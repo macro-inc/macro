@@ -4,7 +4,6 @@ import { type Component, createMemo } from 'solid-js';
 import { Show } from 'solid-js/web';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import type { Property } from '../../types';
-import { useModalPosition } from '../../utils/position';
 import { CreatePropertyModal } from './CreatePropertyModal';
 import { EditPropertyValueModal } from './EditPropertyValueModal';
 import { SelectPropertyModal } from './SelectPropertyModal';
@@ -61,19 +60,15 @@ export const Modals: Component = () => {
       </Show>
 
       <Show when={propertyEditorModal()}>
-        {(state) => {
-          const position = useModalPosition(() => state().anchor);
-
-          return (
-            <EditPropertyValueModal
-              property={state().property}
-              onClose={closePropertyEditor}
-              onSaved={handlePropertySaved}
-              position={position()}
-              entityType={entityType}
-            />
-          );
-        }}
+        {(state) => (
+          <EditPropertyValueModal
+            property={state().property}
+            onClose={closePropertyEditor}
+            onSaved={handlePropertySaved}
+            anchorRef={state().anchor ?? undefined}
+            entityType={entityType}
+          />
+        )}
       </Show>
 
       <Show when={datePickerModal()}>

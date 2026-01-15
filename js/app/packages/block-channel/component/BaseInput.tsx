@@ -56,6 +56,7 @@ import {
   onCleanup,
   onMount,
   Show,
+  Suspense,
 } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
 import { tabbable } from 'tabbable';
@@ -579,11 +580,13 @@ export function BaseInput(props: BaseInputProps) {
         </div>
       </Show>
       <Show when={taskModeEnabled() && potentialTasks().length > 0}>
-        <TaskPreviewPanel
-          tasks={potentialTasks()}
-          onUpdateTaskProperty={updateTaskProperty}
-          onUpdateTaskAssignees={updateTaskAssignees}
-        />
+        <Suspense>
+          <TaskPreviewPanel
+            tasks={potentialTasks()}
+            onUpdateTaskProperty={updateTaskProperty}
+            onUpdateTaskAssignees={updateTaskAssignees}
+          />
+        </Suspense>
       </Show>
       <div class="flex flex-row w-full h-8 justify-between items-center p-2 mb-2 space-x-2 allow-css-brackets">
         <Show when={showAttachMenu()}>

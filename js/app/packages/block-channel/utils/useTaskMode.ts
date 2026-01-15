@@ -3,7 +3,13 @@ import {
   type PotentialTask,
 } from '@core/util/taskExtraction';
 import { debounce } from '@solid-primitives/scheduled';
-import { type Accessor, createMemo, createSignal } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+} from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 
 const DEBOUNCE_MS = 300;
@@ -63,11 +69,18 @@ export function useTaskMode(
   );
 
   // Track markdown changes when task mode is enabled
-  createMemo(() => {
-    if (taskModeEnabled()) {
-      updateDebouncedMarkdown(markdownState());
-    }
-  });
+  // Use createEffect with explicit dependency tracking to avoid interference with editor
+  createEffect(
+    on(
+      () => (taskModeEnabled() ? markdownState() : null),
+      (markdown) => {
+        if (markdown !== null) {
+          updateDebouncedMarkdown(markdown);
+        }
+      },
+      { defer: true }
+    )
+  );
 
   // Extract potential tasks from debounced markdown, merged with local edits
   const potentialTasks = createMemo<PotentialTask[]>(() => {
