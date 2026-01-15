@@ -1,6 +1,6 @@
 import { SUPPORTED_CHAT_ATTACHMENT_BLOCKS } from '@core/component/AI/constant/fileType';
 import type { Attachment } from '@core/component/AI/types';
-import { useChannelsContext } from '@core/component/ChannelsProvider';
+import { useChannelsContext } from '@core/context/channels';
 import type { ChannelWithParticipants } from '@core/user';
 import { isOk } from '@core/util/maybeResult';
 import { type EmailEntity, useEmails } from '@macro-entity';
@@ -94,7 +94,7 @@ function convertSplitToAttachment(
 export function useTabAttachments(): Accessor<ChatAttachmentWithName[]> {
   const history = useHistory();
   const channelsContext = useChannelsContext();
-  const channels = () => channelsContext.channels();
+  const channels = channelsContext.channels;
   const emails = useEmails();
 
   // Get valid active tabs using createMemo

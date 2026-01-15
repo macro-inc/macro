@@ -24,7 +24,6 @@ import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
 import Stop from '@phosphor-icons/core/regular/stop.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { BrightJoins } from '@ui/components/BrightJoins';
 import { Button } from '@ui/components/Button';
 import type { LexicalEditor } from 'lexical';
 import type { Accessor, Component, Setter } from 'solid-js';
@@ -216,7 +215,6 @@ function ChatInput(props: ChatInputInternalProps) {
       ref={containerRef}
       class="relative flex flex-col flex-1 items-center justify-between bg-input border-t border-x border-edge-muted rounded-t-[5px] -mb-[7px]"
     >
-      <BrightJoins dots={[false, false, true, true]} />
       <div class="relative w-full z-0 px-3 pt-2 sm:pb-4 flex-1 overflow-hidden placeholder:text-ink-placeholder placeholder:opacity-50">
         <div
           id="chat-input-text-area"

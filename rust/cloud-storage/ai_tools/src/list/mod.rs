@@ -1,5 +1,5 @@
 use crate::AiToolSet;
-use ai::tool::AsyncToolSet;
+use ai_toolset::AsyncToolSet;
 mod channel;
 mod email;
 mod file;

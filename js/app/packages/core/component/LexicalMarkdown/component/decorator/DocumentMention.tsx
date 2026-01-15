@@ -25,6 +25,7 @@ import {
   useItemPreview,
 } from '@core/signal/preview';
 import { matches } from '@core/util/match';
+import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import EyeSlashDuo from '@icon/duotone/eye-slash-duotone.svg';
 import TrashSimple from '@icon/duotone/trash-simple-duotone.svg';
@@ -251,7 +252,7 @@ export function DocumentMention(props: DocumentMentionDecoratorProps) {
       props.blockName,
       props.documentId,
       props.blockParams,
-      e?.altKey ?? false
+      openInNewSplitForMention(e?.altKey, e != null)
     );
   });
 

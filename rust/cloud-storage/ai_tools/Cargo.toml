@@ -6,6 +6,7 @@ version = "0.1.0"
 
 [dependencies]
 ai = { path = "../ai" }
+ai_toolset = { path = "../ai_toolset" }
 anyhow.workspace = true
 async-trait.workspace = true
 chrono.workspace = true
