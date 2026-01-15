@@ -105,9 +105,8 @@ export function fileDrop(
     e.preventDefault();
     e.stopPropagation();
 
-    dragCounter--;
+    dragCounter = 0;
 
-    // Always call drag end
     const options = accessor();
     options?.onDragEnd?.();
   };
