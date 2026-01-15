@@ -52,51 +52,34 @@ VALUES
 (gen_random_uuid(), 'macro|user-1@test.com', '11111111-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'document', 'edit');
 
 ---------------------------------------------------
---  SYSTEM PROPERTY DEFINITIONS
---  These use the fixed system property UUIDs from SystemPropertyKey
----------------------------------------------------
-
-INSERT INTO property_definitions (id, organization_id, user_id, display_name, data_type, is_multi_select, specific_entity_type, is_system)
-VALUES
-    -- System properties (using SystemPropertyKey UUIDs)
-    ('00000001-0000-0000-0000-000000000001', NULL, NULL, 'Assignees', 'ENTITY', true, 'USER', true),
-    ('00000001-0000-0000-0000-000000000002', NULL, NULL, 'Status', 'SELECT_STRING', false, NULL, true),
-    ('00000001-0000-0000-0000-000000000003', NULL, NULL, 'Priority', 'SELECT_STRING', false, NULL, true),
-    ('00000001-0000-0000-0000-000000000004', NULL, NULL, 'Due Date', 'DATE', false, NULL, true)
-ON CONFLICT (id) DO NOTHING;
-
--- Priority options
-INSERT INTO property_options (id, property_definition_id, display_order, number_value, string_value)
-VALUES
-    ('a0000001-0000-0000-0000-000000000001', '00000001-0000-0000-0000-000000000003', 0, NULL, 'Low'),
-    ('a0000001-0000-0000-0000-000000000002', '00000001-0000-0000-0000-000000000003', 1, NULL, 'Medium'),
-    ('a0000001-0000-0000-0000-000000000003', '00000001-0000-0000-0000-000000000003', 2, NULL, 'High')
-ON CONFLICT (id) DO NOTHING;
-
--- Status options
-INSERT INTO property_options (id, property_definition_id, display_order, number_value, string_value)
-VALUES
-    ('b0000001-0000-0000-0000-000000000001', '00000001-0000-0000-0000-000000000002', 0, NULL, 'Not Started'),
-    ('b0000001-0000-0000-0000-000000000002', '00000001-0000-0000-0000-000000000002', 1, NULL, 'In Progress'),
-    ('b0000001-0000-0000-0000-000000000003', '00000001-0000-0000-0000-000000000002', 2, NULL, 'Completed')
-ON CONFLICT (id) DO NOTHING;
-
----------------------------------------------------
 --  ENTITY PROPERTIES FOR DOCUMENTS AND PROJECTS
 ---------------------------------------------------
 
 INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
 VALUES
     -- Document in A: Priority = High, Status = In Progress
-    ('e1111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'DOCUMENT', '00000001-0000-0000-0000-000000000003', '{"type": "SelectOption", "value": ["a0000001-0000-0000-0000-000000000003"]}'),
-    ('e2222222-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'DOCUMENT', '00000001-0000-0000-0000-000000000002', '{"type": "SelectOption", "value": ["b0000001-0000-0000-0000-000000000002"]}'),
+    (
+        'e1111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa', -- id of this thing?
+        '11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa', -- doc a id
+        'DOCUMENT',                             -- entity_type
+        '00000001-0000-0000-0000-000000000003', -- property_def_id Priority
+        '{"type": "SelectOption", "value": ["00000001-0000-0000-0003-000000000001"]}' -- values. id of "High" in property_options
+    ),
+    (
+        'e2222222-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        '11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        'DOCUMENT',
+        '00000001-0000-0000-0000-000000000002',
+        '{"type": "SelectOption",
+        "value": ["00000001-0000-0000-0002-000000000004"]}'
+    ),
 
     -- Document in B: Priority = Low, Due Date set
-    ('e1111111-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '11111111-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'DOCUMENT', '00000001-0000-0000-0000-000000000003', '{"type": "SelectOption", "value": ["a0000001-0000-0000-0000-000000000001"]}'),
+    ('e1111111-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '11111111-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'DOCUMENT', '00000001-0000-0000-0000-000000000003', '{"type": "SelectOption", "value": ["00000001-0000-0000-0003-000000000001"]}'),
     ('e2222222-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '11111111-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'DOCUMENT', '00000001-0000-0000-0000-000000000004', '{"type": "Date", "value": "2025-12-31T23:59:59Z"}'),
 
     -- Project A: Priority = Medium
-    ('e1111111-ffff-ffff-ffff-ffffffffffff', 'aaaaaaaa-ffff-ffff-ffff-ffffffffffff', 'PROJECT', '00000001-0000-0000-0000-000000000003', '{"type": "SelectOption", "value": ["a0000001-0000-0000-0000-000000000002"]}')
+    ('e1111111-ffff-ffff-ffff-ffffffffffff', 'aaaaaaaa-ffff-ffff-ffff-ffffffffffff', 'PROJECT', '00000001-0000-0000-0000-000000000003', '{"type": "SelectOption", "value": ["00000001-0000-0000-0003-000000000002"]}')
 ON CONFLICT (id) DO NOTHING;
 
 -- Re-enable foreign key constraints
