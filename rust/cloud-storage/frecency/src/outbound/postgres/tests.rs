@@ -2,6 +2,7 @@ use crate::domain::models::{AggregateId, FrecencyData};
 
 use super::*;
 use chrono::Utc;
+use item_filters::ChatFilters;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_entity::{EntityType, TrackAction};
@@ -917,4 +918,64 @@ async fn it_cannot_be_read_concurrently(pool: PgPool) {
     let res = second.get_unprocessed_events().await.unwrap();
     assert_eq!(res.len(), 1);
     assert_eq!(res.first().unwrap().id, event_id);
+}
+
+/// Tests that mixing supported (chat_id) and unsupported (role) filters
+/// does not produce malformed SQL. Role filters don't apply to frecency
+/// aggregates and should be ignored without breaking the query.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_get_top_entities_mixed_supported_and_unsupported_chat_filters(pool: PgPool) {
+    use item_filters::{EntityFilters, ast::EntityFilterAst};
+
+    let storage = FrecencyPgStorage::new(pool.clone());
+    let test_user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+
+    // Create a chat aggregate
+    let chat_id = "11111111-1111-1111-1111-111111111111";
+    let aggregate = AggregateFrecency {
+        id: AggregateId {
+            entity: EntityType::Chat.with_entity_string(chat_id.to_string()),
+            user_id: test_user_id.clone(),
+        },
+        data: FrecencyData {
+            event_count: 5,
+            frecency_score: 75.0,
+            first_event: Utc::now(),
+            recent_events: VecDeque::new(),
+        },
+    };
+    storage.set_aggregate(aggregate).await.unwrap();
+
+    // Create filter with both chat_id (supported) and role (unsupported at frecency level)
+    // This combination previously produced malformed SQL like "( AND entity_id = '...')"
+    let entity_filters = EntityFilters {
+        chat_filters: ChatFilters {
+            chat_ids: vec![chat_id.to_string()],
+            role: vec!["user".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filter = EntityFilterAst::new_from_filters(entity_filters)
+        .unwrap()
+        .unwrap();
+
+    // This should not fail with a SQL syntax error
+    let results = storage
+        .get_top_entities(FrecencyPageRequest {
+            user_id: test_user_id.copied(),
+            from_score: None,
+            limit: 10,
+            filters: Some(filter),
+        })
+        .await
+        .unwrap();
+
+    // Should still filter by the supported chat_id filter
+    assert_eq!(results.len(), 1, "Should return exactly one chat");
+    assert_eq!(
+        results[0].id.entity.entity_id, chat_id,
+        "Should return the correct chat"
+    );
 }

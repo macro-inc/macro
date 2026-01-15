@@ -2,8 +2,6 @@ import { BozzyBracketInnerSibling } from '@core/component/BozzyBracket';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { createTheme } from '@core/component/LexicalMarkdown/theme';
 import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
-import type { DocumentMentionLocation } from '@service-notification/client';
-import { storageServiceClient } from '@service-storage/client';
 import type { EditorThemeClasses } from 'lexical';
 import {
   type Accessor,
@@ -19,6 +17,7 @@ import {
   type Signal,
   useContext,
 } from 'solid-js';
+import { getAndClearCommentMentions } from '.';
 import { Comment, CommentReply } from './Comment';
 import type { CommentOperations, Layout, Reply, Root } from './commentType';
 import { EditInput, NewReplyInput } from './Inputs';
@@ -87,25 +86,6 @@ export const CommentsContext = createContext<CommentsContextType>({
   ownedComment: () => false,
   inComment: false,
 });
-
-export const sendMentions = (
-  data: DocumentMentionLocation,
-  mentionsSignal: Signal<UserMentionRecord[]>
-) => {
-  const [mentions, setMentions] = mentionsSignal;
-  const mentions_ = mentions();
-  setMentions([]);
-  if (mentions_.length === 0) return;
-  const aggregatedMention: UserMentionRecord = {
-    documentId: mentions_[0].documentId,
-    mentions: mentions_.flatMap((m) => m.mentions),
-    metadata: {
-      mention_id: mentions_[0].metadata.mention_id,
-      location: data,
-    },
-  };
-  return storageServiceClient.upsertUserMentions(aggregatedMention);
-};
 
 export function Thread(props: {
   comment: Root;
@@ -223,23 +203,11 @@ export function Thread(props: {
                   onSend={(content: string) => {
                     if (content.trim() === '') return;
                     // NOTE: we need the server to return the thread id first
-                    commentOperations
-                      .createComment({
-                        threadId: props.comment.threadId,
-                        text: content,
-                      })
-                      .then((response) => {
-                        if (!response) return;
-                        sendMentions(
-                          {
-                            type: 'create-comment',
-                            commentId: response.comments[0].commentId,
-                            threadId: response.thread.threadId,
-                            text: content,
-                          },
-                          mentionsSignal
-                        );
-                      });
+                    commentOperations.createComment({
+                      threadId: props.comment.threadId,
+                      text: content,
+                      mentions: getAndClearCommentMentions(mentionsSignal),
+                    });
                   }}
                   isNewThread
                 />
@@ -292,19 +260,12 @@ export function Thread(props: {
                           }
                           updateReply={(content) => {
                             Promise.all([
-                              commentOperations.updateComment({
+                              commentOperations.updateComment(replyId, {
                                 text: content,
-                                commentId: replyId,
+                                threadId: props.comment.threadId,
+                                mentions:
+                                  getAndClearCommentMentions(mentionsSignal),
                               }),
-                              sendMentions(
-                                {
-                                  type: 'edit-comment',
-                                  commentId: replyId,
-                                  threadId: props.comment.threadId,
-                                  text: content,
-                                },
-                                mentionsSignal
-                              ),
                             ]);
                           }}
                         />
@@ -320,25 +281,11 @@ export function Thread(props: {
                   createReply={(content) => {
                     if (content.trim() === '') return;
                     dispatch({ action: 'hard', editing: false });
-                    commentOperations
-                      .createComment({
-                        threadId: props.comment.threadId,
-                        text: content,
-                      })
-                      .then((response) => {
-                        if (!response) return;
-                        sendMentions(
-                          {
-                            type: 'create-comment',
-                            commentId:
-                              response.comments[response.comments.length - 1]
-                                .commentId,
-                            threadId: props.comment.threadId,
-                            text: content,
-                          },
-                          mentionsSignal
-                        );
-                      });
+                    commentOperations.createComment({
+                      threadId: props.comment.threadId,
+                      text: content,
+                      mentions: getAndClearCommentMentions(mentionsSignal),
+                    });
                   }}
                   isEditing={isEditingNewReply()}
                   setEditing={(editing) =>

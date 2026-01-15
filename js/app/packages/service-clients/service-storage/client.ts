@@ -1110,16 +1110,6 @@ export const storageServiceClient = {
     );
   },
 
-  async upsertUserMentions(args) {
-    const { documentId, mentions, metadata } = args;
-    return ok(
-      await dssFetch<{}>(`/mentions/${documentId}`, {
-        method: 'POST',
-        body: JSON.stringify({ mentions, metadata }),
-      })
-    );
-  },
-
   projects: {
     async getAll() {
       return mapOk(

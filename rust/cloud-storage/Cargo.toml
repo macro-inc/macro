@@ -36,6 +36,7 @@ members = [
   "email_suppression_handler",
   "email_utils",
   "email_validator",
+  "entity_access",
   "experiment_service",
   "frecency",
   "gmail_client",

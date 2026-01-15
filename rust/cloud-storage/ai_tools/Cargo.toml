@@ -9,6 +9,7 @@ ai = { path = "../ai" }
 anyhow.workspace = true
 async-trait.workspace = true
 chrono.workspace = true
+comms_service_client = { path = "../comms_service_client" }
 email = { path = "../email", features = ["ai_schema", "axum"] }
 email_service_client = { path = "../email_service_client" }
 lazy_static.workspace = true

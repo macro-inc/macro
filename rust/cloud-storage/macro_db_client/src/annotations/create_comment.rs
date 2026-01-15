@@ -9,37 +9,29 @@ use sqlx::{Pool, Postgres};
 use crate::annotations::CommentError;
 
 use super::{create_anchor::create_comment_anchor, get::get_comment_thread};
-
 fn map_value_to_option(maybe_value: Option<Value>) -> Option<Value> {
-    match maybe_value {
-        Some(value) => {
-            let empty = match &value {
-                Value::Null => true,
-                Value::String(s) => s.is_empty(),
-                Value::Array(arr) => arr.is_empty(),
-                Value::Object(map) => map.is_empty(),
-                _ => false,
-            };
-
-            match empty {
-                true => None,
-                false => Some(value),
-            }
-        }
-        None => None,
-    }
+    maybe_value.and_then(|value| {
+        (match &value {
+            Value::Null => false,
+            Value::String(s) => !s.is_empty(),
+            Value::Array(arr) => !arr.is_empty(),
+            Value::Object(map) => !map.is_empty(),
+            _ => true,
+        })
+        .then_some(value)
+    })
 }
 
 pub async fn create_document_comment(
     db: &Pool<Postgres>,
     document_id: &str,
     owner: &str,
-    req: CreateCommentRequest,
+    req: &CreateCommentRequest,
 ) -> Result<CreateCommentResponse> {
     let mut transaction = db.begin().await?;
 
     let thread = match req.thread_id {
-        Some(thread_id) => match map_value_to_option(req.thread_metadata) {
+        Some(thread_id) => match map_value_to_option(req.thread_metadata.clone()) {
             Some(thread_metadata) => sqlx::query_as!(
                 Thread,
                 r#"
@@ -66,6 +58,7 @@ pub async fn create_document_comment(
                 sqlx::Error::RowNotFound => anyhow::anyhow!(CommentError::ThreadNotFound),
                 e => anyhow::anyhow!(e),
             })?,
+            // TODO we should automatically be setting updatedAt etc
             None => sqlx::query_as!(
                 Thread,
                 r#"
@@ -119,7 +112,7 @@ pub async fn create_document_comment(
     };
 
     let mut anchor: Option<Anchor> = None;
-    if let Some(anchor_req) = req.anchor {
+    if let Some(anchor_req) = &req.anchor {
         let res = create_comment_anchor(
             &mut transaction,
             owner,
@@ -193,10 +186,11 @@ mod tests {
             thread_metadata: Some(json!({"test": "test"})),
             anchor: None,
             metadata: None,
+            mentions: None,
         };
 
         let CreateCommentResponse { comment_thread, .. } =
-            create_document_comment(&pool, document_id, owner, req).await?;
+            create_document_comment(&pool, document_id, owner, &req).await?;
 
         // Verify the thread and comment were created
         assert_eq!(comment_thread.comments.len(), 1);
@@ -235,10 +229,11 @@ mod tests {
             thread_metadata: None,
             anchor: None,
             metadata: None,
+            mentions: None,
         };
 
         let CreateCommentResponse { comment_thread, .. } =
-            create_document_comment(&pool, document_id, owner, req).await?;
+            create_document_comment(&pool, document_id, owner, &req).await?;
 
         // Verify the comment was added to the existing thread
         assert_eq!(comment_thread.thread.thread_id, 1001);

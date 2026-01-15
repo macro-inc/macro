@@ -50,7 +50,6 @@ import {
   createUnifiedInfiniteList,
   createUnifiedSearchInfiniteQuery,
   Entity,
-  type EntityClickHandler,
   type EntityData,
   type EntityFilter,
   type ExpandedEntityType,
@@ -108,6 +107,7 @@ import {
   type Setter,
   Show,
   type Signal,
+  Suspense,
 } from 'solid-js';
 import {
   createStore,
@@ -115,9 +115,10 @@ import {
   type SetStoreFunction,
   unwrap,
 } from 'solid-js/store';
-import type { EntityPointerDownHandler } from '../../macro-entity/src/components/Entity';
 import {
   ENTITY_HEIGHT,
+  type EntityClickHandler,
+  type EntityPointerDownHandler,
   EntityWithEverything,
 } from '../../macro-entity/src/components/EntityWithEverything';
 import {
@@ -159,6 +160,7 @@ import {
   type ViewConfigBase,
   type ViewData,
 } from './ViewConfig';
+import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 300;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
@@ -205,7 +207,7 @@ export type UnifiedListViewProps = {
   defaultFilterOptions?: Partial<FilterOptions>;
   defaultSortOptions?: Partial<SortOptions>;
   defaultDisplayOptions?: Partial<DisplayOptions>;
-  hideToolbar?: true;
+  hideToolbar?: boolean;
 };
 export function UnifiedListView(props: UnifiedListViewProps) {
   const [contextAndModalState, setContextAndModalState] = createStore<{
@@ -250,6 +252,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     entityListRefSignal: [, setEntityListRef],
     entitiesSignal: [entities_, setEntities],
     emailViewSignal: [emailView],
+    activeContextSignal: [activeSoupContext, setActiveSoupContext],
   } = soupContext;
 
   // Properties for task entities
@@ -267,7 +270,20 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     return map;
   });
 
+  const { isKeypressActive } = useIsKeyPressActive();
+
   const setSelectedEntity = (entity: EntityData | undefined) => {
+    setViewDataStore(
+      selectedView(),
+      produce((state) => {
+        if (!state) return;
+        state.selectedEntity = entity;
+      })
+    );
+  };
+  const setSelectedEntityFromMouse = (entity: EntityData | undefined) => {
+    if (isKeypressActive()) return;
+
     setViewDataStore(
       selectedView(),
       produce((state) => {
@@ -1203,20 +1219,37 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     window.open(entityUrl.toString(), '_blank', 'noopener');
   };
 
-  const entityClickHandler: EntityClickHandler<EntityData> = async (
-    entity,
-    event,
-    location,
-    options
-  ) => {
-    if (preview() && !options?.ignorePreview) {
+  const entityClickHandler: EntityClickHandler<EntityData> = async (args) => {
+    const { type, event, location } = args;
+
+    const entity = (
+      type === 'entity' ? args.entity : args.projectEntity
+    ) as EntityData;
+
+    if (event.metaKey || event.ctrlKey) {
+      openEntityInNewTab({ entity, location });
+      return;
+    }
+
+    if (preview() && type === 'entity') {
       setSelectedEntity(entity);
 
       return;
     }
 
-    if (event.metaKey || event.ctrlKey) {
-      openEntityInNewTab({ entity, location });
+    await openEntityInSplitFromUnifiedList(entity, {
+      openInNewSplit: event.altKey,
+      location,
+      splitHandle: splitContext.handle,
+    });
+  };
+
+  const entityDblClickHandler: EntityClickHandler<EntityData> = async ({
+    entity,
+    location,
+    event,
+  }) => {
+    if (!preview()) {
       return;
     }
 
@@ -1228,14 +1261,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   };
 
   const entityPointerDownHandler: EntityPointerDownHandler<EntityData> = async (
-    entity,
-    event,
-    location,
-    options
+    args
   ) => {
-    if (preview() && !options?.ignorePreview) {
-      return;
-    }
+    const { type, location, event } = args;
+    const entity = (
+      type === 'entity' ? args.entity : args.projectEntity
+    ) as EntityData;
 
     // middle mouse button pressed
     if (event.button === 1 && event.pointerType === 'mouse') {
@@ -1459,6 +1490,18 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     }
   });
 
+  createEffect(
+    on(splitContext.isPanelActive, () => {
+      if (splitContext.isPanelActive()) {
+        if (activeSoupContext() !== soupContext) return;
+        const domEl = activeSoupContext()?.domRef();
+        setTimeout(() => {
+          domEl?.focus();
+        });
+      }
+    })
+  );
+
   return (
     <>
       <Show when={!props.hideToolbar}>
@@ -1623,7 +1666,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       <span class="font-medium text-xs">From</span>
                       <RecipientSelector<'user' | 'contact'>
                         options={emailRecipientOptions}
-                        selectedOptions={fromFilterUsers}
+                        selectedOptions={fromFilterUsers()}
                         setSelectedOptions={setFromFilterUsers}
                         placeholder="Filter by user..."
                         includeSelf
@@ -1631,19 +1674,21 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     </section>
                   </Show>
                   <Show when={ENABLE_PROPERTY_FILTER}>
-                    <section class="gap-1 grid p-2">
-                      <span class="font-medium text-xs">Property</span>
-                      <PropertyFilterControl
-                        propertyFilters={propertyFilters}
-                        setPropertyFilters={setPropertyFilters}
-                        onIncompleteFiltersChange={
-                          setHasIncompletePropertyFilters
-                        }
-                        registerClearHandler={(fn) => {
-                          clearPropertyFilters = fn;
-                        }}
-                      />
-                    </section>
+                    <Suspense>
+                      <section class="gap-1 grid p-2">
+                        <span class="font-medium text-xs">Property</span>
+                        <PropertyFilterControl
+                          propertyFilters={propertyFilters}
+                          setPropertyFilters={setPropertyFilters}
+                          onIncompleteFiltersChange={
+                            setHasIncompletePropertyFilters
+                          }
+                          registerClearHandler={(fn) => {
+                            clearPropertyFilters = fn;
+                          }}
+                        />
+                      </section>
+                    </Suspense>
                   </Show>
                 </div>
               </div>
@@ -1720,7 +1765,15 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           });
         }}
       >
-        <ContextMenu.Trigger class="size-full unified-list-root">
+        <ContextMenu.Trigger
+          class="@container/uList size-full unified-list-root"
+          onPointerDown={() => {
+            setActiveSoupContext(soupContext);
+          }}
+          onKeyUp={() => {
+            setActiveSoupContext(soupContext);
+          }}
+        >
           <EntityRowProvider
             container={localEntityListRef}
             canSwipeLeft={(entityId) => {
@@ -1798,6 +1851,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       properties={properties()}
                       timestamp={timestamp()}
                       onClick={entityClickHandler}
+                      onDblClick={entityDblClickHandler}
                       onPointerDown={entityPointerDownHandler}
                       onClickRowAction={
                         soupContext.actionRegistry.isActionEnabled(
@@ -1811,7 +1865,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                             }
                           : undefined
                       }
-                      onClickNotification={(notifiedEntity) => {
+                      onClickNotification={({ entity: notifiedEntity }) => {
                         const notification = tryToTypedNotification(
                           notifiedEntity.notification
                         );
@@ -1826,7 +1880,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                           'hasUserInteractedEntity',
                           true
                         );
-                        setSelectedEntity(innerProps.entity);
+                        setSelectedEntityFromMouse(innerProps.entity);
                       }}
                       onMouseLeave={() => {}}
                       onFocusIn={() => {
@@ -1846,11 +1900,15 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       highlighted={
                         isPanelActive() && focusedSelector(innerProps.entity.id)
                       }
-                      selected={
-                        focusedSelector(innerProps.entity.id) ||
-                        contextAndModalState.selectedEntity?.id ===
-                          innerProps.entity.id
-                      }
+                      selected={{
+                        active:
+                          focusedSelector(innerProps.entity.id) ||
+                          contextAndModalState.selectedEntity?.id ===
+                            innerProps.entity.id,
+                        muted:
+                          focusedSelector(innerProps.entity.id) &&
+                          activeSoupContext() !== soupContext,
+                      }}
                       checked={multiSelectSelector(innerProps.entity.id)}
                       onChecked={(next, shiftKey) =>
                         handleMultiSelectChecked({
@@ -1995,6 +2053,8 @@ function SearchBar(props: {
   isLoading: Accessor<boolean>;
   setIsLoading: Setter<boolean>;
 }) {
+  const getInputId = (selectedView: string) =>
+    `search-input-${splitContext.handle.id}-${selectedView}`;
   const splitContext = useSplitPanelOrThrow();
   const {
     viewsDataStore,
@@ -2057,13 +2117,34 @@ function SearchBar(props: {
     return loading;
   }, props.isLoading());
 
+  // waits for input element to be mounted before focusing it
   const focusSearch = () => {
+    const inputId = getInputId(selectedView());
+    const existingInput = document.getElementById(inputId) as HTMLInputElement;
+    if (existingInput) {
+      existingInput.focus();
+      return;
+    }
+
+    const mutationObserver = new MutationObserver(() => {
+      const input = document.getElementById(inputId) as HTMLInputElement;
+      if (input) {
+        mutationObserver.disconnect();
+        input.focus();
+      }
+    });
+
+    const toolbarLeft = splitContext.layoutRefs.toolbarLeft;
+    if (toolbarLeft) {
+      mutationObserver.observe(toolbarLeft, {
+        childList: true,
+        subtree: true,
+      });
+    }
+
     setTimeout(() => {
-      const searchInput = document.getElementById(
-        `search-input-${splitContext.handle.id}-${selectedView()}`
-      ) as HTMLInputElement;
-      searchInput?.focus();
-    }, 0);
+      mutationObserver.disconnect();
+    }, 1000);
   };
 
   onMount(() => {
@@ -2074,7 +2155,9 @@ function SearchBar(props: {
       hotkeyToken: TOKENS.soup.openSearch,
       keyDownHandler: () => {
         setSelectedView(VIEWCONFIG_DEFAULTS_IDS_ENUM.all);
-        focusSearch();
+        setTimeout(() => {
+          focusSearch();
+        }, 0);
         return true;
       },
       displayPriority: 5,
@@ -2098,7 +2181,7 @@ function SearchBar(props: {
   });
 
   return (
-    <SplitToolbarLeft>
+    <SplitToolbarLeft class="min-w-0">
       <div class="flex ml-2 h-full items-center gap-1">
         <Show
           when={props.isLoading() && searchText()}
@@ -2147,7 +2230,7 @@ function SearchBar(props: {
         </Show>
         <input
           ref={inputRef}
-          id={`search-input-${splitContext.handle.id}-${selectedView()}`}
+          id={getInputId(selectedView())}
           placeholder={`Search in ${viewName()}`}
           value={searchText()}
           onInput={(e) => {
@@ -2167,7 +2250,7 @@ function SearchBar(props: {
               focusNextEntity();
             }
           }}
-          class="p-1 pr-0 border-0 outline-none! focus:outline-none ring-0! focus:ring-0 flex-1 text-ink text-sm truncate"
+          class="p-1 pr-0 border-0 outline-none! focus:outline-none ring-0! focus:ring-0 flex-1 text-ink text-sm truncate min-w-0"
         />
       </div>
     </SplitToolbarLeft>

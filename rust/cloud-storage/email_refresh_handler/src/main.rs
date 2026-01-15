@@ -1,6 +1,8 @@
 mod config;
 mod context;
 mod handler;
+#[cfg(test)]
+mod test;
 
 use anyhow::Context;
 use aws_lambda_events::event::eventbridge::EventBridgeEvent;
@@ -36,6 +38,7 @@ async fn main() -> Result<(), Error> {
     let ctx = context::Context {
         db,
         sqs_client: Arc::new(sqs_client),
+        config,
     };
 
     let func = service_fn(move |event: LambdaEvent<EventBridgeEvent>| {

@@ -1,0 +1,11 @@
+setup_fusionauth_env:
+    curl -o .env https://raw.githubusercontent.com/FusionAuth/fusionauth-containers/452efcac5c60f6a3a734947b1a8eefaae6f811fa/docker/fusionauth/.env
+
+start_fusionauth:
+    docker-compose up
+
+destroy_fusionauth:
+    docker-compose down -v
+
+instantiate_fusionauth:
+    pulumi up --stack local

@@ -12,6 +12,8 @@ export type EnvVars = {
   LINK_MANAGER_QUEUE: pulumi.Output<string> | string;
   ENVIRONMENT: pulumi.Output<string> | string;
   RUST_LOG: pulumi.Output<string> | string;
+  DELETE_UNUSED_AFTER_DAYS: pulumi.Output<string> | string;
+  DELETE_INACTIVE_AFTER_DAYS: pulumi.Output<string> | string;
 };
 
 type Args = {

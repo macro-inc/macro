@@ -14,6 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
+      api_changed: ${{ steps.filter.outputs.api_changed }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -27,6 +28,8 @@ jobs:
               - 'js/app/src/**'
               - '.github/actions/setup-reqs-web/**'
               - '.github/workflows/web-app-check-main.yml'
+            api_changed:
+              - 'rust/cloud-storage/**/*.rs'
 
   typescript:
     needs: path-check
@@ -45,6 +48,7 @@ jobs:
         with:
           version: 2.2.6
       - name: Generate API Types
+        if: needs.path-check.outputs.api_changed == 'true'
         working-directory: js/app
         run: bun run gen-api -- --check
       - name: Check Types

@@ -1,7 +1,10 @@
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
 import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
-import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
+import {
+  MACRO_EMAIL_SIGNATURE,
+  MAX_ATTACHMENTS_BYTES_SIZE,
+} from '@block-email/constants';
 import { useHasPaidAccess } from '@core/auth';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
@@ -13,16 +16,11 @@ import {
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { handleFileFolderDrop } from '@core/util/upload';
 import TextAa from '@icon/regular/text-aa.svg';
-import {
-  $appendWatermarkNodeToLast,
-  type DocumentMentionInfo,
-} from '@lexical-core';
+import { $appendWatermarkNodeToLast } from '@lexical-core';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import ArrowFatLineUp from '@phosphor-icons/core/fill/arrow-fat-line-up-fill.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import { useUserId } from '@service-gql/client';
-import type { FileType } from '@service-storage/generated/schemas/fileType';
-import type { Item } from '@service-storage/generated/schemas/item';
 import { defaultSelectionData } from 'core/component/LexicalMarkdown/plugins';
 import {
   NODE_TRANSFORM,
@@ -37,11 +35,11 @@ import {
 import { createSignal, onMount, Show } from 'solid-js';
 import { type FocusableElement, tabbable } from 'tabbable';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
-import {
-  appendItemsAsMacroMentions,
-  prepareEmailBody,
-} from '../util/prepareEmailBody';
-import { AttachMenu } from './AttachMenu';
+import { prepareEmailBody } from '../util/prepareEmailBody';
+import { Button } from '@ui/components/Button';
+import { fileSelector } from '@core/directive/fileSelector';
+import { toast } from '@core/component/Toast/Toast';
+import { plural } from '@core/util/string';
 
 false && fileFolderDrop;
 
@@ -53,11 +51,29 @@ export type ComposeInputData = {
   };
 };
 
+export type ComposeAttachment =
+  | {
+      type: 'local';
+      file: File;
+      attachmentID?: string;
+    }
+  | {
+      type: 'remote';
+      url: string;
+      fileName: string;
+      contentType: string;
+      attachmentID: string;
+      fileSize: number;
+    };
+
 type ComposeEmailInputProps = {
   inputRef?: (el: HTMLDivElement) => void;
   onSubmit: (data: ComposeInputData) => void;
   disabled?: boolean;
+  loading?: boolean;
   isSubmitting?: boolean;
+  attachments?: ComposeAttachment[];
+  onAddAttachments?: (attachments: ComposeAttachment[]) => void;
 };
 
 export function ComposeEmailInput(props: ComposeEmailInputProps) {
@@ -66,10 +82,8 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
   const [editor, setEditor] = createSignal<LexicalEditor>();
 
   const [isDragging, setIsDragging] = createSignal<boolean>();
-  const [isPendingUpload, setIsPendingUpload] = createSignal<boolean>(false);
 
   const [showFormatRibbon, setShowFormatRibbon] = createSignal<boolean>(false);
-  const [attachMenuOpen, setAttachMenuOpen] = createSignal(false);
 
   const [content, setContent] = createSignal('');
 
@@ -98,26 +112,6 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
 
   let bodyDiv!: HTMLDivElement;
   let attachButtonRef!: HTMLDivElement;
-
-  function onAttach(items: Item[]) {
-    const documentMentionItems = items.map((item) => ({
-      documentId: item.id,
-      documentName: item.name,
-      blockName:
-        item.type === 'document' ? (item.fileType as FileType) : item.type,
-    }));
-    appendItemsAsMacroMentions(editor(), documentMentionItems);
-    items.forEach((item) => {
-      makeAttachmentPublic(item.id);
-    });
-  }
-
-  function onAttachDocuments(items: DocumentMentionInfo[]) {
-    appendItemsAsMacroMentions(editor(), items);
-    items.forEach((item) => {
-      makeAttachmentPublic(item.documentId);
-    });
-  }
 
   // Set up hotkey scope for the compose message component
   const [attachComposeHotkeys, composeHotkeyScope] =
@@ -159,6 +153,36 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
     attachComposeHotkeys(container);
   });
 
+  const onAddFilesAndDirs = (
+    files: FileSystemFileEntry[],
+    directories: FileSystemDirectoryEntry[],
+    dropEvent?: DragEvent
+  ) => {
+    const editor_ = editor();
+    if (!editor_) return;
+
+    const getPositionCallback = dropEvent
+      ? () => getDragDropPosition(editor_, dropEvent, true)
+      : undefined;
+
+    handleFileFolderDrop(
+      files,
+      directories,
+      createFilesReadyHandler(
+        editor_,
+        undefined,
+        undefined,
+        getPositionCallback,
+        (uploadedItemIds) => {
+          uploadedItemIds.forEach((itemId) => {
+            makeAttachmentPublic(itemId);
+          });
+        },
+        { width: 542, height: 542 }
+      )
+    );
+  };
+
   registerHotkey({
     hotkey: 'cmd+enter',
     scopeId: composeHotkeyScope,
@@ -171,6 +195,40 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
     hotkeyToken: 'email.send',
     displayPriority: 10,
   });
+
+  const handleAddAttachments = (files: File[]) => {
+    const currentAttachments = props.attachments ?? [];
+
+    const attachmentsToAddByteSize = files.reduce((sum, f) => sum + f.size, 0);
+
+    if (attachmentsToAddByteSize >= MAX_ATTACHMENTS_BYTES_SIZE) {
+      toast.failure(`${plural('Attachment', files.length)} exceed 18MB`);
+      return;
+    }
+
+    const currentAttachmentsByteSize = currentAttachments.reduce(
+      (sum, a) => sum + (a.type === 'local' ? a.file.size : a.fileSize),
+      0
+    );
+
+    if (
+      currentAttachmentsByteSize + attachmentsToAddByteSize >=
+      MAX_ATTACHMENTS_BYTES_SIZE
+    ) {
+      toast.failure(
+        "Can't add more attachments",
+        'Total attachments exceed 18MB limit'
+      );
+      return;
+    }
+
+    props.onAddAttachments?.(
+      files.map((file) => ({
+        type: 'local',
+        file,
+      }))
+    );
+  };
 
   return (
     <div
@@ -200,28 +258,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
           use:fileFolderDrop={{
             onDragStart: () => setIsDragging(true),
             onDragEnd: () => setIsDragging(false),
-            onDrop: (fileEntries, folderEntries, e) => {
-              const editor_ = editor();
-              if (!editor_ || !e) return;
-              handleFileFolderDrop(
-                fileEntries,
-                folderEntries,
-                createFilesReadyHandler(
-                  editor_,
-                  undefined,
-                  undefined,
-                  () => getDragDropPosition(editor_, e, true),
-                  (uploadedItemIds) => {
-                    setIsDragging(false);
-                    uploadedItemIds.forEach((itemId) => {
-                      makeAttachmentPublic(itemId);
-                    });
-                    // TODO: schedule draft save, when implemented
-                  },
-                  { width: 542, height: 542 }
-                )
-              );
-            },
+            onDrop: onAddFilesAndDirs,
           }}
         >
           <div class={`${!isDragging() && 'hidden'} absolute inset-0`}>
@@ -244,48 +281,26 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
               focusSibling('next');
             }}
             portalScope="local"
-            onPasteFilesAndDirs={(files, directories) => {
-              const editor_ = editor();
-              if (!editor_) return;
-              handleFileFolderDrop(
-                files,
-                directories,
-                createFilesReadyHandler(
-                  editor_,
-                  undefined,
-                  undefined,
-                  undefined,
-                  (uploadedItemIds) => {
-                    uploadedItemIds.forEach((itemId) => {
-                      makeAttachmentPublic(itemId);
-                    });
-                  },
-                  { width: 542, height: 542 }
-                )
-              );
-            }}
+            onPasteFilesAndDirs={onAddFilesAndDirs}
           />
         </div>
       </div>
       <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 allow-css-brackets mt-2">
         <div class="flex flex-row items-center gap-2">
           <div class="relative" ref={attachButtonRef}>
-            <DeprecatedIconButton
-              theme="base"
-              icon={PaperclipIcon}
-              tooltip={{ label: 'Attach' }}
+            <Button
+              ref={(el) =>
+                fileSelector(el, () => ({
+                  multiple: true,
+                  onSelect: handleAddAttachments,
+                }))
+              }
+              tooltip="Attach"
+              class="aspect-square p-1"
               disabled={props.disabled}
-              onClick={() => setAttachMenuOpen(true)}
-            />
-            <AttachMenu
-              open={attachMenuOpen()}
-              close={() => setAttachMenuOpen(false)}
-              anchorRef={attachButtonRef}
-              containerRef={bodyDiv}
-              onAttach={onAttach}
-              onAttachDocuments={onAttachDocuments}
-              setIsPending={setIsPendingUpload}
-            />
+            >
+              <PaperclipIcon class="h-5" />
+            </Button>
           </div>
           <DeprecatedIconButton
             theme="base"
@@ -298,14 +313,14 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
         </div>
         <button
           type="button"
-          disabled={isPendingUpload() || props.isSubmitting || props.disabled}
+          disabled={props.loading || props.isSubmitting || props.disabled}
           onClick={() => {
             handleSend();
           }}
           class="text-ink-muted focus:scale-110 hover:scale-110 transition ease-in-out delay-150 flex gap-2 justify-center items-center hover:bg-hover py-1 px-2 text-sm"
         >
           <Show
-            when={!isPendingUpload() && !props.isSubmitting}
+            when={!props.loading && !props.isSubmitting}
             fallback={<Spinner class="w-5 h-5 animate-spin cursor-disabled" />}
           >
             <span class="font-medium font-mono uppercase">Send</span>

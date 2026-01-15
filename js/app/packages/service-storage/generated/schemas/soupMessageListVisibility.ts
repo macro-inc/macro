@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type SoupMessageListVisibility = typeof SoupMessageListVisibility[keyof typeof SoupMessageListVisibility];
-
+export type SoupMessageListVisibility =
+  (typeof SoupMessageListVisibility)[keyof typeof SoupMessageListVisibility];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const SoupMessageListVisibility = {

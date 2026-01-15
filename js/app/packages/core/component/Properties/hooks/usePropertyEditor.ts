@@ -1,61 +1,37 @@
-import { isErr } from '@core/util/maybeResult';
-import { propertiesServiceClient } from '@service-properties/client';
+import type { AddPropertyOptionAsyncMutation } from '@queries/properties/options';
 import { createSignal } from 'solid-js';
+import type { Accessor } from 'solid-js';
 import type { Property, PropertyOption } from '../types';
-import { ERROR_MESSAGES } from '../utils/errorHandling';
 
-export interface PropertyEditorState {
-  options: PropertyOption[];
+type LocalState = {
   selectedOptions: Set<string>;
-  isLoading: boolean;
-  error: string | null;
   hasChanges: boolean;
+};
+
+export interface PropertyEditorReturn {
+  selectedOptions: Accessor<Set<string>>;
+  hasChanges: Accessor<boolean>;
+  initializeSelectedOptions: () => void;
+  toggleOption: (optionValue: string) => void;
+  addOption: (value: string) => Promise<void>;
 }
 
 /**
  * Hook for managing property value editing in modals
  * Handles option fetching, selection state, and option creation
+ *
+ * Note: Uses manual fetch instead of TanStack Query to avoid
+ * triggering Suspense boundaries when the modal opens.
  */
-export function usePropertyEditor(property: Property) {
-  const [state, setState] = createSignal<PropertyEditorState>({
-    options: [],
+export function usePropertyEditor(
+  property: Property,
+  propertyOptions: Accessor<PropertyOption[]>,
+  addPropertyOption: AddPropertyOptionAsyncMutation
+): PropertyEditorReturn {
+  const [localState, setLocalState] = createSignal<LocalState>({
     selectedOptions: new Set(),
-    isLoading: false,
-    error: null,
     hasChanges: false,
   });
-
-  const fetchOptions = async () => {
-    setState((prev) => ({ ...prev, isLoading: true, error: null }));
-
-    try {
-      const result = await propertiesServiceClient.getPropertyOptions({
-        definition_id: property.propertyDefinitionId,
-      });
-
-      if (isErr(result)) {
-        setState((prev) => ({
-          ...prev,
-          error: ERROR_MESSAGES.OPTION_FETCH,
-          isLoading: false,
-        }));
-        return;
-      }
-
-      const [, data] = result;
-      setState((prev) => ({
-        ...prev,
-        options: Array.isArray(data) ? data : [],
-        isLoading: false,
-      }));
-    } catch (_apiError) {
-      setState((prev) => ({
-        ...prev,
-        error: ERROR_MESSAGES.OPTION_FETCH,
-        isLoading: false,
-      }));
-    }
-  };
 
   const initializeSelectedOptions = () => {
     const selected = new Set<string>();
@@ -78,11 +54,11 @@ export function usePropertyEditor(property: Property) {
       });
     }
 
-    setState((prev) => ({ ...prev, selectedOptions: selected }));
+    setLocalState((prev) => ({ ...prev, selectedOptions: selected }));
   };
 
   const toggleOption = (optionValue: string) => {
-    setState((prev) => {
+    setLocalState((prev) => {
       const newSelected = new Set(prev.selectedOptions);
 
       if (property.isMultiSelect) {
@@ -105,101 +81,74 @@ export function usePropertyEditor(property: Property) {
   };
 
   const addOption = async (value: string) => {
-    try {
-      const currentOptions = state().options;
-      const nextDisplayOrder =
-        currentOptions.length > 0
-          ? Math.max(...currentOptions.map((opt) => opt.display_order)) + 1
-          : 0;
+    const currentOptions = propertyOptions();
+    const nextDisplayOrder =
+      currentOptions.length > 0
+        ? Math.max(...currentOptions.map((opt) => opt.display_order)) + 1
+        : 0;
 
-      let optionBody:
-        | {
-            type: 'select_string';
-            option: { value: string; display_order: number };
-          }
-        | {
-            type: 'select_number';
-            option: { value: number; display_order: number };
-          };
-
-      if (property.valueType === 'SELECT_STRING') {
-        optionBody = {
-          type: 'select_string',
-          option: {
-            value,
-            display_order: nextDisplayOrder,
-          },
-        };
-      } else if (property.valueType === 'SELECT_NUMBER') {
-        const numValue = parseFloat(value);
-        if (isNaN(numValue) || !Number.isFinite(numValue)) {
-          throw new Error('Invalid number value');
+    let optionBody:
+      | {
+          type: 'select_string';
+          option: { value: string; display_order: number };
         }
-        optionBody = {
-          type: 'select_number',
-          option: {
-            value: numValue,
-            display_order: nextDisplayOrder,
-          },
+      | {
+          type: 'select_number';
+          option: { value: number; display_order: number };
         };
-      } else {
-        throw new Error(
-          `Adding options for ${property.valueType} type is not supported`
-        );
+
+    if (property.valueType === 'SELECT_STRING') {
+      optionBody = {
+        type: 'select_string',
+        option: {
+          value,
+          display_order: nextDisplayOrder,
+        },
+      };
+    } else if (property.valueType === 'SELECT_NUMBER') {
+      const numValue = parseFloat(value);
+      if (isNaN(numValue) || !Number.isFinite(numValue)) {
+        throw new Error('Invalid number value');
       }
-
-      const result = await propertiesServiceClient.addPropertyOption({
-        definition_id: property.propertyDefinitionId,
-        body: optionBody,
-      });
-
-      if (isErr(result)) {
-        throw new Error(ERROR_MESSAGES.OPTION_CREATE);
-      }
-
-      const [, newOption] = result;
-
-      // Type guard to ensure newOption is PropertyOption
-      if (!newOption || typeof newOption !== 'object' || !('id' in newOption)) {
-        throw new Error('Invalid option returned from API');
-      }
-
-      setState((prev) => ({
-        ...prev,
-        options: [...prev.options, newOption as PropertyOption],
-      }));
-
-      const newSelected = new Set(state().selectedOptions);
-
-      // The API returns the option ID, which is what we need for selection
-      const optionId = newOption.id;
-      let valueToSelect: string = optionId;
-
-      if (property.isMultiSelect) {
-        newSelected.add(valueToSelect);
-      } else {
-        newSelected.clear();
-        newSelected.add(valueToSelect);
-      }
-
-      setState((prev) => ({
-        ...prev,
-        selectedOptions: newSelected,
-        hasChanges: true,
-      }));
-    } catch (error) {
-      console.error(
-        'usePropertyEditor.addOption:',
-        error,
-        ERROR_MESSAGES.OPTION_ADD
+      optionBody = {
+        type: 'select_number',
+        option: {
+          value: numValue,
+          display_order: nextDisplayOrder,
+        },
+      };
+    } else {
+      throw new Error(
+        `Adding options for ${property.valueType} type is not supported`
       );
-      throw error;
     }
+
+    const newOption = await addPropertyOption({
+      propertyDefinitionId: property.propertyDefinitionId,
+      body: optionBody,
+    });
+
+    // Select the newly created option
+    const newSelected = new Set(localState().selectedOptions);
+    const optionId = newOption.id;
+
+    if (property.isMultiSelect) {
+      newSelected.add(optionId);
+    } else {
+      newSelected.clear();
+      newSelected.add(optionId);
+    }
+
+    setLocalState((prev) => ({
+      ...prev,
+      selectedOptions: newSelected,
+      hasChanges: true,
+    }));
   };
 
   return {
-    state,
-    fetchOptions,
+    selectedOptions: () => localState().selectedOptions,
+    hasChanges: () => localState().hasChanges,
     initializeSelectedOptions,
     toggleOption,
     addOption,

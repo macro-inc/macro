@@ -22,3 +22,5 @@ config:
   email-service:presigned_url_ttl_secs: 3600
   email-service:gmail_gcp_queue: gmail-gcp-queue-dev
   email-service:macro_db_secret_key: macro-db-dev
+  email-service:delete_unused_after_days: 5000
+  email-service:delete_inactive_after_days: 5000

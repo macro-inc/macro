@@ -1,5 +1,6 @@
 use crate::prelude::ServerToolUse;
 
+use super::web_fetch::WebFetchResponse;
 use super::web_search::WebSearchResponse;
 
 use super::{MessageResponse, Usage};
@@ -69,6 +70,7 @@ pub enum ContentDeltaEvent {
         citation: Citation,
     },
     WebSearchToolResult(WebSearchResponse),
+    WebFetchToolResult(WebFetchResponse),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

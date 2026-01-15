@@ -1,3 +1,4 @@
+use crate::domain::models::GetChannelsParams;
 use crate::domain::ports::CommsRepo;
 use chrono::DateTime;
 use chrono::Utc;
@@ -11,6 +12,9 @@ use rootcause::Report;
 use sqlx::PgPool;
 use std::collections::HashMap;
 use uuid::Uuid;
+
+mod dynamic;
+pub use dynamic::get_user_channels_dynamic;
 
 #[derive(Debug, Clone, Copy, Doppleganger, sqlx::Type)]
 #[sqlx(type_name = "comms_channel_type", rename_all = "snake_case")]
@@ -318,9 +322,9 @@ pub struct PgCommsRepo {
 impl CommsRepo for PgCommsRepo {
     async fn get_user_channels_with_participants(
         &self,
-        user_id: MacroUserIdStr<'_>,
+        req: GetChannelsParams,
     ) -> Result<Vec<ChannelWithParticipants>, rootcause::Report> {
-        Ok(get_user_channels_with_participants(&self.pool, user_id.as_ref()).await?)
+        Ok(get_user_channels_dynamic(&self.pool, &req).await?)
     }
 
     async fn get_latest_channel_messages_batch(

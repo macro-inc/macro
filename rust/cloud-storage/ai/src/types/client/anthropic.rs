@@ -17,7 +17,7 @@ pub struct AnthropicClient {
 
 impl AnthropicClient {
     pub fn new(extensions: AnthropicRequestExtensions) -> Self {
-        let client = anthropic::client::Client::dangerously_try_from_env();
+        let client = anthropic::client::Client::dangerously_try_from_env(Some(extensions.clone()));
         Self {
             inner: client,
             extensions,
@@ -73,6 +73,16 @@ impl ExtendedClient for AnthropicClient {
                     id,
                     json,
                     name: "web_search".into(),
+                }))
+            }
+            AnthropicResponseExtension::WebFetchToolResponse(response) => {
+                let id = response.tool_use_id.clone();
+                let json = serde_json::to_value(&response).ok()?;
+
+                Some(StreamPart::ToolResponse(ToolResponse::Json {
+                    id,
+                    json,
+                    name: "web_fetch".into(),
                 }))
             }
         }

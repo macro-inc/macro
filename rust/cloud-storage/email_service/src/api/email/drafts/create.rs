@@ -1,13 +1,16 @@
 use crate::api::context::ApiContext;
 use crate::api::email::validation::{self, ValidationError};
-use anyhow::Context;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
+use email_db_client::contacts::upsert_message::parse_and_upsert_message_contacts;
 use email_db_client::messages::insert::insert_message_to_send;
+use email_db_client::parse::service_to_db::addresses_from_message;
+use email_db_client::user_history::upsert_user_history;
 use model::response::ErrorResponse;
 use model::user::UserContext;
+use models_email::email::db::address::UpsertedRecipients;
 use models_email::service::link::Link;
 use models_email::service::{message, thread};
 use sqlx::types::chrono::{DateTime, Utc};
@@ -96,9 +99,16 @@ pub async fn handler(
 
     let from_email = link.email_address.0.as_ref();
 
+    // Parse and upsert contacts before starting the transaction to avoid deadlocks.
+    // Contacts are shared across messages so they must be inserted outside the transaction.
+    let addresses = addresses_from_message(&draft);
+    let recipients = parse_and_upsert_message_contacts(&ctx.db, link.id, addresses)
+        .await
+        .map_err(CreateDraftError::InsertError)?;
+
     let mut tx = ctx.db.begin().await?;
 
-    let result = insert_draft(&mut tx, &mut draft, from_email).await;
+    let result = insert_draft(&mut tx, &mut draft, from_email, recipients).await;
 
     match result {
         Ok(_) => {
@@ -114,18 +124,19 @@ pub async fn handler(
     }
 }
 
+#[tracing::instrument(skip(tx, recipients), err)]
 async fn insert_draft(
     tx: &mut sqlx::PgConnection,
     draft: &mut message::MessageToSend,
     from_email: &str,
+    recipients: UpsertedRecipients,
 ) -> anyhow::Result<()> {
-    let mut thread_db_id = draft.thread_db_id;
     let link_id = draft.link_id;
     let now: DateTime<Utc> = Utc::now();
 
-    // if there isn't already a thread associated with this message, create one
-    if thread_db_id.is_none() {
-        let link_id = draft.link_id;
+    let thread_db_id = if let Some(id) = draft.thread_db_id {
+        id
+    } else {
         let thread = thread::Thread {
             db_id: None,
             provider_id: None,
@@ -141,22 +152,19 @@ async fn insert_draft(
             messages: Vec::new(),
         };
 
-        thread_db_id = Option::from(
-            email_db_client::threads::insert::insert_thread(&mut *tx, &thread, link_id)
-                .await
-                .context("unable to insert thread")?,
-        );
-        draft.thread_db_id = thread_db_id;
-    }
+        let new_id =
+            email_db_client::threads::insert::insert_thread(&mut *tx, &thread, link_id).await?;
+
+        draft.thread_db_id = Some(new_id);
+        new_id
+    };
 
     let from_email_id =
-        // safe because we always populate the from field before calling this function
-        email_db_client::contacts::get::fetch_id_by_email(tx, link_id, from_email)
-            .await.context("unable to fetch from email id")?;
+        email_db_client::contacts::get::fetch_id_by_email(tx, link_id, from_email).await?;
 
-    insert_message_to_send(tx, draft, thread_db_id.unwrap(), from_email_id, true)
-        .await
-        .context("unable to insert message to send")?;
+    insert_message_to_send(tx, draft, thread_db_id, from_email_id, true, recipients).await?;
+
+    upsert_user_history(tx, link_id, thread_db_id).await?;
 
     Ok(())
 }

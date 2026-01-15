@@ -2,8 +2,7 @@ use crate::{Base64SerdeErr, Base64Str, Cursor, CursorVal, CursorWithValAndFilter
 use axum::extract::{FromRequestParts, Query};
 use axum::http::{StatusCode, request::Parts};
 use axum::response::IntoResponse;
-use axum::{Json, RequestPartsExt, async_trait};
-pub use either::Either;
+use axum::{Json, async_trait};
 use model_error_response::ErrorResponse;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
@@ -115,46 +114,5 @@ where
             .map_err(CursorExtractErr::DecodeErr)?;
 
         Ok(CursorExtractor::Some(decoded))
-    }
-}
-
-/// utility type for handling the cases where exactly 1 of 2 extractors must pass
-pub struct EitherWrapper<L, R>(pub Either<L, R>);
-
-impl<L, R> IntoResponse for EitherWrapper<L, R>
-where
-    L: IntoResponse,
-    R: IntoResponse,
-{
-    fn into_response(self) -> axum::response::Response {
-        match self.0 {
-            Either::Left(l) => l.into_response(),
-            Either::Right(r) => r.into_response(),
-        }
-    }
-}
-
-#[axum::async_trait]
-impl<S, L, R> FromRequestParts<S> for EitherWrapper<L, R>
-where
-    L: FromRequestParts<S> + Send + 'static,
-    L::Rejection: Send,
-    R: FromRequestParts<S> + Send + 'static,
-    R::Rejection: Send,
-    S: Send + Sync,
-{
-    type Rejection = EitherWrapper<L::Rejection, R::Rejection>;
-
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let res: Result<L, _> = parts.extract_with_state(state).await;
-        if let Ok(left) = res {
-            return Ok(EitherWrapper(Either::Left(left)));
-        }
-        let res2: Result<R, _> = parts.extract_with_state(state).await;
-
-        res2.map(Either::Right)
-            .map(EitherWrapper)
-            .map_err(Either::Right)
-            .map_err(EitherWrapper)
     }
 }

@@ -19,6 +19,10 @@ export const TOKENS = {
   // unified list
   unifiedList: {
     togglePreview: 'unifiedList.togglePreview',
+    navigation: {
+      parent: 'unifiedList.navigation.parent',
+      child: 'unifiedList.navigation.child',
+    },
   },
 
   // entity navigation
@@ -222,6 +226,7 @@ export const TOKENS = {
       toggle: 'chat-spotlight-toggle',
       close: 'chat-spotlight-close',
     },
+    new: 'chat-new',
   },
 } as const;
 

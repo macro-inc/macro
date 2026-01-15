@@ -7,7 +7,6 @@ import {
   Svc,
   withFetchErrors,
 } from '@core/service';
-import { documentMentionMetadata } from '@service-notification/client';
 import { z } from 'zod';
 import * as schemas from './generated/zod';
 
@@ -668,17 +667,6 @@ export const StorageService = new Svc('Document++ Storage Service API')
         schemas.deleteUserDocumentViewLocationParams.shape.document_id,
     },
     result: schemas.deleteUserDocumentViewLocationResponse.shape,
-    modifies: true,
-    throws: withFetchErrors(),
-  })
-  .fn('upsertUserMentions', {
-    description: 'Upsert the user mentions for a document',
-    args: {
-      documentId: schemas.upsertUserMentionsParams.shape.document_id,
-      mentions: schemas.upsertUserMentionsBody.shape.mentions,
-      metadata: documentMentionMetadata,
-    },
-    result: schemas.upsertUserMentionsResponse.shape,
     modifies: true,
     throws: withFetchErrors(),
   })
