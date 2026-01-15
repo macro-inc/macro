@@ -213,6 +213,7 @@ export function EmailCompose(props: EmailComposeProps) {
 
     const draftResponse = await saveEmailDraft({
       ...draftToSave,
+      db_id: currentDraftID(),
       link_id: linkID,
     });
 
