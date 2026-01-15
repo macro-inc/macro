@@ -31,7 +31,7 @@ async fn main() {
                 }
     );
 
-    let client = anthropic::client::Client::dangerously_try_from_env();
+    let client = anthropic::client::Client::dangerously_try_from_env(None);
     let mut request = anthropic::types::request::CreateMessageRequestBody::default();
     request.model = "claude-haiku-4-5".into();
     request.max_tokens = 6767;

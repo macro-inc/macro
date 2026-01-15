@@ -1,0 +1,15 @@
+[package]
+name = "ai_toolset"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+serde_json = { workspace = true }
+futures = { workspace = true }
+serde = { workspace = true }
+utoipa = { workspace = true }
+schemars = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }

@@ -1,56 +1,13 @@
-use crate::api::search::{SearchPaginationParams, simple::SearchError};
-use axum::{
-    Extension,
-    extract::{self, State},
-    response::Json,
-};
+use crate::api::search::simple::SearchError;
 use item_filters::ProjectFilters;
 use macro_user_id::user_id::MacroUserId;
-use model::{
-    item::{ShareableItem, ShareableItemType},
-    response::ErrorResponse,
-    user::UserContext,
-};
-use models_search::project::{ProjectSearchRequest, SimpleProjectSearchResponse};
-use models_search::{SearchOn, SimpleSearchResponse};
+use model::item::{ShareableItem, ShareableItemType};
 use opensearch_client::search::model::{Highlight, SearchHit};
-use sqlx::types::Uuid;
+use sqlx::{Pool, Postgres, types::Uuid};
 
 use crate::api::ApiContext;
 
-/// Perform a search through your projects
-/// This is a simple search where we do not group your results by project id.
-#[utoipa::path(
-        post,
-        path = "/search/simple/project",
-        operation_id = "simple_project_search",
-        params(
-            ("page" = Option<i64>, Query, description = "The page. Defaults to 0."),
-            ("page_size" = Option<i64>, Query, description = "The page size. Defaults to 10."),
-        ),
-        responses(
-            (status = 200, body=SimpleProjectSearchResponse),
-            (status = 400, body=ErrorResponse),
-            (status = 401, body=ErrorResponse),
-            (status = 500, body=ErrorResponse),
-        )
-    )]
-#[tracing::instrument(skip(ctx, user_context, query_params), fields(user_id=user_context.user_id), err)]
-pub async fn handler(
-    State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
-    extract::Query(query_params): extract::Query<SearchPaginationParams>,
-    extract::Json(req): extract::Json<ProjectSearchRequest>,
-) -> Result<Json<SimpleSearchResponse>, SearchError> {
-    tracing::info!("simple_project_search");
-
-    let results = search_projects(&ctx, user_context.user_id.as_str(), &query_params, req).await?;
-
-    Ok(Json(SimpleSearchResponse {
-        results: results.into_iter().map(|a| a.into()).collect(),
-    }))
-}
-
+#[derive(Debug)]
 pub(in crate::api::search) struct FilterProjectResponse {
     pub project_ids: Vec<String>,
     pub ids_only: bool,
@@ -139,89 +96,57 @@ pub(in crate::api::search) async fn filter_projects(
     })
 }
 
-pub(in crate::api::search) async fn search_projects(
-    ctx: &ApiContext,
-    user_id: &str,
-    query_params: &SearchPaginationParams,
-    req: ProjectSearchRequest,
-) -> Result<Vec<opensearch_client::search::model::SearchHit>, SearchError> {
-    // content search is not applicable for projects
-    if let SearchOn::Content = req.search_on {
-        return Ok(Vec::new());
-    }
-
-    if user_id.is_empty() {
-        return Err(SearchError::NoUserId);
-    }
-
-    let user_id = MacroUserId::parse_from_str(user_id)
-        .map_err(|_| SearchError::InvalidUserId(user_id.to_string()))?
-        .lowercase();
-
-    let page = query_params.page.unwrap_or(0);
-
-    let page_size = if let Some(page_size) = query_params.page_size {
-        if !(0..=100).contains(&page_size) {
-            return Err(SearchError::InvalidPageSize);
+/// Performs the name search over project names
+#[tracing::instrument(skip(db), err)]
+pub(in crate::api::search::simple) async fn search_names<'a>(
+    db: &Pool<Postgres>,
+    user_id: &MacroUserId<macro_user_id::lowercased::Lowercase<'a>>,
+    filter_project_response: &FilterProjectResponse,
+    term: String,
+    limit: u32,
+    cursor: models_search_cursor::SearchCursorOption,
+) -> Result<(Vec<SearchHit>, models_search_cursor::SearchCursorOption), SearchError> {
+    // If cursor is Done, no more results to fetch
+    let inner_cursor = match cursor {
+        models_search_cursor::SearchCursorOption::Done => {
+            return Ok((vec![], models_search_cursor::SearchCursorOption::Done));
         }
-        page_size
-    } else {
-        10
+        models_search_cursor::SearchCursorOption::NotDone(c) => c,
     };
 
-    let terms: Vec<String> = if let Some(terms) = req.terms {
-        terms
-            .into_iter()
-            .filter_map(|t| if t.len() < 3 { None } else { Some(t) })
-            .collect()
-    } else if let Some(query) = req.query {
-        if query.len() < 3 {
-            return Err(SearchError::InvalidQuerySize);
-        }
-
-        vec![query]
-    } else {
-        return Err(SearchError::NoQueryOrTermsProvided);
-    };
-
-    let filters = req.filters.unwrap_or_default();
-
-    let filter_project_response = filter_projects(ctx, user_id.as_ref(), &filters).await?;
-
-    if filter_project_response.project_ids.is_empty() && filter_project_response.ids_only {
-        return Ok(Vec::new());
-    }
-
-    let project_ids = filter_project_response
+    let project_uuids = filter_project_response
         .project_ids
         .iter()
         .map(|p| p.parse().unwrap())
         .collect::<Vec<Uuid>>();
 
-    let results = name_search::search_project_names(
-        &ctx.db,
-        &user_id,
-        &project_ids,
-        terms[0].clone(),
+    name_search::search_project_names(
+        db,
+        user_id,
+        &project_uuids,
+        term,
         filter_project_response.ids_only,
-        page_size,
-        page * page_size,
+        limit,
+        inner_cursor,
     )
-    .await?;
-
-    let results: Vec<SearchHit> = results
-        .into_iter()
-        .map(|n| SearchHit {
-            entity_id: n.entity_id,
-            entity_type: n.entity_type,
-            score: None,
-            highlight: Highlight {
-                name: Some(n.name),
-                ..Default::default()
-            },
-            goto: None,
-        })
-        .collect();
-
-    Ok(results)
+    .await
+    .map_err(SearchError::NameSearch)
+    .map(|response| {
+        let hits = response
+            .items
+            .into_iter()
+            .map(|n| SearchHit {
+                entity_id: n.entity_id,
+                entity_type: n.entity_type,
+                score: None,
+                highlight: Highlight {
+                    name: Some(n.name),
+                    ..Default::default()
+                },
+                goto: None,
+                updated_at: Some(n.updated_at),
+            })
+            .collect();
+        (hits, response.cursor)
+    })
 }

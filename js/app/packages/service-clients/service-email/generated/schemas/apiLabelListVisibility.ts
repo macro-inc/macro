@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ApiLabelListVisibility = typeof ApiLabelListVisibility[keyof typeof ApiLabelListVisibility];
-
+export type ApiLabelListVisibility =
+  (typeof ApiLabelListVisibility)[keyof typeof ApiLabelListVisibility];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ApiLabelListVisibility = {

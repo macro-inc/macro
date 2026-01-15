@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ApiMessageListVisibility = typeof ApiMessageListVisibility[keyof typeof ApiMessageListVisibility];
-
+export type ApiMessageListVisibility =
+  (typeof ApiMessageListVisibility)[keyof typeof ApiMessageListVisibility];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ApiMessageListVisibility = {

@@ -70,6 +70,34 @@ impl LexicalClient {
 
         response.json().await.context("unexpected response")
     }
+
+    /// Parse markdown content from a presigned URL (for documents not in sync-service)
+    #[tracing::instrument(skip(self), err)]
+    pub async fn parse_markdown_for_ai_from_url(
+        &self,
+        presigned_url: &str,
+    ) -> Result<CognitionResponseData> {
+        let full_url = format!("{}/cognition/presigned", self.url);
+        let response = self
+            .client
+            .get(&full_url)
+            .query(&[("url", presigned_url)])
+            .send()
+            .await?;
+
+        let status_code = response.status();
+        if status_code != reqwest::StatusCode::OK {
+            let body: String = response.text().await?;
+            tracing::error!(
+                body=%body,
+                status=%status_code,
+                "unexpected response from lexical service while parsing presigned URL content"
+            );
+            anyhow::bail!(body);
+        }
+
+        response.json().await.context("unexpected response")
+    }
 }
 
 #[cfg(test)]

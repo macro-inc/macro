@@ -225,3 +225,10 @@ pub enum AnnotationIncrementalUpdate<'a> {
         response: &'a DeleteUnthreadedAnchorResponse,
     },
 }
+
+#[derive(Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct Mentions {
+    pub users: Vec<String>,
+    pub mention_id: String,
+}

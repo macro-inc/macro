@@ -3,7 +3,8 @@ import {
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { useChannelsContext } from '@core/component/ChannelsProvider';
+import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
+import { useChannelsContext } from '@core/context/channels';
 import { Tooltip } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
 import {
@@ -64,8 +65,8 @@ function QuickAccessItem(props: QuickAccessItemProps) {
   ) => {
     const blockHandle = await blockOrchestrator.getBlockHandle(channelId);
     await blockHandle?.goToLocationFromParams({
-      message_id: messageId,
-      thread_id: threadId,
+      [CHANNEL_URL_PARAMS.message]: messageId,
+      [CHANNEL_URL_PARAMS.thread]: threadId,
     });
   };
 
@@ -162,7 +163,7 @@ function QuickAccessItem(props: QuickAccessItemProps) {
         class="relative flex justify-center items-center bg-panel hover:bg-panel-highlight border border-edge rounded-full size-8 transition-colors cursor-pointer select-none shrink-0"
       >
         <Show when={unreadNotifications().length > 0}>
-          <div class="-top-1 -right-1 z-10 absolute bg-accent px-px rounded-full min-w-[1lh] font-mono font-bold text-[10px] text-panel text-center">
+          <div class="-top-1 -right-1 z-10 absolute bg-accent px-px rounded-full min-w-[1lh] font-mono font-bold text-xxs text-panel text-center">
             {unreadNotifications().length}
           </div>
         </Show>
@@ -186,11 +187,10 @@ function QuickAccessItem(props: QuickAccessItemProps) {
 
 export function QuickAccess() {
   const channelsContext = useChannelsContext();
-  const channels = channelsContext.channels;
   const notificationSource = useGlobalNotificationSource();
   const allNotifications = notificationSource.notifications;
   const channelsWithNotifications = createMemo(() => {
-    const channels_ = channels();
+    const channels_ = channelsContext.channels();
     const notifications = allNotifications();
 
     return channels_

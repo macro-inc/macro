@@ -14,6 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
+      api_changed: ${{ steps.filter.outputs.api_changed }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -27,6 +28,8 @@ jobs:
               - 'js/app/src/**'
               - '.github/actions/setup-reqs-web/**'
               - '.github/workflows/web-app-check-main.yml'
+            api_changed:
+              - 'rust/cloud-storage/**/*.rs'
 
   typescript:
     needs: path-check
@@ -40,9 +43,14 @@ jobs:
         uses: ./.github/actions/setup-reqs-web
         with:
           npm-rc-token: ${{ secrets.NPMRC_GH_TOKEN }}
+      - name: Setup Biome
+        uses: biomejs/setup-biome@v2
+        with:
+          version: 2.2.6
       - name: Generate API Types
+        if: needs.path-check.outputs.api_changed == 'true'
         working-directory: js/app
-        run: just gen-api
+        run: bun run gen-api -- --check
       - name: Check Types
         working-directory: js/app
         run: |
@@ -112,7 +120,7 @@ jobs:
       - name: Setup Biome
         uses: biomejs/setup-biome@v2
         with:
-          version: latest
+          version: 2.2.6
       - name: Cycles Import Check
         working-directory: js/app
         run: biome lint --changed --no-errors-on-unmatched --only=nursery/noImportCycles

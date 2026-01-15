@@ -21,8 +21,7 @@ For each tuple it generates:
   - ContentType::mime_type() - Gets MIME type for ContentType
 
  */
-export type FileType = typeof FileType[keyof typeof FileType];
-
+export type FileType = (typeof FileType)[keyof typeof FileType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const FileType = {
@@ -210,6 +209,7 @@ export const FileType = {
   rbi: 'rbi',
   rs: 'rs',
   scss: 'scss',
+  sass: 'sass',
   shader: 'shader',
   sh: 'sh',
   bash: 'bash',

@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type PdfAnchorRequestOneOfFourAllOfAnchorType = typeof PdfAnchorRequestOneOfFourAllOfAnchorType[keyof typeof PdfAnchorRequestOneOfFourAllOfAnchorType];
-
+export type PdfAnchorRequestOneOfFourAllOfAnchorType =
+  (typeof PdfAnchorRequestOneOfFourAllOfAnchorType)[keyof typeof PdfAnchorRequestOneOfFourAllOfAnchorType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const PdfAnchorRequestOneOfFourAllOfAnchorType = {

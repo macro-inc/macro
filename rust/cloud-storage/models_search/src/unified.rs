@@ -155,11 +155,23 @@ impl UnifiedSearchResponseItem {
                 .map(|m| m.updated_at)
                 .unwrap_or_default(),
             Self::Email(item) => item.updated_at,
-            Self::Channel(item) => item
-                .metadata
-                .as_ref()
-                .map(|m| m.updated_at)
-                .unwrap_or_default(),
+            Self::Channel(item) => {
+                // Get the max updated_at from channel_message_search_results
+                let max_result_updated_at = item
+                    .extra
+                    .channel_message_search_results
+                    .iter()
+                    .filter_map(|r| r.updated_at)
+                    .max();
+
+                // Use max from results, or fall back to metadata.updated_at
+                max_result_updated_at.unwrap_or_else(|| {
+                    item.metadata
+                        .as_ref()
+                        .map(|m| m.updated_at)
+                        .unwrap_or_default()
+                })
+            }
             Self::Project(item) => item
                 .metadata
                 .as_ref()
@@ -171,7 +183,10 @@ impl UnifiedSearchResponseItem {
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, Default)]
 pub struct UnifiedSearchResponse {
+    /// The search results
     pub results: Vec<UnifiedSearchResponseItem>,
+    /// The next cursor to use for paginating results
+    pub next_cursor: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]

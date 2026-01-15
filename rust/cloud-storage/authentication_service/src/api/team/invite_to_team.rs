@@ -25,7 +25,7 @@ use crate::api::{
 
 use model::{response::ErrorResponse, tracking::IPContext};
 
-use model_notifications::{InviteToTeamMetadata, NotificationEvent, NotificationQueueMessage};
+use model_notifications::{InviteToTeamMetadata, NotificationQueueMessage};
 
 /// The request body to invite a user to a team
 #[derive(serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
@@ -184,7 +184,7 @@ pub(in crate::api::team) async fn notify_team_invite(
         let notification_queue_message = NotificationQueueMessage {
             notification_entity: EntityType::Team
                 .with_entity_string(team_invite.team_invite_id.to_string()),
-            notification_event: NotificationEvent::InviteToTeam(notification_metadata.clone()),
+            notification_event: notification_metadata.clone().into(),
             sender_id: Some(invited_by.clone()),
             recipient_ids: Some(vec![format!("macro|{}", team_invite.email.as_ref())]),
         };

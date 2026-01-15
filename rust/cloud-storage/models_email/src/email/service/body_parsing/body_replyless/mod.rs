@@ -8,18 +8,10 @@ use html_parser::extract_reply_html;
 use plaintext_parser::extract_reply_plaintext;
 
 pub fn get_body_replyless_for_message(message: &message::Message) -> Option<String> {
-    if message.body_html_sanitized.is_some() {
-        extract_reply_html(
-            message.subject.as_deref(),
-            message.body_html_sanitized.as_ref().unwrap(),
-        )
-        .into()
-    } else if message.body_text.is_some() {
-        extract_reply_plaintext(
-            message.subject.as_deref(),
-            message.body_text.as_ref().unwrap(),
-        )
-        .into()
+    if let Some(sanitized) = message.body_html_sanitized.as_ref() {
+        extract_reply_html(message.subject.as_deref(), sanitized).into()
+    } else if let Some(body) = message.body_text.as_ref() {
+        extract_reply_plaintext(message.subject.as_deref(), body).into()
     } else {
         None
     }
@@ -96,7 +88,7 @@ mod tests {
 
     fn test_email_extraction(full_email: &str, expected_reply: &str, test_name: &str) {
         // Create a message with HTML content
-        let mut message = service::message::Message {
+        let message = service::message::Message {
             db_id: None,
             provider_id: None,
             global_id: None,
@@ -132,7 +124,7 @@ mod tests {
             updated_at: Default::default(),
         };
 
-        let mut body_replyless = get_body_replyless_for_message(&message);
+        let body_replyless = get_body_replyless_for_message(&message);
 
         assert_eq!(
             body_replyless

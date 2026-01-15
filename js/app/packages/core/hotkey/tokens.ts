@@ -19,6 +19,10 @@ export const TOKENS = {
   // unified list
   unifiedList: {
     togglePreview: 'unifiedList.togglePreview',
+    navigation: {
+      parent: 'unifiedList.navigation.parent',
+      child: 'unifiedList.navigation.child',
+    },
   },
 
   // entity navigation
@@ -54,13 +58,6 @@ export const TOKENS = {
   // global
   global: {
     createCommand: 'global.createCommand',
-    quickCreateCommand: 'global.quickCreateCommand',
-    quickCreate: {
-      note: 'global.quickCreate.note',
-      email: 'global.quickCreate.email',
-      message: 'global.quickCreate.message',
-      menuFormat: 'global.quickCreate.menuFormat',
-    },
     commandMenu: 'global.commandMenu',
     toggleBigChat: 'global.toggleBigChat',
     instructions: 'global.instructions',
@@ -222,6 +219,7 @@ export const TOKENS = {
       toggle: 'chat-spotlight-toggle',
       close: 'chat-spotlight-close',
     },
+    new: 'chat-new',
   },
 } as const;
 

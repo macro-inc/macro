@@ -1,4 +1,4 @@
-import { useChannelsContext } from '@core/component/ChannelsProvider';
+import { useChannelsContext } from '@core/context/channels';
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { DialogWrapper } from '@core/component/DialogWrapper';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -22,11 +22,11 @@ import { VList } from 'virtua/solid';
 import { beveledCorners } from '../../../block-theme/signals/themeSignals';
 import { KonsoleFilter } from './KonsoleFilter';
 import {
+  type ChannelLookup,
   COMMAND_ITEM_HEIGHT,
   COMMAND_ITEM_MARGIN,
   COMMAND_ITEM_PADDING,
   CommandItemCard,
-  createChannelLookup,
   filterItemByCategory,
   hydrateChannel,
   setCommandCategoryIndex,
@@ -135,6 +135,7 @@ export function KommandMenuInner(props: {
       fuzzyWeight: hasQuery ? 0.7 : 0.1,
       timeWeight: hasQuery ? 0.3 : 0.9,
       minFuzzyThreshold: hasQuery ? 0.1 : 0,
+      commaSeparatedChannelMatch: true,
     };
   });
 
@@ -161,7 +162,7 @@ export function KommandMenuInner(props: {
   });
 
   const paginatedSearch = usePaginatedSearchItems(fullTextQueryOrBlank);
-  const channelLookup = createChannelLookup(channelsContext);
+  const channelLookup = () => channelsContext!.channelsById() as ChannelLookup;
 
   const handleLoadMore = async () => {
     const loadMoreIndex = filteredItems().length - 1; // Position of "Load More" button

@@ -1,12 +1,12 @@
-pub(crate) mod apple;
-pub(crate) mod error;
-pub(crate) mod google;
-pub(crate) mod identity_provider;
-pub(crate) mod jwt;
-pub(crate) mod logout;
-pub(crate) mod oauth;
-pub(crate) mod password;
-pub(crate) mod passwordless;
+pub mod apple;
+pub mod error;
+pub mod google;
+pub mod identity_provider;
+pub mod jwt;
+pub mod logout;
+pub mod oauth;
+pub mod password;
+pub mod passwordless;
 pub mod user;
 
 pub type Result<T, E = error::FusionAuthClientError> = std::result::Result<T, E>;
@@ -39,16 +39,14 @@ impl AuthedClient {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct UnauthedClient {
     inner: reqwest::Client,
 }
 
 impl UnauthedClient {
     pub fn new() -> Self {
-        let client = reqwest::Client::new();
-
-        Self { inner: client }
+        Self::default()
     }
 
     pub fn client(&self) -> &reqwest::Client {
@@ -110,10 +108,10 @@ impl FusionAuthClient {
     /// If login_hint is provided, it will be used as the login_hint parameter. This is used to
     /// ensure users are correctly redirected for domain specific SSO
     #[tracing::instrument(skip(self, state), fields(application_id=%self.application_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
-    pub fn construct_oauth2_authorize_url<'a, T>(
+    pub fn construct_oauth2_authorize_url<T>(
         &self,
         idp_id: &str,
-        login_hint: Option<&'a str>,
+        login_hint: Option<&str>,
         state: Option<T>,
     ) -> anyhow::Result<String>
     where

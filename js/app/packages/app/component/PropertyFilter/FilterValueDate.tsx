@@ -51,7 +51,7 @@ export const FilterValueDate: Component<FilterValueDateProps> = (props) => {
         ref={buttonRef}
         type="button"
         onClick={() => setIsOpen(true)}
-        class="h-6 px-2 w-fit text-[10px] border border-edge hover:bg-hover text-left font-mono flex items-center"
+        class="h-6 px-2 w-fit text-xxs border border-edge hover:bg-hover text-left font-mono flex items-center"
         classList={{
           'text-ink': props.value !== null,
           'text-ink-muted': props.value === null,

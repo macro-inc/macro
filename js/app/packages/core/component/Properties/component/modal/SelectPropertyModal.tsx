@@ -1,24 +1,28 @@
 import { useBlockId } from '@core/block';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { toast } from '@core/component/Toast/Toast';
 import { MODAL_VIEWPORT_CLASSES } from '@core/util/modalUtils';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
-import { createEffect, createSignal, For, Show } from 'solid-js';
+import { useAddEntityPropertyMutation } from '@queries/properties/entity';
+import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { addEntityProperty } from '../../api';
 import { MODAL_DIMENSIONS } from '../../constants';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import { usePropertySelection } from '../../hooks/usePropertySelection';
 import { PROPERTY_STYLES } from '../../styles';
-import type { PropertySelectorProps } from '../../types';
+import type {
+  PropertyDefinitionDomain,
+  PropertySelectorProps,
+} from '../../types';
 import {
   getPropertyDefinitionTypeDisplay,
+  toPropertyDefinitionDomain,
   useSearchInputFocus,
 } from '../../utils';
-import { ERROR_MESSAGES, handlePropertyError } from '../../utils/errorHandling';
+import { useListPropertiesQuery } from '@queries/properties/definitions';
+
 export function SelectPropertyModal(props: PropertySelectorProps) {
   const blockId = useBlockId();
   const { entityType, onPropertyAdded, openCreateProperty } =
@@ -26,22 +30,47 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
   const [isAdding, setIsAdding] = createSignal(false);
   const [searchQuery, setSearchQuery] = createSignal('');
 
+  const addMutation = useAddEntityPropertyMutation();
+
+  const listPropertiesQuery = useListPropertiesQuery(() => ({
+    scope: 'all',
+    includeOptions: true,
+    forEntityType: entityType,
+  }));
+
+  const availableProperties = createMemo((): PropertyDefinitionDomain[] => {
+    if (
+      listPropertiesQuery.isLoading ||
+      listPropertiesQuery.isError ||
+      !listPropertiesQuery.data
+    ) {
+      return [];
+    }
+
+    const data = listPropertiesQuery.data;
+
+    const properties = Array.isArray(data) ? data : [];
+    return properties.map((item) => {
+      if ('definition' in item) {
+        return toPropertyDefinitionDomain(
+          item.definition,
+          item.property_options || []
+        );
+      }
+      return toPropertyDefinitionDomain(item);
+    });
+  });
+
   let searchInputRef!: HTMLInputElement;
   let modalRef!: HTMLDivElement;
 
-  const {
-    state,
-    filteredProperties,
-    fetchAvailableProperties,
-    togglePropertySelection,
-  } = usePropertySelection(
-    props.existingPropertyIds,
-    () => searchQuery(),
-    entityType
-  );
+  const { selectedPropertyIds, filteredProperties, togglePropertySelection } =
+    usePropertySelection(props.existingPropertyIds, availableProperties, () =>
+      searchQuery()
+    );
 
   const handleAddProperties = async () => {
-    const selected = state().selectedPropertyIds;
+    const selected = selectedPropertyIds();
     if (selected.size === 0) return;
 
     setIsAdding(true);
@@ -49,38 +78,28 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
     try {
       const addPromises = Array.from(selected).map(
         async (propertyDefinitionId) => {
-          const result = await addEntityProperty(
-            blockId,
-            entityType,
-            propertyDefinitionId
-          );
-
-          return handlePropertyError(
-            result,
-            ERROR_MESSAGES.PROPERTY_ADD,
-            'SelectPropertyModal.handleAddProperties'
-          );
+          try {
+            await addMutation.mutateAsync({
+              entityId: blockId,
+              entityType,
+              propertyDefinitionId,
+            });
+            return true;
+          } catch {
+            // Error toast is shown by mutation's onError callback
+            return false;
+          }
         }
       );
 
       const results = await Promise.all(addPromises);
-      const failures = results.filter((success) => !success);
+      const allSucceeded = results.every(Boolean);
 
-      // Close modal regardless of success/failure (toasts already shown)
       props.onClose();
 
-      if (failures.length === 0) {
+      if (allSucceeded) {
         onPropertyAdded();
       }
-    } catch (error) {
-      // Handle unexpected exceptions (e.g., Promise.all rejection)
-      console.error(
-        'SelectPropertyModal.handleAddProperties:',
-        error,
-        ERROR_MESSAGES.PROPERTY_ADD
-      );
-      toast.failure(ERROR_MESSAGES.PROPERTY_ADD);
-      props.onClose();
     } finally {
       setIsAdding(false);
     }
@@ -112,12 +131,11 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
 
   useSearchInputFocus(
     () => searchInputRef,
-    () => props.isOpen && state().availableProperties.length > 0
+    () => props.isOpen && availableProperties().length > 0
   );
 
   createEffect(() => {
     if (props.isOpen) {
-      fetchAvailableProperties();
       setSearchQuery('');
     }
   });
@@ -169,7 +187,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
             />
           </div>
 
-          <Show when={state().availableProperties.length > 0}>
+          <Show when={availableProperties().length > 0}>
             <div class="px-4 pb-2">
               <div class="relative">
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-10">
@@ -189,7 +207,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
 
           <div class="px-4 pb-2 overflow-y-auto max-h-[60vh]">
             <Show
-              when={!state().isLoading}
+              when={!listPropertiesQuery.isLoading}
               fallback={
                 <div class="flex items-center justify-center py-8">
                   <div class="w-5 h-5 animate-spin">
@@ -199,25 +217,9 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
                 </div>
               }
             >
-              <Show
-                when={!state().error}
-                fallback={
-                  <div class="text-center py-6">
-                    <div class="text-failure-ink mb-3 text-sm">
-                      {state().error}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={fetchAvailableProperties}
-                      class="px-3 py-1.5 bg-accent text-accent-ink text-sm hover:bg-accent/90"
-                    >
-                      Retry
-                    </button>
-                  </div>
-                }
-              >
+              <Show when={!listPropertiesQuery.error}>
                 <Show
-                  when={state().availableProperties.length > 0}
+                  when={availableProperties().length > 0}
                   fallback={
                     <div class="text-center py-6">
                       <div class="text-ink-muted text-sm">
@@ -238,7 +240,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
                       <For each={filteredProperties()}>
                         {(property) => {
                           const isSelected = () =>
-                            state().selectedPropertyIds.has(property.id);
+                            selectedPropertyIds().has(property.id);
 
                           return (
                             <button
@@ -252,15 +254,15 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
                                 <div class="flex-1">
                                   <div class="flex items-center gap-2">
                                     <h4 class="font-medium text-xs">
-                                      {property.display_name}
+                                      {property.displayName}
                                     </h4>
                                   </div>
                                   <div class="text-xs text-ink-muted mt-0.5">
                                     {getPropertyDefinitionTypeDisplay({
-                                      dataType: property.data_type,
+                                      dataType: property.valueType,
                                       specificEntityType:
-                                        property.specific_entity_type,
-                                      isMultiSelect: property.is_multi_select,
+                                        property.specificEntityType,
+                                      isMultiSelect: property.isMultiSelect,
                                     })}
                                   </div>
                                 </div>
@@ -292,12 +294,12 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
             >
               Cancel
             </button>
-            <Show when={state().selectedPropertyIds.size > 0}>
+            <Show when={selectedPropertyIds().size > 0}>
               <button
                 type="button"
-                class={`${PROPERTY_STYLES.button.base} ${state().selectedPropertyIds.size > 0 && !isAdding() ? PROPERTY_STYLES.button.accent : 'bg-ink-muted text-ink cursor-not-allowed'}`}
+                class={`${PROPERTY_STYLES.button.base} ${selectedPropertyIds().size > 0 && !isAdding() ? PROPERTY_STYLES.button.accent : 'bg-ink-muted text-ink cursor-not-allowed'}`}
                 onClick={handleAddProperties}
-                disabled={state().selectedPropertyIds.size === 0 || isAdding()}
+                disabled={selectedPropertyIds().size === 0 || isAdding()}
               >
                 <Show
                   when={!isAdding()}
@@ -311,13 +313,13 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
                   }
                 >
                   Add{' '}
-                  {state().selectedPropertyIds.size > 0
-                    ? `(${state().selectedPropertyIds.size})`
+                  {selectedPropertyIds().size > 0
+                    ? `(${selectedPropertyIds().size})`
                     : ''}
                 </Show>
               </button>
             </Show>
-            <Show when={state().selectedPropertyIds.size === 0}>
+            <Show when={selectedPropertyIds().size === 0}>
               <div class="flex gap-2">
                 <button
                   type="button"
@@ -326,7 +328,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
                     openCreateProperty();
                   }}
                   class={`${PROPERTY_STYLES.button.base} ${PROPERTY_STYLES.button.accent}`}
-                  disabled={state().isLoading}
+                  disabled={false}
                 >
                   Create New Property
                 </button>

@@ -1,5 +1,5 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import type { BlockName } from '@core/block';
+import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon, getIconConfig } from '@core/component/EntityIcon';
 import { DeprecatedButton } from '@core/component/FormControls/DeprecatedButton';
 import { toast } from '@core/component/Toast/Toast';
@@ -9,6 +9,7 @@ import {
   createCanvasFileFromJsonString,
   createChat,
   createMarkdownFile,
+  createTask,
 } from '@core/util/create';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { useCreateProject } from '@service-storage/projects';
@@ -16,7 +17,7 @@ import { type Component, createSignal, For } from 'solid-js';
 
 type MenuItemProps = {
   label: string;
-  blockName: BlockName;
+  blockName: BlockName | BlockAlias;
   index?: number;
   hotkeyToken: HotkeyToken;
   Icon: Component;
@@ -46,7 +47,7 @@ function MenuContent(props: { projectId: string }) {
   let ref!: HTMLDivElement;
 
   const createBlock = async (spec: {
-    blockName: BlockName;
+    blockName: BlockName | BlockAlias;
     createFn: () => Promise<string>;
     loading?: boolean;
   }) => {
@@ -118,6 +119,28 @@ function MenuContent(props: { projectId: string }) {
               projectId: props.projectId,
             });
             if (!result) throw new Error('Failed to create markdown file');
+            return result;
+          },
+        }),
+    },
+    {
+      label: 'Task',
+      blockName: 'task' as BlockAlias,
+      hotkeyToken: TOKENS.create.task,
+      Icon: () => (
+        <EntityIcon targetType="task" size="shrinkFill" theme="monochrome" />
+      ),
+      action: () =>
+        createBlock({
+          blockName: 'task' as BlockAlias,
+          loading: true,
+          createFn: async () => {
+            const result = await createTask({
+              title: '',
+              content: '',
+              projectId: props.projectId,
+            });
+            if (!result) throw new Error('Failed to create task');
             return result;
           },
         }),

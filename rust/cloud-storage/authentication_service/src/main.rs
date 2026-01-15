@@ -21,8 +21,8 @@ use teams::{
 };
 
 use crate::api::context::{
-    ApiContext, MacroApiTokenContext, MacroApiTokenIssuer, MacroApiTokenPrivateSecretKey,
-    StripeWebhookSecretKey,
+    ApiContext, MacroApiTokenContext, MacroApiTokenExpirySeconds, MacroApiTokenIssuer,
+    MacroApiTokenPrivateSecretKey, StripeWebhookSecretKey,
 };
 use std::sync::Arc;
 
@@ -30,7 +30,8 @@ mod api;
 mod config;
 mod generate_password;
 mod rate_limit_config;
-mod service;
+
+use authentication_service::service;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -127,7 +128,7 @@ async fn main() -> anyhow::Result<()> {
             .to_string(),
     };
 
-    let auth_client = crate::service::fusionauth_client::FusionAuthClient::new(
+    let auth_client = service::fusionauth_client::FusionAuthClient::new(
         fusionauth_api_key,
         config.fusionauth_client_id.clone(),
         fusionauth_client_secret,
@@ -226,6 +227,10 @@ async fn main() -> anyhow::Result<()> {
             token_context: MacroApiTokenContext {
                 issuer: MacroApiTokenIssuer::new()?,
                 macro_api_token_private_key,
+                expiry_seconds: MacroApiTokenExpirySeconds::new()?
+                    .as_ref()
+                    .parse()
+                    .context("failed to parse MACRO_API_TOKEN_EXPIRY_SECONDS as usize")?,
             },
             internal_api_key,
             stripe_webhook_secret,

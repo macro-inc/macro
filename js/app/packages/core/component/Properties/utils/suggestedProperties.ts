@@ -1,5 +1,5 @@
 import type { ExpandedEntityType } from '@macro-entity';
-import type { PropertyDefinitionFlat } from '../types';
+import type { PropertyDefinitionDomain } from '../types';
 
 /**
  * Get suggested properties for a given entity type filter.
@@ -8,10 +8,10 @@ import type { PropertyDefinitionFlat } from '../types';
  * TODO: Add scoring system to dynamically select best properties
  *
  * @param entityTypes - Array of entity types from the filter (e.g., ['document', 'chat'])
- * @returns Array of PropertyDefinitionFlat objects for quick selection
+ * @returns Array of PropertyDefinitionDomain objects for quick selection
  */
 export function getSuggestedProperties(
   _entityTypes: ExpandedEntityType[]
-): PropertyDefinitionFlat[] {
+): PropertyDefinitionDomain[] {
   return [];
 }

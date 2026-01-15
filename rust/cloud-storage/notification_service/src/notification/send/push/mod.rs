@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 pub mod generate;
 pub mod process;
@@ -8,6 +9,8 @@ pub mod remove;
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PushNotificationData {
+    /// The id of the notification record (UserNotification.id)
+    pub notification_id: Uuid,
     #[serde(flatten)]
     pub notification_entity: model_entity::Entity<'static>,
     /// user id of the macro user who generated the notification

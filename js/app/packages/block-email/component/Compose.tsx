@@ -34,7 +34,31 @@ import {
   Switch,
 } from 'solid-js';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
-import { ComposeEmailInput, type ComposeInputData } from './ComposeEmailInput';
+import { ComposeEmailInput } from './ComposeEmailInput';
+import {
+  createEmailFormState,
+  type DraftFormAttachment,
+} from '@block-email/component/createEmailFormState';
+import { logger } from '@observability/logger';
+import { debounce } from '@solid-primitives/scheduled';
+import type { LexicalEditor } from 'lexical';
+import {
+  $appendWatermarkNodeToLast,
+  $removeAllWatermarkNodes,
+} from '@lexical-core';
+import { prepareEmailBody } from '@block-email/util/prepareEmailBody';
+import { convertEmailRecipientToContactInfo } from '@block-email/util/recipientConversion';
+import {
+  deleteEmailDraft,
+  saveEmailDraft,
+} from '@block-email/signal/emailDraft';
+import {
+  useRemoveDraftAttachmentMutation,
+  useUploadDraftAttachmentsMutation,
+} from '@queries/email/attachment';
+import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
+
+const DRAFT_DEBOUNCE_MS = 1000;
 
 type EmailComposeErrors =
   | 'no_recipient'
@@ -61,8 +85,6 @@ type EmailComposeElementRefs = {
 export function EmailCompose() {
   const hasPaidAccess = useHasPaidAccess();
   const { showPaywall } = usePaywallState();
-
-  const [subject, setSubject] = createSignal<string>('');
 
   const emailLinksQuery = useEmailLinksQuery();
 
@@ -101,15 +123,142 @@ export function EmailCompose() {
   });
 
   const { users: destinationOptions } = useCombinedRecipients();
-  const [selectedRecipients, setSelectedRecipients] = createSignal<
-    WithCustomUserInput<'user' | 'contact'>[]
-  >([]);
-  const [ccRecipients, setCcRecipients] = createSignal<
-    WithCustomUserInput<'user' | 'contact'>[]
-  >([]);
-  const [bccRecipients, setBccRecipients] = createSignal<
-    WithCustomUserInput<'user' | 'contact'>[]
-  >([]);
+
+  const form = createEmailFormState();
+
+  const [editor, setEditor] = createSignal<LexicalEditor | undefined>();
+
+  const [content, setContent] = createSignal('');
+  const [currentDraftID, setCurrentDraftID] = createSignal<
+    string | undefined
+  >();
+
+  const uploadAttachmentMutation = useUploadDraftAttachmentsMutation();
+
+  function collectDraft() {
+    $removeAllWatermarkNodes(editor());
+    const prepared = prepareEmailBody(editor());
+    if (!prepared) {
+      logger.error(
+        new Error('Unable to prepare email body for draft collection.')
+      );
+      return null;
+    }
+    // Fail if no body text and no attachments
+    // You can have a draft with attachments and no body text
+    if (
+      prepared.bodyText.trim() === '' &&
+      form.attachments.list().length === 0
+    ) {
+      return null;
+    }
+    // We attach the drafts entirely using bodyHTML (because this is how the appended reply parsing works) so we are not including bodyMacro or bodyText
+    return {
+      bcc: form.recipients().bcc.map(convertEmailRecipientToContactInfo),
+      body_html: prepared.bodyHtml,
+      cc: form.recipients().cc.map(convertEmailRecipientToContactInfo),
+      subject: form.subject(),
+      to: form.recipients().to.map(convertEmailRecipientToContactInfo),
+    };
+  }
+
+  async function executeSaveDraft() {
+    if (sendMutation.isPending) {
+      return;
+    }
+    const draftToSave = collectDraft();
+    if (!draftToSave) {
+      const draftID = currentDraftID();
+      if (draftID) {
+        await deleteEmailDraft(draftID);
+      }
+      setCurrentDraftID(undefined);
+      return;
+    }
+
+    const linkID = link()?.id;
+    if (!linkID || hasLinkError()) {
+      logger.error(
+        new Error('Failed to save email draft: could not load email links')
+      );
+      return false;
+    }
+
+    const draftResponse = await saveEmailDraft({
+      ...draftToSave,
+      link_id: linkID,
+    });
+
+    if (draftResponse) {
+      // If the email draft saved successfully, we want to upload the
+      // attachments as well. We should grab only the attachments that
+      // haven't been uploaded yet
+      const attachments = form.attachments
+        .list()
+        .filter((a) => a.type === 'local' && !a.attachmentID) as Extract<
+        DraftFormAttachment,
+        { type: 'local' }
+      >[];
+
+      if (attachments.length) {
+        const uploaded = await uploadAttachmentMutation.mutateAsync({
+          draftID: draftResponse,
+          attachments: attachments.map((a) => a.file),
+        });
+
+        // Assign the attachment ids to attachments for later use
+        for (const attachment of uploaded.attachments) {
+          form.attachments.assignAttachmentID(
+            attachment.file,
+            attachment.attachmentID
+          );
+        }
+      }
+
+      setCurrentDraftID(draftResponse);
+    }
+  }
+
+  const scheduleDraftSave = debounce(() => {
+    void executeSaveDraft();
+  }, DRAFT_DEBOUNCE_MS);
+
+  const onAddAttachments = (attachments: DraftFormAttachment[]) => {
+    for (const attachment of attachments) {
+      form.attachments.add(attachment);
+    }
+    scheduleDraftSave();
+  };
+
+  const removeAttachmentMutation = useRemoveDraftAttachmentMutation();
+
+  const handleRemoveAttachment = (attachment: DraftFormAttachment) => {
+    if (attachment.type === 'local') {
+      form.attachments.removeByFile(attachment.file);
+    } else {
+      form.attachments.removeByID(attachment.attachmentID);
+    }
+
+    const savedDraftID = currentDraftID();
+
+    if (!savedDraftID || !attachment.attachmentID) return;
+
+    removeAttachmentMutation.mutate({
+      draftID: savedDraftID,
+      attachmentID: attachment.attachmentID,
+    });
+  };
+
+  // We are consuming the first change, because it is the initial value
+  let firstChangeConsumed = false;
+  const onContentChange = (content: string) => {
+    setContent(content);
+    if (!firstChangeConsumed) {
+      firstChangeConsumed = true;
+      return;
+    }
+    scheduleDraftSave();
+  };
 
   const [showCc, setShowCc] = createSignal(false);
   const [showBcc, setShowBcc] = createSignal(false);
@@ -201,37 +350,39 @@ export function EmailCompose() {
     shouldReturnFocusOnClose: false,
   });
 
-  const [triedToSubmit, _setTriedToSubmit] = createSignal(false);
-
   const { connect: connectEmail } = useEmailLinks();
 
   const previewName = createMemo(() => {
-    const recipients = selectedRecipients();
+    const recipients = form.recipients().to;
     if (recipients.length === 0) {
       return 'Draft email';
-    } else if (recipients.length === 1) {
-      const recipientName =
-        recipients[0].kind === 'user'
-          ? useDisplayName(tryMacroId(recipients[0].data.id))[0]()
-          : recipients[0].data.email;
-      return recipientName ? `Email to ${recipientName}` : 'Draft email';
-    } else {
-      const names = recipients
-        .slice(0, 2)
-        .map((r) => {
-          if (r.kind === 'user') {
-            return useDisplayName(tryMacroId(r.data.id))[0]();
-          }
-          return r.data.email || 'Unknown';
-        })
-        .filter(Boolean);
-
-      if (recipients.length > 2) {
-        return `Email to ${names.join(', ')}, and others`;
-      } else {
-        return `Email to ${names.join(' and ')}`;
-      }
     }
+
+    if (recipients.length === 1) {
+      let recipientName = recipients[0].data.email;
+
+      if (recipients[0].kind === 'user') {
+        recipientName = useDisplayName(tryMacroId(recipients[0].data.id))[0]();
+      }
+
+      return recipientName ? `Email to ${recipientName}` : 'Draft email';
+    }
+
+    const names = recipients
+      .slice(0, 2)
+      .map((r) => {
+        if (r.kind === 'user') {
+          return useDisplayName(tryMacroId(r.data.id))[0]();
+        }
+        return r.data.email || 'Unknown';
+      })
+      .filter(Boolean);
+
+    if (recipients.length > 2) {
+      return `Email to ${names.join(', ')}, and others`;
+    }
+
+    return `Email to ${names.join(' and ')}`;
   });
 
   const { replaceSplit } = useSplitLayout();
@@ -254,12 +405,35 @@ export function EmailCompose() {
     },
   });
 
-  const onSubmit = (data: ComposeInputData) => {
+  const onSubmit = () => {
     setValidationError(null);
+
+    const currentEditor = editor();
+
+    // We handle cleaning up the signature after we've sent the request because
+    // otherwise the `bodyMacro` signal would update after the clean up call and
+    // not contain the signature in the request data
+    const cleanupWatermark = $appendWatermarkNodeToLast(
+      currentEditor,
+      !hasPaidAccess() ? MACRO_EMAIL_SIGNATURE : undefined
+    );
+
+    const prepared = prepareEmailBody(currentEditor, undefined);
+    if (!prepared) return;
+
+    const bodyMacro = content();
+
+    const data = {
+      text: prepared.bodyText,
+      html: prepared.bodyHtml,
+      raw: bodyMacro,
+    };
 
     const currentLink = link();
 
-    if (!selectedRecipients().length) {
+    const recipients = form.recipients();
+
+    if (!recipients.to.length) {
       setValidationError(
         new EmailComposeError(
           'no_recipient',
@@ -269,14 +443,14 @@ export function EmailCompose() {
       return;
     }
 
-    if (!data.body.raw.trim()) {
+    if (!data.raw.trim()) {
       setValidationError(
         new EmailComposeError('no_message', 'Please enter a message')
       );
       return;
     }
 
-    if (!subject()?.trim()) {
+    if (!form.subject()?.trim()) {
       setValidationError(
         new EmailComposeError('no_subject', 'Please enter a subject')
       );
@@ -293,22 +467,24 @@ export function EmailCompose() {
     sendMutation.mutate({
       message: {
         link_id: currentLink.id,
-        to: convertToContactInfoArray(selectedRecipients()),
+        to: convertToContactInfoArray(recipients.to),
         cc:
-          ccRecipients().length > 0
-            ? convertToContactInfoArray(ccRecipients())
+          recipients.cc.length > 0
+            ? convertToContactInfoArray(recipients.cc)
             : [],
         bcc:
-          bccRecipients().length > 0
-            ? convertToContactInfoArray(bccRecipients())
+          recipients.bcc.length > 0
+            ? convertToContactInfoArray(recipients.bcc)
             : [],
-        subject: subject(),
-        body_text: data.body.text,
-        body_html: data.body.html,
-        body_macro: data.body.raw,
-        attachments: [],
+        subject: form.subject(),
+        body_text: data.text,
+        body_html: data.html,
+        body_macro: data.raw,
+        db_id: currentDraftID(),
       },
     });
+
+    cleanupWatermark();
   };
 
   const withValidationError = (type: EmailComposeErrors) => {
@@ -321,7 +497,7 @@ export function EmailCompose() {
     <>
       <SplitHeaderLeft>
         <StaticSplitLabel
-          label={subject() || previewName()}
+          label={form.subject() || previewName()}
           iconType="email"
           badges={[
             <SplitHeaderBadge text="draft" tooltip="This is a Draft Email" />,
@@ -433,10 +609,11 @@ export function EmailCompose() {
                       <RecipientSelector<'user' | 'contact'>
                         inputRef={registerRef('directRecipientsSelector')}
                         options={destinationOptions}
-                        selectedOptions={selectedRecipients}
-                        setSelectedOptions={setSelectedRecipients}
+                        selectedOptions={form.recipients().to}
+                        setSelectedOptions={(next) =>
+                          form.setRecipients('to', next)
+                        }
                         placeholder="Macro users or email addresses"
-                        triedToSubmit={triedToSubmit}
                         focusOnMount={!hasLinkError()}
                         hideBorder
                         noBrackets
@@ -461,10 +638,11 @@ export function EmailCompose() {
                         <RecipientSelector<'user' | 'contact'>
                           inputRef={registerRef('ccRecipientsSelector')}
                           options={destinationOptions}
-                          selectedOptions={ccRecipients}
-                          setSelectedOptions={setCcRecipients}
+                          selectedOptions={form.recipients().cc}
+                          setSelectedOptions={(next) =>
+                            form.setRecipients('cc', next)
+                          }
                           placeholder="Macro users or email addresses"
-                          triedToSubmit={triedToSubmit}
                           hideBorder
                           noBrackets
                           disabled={hasLinkError()}
@@ -482,10 +660,11 @@ export function EmailCompose() {
                         <RecipientSelector<'user' | 'contact'>
                           inputRef={registerRef('bccRecipientsSelector')}
                           options={destinationOptions}
-                          selectedOptions={bccRecipients}
-                          setSelectedOptions={setBccRecipients}
+                          selectedOptions={form.recipients().bcc}
+                          setSelectedOptions={(next) =>
+                            form.setRecipients('bcc', next)
+                          }
                           placeholder="Macro users or email addresses"
-                          triedToSubmit={triedToSubmit}
                           hideBorder
                           noBrackets
                           disabled={hasLinkError()}
@@ -503,11 +682,12 @@ export function EmailCompose() {
                       <input
                         ref={registerRef('subjectInput')}
                         type="text"
-                        value={subject()}
+                        value={form.subject()}
                         placeholder="Subject"
                         class="w-full text-base resize-none placeholder:text-ink-placeholder p-1 ml-1"
                         onInput={(e) => {
-                          setSubject(e.currentTarget.value);
+                          form.setSubject(e.currentTarget.value);
+                          scheduleDraftSave();
                         }}
                         disabled={hasLinkError()}
                       />
@@ -531,10 +711,15 @@ export function EmailCompose() {
                 }}
               >
                 <ComposeEmailInput
+                  captureEditor={setEditor}
                   inputRef={registerRef('messageInput')}
+                  onContentChange={onContentChange}
+                  onAddAttachments={onAddAttachments}
+                  onRemoveAttachment={handleRemoveAttachment}
+                  attachments={form.attachments.list()}
                   onSubmit={onSubmit}
                   isSubmitting={sendMutation.isPending}
-                  disabled={hasLinkError()}
+                  disabled={hasLinkError() || sendMutation.isPending}
                 />
                 <Show when={withValidationError('no_message')}>
                   {(err) => (

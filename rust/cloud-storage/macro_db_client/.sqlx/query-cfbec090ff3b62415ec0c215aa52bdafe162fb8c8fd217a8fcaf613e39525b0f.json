@@ -56,12 +56,12 @@
       ]
     },
     "nullable": [
-      true,
-      true,
-      true,
-      true,
-      null,
       false,
+      false,
+      true,
+      false,
+      null,
+      true,
       null
     ]
   },

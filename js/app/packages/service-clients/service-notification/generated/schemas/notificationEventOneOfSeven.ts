@@ -4,8 +4,9 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { NotificationEventOneOfSevenNotificationEventType } from './notificationEventOneOfSevenNotificationEventType';
+
 import type { DocumentMentionMetadata } from './documentMentionMetadata';
+import type { NotificationEventOneOfSevenNotificationEventType } from './notificationEventOneOfSevenNotificationEventType';
 
 /**
  * Someone mentioned you in a document

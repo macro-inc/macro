@@ -15,10 +15,9 @@ import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/St
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import { UserIcon } from 'core/component/UserIcon';
 import { emailToMacroId, tryMacroId, useDisplayName } from 'core/user';
-import type { ParentProps, Ref } from 'solid-js';
+import type { JSX, ParentProps, Ref } from 'solid-js';
 import {
   createDeferred,
-  createEffect,
   createMemo,
   createSignal,
   For,
@@ -49,27 +48,39 @@ import type {
   SearchLocation,
   WithSearch,
 } from '../types/search';
-import type { EntityClickEvent, EntityClickHandler } from './Entity';
-import { KeyPropertiesGrid, PropertyPills } from './PropertyPills';
+import { KeyPropertiesGrid } from './EntityPropertyValues';
+
+export type EntityClickEvent = Parameters<
+  JSX.EventHandler<HTMLDivElement, MouseEvent>
+>[0];
+type EntityPointerDownEvent = Parameters<
+  JSX.EventHandler<HTMLDivElement, PointerEvent>
+>[0];
+type EntityClickProps<T extends EntityData, E> = {
+  type: 'entity' | 'entity-project-path';
+  entity: T;
+  projectEntity?: T;
+  event: E;
+  location?: SearchLocation;
+};
+export type EntityClickHandler<T extends EntityData> = (
+  args: EntityClickProps<T, EntityClickEvent>
+) => void;
+export type EntityPointerDownHandler<T extends EntityData> = (
+  args: EntityClickProps<T, EntityPointerDownEvent>
+) => void;
 
 export const ENTITY_HEIGHT = 40;
 
 function UnreadIndicator(props: { active?: boolean }) {
   return (
     <div class="flex size-4 items-center justify-center">
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
+      <div
         classList={{
-          'fill-accent': true,
+          'bg-accent rounded-full size-2': true,
           'opacity-0': !props.active,
         }}
-        viewBox="0 0 8 8"
-        width="75%"
-        height="75%"
-        fill="none"
-      >
-        <path d="M3.39622 8C3.29136 8 3.23894 7.94953 3.23894 7.84858L3.33068 5.13565L0.932129 6.58675C0.836012 6.63722 0.76174 6.6204 0.709312 6.53628L0.0801831 5.56467C0.0190178 5.47213 0.0364936 5.40063 0.132611 5.35016L2.58359 4.07571L0.09329 2.88959C-0.00282696 2.83912 -0.0246717 2.77182 0.0277557 2.6877L0.59135 1.58991C0.643778 1.49737 0.71805 1.47634 0.814167 1.52681L3.31758 2.95268L3.21272 0.151421C3.21272 0.0504735 3.26515 0 3.37 0H4.57583C4.68069 0 4.73312 0.0504735 4.73312 0.151421L4.64137 2.94006L7.14478 1.40063C7.2409 1.34175 7.3108 1.35857 7.35449 1.4511L7.97051 2.46057C8.02294 2.5531 8.00546 2.6204 7.91808 2.66246L5.40157 4L7.82633 5.18612C7.91371 5.23659 7.93556 5.30389 7.89187 5.38801L7.36759 6.4858C7.32391 6.58675 7.25837 6.60778 7.17099 6.54889L4.6938 5.13565L4.78554 7.84858C4.79428 7.94953 4.74185 8 4.62826 8H3.39622Z" />
-      </svg>
+      />
     </div>
   );
 }
@@ -85,7 +96,7 @@ function SharedBadge(props: { ownerId: string }) {
 
 function GenericContentHit(props: { data: ContentHitData }) {
   return (
-    <div class="text-sm text-ink-muted truncate flex items-center">
+    <div class="text-ink-muted truncate flex items-center">
       <StaticMarkdown
         markdown={props.data.content}
         theme={unifiedListMarkdownTheme}
@@ -103,14 +114,12 @@ function ChannelMessageContentHit(props: { data: ChannelContentHitData }) {
       <div class="flex size-5 shrink-0 items-center justify-center">
         <UserIcon id={props.data.senderId} size="xs" />
       </div>
-      <div class="flex gap-2 text-sm w-full min-w-0 overflow-hidden items-baseline">
-        <div class="text-sm shrink-0 truncate min-w-0 font-medium">
-          {userName()}
-        </div>
-        <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted">
+      <div class="flex gap-2 w-full min-w-0 overflow-hidden items-baseline">
+        <div class="shrink-0 truncate min-w-0 font-medium">{userName()}</div>
+        <div class="shrink-0 font-mono text-xs touch:mobile-width:text-sm uppercase text-ink-extra-muted">
           {createFormattedDate(props.data.sentAt)}
         </div>
-        <div class="text-sm text-ink-muted truncate flex items-center flex-1 min-w-0">
+        <div class="text-ink-muted truncate flex items-center flex-1 min-w-0">
           <StaticMarkdown
             markdown={props.data.content}
             theme={unifiedListMarkdownTheme}
@@ -149,18 +158,18 @@ function EmailMessageContentHit(props: {
       <div class="flex size-5 shrink-0 items-center justify-center">
         <UserIcon id={props.data.senderId} size="xs" />
       </div>
-      <div class="flex gap-2 text-sm w-full min-w-0 overflow-hidden items-baseline">
+      <div class="flex gap-2 w-full min-w-0 overflow-hidden items-baseline">
         <Show when={!isSingleMatch() && !isSingleSender()}>
-          <div class="text-sm shrink-0 truncate min-w-0 font-medium">
+          <div class="shrink-0 truncate min-w-0 font-medium">
             {props.data.sender}
           </div>
         </Show>
         <Show when={!isSingleMatch() && !isSingleSentAt()}>
-          <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted">
+          <div class="shrink-0 font-mono text-xs touch:mobile-width:text-sm uppercase text-ink-extra-muted">
             {createFormattedDate(props.data.sentAt)}
           </div>
         </Show>
-        <div class="text-sm text-ink-muted truncate flex items-center flex-1 min-w-0">
+        <div class="text-ink-muted truncate flex items-center flex-1 min-w-0">
           <StaticMarkdown
             markdown={props.data.content}
             theme={unifiedListMarkdownTheme}
@@ -246,7 +255,7 @@ function CollapsibleList<T>(props: {
             <ThreadBorder />
           </Show>
           <button
-            class="block w-fit px-2 py-0.5 text-[10px] border border-edge uppercase font-mono hover:font-medium"
+            class="block w-fit px-2 py-0.5 text-xxs border border-edge uppercase font-mono hover:font-medium"
             onClick={(e) => {
               e.stopPropagation();
               setShowAll((prev) => !prev);
@@ -331,13 +340,14 @@ function NotificationRow(props: {
       onClick={
         props.onClick
           ? (e) => {
-              props.onClick?.(
-                {
+              props.onClick?.({
+                type: 'entity',
+                entity: {
                   ...props.entity,
                   notification: props.notification,
                 },
-                e
-              );
+                event: e,
+              });
             }
           : undefined
       }
@@ -348,8 +358,8 @@ function NotificationRow(props: {
       <div class="flex size-5 shrink-0 items-center justify-center mr-1">
         <UserIcon id={props.notification.senderId!} size="xs" />
       </div>
-      <div class="flex gap-1 text-sm w-full min-w-0 overflow-hidden items-baseline">
-        <div class="text-sm w-[20cqw] shrink-0 truncate min-w-0">
+      <div class="flex gap-1 w-full min-w-0 overflow-hidden items-baseline">
+        <div class="w-[20cqw] shrink-0 truncate min-w-0">
           {userName()}{' '}
           <span class="opacity-70 uppercase font-mono text-[0.625rem] ml-2">
             {ActionContent()}
@@ -357,7 +367,7 @@ function NotificationRow(props: {
         </div>
         <MessageContent />
       </div>
-      <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted ml-2">
+      <div class="shrink-0 font-mono text-xs touch:mobile-width:text-sm uppercase text-ink-extra-muted ml-2">
         {createFormattedDate(props.notification.createdAt)}
       </div>
     </CollapsibleListRow>
@@ -402,7 +412,7 @@ function ContentHitRow(props: {
             <Show when={match()}>
               {(match) => {
                 return (
-                  <span class="font-mono text-xs text-ink-disabled/50">
+                  <span class="font-mono text-xs touch:mobile-width:text-sm text-ink-disabled/50">
                     {match()[0] + 1}/{match()[1]}
                   </span>
                 );
@@ -437,6 +447,7 @@ interface EntityProps<T extends WithNotification<EntityData>>
   focused?: boolean;
   timestamp?: number;
   onClick?: EntityClickHandler<T>;
+  onDblClick?: EntityClickHandler<T>;
   onPointerDown?: EntityClickHandler<T>;
   onClickRowAction?: (entity: T, type: 'done') => void;
   onClickNotification?: NotificationClickHandler<T>;
@@ -453,17 +464,21 @@ interface EntityProps<T extends WithNotification<EntityData>>
   showUnrollNotifications?: boolean;
   showDoneButton?: boolean;
   highlighted?: boolean;
-  selected?: boolean;
+  selected: { active: boolean; muted?: boolean };
   ref?: Ref<HTMLDivElement>;
   onChecked?: (checked: boolean, shiftKey?: boolean) => void;
   checked?: boolean;
+  searchActive?: boolean;
 }
 
-const [hoveredEntityId, setHoveredEntityId] = createSignal<string | null>(null);
+const [hoveredComponentId, setHoveredComponentId] = createSignal<Symbol>(
+  Symbol()
+);
 
 export function EntityWithEverything(
   props: EntityProps<WithNotification<EntityData | WithSearch<EntityData>>>
 ) {
+  const id = Symbol();
   const [actionButtonRef, setActionButtonRef] =
     createSignal<HTMLButtonElement | null>(null);
   const [entityDivRef, setEntityDivRef] = createSignal<HTMLDivElement | null>(
@@ -506,6 +521,10 @@ export function EntityWithEverything(
     return notifications.filter(({ done }) => !done);
   };
 
+  const isSearch = createMemo(
+    () => !!props.searchActive && isSearchEntity(props.entity)
+  );
+
   const searchHighlightName = () =>
     isSearchEntity(props.entity) && props.entity.search.nameHighlight;
 
@@ -523,7 +542,7 @@ export function EntityWithEverything(
     }
   });
 
-  const EntityTitle = () => {
+  const EntityTitle = createMemo(() => {
     if (props.entity.type === 'email') {
       const isLikelyEmail = (value?: string) =>
         typeof value === 'string' && value.includes('@');
@@ -571,19 +590,17 @@ export function EntityWithEverything(
         return `${firstNames[0]} .. ${firstNames[firstNames.length - 2]}, ${firstNames[firstNames.length - 1]}`;
       };
 
-      const isSearch = () => isSearchEntity(props.entity);
-
       return (
-        <div class="flex gap-1 items-center text-sm min-w-0 w-full truncate overflow-hidden @max-md/split:flex-col @max-md/split:items-start @max-md/split:gap-1 @max-md/split:truncate-none">
+        <div class="flex gap-1 items-center min-w-0 w-full truncate overflow-hidden @max-md/uList:flex-col @max-md/uList:items-start @max-md/uList:gap-1 @max-md/uList:truncate-none">
           {/* sometimes senderName and senderEmail are the same */}
           <div
-            class="flex gap-2 items-center font-semibold shrink-0 @max-md/split:w-full @max-md/split:truncate"
+            class="flex gap-2 items-center font-semibold shrink-0 @max-md/uList:w-full @max-md/uList:truncate"
             classList={{
               'w-[20cqw]': !isSearch(),
             }}
           >
             {/* Icon inline with sender in narrow mode */}
-            <div class="hidden @max-md/split:flex size-[1em] shrink-0 items-center justify-center relative group/icon-checkbox">
+            <div class="hidden @max-md/uList:flex size-[1em] shrink-0 items-center justify-center relative group/icon-checkbox">
               {/* Checkbox for narrow mode - shown on hover or when checked */}
               <button
                 type="button"
@@ -622,7 +639,7 @@ export function EntityWithEverything(
               </div>
             </div>
             {/* Sender Name */}
-            <div class="truncate @max-md/split:min-w-0">
+            <div class="truncate @max-md/uList:min-w-0">
               {displayedNames() ??
                 props.entity.senderName ??
                 props.entity.senderEmail?.split('@')[0]}
@@ -640,19 +657,22 @@ export function EntityWithEverything(
           </div>
           {/* Subject */}
           {/*<ImportantBadge active={props.importantIndicatorActive} />*/}
-          <div class="flex items-center w-full gap-2 flex-1 min-w-0 @max-md/split:flex-col @max-md/split:items-start @max-md/split:w-full @max-md/split:gap-1">
-            <div class="flex items-center gap-2 flex-1 min-w-0 @max-md/split:w-full @max-md/split:justify-between @max-md/split:min-w-0">
+          <div class="flex items-center w-full gap-2 flex-1 min-w-0 @max-md/uList:flex-col @max-md/uList:items-start @max-md/uList:w-full @max-md/uList:gap-1">
+            <div class="flex items-center gap-2 flex-1 min-w-0 @max-md/uList:w-full @max-md/uList:justify-between @max-md/uList:min-w-0">
               <div
-                class="shrink-0 truncate @max-md/split:min-w-0 @max-md/split:flex-1"
+                class="shrink-0 truncate @max-md/uList:min-w-0 @max-md/uList:flex-1"
                 classList={{
                   'font-regular text-ink-disabled': isSearch(),
                   'font-medium': !isSearch(),
                 }}
               >
                 <Show when={isSearch()}>
-                  <span class="@max-md/split:hidden"> – </span>
+                  <span class="@max-md/uList:hidden"> – </span>
                 </Show>
-                <Show when={searchHighlightName()} fallback={props.entity.name}>
+                <Show
+                  when={isSearch() && searchHighlightName()}
+                  fallback={props.entity.name}
+                >
                   {(name) => (
                     <StaticMarkdown
                       markdown={name()}
@@ -663,20 +683,20 @@ export function EntityWithEverything(
                 </Show>
               </div>
               {/* Body snippet - inline in wide mode */}
-              <div class="truncate shrink grow opacity-60 @max-md/split:hidden">
+              <div class="truncate shrink grow opacity-60 @max-md/uList:hidden">
                 {props.entity.snippet}
               </div>
               {/* Timestamp inline with subject in narrow mode */}
               <Show when={props.timestamp ?? props.entity.updatedAt}>
                 {(date) => (
-                  <span class="hidden @max-md/split:inline shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted">
+                  <span class="hidden @max-md/uList:inline shrink-0 whitespace-nowrap text-xs touch:mobile-width:text-sm font-mono uppercase text-ink-extra-muted">
                     {createFormattedDate(date())}
                   </span>
                 )}
               </Show>
             </div>
             {/* Body snippet - below subject in narrow mode */}
-            <div class="hidden @max-md/split:block truncate w-full text-xs opacity-60">
+            <div class="hidden @max-md/uList:block truncate w-full text-xs touch:mobile-width:text-sm opacity-60">
               {props.entity.snippet}
             </div>
           </div>
@@ -706,11 +726,11 @@ export function EntityWithEverything(
     };
 
     return (
-      <div class="flex gap-2 items-center min-w-0 w-fit max-w-full overflow-hidden @max-md/split:flex-col @max-md/split:items-start @max-md/split:w-full @max-md/split:gap-1">
-        <span class="flex gap-1 truncate font-medium text-sm shrink-0 items-center @max-md/split:w-full @max-md/split:flex-col @max-md/split:items-start @max-md/split:gap-1">
-          <div class="flex items-center gap-2 w-full @max-md/split:justify-between @max-md/split:min-w-0">
+      <div class="flex gap-2 items-center min-w-0 w-fit max-w-full overflow-hidden @max-md/uList:flex-col @max-md/uList:items-start @max-md/uList:w-full @max-md/uList:gap-1">
+        <span class="flex gap-1 truncate font-medium shrink-0 items-center @max-md/uList:w-full @max-md/uList:flex-col @max-md/uList:items-start @max-md/uList:gap-1">
+          <div class="flex items-center gap-2 w-full @max-md/uList:justify-between @max-md/uList:min-w-0">
             {/* Icon inline with title in narrow mode */}
-            <div class="hidden @max-md/split:flex size-[1em] shrink-0 items-center justify-center relative group/icon-checkbox-nonemail">
+            <div class="hidden @max-md/uList:flex size-[1em] shrink-0 items-center justify-center relative group/icon-checkbox-nonemail">
               {/* Checkbox for narrow mode - shown on hover or when checked */}
               <button
                 type="button"
@@ -759,12 +779,15 @@ export function EntityWithEverything(
               </div>
             </div>
             <span
-              class="font-semibold truncate @max-md/split:min-w-0 @max-md/split:flex-1"
+              class="font-semibold truncate @max-md/uList:min-w-0 @max-md/uList:flex-1"
               classList={{
                 'w-[20cqw]': !props.showUnrollNotifications,
               }}
             >
-              <Show when={searchHighlightName()} fallback={props.entity.name}>
+              <Show
+                when={isSearch() && searchHighlightName()}
+                fallback={props.entity.name}
+              >
                 {(name) => (
                   <StaticMarkdown
                     markdown={name()}
@@ -777,7 +800,7 @@ export function EntityWithEverything(
             {/* Timestamp inline with title in narrow mode */}
             <Show when={props.timestamp ?? props.entity.updatedAt}>
               {(date) => (
-                <span class="hidden @max-md/split:inline shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted">
+                <span class="hidden @max-md/uList:inline shrink-0 whitespace-nowrap text-xs touch:mobile-width:text-sm font-mono uppercase text-ink-extra-muted">
                   {createFormattedDate(date())}
                 </span>
               )}
@@ -785,14 +808,14 @@ export function EntityWithEverything(
           </div>
 
           <Show when={showLatestMessageInfo()}>
-            <div class="flex items-center gap-1 @max-md/split:w-full @max-md/split:flex-col @max-md/split:items-start @max-md/split:gap-1">
+            <div class="flex items-center gap-1 @max-md/uList:w-full @max-md/uList:flex-col @max-md/uList:items-start @max-md/uList:gap-1">
               {/*<ImportantBadge active={props.importantIndicatorActive} />*/}
-              <span class="font-medium shrink-0 truncate @max-md/split:w-full">
+              <span class="font-medium shrink-0 truncate @max-md/uList:w-full">
                 {userNameFromSender()}
               </span>
               <Show when={latestMessage()}>
                 {(lastMessage) => (
-                  <div class="truncate shrink grow opacity-60 flex items-center @max-md/split:w-full @max-md/split:text-xs">
+                  <div class="truncate shrink grow opacity-60 flex items-center @max-md/uList:w-full @max-md/uList:text-xs @max-md/uList:touch:mobile-width:text-sm">
                     {/* TODO (seamus): Channels endpoint does not return any information about attachments. If we have an empty message, assume it's attachments.*/}
                     <Show
                       when={lastMessage().content.trim()}
@@ -818,14 +841,12 @@ export function EntityWithEverything(
         </span>
       </div>
     );
-  };
+  });
 
   const draggable = createDraggable(props.entity.id, props.entity);
   false && draggable;
   const droppable = createDroppable(props.entity.id, props.entity);
   false && droppable;
-
-  const { didCursorMove } = useCursorMove();
 
   // The main click handler for the entity row should navigate to an entity
   // without forcing focus back to the source split until after navigation.
@@ -869,26 +890,26 @@ export function EntityWithEverything(
       use:draggable
       use:droppable
       data-checked={props.checked}
-      class="everything-entity w-full relative group/entity hover:bg-hover/30"
+      class="everything-entity w-full relative group/entity hover:bg-hover/30 text-sm touch:mobile-width:text-base mx-[1px]"
       style={{
         'min-height': `${ENTITY_HEIGHT}px`,
       }}
       classList={{
         'outline outline-accent/20 outline-offset-[-1px]':
-          !isTouchDevice() && props.selected && !props.checked,
+          !isTouchDevice() && props.selected.active && !props.checked,
         '!bg-accent/5 outline outline-accent/20 outline-offset-[-1px]':
           props.checked,
         'bracket outline outline-accent/20 outline-offset-[-1px]':
-          !isTouchDevice() && props.selected,
+          !isTouchDevice() && props.selected.active,
+        'after:opacity-20 !outline-accent/10':
+          !isTouchDevice() && props.selected.active && props.selected.muted,
         'active:bracket active:outline active:outline-accent/20 active:outline-offset-[-1px]':
           isTouchDevice() && !props.checked,
       }}
-      onMouseOver={(e) => {
+      onMouseMove={() => {
         if (isTouchDevice()) return;
-        if (!didCursorMove(e)) {
-          return;
-        }
-        setHoveredEntityId(props.entity.id);
+
+        setHoveredComponentId(id);
         props.onMouseOver?.();
       }}
       onContextMenu={() => {
@@ -898,10 +919,18 @@ export function EntityWithEverything(
       <div
         data-entity
         data-entity-id={props.entity.id}
-        class="w-full min-w-0 grid flex-1 items-center suppress-css-bracket grid-cols-[2rem_1fr_auto] @max-md/split:flex @max-md/split:flex-col pr-2 @max-md/split:px-2 @max-md/split:py-2"
+        class="w-full min-w-0 grid flex-1 items-center suppress-css-bracket grid-cols-[2rem_1fr_auto] @max-md/uList:flex @max-md/uList:flex-col pr-2 @max-md/uList:px-2 @max-md/uList:py-2"
         onClick={(e) => {
           if (blocksNavigation(e)) return;
-          props.onClick?.(props.entity, e);
+          props.onClick?.({ type: 'entity', entity: props.entity, event: e });
+        }}
+        onDblClick={(e) => {
+          if (blocksNavigation(e)) return;
+          props.onDblClick?.({
+            type: 'entity',
+            entity: props.entity,
+            event: e,
+          });
         }}
         onMouseDown={(e) => {
           if (blocksNavigation(e)) return;
@@ -909,7 +938,11 @@ export function EntityWithEverything(
         }}
         onPointerDown={(e) => {
           if (blocksNavigation(e)) return;
-          props.onPointerDown?.(props.entity, e);
+          props.onPointerDown?.({
+            type: 'entity',
+            entity: props.entity,
+            event: e,
+          });
         }}
         // Action List is also rendered based on focus, but when focused via Shift+Tab, parent is focused due to Action List dom not present. Here we check if current browser task has captured Shift+Tab focus on Action List
         onFocusIn={(e) => {
@@ -930,7 +963,7 @@ export function EntityWithEverything(
       >
         <button
           type="button"
-          class="col-1 size-full relative group/button flex items-center justify-center bracket-never @max-md/split:hidden"
+          class="col-1 size-full relative group/button flex items-center justify-center bracket-never @max-md/uList:hidden touch:hidden"
           onMouseDown={(e) => {
             e.stopPropagation();
           }}
@@ -959,7 +992,7 @@ export function EntityWithEverything(
               !props.highlighted
             }
           >
-            <div class="absolute inset-0 flex items-center justify-center group-hover/button:opacity-0 @max-md/split:hidden">
+            <div class="absolute inset-0 flex items-center justify-center group-hover/button:opacity-0 @max-md/uList:hidden">
               <UnreadIndicator active={props.unreadIndicatorActive} />
             </div>
           </Show>
@@ -967,19 +1000,31 @@ export function EntityWithEverything(
         {/* Left Column Indicator(s) */}
         {/* Icon and name - top left on mobile, first item on desktop */}
         <div
-          class="min-h-10 min-w-[50px] flex flex-row items-center gap-2 col-2 @max-md/split:col-auto @max-md/split:w-full @max-md/split:min-h-0 @max-md/split:items-start"
+          class="min-h-10 min-w-[50px] flex flex-row items-center gap-2 col-2 @max-md/uList:col-auto @max-md/uList:w-full @max-md/uList:min-h-0 @max-md/uList:items-start"
           classList={{
             grow: props.contentPlacement === 'bottom-row',
-            'opacity-70': props.fadeIfRead && !props.unreadIndicatorActive,
           }}
         >
+          {/* When the left checkbox column is hidden in narrow split containers, we still want
+              unread indicators to be visible. */}
+          <Show
+            when={
+              props.showLeftColumnIndicator &&
+              !props.checked &&
+              !props.highlighted
+            }
+          >
+            <div class="flex size-4 items-center justify-center @min-md/split:hidden">
+              <UnreadIndicator active={props.unreadIndicatorActive} />
+            </div>
+          </Show>
           {/* Icon/Checkbox container - in narrow mode, shows icon by default, checkbox on hover */}
           {/* For emails, icon is inline with sender, so hide this container in narrow mode */}
-          <div class="flex size-5 shrink-0 items-center justify-center relative group/icon-checkbox @max-md/split:hidden">
+          <div class="flex size-5 shrink-0 items-center justify-center relative group/icon-checkbox @max-md/uList:hidden">
             {/* Checkbox for narrow mode - shown on hover or when checked, hidden at larger widths */}
             <button
               type="button"
-              class="hidden @max-md/split:flex @min-md/split:hidden absolute inset-0 items-center justify-center opacity-0 group-hover/icon-checkbox:opacity-100 transition-opacity"
+              class="hidden @max-md/uList:flex @min-md/uList:hidden absolute inset-0 items-center justify-center opacity-0 group-hover/icon-checkbox:opacity-100 transition-opacity"
               classList={{
                 'opacity-100': props.checked,
               }}
@@ -1002,9 +1047,9 @@ export function EntityWithEverything(
             </button>
             {/* Icon - hidden on hover in narrow mode when not checked */}
             <div
-              class="flex items-center justify-center @max-md/split:group-hover/icon-checkbox:opacity-0 @max-md/split:transition-opacity"
+              class="flex items-center justify-center @max-md/uList:group-hover/icon-checkbox:opacity-0 @max-md/uList:transition-opacity"
               classList={{
-                '@max-md/split:opacity-0': props.checked,
+                '@max-md/uList:opacity-0': props.checked,
               }}
             >
               <Show
@@ -1024,26 +1069,15 @@ export function EntityWithEverything(
             </div>
           </div>
           <EntityTitle />
-          <Show when={isTaskEntity(props.entity) && properties().length > 0}>
-            <KeyPropertiesGrid properties={properties()} />
-          </Show>
         </div>
         {/* Date and user - top right on mobile, end on desktop  */}
         <div
-          class="row-1 ml-2 @md:ml-4 self-center min-w-0 col-3 @max-md/split:col-auto @max-md/split:row-auto @max-md/split:ml-0 @max-md/split:mt-1 @max-md/split:self-start @max-md/split:w-full"
+          class="row-1 ml-2 @md:ml-4 self-center min-w-0 col-3 @max-md/uList:col-auto @max-md/uList:row-auto @max-md/uList:ml-0 @max-md/uList:mt-1 @max-md/uList:self-start @max-md/uList:w-full"
           classList={{
             'opacity-50': props.fadeIfRead && !props.unreadIndicatorActive,
           }}
         >
-          <div class="flex flex-row items-center justify-end gap-2 min-w-0 @max-md/split:justify-start @max-md/split:flex-wrap">
-            <Show when={properties().length > 0}>
-              <div class="pr-2 overflow-hidden shrink min-w-0">
-                <PropertyPills
-                  properties={properties()}
-                  excludeKeyProperties={isTaskEntity(props.entity)}
-                />
-              </div>
-            </Show>
+          <div class="flex flex-row items-center justify-end gap-2 min-w-0 @max-md/uList:justify-start @max-md/uList:flex-wrap">
             <Show when={sharedData()}>
               {(shared) => (
                 <Tooltip
@@ -1055,23 +1089,34 @@ export function EntityWithEverything(
             </Show>
             <Show when={matches(props.entity, isProjectContainedEntity)}>
               {(entity) => (
-                <EntityProject entity={entity()} onClick={props.onClick} />
+                <EntityProject
+                  entity={entity()}
+                  onClick={props.onClick}
+                  onPointerdown={props.onPointerDown}
+                />
               )}
+            </Show>
+            <Show when={isTaskEntity(props.entity) && properties().length > 0}>
+              <KeyPropertiesGrid
+                properties={properties()}
+                entityId={props.entity.id}
+                entityType="TASK"
+              />
             </Show>
             <Show when={props.timestamp ?? props.entity.updatedAt}>
               {(date) => (
-                <span class="shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted @max-md/split:hidden">
+                <span class="w-[8ch] text-right shrink-0 whitespace-nowrap text-xs touch:mobile-width:text-sm font-mono uppercase text-ink-extra-muted @max-md/uList:hidden">
                   {createFormattedDate(date())}
                 </span>
               )}
             </Show>
             <Show
               when={
-                (props.selected || hoveredEntityId() === props.entity.id) &&
+                (props.selected.active || hoveredComponentId() === id) &&
                 props.onClickRowAction
               }
             >
-              <div class="absolute top-1 right-1 items-center flex @max-sm/split:hidden">
+              <div class="absolute top-1 right-1 items-center flex @max-sm/uList:hidden">
                 <Tooltip
                   tooltip={
                     <LabelAndHotKey
@@ -1097,7 +1142,7 @@ export function EntityWithEverything(
           </div>
         </div>
         {/* Content Hits from Search */}
-        <Show when={contentHitData().length > 0}>
+        <Show when={isSearch() && contentHitData().length > 0}>
           <div class="relative row-2 col-2 col-end-4 pb-2 @max-md/split:row-auto @max-md/split:col-auto @max-md/split:w-full @max-md/split:mt-1">
             <CollapsibleList
               items={contentHitData()}
@@ -1109,7 +1154,12 @@ export function EntityWithEverything(
                   allData={contentHitData()}
                   data={data}
                   onClick={(e, location) => {
-                    props.onClick?.(props.entity, e, location);
+                    props.onClick?.({
+                      type: 'entity',
+                      entity: props.entity,
+                      event: e,
+                      location,
+                    });
                   }}
                   index={index}
                   count={count}
@@ -1126,7 +1176,7 @@ export function EntityWithEverything(
             contentHitData().length === 0
           }
         >
-          <div class="relative col-2 col-end-4 pb-2 @max-md/split:col-auto @max-md/split:w-full @max-md/split:mt-1">
+          <div class="relative col-2 col-end-4 pb-2 @max-md/uList:col-auto @max-md/uList:w-full @max-md/uList:mt-1">
             <CollapsibleList items={notDoneNotifications()} threadBorder>
               {(notification) => (
                 <NotificationRow
@@ -1220,39 +1270,44 @@ function EntityProjectPathDisplay(props: { name: string; path: string[] }) {
 function EntityProject(props: {
   entity: ProjectContainedEntity;
   onClick?: EntityClickHandler<ProjectEntity>;
+  onPointerdown?: EntityPointerDownHandler<ProjectEntity>;
 }) {
   const projectQuery = createProjectQuery(props.entity.projectId);
-  let projectIconRef!: HTMLDivElement;
-
-  createEffect(() => {
-    const click = props.onClick;
-    if (!click) return;
+  const openProjectEntity: (args: {
+    event: Parameters<JSX.EventHandler<HTMLDivElement, MouseEvent>>[number];
+    eventHandler?: EntityClickHandler<ProjectEntity>;
+  }) => void = ({ event, eventHandler }) => {
     if (!projectQuery.isSuccess) return;
 
     const data = projectQuery.data;
-    const handleClick = (e: EntityClickEvent) => {
-      const projectEntity: ProjectEntity = {
-        type: 'project',
-        id: data.id,
-        name: data.name,
-        ownerId: data.owner,
-        updatedAt: data.updatedAt,
-      };
-      click(projectEntity, e, undefined, { ignorePreview: true });
+    const projectEntity: ProjectEntity = {
+      type: 'project',
+      id: data.id,
+      name: data.name,
+      ownerId: data.owner,
+      updatedAt: data.updatedAt,
     };
-
-    projectIconRef.classList.add('hover:text-accent');
-    projectIconRef.dataset.blocksNavigation = 'true';
-    projectIconRef.addEventListener('click', handleClick);
-    onCleanup(() => {
-      projectIconRef.removeEventListener('click', handleClick);
+    eventHandler?.({
+      type: 'entity-project-path',
+      entity: props.entity as unknown as ProjectEntity,
+      projectEntity,
+      event,
     });
-  });
+  };
 
   return (
     <div
-      ref={projectIconRef}
-      class="flex gap-1 items-center text-xs text-ink-extra-muted min-w-0"
+      data-blocks-navigation={projectQuery.isSuccess ? 'true' : undefined}
+      onClick={(e) =>
+        openProjectEntity({ event: e, eventHandler: props.onClick })
+      }
+      onPointerDown={(e) =>
+        openProjectEntity({ event: e, eventHandler: props.onPointerdown })
+      }
+      class="flex gap-1 items-center text-xs touch:mobile-width:text-sm text-ink-extra-muted min-w-0"
+      classList={{
+        'hover:text-accent': projectQuery.isSuccess,
+      }}
     >
       <svg
         class="shrink-0"
@@ -1353,44 +1408,4 @@ const createFormattedDate = (timestamp: number) => {
     day: 'numeric',
     year: '2-digit',
   });
-};
-
-let lastMouseX: number | null = null;
-let lastMouseY: number | null = null;
-let initialMouseMove: boolean = false;
-let cursorInit = true;
-
-const useCursorMove = () => {
-  const didCursorMove = (event: MouseEvent) => {
-    if (!initialMouseMove) return;
-    const { clientX, clientY } = event;
-    // If the mouse hasn't moved, ignore the event
-    if (clientX === lastMouseX && clientY === lastMouseY) {
-      return false;
-    }
-
-    // Update the last known position
-    lastMouseX = clientX;
-    lastMouseY = clientY;
-
-    return true;
-  };
-
-  const moveEvent = (event: MouseEvent) => {
-    const { clientX, clientY } = event;
-    initialMouseMove = true;
-
-    setTimeout(() => {
-      lastMouseX = clientX;
-      lastMouseY = clientY;
-    });
-  };
-  onMount(() => {
-    if (!cursorInit) {
-      return;
-    }
-    cursorInit = false;
-    document.addEventListener('mousemove', moveEvent, { capture: true });
-  });
-  return { didCursorMove };
 };

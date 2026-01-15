@@ -40,7 +40,7 @@ pub(in crate::api::oauth2) struct OAuthState {
 }
 
 #[derive(Debug, serde::Deserialize)]
-pub(in crate::api::oauth2) struct Params {
+pub(in crate::api) struct Params {
     /// The code to complete the login
     code: String,
     /// State that is passed from the original request
@@ -48,7 +48,7 @@ pub(in crate::api::oauth2) struct Params {
 }
 
 #[derive(Debug, serde::Deserialize)]
-struct PathParams {
+pub(in crate::api) struct PathParams {
     provider: String,
 }
 

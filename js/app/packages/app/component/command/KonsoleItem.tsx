@@ -3,7 +3,6 @@ import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
 import type { BlockAlias, BlockName } from '@core/block';
 import { BozzyBracket } from '@core/component/BozzyBracket';
-import type { ChannelsContext } from '@core/component/ChannelsProvider';
 import { Hotkey } from '@core/component/Hotkey';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { Message } from '@core/component/Message';
@@ -69,18 +68,6 @@ export const COMMAND_ITEM_MARGIN = 2;
 export const [commandCategoryIndex, setCommandCategoryIndex] = createSignal(0);
 
 export type ChannelLookup = Record<string, Channel>;
-
-export function createChannelLookup(channelsContext: ChannelsContext) {
-  return createMemo(() => {
-    const lookup: ChannelLookup = {};
-    const channels = channelsContext.channels();
-
-    for (const channel of channels) {
-      lookup[channel.id] = channel;
-    }
-    return lookup;
-  });
-}
 
 // Context information for actions and stuff
 export const [konsoleContextInformation, setKonsoleContextInformation] =

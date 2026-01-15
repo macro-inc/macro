@@ -183,7 +183,6 @@ const PropertiesDebug: Component = () => {
       });
 
       setPropertyValues(property.propertyDefinitionId, value);
-      return { ok: true, value: undefined };
     },
     saveDate: async (property: Property, date: Date) => {
       console.log('Properties Debug - Saving date:', {
@@ -196,7 +195,6 @@ const PropertiesDebug: Component = () => {
         valueType: 'DATE',
         value: date.toISOString(),
       });
-      return { ok: true, value: undefined };
     },
   };
 

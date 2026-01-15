@@ -1,6 +1,7 @@
 //! Tests for chat module
 
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use models_search_cursor::SearchCursorOption;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
@@ -15,7 +16,7 @@ async fn test_search_chat_names_empty_term(pool: Pool<Postgres>) -> anyhow::Resu
         .map(|l| l.lowercase())
         .unwrap();
 
-    let result = search_chat_names(&pool, &user_id, &[], "".to_string(), false, 10, 0).await;
+    let result = search_chat_names(&pool, &user_id, &[], "".to_string(), false, 10, None).await;
 
     assert!(result.is_err());
     assert!(matches!(
@@ -37,7 +38,8 @@ async fn test_search_chat_names_ids_only_with_empty_ids(
         .map(|l| l.lowercase())
         .unwrap();
 
-    let result = search_chat_names(&pool, &user_id, &[], "project".to_string(), true, 10, 0).await;
+    let result =
+        search_chat_names(&pool, &user_id, &[], "project".to_string(), true, 10, None).await;
 
     assert!(result.is_err());
     assert!(matches!(
@@ -64,33 +66,39 @@ async fn test_search_chat_names_ids_only_mode(pool: Pool<Postgres>) -> anyhow::R
         Uuid::parse_str("55555555-5555-5555-5555-555555555555")?, // Budget Discussion - won't match
     ];
 
-    let results = search_chat_names(
+    let response = search_chat_names(
         &pool,
         &user_id,
         &chat_ids,
         "project".to_string(),
         true,
         10,
-        0,
+        None,
     )
     .await?;
 
     // Should only return the 2 chats that match "project" from the provided IDs
-    assert_eq!(results.len(), 2);
+    assert_eq!(response.items.len(), 2);
 
     // Verify results contain expected chats (ordered by updatedAt DESC)
     assert_eq!(
-        results[0].entity_id.to_string(),
+        response.items[0].entity_id.to_string(),
         "22222222-2222-2222-2222-222222222222"
     );
-    assert_eq!(results[0].entity_type, SearchEntityType::Chats);
-    assert_eq!(results[0].name, "Project Review Chat");
+    assert_eq!(response.items[0].entity_type, SearchEntityType::Chats);
+    assert_eq!(
+        response.items[0].name,
+        "<macro_em>Project</macro_em> Review Chat"
+    );
 
     assert_eq!(
-        results[1].entity_id.to_string(),
+        response.items[1].entity_id.to_string(),
         "11111111-1111-1111-1111-111111111111"
     );
-    assert_eq!(results[1].name, "Project Planning Chat");
+    assert_eq!(
+        response.items[1].name,
+        "<macro_em>Project</macro_em> Planning Chat"
+    );
 
     Ok(())
 }
@@ -107,24 +115,30 @@ async fn test_search_chat_names_normal_mode_owned_chats(
         .unwrap();
 
     // Search for "project" across all user1's owned chats
-    let results =
-        search_chat_names(&pool, &user_id, &[], "project".to_string(), false, 10, 0).await?;
+    let response =
+        search_chat_names(&pool, &user_id, &[], "project".to_string(), false, 10, None).await?;
 
     // Should return 3 chats matching "project" (2 lowercase + 1 uppercase)
-    assert_eq!(results.len(), 3);
+    assert_eq!(response.items.len(), 3);
 
     // Verify ordering by updatedAt DESC
     assert_eq!(
-        results[0].entity_id.to_string(),
+        response.items[0].entity_id.to_string(),
         "66666666-6666-6666-6666-666666666666"
     );
-    assert_eq!(results[0].name, "IMPORTANT PROJECT");
+    assert_eq!(
+        response.items[0].name,
+        "IMPORTANT <macro_em>PROJECT</macro_em>"
+    );
 
     assert_eq!(
-        results[1].entity_id.to_string(),
+        response.items[1].entity_id.to_string(),
         "22222222-2222-2222-2222-222222222222"
     );
-    assert_eq!(results[1].name, "Project Review Chat");
+    assert_eq!(
+        response.items[1].name,
+        "<macro_em>Project</macro_em> Review Chat"
+    );
 
     Ok(())
 }
@@ -139,22 +153,22 @@ async fn test_search_chat_names_case_insensitive(pool: Pool<Postgres>) -> anyhow
         .unwrap();
 
     // Search with uppercase term should match both lowercase and uppercase names
-    let results =
-        search_chat_names(&pool, &user_id, &[], "PROJECT".to_string(), false, 10, 0).await?;
+    let response =
+        search_chat_names(&pool, &user_id, &[], "PROJECT".to_string(), false, 10, None).await?;
 
-    assert_eq!(results.len(), 3);
+    assert_eq!(response.items.len(), 3);
 
     // Search with lowercase term should also match both
-    let results =
-        search_chat_names(&pool, &user_id, &[], "project".to_string(), false, 10, 0).await?;
+    let response =
+        search_chat_names(&pool, &user_id, &[], "project".to_string(), false, 10, None).await?;
 
-    assert_eq!(results.len(), 3);
+    assert_eq!(response.items.len(), 3);
 
     // Search with mixed case
-    let results =
-        search_chat_names(&pool, &user_id, &[], "PrOjEcT".to_string(), false, 10, 0).await?;
+    let response =
+        search_chat_names(&pool, &user_id, &[], "PrOjEcT".to_string(), false, 10, None).await?;
 
-    assert_eq!(results.len(), 3);
+    assert_eq!(response.items.len(), 3);
 
     Ok(())
 }
@@ -171,28 +185,31 @@ async fn test_search_chat_names_with_shared_chats(pool: Pool<Postgres>) -> anyho
     // Include a chat from user3 (shared via chat_ids parameter)
     let shared_chat_ids = vec![Uuid::parse_str("99999999-9999-9999-9999-999999999999")?];
 
-    let results = search_chat_names(
+    let response = search_chat_names(
         &pool,
         &user_id,
         &shared_chat_ids,
         "project".to_string(),
         false,
         10,
-        0,
+        None,
     )
     .await?;
 
     // Should return user1's 3 "project" chats + user3's 1 "project" chat
-    assert_eq!(results.len(), 4);
+    assert_eq!(response.items.len(), 4);
 
     // Verify user3's chat is included
-    let user3_chat = results.iter().find(|r| {
+    let user3_chat = response.items.iter().find(|r| {
         r.entity_id
             .to_string()
             .eq("99999999-9999-9999-9999-999999999999")
     });
     assert!(user3_chat.is_some());
-    assert_eq!(user3_chat.unwrap().name, "User3 Shared Project");
+    assert_eq!(
+        user3_chat.unwrap().name,
+        "User3 Shared <macro_em>Project</macro_em>"
+    );
 
     Ok(())
 }
@@ -207,20 +224,23 @@ async fn test_search_chat_names_pagination_limit(pool: Pool<Postgres>) -> anyhow
         .unwrap();
 
     // Search with limit of 2
-    let results =
-        search_chat_names(&pool, &user_id, &[], "project".to_string(), false, 2, 0).await?;
+    let response =
+        search_chat_names(&pool, &user_id, &[], "project".to_string(), false, 2, None).await?;
 
-    assert_eq!(results.len(), 2);
+    assert_eq!(response.items.len(), 2);
 
     // Should get the 2 most recently updated chats with "project"
     assert_eq!(
-        results[0].entity_id.to_string(),
+        response.items[0].entity_id.to_string(),
         "66666666-6666-6666-6666-666666666666"
     );
     assert_eq!(
-        results[1].entity_id.to_string(),
+        response.items[1].entity_id.to_string(),
         "22222222-2222-2222-2222-222222222222"
     );
+
+    // Should have a next_cursor since there are more results
+    assert!(response.cursor.has_more());
 
     Ok(())
 }
@@ -229,22 +249,66 @@ async fn test_search_chat_names_pagination_limit(pool: Pool<Postgres>) -> anyhow
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../fixtures", scripts("chat"))
 )]
-async fn test_search_chat_names_pagination_offset(pool: Pool<Postgres>) -> anyhow::Result<()> {
+async fn test_search_chat_names_pagination_cursor(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let user_id = MacroUserId::parse_from_str("macro|user1@test.com")
         .map(|l| l.lowercase())
         .unwrap();
 
-    // Search with offset of 2
-    let results =
-        search_chat_names(&pool, &user_id, &[], "project".to_string(), false, 10, 2).await?;
+    // First page with limit of 2
+    let first_response =
+        search_chat_names(&pool, &user_id, &[], "project".to_string(), false, 2, None).await?;
 
-    assert_eq!(results.len(), 1);
+    assert_eq!(first_response.items.len(), 2);
+    assert!(first_response.cursor.has_more());
 
-    // Should skip the first 2 and get the next 1
+    // Extract cursor for second page
+    let cursor = match first_response.cursor {
+        SearchCursorOption::NotDone(c) => c,
+        SearchCursorOption::Done => panic!("Expected more results"),
+    };
+
+    // Second page using cursor
+    let second_response = search_chat_names(
+        &pool,
+        &user_id,
+        &[],
+        "project".to_string(),
+        false,
+        2,
+        cursor,
+    )
+    .await?;
+
+    assert_eq!(second_response.items.len(), 1);
+
+    // Should get the next chat (skipping the first 2)
     assert_eq!(
-        results[0].entity_id.to_string(),
+        second_response.items[0].entity_id.to_string(),
         "11111111-1111-1111-1111-111111111111"
     );
+
+    // Should NOT have next_cursor since we've reached the end
+    assert!(second_response.cursor.is_done());
+
+    // Verify no overlap between pages
+    let first_ids: Vec<String> = first_response
+        .items
+        .iter()
+        .map(|r| r.entity_id.to_string())
+        .collect();
+    let second_ids: Vec<String> = second_response
+        .items
+        .iter()
+        .map(|r| r.entity_id.to_string())
+        .collect();
+
+    for id in &first_ids {
+        assert!(
+            !second_ids.contains(id),
+            "Found duplicate ID between pages: {}",
+            id
+        );
+    }
 
     Ok(())
 }
@@ -259,18 +323,19 @@ async fn test_search_chat_names_no_results(pool: Pool<Postgres>) -> anyhow::Resu
         .unwrap();
 
     // Search for a term that doesn't match any chats
-    let results = search_chat_names(
+    let response = search_chat_names(
         &pool,
         &user_id,
         &[],
         "nonexistent".to_string(),
         false,
         10,
-        0,
+        None,
     )
     .await?;
 
-    assert_eq!(results.len(), 0);
+    assert_eq!(response.items.len(), 0);
+    assert!(response.cursor.is_done());
 
     Ok(())
 }
@@ -285,20 +350,27 @@ async fn test_search_chat_names_partial_match(pool: Pool<Postgres>) -> anyhow::R
         .unwrap();
 
     // Search for partial term "meet" should match "meeting"
-    let results = search_chat_names(&pool, &user_id, &[], "meet".to_string(), false, 10, 0).await?;
+    let response =
+        search_chat_names(&pool, &user_id, &[], "meet".to_string(), false, 10, None).await?;
 
-    assert_eq!(results.len(), 2);
+    assert_eq!(response.items.len(), 2);
     assert_eq!(
-        results[0].entity_id.to_string(),
+        response.items[0].entity_id.to_string(),
         "44444444-4444-4444-4444-444444444444"
     );
-    assert_eq!(results[0].name, "Client Meeting");
+    assert_eq!(
+        response.items[0].name,
+        "Client <macro_em>Meet</macro_em>ing"
+    );
 
     assert_eq!(
-        results[1].entity_id.to_string(),
+        response.items[1].entity_id.to_string(),
         "33333333-3333-3333-3333-333333333333"
     );
-    assert_eq!(results[1].name, "Team Meeting Chat");
+    assert_eq!(
+        response.items[1].name,
+        "Team <macro_em>Meet</macro_em>ing Chat"
+    );
 
     Ok(())
 }
@@ -313,11 +385,11 @@ async fn test_search_chat_names_user_isolation(pool: Pool<Postgres>) -> anyhow::
         .unwrap();
 
     // Search for "User2" - user1 should not see user2's private chats
-    let results =
-        search_chat_names(&pool, &user_id, &[], "User2".to_string(), false, 10, 0).await?;
+    let response =
+        search_chat_names(&pool, &user_id, &[], "User2".to_string(), false, 10, None).await?;
 
     // Should return 0 results (user2's chats are not owned by user1 and not shared)
-    assert_eq!(results.len(), 0);
+    assert_eq!(response.items.len(), 0);
 
     Ok(())
 }
@@ -332,18 +404,18 @@ async fn test_search_chat_names_excludes_soft_deleted(pool: Pool<Postgres>) -> a
         .unwrap();
 
     // Search for "project" - should NOT include soft-deleted chat
-    let results =
-        search_chat_names(&pool, &user_id, &[], "project".to_string(), false, 10, 0).await?;
+    let response =
+        search_chat_names(&pool, &user_id, &[], "project".to_string(), false, 10, None).await?;
 
     // Should NOT include the deleted chat (id: 77777777-7777-7777-7777-777777777777)
-    assert!(!results.iter().any(|r| {
+    assert!(!response.items.iter().any(|r| {
         r.entity_id
             .to_string()
             .eq("77777777-7777-7777-7777-777777777777")
     }));
 
     // Should include non-deleted chats
-    assert!(results.iter().any(|r| {
+    assert!(response.items.iter().any(|r| {
         r.entity_id
             .to_string()
             .eq("11111111-1111-1111-1111-111111111111")

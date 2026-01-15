@@ -80,38 +80,25 @@ async fn fetch_new_contacts_from_google(
     {
         Ok(response) => {
             all_new_contacts.push(response);
-            tracing::info!(
-                link_id = %link.id,
-                "Fetched own contact"
-            );
         }
         Err(e) => {
             tracing::error!(error = ?e, link_id = %link.id, "Failed to get own contact");
         }
     };
 
-    let primary_start = Instant::now();
     match gmail_client
         .get_contacts(gmail_access_token, link.id, contacts_sync_token.as_deref())
         .await
     {
         Ok(response) => {
-            let length = response.contacts.len();
             new_contacts_token = Some(response.next_sync_token);
             all_new_contacts.extend(response.contacts);
-            tracing::info!(
-                duration = ?primary_start.elapsed(),
-                num_contacts = length,
-                link_id = %link.id,
-                "Fetched primary contacts"
-            );
         }
         Err(e) => {
-            tracing::error!(error = ?e, link_id = %link.id, "Failed to get primary contacts");
+            tracing::debug!(error = ?e, link_id = %link.id, "Failed to get primary contacts");
         }
     };
 
-    let other_start = Instant::now();
     match gmail_client
         .get_other_contacts(
             gmail_access_token,
@@ -121,18 +108,11 @@ async fn fetch_new_contacts_from_google(
         .await
     {
         Ok(response) => {
-            let length = response.contacts.len();
             new_other_contacts_token = Some(response.next_sync_token);
             all_new_contacts.extend(response.contacts);
-            tracing::info!(
-                duration = ?other_start.elapsed(),
-                num_contacts = length,
-                link_id = %link.id,
-                "Fetched other contacts"
-            );
         }
         Err(e) => {
-            tracing::error!(error = ?e, link_id = %link.id, "Failed to get other contacts");
+            tracing::debug!(error = ?e, link_id = %link.id, "Failed to get other contacts");
         }
     };
 
@@ -196,15 +176,11 @@ async fn process_and_store_contacts(
         return Ok(());
     }
     // Async enqueue messages to sfs_uploader worker that populates the sfs_url for the contacts profile images
-    let sqs_start = Instant::now();
-    let link_id = link.id;
     let sqs_client = sqs_client.clone();
     let contacts_for_sqs = contacts.clone();
 
     tokio::spawn(async move {
         const MAX_CONCURRENT_ENQUEUES: usize = 50;
-        let mut successful_enqueues = 0;
-        let mut failed_enqueues = 0;
 
         let mut stream = stream::iter(contacts_for_sqs)
             // only enqueue contacts that have a photo_url
@@ -223,20 +199,7 @@ async fn process_and_store_contacts(
             })
             .buffer_unordered(MAX_CONCURRENT_ENQUEUES);
 
-        while let Some(result) = stream.next().await {
-            match result {
-                Ok(_) => successful_enqueues += 1,
-                Err(_) => failed_enqueues += 1,
-            }
-        }
-
-        tracing::info!(
-            duration = ?sqs_start.elapsed(),
-            successful_enqueues = successful_enqueues,
-            failed_enqueues = failed_enqueues,
-            link_id = %link_id,
-            "Completed SQS enqueuing"
-        );
+        while stream.next().await.is_some() {}
     });
 
     Ok(())

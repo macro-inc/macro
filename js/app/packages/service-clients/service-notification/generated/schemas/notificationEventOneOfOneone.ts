@@ -4,8 +4,9 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { NotificationEventOneOfOneoneNotificationEventType } from './notificationEventOneOfOneoneNotificationEventType';
+
 import type { ChannelMessageSendMetadata } from './channelMessageSendMetadata';
+import type { NotificationEventOneOfOneoneNotificationEventType } from './notificationEventOneOfOneoneNotificationEventType';
 
 /**
  * A user sent a message in a channel

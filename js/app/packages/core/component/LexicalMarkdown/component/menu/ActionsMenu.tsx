@@ -24,6 +24,7 @@ import {
 } from '../../plugins';
 import { ACTIONS, type Action } from '../../plugins/actions/actions';
 import type { MenuOperations } from '../../shared/inlineMenu';
+import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 
 false && clickOutside;
 false && floatWithSelection;
@@ -89,6 +90,12 @@ export function ActionMenu(props: {
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   let menuRef!: HTMLDivElement;
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
+
+  const { isKeypressActive } = useIsKeyPressActive();
+  const setSelectedIndexFromMouse = (index: number) => {
+    if (isKeypressActive()) return;
+    setSelectedIndex(index);
+  };
 
   const [searchTerm, setSearchTerm] = createSignal(props.menu.searchTerm());
   const debouncedSetSearchTerm = debounce(
@@ -250,7 +257,7 @@ export function ActionMenu(props: {
                 index={index()}
                 selected={index() === selectedIndex()}
                 editor={props.editor}
-                setIndex={setSelectedIndex}
+                setIndex={setSelectedIndexFromMouse}
                 setOpen={setIsOpen}
               />
             );

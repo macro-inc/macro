@@ -12,6 +12,12 @@ pub struct Config {
     /// The environment we are in
     #[allow(dead_code)]
     pub environment: Environment,
+
+    /// How many days to keep never-used links around
+    pub delete_unused_after_days: u32,
+
+    /// How many days to keep inactive links around
+    pub delete_inactive_after_days: u32,
 }
 
 impl Config {
@@ -24,10 +30,22 @@ impl Config {
 
         let environment = Environment::new_or_prod();
 
+        let delete_unused_after_days = std::env::var("DELETE_UNUSED_AFTER_DAYS")
+            .context("DELETE_UNUSED_AFTER_DAYS must be provided")?
+            .parse()
+            .context("DELETE_UNUSED_AFTER_DAYS must be a valid u32")?;
+
+        let delete_inactive_after_days = std::env::var("DELETE_INACTIVE_AFTER_DAYS")
+            .context("DELETE_INACTIVE_AFTER_DAYS must be provided")?
+            .parse()
+            .context("DELETE_INACTIVE_AFTER_DAYS must be a valid u32")?;
+
         Ok(Config {
             database_url,
             link_manager_queue,
             environment,
+            delete_unused_after_days,
+            delete_inactive_after_days,
         })
     }
 }

@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type SoupDocumentSubTypeOneOfType = typeof SoupDocumentSubTypeOneOfType[keyof typeof SoupDocumentSubTypeOneOfType];
-
+export type SoupDocumentSubTypeOneOfType =
+  (typeof SoupDocumentSubTypeOneOfType)[keyof typeof SoupDocumentSubTypeOneOfType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const SoupDocumentSubTypeOneOfType = {

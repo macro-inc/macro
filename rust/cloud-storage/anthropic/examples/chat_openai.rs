@@ -13,7 +13,7 @@ use futures::StreamExt;
 
 #[tokio::main]
 async fn main() {
-    let client = Client::dangerously_try_from_env();
+    let client = Client::dangerously_try_from_env(None);
 
     let mut request = CreateChatCompletionRequestArgs::default()
         .model("claude-haiku-4-5")

@@ -4,8 +4,9 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { NotificationEventOneOfFiveNotificationEventType } from './notificationEventOneOfFiveNotificationEventType';
+
 import type { ChannelMentionMetadata } from './channelMentionMetadata';
+import type { NotificationEventOneOfFiveNotificationEventType } from './notificationEventOneOfFiveNotificationEventType';
 
 /**
  * Someone mentioned you in a channel

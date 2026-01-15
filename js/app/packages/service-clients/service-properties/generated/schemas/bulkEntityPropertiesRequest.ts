@@ -5,7 +5,6 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EntityReference } from './entityReference';
-import type { BulkEntityPropertiesRequestPropertyIds } from './bulkEntityPropertiesRequestPropertyIds';
 
 /**
  * Request for getting properties for multiple entities in bulk
@@ -13,6 +12,6 @@ import type { BulkEntityPropertiesRequestPropertyIds } from './bulkEntityPropert
 export interface BulkEntityPropertiesRequest {
   /** Array of entity references (entity_id and entity_type pairs) */
   entities: EntityReference[];
-  /** Optional: only return properties with these definition IDs. If empty/None, returns all. */
-  property_ids?: BulkEntityPropertiesRequestPropertyIds;
+  /** Optional: only return properties with these definition IDs. If empty, returns all. */
+  property_ids?: string[];
 }

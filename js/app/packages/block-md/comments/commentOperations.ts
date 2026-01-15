@@ -1,11 +1,7 @@
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import { withAnalytics } from '@coparse/analytics';
 import { useBlockId } from '@core/block';
-import type {
-  CreateCommentInfo,
-  DeleteCommentInfo,
-  UpdateCommentInfo,
-} from '@core/collab/comments/commentType';
+import type { DeleteCommentInfo } from '@core/collab/comments/commentType';
 import { threadMeasureContainerId } from '@core/collab/comments/Thread';
 import {
   CREATE_COMMENT_COMMAND,
@@ -14,6 +10,10 @@ import {
   SET_COMMENT_THREAD_ID_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
 import { blockElementSignal } from '@core/signal/blockElement';
+import type {
+  CreateCommentRequest,
+  EditCommentRequest,
+} from '@service-storage/generated/schemas';
 import type { CreateCommentResponse } from '@service-storage/generated/schemas/createCommentResponse';
 import { createCallback } from '@solid-primitives/rootless';
 import {
@@ -41,7 +41,7 @@ export function useCreateComment() {
   const editor = mdStore.get.editor;
 
   return createCallback(
-    async (info: CreateCommentInfo & { markId: string }) => {
+    async (info: CreateCommentRequest & { threadId: number }) => {
       track(TrackingEvents.BLOCKMARKDOWN.COMMENT.CREATE);
       const { threadId, text } = info;
 
@@ -71,7 +71,7 @@ export function useCreateComment() {
         return response;
       }
 
-      return await createThreadReply(text, threadId);
+      return await createThreadReply(info);
     }
   );
 }
@@ -79,12 +79,10 @@ export function useCreateComment() {
 export function useUpdateComment() {
   const editComment = useEditCommentResource();
 
-  return createCallback((info: UpdateCommentInfo) => {
+  return createCallback((commentId: number, info: EditCommentRequest) => {
     track(TrackingEvents.BLOCKMARKDOWN.COMMENT.UPDATE);
 
-    return editComment(info.commentId, {
-      text: info.text,
-    });
+    return editComment(commentId, info);
   });
 }
 

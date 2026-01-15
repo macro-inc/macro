@@ -5,8 +5,12 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { AssistantMessagePartOneOf } from './assistantMessagePartOneOf';
-import type { AssistantMessagePartOneOfThree } from './assistantMessagePartOneOfThree';
 import type { AssistantMessagePartOneOfFive } from './assistantMessagePartOneOfFive';
 import type { AssistantMessagePartOneOfSeven } from './assistantMessagePartOneOfSeven';
+import type { AssistantMessagePartOneOfThree } from './assistantMessagePartOneOfThree';
 
-export type AssistantMessagePart = AssistantMessagePartOneOf | AssistantMessagePartOneOfThree | AssistantMessagePartOneOfFive | AssistantMessagePartOneOfSeven;
+export type AssistantMessagePart =
+  | AssistantMessagePartOneOf
+  | AssistantMessagePartOneOfThree
+  | AssistantMessagePartOneOfFive
+  | AssistantMessagePartOneOfSeven;

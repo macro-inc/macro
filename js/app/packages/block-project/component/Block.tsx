@@ -1,11 +1,18 @@
+import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
+import { PreviewPanel } from '@app/component/PreviewPanel';
+import { SplitPanelContext } from '@app/component/split-layout/context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { UnifiedListView } from '@app/component/UnifiedListView';
 import { PROJECT_VIEWCONFIG_BASE } from '@app/component/ViewConfig';
+import { playSound } from '@app/util/sound';
 import { getIsSpecialProject } from '@block-project/isSpecial';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
+import { ENABLE_PROJECT_VIEW_PREVIEW } from '@core/constant/featureFlags';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { fileSelector } from '@core/directive/fileSelector';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import {
   handleFileFolderDrop,
   type UploadInput,
@@ -20,6 +27,7 @@ import { refetchResources } from '@service-storage/util/refetchResources';
 import { toast } from 'core/component/Toast/Toast';
 import {
   type Component,
+  createMemo,
   createRenderEffect,
   createSignal,
   onCleanup,
@@ -83,9 +91,33 @@ const Block: Component = () => {
     }
   };
 
-  const splitContext = useSplitPanelOrThrow();
-  const { selectedView, setSelectedView, setViewDataStore } =
-    splitContext.soupContext;
+  const orchestrator = useGlobalBlockOrchestrator();
+  const splitPanelContext = useSplitPanelOrThrow();
+  const {
+    selectedView,
+    setSelectedView,
+    setViewDataStore,
+    isRenderedFromPreview,
+    viewsDataStore: viewsData,
+  } = splitPanelContext.soupContext;
+  const [preview, setPreview] = splitPanelContext.previewState;
+  const view = createMemo(() => viewsData[selectedView()]);
+  const selectedEntity = () => view().selectedEntity;
+
+  if (!isRenderedFromPreview) {
+    registerHotkey({
+      hotkey: ['p'],
+      scopeId: splitPanelContext.splitHotkeyScope,
+      description: 'Toggle Preview',
+      hotkeyToken: TOKENS.unifiedList.togglePreview,
+      keyDownHandler: () => {
+        playSound('open');
+        setPreview((prev) => !prev);
+        return true;
+      },
+      hide: true,
+    });
+  }
 
   createRenderEffect(() => {
     const previousView = untrack(selectedView);
@@ -134,7 +166,26 @@ const Block: Component = () => {
           </div>
         </Show>
         <TopBar />
-        <UnifiedListView />
+        <Show when={ENABLE_PROJECT_VIEW_PREVIEW} fallback={<UnifiedListView />}>
+          <div class="flex size-full">
+            <SplitPanelContext.Provider
+              value={{
+                ...splitPanelContext,
+                halfSplitState: () =>
+                  preview() ? { side: 'left', percentage: 30 } : undefined,
+              }}
+            >
+              <UnifiedListView hideToolbar={isRenderedFromPreview} />
+            </SplitPanelContext.Provider>
+            <Show when={preview()}>
+              <PreviewPanel
+                selectedEntity={selectedEntity()}
+                orchestrator={orchestrator}
+                splitPanelContext={splitPanelContext}
+              />
+            </Show>
+          </div>
+        </Show>
       </div>
     </DocumentBlockContainer>
   );

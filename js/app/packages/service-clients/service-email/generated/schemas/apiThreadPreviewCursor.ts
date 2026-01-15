@@ -4,7 +4,9 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ApiThreadPreviewCursorInner } from './apiThreadPreviewCursorInner';
-import type { ApiThreadPreviewCursorAllOf } from './apiThreadPreviewCursorAllOf';
 
-export type ApiThreadPreviewCursor = ApiThreadPreviewCursorInner & ApiThreadPreviewCursorAllOf;
+import type { ApiThreadPreviewCursorAllOf } from './apiThreadPreviewCursorAllOf';
+import type { ApiThreadPreviewCursorInner } from './apiThreadPreviewCursorInner';
+
+export type ApiThreadPreviewCursor = ApiThreadPreviewCursorInner &
+  ApiThreadPreviewCursorAllOf;

@@ -32,7 +32,7 @@ const shortcutSections: ShortcutSection[] = [
       { keys: ['x'], description: `Select items (then ${IS_MAC ? '⌘' : 'Ctrl'}+K to bring up actions)` },
       { keys: ['shift+j', 'shift+arrowdown'], description: `Select down` },
       { keys: ['shift+k', 'shift+arrowup'], description: `Select up` },
-      { keys: ['p'], description: 'Preview an item in the side panel' },
+      { keys: ['space'], description: 'Preview an item in the side panel' },
       { keys: ['enter'], description: 'Open an item fullscreen' },
       { keys: [`${cmdOrCtrl}+f`], description: 'Search (uses current filters)' },
     ],
@@ -42,6 +42,9 @@ const shortcutSections: ShortcutSection[] = [
     items: [
       { keys: ['d'], description: 'Filter to docs' },
       { keys: ['l'], description: 'Filter to email' },
+      { keys: ['p'], description: 'Filter to people (direct messages)' },
+      { keys: ['m'], description: 'Filter to teams' },
+      { keys: ['f'], description: 'Filter to files' },
     ],
   },
   {
@@ -79,7 +82,7 @@ function Kbd(props: { shortcut: string; class?: string }) {
 function ShortcutRow(props: { item: ShortcutItem }) {
   return (
     <div class="flex items-center gap-2 py-1.5 px-3 rounded-md hover:bg-panel-secondary/50 transition-colors">
-      <div class="shrink-0 flex items-center gap-1">
+      <div class="shrink-0 flex items-center gap-1 uppercase">
         <For each={props.item.keys}>
           {(key) => <Kbd shortcut={key} />}
         </For>
@@ -92,8 +95,8 @@ function ShortcutRow(props: { item: ShortcutItem }) {
 function ShortcutSectionComponent(props: { section: ShortcutSection }) {
   return (
     <div class="mb-6">
-      <h3 class="text-accent font-medium text-sm mb-2 px-3 flex items-center gap-2">
-        <span class="w-1.5 h-1.5 rounded-full bg-accent" />
+      <h3 class="text-accent font-medium text-lg mb-2 px-3 flex items-center gap-2">
+        {/*<span class="w-1.5 h-1.5 rounded-full bg-accent" />*/}
         {props.section.title}
       </h3>
       <div class="flex flex-col">
@@ -116,7 +119,7 @@ export function Shortcuts() {
       >
         <div class="max-w-2xl mx-auto">
           <div class="mb-8">
-            <h2 class="text-lg font-semibold text-ink mb-2">Keyboard Shortcuts</h2>
+            <h2 class="text-xl font-semibold text-ink mb-2">Keyboard Shortcuts</h2>
             <p class="text-ink-muted text-sm">
               Shortcuts without a {IS_MAC ? 'cmd' : 'ctrl'}/option modifier key require text inputs to be unfocused. For example, pressing <kbd>j</kbd> in a document will insert a j, but will move down the list if the document text is unfocused.
             </p>
@@ -131,4 +134,3 @@ export function Shortcuts() {
     </div>
   );
 }
-

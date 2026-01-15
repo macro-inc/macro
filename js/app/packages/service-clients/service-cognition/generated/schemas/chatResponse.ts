@@ -5,12 +5,12 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { ChatAttachmentWithName } from './chatAttachmentWithName';
-import type { Model } from './model';
 import type { ChatMessageWithAttachments } from './chatMessageWithAttachments';
 import type { ChatResponseModel } from './chatResponseModel';
 import type { ChatResponseProjectId } from './chatResponseProjectId';
 import type { ChatResponseTokenCount } from './chatResponseTokenCount';
 import type { ChatResponseWebCitationsItemItem1Item } from './chatResponseWebCitationsItemItem1Item';
+import type { Model } from './model';
 
 export interface ChatResponse {
   /**

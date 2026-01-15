@@ -5,6 +5,7 @@ import { fromHono } from 'chanfana';
 import { Hono } from 'hono';
 import { PlaintextEndpoint } from './endpoints/plaintext';
 import { CognitionTextEndpoint } from './endpoints/cognition-text';
+import { CognitionPresignedEndpoint } from './endpoints/cognition-presigned';
 import { SearchTextEndpoint } from './endpoints/search-text';
 import { MarkdownEndpoint } from './endpoints/markdown';
 
@@ -27,9 +28,9 @@ app.use('/plaintext/*', async (c, next) => {
 });
 
 app.use('/cognition/*', async (c, next) => {
-  const authKey = c.req.header('x-internal-auth-key');
+  const authKey = c.req.header("x-internal-auth-key");
   if (!authKey || authKey !== c.env.INTERNAL_AUTH_KEY) {
-    return c.json({ error: 'Unauthorized' }, 401);
+  	return c.json({ error: "Unauthorized" }, 401);
   }
   await next();
 });
@@ -71,6 +72,7 @@ const openapi = fromHono(app, {
 
 openapi.get('/health', (c) => c.json({ message: 'Healthy' }));
 openapi.get('/plaintext/:docId', PlaintextEndpoint);
+openapi.get('/cognition/presigned', CognitionPresignedEndpoint);
 openapi.get('/cognition/:docId', CognitionTextEndpoint);
 openapi.get('/search/:docId', SearchTextEndpoint);
 openapi.get('/markdown/:docId', MarkdownEndpoint);

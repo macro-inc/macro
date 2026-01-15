@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            -- Condition A: Created > X days ago and has NO history - hasn't viewed a thread\n            SELECT\n                l.id AS \"link_id!\"\n            FROM\n                public.email_links l\n            LEFT JOIN\n                public.email_user_history h ON l.id = h.link_id\n            WHERE\n                l.macro_id NOT LIKE '%@macro.com'\n                AND l.created_at < NOW() - (make_interval(days => $1))\n            GROUP BY\n                l.id\n            HAVING\n                COUNT(h.link_id) = 0\n\n            UNION\n\n            -- Condition B: Has history rows, but latest thread viewed was > Y days ago\n            SELECT\n                l.id AS \"link_id!\"\n            FROM\n                public.email_links l\n            JOIN\n                public.email_user_history h ON l.id = h.link_id\n            WHERE\n                l.macro_id NOT LIKE '%@macro.com'\n            GROUP BY\n                l.id\n            HAVING\n                MAX(h.updated_at) < NOW() - (make_interval(days => $2))\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "c4f9c493fa0e3816a20a0494d5513617cdb7a83c37ecdb2df1faae1a83e14e37"
+}

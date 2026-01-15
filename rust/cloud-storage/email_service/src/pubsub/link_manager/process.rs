@@ -1,5 +1,7 @@
 use crate::pubsub::link_manager::context::LinkManagerContext;
-use crate::pubsub::util::{fetch_access_token_for_link, fetch_link};
+use crate::util::gmail::auth::{
+    fetch_gmail_access_token_from_link, fetch_token_or_delete_on_revocation,
+};
 use crate::util::sync_contacts::sync_contacts;
 use anyhow::{Context, anyhow};
 use models_email::email::service::pubsub::LinkManagerMessage;
@@ -18,24 +20,38 @@ pub async fn process_message(
     let notification_data = extract_message(message)?;
 
     // Step 2: Fetch the user's link details from the database
-    let link = fetch_link(&ctx.db, notification_data.link_id).await?;
+    let link =
+        email_db_client::links::get::fetch_link_by_id(&ctx.db, notification_data.link_id).await?;
+
+    let Some(link) = link else {
+        tracing::debug!(link_id=%notification_data.link_id, "Link not found - skipping");
+        cleanup_message(&ctx.sqs_worker, message).await?;
+        return Ok(());
+    };
 
     // Step 3: Execute the appropriate operation
     match notification_data.operation {
         LinkManagerOperation::Refresh => {
             // Access token is required for refresh - fail if we can't get it
-            let gmail_access_token =
-                fetch_access_token_for_link(&ctx.redis_client, &ctx.auth_service_client, &link)
-                    .await?;
+            let gmail_access_token = fetch_token_or_delete_on_revocation(
+                &link,
+                &ctx.redis_client,
+                &ctx.auth_service_client,
+                &ctx.sqs_client,
+            )
+            .await?;
             handle_refresh(&ctx, &link, &gmail_access_token).await?;
         }
         LinkManagerOperation::Delete => {
             // Access token is optional for delete - we still want to clean up the database
-            // even if the user has revoked access
-            let gmail_access_token =
-                fetch_access_token_for_link(&ctx.redis_client, &ctx.auth_service_client, &link)
-                    .await
-                    .ok();
+            // even if the user has revoked access. don't delete on revocation -> infinite loop
+            let gmail_access_token = fetch_gmail_access_token_from_link(
+                &link,
+                &ctx.redis_client,
+                &ctx.auth_service_client,
+            )
+            .await
+            .ok();
             handle_delete(&ctx, &link, gmail_access_token.as_deref()).await?;
         }
     }
@@ -123,7 +139,7 @@ async fn handle_delete(
             tracing::warn!(error=?e, link_id=?link.id, "Gmail call to stop watch failed");
         }
     } else {
-        tracing::info!(link_id=?link.id, "Skipping Gmail stop_watch - no access token available");
+        tracing::debug!(link_id=?link.id, "Skipping Gmail stop_watch - no access token available");
     }
 
     // remove google fusionauth link with gmail inbox permissions

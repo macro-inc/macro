@@ -10,6 +10,9 @@ name = "properties_service"
 path = "src/main.rs"
 required-features = []
 
+[[bin]]
+name = "properties_service_openapi"
+path = "src/openapi.rs"
 
 [features]
 local_auth = []

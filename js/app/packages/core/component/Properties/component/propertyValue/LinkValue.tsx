@@ -1,33 +1,24 @@
 import { useUnfurl } from '@core/signal/unfurl';
 import LinkIcon from '@icon/regular/link.svg';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { proxyResource } from '@service-unfurl/client';
 import type { Component } from 'solid-js';
 import { createSignal, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { usePropertiesContext } from '../../context/PropertiesContext';
-import type { Property } from '../../types';
 import {
   extractDomain,
   getLinkValues,
   isValidUrl,
   normalizeUrl,
 } from '../../utils';
-import { ERROR_MESSAGES } from '../../utils/errorHandling';
 import {
   AddPropertyValueButton,
   EmptyValue,
   PropertyValueDeleteButton,
+  type PropertyValueProps,
 } from './ValueComponents';
 
-type LinkValueProps = {
-  property: Property;
-  canEdit: boolean;
-  entityType: EntityType;
-  onRefresh?: () => void;
-};
-
-export const LinkValue: Component<LinkValueProps> = (props) => {
+export const LinkValue: Component<PropertyValueProps> = (props) => {
   const { saveHandler } = usePropertiesContext();
   const [isAdding, setIsAdding] = createSignal(false);
   const [inputValue, setInputValue] = createSignal('');
@@ -81,19 +72,14 @@ export const LinkValue: Component<LinkValueProps> = (props) => {
         newValues = [normalized];
       }
 
-      const result = await saveHandler.saveProperty(props.property, {
+      await saveHandler.saveProperty(props.property, {
         valueType: 'LINK',
         values: newValues,
       });
-
-      if (result.ok) {
-        cancelAdding();
-        props.onRefresh?.();
-      } else {
-        setError(ERROR_MESSAGES.PROPERTY_SAVE);
-      }
-    } catch (_err) {
-      setError(ERROR_MESSAGES.PROPERTY_SAVE);
+      cancelAdding();
+      props.onRefresh?.();
+    } catch {
+      // Error toast is shown by mutation's onError callback
     } finally {
       setIsSaving(false);
     }
@@ -107,14 +93,13 @@ export const LinkValue: Component<LinkValueProps> = (props) => {
     try {
       const newValues = linkValues.filter((link: string) => link !== url);
 
-      const result = await saveHandler.saveProperty(props.property, {
+      await saveHandler.saveProperty(props.property, {
         valueType: 'LINK',
         values: newValues.length > 0 ? newValues : null,
       });
-
-      if (result.ok) {
-        props.onRefresh?.();
-      }
+      props.onRefresh?.();
+    } catch {
+      // Error toast is shown by mutation's onError callback
     } finally {
       setIsSaving(false);
     }

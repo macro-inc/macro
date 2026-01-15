@@ -181,9 +181,6 @@ export function SplitTabs(props: {
                   </span>
                   <span class="truncate">{label}</span>
                 </span>
-                {/* <Show when={isActive()}>
-                  <BrightJoins dots={[true, true, true, true]} />
-                </Show> */}
                 {props.contextMenu?.({ label, value })}
               </Tabs.Trigger>
             );

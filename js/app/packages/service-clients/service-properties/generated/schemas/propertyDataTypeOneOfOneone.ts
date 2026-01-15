@@ -4,8 +4,9 @@
  * properties_service
  * OpenAPI spec version: 0.1.0
  */
-import type { SelectStringOption } from './selectStringOption';
+
 import type { PropertyDataTypeOneOfOneoneType } from './propertyDataTypeOneOfOneoneType';
+import type { SelectStringOption } from './selectStringOption';
 
 /**
  * Select property with string options.

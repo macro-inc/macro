@@ -1,10 +1,10 @@
 use crate::{api::context::ApiContext, config::APPLE_BUNDLE_ID};
 use anyhow::Context;
 use futures::StreamExt;
-use notification_db_client::notification::get::BasicNotification;
+use notification_db_client::notification::get::DbBasicNotification;
 use serde::Serialize;
-use sns_client::{APNSPushNotification, MessageAttributes, NotifCollapseKey, PushType, SnsTarget};
-use std::hash::{DefaultHasher, Hash, Hasher};
+use sns_client::{APNSPushNotification, MessageAttributes, PushType, SnsTarget};
+use std::borrow::Cow;
 
 /// Clears out push notifications for a user in bulk
 #[tracing::instrument(skip(ctx))]
@@ -42,23 +42,18 @@ pub fn clear_push_notifications(
                 .then(|notification_id| {
                     let sns_client = sns_client.clone();
                     let db = db.clone();
-                    let user_id = user_id.clone();
                     let device_endpoints = device_endpoints.clone();
                     async move {
-                        if let Err(e) =
-                            clear_push_notification(
+                        let notif =
+                            notification_db_client::notification::get::get_basic_notification(
                                 &db,
-                                &sns_client,
-                                &device_endpoints,
-                                Some(&notification_id.to_string()),
-                                None,
+                                notification_id,
                             )
-                            .await
-                        {
-                            tracing::error!(error=?e, notification_id=notification_id.to_string(), user_id=user_id, "failed to remove push notification");
-                        }
+                            .await?
+                            .transpose()
+                            .context("Cannot clear a notification without an apns collapse key")?;
 
-                        Ok(())
+                        clear_push_notification(&sns_client, &device_endpoints, notif).await
                     }
                 })
                 .collect::<Vec<anyhow::Result<()>>>()
@@ -73,38 +68,15 @@ pub fn clear_push_notifications(
 
 /// When a notification is marked as "done" or "seen" for a user, we need to potentially send a
 /// remove notification sns notification to the user to clear it from their device.
-#[tracing::instrument(skip(db, sns_client))]
+#[tracing::instrument(err, skip(sns_client))]
 pub async fn clear_push_notification(
-    db: &sqlx::Pool<sqlx::Postgres>,
     sns_client: &sns_client::SNS,
     device_endpoints: &[String],
-    notification_id: Option<&str>,
-    basic_notification: Option<&BasicNotification>,
+    basic_notification: DbBasicNotification<String>,
 ) -> anyhow::Result<()> {
     // As of right now, we can only do this for APNS notifications since android requires a
     // custom push notification handler in order to clear the notification on the mobile application side
-    let BasicNotification {
-        event_item_id,
-        event_item_type: _,
-        notification_event_type,
-    } = if let Some(basic_notification) = basic_notification {
-        basic_notification
-    } else {
-        &notification_db_client::notification::get::get_basic_notification(
-            db,
-            notification_id.context("expected notification_id")?,
-        )
-        .await
-        .context("failed to get notification")?
-    };
-
-    let collapse_key = format!("{}{}", event_item_id, notification_event_type);
-
-    // hash the collapse key to shorten it
-    let mut hasher = DefaultHasher::new();
-    collapse_key.hash(&mut hasher);
-    let hash = hasher.finish();
-    let collapse_key = format!("{:x}", hash);
+    let collapse_key = basic_notification.apns_collapse_key;
 
     #[derive(Debug, Serialize, Clone)]
     struct CustomData {
@@ -123,7 +95,7 @@ pub async fn clear_push_notification(
     let attributes = MessageAttributes {
         push_type: PushType::Background,
         apns_bundle_id: &APPLE_BUNDLE_ID,
-        collapse_key: NotifCollapseKey::new_str(&collapse_key),
+        collapse_key,
     };
 
     futures::stream::iter(device_endpoints.iter())
@@ -132,12 +104,9 @@ pub async fn clear_push_notification(
                 tracing::trace!("skipping non-apns endpoint");
                 return;
             }
-            if let Err(e) = sns_client
+            let _ = sns_client
                 .push_notification(endpoint, &apns, attributes.clone())
-                .await
-            {
-                tracing::warn!(error=?e, "unable to send push notification");
-            }
+                .await;
         })
         .collect::<Vec<_>>()
         .await;
@@ -146,50 +115,36 @@ pub async fn clear_push_notification(
 }
 
 /// Clears out push notifications for a user by notification event
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(err, skip(ctx))]
 pub async fn clear_push_notifications_basic(
     ctx: ApiContext,
-    user_id: &str,
-    notification: &BasicNotification,
+    user_id: Cow<'_, str>,
+    notification: DbBasicNotification<Option<String>>,
 ) -> anyhow::Result<()> {
     tracing::trace!("clearing potential push notifications");
-    tokio::spawn({
-        let db = ctx.db.clone();
-        let sns_client = ctx.sns_client.clone();
-        let user_id = user_id.to_string();
-        let basic_notification = notification.clone();
-        async move {
-            tracing::trace!("removing push notifications");
+    let db = ctx.db.clone();
+    let sns_client = ctx.sns_client.clone();
+    let user_id = user_id.to_string();
+    tracing::trace!("removing push notifications");
 
-            let device_endpoints =
-                notification_db_client::device::get_user_device_endpoints(&db, &user_id)
-                    .await
-                    .inspect_err(|e| {
-                        tracing::error!(error=?e, "failed to get device endpoints");
-                    })
-                    .unwrap_or(Vec::new());
+    let device_endpoints = notification_db_client::device::get_user_device_endpoints(&db, &user_id)
+        .await
+        .inspect_err(|e| {
+            tracing::error!(error=?e, "failed to get device endpoints");
+        })
+        .unwrap_or(Vec::new());
 
-            if device_endpoints.is_empty() {
-                tracing::trace!(
-                    "user has no device endpoints, skipping push notification clearing"
-                );
-                return;
-            }
-            if let Err(e) = clear_push_notification(
-                &db,
-                &sns_client,
-                &device_endpoints,
-                None,
-                Some(&basic_notification),
-            )
-            .await
-            {
-                tracing::error!(error=?e, basic_notification=?basic_notification, user_id=user_id, "failed to remove push notification");
-            }
+    if device_endpoints.is_empty() {
+        tracing::trace!("user has no device endpoints, skipping push notification clearing");
+        return Ok(());
+    }
 
-            tracing::trace!(basic_notification=?basic_notification, user_id=user_id, "removing push notifications complete");
-        }
-    });
+    let Some(basic_notification) = notification.transpose() else {
+        tracing::trace!("cannot clear a notification that is missing a collapse key");
+        return Ok(());
+    };
+
+    let _ = clear_push_notification(&sns_client, &device_endpoints, basic_notification).await;
 
     Ok(())
 }

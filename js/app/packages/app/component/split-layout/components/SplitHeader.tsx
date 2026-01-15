@@ -1,6 +1,9 @@
 import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
 import { LabelAndHotKey } from '@core/component/Tooltip';
-import { ENABLE_PREVIEW } from '@core/constant/featureFlags';
+import {
+  ENABLE_PREVIEW,
+  ENABLE_PROJECT_VIEW_PREVIEW,
+} from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
@@ -8,7 +11,7 @@ import CollapseIcon from '@icon/regular/arrows-in.svg';
 import ExpandIcon from '@icon/regular/arrows-out.svg';
 import CaretLeft from '@icon/regular/caret-left.svg';
 import CaretRight from '@icon/regular/caret-right.svg';
-import SplitIcon from '@icon/regular/square-split-horizontal.svg';
+import SplitIcon from '@icon/regular/square-half.svg';
 import CloseIcon from '@icon/regular/x.svg';
 import IconGear from '@macro-icons/macro-gear.svg';
 import { Button } from '@ui/components/Button';
@@ -35,14 +38,14 @@ function SplitBackButton() {
   if (!context) return null;
   return (
     <Button
-      class="p-1 *:h-4"
+      class="p-1"
       tooltip={
         <LabelAndHotKey label="Go Back" hotkeyToken={TOKENS.split.go.back} />
       }
       disabled={!context.handle.canGoBack()}
       onClick={context.handle.goBack}
     >
-      <CaretLeft />
+      <CaretLeft class="h-4" />
     </Button>
   );
 }
@@ -52,7 +55,7 @@ function SplitForwardButton() {
   if (!context) return '';
   return (
     <Button
-      class="p-1 *:h-4"
+      class="p-1"
       tooltip={
         <LabelAndHotKey
           label="Go Forward"
@@ -62,7 +65,7 @@ function SplitForwardButton() {
       disabled={!context.handle.canGoForward()}
       onClick={context.handle.goForward}
     >
-      <CaretRight />
+      <CaretRight class="h-4" />
     </Button>
   );
 }
@@ -74,7 +77,7 @@ function SplitSpotlightButton() {
   return (
     <Show when={canSpotlight(layout.manager)}>
       <Button
-        class="p-1 *:h-4"
+        class="p-1"
         tooltip={
           <LabelAndHotKey
             label={
@@ -87,7 +90,11 @@ function SplitSpotlightButton() {
         }
         onClick={() => context.handle.toggleSpotlight()}
       >
-        {context.handle.isSpotLight() ? <CollapseIcon /> : <ExpandIcon />}
+        {context.handle.isSpotLight() ? (
+          <CollapseIcon class="h-4" />
+        ) : (
+          <ExpandIcon class="h-4" />
+        )}
       </Button>
     </Show>
   );
@@ -96,24 +103,26 @@ function SplitSpotlightButton() {
 function SplitCloseButton() {
   const context = useContext(SplitPanelContext);
   if (!context) return null;
+
   return (
     <Button
-      class="p-1 *:h-4"
+      class="p-1"
       tooltip={<LabelAndHotKey label="Close" />}
       onClick={context.handle.close}
     >
-      <CloseIcon />
+      <CloseIcon class="h-4" />
     </Button>
   );
 }
 
-function SplitPreviewToggle() {
+function _SplitPreviewToggle() {
   const context = useContext(SplitPanelContext);
   if (!ENABLE_PREVIEW || !context || !context.previewState) return null;
 
-  // Only show toggle for unified-list component, not for blocks
+  // Only show toggle for unified-list component and project block
   const isUnifiedList = createMemo(() => {
     const content = context.handle.content();
+    if (ENABLE_PROJECT_VIEW_PREVIEW && content.type === 'project') return true;
     return content.type === 'component' && content.id === 'unified-list';
   });
 
@@ -123,7 +132,7 @@ function SplitPreviewToggle() {
     <Show when={isUnifiedList()}>
       <div class="max-sm:rotate-90">
         <Button
-          class="p-1 *:h-4"
+          class="p-1"
           classList={{
             'bg-accent/20 text-accent': preview(),
           }}
@@ -133,16 +142,17 @@ function SplitPreviewToggle() {
               hotkeyToken={TOKENS.unifiedList.togglePreview}
             />
           }
+          tabIndex={-1}
           onClick={() => setPreview((prev) => !prev)}
         >
-          <SplitIcon />
+          <SplitIcon class="h-4" />
         </Button>
       </div>
     </Show>
   );
 }
 
-function SplitControlButtons() {
+function _SplitControlButtons() {
   return (
     <div class="flex flex-row items-center px-2 h-full shrink-0">
       <div class="touch:mobile-width:hidden">
@@ -165,7 +175,7 @@ function SplitSettingsButton() {
 
   return (
     <Button
-      class="p-1 *:h-4"
+      class="p-1"
       classList={{
         'bg-accent/20 text-accent': isSettingsSplitOpen(),
       }}
@@ -183,7 +193,7 @@ function SplitSettingsButton() {
         replaceSplit({ content: { type: 'component', id: 'settings' } });
       }}
     >
-      <IconGear />
+      <IconGear class="h-4" />
     </Button>
   );
 }
@@ -195,14 +205,20 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
 
   return (
     <div
-      class="isolate relative w-full h-10 overflow-clip text-ink shrink-0"
+      class="isolate relative w-full h-10 touch:h-11 overflow-clip text-ink shrink-0 border-b border-edge-muted/50"
       data-split-header
       ref={props.ref}
     >
-      <div class="absolute inset-0 flex justify-start items-center bg-panel border-b border-b-edge-muted">
-        <SplitControlButtons />
+      <div class="absolute inset-0 flex justify-start items-center bg-panel">
+        <div class="z-2 relative flex items-center bg-panel pl-2 h-full">
+          <div class="touch:mobile-width:hidden">
+            <SplitCloseButton />
+          </div>
+          <SplitBackButton />
+          <SplitForwardButton />
+        </div>
         <div
-          class="relative w-fit min-w-0 h-full shrink"
+          class="relative w-fit min-w-0 h-full shrink pl-2"
           ref={(ref) => {
             ctx.layoutRefs.headerLeft = ref;
           }}
@@ -220,7 +236,6 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
           />
           <div class="z-2 relative flex items-center bg-panel pr-2 h-full">
             <EntityNavigationIndicator />
-            <SplitPreviewToggle />
             <SplitSpotlightButton />
           </div>
         </Show>

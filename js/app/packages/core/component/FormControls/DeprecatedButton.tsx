@@ -12,7 +12,7 @@ type Size = 'SM' | 'Base' | 'XS';
 type Theme = 'primary' | 'secondary' | 'primary' | 'secondary';
 
 const sizeClass: Record<Size, string> = {
-  XS: 'text-[10px] p-1',
+  XS: 'text-xxs p-1',
   SM: 'text-xs p-1',
   Base: 'text-[14px] p-1 px-[8px]',
 };

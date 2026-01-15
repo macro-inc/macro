@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type PdfAnchorIdOneOfThreeAnchorType = typeof PdfAnchorIdOneOfThreeAnchorType[keyof typeof PdfAnchorIdOneOfThreeAnchorType];
-
+export type PdfAnchorIdOneOfThreeAnchorType =
+  (typeof PdfAnchorIdOneOfThreeAnchorType)[keyof typeof PdfAnchorIdOneOfThreeAnchorType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const PdfAnchorIdOneOfThreeAnchorType = {

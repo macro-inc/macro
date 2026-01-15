@@ -1,13 +1,9 @@
-use std::collections::HashMap;
-
 use anyhow::Context;
 use aws_sdk_sns::types::MessageAttributeValue;
 use macro_entrypoint::MacroEntrypoint;
 use serde::Serialize;
-use sns_client::{
-    APNSPushNotification, Alert, AlertDictionary, Aps, FCMMessage, MessageAttributes,
-    NotifCollapseKey, SnsTarget,
-};
+use sns_client::{APNSPushNotification, Alert, AlertDictionary, Aps, MessageAttributes, SnsTarget};
+use std::collections::HashMap;
 
 /// Sends a push notification to the provided ENDPOINT_ARN environment variable
 #[tokio::main]
@@ -25,11 +21,11 @@ async fn main() -> anyhow::Result<()> {
     let collapse_key = "collapse";
 
     // Sends the first push notification
-    send_first(&sns_client, &endpoint_arn, collapse_key).await?;
+    send_first(&sns_client, &endpoint_arn, collapse_key.to_string()).await?;
 
     // Sends an empty push notification with the same collapse key.
     // this will remove the notification from the device.
-    send_empty(&sns_client, &endpoint_arn, collapse_key).await?;
+    send_empty(&sns_client, &endpoint_arn, collapse_key.to_string()).await?;
 
     Ok(())
 }
@@ -74,7 +70,7 @@ fn message_attributes(collapse_key: &str) -> Option<HashMap<String, MessageAttri
 async fn send_first(
     sns_client: &sns_client::SNS,
     endpoint_arn: &str,
-    collapse_key: &str,
+    collapse_key: String,
 ) -> anyhow::Result<()> {
     let apns = SnsTarget::Ios(Box::new(APNSPushNotification {
         aps: Aps {
@@ -95,7 +91,7 @@ async fn send_first(
             MessageAttributes {
                 push_type: sns_client::PushType::Alert,
                 apns_bundle_id: "com.macro.app.prod",
-                collapse_key: NotifCollapseKey::new_str(collapse_key),
+                collapse_key,
             },
         )
         .await
@@ -107,7 +103,7 @@ async fn send_first(
 async fn send_empty(
     sns_client: &sns_client::SNS,
     endpoint_arn: &str,
-    collapse_key: &str,
+    collapse_key: String,
 ) -> anyhow::Result<()> {
     #[derive(Debug, Serialize)]
     struct ExtraData {
@@ -131,7 +127,7 @@ async fn send_empty(
             MessageAttributes {
                 push_type: sns_client::PushType::Alert,
                 apns_bundle_id: "com.macro.app.prod",
-                collapse_key: NotifCollapseKey::new_str(collapse_key),
+                collapse_key,
             },
         )
         .await

@@ -163,7 +163,7 @@ export function ChannelCompose() {
             />
             <RecipientSelector<'user' | 'contact'>
               options={destinationOptions}
-              selectedOptions={selectedRecipients}
+              selectedOptions={selectedRecipients()}
               setSelectedOptions={setSelectedRecipients}
               placeholder="To: Macro users or email addresses"
               triedToSubmit={triedToSubmit}

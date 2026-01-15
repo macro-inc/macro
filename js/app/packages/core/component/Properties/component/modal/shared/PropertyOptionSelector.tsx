@@ -28,7 +28,6 @@ type SelectOptionsProps = {
   error: string | null;
   selectedOptions: () => Set<string>;
   onToggleOption: (value: string) => void;
-  onRetry: () => void;
   onAddOption?: (value: string) => Promise<void>;
   onClose?: () => void;
 };
@@ -266,20 +265,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
         </div>
       }
     >
-      <Show
-        when={!props.error}
-        fallback={
-          <div class="text-center py-6">
-            <div class="text-failure-ink mb-3 text-sm">{props.error}</div>
-            <button
-              onClick={props.onRetry}
-              class="px-3 py-1.5 bg-accent text-ink text-sm hover:bg-accent/90"
-            >
-              Retry
-            </button>
-          </div>
-        }
-      >
+      <Show when={!props.error}>
         <div>
           <div class="relative">
             <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">

@@ -5,8 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ParticipantRole = typeof ParticipantRole[keyof typeof ParticipantRole];
-
+export type ParticipantRole =
+  (typeof ParticipantRole)[keyof typeof ParticipantRole];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ParticipantRole = {

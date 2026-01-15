@@ -1,5 +1,6 @@
 use std::{collections::HashMap, fmt::Display};
 
+use chrono::{DateTime, Utc};
 use models_opensearch::SearchEntityType;
 
 use crate::search::query::Keys;
@@ -218,4 +219,7 @@ pub struct SearchHit {
     pub highlight: Highlight,
     /// The goto content for the entity
     pub goto: Option<SearchGotoContent>,
+    /// Timestamp for sorting across sources (None sorts to bottom)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<DateTime<Utc>>,
 }

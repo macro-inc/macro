@@ -38,7 +38,7 @@ mod webhooks;
 
 // Misc
 mod middleware;
-mod swagger;
+pub(crate) mod swagger;
 mod utils;
 
 pub async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<()> {

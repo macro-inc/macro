@@ -1,5 +1,5 @@
 use crate::AiToolSet;
-use ai::tool::AsyncToolSet;
+use ai_toolset::AsyncToolSet;
 
 mod search_service;
 pub mod web;

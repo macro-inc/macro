@@ -1,5 +1,7 @@
+use item_filters::ast::{LiteralTree, channel::ChannelLiteral};
 use macro_user_id::user_id::MacroUserIdStr;
 pub use models_comms::*;
+use models_pagination::{Query, SimpleSortMethod};
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -33,5 +35,43 @@ impl UserName {
             (Some(first), None) => Some(first.to_string()),
             (Some(first), Some(last)) => Some(format!("{first} {last}")),
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct GetChannelsRequest {
+    pub macro_id: MacroUserIdStr<'static>,
+    pub limit: Option<u32>,
+    pub query: Query<Uuid, SimpleSortMethod, LiteralTree<ChannelLiteral>>,
+}
+
+impl GetChannelsRequest {
+    pub fn into_params(self) -> GetChannelsParams {
+        GetChannelsParams {
+            macro_id: self.macro_id,
+            limit: self.limit,
+            query: self.query,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct GetChannelsParams {
+    macro_id: MacroUserIdStr<'static>,
+    limit: Option<u32>,
+    query: Query<Uuid, SimpleSortMethod, LiteralTree<ChannelLiteral>>,
+}
+
+impl GetChannelsParams {
+    pub fn user(&self) -> &MacroUserIdStr<'static> {
+        &self.macro_id
+    }
+
+    pub fn limit(&self) -> Option<u32> {
+        self.limit
+    }
+
+    pub fn query(&self) -> &Query<Uuid, SimpleSortMethod, LiteralTree<ChannelLiteral>> {
+        &self.query
     }
 }

@@ -1,4 +1,5 @@
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
+import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import BuildingIcon from '@icon/regular/buildings.svg';
 import UserIcon from '@icon/regular/user.svg';
 import type { ContactMentionDecoratorProps } from '@lexical-core';
@@ -32,7 +33,8 @@ export function ContactMention(props: ContactMentionDecoratorProps) {
   const openContact = (e: MouseEvent | KeyboardEvent | null) => {
     // The contactId is the email or @domain
     const contactId = encodeURIComponent(props.emailOrDomain);
-    if (e?.altKey) {
+    const inNewSplit = openInNewSplitForMention(e?.altKey, e != null);
+    if (inNewSplit) {
       insertSplit({
         type: 'contact',
         id: contactId,

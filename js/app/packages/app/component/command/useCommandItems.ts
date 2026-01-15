@@ -1,4 +1,4 @@
-import { useChannelsContext } from '@core/component/ChannelsProvider';
+import { useChannelsContext } from '@core/context/channels';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { activeScope } from '@core/hotkey/state';
 import { mapFromListsByKey } from '@core/util/compareUtils';
@@ -30,7 +30,7 @@ function channelsIntoCategories(channels: Channel[]) {
 export function useCommandItems() {
   const historyQuery = useHistoryQuery();
   const channelsContext = useChannelsContext();
-  const channels = () => channelsContext.channels();
+  const channels = channelsContext.channels;
   const activeCommands = getActiveCommandsFromScope(activeScope(), {
     sortByScopeLevel: false,
     hideShadowedCommands: false,

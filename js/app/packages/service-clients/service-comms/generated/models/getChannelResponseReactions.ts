@@ -9,4 +9,4 @@ import type { CountedReaction } from './countedReaction';
 /**
  * reactions grouped by message
  */
-export type GetChannelResponseReactions = {[key: string]: CountedReaction[]};
+export type GetChannelResponseReactions = { [key: string]: CountedReaction[] };

@@ -6,7 +6,6 @@ import type { ParsedDate } from '@core/util/dateParser';
 import type { EmailEntity } from '@macro-entity';
 import { waitBulkUploadStatus } from '@service-connection/bulkUpload';
 import type { DocumentMentionMetadata } from '@service-notification/client';
-import { storageServiceClient } from '@service-storage/client';
 import type { BasicDocument } from '@service-storage/generated/schemas/basicDocument';
 import type { Item } from '@service-storage/generated/schemas/item';
 import type { Project } from '@service-storage/generated/schemas/project';
@@ -166,8 +165,6 @@ export async function handleUserMention(
       };
       if (onUserMention) {
         onUserMention(record);
-      } else {
-        storageServiceClient.upsertUserMentions(record);
       }
       if (!disableMentionTracking) {
         mentionId = await trackMention(blockId, 'user', user.id);

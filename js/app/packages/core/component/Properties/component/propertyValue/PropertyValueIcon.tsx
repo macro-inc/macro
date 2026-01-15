@@ -16,6 +16,10 @@ type PropertyValueIconProps = {
   class?: string;
 };
 
+const knownPropertyIds = new Set<string>(
+  Object.values(PROPERTY_OPTION_IDS).flatMap((group) => Object.values(group))
+);
+
 /**
  * Render appropriate icons for property option values - based on common,
  * hard-coded property option ids.
@@ -28,6 +32,9 @@ type PropertyValueIconProps = {
  * ```
  */
 export const PropertyValueIcon: Component<PropertyValueIconProps> = (props) => {
+  if (!knownPropertyIds.has(props.optionId)) {
+    return null;
+  }
   return (
     <Switch>
       {/* Priority */}

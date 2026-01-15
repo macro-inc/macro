@@ -2,6 +2,7 @@ pub mod chat_completion;
 pub mod chat_stream;
 mod constants;
 pub mod model_selection;
+mod openai_toolset;
 pub mod simple_completion;
 pub mod structured_output;
 pub mod structured_output_v2;
@@ -10,3 +11,6 @@ pub mod tool;
 pub mod traits;
 pub mod types;
 pub mod web_search;
+
+pub use ai_toolset::generate_tool_input_schema;
+pub use ai_toolset::generate_tool_output_schema;

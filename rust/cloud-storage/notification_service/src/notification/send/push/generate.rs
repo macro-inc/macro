@@ -76,10 +76,12 @@ impl XmlFormatter for PlainTextFormatter {
     }
 }
 
+#[tracing::instrument(err)]
 pub fn generate_apns_notification<T: XmlFormatter>(
     notif: &NotificationWithRecipient,
 ) -> Result<Option<APNSPushNotification<PushNotificationData>>, NotificationErr> {
     let create_push_data = |route: Route| PushNotificationData {
+        notification_id: notif.inner.id,
         notification_entity: notif.inner.notification_entity.clone(),
         sender_id: notif.inner.sender_id.as_ref().map(|x| x.to_string()),
         open_route: route.0,

@@ -1,6 +1,7 @@
 use crate::attachments::{marco, provider};
 use crate::messages::replying_to_id;
-use crate::messages::scheduled::{delete_scheduled_message, upsert_scheduled_message};
+use crate::messages::scheduled::delete::delete_scheduled_message;
+use crate::messages::scheduled::upsert::upsert_scheduled_message;
 use crate::parse::service_to_db::{addresses_from_message, map_message_to_send_to_db};
 use crate::{contacts, labels, parse, threads};
 use anyhow::Context;
@@ -217,32 +218,22 @@ pub async fn insert_message(
 }
 
 /// insert message that user created via macro frontend
-#[tracing::instrument(skip(tx, service_message))]
+#[tracing::instrument(skip(tx, service_message), err)]
 pub async fn insert_message_to_send(
     tx: &mut sqlx::PgConnection,
     service_message: &mut message::MessageToSend,
     thread_id: Uuid,
     from_contact_id: Option<Uuid>,
     is_draft: bool,
+    // recipients need to be inserted ahead of time outside the tx, as they are shared
+    // across messages and can cause deadlocks if inserted within.
+    recipients: UpsertedRecipients,
 ) -> anyhow::Result<()> {
     let message_db_id = service_message
         .db_id
         .unwrap_or_else(macro_uuid::generate_uuid_v7);
 
-    // Generate and insert recipients for message before sending.
-    // This ensures recipients are accessible to the frontend before Gmail sync message arrives with
-    // complete message details.
-    let addresses = addresses_from_message(service_message);
-
     let db_message_to_send = map_message_to_send_to_db(service_message, message_db_id, thread_id);
-
-    let recipients = contacts::upsert_message::parse_and_upsert_message_contacts(
-        &mut *tx,
-        db_message_to_send.link_id,
-        addresses,
-    )
-    .await
-    .context("Failed to insert address ids")?;
 
     // Insert the message into the database
     sqlx::query!(
@@ -300,24 +291,17 @@ pub async fn insert_message_to_send(
         Utc::now()
     )
     .execute(&mut *tx)
-    .await
-    .with_context(|| format!("Failed to insert message with thread_id {}", thread_id))?;
+    .await?;
 
     service_message.db_id = Some(message_db_id);
 
-    process_scheduled_message(tx, service_message, message_db_id, is_draft)
-        .await
-        .context("Failed to process scheduled message")?;
+    process_scheduled_message(tx, service_message, message_db_id, is_draft).await?;
 
     if let Some(mut attachments) = service_message.attachments_macro.clone() {
-        marco::insert_macro_attachments(tx, message_db_id, &mut attachments)
-            .await
-            .context("Failed to insert macro attachments")?;
+        marco::insert_macro_attachments(tx, message_db_id, &mut attachments).await?;
     }
 
-    contacts::upsert_message::upsert_message_recipients(tx, message_db_id, &recipients)
-        .await
-        .context("Failed to insert recipients")?;
+    contacts::upsert_message::upsert_message_recipients(tx, message_db_id, &recipients).await?;
 
     Ok(())
 }

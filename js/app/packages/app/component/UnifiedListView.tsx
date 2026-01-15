@@ -2,7 +2,11 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
-import { noiseFilter, signalFilter } from '@app/component/soupFilters';
+import {
+  explicitNoiseFilter,
+  noiseFilter,
+  signalFilter,
+} from '@app/component/soupFilters';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { codeFileExtensions } from '@block-code/util/languageSupport';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
@@ -50,7 +54,6 @@ import {
   createUnifiedInfiniteList,
   createUnifiedSearchInfiniteQuery,
   Entity,
-  type EntityClickHandler,
   type EntityData,
   type EntityFilter,
   type ExpandedEntityType,
@@ -75,7 +78,7 @@ import {
   type UnifiedNotification,
   useNotificationsForEntity,
 } from '@notifications';
-import type { PaginatedSearchArgs } from '@service-search/client';
+import type { SearchArgs } from '@service-search/client';
 import type {
   ChannelFilters,
   ChatFilters,
@@ -108,6 +111,7 @@ import {
   type Setter,
   Show,
   type Signal,
+  Suspense,
 } from 'solid-js';
 import {
   createStore,
@@ -115,9 +119,10 @@ import {
   type SetStoreFunction,
   unwrap,
 } from 'solid-js/store';
-import type { EntityPointerDownHandler } from '../../macro-entity/src/components/Entity';
 import {
   ENTITY_HEIGHT,
+  type EntityClickHandler,
+  type EntityPointerDownHandler,
   EntityWithEverything,
 } from '../../macro-entity/src/components/EntityWithEverything';
 import {
@@ -159,8 +164,9 @@ import {
   type ViewConfigBase,
   type ViewData,
 } from './ViewConfig';
+import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 
-const SEARCH_SERVICE_DEBOUNCE_MS = 200;
+const SEARCH_SERVICE_DEBOUNCE_MS = 300;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
@@ -205,7 +211,7 @@ export type UnifiedListViewProps = {
   defaultFilterOptions?: Partial<FilterOptions>;
   defaultSortOptions?: Partial<SortOptions>;
   defaultDisplayOptions?: Partial<DisplayOptions>;
-  hideToolbar?: true;
+  hideToolbar?: boolean;
 };
 export function UnifiedListView(props: UnifiedListViewProps) {
   const [contextAndModalState, setContextAndModalState] = createStore<{
@@ -236,7 +242,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   );
   const defaultDisplayOptions = mergeProps(
     VIEWCONFIG_BASE.display,
-    props.defaultDisplayOptions
+    props.defaultDisplayOptions,
+    // When the toolbar is hidden (e.g. `Soup`'s topbar is used instead), users
+    // have no in-view way to toggle this on. Default it to on so unread dots
+    // are visible in the list.
+    props.hideToolbar ? { showUnreadIndicator: true } : {}
   );
 
   const splitContext = useSplitPanelOrThrow();
@@ -250,6 +260,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     entityListRefSignal: [, setEntityListRef],
     entitiesSignal: [entities_, setEntities],
     emailViewSignal: [emailView],
+    activeContextSignal: [activeSoupContext, setActiveSoupContext],
   } = soupContext;
 
   // Properties for task entities
@@ -267,7 +278,20 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     return map;
   });
 
+  const { isKeypressActive } = useIsKeyPressActive();
+
   const setSelectedEntity = (entity: EntityData | undefined) => {
+    setViewDataStore(
+      selectedView(),
+      produce((state) => {
+        if (!state) return;
+        state.selectedEntity = entity;
+      })
+    );
+  };
+  const setSelectedEntityFromMouse = (entity: EntityData | undefined) => {
+    if (isKeypressActive()) return;
+
     setViewDataStore(
       selectedView(),
       produce((state) => {
@@ -285,6 +309,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const rawSearchText = createMemo<string>(() => view()?.searchText ?? '');
   const searchText = createMemo(() => rawSearchText()?.trim() ?? '');
 
+  // Track entity list ref changes
   createEffect(
     on(
       [localEntityListRef, () => entities_()?.at(0), searchText],
@@ -292,16 +317,68 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         if (!localEntityListRef) return;
         setEntityListRef(localEntityListRef);
 
-        if (view()?.hasUserInteractedEntity) {
-          return;
-        }
-
+        if (view()?.hasUserInteractedEntity) return;
         if (isTouchDevice()) return;
         if (!firstEntity) return;
 
         setSelectedEntity(firstEntity);
       }
     )
+  );
+
+  // Stable key for filter state - changes trigger selection reset
+  const filterKey = createMemo(() =>
+    stringify({ viewId: selectedView(), filters: view()?.filters })
+  );
+
+  // Reset selection and scroll when filters change
+  createEffect(
+    on(
+      filterKey,
+      (_current, prev) => {
+        if (isTouchDevice()) return;
+        if (prev === undefined) return; // Skip initial run
+
+        batch(() => {
+          setViewDataStore(selectedView(), 'selectedEntity', undefined);
+          setViewDataStore(selectedView(), 'hasUserInteractedEntity', false);
+        });
+        virtualizerHandle()?.scrollToIndex(0);
+      },
+      { defer: true }
+    )
+  );
+
+  // Auto-select first entity when no selection exists
+  createEffect(() => {
+    if (isTouchDevice()) return;
+    if (view()?.hasUserInteractedEntity) return;
+    if (selectedEntity()) return;
+
+    const first = entities_()?.at(0);
+    if (first) setSelectedEntity(first);
+  });
+
+  // Always keep an entity selected when the list has items (e.g. after deletes).
+  createEffect(
+    on([entities_, selectedEntity], () => {
+      if (isTouchDevice()) return;
+
+      const list = entities_() ?? [];
+      const first = list.at(0);
+      if (!first) return;
+
+      const current = selectedEntity();
+      if (!current) {
+        setSelectedEntity(first);
+        return;
+      }
+
+      const existsInList = entityById().has(current.id);
+      if (!existsInList) {
+        setSelectedEntity(first);
+      }
+    })
   );
 
   const notificationFilter = createMemo(
@@ -351,6 +428,10 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     );
   };
 
+  const unreadOnly = createMemo(
+    () => view()?.filters?.unreadOnly ?? defaultFilterOptions.unreadOnly
+  );
+
   const entityTypeFilter = createMemo(
     () => view()?.filters?.typeFilter ?? defaultFilterOptions.typeFilter
   );
@@ -367,6 +448,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       view()?.filters?.documentTypeFilter ??
       defaultFilterOptions.documentTypeFilter
   );
+
   const setFileTypeFilter: SetStoreFunction<
     ViewData['filters']['documentTypeFilter']
   > = (...args: any[]) => {
@@ -382,6 +464,10 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const projectFilter = createMemo(
     () => view()?.filters?.projectFilter ?? defaultFilterOptions.projectFilter
   );
+
+  const channelCategoryFilter = () =>
+    view()?.filters?.channelCategoryFilter ??
+    defaultFilterOptions.channelCategoryFilter;
 
   const { all: emailRecipientOptions } = useCombinedRecipients(['user']);
   const fromFilter = createMemo(() => view()?.filters.fromFilter);
@@ -475,27 +561,23 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     setViewDataStore(selectedView(), 'sort', 'sortOrder', order);
   };
 
-  const showUnrollNotifications = createMemo(
-    () =>
-      view()?.display?.unrollNotifications ??
-      defaultDisplayOptions.unrollNotifications
-  );
-  const setShowUnrollNotifications = (
-    showUnrollNotifications: DisplayOptions['unrollNotifications']
-  ) => {
-    setViewDataStore(
-      selectedView(),
-      'display',
-      'unrollNotifications',
-      showUnrollNotifications
-    );
-  };
+  // Inbox + notification unrolling are coupled:
+  // - inbox=true  => unroll=true
+  // - inbox=false => unroll=false
+  const showUnrollNotifications = createMemo(() => {
+    const focusFilters = view()?.filters?.focusFilters ?? [];
+    return focusFilters.includes('signal') && !focusFilters.includes('noise');
+  });
 
-  const showUnreadIndicator = createMemo(
-    () =>
+  const showUnreadIndicator = createMemo(() => {
+    // When the toolbar is hidden, the user has no in-view way to toggle this.
+    // Keep unread indicators visible by default in these contexts.
+    if (props.hideToolbar) return true;
+    return (
       view()?.display?.showUnreadIndicator ??
       defaultDisplayOptions.showUnreadIndicator
-  );
+    );
+  });
   const setShowUnreadIndicator = (
     showUnreadIndicator: DisplayOptions['showUnreadIndicator']
   ) => {
@@ -538,7 +620,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     SEARCH_SERVICE_DEBOUNCE_MS
   );
 
-  const [isSearchLoading, setIsSearchLoading] = createSignal(false);
+  const [, setIsSearchLoading] = createSignal(false);
 
   const currentViewConfigBase = createMemo(() => {
     const viewKey = selectedView();
@@ -572,9 +654,10 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   });
 
   const { setFilters: setOptionalFilters, filterFn: optionalFilter } =
-    createFilterComposer();
+    createFilterComposer([signalFilter.predicate]);
+  // Initialize with default inbox filter since focusFilters defaults to ['signal']
   const { setFilters: setRequiredFilters, filterFn: requiredFilter } =
-    createFilterComposer();
+    createFilterComposer([signalFilter.predicate]);
 
   const toggleFileTypeFilter = (fileType: DocumentTypeFilter) => {
     batch(() => {
@@ -676,7 +759,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
     if (importantFilter()) filterFns.push(importantFilterFn);
 
-    if (notificationFilter() === 'unread') filterFns.push(unreadFilterFn);
+    const shouldFilterUnread =
+      unreadOnly() === true || notificationFilter() === 'unread';
+    if (shouldFilterUnread) filterFns.push(unreadFilterFn);
 
     if (notificationFilter() === 'notDone') filterFns.push(notDoneFilterFn);
 
@@ -684,14 +769,14 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     const hasSignalFilter = focusFilters_?.includes('signal') === true;
     const hasNoiseFilter = focusFilters_?.includes('noise') === true;
 
-    // We only want to apply these filters when their opposite is not in the list
-    // because the filters negate each other
     if (hasSignalFilter && !hasNoiseFilter) {
       filterFns.push(signalFilter.predicate);
-    }
-
-    if (hasNoiseFilter && !hasSignalFilter) {
+    } else if (hasNoiseFilter && !hasSignalFilter) {
       filterFns.push(noiseFilter.predicate);
+    } else if (!hasSignalFilter && !hasNoiseFilter) {
+      filterFns.push(
+        (entity) => !explicitNoiseFilter.predicate(entity, undefined)
+      );
     }
 
     setRequiredFilters(filterFns);
@@ -712,6 +797,21 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           return entityTypeFilter().includes('task');
         }
         return entityTypeFilter().includes(entity.type);
+      });
+    }
+
+    const channelCategoryFilter_ = channelCategoryFilter() ?? [];
+    if (channelCategoryFilter_.length > 0) {
+      filterFns.push((entity) => {
+        if (entity.type !== 'channel') return true;
+        const isDm = entity.channelType === 'direct_message';
+        const includePeople = channelCategoryFilter_.includes('people');
+        const includeGroups = channelCategoryFilter_.includes('groups');
+        // Defensive: if both are selected, behave like "no refinement".
+        if (includePeople && includeGroups) return true;
+        if (includePeople) return isDm;
+        if (includeGroups) return !isDm;
+        return true;
       });
     }
 
@@ -864,12 +964,19 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   const emailActive = useEmailLinksStatus();
 
-  const validSearchTerms = createMemo(() => {
-    return debouncedSearchForService().length >= 3;
+  const validSearchTerms = createMemo(
+    () => debouncedSearchForService().length >= 3
+  );
+  const hasSignalOrNoiseFilter = createMemo(() => {
+    const focusFilters_ = focusFilters();
+    return (
+      focusFilters_?.includes('signal') === true ||
+      focusFilters_?.includes('noise') === true
+    );
   });
-  const isSearchActive = createMemo(() => {
-    return validSearchTerms();
-  });
+  const isSearchActive = createMemo(
+    () => validSearchTerms() && !hasSignalOrNoiseFilter()
+  );
 
   const dssQueryParams = createMemo(
     (): GetItemsSoupParams => ({
@@ -932,9 +1039,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     })
   );
   const searchUnifiedNameContentQueryParams = createMemo(
-    (): PaginatedSearchArgs => ({
+    (): SearchArgs => ({
       params: {
-        page: 0,
+        cursor: null,
         page_size: 100,
       },
       request: {
@@ -1196,20 +1303,37 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     window.open(entityUrl.toString(), '_blank', 'noopener');
   };
 
-  const entityClickHandler: EntityClickHandler<EntityData> = async (
-    entity,
-    event,
-    location,
-    options
-  ) => {
-    if (preview() && !options?.ignorePreview) {
+  const entityClickHandler: EntityClickHandler<EntityData> = async (args) => {
+    const { type, event, location } = args;
+
+    const entity = (
+      type === 'entity' ? args.entity : args.projectEntity
+    ) as EntityData;
+
+    if (event.metaKey || event.ctrlKey) {
+      openEntityInNewTab({ entity, location });
+      return;
+    }
+
+    if (preview() && type === 'entity') {
       setSelectedEntity(entity);
 
       return;
     }
 
-    if (event.metaKey || event.ctrlKey) {
-      openEntityInNewTab({ entity, location });
+    await openEntityInSplitFromUnifiedList(entity, {
+      openInNewSplit: event.altKey,
+      location,
+      splitHandle: splitContext.handle,
+    });
+  };
+
+  const entityDblClickHandler: EntityClickHandler<EntityData> = async ({
+    entity,
+    location,
+    event,
+  }) => {
+    if (!preview()) {
       return;
     }
 
@@ -1221,14 +1345,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   };
 
   const entityPointerDownHandler: EntityPointerDownHandler<EntityData> = async (
-    entity,
-    event,
-    location,
-    options
+    args
   ) => {
-    if (preview() && !options?.ignorePreview) {
-      return;
-    }
+    const { type, location, event } = args;
+    const entity = (
+      type === 'entity' ? args.entity : args.projectEntity
+    ) as EntityData;
 
     // middle mouse button pressed
     if (event.button === 1 && event.pointerType === 'mouse') {
@@ -1452,13 +1574,21 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     }
   });
 
+  createEffect(
+    on(splitContext.isPanelActive, () => {
+      if (splitContext.isPanelActive()) {
+        if (activeSoupContext() !== soupContext) return;
+        const domEl = activeSoupContext()?.domRef();
+        setTimeout(() => {
+          domEl?.focus();
+        });
+      }
+    })
+  );
+
   return (
     <>
       <Show when={!props.hideToolbar}>
-        <SearchBar
-          isLoading={isSearchLoading}
-          setIsLoading={setIsSearchLoading}
-        />
         <SplitToolbarRight order={5}>
           <div class="flex flex-row items-center gap-1 p-1 h-full select-none">
             <Show when={isViewConfigChanged()}>
@@ -1616,7 +1746,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       <span class="font-medium text-xs">From</span>
                       <RecipientSelector<'user' | 'contact'>
                         options={emailRecipientOptions}
-                        selectedOptions={fromFilterUsers}
+                        selectedOptions={fromFilterUsers()}
                         setSelectedOptions={setFromFilterUsers}
                         placeholder="Filter by user..."
                         includeSelf
@@ -1624,19 +1754,21 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     </section>
                   </Show>
                   <Show when={ENABLE_PROPERTY_FILTER}>
-                    <section class="gap-1 grid p-2">
-                      <span class="font-medium text-xs">Property</span>
-                      <PropertyFilterControl
-                        propertyFilters={propertyFilters}
-                        setPropertyFilters={setPropertyFilters}
-                        onIncompleteFiltersChange={
-                          setHasIncompletePropertyFilters
-                        }
-                        registerClearHandler={(fn) => {
-                          clearPropertyFilters = fn;
-                        }}
-                      />
-                    </section>
+                    <Suspense>
+                      <section class="gap-1 grid p-2">
+                        <span class="font-medium text-xs">Property</span>
+                        <PropertyFilterControl
+                          propertyFilters={propertyFilters}
+                          setPropertyFilters={setPropertyFilters}
+                          onIncompleteFiltersChange={
+                            setHasIncompletePropertyFilters
+                          }
+                          registerClearHandler={(fn) => {
+                            clearPropertyFilters = fn;
+                          }}
+                        />
+                      </section>
+                    </Suspense>
                   </Show>
                 </div>
               </div>
@@ -1658,12 +1790,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     />
                   </section>
                   <section class="gap-1 grid p-2">
-                    <ToggleSwitch
-                      size="SM"
-                      label="Unroll Notifications"
-                      checked={showUnrollNotifications()}
-                      onChange={setShowUnrollNotifications}
-                    />
                     <ToggleSwitch
                       size="SM"
                       label="Indicate Unread"
@@ -1713,7 +1839,15 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           });
         }}
       >
-        <ContextMenu.Trigger class="size-full unified-list-root">
+        <ContextMenu.Trigger
+          class="@container/uList size-full unified-list-root"
+          onPointerDown={() => {
+            setActiveSoupContext(soupContext);
+          }}
+          onKeyUp={() => {
+            setActiveSoupContext(soupContext);
+          }}
+        >
           <EntityRowProvider
             container={localEntityListRef}
             canSwipeLeft={(entityId) => {
@@ -1791,6 +1925,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       properties={properties()}
                       timestamp={timestamp()}
                       onClick={entityClickHandler}
+                      onDblClick={entityDblClickHandler}
                       onPointerDown={entityPointerDownHandler}
                       onClickRowAction={
                         soupContext.actionRegistry.isActionEnabled(
@@ -1804,7 +1939,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                             }
                           : undefined
                       }
-                      onClickNotification={(notifiedEntity) => {
+                      onClickNotification={({ entity: notifiedEntity }) => {
                         const notification = tryToTypedNotification(
                           notifiedEntity.notification
                         );
@@ -1819,7 +1954,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                           'hasUserInteractedEntity',
                           true
                         );
-                        setSelectedEntity(innerProps.entity);
+                        setSelectedEntityFromMouse(innerProps.entity);
                       }}
                       onMouseLeave={() => {}}
                       onFocusIn={() => {
@@ -1839,11 +1974,15 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       highlighted={
                         isPanelActive() && focusedSelector(innerProps.entity.id)
                       }
-                      selected={
-                        focusedSelector(innerProps.entity.id) ||
-                        contextAndModalState.selectedEntity?.id ===
-                          innerProps.entity.id
-                      }
+                      selected={{
+                        active:
+                          focusedSelector(innerProps.entity.id) ||
+                          contextAndModalState.selectedEntity?.id ===
+                            innerProps.entity.id,
+                        muted:
+                          focusedSelector(innerProps.entity.id) &&
+                          activeSoupContext() !== soupContext,
+                      }}
                       checked={multiSelectSelector(innerProps.entity.id)}
                       onChecked={(next, shiftKey) =>
                         handleMultiSelectChecked({
@@ -1853,6 +1992,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                           shiftKey: shiftKey ?? false,
                         })
                       }
+                      searchActive={!!searchText()}
                     />
                   </EntityRow>
                 );
@@ -1983,10 +2123,12 @@ const EntityTypeToggle = (props: {
   );
 };
 
-function SearchBar(props: {
+function _SearchBar(props: {
   isLoading: Accessor<boolean>;
   setIsLoading: Setter<boolean>;
 }) {
+  const getInputId = (selectedView: string) =>
+    `search-input-${splitContext.handle.id}-${selectedView}`;
   const splitContext = useSplitPanelOrThrow();
   const {
     viewsDataStore,
@@ -2049,13 +2191,34 @@ function SearchBar(props: {
     return loading;
   }, props.isLoading());
 
+  // waits for input element to be mounted before focusing it
   const focusSearch = () => {
+    const inputId = getInputId(selectedView());
+    const existingInput = document.getElementById(inputId) as HTMLInputElement;
+    if (existingInput) {
+      existingInput.focus();
+      return;
+    }
+
+    const mutationObserver = new MutationObserver(() => {
+      const input = document.getElementById(inputId) as HTMLInputElement;
+      if (input) {
+        mutationObserver.disconnect();
+        input.focus();
+      }
+    });
+
+    const toolbarLeft = splitContext.layoutRefs.toolbarLeft;
+    if (toolbarLeft) {
+      mutationObserver.observe(toolbarLeft, {
+        childList: true,
+        subtree: true,
+      });
+    }
+
     setTimeout(() => {
-      const searchInput = document.getElementById(
-        `search-input-${splitContext.handle.id}-${selectedView()}`
-      ) as HTMLInputElement;
-      searchInput?.focus();
-    }, 0);
+      mutationObserver.disconnect();
+    }, 1000);
   };
 
   onMount(() => {
@@ -2066,7 +2229,9 @@ function SearchBar(props: {
       hotkeyToken: TOKENS.soup.openSearch,
       keyDownHandler: () => {
         setSelectedView(VIEWCONFIG_DEFAULTS_IDS_ENUM.all);
-        focusSearch();
+        setTimeout(() => {
+          focusSearch();
+        }, 0);
         return true;
       },
       displayPriority: 5,
@@ -2090,7 +2255,7 @@ function SearchBar(props: {
   });
 
   return (
-    <SplitToolbarLeft>
+    <SplitToolbarLeft class="min-w-0">
       <div class="flex ml-2 h-full items-center gap-1">
         <Show
           when={props.isLoading() && searchText()}
@@ -2103,6 +2268,7 @@ function SearchBar(props: {
                   icon={SearchIcon}
                   theme="clear"
                   tooltip={{ label: 'Search' }}
+                  tabIndex={-1}
                   onClick={() => {
                     inputRef?.focus();
                   }}
@@ -2114,6 +2280,7 @@ function SearchBar(props: {
                 icon={XIcon}
                 theme="clear"
                 tooltip={{ label: 'Clear search' }}
+                tabIndex={-1}
                 onClick={() => {
                   setSearchText('');
                   inputRef?.focus();
@@ -2128,6 +2295,7 @@ function SearchBar(props: {
             theme="clear"
             tooltip={{ label: 'Cancel search' }}
             class="[&_svg]:animate-spin"
+            tabIndex={-1}
             onClick={() => {
               setSearchText('');
               inputRef?.focus();
@@ -2136,7 +2304,7 @@ function SearchBar(props: {
         </Show>
         <input
           ref={inputRef}
-          id={`search-input-${splitContext.handle.id}-${selectedView()}`}
+          id={getInputId(selectedView())}
           placeholder={`Search in ${viewName()}`}
           value={searchText()}
           onInput={(e) => {
@@ -2156,7 +2324,7 @@ function SearchBar(props: {
               focusNextEntity();
             }
           }}
-          class="p-1 pr-0 border-0 outline-none! focus:outline-none ring-0! focus:ring-0 flex-1 text-ink text-sm truncate"
+          class="p-1 pr-0 border-0 outline-none! focus:outline-none ring-0! focus:ring-0 flex-1 text-ink text-sm truncate min-w-0"
         />
       </div>
     </SplitToolbarLeft>

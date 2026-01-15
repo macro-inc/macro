@@ -10,4 +10,5 @@ import type { ToWebSocketMessageOneOfOnezeroAllOf } from './toWebSocketMessageOn
 /**
  * Select model for a given chat
  */
-export type ToWebSocketMessageOneOfOnezero = SelectModelPayload & ToWebSocketMessageOneOfOnezeroAllOf;
+export type ToWebSocketMessageOneOfOnezero = SelectModelPayload &
+  ToWebSocketMessageOneOfOnezeroAllOf;
