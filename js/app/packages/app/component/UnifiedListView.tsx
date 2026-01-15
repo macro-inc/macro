@@ -162,6 +162,7 @@ import {
   type ViewData,
 } from './ViewConfig';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
+import { mul } from 'three/src/nodes/TSL.js';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 300;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
@@ -1290,6 +1291,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   usePropertyEditorHotkeys({
     scopeId: splitContext.splitHotkeyScope,
     getSelectedEntities: () => {
+      const multi = view().multiSelectEntities;
+      if (multi.length > 0) return multi;
       return selectedEntity() ? [selectedEntity()!] : [];
     },
   });

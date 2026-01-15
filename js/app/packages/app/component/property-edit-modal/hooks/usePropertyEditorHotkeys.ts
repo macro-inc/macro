@@ -47,10 +47,9 @@ export function usePropertyEditorHotkeys(options: PropertyEditorHotkeyOptions) {
     // Register main property selector hotkey
     disposers.push(
       registerHotkey({
-        hotkey: ['i'],
+        hotkey: ['shift+cmd+o'],
         description: 'Edit properties',
         keyDownHandler: () => {
-          console.log('[PropertyEditor] p hotkey triggered');
           openIfSelected('selector');
           return true;
         },

@@ -29,6 +29,7 @@ import CheckIcon from '@icon/regular/check.svg';
 import { PROPERTY_STYLES } from '@core/component/Properties/styles';
 import { getPropertyDefinitionTypeDisplay } from '@core/component/Properties/utils';
 import { EntityData } from '@macro-entity';
+import { InlineEntity } from '../../../macro-entity/src/components/InlineEntity';
 
 export function PropertyEditorModal() {
   const [attach, hotkeyScope] = useHotkeyDOMScope('property-editor-modal');
@@ -152,10 +153,29 @@ function PropertyList(props: { searchTerm: string }) {
 }
 
 function EditingEntityPreview(props: { entities: EntityData[] }) {
-  const count = () => props.entities.length;
+  const displayEntities = () => props.entities.slice(0, 2);
+  const remainingCount = () => Math.max(0, props.entities.length - 2);
+
   return (
-    <div class="bg-edge/10 text-ink-muted px-2 py-1 text-xs flex w-fit">
-      Editing properties for {count()} entities
+    <div class="flex items-center gap-1">
+      <For each={displayEntities()}>
+        {(entity) => {
+          return (
+            <div
+              class={cn('bg-edge/20 px-2 py-1 truncate', {
+                'max-w-[50%]': props.entities.length === 2,
+              })}
+            >
+              <InlineEntity entity={entity} />
+            </div>
+          );
+        }}
+      </For>
+      <Show when={remainingCount() > 0}>
+        <div class="text-sm text-muted-foreground px-2 py-1">
+          +{remainingCount()} more
+        </div>
+      </Show>
     </div>
   );
 }
