@@ -122,7 +122,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
             content: '',
             projectId: undefined,
           }),
-        shouldInsert: pressedKeys().has('opt'),
+        shouldInsert: !pressedKeys().has('opt'),
       });
       return true;
     },
@@ -158,7 +158,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     keyDownHandler: () => {
       createComponent({
         componentId: 'email-compose',
-        shouldInsert: pressedKeys().has('opt'),
+        shouldInsert: !pressedKeys().has('opt'),
       });
       return true;
     },
@@ -174,7 +174,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     keyDownHandler: () => {
       createComponent({
         componentId: 'channel-compose',
-        shouldInsert: pressedKeys().has('opt'),
+        shouldInsert: !pressedKeys().has('opt'),
       });
       return true;
     },
@@ -197,7 +197,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
           }
           return result.chatId;
         },
-        shouldInsert: pressedKeys().has('opt'),
+        shouldInsert: !pressedKeys().has('opt'),
       });
       return true;
     },
@@ -223,7 +223,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
           const [_, id] = ok(result.documentId);
           return id;
         },
-        shouldInsert: pressedKeys().has('opt'),
+        shouldInsert: !pressedKeys().has('opt'),
       });
       return true;
     },
@@ -243,7 +243,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
           const createProject = useCreateProject();
           return createProject({ name: 'New Folder' });
         },
-        shouldInsert: pressedKeys().has('opt'),
+        shouldInsert: !pressedKeys().has('opt'),
       });
       return true;
     },
@@ -270,7 +270,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
           const [, id] = ok(result[1]?.documentId);
           return id;
         },
-        shouldInsert: pressedKeys().has('opt'),
+        shouldInsert: !pressedKeys().has('opt'),
       });
       return true;
     },
@@ -451,7 +451,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
         hotkeyToken: item.altHotkeyToken,
         hotkey: `opt+${item.hotkey}` as ValidHotkey,
         scopeId: launcherScope,
-        description: `${item.description} in new split`,
+        description: `${item.description} in current split`,
         keyDownHandler: () => {
           item.keyDownHandler();
           props.onClose();
@@ -498,7 +498,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
   registerHotkey({
     hotkey: 'enter',
     scopeId: launcherScope,
-    description: 'Open in current split',
+    description: 'Open in new split',
     keyDownHandler: () => {
       CREATABLE_BLOCKS[focusedIndex()].keyDownHandler();
       props.onClose();
@@ -511,7 +511,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
   registerHotkey({
     hotkey: 'opt+enter' as ValidHotkey,
     scopeId: launcherScope,
-    description: 'Open in new split',
+    description: 'Open in current split',
     keyDownHandler: () => {
       CREATABLE_BLOCKS[focusedIndex()].keyDownHandler();
       props.onClose();
@@ -568,7 +568,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
         </For>
       </div>
       <div class="col-span-full text-sm text-ink-muted text-center pt-4">
-        Hold option to open in a new split view
+        Hold option to open in current split
       </div>
     </div>
   );
