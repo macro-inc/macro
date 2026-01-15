@@ -1080,6 +1080,11 @@ export function EntityWithEverything(
           }}
         >
           <div class="flex flex-row items-center justify-end gap-2 min-w-0 @max-md/uList:justify-start @max-md/uList:flex-wrap">
+            <Show when={props.entity.type === 'email' && props.entity.isDraft}>
+              <div class="font-mono font-medium user-select-none uppercase flex items-center text-accent-30 p-0.5 gap-1 text-[0.625rem] rounded-full border border-edge-muted px-2">
+                DRAFT
+              </div>
+            </Show>
             <Show when={sharedData()}>
               {(shared) => (
                 <Tooltip
