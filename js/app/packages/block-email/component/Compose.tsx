@@ -61,6 +61,8 @@ import {
 } from '@queries/email/attachment';
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
 import { useMaybeEmailContext } from '@block-email/component/EmailContext';
+import { parseEmailContent } from '@core/email';
+import { decodeBase64Utf8 } from '@block-email/util/decodeBase64';
 
 const DRAFT_DEBOUNCE_MS = 1000;
 
@@ -533,6 +535,15 @@ export function EmailCompose(props: EmailComposeProps) {
     return undefined;
   };
 
+  const initialHtml = () => {
+    const draft = form.draft;
+    if (!draft || !draft.body_html_sanitized) return;
+
+    const decodedHtml = decodeBase64Utf8(draft.body_html_sanitized);
+
+    return decodedHtml;
+  };
+
   return (
     <>
       <SplitHeaderLeft>
@@ -753,6 +764,7 @@ export function EmailCompose(props: EmailComposeProps) {
                 <ComposeEmailInput
                   captureEditor={setEditor}
                   inputRef={registerRef('messageInput')}
+                  initialHtml={initialHtml()}
                   onContentChange={onContentChange}
                   onAddAttachments={onAddAttachments}
                   onRemoveAttachment={handleRemoveAttachment}

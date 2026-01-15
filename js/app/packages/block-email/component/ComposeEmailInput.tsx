@@ -47,6 +47,7 @@ type ComposeEmailInputProps = {
   hasDraft?: boolean;
   onDraftDeletePress?: VoidFunction;
   attachments?: DraftFormAttachment[];
+  initialHtml?: string;
   onAddAttachments?: (attachments: DraftFormAttachment[]) => void;
   onRemoveAttachment?: (attachment: DraftFormAttachment) => void;
   onContentChange?: (content: string) => void;
@@ -222,6 +223,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
           <MarkdownTextarea
             domRef={props.inputRef}
             captureEditor={captureEditor}
+            initialHtml={props.initialHtml}
             class="text-sm break-words text-ink"
             editable={() => !props.disabled}
             placeholder="Use `@` to reference files"
