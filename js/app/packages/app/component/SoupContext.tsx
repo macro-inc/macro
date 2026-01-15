@@ -436,7 +436,6 @@ export function createNavigationEntityListShortcut({
   actionRegistry.register(
     'mark_as_done',
     async (multiSelectEntities) => {
-      console.log(selectedView());
       const handler =
         VIEWCONFIG_DEFAULTS[selectedView() as DefaultView]?.hotkeyOptions?.e;
 
@@ -515,7 +514,6 @@ export function createNavigationEntityListShortcut({
 
         setViewDataStore(selectedView(), 'multiSelectEntities', []);
 
-        console.log('marked as done');
         toast.success('Marked as done');
       }
 
