@@ -1,0 +1,20 @@
+[package]
+name = "ai_toolset"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+openai = [
+    "dep:async-openai"
+]
+
+[dependencies]
+serde_json = { workspace = true }
+futures = { workspace = true }
+serde = { workspace = true }
+utoipa = { workspace = true }
+schemars = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+async-openai = { workspace = true, optional = true }

@@ -117,6 +117,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "ai_toolset"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-openai",
+ "async-trait",
+ "futures",
+ "schemars",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "utoipa",
+]
+
+[[package]]
 name = "aligned"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
