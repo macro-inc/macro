@@ -95,10 +95,10 @@ export function UserTooltip(props: UserTooltipProps) {
     <ClippedPanel tl={!beveledCorners()} active>
       <div class="bg-panel text-ink box-border border-accent overflow-hidden">
         <div class="flex items-center gap-2 p-2">
-          <div class="size-14 shrink-0 rounded-full bg-ink-extra-muted pointer-events-none">
+          <div class="size-10 shrink-0 rounded-full bg-ink-extra-muted pointer-events-none">
             <Switch>
               <Match when={props.isDeleted}>
-                <div class="size-12 shrink-0 rounded-full bg-ink-extra-muted/50 flex items-center justify-center">
+                <div class="size-10 shrink-0 rounded-full bg-ink-extra-muted/50 flex items-center justify-center">
                   <Trash class="w-4 h-4 shrink-0" />
                 </div>
               </Match>
@@ -106,7 +106,7 @@ export function UserTooltip(props: UserTooltipProps) {
                 <ProfilePicture
                   id={props.id}
                   sizeClass={{
-                    container: 'size-14',
+                    container: 'size-10',
                     icon: 'w-4 h-4',
                     text: 'text-lg text-panel leading-none',
                   }}
@@ -117,7 +117,7 @@ export function UserTooltip(props: UserTooltipProps) {
                   id={undefined}
                   email={props.email}
                   sizeClass={{
-                    container: 'size-14',
+                    container: 'size-10',
                     icon: 'w-4 h-4',
                     text: 'text-lg text-panel leading-none',
                   }}
