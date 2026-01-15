@@ -12,6 +12,7 @@ import { useSplitPanelOrThrow } from '../layoutUtils';
 
 export function SplitToolbar(props: { ref: Setter<HTMLDivElement | null> }) {
   const panel = useSplitPanelOrThrow();
+  const [preview] = panel.previewState;
   const [hasContent, setHasContent] = createSignal(false);
 
   const checkContent = () => {
@@ -37,28 +38,33 @@ export function SplitToolbar(props: { ref: Setter<HTMLDivElement | null> }) {
     onCleanup(() => observer.disconnect());
   });
 
+  // Hide toolbar when preview is open
+  // The preview panel renders blocks directly without using SplitContainer,
+  // so this only affects the main unified list toolbar
   return (
-    <div
-      class="relative w-full flex items-center justify-between shrink-0"
-      classList={{
-        'h-10 px-1 border-b border-edge-muted/50': hasContent(),
-      }}
-      data-split-toolbar
-      ref={props.ref}
-    >
+    <Show when={!preview()}>
       <div
-        class="flex h-full items-center flex-1"
-        ref={(ref) => {
-          panel.layoutRefs.toolbarLeft = ref;
+        class="relative w-full flex items-center justify-between shrink-0"
+        classList={{
+          'h-10 px-1 border-b border-edge-muted/50': hasContent(),
         }}
-      />
-      <div
-        class="flex h-full items-center"
-        ref={(ref) => {
-          panel.layoutRefs.toolbarRight = ref;
-        }}
-      />
-    </div>
+        data-split-toolbar
+        ref={props.ref}
+      >
+        <div
+          class="flex h-full items-center flex-1"
+          ref={(ref) => {
+            panel.layoutRefs.toolbarLeft = ref;
+          }}
+        />
+        <div
+          class="flex h-full items-center"
+          ref={(ref) => {
+            panel.layoutRefs.toolbarRight = ref;
+          }}
+        />
+      </div>
+    </Show>
   );
 }
 

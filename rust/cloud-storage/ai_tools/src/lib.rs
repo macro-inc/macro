@@ -1,5 +1,5 @@
-use ai::tool::AsyncToolSet;
-use ai::tool::schema::{ToolSchemaGenerator, ToolSchemas};
+use ai_toolset::AsyncToolSet;
+use ai_toolset::schema::{ToolSchemaGenerator, ToolSchemas};
 pub mod list;
 pub mod prompts;
 pub mod read;
@@ -23,7 +23,7 @@ pub struct ToolSetWithPrompt {
 }
 
 impl ToolSchemaGenerator for ToolSetWithPrompt {
-    fn generate_schemas(&self) -> ai::tool::schema::ToolSchemas {
+    fn generate_schemas(&self) -> ai_toolset::schema::ToolSchemas {
         self.toolset.generate_schemas()
     }
 }
@@ -44,7 +44,7 @@ pub fn all_tools() -> ToolSetWithPrompt {
 }
 
 /// These are used to generate schemas for the frontend
-/// See [ai::tool::types::schema::PhantomTool]
+/// See [ai_toolset::schema::PhantomTool]
 pub fn all_tool_schemas() -> ToolSchemas {
     all_tools()
         .merge(&*anthropic_web_search_tool)

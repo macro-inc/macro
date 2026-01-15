@@ -1,5 +1,5 @@
 use crate::tool_context::{RequestContext, ToolServiceContext};
-use ai::tool::{AsyncTool, ToolCallError, ToolResult};
+use ai_toolset::{AsyncTool, ToolCallError, ToolResult};
 use async_trait::async_trait;
 use model::comms::ChannelType;
 use schemars::JsonSchema;

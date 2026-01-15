@@ -1,6 +1,5 @@
 import { modifierMap } from '@core/component/Hotkey';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
-import { BrightJoins } from '@ui/components/BrightJoins';
 import { Show } from 'solid-js';
 import { useOpenInstructionsMd } from '../util/instructions';
 
@@ -8,7 +7,6 @@ export function AiChatEmptyState() {
   const openInstructions = useOpenInstructionsMd();
   return (
     <div class="relative p-2 border border-edge-muted bg-dialog text-sm flex flex-col gap-2 text-ink">
-      <BrightJoins dots={[true, true, true, true]} />
       <Show when={!isMobileWidth()}>
         <div class="grid justify-start grid-cols-[max-content_auto] gap-y-1 grid-template items-center">
           <span class="p-1 bg-accent text-panel mr-2 text-center">@</span>

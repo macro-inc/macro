@@ -601,8 +601,6 @@
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
 
-        /* The only place this font-size should apply is to md docs. This was an adjustment to make Forma look good. If in future we switch from Forma, we should remove this. */
-        font-size: 1.03125rem;
         /* Need to set opsz here so that it will apply to MD */
         font-variation-settings: "opsz" 11;
         font-synthesis: none;

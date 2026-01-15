@@ -1,9 +1,9 @@
 use super::types::AIDiffResponse;
 use super::types::{PROMPT, REWRITE_MODEL};
 use crate::tool_context::{RequestContext, ToolScribe, ToolServiceContext};
-use ai::tool::{AsyncTool, ToolCallError, ToolResult};
 use ai::types::{MessageBuilder, RequestBuilder};
 use ai_format::document::Document;
+use ai_toolset::{AsyncTool, ToolCallError, ToolResult};
 use anyhow::Error;
 use async_trait::async_trait;
 use model::document::FileType;

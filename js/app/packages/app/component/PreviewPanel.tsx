@@ -9,7 +9,6 @@ import {
   createMemo,
   createRenderEffect,
   createSignal,
-  onCleanup,
   onMount,
   Show,
 } from 'solid-js';
@@ -39,6 +38,13 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
   );
   let scopedSplitPanelContextType: SplitPanelContextType = {} as any;
   const splitPanelContext = useSplitPanelOrThrow();
+  const scopedLayoutRefs: SplitPanelContextType['layoutRefs'] = {
+    ...props.splitPanelContext.layoutRefs,
+  };
+  // In preview we intentionally do NOT render the split header/title row.
+  // We only provide toolbar slots (Share, etc).
+  scopedLayoutRefs.headerLeft = undefined;
+  scopedLayoutRefs.headerRight = undefined;
 
   if (props.selectedEntity.type === 'project') {
     const { getSplitCount } = useSplitLayout();
@@ -102,18 +108,15 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
   }, props.selectedEntity.id);
 
   createRenderEffect(() => {
-    // Temporary fix to prevent toolbarLeft overlapping right content
-    if (!splitPanelContext.layoutRefs.toolbarLeft) return;
-    splitPanelContext.layoutRefs.toolbarLeft.style.maxWidth = `${splitPanelContext.halfSplitState?.()?.percentage ?? 30}%`;
-    onCleanup(() => {
-      if (!splitPanelContext.layoutRefs.toolbarLeft) return;
-      splitPanelContext.layoutRefs.toolbarLeft.style.maxWidth = '';
-    });
+    // noop: previously we constrained toolbarLeft width based on the main split's
+    // halfSplitState. This caused preview topbars (e.g. the hamburger menu) to
+    // appear "hung" from the middle in preview mode.
+    // Keeping this effect slot in case we need future layout hacks.
   });
 
   return (
     <div
-      class="size-full"
+      class="flex flex-col size-full"
       onFocusIn={(event) => {
         if (interactedWith()) return;
         const relatedTarget = event.relatedTarget;
@@ -137,23 +140,47 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
       tabIndex={-1}
       ref={setContainerRef}
     >
-      <SplitPanelContext.Provider
-        value={{
-          ...props.splitPanelContext,
-          ...scopedSplitPanelContextType,
-          layoutRefs: {
-            ...props.splitPanelContext.layoutRefs,
-            headerLeft: undefined,
-            headerRight: undefined,
-          },
-          halfSplitState: () => ({
-            side: 'right',
-            percentage: 30,
-          }),
+      {/* Preview-specific toolbar slots so blocks can render the "share" bar (via SplitToolbarLeft/Right) */}
+      <div
+        class="relative w-full flex items-center justify-between shrink-0 h-10 pr-1 border-b border-edge-muted/50 bg-panel"
+        classList={{
+          // In spotlight/fullscreen, avoid hugging the screen edge
+          'pl-2': splitPanelContext.handle.isSpotLight(),
+          'pl-1': !splitPanelContext.handle.isSpotLight(),
         }}
+        data-preview-split-toolbar
       >
-        <Dynamic component={blockInstance().element} />
-      </SplitPanelContext.Provider>
+        <div
+          // In preview mode, anchor left-side controls (e.g. file menu) to the top-left
+          // so the dropdown doesn't feel like it's "hanging" from the middle of the bar.
+          class="flex h-full items-start pt-1 flex-1"
+          ref={(ref) => {
+            scopedLayoutRefs.toolbarLeft = ref;
+          }}
+        />
+        <div
+          class="flex h-full items-center"
+          ref={(ref) => {
+            scopedLayoutRefs.toolbarRight = ref;
+          }}
+        />
+      </div>
+
+      <div class="flex-1 min-h-0">
+        <SplitPanelContext.Provider
+          value={{
+            ...props.splitPanelContext,
+            ...scopedSplitPanelContextType,
+            layoutRefs: scopedLayoutRefs,
+            // Disable halfSplit positioning logic for preview topbars.
+            // The preview panel is already laid out by the outer split; applying halfSplitState
+            // here incorrectly shifts toolbar content towards the middle.
+            halfSplitState: undefined,
+          }}
+        >
+          <Dynamic component={blockInstance().element} />
+        </SplitPanelContext.Provider>
+      </div>
     </div>
   );
 };
