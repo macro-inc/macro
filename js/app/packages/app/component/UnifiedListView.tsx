@@ -653,9 +653,10 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   });
 
   const { setFilters: setOptionalFilters, filterFn: optionalFilter } =
-    createFilterComposer();
+    createFilterComposer([signalFilter.predicate]);
+  // Initialize with default inbox filter since focusFilters defaults to ['signal']
   const { setFilters: setRequiredFilters, filterFn: requiredFilter } =
-    createFilterComposer();
+    createFilterComposer([signalFilter.predicate]);
 
   const toggleFileTypeFilter = (fileType: DocumentTypeFilter) => {
     batch(() => {
@@ -755,25 +756,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   createEffect(() => {
     const filterFns: EntityFilter<EntityData>[] = [];
 
-    // Apply focus filters (inbox/other) based on focusFilters state
-    const focusFilters_ = focusFilters();
-    const hasSignalFilter = focusFilters_?.includes('signal') === true;
-    const hasNoiseFilter = focusFilters_?.includes('noise') === true;
-
-    if (hasSignalFilter && !hasNoiseFilter) {
-      filterFns.push((entity) =>
-        signalFilter.predicate(entity, { soupContext })
-      );
-    } else if (hasNoiseFilter && !hasSignalFilter) {
-      filterFns.push((entity) =>
-        noiseFilter.predicate(entity, { soupContext })
-      );
-    } else if (!hasSignalFilter && !hasNoiseFilter) {
-      filterFns.push(
-        (entity) => !explicitNoiseFilter.predicate(entity, { soupContext })
-      );
-    }
-
     if (importantFilter()) filterFns.push(importantFilterFn);
 
     const shouldFilterUnread =
@@ -781,6 +763,20 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     if (shouldFilterUnread) filterFns.push(unreadFilterFn);
 
     if (notificationFilter() === 'notDone') filterFns.push(notDoneFilterFn);
+
+    const focusFilters_ = focusFilters();
+    const hasSignalFilter = focusFilters_?.includes('signal') === true;
+    const hasNoiseFilter = focusFilters_?.includes('noise') === true;
+
+    if (hasSignalFilter && !hasNoiseFilter) {
+      filterFns.push(signalFilter.predicate);
+    } else if (hasNoiseFilter && !hasSignalFilter) {
+      filterFns.push(noiseFilter.predicate);
+    } else if (!hasSignalFilter && !hasNoiseFilter) {
+      filterFns.push(
+        (entity) => !explicitNoiseFilter.predicate(entity, undefined)
+      );
+    }
 
     setRequiredFilters(filterFns);
   });

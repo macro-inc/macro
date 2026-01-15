@@ -212,6 +212,7 @@ const ALL_VIEWCONFIG_DEFAULTS = {
           });
         }
         if (extra?.notificationSource) {
+          console.log('marking notification as done');
           markNotificationsForEntityAsDone(extra.notificationSource, entity);
         }
         return true;
@@ -312,9 +313,14 @@ const ALL_VIEWCONFIG_DEFAULTS = {
       sortBy: 'viewed_at',
     },
     hotkeyOptions: {
-      e: (entity: EntityData) => {
+      e: (entity, extra) => {
         if (entity.type === 'email') {
-          archiveEmail(entity.id, { isDone: entity.done });
+          archiveEmail(entity.id, {
+            isDone: entity.done,
+          });
+        }
+        if (extra?.notificationSource) {
+          markNotificationsForEntityAsDone(extra.notificationSource, entity);
         }
         return true;
       },

@@ -146,28 +146,19 @@ function EntityTypeIconFilter() {
 
   // Ensure state consistency when switching views (not continuous watching)
   createEffect(
-    on(
-      selectedView,
-      (viewId) => {
-        const focus = focusFilters() ?? [];
-        if (!focus.includes('signal') && !focus.includes('noise')) return;
+    on(selectedView, (viewId) => {
+      const focus = focusFilters() ?? [];
+      if (!focus.includes('signal') && !focus.includes('noise')) return;
 
-        batch(() => {
-          if (notificationFilter() !== 'notDone') {
-            setViewDataStore(
-              viewId,
-              'filters',
-              'notificationFilter',
-              'notDone'
-            );
-          }
-          if (!unrollNotifications()) {
-            setViewDataStore(viewId, 'display', 'unrollNotifications', true);
-          }
-        });
-      },
-      { defer: true }
-    )
+      batch(() => {
+        if (notificationFilter() !== 'notDone') {
+          setViewDataStore(viewId, 'filters', 'notificationFilter', 'notDone');
+        }
+        if (!unrollNotifications()) {
+          setViewDataStore(viewId, 'display', 'unrollNotifications', true);
+        }
+      });
+    })
   );
 
   const isUnreadFilterActive = () => view()?.filters?.unreadOnly === true;
