@@ -3,6 +3,7 @@ import { propertyValueToApi } from '@core/component/Properties/api/converters';
 import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { createTask } from '@core/util/create';
 import type { PropertyInput } from '@service-storage/generated/schemas/propertyInput';
+import { err, ok, type Result } from 'neverthrow';
 
 export type TaskCreationSuccess = {
   lineIndex: number;
@@ -22,7 +23,6 @@ export type TaskCreationResults = {
 
 export type TaskCreationOptions = {
   currentUserId?: string;
-  parentTaskId?: string;
 };
 
 function buildPropertyInputs(
@@ -79,28 +79,15 @@ function buildPropertyInputs(
     });
   }
 
-  if (options.parentTaskId) {
-    properties.push({
-      propertyId: SYSTEM_PROPERTY_IDS.PARENT_TASK,
-      value: {
-        type: 'entity_reference',
-        reference: {
-          entity_id: options.parentTaskId,
-          entity_type: 'TASK' as const,
-        },
-      },
-    });
-  }
-
   return properties;
 }
 
 async function createSingleTask(
   task: TaskWithProperties,
   options: TaskCreationOptions
-): Promise<TaskCreationSuccess | TaskCreationError> {
+): Promise<Result<TaskCreationSuccess, TaskCreationError>> {
   if (!task.title.trim()) {
-    return { lineIndex: task.lineIndex, error: 'Empty task title' };
+    return err({ lineIndex: task.lineIndex, error: 'Empty task title' });
   }
 
   try {
@@ -113,26 +100,20 @@ async function createSingleTask(
     });
 
     if (!documentId) {
-      return { lineIndex: task.lineIndex, error: 'Failed to create task' };
+      return err({ lineIndex: task.lineIndex, error: 'Failed to create task' });
     }
 
-    return {
+    return ok({
       lineIndex: task.lineIndex,
       documentId,
       title: task.title,
-    };
+    });
   } catch (error) {
-    return {
+    return err({
       lineIndex: task.lineIndex,
       error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    });
   }
-}
-
-function isSuccess(
-  result: TaskCreationSuccess | TaskCreationError
-): result is TaskCreationSuccess {
-  return 'documentId' in result;
 }
 
 export async function createTasksFromPotential(
@@ -147,10 +128,10 @@ export async function createTasksFromPotential(
   const errors: TaskCreationError[] = [];
 
   for (const result of results) {
-    if (isSuccess(result)) {
-      successes.push(result);
+    if (result.isOk()) {
+      successes.push(result.value);
     } else {
-      errors.push(result);
+      errors.push(result.error);
     }
   }
 

@@ -17,6 +17,7 @@ import type {
 import { filterMap } from '@core/util/list';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
+import { queryReadyGate } from '@queries/gate';
 import { createMemo, For, Show } from 'solid-js';
 
 const PREVIEW_PROPERTIES = [
@@ -95,10 +96,6 @@ function TaskPropertyRow(props: {
   );
 }
 
-/**
- * Individual task row in the preview panel.
- * Shows task title with editable property pills (status, priority, due date, assignees).
- */
 export function TaskPreviewRow(props: TaskPreviewRowProps) {
   const systemPropertiesQuery = useListPropertiesQuery(
     () => ({
@@ -110,7 +107,7 @@ export function TaskPreviewRow(props: TaskPreviewRowProps) {
   );
 
   const definitions = createMemo(() => {
-    if (!systemPropertiesQuery.isSuccess || !systemPropertiesQuery.data)
+    if (!queryReadyGate(systemPropertiesQuery))
       return new Map<string, PropertyDefinition>();
     return new Map(
       systemPropertiesQuery.data.map((p) => {
@@ -121,7 +118,7 @@ export function TaskPreviewRow(props: TaskPreviewRowProps) {
   });
 
   const options = createMemo(() => {
-    if (!systemPropertiesQuery.isSuccess || !systemPropertiesQuery.data)
+    if (!queryReadyGate(systemPropertiesQuery))
       return new Map<string, PropertyOption[]>();
     return new Map(
       systemPropertiesQuery.data.map((p) => {
@@ -157,6 +154,8 @@ export function TaskPreviewRow(props: TaskPreviewRowProps) {
     }
   );
 
+  // Cast needed: Property is a discriminated union, but we build it dynamically
+  // from definition.data_type which TypeScript can't narrow statically
   const properties = createMemo(() => {
     return filterMap(PREVIEW_PROPERTIES, (id) => {
       const definition = definitions().get(id);
@@ -195,7 +194,7 @@ export function TaskPreviewRow(props: TaskPreviewRowProps) {
 
   return (
     <Show
-      when={systemPropertiesQuery.isSuccess}
+      when={queryReadyGate(systemPropertiesQuery)}
       fallback={
         <div class="flex items-center gap-2 text-sm py-1 text-ink-muted">
           <EntityIcon targetType="task" size="sm" class="flex-shrink-0" />
