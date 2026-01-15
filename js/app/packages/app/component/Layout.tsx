@@ -133,7 +133,6 @@ export function Layout(props: RouteSectionProps) {
           <Suspense>
             <PropertyEditorModal />
           </Suspense>
-          <QuickCreateMenu />
           <GlobalBulkEditEntityModal />
           <ShortcutsHelper />
         </Show>
