@@ -19,7 +19,6 @@ import type { PropertyDefinition } from '@service-properties/generated/schemas/p
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import { createMemo, For, Show } from 'solid-js';
 
-// Properties to show in the task preview row
 const PREVIEW_PROPERTIES = [
   SYSTEM_PROPERTY_IDS.STATUS,
   SYSTEM_PROPERTY_IDS.PRIORITY,
@@ -35,9 +34,6 @@ type TaskPreviewRowProps = {
   ) => void;
 };
 
-/**
- * Extract display value from stored PropertyApiValues (from ComposeTask pattern)
- */
 function extractPropertyValue(
   definition: PropertyDefinition,
   savedValues: Record<string, PropertyApiValues>,
@@ -64,9 +60,6 @@ function extractPropertyValue(
   }
 }
 
-/**
- * Inner component that renders task row with property pills.
- */
 function TaskPropertyRow(props: {
   task: TaskWithProperties;
   properties: Property[];
@@ -139,12 +132,10 @@ export function TaskPreviewRow(props: TaskPreviewRowProps) {
     );
   });
 
-  // Merge extracted values with stored property values
   const mergedPropertyValues = createMemo(
     (): Record<string, PropertyApiValues> => {
       const values: Record<string, PropertyApiValues> = {};
 
-      // Add extracted assignees from @mentions
       if (props.task.assigneeUserIds.length > 0) {
         values[SYSTEM_PROPERTY_IDS.ASSIGNEES] = {
           valueType: 'ENTITY',
@@ -155,7 +146,6 @@ export function TaskPreviewRow(props: TaskPreviewRowProps) {
         };
       }
 
-      // Add extracted due date from date mention
       if (props.task.dueDate) {
         values[SYSTEM_PROPERTY_IDS.DUE_DATE] = {
           valueType: 'DATE',
@@ -163,12 +153,10 @@ export function TaskPreviewRow(props: TaskPreviewRowProps) {
         };
       }
 
-      // Override with any user-edited values
       return { ...values, ...props.task.propertyValues };
     }
   );
 
-  // Build properties from definitions (following ComposeTask pattern)
   const properties = createMemo(() => {
     return filterMap(PREVIEW_PROPERTIES, (id) => {
       const definition = definitions().get(id);
@@ -193,7 +181,6 @@ export function TaskPreviewRow(props: TaskPreviewRowProps) {
     });
   });
 
-  // Simple save handler (following ComposeTask pattern)
   const saveHandler: PropertySaveHandler = {
     saveProperty: async (property: Property, value: PropertyApiValues) => {
       props.onUpdatePropertyValue(property.propertyDefinitionId, value);

@@ -209,7 +209,6 @@ export function BaseInput(props: BaseInputProps) {
     ref,
   } = useChannelMarkdownArea();
 
-  // Task mode state
   const {
     taskModeEnabled,
     toggleTaskMode,
@@ -367,7 +366,6 @@ export function BaseInput(props: BaseInputProps) {
     let content = markdownState();
     const originalContent = content;
 
-    // If task mode enabled and has tasks, create them first
     if (taskModeEnabled() && potentialTasks().length > 0) {
       try {
         const results = await createTasksFromPotential(potentialTasks(), {
@@ -376,7 +374,6 @@ export function BaseInput(props: BaseInputProps) {
         });
 
         if (results.successes.length > 0) {
-          // Replace checkbox lines with task mentions in content
           content = replaceCheckboxesWithMentions(content, results.successes);
           toast.success(`Created ${results.successes.length} task(s)`);
         }
@@ -520,7 +517,6 @@ export function BaseInput(props: BaseInputProps) {
                   if (hasPendingAttachments() || isPendingSend()) {
                     return true;
                   }
-                  // Fire send async but return true to indicate handled
                   handleSend();
                   return true;
                 }

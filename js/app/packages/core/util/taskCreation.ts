@@ -1,15 +1,7 @@
-/**
- * Shared utilities for creating tasks from parsed checkbox/task data.
- * Used by both the Lexical checkbox-to-task plugin and channel Task Mode.
- */
-
 import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import type { PropertyInput } from '@service-storage/generated/schemas/propertyInput';
 import { createTask } from './create';
 
-/**
- * Common task data needed for creation (shared between ParsedCheckbox and PotentialTask)
- */
 export type TaskData = {
   title: string;
   assigneeUserIds: string[];
@@ -20,9 +12,6 @@ export type TaskData = {
   priorityOptionId?: string | null;
 };
 
-/**
- * Options for task creation
- */
 export type TaskCreationOptions = {
   /** Current user ID for auto-assignment when no assignees specified */
   currentUserId?: string;
@@ -30,17 +19,11 @@ export type TaskCreationOptions = {
   parentTaskId?: string;
 };
 
-/**
- * Result of a successful task creation
- */
 export type CreatedTask = {
   documentId: string;
   title: string;
 };
 
-/**
- * If no assignees specified, fall back to current user
- */
 function maybeFallbackToCurrentAssignee(
   assigneeUserIds: string[],
   currentUserId?: string
@@ -50,10 +33,6 @@ function maybeFallbackToCurrentAssignee(
   return [];
 }
 
-/**
- * Build PropertyInput array from task data.
- * Auto-assigns to current user when no assignees are extracted.
- */
 function buildTaskPropertyValues(
   task: TaskData,
   options: TaskCreationOptions
@@ -124,10 +103,6 @@ function buildTaskPropertyValues(
   return properties;
 }
 
-/**
- * Create a task from task data. Returns the created task info or null on failure.
- * Throws on API errors.
- */
 export async function createTaskFromData(
   task: TaskData,
   options: TaskCreationOptions

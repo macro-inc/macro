@@ -9,7 +9,6 @@ import {
   extractTitleFromMarkdown,
 } from '@core/component/LexicalMarkdown/plugins/checkbox-to-task/checkboxParsing';
 
-// Re-export parsing utilities for consumers
 export { extractUserMentions, extractDateMention, extractTitleFromMarkdown };
 
 /**
@@ -61,7 +60,6 @@ export function extractCheckboxesFromMarkdown(
       const lineWithoutIndent = line.slice(leadingWhitespace.length);
       const title = extractTitleFromMarkdown(lineWithoutIndent);
 
-      // Skip empty checkboxes
       if (!title.trim()) {
         continue;
       }

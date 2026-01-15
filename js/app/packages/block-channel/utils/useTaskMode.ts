@@ -56,13 +56,11 @@ export function useTaskMode(
     Record<number, Record<string, PropertyApiValues>>
   >({});
 
-  // Debounce the markdown state updates
   const updateDebouncedMarkdown = debounce(
     (content: string) => setDebouncedMarkdown(content),
     DEBOUNCE_MS
   );
 
-  // Track markdown changes when task mode is enabled
   createEffect(
     on(
       () => (taskModeEnabled() ? markdownState() : null),
@@ -75,7 +73,6 @@ export function useTaskMode(
     )
   );
 
-  // Extract potential tasks from debounced markdown, merged with property values
   const potentialTasks = createMemo<TaskWithProperties[]>(() => {
     if (!taskModeEnabled()) return [];
     const markdown = debouncedMarkdown();
@@ -83,7 +80,6 @@ export function useTaskMode(
 
     const extracted = extractCheckboxesFromMarkdown(markdown);
 
-    // Merge extracted tasks with stored property values
     return extracted.map((task) => ({
       ...task,
       propertyValues: taskPropertyValues[task.lineIndex] ?? {},

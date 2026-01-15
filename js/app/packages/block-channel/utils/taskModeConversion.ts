@@ -25,19 +25,13 @@ export type TaskCreationOptions = {
   parentTaskId?: string;
 };
 
-/**
- * Convert TaskWithProperties to PropertyInput[] for task creation API.
- * Follows the same pattern as ComposeTask.
- */
 function buildPropertyInputs(
   task: TaskWithProperties,
   options: TaskCreationOptions
 ): PropertyInput[] {
   const properties: PropertyInput[] = [];
 
-  // Convert stored PropertyApiValues to API format
   for (const [propertyId, apiValue] of Object.entries(task.propertyValues)) {
-    // Determine if multi-select based on property type
     const isMultiSelect =
       propertyId === SYSTEM_PROPERTY_IDS.ASSIGNEES ||
       apiValue.valueType === 'SELECT_STRING' ||
@@ -49,7 +43,6 @@ function buildPropertyInputs(
     }
   }
 
-  // Add assignees from extracted mentions if not already set
   if (
     task.assigneeUserIds.length > 0 &&
     !task.propertyValues[SYSTEM_PROPERTY_IDS.ASSIGNEES]
@@ -68,7 +61,6 @@ function buildPropertyInputs(
     !task.propertyValues[SYSTEM_PROPERTY_IDS.ASSIGNEES] &&
     options.currentUserId
   ) {
-    // Fall back to current user if no assignees
     properties.push({
       propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
       value: {
@@ -80,7 +72,6 @@ function buildPropertyInputs(
     });
   }
 
-  // Add due date from extracted mention if not already set
   if (task.dueDate && !task.propertyValues[SYSTEM_PROPERTY_IDS.DUE_DATE]) {
     properties.push({
       propertyId: SYSTEM_PROPERTY_IDS.DUE_DATE,
@@ -88,7 +79,6 @@ function buildPropertyInputs(
     });
   }
 
-  // Add parent task if specified
   if (options.parentTaskId) {
     properties.push({
       propertyId: SYSTEM_PROPERTY_IDS.PARENT_TASK,
@@ -105,9 +95,6 @@ function buildPropertyInputs(
   return properties;
 }
 
-/**
- * Create a single task from TaskWithProperties
- */
 async function createSingleTask(
   task: TaskWithProperties,
   options: TaskCreationOptions
@@ -148,9 +135,6 @@ function isSuccess(
   return 'documentId' in result;
 }
 
-/**
- * Create tasks from TaskWithProperties array in parallel
- */
 export async function createTasksFromPotential(
   tasks: TaskWithProperties[],
   options: TaskCreationOptions
@@ -173,9 +157,6 @@ export async function createTasksFromPotential(
   return { successes, errors };
 }
 
-/**
- * Generate markdown for a task mention
- */
 function createTaskMentionMarkdown(documentId: string, title: string): string {
   const data = JSON.stringify({
     documentId,
@@ -185,9 +166,6 @@ function createTaskMentionMarkdown(documentId: string, title: string): string {
   return `<m-document-mention>${data}</m-document-mention>`;
 }
 
-/**
- * Replace checkbox lines in markdown with task mentions.
- */
 export function replaceCheckboxesWithMentions(
   markdown: string,
   createdTasks: TaskCreationSuccess[]
