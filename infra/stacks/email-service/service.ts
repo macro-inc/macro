@@ -170,7 +170,7 @@ export class EmailService extends pulumi.ComponentResource {
             }`,
           },
         },
-        desiredCount: stack === 'prod' ? 5 : 1,
+        desiredCount: stack === 'prod' ? 3 : 1,
       },
       { parent: this }
     );
@@ -312,7 +312,7 @@ export class EmailService extends pulumi.ComponentResource {
       `${BASE_NAME}-service-scalable-target-${stack}`,
       {
         maxCapacity: stack === 'prod' ? 10 : 2,
-        minCapacity: stack === 'prod' ? 5 : 1,
+        minCapacity: stack === 'prod' ? 3 : 1,
         resourceId: pulumi.interpolate`service/${this.clusterName}/${this.service.service.name}`,
         scalableDimension: 'ecs:service:DesiredCount',
         serviceNamespace: 'ecs',

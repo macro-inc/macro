@@ -27,3 +27,4 @@ tokio-stream = { workspace = true }
 async-openai = { workspace = true, optional = true}
 chrono.workspace = true
 lazy_static = {workspace = true}
+regex = { workspace = true }

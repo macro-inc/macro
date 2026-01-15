@@ -289,6 +289,12 @@ async fn test_something() {
 
 This keeps implementation files focused and makes tests easier to locate and maintain.
 
+### Tracing
+
+- Include `err` when adding the `tracing::instrument` attribute to functions. Never include `level = "info"`.
+- When including an error with a log, include it like so: `tracing::error!(error=?e, "error msg");`
+don't inject it directly into the error message.
+
 ## Development Memories
 
 ### DB Crate Changes

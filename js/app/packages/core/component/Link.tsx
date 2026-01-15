@@ -68,7 +68,7 @@ interface UnfurledLinkCollection {
 }
 
 export function UnfurledLinkCollection(props: UnfurledLinkCollection) {
-  const [isCollapsed, setIsCollapsed] = createSignal(props.collapsed ?? false);
+  const [isCollapsed, setIsCollapsed] = createSignal(props.collapsed ?? true);
 
   return (
     <div class="border-1 border-edge rounded-lg w-full text-sm cursor-default select-none">

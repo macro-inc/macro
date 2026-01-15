@@ -24,12 +24,35 @@ import {
 } from '../../utils/entityConversion';
 import { PropertyEntitySelector } from './shared/PropertyEntitySelector';
 import { PropertyOptionSelector } from './shared/PropertyOptionSelector';
+import {
+  useAddPropertyOptionMutation,
+  usePropertyOptionsQuery,
+} from '@queries/properties/options';
 
 // Common CSS classes
 const MODAL_BASE =
   'absolute bg-menu border border-edge-muted max-h-96 overflow-hidden flex flex-col w-full max-w-md';
 
 export function EditPropertyValueModal(props: PropertyEditorProps) {
+  const propertyOptionsQuery = usePropertyOptionsQuery(
+    () => props.property.propertyDefinitionId
+  );
+
+  const addPropertyOptionMutation = useAddPropertyOptionMutation({});
+
+  const propertyOptions = createMemo(() => {
+    if (
+      propertyOptionsQuery.isLoading ||
+      propertyOptionsQuery.isError ||
+      !propertyOptionsQuery.data
+    )
+      return [];
+    return propertyOptionsQuery.data;
+  });
+
+  const isLoading = () =>
+    propertyOptionsQuery.isLoading || addPropertyOptionMutation.isPending;
+
   const { saveHandler } = usePropertiesContext();
 
   let modalRef!: HTMLDivElement;
@@ -48,15 +71,19 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
   );
 
   const {
-    state: editorState,
-    fetchOptions,
+    selectedOptions,
+    hasChanges,
     initializeSelectedOptions,
     toggleOption,
     addOption,
-  } = usePropertyEditor(props.property);
+  } = usePropertyEditor(
+    props.property,
+    propertyOptions,
+    addPropertyOptionMutation.mutateAsync
+  );
 
   const saveChanges = async () => {
-    const selectedArray = Array.from(editorState().selectedOptions);
+    const selectedArray = Array.from(selectedOptions());
 
     let apiValues: PropertyApiValues;
 
@@ -124,8 +151,8 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
 
   const handleClose = async () => {
     // All properties that reach this modal (select and entity types) should auto-save
-    const hasChanges = editorState().hasChanges || hasEntityChanges();
-    if (hasChanges) {
+    const hasUnsavedChanges = hasChanges() || hasEntityChanges();
+    if (hasUnsavedChanges) {
       await saveChanges();
     } else {
       props.onClose();
@@ -134,12 +161,7 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
 
   onMount(() => {
     initializeSelectedOptions();
-    if (
-      props.property.valueType === 'SELECT_STRING' ||
-      props.property.valueType === 'SELECT_NUMBER'
-    ) {
-      fetchOptions();
-    }
+    propertyOptionsQuery.refetch();
 
     // Attach hotkeys to modal element
     attachHotkeys(modalRef);
@@ -206,71 +228,53 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
           })()}
           onClick={(e) => e.stopPropagation()}
         >
-          <div class="bg-dialog text-ink">
-            {/*<div class={HEADER_CLASSES}>
+          <Show when={!isLoading()}>
+            <div class="bg-dialog text-ink">
               <div>
-                <h3 class="text-base font-semibold text-ink">
-                  {props.property.displayName}
-                </h3>
-                <p class="text-xs text-ink-muted mt-1">
-                  {`${props.property.isMultiSelect ? 'Multi-select ' : ''}${getValueTypeDisplay(props.property)}`}
-                </p>
-              </div>
-              <div class="flex items-center gap-2">
-                <DeprecatedIconButton
-                  icon={XIcon}
-                  theme="clear"
-                  size="sm"
-                  onClick={handleClose}
-                />
-              </div>
-            </div>*/}
-
-            <div>
-              <Show
-                when={
-                  props.property.valueType === 'SELECT_STRING' ||
-                  props.property.valueType === 'SELECT_NUMBER'
-                }
-                fallback={
-                  <Show when={props.property.valueType === 'ENTITY'}>
-                    <PropertyEntitySelector
-                      property={props.property}
-                      selectedOptions={() => {
-                        const refs = selectedEntityRefs();
-                        return entityReferencesToIdSet(refs);
-                      }}
-                      setSelectedOptions={(newOptions, entityInfo) => {
-                        const currentRefs = selectedEntityRefs();
-                        const updatedRefs = updateEntityReferences(
-                          currentRefs,
-                          newOptions,
-                          entityInfo
-                        );
-                        setSelectedEntityRefs(updatedRefs);
-                      }}
-                      setHasChanges={() => {}} // Not needed with new hook
-                      onClose={handleClose}
-                    />
-                  </Show>
-                }
-              >
-                <PropertyOptionSelector
-                  property={props.property}
-                  options={editorState().options}
-                  isLoading={editorState().isLoading}
-                  error={editorState().error}
-                  selectedOptions={() => editorState().selectedOptions}
-                  onToggleOption={toggleOption}
-                  onRetry={fetchOptions}
-                  onAddOption={
-                    props.property.isSystemProperty ? undefined : addOption
+                <Show
+                  when={
+                    props.property.valueType === 'SELECT_STRING' ||
+                    props.property.valueType === 'SELECT_NUMBER'
                   }
-                  onClose={handleClose}
-                />
-              </Show>
+                  fallback={
+                    <Show when={props.property.valueType === 'ENTITY'}>
+                      <PropertyEntitySelector
+                        property={props.property}
+                        selectedOptions={() => {
+                          const refs = selectedEntityRefs();
+                          return entityReferencesToIdSet(refs);
+                        }}
+                        setSelectedOptions={(newOptions, entityInfo) => {
+                          const currentRefs = selectedEntityRefs();
+                          const updatedRefs = updateEntityReferences(
+                            currentRefs,
+                            newOptions,
+                            entityInfo
+                          );
+                          setSelectedEntityRefs(updatedRefs);
+                        }}
+                        setHasChanges={() => {}} // Not needed with new hook
+                        onClose={handleClose}
+                      />
+                    </Show>
+                  }
+                >
+                  <PropertyOptionSelector
+                    property={props.property}
+                    options={propertyOptions()}
+                    isLoading={false}
+                    error={null}
+                    selectedOptions={selectedOptions}
+                    onToggleOption={toggleOption}
+                    onAddOption={
+                      props.property.isSystemProperty ? undefined : addOption
+                    }
+                    onClose={handleClose}
+                  />
+                </Show>
+              </div>
             </div>
-          </div>
+          </Show>
         </div>
       </div>
     </ScopedPortal>

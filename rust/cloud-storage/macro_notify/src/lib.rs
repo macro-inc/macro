@@ -4,7 +4,6 @@ mod message_attribute;
 use std::collections::HashMap;
 use std::fmt::Debug;
 
-use anyhow::Context;
 use message_attribute::build_string_message_attribute;
 use model_notifications::{NotificationEventType, NotificationQueueMessage};
 
@@ -55,12 +54,11 @@ impl MacroNotifyClient {
         let notification_id = macro_uuid::generate_uuid_v7();
 
         let NotificationMessageAttributes(message_attributes) =
-            NotificationMessageAttributes::try_from_message(
+            NotificationMessageAttributes::from_message(
                 &notification_id.to_string(),
                 &message,
                 self.service.as_str(),
-            )
-            .context("Failed to build message attributes")?;
+            );
 
         let body = serde_json::to_string(&message)?;
         enqueue::enqueue(
@@ -80,11 +78,11 @@ struct NotificationMessageAttributes(
 );
 
 impl NotificationMessageAttributes {
-    fn try_from_message(
+    fn from_message(
         notification_id: &str,
         message: &NotificationQueueMessage,
         service: &str,
-    ) -> anyhow::Result<Self> {
+    ) -> Self {
         const ATTRIBUTES: &[&str] = &[
             "notification_id",
             "notification_event_type",
@@ -99,11 +97,9 @@ impl NotificationMessageAttributes {
         let attributes = ATTRIBUTES
             .iter()
             .zip(values.iter())
-            .map(|(key, value)| {
-                build_string_message_attribute(value).map(|attr| ((*key).to_string(), attr))
-            })
-            .collect::<anyhow::Result<HashMap<_, _>>>()?;
+            .map(|(key, value)| (key.to_string(), build_string_message_attribute(value)))
+            .collect::<HashMap<_, _>>();
 
-        Ok(Self(attributes))
+        Self(attributes)
     }
 }

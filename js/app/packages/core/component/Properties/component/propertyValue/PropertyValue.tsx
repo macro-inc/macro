@@ -1,7 +1,10 @@
 import type { Component } from 'solid-js';
+import { Dynamic, Show } from 'solid-js/web';
+import { match } from 'ts-pattern';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import type { Property } from '../../types';
 import { BooleanValue } from './BooleanValue';
+import { CondensedPropertyValue } from './CondensedPropertyValue';
 import { DateValue } from './DateValue';
 import { EntityValue } from './EntityValue';
 import { LinkValue } from './LinkValue';
@@ -9,106 +12,42 @@ import { NumberValue } from './NumberValue';
 import { SelectValue } from './SelectValue';
 import { TextValue } from './TextValue';
 
-type PropertyValueProps = {
-  property: Property;
-  onEdit?: (property: Property, anchor?: HTMLElement) => void;
-};
-
 /**
  * Router component that delegates to type-specific display components
- * This is the decision maker for which editing method to use
  */
-export const PropertyValue: Component<PropertyValueProps> = (props) => {
+export const PropertyValue: Component<{
+  property: Property;
+  onEdit?: (property: Property, anchor?: HTMLElement) => void;
+  condensed?: boolean;
+}> = (props) => {
   const { entityType, canEdit, onRefresh } = usePropertiesContext();
+  const expanded = () => !props.condensed;
 
-  // Route based on valueType
-  switch (props.property.valueType) {
-    case 'STRING':
-      return (
-        <TextValue
-          property={props.property}
-          canEdit={canEdit}
-          entityType={entityType}
-          onRefresh={onRefresh}
-        />
-      );
+  const valueComponent = () =>
+    match(props.property)
+      .with({ valueType: 'STRING' }, () => TextValue)
+      .with({ valueType: 'NUMBER' }, () => NumberValue)
+      .with({ valueType: 'BOOLEAN' }, () => BooleanValue)
+      .with({ valueType: 'DATE' }, () => DateValue)
+      .with({ valueType: 'SELECT_STRING' }, () => SelectValue)
+      .with({ valueType: 'SELECT_NUMBER' }, () => SelectValue)
+      .with({ valueType: 'ENTITY' }, () => EntityValue)
+      .with({ valueType: 'LINK' }, () => LinkValue)
+      .exhaustive();
 
-    case 'NUMBER':
-      return (
-        <NumberValue
-          property={props.property}
-          canEdit={canEdit}
-          entityType={entityType}
-          onRefresh={onRefresh}
-        />
-      );
-
-    case 'BOOLEAN':
-      return (
-        <BooleanValue
-          property={props.property}
-          canEdit={canEdit}
-          entityType={entityType}
-          onRefresh={onRefresh}
-        />
-      );
-
-    case 'DATE':
-      return (
-        <DateValue
-          property={props.property}
-          canEdit={canEdit}
-          onEdit={props.onEdit}
-          onRefresh={onRefresh}
-        />
-      );
-
-    case 'SELECT_STRING':
-    case 'SELECT_NUMBER':
-      return (
-        <SelectValue
-          property={props.property}
-          canEdit={canEdit}
-          entityType={entityType}
-          onEdit={props.onEdit}
-          onRefresh={onRefresh}
-        />
-      );
-
-    case 'ENTITY':
-      return (
-        <EntityValue
-          property={props.property}
-          canEdit={canEdit}
-          entityType={entityType}
-          onEdit={props.onEdit}
-          onRefresh={onRefresh}
-        />
-      );
-
-    case 'LINK':
-      return (
-        <LinkValue
-          property={props.property}
-          canEdit={canEdit}
-          entityType={entityType}
-          onRefresh={onRefresh}
-        />
-      );
-
-    default: {
-      // Exhaustive check: if we reach here, TypeScript will error
-      // because we haven't handled all PropertyValue types
-      const _exhaustiveCheck: never = props.property;
-      console.error(
-        'Unhandled property type in PropertyValue:',
-        (_exhaustiveCheck as Property).valueType
-      );
-      return (
-        <div class="text-failure-ink text-xs px-2 py-1">
-          Unsupported Property Type
-        </div>
-      );
-    }
-  }
+  return (
+    <Show
+      when={expanded()}
+      fallback={<CondensedPropertyValue property={props.property} />}
+    >
+      <Dynamic
+        component={valueComponent()}
+        property={props.property}
+        canEdit={canEdit}
+        entityType={entityType}
+        onEdit={props.onEdit}
+        onRefresh={onRefresh}
+      />
+    </Show>
+  );
 };

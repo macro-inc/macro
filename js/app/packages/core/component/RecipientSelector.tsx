@@ -37,7 +37,6 @@ import {
   type JSX,
   Match,
   onMount,
-  type Setter,
   Switch,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
@@ -209,8 +208,8 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
 
 type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   options: Accessor<CombinedRecipientItem<K>[]>;
-  selectedOptions: Accessor<WithCustomUserInput<K>[]>;
-  setSelectedOptions: Setter<WithCustomUserInput<K>[]>;
+  selectedOptions: WithCustomUserInput<K>[];
+  setSelectedOptions: (next: WithCustomUserInput<K>[]) => void;
   // If you provide triedToSubmit, the component will show an error message if no options are selected and triedToSubmit is true
   triedToSubmit?: Accessor<boolean>;
   placeholder?: string | JSX.Element;
@@ -268,7 +267,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
   }
 
   const placeholderText = () => {
-    return props.selectedOptions().length === 0
+    return props.selectedOptions.length === 0
       ? 'Select recipients'
       : 'select more recipients';
   };
@@ -321,7 +320,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
   const invalid = createMemo(
     () =>
-      (props.triedToSubmit?.() ?? false) && props.selectedOptions().length === 0
+      (props.triedToSubmit?.() ?? false) && props.selectedOptions.length === 0
   );
 
   const options = createMemo(() => {
@@ -378,7 +377,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     () => {}
   );
 
-  const selectedLen = () => props.selectedOptions().length;
+  const selectedLen = () => props.selectedOptions.length;
 
   const onInputChange = (next: string) => {
     setInputValue(next);
@@ -408,12 +407,12 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       optionValue={getRecipientOptionValue}
       optionTextValue={getRecipientOptionTextValue}
       optionDisabled={getOptionDisabled}
-      value={props.selectedOptions() as CombinedRecipientItem[]}
+      value={props.selectedOptions as CombinedRecipientItem[]}
       onChange={debouncedHandleChange}
       onInputChange={onInputChange}
       shouldFocusWrap
       placeholder={
-        props.selectedOptions()?.length === 0
+        props.selectedOptions?.length === 0
           ? (props.placeholder ?? placeholderText())
           : undefined
       }

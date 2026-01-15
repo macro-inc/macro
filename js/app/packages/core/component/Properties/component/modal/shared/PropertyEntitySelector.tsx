@@ -1,5 +1,5 @@
 import { useMaybeBlockId } from '@core/block';
-import { useChannelsContext } from '@core/component/ChannelsProvider';
+import { useChannelsContext } from '@core/context/channels';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
@@ -155,7 +155,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const history = useHistory();
   const contacts = useContacts();
   const channelsContext = useChannelsContext();
-  const channels = () => channelsContext.channels();
+  const channels = channelsContext.channels;
 
   // Get current user info for injection into contacts
   const currentUserId = useUserId();

@@ -6,7 +6,7 @@ use axum::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
-use model_notifications::{InviteToTeamMetadata, NotificationEvent, NotificationQueueMessage};
+use model_notifications::{InviteToTeamMetadata, NotificationQueueMessage};
 
 use crate::api::{
     context::ApiContext,
@@ -141,7 +141,7 @@ async fn notify_team_invite(
 
     let notification_queue_message = NotificationQueueMessage {
         notification_entity: EntityType::Team.with_entity_string(team_invite_id.to_string()),
-        notification_event: NotificationEvent::InviteToTeam(notification_metadata),
+        notification_event: notification_metadata.into(),
         sender_id: Some(invited_by),
         recipient_ids: Some(vec![format!("macro|{normalized_email}")]),
     };

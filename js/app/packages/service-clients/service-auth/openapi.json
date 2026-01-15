@@ -283,6 +283,16 @@
               }
             }
           },
+          "429": {
+            "description": "Refresh already in progress for this user",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "500": {
             "description": "",
             "content": {

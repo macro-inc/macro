@@ -1,7 +1,6 @@
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { usePropertiesContext } from '../context/PropertiesContext';
 import type { Property } from '../types';
-import { ERROR_MESSAGES, handlePropertyError } from '../utils/errorHandling';
 
 /**
  * Hook for editing boolean properties
@@ -37,20 +36,13 @@ export function useBooleanEditor(
       // Otherwise toggle between true and false
       const newValue = actualValue === null ? true : !actualValue;
 
-      const result = await saveHandler.saveProperty(property, {
+      await saveHandler.saveProperty(property, {
         valueType: 'BOOLEAN',
         value: newValue,
       });
-
-      if (
-        handlePropertyError(
-          result,
-          ERROR_MESSAGES.PROPERTY_SAVE,
-          'useBooleanEditor.toggle'
-        )
-      ) {
-        onSaved?.();
-      }
+      onSaved?.();
+    } catch {
+      // Error toast is shown by mutation's onError callback
     } finally {
       setIsSaving(false);
     }

@@ -9,7 +9,10 @@ import {
 } from '@app/component/split-layout/components/SplitToolbar';
 import { hasPermissions, Permissions } from '@core/component/SharePermissions';
 import { ShareButton } from '@core/component/TopBar/ShareButton';
-import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
+import {
+  DEV_MODE_ENV,
+  ENABLE_EMAIL_SHARING,
+} from '@core/constant/featureFlags';
 import { Show } from 'solid-js';
 import { useEmailContext } from './EmailContext';
 import { EmailPropertiesModal } from './EmailPropertiesModal';
@@ -37,7 +40,7 @@ export function TopBar(props: { id: string; title: string }) {
               Permissions.CAN_EDIT
             )}
           />
-          <Show when={ENABLE_EMAIL_SHARING}>
+          <Show when={ENABLE_EMAIL_SHARING || DEV_MODE_ENV}>
             <ShareButton
               id={props.id}
               name={props.title}

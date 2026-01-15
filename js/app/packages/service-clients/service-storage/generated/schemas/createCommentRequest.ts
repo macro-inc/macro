@@ -5,10 +5,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CreateCommentRequestAnchor } from './createCommentRequestAnchor';
+import type { CreateCommentRequestMentions } from './createCommentRequestMentions';
 import type { CreateCommentRequestThreadId } from './createCommentRequestThreadId';
 
 export interface CreateCommentRequest {
   anchor?: CreateCommentRequestAnchor;
+  mentions?: CreateCommentRequestMentions;
   metadata?: unknown;
   text: string;
   threadId?: CreateCommentRequestThreadId;

@@ -66,48 +66,57 @@ export type Property = {
   | { valueType: 'LINK'; value: string[] | null }
 );
 
+type PropertyOfType<T extends ValueType> = Extract<Property, { valueType: T }>;
+
+export type StringProperty = PropertyOfType<'STRING'>;
+export type NumberProperty = PropertyOfType<'NUMBER'>;
+export type BooleanProperty = PropertyOfType<'BOOLEAN'>;
+export type DateProperty = PropertyOfType<'DATE'>;
+export type SelectStringProperty = PropertyOfType<'SELECT_STRING'>;
+export type SelectNumberProperty = PropertyOfType<'SELECT_NUMBER'>;
+export type EntityProperty = PropertyOfType<'ENTITY'>;
+export type LinkProperty = PropertyOfType<'LINK'>;
+
+/** Properties that hold a single primitive value */
+export type SingleValueProperty =
+  | StringProperty
+  | NumberProperty
+  | BooleanProperty
+  | DateProperty;
+
+/** Properties that hold multiple values (arrays) */
+export type MultiValueProperty =
+  | SelectStringProperty
+  | SelectNumberProperty
+  | EntityProperty
+  | LinkProperty;
+
+export type SelectProperty = SelectStringProperty | SelectNumberProperty;
+
 /**
- * Flat property definition type (when include_options is false)
- * Used for property selection and display
+ * Domain type for property definitions (camelCase, frontend-friendly)
  *
- * Note: Uses backend UPPERCASE enum values for data_type and specific_entity_type
+ * This is the UI layer representation of a property definition.
+ * Use `toPropertyDefinitionDomain` to transform from API types.
+ *
+ * Note: Uses `valueType` to match the `Property` type, enabling shared
+ * components like `PropertyDataTypeIcon` to work with both types.
+ *
+ * @see PropertyDefinition - Generated API type (snake_case)
+ * @see Property - Domain type for property instances with values
  */
-export type PropertyDefinitionFlat = {
-  created_at: string;
-  data_type:
-    | 'BOOLEAN'
-    | 'DATE'
-    | 'NUMBER'
-    | 'STRING'
-    | 'SELECT_NUMBER'
-    | 'SELECT_STRING'
-    | 'ENTITY'
-    | 'LINK';
-  display_name: string;
+export type PropertyDefinitionDomain = {
   id: string;
-  is_metadata: boolean;
-  is_multi_select: boolean;
-  is_system: boolean;
-  owner:
-    | {
-        scope: 'user';
-        user_id: string;
-      }
-    | {
-        scope: 'organization';
-        organization_id: number;
-      }
-    | {
-        scope: 'user_and_organization';
-        user_id: string;
-        organization_id: number;
-      }
-    | {
-        scope: 'system';
-      };
-  propertyOptions?: PropertyOption[];
-  specific_entity_type?: EntityType | null;
-  updated_at: string;
+  displayName: string;
+  valueType: ValueType;
+  isMultiSelect: boolean;
+  isMetadata: boolean;
+  isSystem: boolean;
+  owner: PropertyOwner;
+  specificEntityType?: EntityType | null;
+  options?: PropertyOption[];
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type PropertiesPanelProps = {

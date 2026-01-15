@@ -10,12 +10,14 @@ import {
 } from '@service-cognition/generated/tools/tool';
 import { createStore } from 'solid-js/store';
 import { Dynamic, Show } from 'solid-js/web';
+import { listChannelsHandler } from './ListChannels';
 import { listDocumentsHandler } from './ListDocuments';
 import { listEmailsHandler } from './ListEmails';
 import { rewriteHandler } from './MarkdownRewrite';
 import { readHandler } from './Read';
 import { contentSearchHandler, nameSearchHandler } from './Search';
 import type { RenderContext } from './ToolRenderer';
+import { webFetchHandler } from './WebFetch';
 import { webSearchHandler } from './WebSearch';
 
 const [renderStore, setRenderStore] = createStore<
@@ -25,9 +27,11 @@ const [renderStore, setRenderStore] = createStore<
 const toolHandlers: ToolHandlerMap<RenderContext> = {
   ContentSearch: contentSearchHandler,
   NameSearch: nameSearchHandler,
+  web_fetch: webFetchHandler,
   web_search: webSearchHandler,
   MarkdownRewrite: rewriteHandler,
   Read: readHandler,
+  ListChannels: listChannelsHandler,
   ListDocuments: listDocumentsHandler,
   ListEmails: listEmailsHandler,
 };

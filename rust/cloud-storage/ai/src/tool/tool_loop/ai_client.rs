@@ -23,7 +23,10 @@ where
     R: Clone + Send + Sync,
 {
     pub fn new(toolset: AsyncToolSet<T, R>, context: T) -> Self {
-        let extensions = AnthropicRequestExtensions(vec![AnthropicRequestExtension::WebSearchTool]);
+        let extensions = AnthropicRequestExtensions(vec![
+            AnthropicRequestExtension::WebSearchTool,
+            AnthropicRequestExtension::FetchTool,
+        ]);
         let client = AnthropicClient::new(extensions);
         let toolset = Arc::new(toolset);
         Self {

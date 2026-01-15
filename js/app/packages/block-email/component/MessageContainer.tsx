@@ -307,8 +307,13 @@ export function MessageContainer(props: MessageContainerProps) {
                 <For each={otherAttachments()}>
                   {(attachment) => (
                     <EmailAttachmentPill
-                      attachment={attachment}
-                      onClick={onClickAttachment}
+                      attachment={{
+                        fileName: attachment.filename ?? '',
+                        mimeType: attachment.mime_type ?? undefined,
+                      }}
+                      onClick={(fileType) =>
+                        onClickAttachment(attachment, fileType)
+                      }
                     />
                   )}
                 </For>

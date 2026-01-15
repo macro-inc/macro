@@ -1,4 +1,4 @@
-export { Entity, type EntityClickHandler } from './components/Entity';
+export { Entity } from './components/Entity';
 export { EntityWrapper } from './components/EntityWrapper';
 export { createFilter } from './components/Filter';
 export { Provider } from './components/Provider';

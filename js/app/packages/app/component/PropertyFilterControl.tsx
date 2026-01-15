@@ -1,14 +1,11 @@
-import { listPropertiesFlat } from '@core/component/Properties/utils';
-import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
-import type { Accessor, Component } from 'solid-js';
+import type { PropertyDefinitionDomain } from '@core/component/Properties/types';
 import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  onMount,
-  Show,
-} from 'solid-js';
+  isPropertyDefinition,
+  toPropertyDefinitionDomain,
+} from '@core/component/Properties/utils';
+import { useListPropertiesQuery } from '@queries/properties/definitions';
+import type { Accessor, Component } from 'solid-js';
+import { createEffect, createMemo, For, Show } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { FilterPropertyPill } from './PropertyFilter';
 import type { PropertyFilter } from './PropertyFilterTypes';
@@ -31,18 +28,22 @@ type PropertyFilterControlProps = {
 export const PropertyFilterControl: Component<PropertyFilterControlProps> = (
   props
 ) => {
-  // Fetch all properties once for looking up saved filters
-  const [allProperties, setAllProperties] = createSignal<PropertyDefinition[]>(
-    []
-  );
+  // Fetch all properties using query
+  const propertiesQuery = useListPropertiesQuery(() => ({
+    scope: 'all',
+    includeOptions: false,
+  }));
 
-  onMount(async () => {
-    const properties = await listPropertiesFlat('all');
-    setAllProperties(properties);
+  const allProperties = createMemo((): PropertyDefinitionDomain[] => {
+    const data = propertiesQuery.data;
+    if (!data) return [];
+    return (Array.isArray(data) ? data : [])
+      .filter(isPropertyDefinition)
+      .map((def) => toPropertyDefinitionDomain(def));
   });
 
   // Look up property definition by ID
-  const getPropertyById = (id: string): PropertyDefinition | undefined =>
+  const getPropertyById = (id: string): PropertyDefinitionDomain | undefined =>
     allProperties().find((p) => p.id === id);
 
   // Simple incrementing ID generator (unique within component lifetime)

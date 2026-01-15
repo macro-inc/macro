@@ -1,7 +1,10 @@
 use super::CommsServiceClient;
 use crate::error::{ClientError, ResponseExt};
-use model::comms::ChannelType;
-use model::comms::{GetChannelsHistoryRequest, GetChannelsHistoryResponse};
+use model::comms::{
+    ChannelMessage, ChannelParticipant, ChannelType, GetChannelsHistoryRequest,
+    GetChannelsHistoryResponse,
+};
+use models_comms::channel::{ChannelId, OrganizationId};
 use serde::{Deserialize, Serialize};
 use urlencoding;
 use uuid::Uuid;
@@ -17,11 +20,71 @@ pub struct ChannelTranscriptResponse {
     pub transcript: String,
 }
 
+/// Channel with latest message from GET /channels response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApiChannelWithLatest {
+    /// Channel ID
+    pub id: ChannelId,
+    /// Channel name (may be None for DMs)
+    pub name: Option<String>,
+    /// Channel type
+    pub channel_type: ChannelType,
+    /// Organization ID if applicable
+    pub org_id: Option<OrganizationId>,
+    /// When the channel was created
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    /// When the channel was last updated
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+    /// Owner user ID
+    pub owner_id: String,
+    /// Channel participants
+    pub participants: Vec<ChannelParticipant>,
+    /// Latest message in the channel
+    pub latest_message: Option<ChannelMessage>,
+    /// Latest non-thread message
+    pub latest_non_thread_message: Option<ChannelMessage>,
+    /// When the user last viewed the channel
+    pub viewed_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// When the user last interacted with the channel
+    pub interacted_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// Frecency score for sorting
+    pub frecency_score: Option<f64>,
+}
+
 impl CommsServiceClient {
     // External routes - require JWT authentication and perform permission checks
 
+    /// Get all channels the user has access to using external authenticated endpoint
+    #[tracing::instrument(skip(self, jwt_token), err)]
+    pub async fn get_channels_external(
+        &self,
+        jwt_token: &str,
+    ) -> Result<Vec<ApiChannelWithLatest>, ClientError> {
+        let url = format!("{}/channels", self.url);
+        let response = self
+            .client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", jwt_token))
+            .send()
+            .await
+            .map_client_error()
+            .await?;
+
+        let result = response
+            .json::<Vec<ApiChannelWithLatest>>()
+            .await
+            .map_err(|e| {
+                ClientError::Generic(anyhow::anyhow!(
+                    "unable to parse response from get_channels_external: {}",
+                    e.to_string()
+                ))
+            })?;
+
+        Ok(result)
+    }
+
     /// Get channel metadata using external authenticated endpoint
-    #[tracing::instrument(skip(self, jwt_token))]
+    #[tracing::instrument(skip(self, jwt_token), err)]
     pub async fn get_channel_metadata_external(
         &self,
         channel_id: &Uuid,
@@ -51,7 +114,7 @@ impl CommsServiceClient {
     }
 
     /// Get channel transcript using external authenticated endpoint
-    #[tracing::instrument(skip(self, jwt_token))]
+    #[tracing::instrument(skip(self, jwt_token), err)]
     pub async fn get_channel_transcript_external(
         &self,
         channel_id: &Uuid,

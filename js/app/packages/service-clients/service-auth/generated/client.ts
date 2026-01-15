@@ -386,6 +386,11 @@ export type refreshResponse401 = {
   status: 401;
 };
 
+export type refreshResponse429 = {
+  data: string;
+  status: 429;
+};
+
 export type refreshResponse500 = {
   data: string;
   status: 500;
@@ -397,6 +402,7 @@ export type refreshResponseSuccess = refreshResponse200 & {
 export type refreshResponseError = (
   | refreshResponse400
   | refreshResponse401
+  | refreshResponse429
   | refreshResponse500
 ) & {
   headers: Headers;

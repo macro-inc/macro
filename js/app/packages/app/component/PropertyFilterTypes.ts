@@ -1,4 +1,4 @@
-import { DataType } from '@service-properties/generated/schemas/dataType';
+import type { ValueType } from '@core/component/Properties/types';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 
 // ============================================
@@ -7,13 +7,13 @@ import type { EntityType } from '@service-properties/generated/schemas/entityTyp
 
 /** Data types that support filtering */
 export const FILTERABLE_DATA_TYPES = [
-  DataType.BOOLEAN,
-  DataType.DATE,
-  DataType.NUMBER,
-  DataType.SELECT_NUMBER,
-  DataType.SELECT_STRING,
-  DataType.ENTITY,
-] as const;
+  'BOOLEAN',
+  'DATE',
+  'NUMBER',
+  'SELECT_NUMBER',
+  'SELECT_STRING',
+  'ENTITY',
+] as const satisfies readonly ValueType[];
 
 /** Equality actions - matches against one or more values (OR logic for multiple) */
 export const EqualityAction = {
@@ -148,13 +148,13 @@ export type PropertyFilter =
     };
 
 /** Helper: Check if a data type is filterable */
-export const isFilterableDataType = (dataType: DataType): boolean => {
-  return (FILTERABLE_DATA_TYPES as readonly DataType[]).includes(dataType);
+export const isFilterableDataType = (dataType: ValueType): boolean => {
+  return (FILTERABLE_DATA_TYPES as readonly ValueType[]).includes(dataType);
 };
 
 /** Helper: Get valid filter actions for a property based on data type and multi-select */
 export const getValidFilterActions = (
-  dataType: DataType,
+  dataType: ValueType,
   isMultiSelect: boolean
 ): FilterAction[] => {
   const actions: FilterAction[] = [];
@@ -168,12 +168,12 @@ export const getValidFilterActions = (
   }
 
   // BOOLEAN: only equality
-  if (dataType === DataType.BOOLEAN) {
+  if (dataType === 'BOOLEAN') {
     return [EqualityAction.EQUAL, EqualityAction.NOT_EQUAL];
   }
 
   // ENTITY (single-value): only equality
-  if (dataType === DataType.ENTITY) {
+  if (dataType === 'ENTITY') {
     return [EqualityAction.EQUAL, EqualityAction.NOT_EQUAL];
   }
 
