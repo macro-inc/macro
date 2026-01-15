@@ -1,4 +1,3 @@
-use anyhow::Context;
 use models_email::{db, service};
 use sqlx::{Executor, Postgres};
 

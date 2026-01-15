@@ -6,7 +6,7 @@ use lambda_runtime::{
 };
 use sqs_client::email::SFSDeleteMessage;
 
-#[tracing::instrument(skip(ctx, _event))]
+#[tracing::instrument(skip_all, err)]
 pub async fn handler(
     ctx: context::Context,
     _event: LambdaEvent<EventBridgeEvent>,
@@ -31,6 +31,8 @@ pub async fn handler(
 
     if !messages.is_empty() {
         tracing::info!(count = messages.len(), "Sending sfs delete messages");
+    } else {
+        tracing::info!("No orphaned sfs attachments found");
     }
 
     for message in messages.into_iter() {

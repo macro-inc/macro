@@ -38,7 +38,7 @@ pub async fn process_message(ctx: SFSDeleteContext, message: &Message) -> anyhow
 }
 
 /// Deserializes the SQS message body into a SFSDeleteMessage struct.
-#[tracing::instrument(skip(message))]
+#[tracing::instrument(skip(message), err)]
 fn extract_sfs_delete_notification(
     message: &aws_sdk_sqs::types::Message,
 ) -> anyhow::Result<SFSDeleteMessage> {

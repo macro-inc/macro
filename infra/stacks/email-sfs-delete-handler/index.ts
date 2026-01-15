@@ -20,7 +20,7 @@ const MACRO_DB_URL = aws.secretsmanager
   })
   .apply((secret) => secret.secretString);
 
-const sfs_delete_queue = new Queue('email-service-sfs-delete', {
+const sfs_delete_queue = new Queue('email-sfs-delete', {
   tags,
   maxReceiveCount: 5,
   visibilityTimeoutSeconds: 60,

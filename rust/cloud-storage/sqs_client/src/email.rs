@@ -87,7 +87,7 @@ impl SQS {
 
     /// Sends a message to the sfs delete queue
     #[cfg(feature = "sfs_delete")]
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self), err)]
     pub async fn enqueue_sfs_delete_message(
         &self,
         message: SFSDeleteMessage,
