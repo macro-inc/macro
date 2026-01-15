@@ -61,12 +61,19 @@ env_var! {
     pub struct MacroApiTokenPrivateSecretKey;
 }
 
+env_var! {
+    #[derive(Clone)]
+    pub struct MacroApiTokenExpirySeconds;
+}
+
 #[derive(Clone)]
 pub struct MacroApiTokenContext {
     /// The issuer of the macro-api-token
     pub issuer: MacroApiTokenIssuer,
     /// The macro api token private key used to sign macro-api tokens
     pub macro_api_token_private_key: LocalOrRemoteSecret<MacroApiTokenPrivateSecretKey>,
+    /// The token expiry duration in seconds
+    pub expiry_seconds: usize,
 }
 
 #[derive(Clone)]

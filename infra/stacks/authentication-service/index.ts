@@ -269,6 +269,10 @@ const service = new AuthenticationService('authentication-service', {
       value: pulumi.interpolate`${macroApiTokenSecretPrivateKeyArn}`,
     },
     {
+      name: 'MACRO_API_TOKEN_EXPIRY_SECONDS',
+      value: '3600',
+    },
+    {
       name: 'STRIPE_WEBHOOK_SECRET_KEY',
       value: pulumi.interpolate`${stripeWebhookSecretKeyArn}`,
     },
