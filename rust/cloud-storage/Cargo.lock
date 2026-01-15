@@ -92,6 +92,7 @@ dependencies = [
  "anthropic",
  "anyhow",
  "async-trait",
+ "axum",
  "chrono",
  "comms_service_client",
  "cool_asserts",

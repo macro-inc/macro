@@ -97,6 +97,16 @@ impl<'a> MacroUserIdStr<'a> {
     }
 }
 
+impl<'a> From<MacroUserIdStr<'a>> for MacroUserId<String> {
+    fn from(value: MacroUserIdStr<'a>) -> Self {
+        MacroUserId {
+            email_part: value.email_part,
+            email_part_offset: value.email_part_offset,
+            user_id: value.0.user_id.as_ref().into(),
+        }
+    }
+}
+
 impl MacroUserIdStr<'static> {
     /// Create a MacroUserIdStr from an email address by prepending "macro|"
     pub fn try_from_email(email: &str) -> Result<Self, ParseErr> {

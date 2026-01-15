@@ -25,6 +25,7 @@ use ai_request::build_chat_completion_request;
 use ai_tools::{AiToolSet, RequestContext, ToolServiceContext};
 use anyhow::{Context, Result};
 use futures::stream::StreamExt;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::chat::{NewAttachment, NewChatMessage};
 use std::sync::Arc;
 use tokio;
@@ -81,13 +82,13 @@ pub struct StreamChatResponse {
     pub new_messages: Vec<ChatMessage>,
 }
 
-#[tracing::instrument(err, skip(context, user_id, request, sender, jwt_token), fields(chat_id=?chat_id, message_id=?message_id))]
+#[tracing::instrument(err, skip(context, user_id, request, sender, jwt_token, toolset), fields(chat_id=?chat_id, message_id=?message_id))]
 #[expect(clippy::too_many_arguments, reason = "too annoying to fix")]
 // Handles streaming the response from the provider back to the
 // client over the websocket connection. Returns the response string
 pub async fn stream_chat_response(
     context: Arc<ApiContext>,
-    user_id: &str,
+    user_id: Arc<MacroUserIdStr<'static>>,
     request: ChatCompletionRequest,
     toolset: AiToolSet,
     sender: &UnboundedSender<FromWebSocketMessage>,
@@ -112,16 +113,17 @@ pub async fn stream_chat_response(
         scribe: context.scribe.clone(),
     };
 
+    #[expect(deprecated)]
     let request_context = RequestContext {
-        user_id: user_id.to_string(),
-        jwt_token: jwt_token.to_string(),
+        user_id: user_id.clone(),
+        jwt: Arc::new(jwt_token.to_string()),
     };
 
     let client = ToolLoop::new(toolset, tool_context);
     let mut chat = client.chat();
     let now = std::time::Instant::now();
     let mut stream = chat
-        .send_message(request, request_context, user_id.to_owned())
+        .send_message(request, request_context, user_id.as_ref().to_string())
         .await?;
 
     // Process the stream completely
@@ -271,18 +273,18 @@ pub async fn store_conversation_messages(
 }
 
 /// Handles incoming messages of type `send_message`
-#[tracing::instrument(skip(ctx, sender, incoming_message, jwt_token), fields(chat_id=?incoming_message.chat_id, stream_id=?incoming_message.stream_id))]
+#[tracing::instrument(skip(ctx, sender, incoming_message, jwt_token, user_id), fields(chat_id=?incoming_message.chat_id, stream_id=?incoming_message.stream_id))]
 pub async fn handle_send_chat_message(
     sender: &UnboundedSender<FromWebSocketMessage>,
     ctx: Arc<ApiContext>,
     message_id: String,
     incoming_message: SendChatMessagePayload,
-    user_id: &str,
+    user_id: Arc<MacroUserIdStr<'static>>,
     connection_id: &str,
     jwt_token: &str,
 ) -> Result<(), StreamWebSocketError> {
     let now = std::time::Instant::now();
-    let chat = get_chat(&ctx, &incoming_message.chat_id, user_id)
+    let chat = get_chat(&ctx, &incoming_message.chat_id, user_id.0.as_ref())
         .await
         .map_err(|err| {
             tracing::error!(error=?err, "failed to get chat");
@@ -297,15 +299,20 @@ pub async fn handle_send_chat_message(
         FALLBACK_MODEL
     };
 
-    let _user_message_id =
-        store_incoming_message(ctx.clone(), user_id, &chat, model, &incoming_message)
-            .await
-            .map_err(|err| {
-                tracing::error!(error=?err, "failed to store incoming message");
-                StreamError::InternalError {
-                    stream_id: incoming_message.stream_id.clone(),
-                }
-            })?;
+    let _user_message_id = store_incoming_message(
+        ctx.clone(),
+        user_id.0.as_ref(),
+        &chat,
+        model,
+        &incoming_message,
+    )
+    .await
+    .map_err(|err| {
+        tracing::error!(error=?err, "failed to store incoming message");
+        StreamError::InternalError {
+            stream_id: incoming_message.stream_id.clone(),
+        }
+    })?;
 
     let toolset = toolset::choose_toolset(&incoming_message);
     let request = build_chat_completion_request(
@@ -326,7 +333,7 @@ pub async fn handle_send_chat_message(
     log::log_timing(log::LatencyMetric::TimeToSendRequest, model, now.elapsed());
     let StreamChatResponse { new_messages } = stream_chat_response(
         ctx.clone(),
-        user_id,
+        user_id.clone(),
         request,
         toolset.toolset,
         sender,
@@ -358,7 +365,7 @@ pub async fn handle_send_chat_message(
 
     store_conversation_messages(
         ctx.clone(),
-        user_id,
+        user_id.0.as_ref(),
         &incoming_message.chat_id,
         new_messages,
         model,
@@ -373,7 +380,7 @@ pub async fn handle_send_chat_message(
 
     // The chat is empty and we want to auto generate a name for the chat
     if is_first_message {
-        let _ = maybe_rename_chat(&incoming_message.chat_id, &ctx, user_id)
+        let _ = maybe_rename_chat(&incoming_message.chat_id, &ctx, user_id.0.as_ref())
             .await
             .inspect_err(|err| tracing::error!(error=?err, "failed to rename chat"))
             .map(|new_name| {
