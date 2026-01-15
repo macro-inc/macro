@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createFreshSearch } from './freshSort';
-import {
-  fuzzyScoreCommaSeparated,
-  fuzzyTestCommaSeparated,
-} from './fuzzy';
+import { fuzzyScoreCommaSeparated, fuzzyTestCommaSeparated } from './fuzzy';
 
 interface MockItem {
   id: string;
@@ -188,7 +185,12 @@ describe('createFreshSearch with comma-separated channel matching', () => {
     const now = Date.now();
     const items: MockItem[] = [
       { id: '1', name: 'Nick Noble,teo,hutch', type: 'channel', viewedAt: now },
-      { id: '2', name: 'nick,hutch meeting notes', type: 'item', viewedAt: now },
+      {
+        id: '2',
+        name: 'nick,hutch meeting notes',
+        type: 'item',
+        viewedAt: now,
+      },
     ];
 
     const search = createCommaSeparatedSearch();

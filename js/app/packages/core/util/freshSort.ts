@@ -4,10 +4,7 @@
  */
 import type { FilterResult } from 'fuzzy';
 import fuzzy from 'fuzzy';
-import {
-  fuzzyScoreCommaSeparated,
-  fuzzyTestCommaSeparated,
-} from './fuzzy';
+import { fuzzyScoreCommaSeparated, fuzzyTestCommaSeparated } from './fuzzy';
 
 export interface FreshSortConfig {
   /** Weight for fuzzy match (0-1). Higher values prioritize search relevance. Default: 0.7 */
