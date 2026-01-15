@@ -9,6 +9,15 @@ import type { DefaultView, ViewId } from '@core/types/view';
 import { handleFolderSelect } from '@core/util/upload';
 import { createMemo, Match, onCleanup, onMount, Show, Switch } from 'solid-js';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
+import Arcanum001 from '@macro-icons/arcanum/arcanum-001.svg';
+import Arcanum002 from '@macro-icons/arcanum/arcanum-002.svg';
+import Arcanum003 from '@macro-icons/arcanum/arcanum-003.svg';
+import Arcanum004 from '@macro-icons/arcanum/arcanum-004.svg';
+import Arcanum005 from '@macro-icons/arcanum/arcanum-005.svg';
+import Arcanum006 from '@macro-icons/arcanum/arcanum-006.svg';
+import Arcanum007 from '@macro-icons/arcanum/arcanum-007.svg';
+import Arcanum008 from '@macro-icons/arcanum/arcanum-008.svg';
+import Arcanum0010 from '@macro-icons/arcanum/arcanum-010.svg';
 
 false && fileSelector;
 false && folderSelector;
@@ -16,6 +25,22 @@ false && folderSelector;
 const EMPTY_STATE_HELP_DRAWER_TIMEOUT_MS = 0;
 
 const DEFAULT_EMPTY_MESSAGE = 'No items to show.';
+
+function getRandomArcanumGraphic() {
+  const arcanumGraphics = [
+    <Arcanum001 class="h-58 m-8 mt-32 opacity-60" />,
+    <Arcanum002 class="h-58 m-8 mt-32 opacity-60" />,
+    <Arcanum003 class="h-58 m-8 mt-32 opacity-60" />,
+    <Arcanum004 class="h-58 m-8 mt-32 opacity-60" />,
+    <Arcanum005 class="h-58 m-8 mt-32 opacity-60" />,
+    <Arcanum006 class="h-58 m-8 mt-32 opacity-60" />,
+    <Arcanum007 class="h-58 m-8 mt-32 opacity-60" />,
+    <Arcanum008 class="h-58 m-8 mt-32 opacity-60" />,
+    <Arcanum0010 class="h-58 m-8 mt-32 opacity-60" />,
+  ];
+  const randomIndex = Math.floor(Math.random() * arcanumGraphics.length);
+  return arcanumGraphics[randomIndex];
+}
 
 function EmptyStateHelpDrawer(props: {
   message?: string;
@@ -149,7 +174,8 @@ export function EmptyStateInner(props: EmptyStateInnerProps) {
 
   return (
     <div class="size-full flex items-center justify-center p-4 text-ink-muted">
-      <div class="panel w-full flex flex-col size-full">
+      <div class="panel w-full flex flex-col items-center size-full">
+        {getRandomArcanumGraphic()}
         <p class="text-ink-muted font-mono">
           {props.message ?? DEFAULT_EMPTY_MESSAGE}
         </p>
