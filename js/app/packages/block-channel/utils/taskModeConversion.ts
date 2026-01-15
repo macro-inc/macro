@@ -4,8 +4,6 @@ import {
   type TaskCreationOptions,
 } from '@core/util/taskCreation';
 
-export type { TaskCreationOptions as TaskConversionOptions };
-
 export type TaskCreationSuccess = {
   lineIndex: number;
   documentId: string;

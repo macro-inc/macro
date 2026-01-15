@@ -3,12 +3,14 @@
  * Used by Task Mode in channel input to preview and create tasks from checkboxes.
  */
 
-// Re-export existing parsing utilities from the checkbox-to-task plugin
-export {
+import {
   extractUserMentions,
   extractDateMention,
   extractTitleFromMarkdown,
 } from '@core/component/LexicalMarkdown/plugins/checkbox-to-task/checkboxParsing';
+
+// Re-export parsing utilities for consumers
+export { extractUserMentions, extractDateMention, extractTitleFromMarkdown };
 
 /**
  * Represents a potential task extracted from markdown text.
@@ -37,12 +39,6 @@ export type PotentialTask = {
 // Pattern to match checkbox lines: "- [ ] text" or "- [x] text"
 // Captures: (1) leading whitespace, (2) check state, (3) content after checkbox
 const CHECKBOX_LINE_PATTERN = /^(\s*)-\s*\[([ xX])\]\s*(.*)$/;
-
-import {
-  extractUserMentions,
-  extractDateMention,
-  extractTitleFromMarkdown,
-} from '@core/component/LexicalMarkdown/plugins/checkbox-to-task/checkboxParsing';
 
 /**
  * Extract all checkbox items from a markdown string as potential tasks.

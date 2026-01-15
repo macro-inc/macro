@@ -31,8 +31,6 @@ type UseTaskModeReturn = {
   setTaskModeEnabled: (enabled: boolean) => void;
   /** Potential tasks detected in current content (debounced) */
   potentialTasks: Accessor<PotentialTask[]>;
-  /** Whether there are tasks to create */
-  hasTasksToCreate: Accessor<boolean>;
   /** Update a property on a specific task */
   updateTaskProperty: (
     lineIndex: number,
@@ -97,8 +95,6 @@ export function useTaskMode(
     }));
   });
 
-  const hasTasksToCreate = createMemo(() => potentialTasks().length > 0);
-
   const toggleTaskMode = () => {
     const newState = !taskModeEnabled();
     setTaskModeEnabled(newState);
@@ -139,7 +135,6 @@ export function useTaskMode(
     toggleTaskMode,
     setTaskModeEnabled,
     potentialTasks,
-    hasTasksToCreate,
     updateTaskProperty,
     updateTaskAssignees,
   };

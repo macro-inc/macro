@@ -54,7 +54,7 @@ function maybeFallbackToCurrentAssignee(
  * Build PropertyInput array from task data.
  * Auto-assigns to current user when no assignees are extracted.
  */
-export function buildTaskPropertyValues(
+function buildTaskPropertyValues(
   task: TaskData,
   options: TaskCreationOptions
 ): PropertyInput[] {
