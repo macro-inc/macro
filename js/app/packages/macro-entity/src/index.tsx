@@ -29,3 +29,16 @@ export * from './types/notification';
 export * from './types/search';
 export * from './utils/filter';
 export { composeFilters, createFilterComposer } from './utils/filter';
+
+// Property Editor exports
+export { PropertyEditorModal } from './components/PropertyEditorModal';
+export { type SimpleProperty } from './types/property';
+export { usePropertyEditorHotkeys } from './hooks/usePropertyEditorHotkeys';
+export {
+  openPropertyEditor,
+  closePropertyEditor,
+  togglePropertyEditor,
+  propertyEditorOpen,
+  propertyEditorMode,
+  propertyEditorSelectedEntities,
+} from 'app/component/property-edit-modal/state/propertyEditor';

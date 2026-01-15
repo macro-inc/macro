@@ -66,6 +66,7 @@ import {
   type WithNotification,
   type WithSearch,
 } from '@macro-entity';
+import { usePropertyEditorHotkeys } from '@macro-entity';
 import {
   isChannelMention,
   isChannelMessageReply,
@@ -1284,6 +1285,14 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     () => view()?.multiSelectEntities,
     (a: string, b: EntityData[]) => b.find((e) => e.id === a) !== undefined
   );
+
+  // Add property editor hotkeys
+  usePropertyEditorHotkeys({
+    scopeId: splitContext.splitHotkeyScope,
+    getSelectedEntities: () => {
+      return [selectedEntity()];
+    },
+  });
 
   const saveViewMutation = useUpsertSavedViewMutation();
 

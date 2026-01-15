@@ -15,6 +15,7 @@ import { updateCookie } from '../util/updateCookie';
 import Banner from './banner/Banner';
 import { GlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
 import { KommandMenu } from './command/Konsole';
+import { PropertyEditorModal } from '@macro-entity';
 import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { createMenuOpen, Launcher, setCreateMenuOpen } from './Launcher';
@@ -129,6 +130,9 @@ export function Layout(props: RouteSectionProps) {
           <GlobalShortcuts />
           <Suspense>
             <KommandMenu />
+          </Suspense>
+          <Suspense>
+            <PropertyEditorModal />
           </Suspense>
           <QuickCreateMenu />
           <GlobalBulkEditEntityModal />
