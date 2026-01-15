@@ -1,4 +1,5 @@
-use crate::types::ToolObject;
+use crate::tool_object::ToolObject;
+use crate::ToolSet;
 use async_openai::types::{ChatCompletionTool, ChatCompletionToolType, FunctionObject};
 
 impl<T> From<&ToolObject<T>> for ChatCompletionTool {
