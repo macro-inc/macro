@@ -3,19 +3,32 @@ import { ClippedPanel } from '@core/component/ClippedPanel';
 import { Dialog } from '@kobalte/core/dialog';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
-  Accessor,
+  type Accessor,
   createMemo,
+  createSelector,
   createSignal,
+  For,
+  Match,
   onCleanup,
-  Setter,
+  type Setter,
+  Show,
+  Switch,
 } from 'solid-js';
 import {
   closePropertyEditor,
   propertyEditorOpen,
+  propertyEditorState,
   togglePropertyEditor,
 } from './state/propertyEditor';
 import { mergeRefs } from '@solid-primitives/refs';
 import { beveledCorners } from '../../../block-theme/signals/themeSignals';
+import { useAllProperties } from './hooks/useAllProperties';
+import { usePropertySelection } from '@core/component/Properties/hooks';
+import { cn } from '@ui/utils/classname';
+import CheckIcon from '@icon/regular/check.svg';
+import { PROPERTY_STYLES } from '@core/component/Properties/styles';
+import { getPropertyDefinitionTypeDisplay } from '@core/component/Properties/utils';
+import { EntityData } from '@macro-entity';
 
 export function PropertyEditorModal() {
   const [attach, hotkeyScope] = useHotkeyDOMScope('property-editor-modal');
@@ -44,15 +57,27 @@ export function PropertyEditorModal() {
           <div ref={mergeRefs(attach)}>
             <Dialog.Content>
               <ClippedPanel tl={!beveledCorners()} active>
-                <div class="flex flex-col h-[400px] overflow-hidden bracket-never">
-                  <div class="flex items-center gap-2 bg-panel px-2 h-[40px] border-b border-edge-muted">
-                    <span class="pl-2 pointer-events-none">❯</span>
-                    <SearchInput
-                      placeHolder="Search Properties"
-                      value={searchValue}
-                      setValue={setSearchValue}
-                    />
-                  </div>
+                <div class="flex flex-col max-h-108 overflow-hidden bracket-never">
+                  <Switch>
+                    <Match when={propertyEditorState.mode === 'selector'}>
+                      <div class="flex items-center gap-2 bg-panel px-2 h-[40px] border-b border-edge-muted shrink-0">
+                        <span class="pl-2 pointer-events-none">❯</span>
+                        <SearchInput
+                          placeHolder="Search Properties"
+                          value={searchValue}
+                          setValue={setSearchValue}
+                        />
+                      </div>
+                      <div class="p-2 border-b border-edge-muted">
+                        <EditingEntityPreview
+                          entities={propertyEditorState.selectedEntities}
+                        />
+                      </div>
+                      <div class="overflow-scroll scrollbar-hidden">
+                        <PropertyList searchTerm={searchValue()} />
+                      </div>
+                    </Match>
+                  </Switch>
                 </div>
               </ClippedPanel>
             </Dialog.Content>
@@ -79,32 +104,58 @@ function SearchInput(props: {
 }
 
 function PropertyList(props: { searchTerm: string }) {
-  const listPropertiesQuery = useListPropertiesQuery(() => ({
-    scope: 'all',
-    includeOptions: true,
-    forEntityType: entityType,
-  }));
+  const properties = useAllProperties();
 
-  const availableProperties = createMemo((): PropertyDefinitionDomain[] => {
-    if (
-      listPropertiesQuery.isLoading ||
-      listPropertiesQuery.isError ||
-      !listPropertiesQuery.data
-    ) {
-      return [];
-    }
+  const { selectedPropertyIds, filteredProperties, togglePropertySelection } =
+    usePropertySelection(
+      () => [],
+      properties,
+      () => props.searchTerm
+    );
 
-    const data = listPropertiesQuery.data;
-
-    const properties = Array.isArray(data) ? data : [];
-    return properties.map((item) => {
-      if ('definition' in item) {
-        return toPropertyDefinitionDomain(
-          item.definition,
-          item.property_options || []
+  return (
+    <For each={filteredProperties()}>
+      {(property) => {
+        const selected = () => selectedPropertyIds().has(property.id);
+        return (
+          <button
+            type="button"
+            class={cn('w-full px-2.5 py-1.5 text-left')}
+            onClick={() => togglePropertySelection(property.id)}
+          >
+            <div class="flex items-center justify-between">
+              <div class="flex-1">
+                <div class="flex items-center gap-2">
+                  <h4 class="font-medium text-xs">{property.displayName}</h4>
+                </div>
+                <div class="text-xs text-ink-muted mt-0.5">
+                  {getPropertyDefinitionTypeDisplay({
+                    dataType: property.valueType,
+                    specificEntityType: property.specificEntityType,
+                    isMultiSelect: property.isMultiSelect,
+                  })}
+                </div>
+              </div>
+              <div
+                class={`${PROPERTY_STYLES.checkbox.base} border-edge bg-transparent`}
+              >
+                <Show when={selected()}>
+                  <CheckIcon class="w-3 h-3 text-accent" />
+                </Show>
+              </div>
+            </div>
+          </button>
         );
-      }
-      return toPropertyDefinitionDomain(item);
-    });
-  });
+      }}
+    </For>
+  );
+}
+
+function EditingEntityPreview(props: { entities: EntityData[] }) {
+  const count = () => props.entities.length;
+  return (
+    <div class="bg-edge/10 text-ink-muted px-2 py-1 text-xs flex w-fit">
+      Editing properties for {count()} entities
+    </div>
+  );
 }
