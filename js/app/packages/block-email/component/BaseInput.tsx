@@ -162,10 +162,15 @@ export function BaseInput(props: {
   const form = createMemo(() => {
     const replyingTo = props.replyingTo();
 
+    // If neither `replyingTo` or `draft` exist, we'll have an empty
+    // initial state
     if (!replyingTo && !props.draft) {
       return getOrInitEmailFormContext();
     }
 
+    // If we have `replyingTo`, we're going to be
+    // creating a reply to a message so we can derive our state
+    // from the `replyingTo` and a possible existing draft
     if (replyingTo && replyingTo.db_id) {
       return getOrInitEmailFormContext({
         type: 'replying_to',
@@ -173,6 +178,8 @@ export function BaseInput(props: {
       });
     }
 
+    // If we only have the draft available, then we're most likely
+    // editing a draft in a new thread with no other messages
     if (props.draft && props.draft.db_id) {
       return getOrInitEmailFormContext({
         type: 'draft',
@@ -180,6 +187,7 @@ export function BaseInput(props: {
       });
     }
 
+    // Fallback to empty state
     return getOrInitEmailFormContext();
   });
   const blockId = useBlockId();
