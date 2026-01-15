@@ -1,9 +1,9 @@
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import ArrowBendDoubleUpLeft from '@icon/regular/arrow-bend-double-up-left.svg';
 import ArrowBendUpLeft from '@icon/regular/arrow-bend-up-left.svg';
 import ArrowBendUpRight from '@icon/regular/arrow-bend-up-right.svg';
 import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
 import { useEmail } from '@service-gql/client';
+import { Button } from '@ui/components/Button';
 import { type Setter, Show } from 'solid-js';
 import { getEmailFormRegistry } from './EmailFormContext';
 
@@ -53,9 +53,8 @@ export function MessageActions(props: {
         }
         fallback={
           <Show when={!props.hiddenActions?.includes('reply')}>
-            <DeprecatedIconButton
-              icon={ArrowBendUpLeft}
-              theme="clear"
+            <Button
+              class="h-8 w-8 p-0 border-0 bg-transparent hover:bg-hover hover-transition-bg text-ink gap-0.5 active:bg-hover active:text-ink active:border-transparent"
               onClick={() => {
                 if (!props.isLastMessage) {
                   props.setShowReply(true);
@@ -64,16 +63,15 @@ export function MessageActions(props: {
                 form.setReplyType('reply');
                 form.setShouldFocusInput(true);
               }}
-              tooltip={{
-                label: 'Reply',
-              }}
-            />
+              tooltip={<span>Reply</span>}
+            >
+              <ArrowBendUpLeft class="h-5 w-5" />
+            </Button>
           </Show>
         }
       >
-        <DeprecatedIconButton
-          icon={ArrowBendDoubleUpLeft}
-          theme="clear"
+        <Button
+          class="h-8 w-8 p-0 border-0 bg-transparent hover:bg-hover hover-transition-bg text-ink gap-0.5 active:bg-hover active:text-ink active:border-transparent"
           onClick={() => {
             if (!props.isLastMessage) {
               props.setShowReply(true);
@@ -82,15 +80,14 @@ export function MessageActions(props: {
             form.setReplyType('reply-all');
             form.setShouldFocusInput(true);
           }}
-          tooltip={{
-            label: 'Reply all',
-          }}
-        />
+          tooltip={<span>Reply all</span>}
+        >
+          <ArrowBendDoubleUpLeft class="h-5 w-5" />
+        </Button>
       </Show>
       <Show when={!props.hiddenActions?.includes('forward')}>
-        <DeprecatedIconButton
-          icon={ArrowBendUpRight}
-          theme="clear"
+        <Button
+          class="h-8 w-8 p-0 border-0 bg-transparent hover:bg-hover hover-transition-bg text-ink gap-0.5 active:bg-hover active:text-ink active:border-transparent"
           onClick={() => {
             if (!props.isLastMessage) {
               props.setShowReply(true);
@@ -99,10 +96,10 @@ export function MessageActions(props: {
             form.setReplyType('forward');
             form.setShouldFocusInput(true);
           }}
-          tooltip={{
-            label: 'Forward',
-          }}
-        />
+          tooltip={<span>Forward</span>}
+        >
+          <ArrowBendUpRight class="h-5 w-5" />
+        </Button>
       </Show>
     </div>
   );

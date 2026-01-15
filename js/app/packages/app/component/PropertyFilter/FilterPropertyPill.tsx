@@ -475,7 +475,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
         <button
           type="button"
           onClick={handleStartEditProperty}
-          class="h-6 px-2 text-[10px] text-ink border border-edge hover:bg-hover text-left flex items-center gap-1.5 font-mono shrink-0"
+          class="h-6 px-2 text-xxs text-ink border border-edge hover:bg-hover text-left flex items-center gap-1.5 font-mono shrink-0"
         >
           <PropertyDataTypeIcon
             property={selectedProperty()!}
@@ -501,7 +501,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
             fallback={
               <button
                 type="button"
-                class="h-6  px-2 w-fit text-[10px] text-ink-muted font-mono border border-edge hover:bg-hover text-left flex items-center"
+                class="h-6  px-2 w-fit text-xxs text-ink-muted font-mono border border-edge hover:bg-hover text-left flex items-center"
               >
                 {values().length > 0 ? values().join(', ') : '...'}
               </button>

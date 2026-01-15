@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createFreshSearch } from './freshSort';
+import { fuzzyScoreCommaSeparated, fuzzyTestCommaSeparated } from './fuzzy';
 
 interface MockItem {
   id: string;
@@ -66,5 +67,136 @@ describe('freshSort ordering', () => {
     const results = search(items, '');
 
     expect(results.map((r) => r.item.id)).toEqual(['2', '1', '3']);
+  });
+});
+
+describe('fuzzyTestCommaSeparated', () => {
+  it('matches when all query parts match text parts', () => {
+    expect(fuzzyTestCommaSeparated('nick,hutch', 'Nick Noble,teo,hutch')).toBe(
+      true
+    );
+  });
+
+  it('matches regardless of order', () => {
+    expect(fuzzyTestCommaSeparated('teo,nick', 'Nick Noble,teo,hutch')).toBe(
+      true
+    );
+  });
+
+  it('matches single query term against multi-part name', () => {
+    expect(fuzzyTestCommaSeparated('teo', 'Nick Noble,teo,hutch')).toBe(true);
+  });
+
+  it('does not match when a query part is missing', () => {
+    expect(fuzzyTestCommaSeparated('nick,alice', 'Nick Noble,teo,hutch')).toBe(
+      false
+    );
+  });
+
+  it('handles fuzzy matching within parts', () => {
+    expect(fuzzyTestCommaSeparated('nob,teo', 'Nick Noble,teo,hutch')).toBe(
+      true
+    );
+  });
+
+  it('handles whitespace around commas', () => {
+    expect(
+      fuzzyTestCommaSeparated('nick , hutch', 'Nick Noble , teo , hutch')
+    ).toBe(true);
+  });
+
+  it('returns true for empty query', () => {
+    expect(fuzzyTestCommaSeparated('', 'Nick Noble,teo,hutch')).toBe(true);
+  });
+});
+
+describe('fuzzyScoreCommaSeparated', () => {
+  it('returns score between 0 and 1', () => {
+    const score = fuzzyScoreCommaSeparated('nick,teo', 'Nick Noble,teo,hutch');
+    expect(score).toBeGreaterThan(0);
+    expect(score).toBeLessThanOrEqual(1);
+  });
+
+  it('returns -1 when no match', () => {
+    const score = fuzzyScoreCommaSeparated('alice,bob', 'Nick Noble,teo,hutch');
+    expect(score).toBe(-1);
+  });
+
+  it('returns 1 for empty query', () => {
+    const score = fuzzyScoreCommaSeparated('', 'Nick Noble,teo,hutch');
+    expect(score).toBe(1);
+  });
+});
+
+describe('createFreshSearch with comma-separated channel matching', () => {
+  function createCommaSeparatedSearch() {
+    return createFreshSearch<MockItem>(
+      {
+        commaSeparatedChannelMatch: true,
+        fuzzyWeight: 0.9,
+        timeWeight: 0.1,
+      },
+      (item) => item.name
+    );
+  }
+
+  it('matches channel with comma-separated query', () => {
+    const now = Date.now();
+    const items: MockItem[] = [
+      { id: '1', name: 'Nick Noble,teo,hutch', type: 'channel', viewedAt: now },
+      { id: '2', name: 'Alice,Bob', type: 'channel', viewedAt: now },
+    ];
+
+    const search = createCommaSeparatedSearch();
+    const results = search(items, 'nick,hutch');
+
+    expect(results.length).toBe(1);
+    expect(results[0].item.id).toBe('1');
+  });
+
+  it('matches channel regardless of query order', () => {
+    const now = Date.now();
+    const items: MockItem[] = [
+      { id: '1', name: 'Nick Noble,teo,hutch', type: 'channel', viewedAt: now },
+    ];
+
+    const search = createCommaSeparatedSearch();
+    const results = search(items, 'teo,nick');
+
+    expect(results.length).toBe(1);
+    expect(results[0].item.id).toBe('1');
+  });
+
+  it('uses regular fuzzy search when query has no commas', () => {
+    const now = Date.now();
+    const items: MockItem[] = [
+      { id: '1', name: 'Nick Noble,teo,hutch', type: 'channel', viewedAt: now },
+      { id: '2', name: 'Design Doc', type: 'item', viewedAt: now },
+    ];
+
+    const search = createCommaSeparatedSearch();
+    const results = search(items, 'Nick');
+
+    expect(results.length).toBe(1);
+    expect(results[0].item.id).toBe('1');
+  });
+
+  it('still matches non-channel items with comma queries', () => {
+    const now = Date.now();
+    const items: MockItem[] = [
+      { id: '1', name: 'Nick Noble,teo,hutch', type: 'channel', viewedAt: now },
+      {
+        id: '2',
+        name: 'nick,hutch meeting notes',
+        type: 'item',
+        viewedAt: now,
+      },
+    ];
+
+    const search = createCommaSeparatedSearch();
+    const results = search(items, 'nick,hutch');
+
+    // Both should match - channel via comma-separated, item via regular fuzzy
+    expect(results.length).toBe(2);
   });
 });

@@ -9,7 +9,7 @@ import {
   toSimpleMention,
 } from '@block-channel/utils/mentionExpansion';
 import { isInBlock } from '@core/block';
-import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { LabelAndHotKey } from '@core/component/Tooltip';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { setEditorStateFromMarkdown } from '@core/component/LexicalMarkdown/utils';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
@@ -36,7 +36,7 @@ import type { SimpleMention } from '@service-comms/generated/models/simpleMentio
 import { staticFileClient } from '@service-static-files/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { leading, throttle } from '@solid-primitives/scheduled';
-import { BrightJoins } from '@ui/components/BrightJoins';
+import { Button } from '@ui/components/Button';
 import { activeElement } from 'app/signal/focus';
 import { toast } from 'core/component/Toast/Toast';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
@@ -53,7 +53,6 @@ import {
 } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
 import { tabbable } from 'tabbable';
-import { ActionButton } from './ActionButton';
 import { AttachMenu } from './AttachMenu';
 import { Attachment } from './Attachment';
 import { FormatRibbon } from './FormatRibbon';
@@ -439,9 +438,6 @@ export function BaseInput(props: BaseInputProps) {
         },
       }}
     >
-      <Show when={!props.isReplyInput}>
-        <BrightJoins dots={[false, false, true, true]} />
-      </Show>
       <Show when={isDraggedOver() || isDraggingOverChannel()}>
         <FileDropOverlay valid={isValidChannelDrag()}>
           <Show when={!isValidChannelDrag()}>
@@ -462,7 +458,7 @@ export function BaseInput(props: BaseInputProps) {
         />
       </Show>
       <div
-        class="transition-all duration-150 px-3 pt-2 sm:pb-4 overflow-y-auto placeholder:text-ink-placeholder text-ink w-full text-sm"
+        class="transition-all duration-150 px-3 pt-2 sm:pb-4 overflow-y-auto placeholder:text-ink-placeholder text-ink w-full text-sm touch:mobile-width:text-base"
         onClick={(e) => {
           e.stopPropagation();
           focusMarkdownArea();
@@ -542,51 +538,61 @@ export function BaseInput(props: BaseInputProps) {
           />
         </Show>
         <div class="flex flex-row items-center gap-2">
-          <DeprecatedIconButton
-            icon={showAttachMenu() ? XIcon : PlusIcon}
-            theme="base"
+          <Button
             ref={setAttachMenuAnchorRef}
-            onClick={() => setShowAttachMenu((prev) => !prev)}
-          />
+            // We use onPointerDown here to integrate correctly with attach menu onMouseDown behavior.
+            onPointerDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setShowAttachMenu((prev) => !prev);
+            }}
+          >
+            <Show
+              when={showAttachMenu()}
+              fallback={<PlusIcon width={20} height={20} />}
+            >
+              <XIcon width={20} height={20} />
+            </Show>
+          </Button>
 
-          <ActionButton
-            tooltip="Format"
+          <Button
+            tooltip={<LabelAndHotKey label="Format" />}
             onClick={(e) => {
               e.preventDefault();
               setShowFormatRibbon((prev) => !prev);
             }}
-            clicked={showFormatRibbon()}
+            classList={{ 'bg-active': showFormatRibbon() }}
           >
             <FormatIcon width={20} height={20} />
-          </ActionButton>
+          </Button>
           <Show when={props.isReplyInput && props.closeDraft}>
-            <ActionButton
-              tooltip="Delete reply"
+            <Button
+              tooltip={<LabelAndHotKey label="Delete reply" />}
               onClick={(e) => {
                 e.preventDefault();
                 props.closeDraft?.();
               }}
             >
               <Trash width={20} height={20} />
-            </ActionButton>
+            </Button>
           </Show>
         </div>
-        <button
+        <Button
           disabled={hasPendingAttachments()}
           onClick={() => {
             handleSend();
           }}
-          class="text-ink-muted hover:scale-115 transition ease-in-out flex flex-col justify-center items-center size-6 rounded-full"
+          class="group transition ease-in-out hover:bg-transparent"
         >
           <Show
             when={!hasPendingAttachments() && !isPendingSend()}
             fallback={<Spinner class="size-6 animate-spin cursor-disabled" />}
           >
-            <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center">
+            <div class="group-hover:scale-115 group-hover:bg-accent transition ease-in-out size-6 touch:size-8 border border-accent rounded-full flex items-center justify-center">
               <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
             </div>
           </Show>
-        </button>
+        </Button>
       </div>
     </div>
   );

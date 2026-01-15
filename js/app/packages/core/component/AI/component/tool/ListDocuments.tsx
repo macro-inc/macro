@@ -58,7 +58,9 @@ const ListDocumentsToolResponse = (props: {
         >
           <div class="flex items-center gap-2">
             <div class="text-sm font-medium text-ink">
-              Search Results ({results().length})
+              Found
+              <span class="text-accent pr-1"> {results().length}</span>
+              Documents
             </div>
           </div>
           <div class="flex items-center gap-1 text-ink-muted">

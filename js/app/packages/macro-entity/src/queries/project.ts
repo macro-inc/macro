@@ -12,7 +12,11 @@ import {
   getEntityProjectId,
   type ProjectEntity,
 } from '../types/entity';
-import { createApiTokenQuery } from './auth';
+import {
+  createApiTokenQuery,
+  handleFetchResponse,
+  withApiTokenRetry,
+} from './auth';
 import { queryKeys } from './key';
 
 export type ProjectContainedEntity = WithRequired<
@@ -36,76 +40,38 @@ const fetchProjectData = async (
   const apiVersion = 'v2';
   const url = `${dssHost}/${apiVersion}/projects/preview`;
 
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        projectIds: [projectId],
-      }),
-    });
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      projectIds: [projectId],
+    }),
+  });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Fetch failed:', {
-        status: response.status,
-        statusText: response.statusText,
-        body: errorText,
-        url,
-        projectId,
-        tokenLength: apiToken.length,
-      });
+  await handleFetchResponse(response, 'Failed to fetch project');
 
-      // If it's a 401, let's try to decode the token to see if it's valid
-      if (response.status === 401) {
-        try {
-          const parts = apiToken.split('.');
-          if (parts.length === 3) {
-            const payload = JSON.parse(
-              atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'))
-            );
-            console.log('Token payload:', payload);
-          }
-        } catch (e) {
-          console.log('Could not decode token:', e);
-        }
-      }
+  const json = (await response.json()) as GetBatchProjectPreviewResponse;
 
-      throw new Error(
-        `Failed to fetch project: ${response.status} ${response.statusText}`,
-        { cause: response }
-      );
-    }
+  const projectPreview = json.previews.find(
+    (preview) => preview.id === projectId
+  );
 
-    const json = (await response.json()) as GetBatchProjectPreviewResponse;
-
-    // Find the preview for our specific project ID
-    const projectPreview = json.previews.find(
-      (preview) => preview.id === projectId
-    );
-
-    if (!projectPreview) {
-      throw new Error(`Project ${projectId} not found in preview response`);
-    }
-
-    // Check access level
-    if (projectPreview.access === 'no_access') {
-      throw new Error(`No access to folder ${projectId}`);
-    }
-
-    if (projectPreview.access === 'does_not_exist') {
-      throw new Error(`Project ${projectId} does not exist`);
-    }
-
-    return projectPreview;
-    // Return the project metadata in the expected format
-  } catch (error) {
-    console.error('Fetch error:', error);
-    throw error;
+  if (!projectPreview) {
+    throw new Error(`Project ${projectId} not found in preview response`);
   }
+
+  if (projectPreview.access === 'no_access') {
+    throw new Error(`No access to folder ${projectId}`);
+  }
+
+  if (projectPreview.access === 'does_not_exist') {
+    throw new Error(`Project ${projectId} does not exist`);
+  }
+
+  return projectPreview;
 };
 
 export function createProjectQuery(projectId: string) {
@@ -116,7 +82,10 @@ export function createProjectQuery(projectId: string) {
       queryKey: queryKeys.project({
         projectId,
       }),
-      queryFn: () => fetchProjectData(projectId, authQuery.data),
+      queryFn: () =>
+        withApiTokenRetry(authQuery, (apiToken) =>
+          fetchProjectData(projectId, apiToken)
+        ),
       enabled: authQuery.isSuccess && !!projectId,
       gcTime: 1000 * 60 * 10, // 10 minutes
       staleTime: 1000 * 60 * 5, // 5 minutes

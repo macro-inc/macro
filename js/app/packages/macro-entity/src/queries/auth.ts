@@ -6,21 +6,71 @@ import {
   useQuery,
 } from '@tanstack/solid-query';
 import { SERVER_HOSTS } from 'core/constant/servers';
+import { fetchWithToken } from 'core/util/fetchWithToken';
+import { isOk } from 'core/util/maybeResult';
 import { platformFetch } from 'core/util/platformFetch';
 import { createMemo } from 'solid-js';
 import { queryKeys } from './key';
 
 const authHost = SERVER_HOSTS['auth-service'];
 
-export const fetchApiToken = async () => {
-  const response = await platformFetch(`${authHost}/jwt/macro_api_token`, {
-    credentials: 'include',
-  });
-  if (!response.ok)
-    throw new Error('Failed to fetch API token', { cause: response });
+export class FetchDocumentsError extends Error {
+  constructor(
+    message: string,
+    public readonly response: Response,
+    public readonly data?: { message?: string }
+  ) {
+    super(message);
+    this.name = 'FetchDocumentsError';
+  }
 
-  const { macro_api_token }: MacroApiTokenResponse = await response.json();
-  return macro_api_token;
+  isJwtExpired(): boolean {
+    return this.response.status === 401 && this.data?.message === 'jwt expired';
+  }
+}
+
+export async function handleFetchResponse(
+  response: Response,
+  errorMessage: string
+): Promise<void> {
+  if (!response.ok) {
+    const errorData =
+      response.status === 401
+        ? await response.json().catch(() => undefined)
+        : undefined;
+    throw new FetchDocumentsError(errorMessage, response, errorData);
+  }
+}
+
+export async function withApiTokenRetry<T>(
+  authQuery: ReturnType<typeof createApiTokenQuery>,
+  fetchFn: (apiToken: string) => Promise<T>
+): Promise<T> {
+  if (!authQuery.data) throw new Error('No API token available');
+
+  try {
+    return await fetchFn(authQuery.data);
+  } catch (error) {
+    if (error instanceof FetchDocumentsError && error.isJwtExpired()) {
+      const refetchResult = await authQuery.refetch();
+      if (refetchResult.isSuccess) {
+        return await fetchFn(refetchResult.data);
+      }
+    }
+    throw error;
+  }
+}
+
+export const fetchApiToken = async () => {
+  const result = await fetchWithToken<MacroApiTokenResponse>(
+    `${authHost}/jwt/macro_api_token`
+  );
+
+  if (!isOk(result)) {
+    throw new Error('Failed to fetch API token', { cause: result[0] });
+  }
+
+  return result[1].macro_api_token;
 };
 
 type ApiTokenQueryOptions = SolidQueryOptions<
@@ -34,6 +84,7 @@ type ApiTokenQueryOptions = SolidQueryOptions<
 export function createApiTokenQueryOptions(): ApiTokenQueryOptions {
   return queryOptions({
     queryKey: queryKeys.auth.apiToken,
+    queryFn: fetchApiToken,
   });
 }
 
@@ -88,8 +139,8 @@ const fetchProfilePictures = async (
     body: JSON.stringify({ user_id_list }),
     ...credentials,
   });
-  if (!response.ok)
-    throw new Error('Failed to fetch profile picture', { cause: response });
+
+  await handleFetchResponse(response, 'Failed to fetch profile picture');
 
   const { pictures }: ProfilePictures = await response.json();
   if (pictures.length === 0)
@@ -102,7 +153,10 @@ export function createProfilePictureQuery(id: string) {
   const authQuery = createApiTokenQuery();
   return useQuery(() => ({
     queryKey: queryKeys.auth.profilePicture({ id }),
-    queryFn: () => fetchProfilePictures([id], authQuery.data),
+    queryFn: () =>
+      withApiTokenRetry(authQuery, (apiToken) =>
+        fetchProfilePictures([id], apiToken)
+      ),
     select: (pictures) => pictures.at(0),
     enabled: authQuery.isSuccess,
     retry: 1,

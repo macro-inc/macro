@@ -8,6 +8,8 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { ImagePreview } from '@core/component/ImagePreview';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { openInNewSplitForMention } from '@core/util/openInNewSplit';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import BuildingIcon from '@icon/duotone/building-office-duotone.svg';
 import GlobeIcon from '@icon/duotone/globe-duotone.svg';
 import ChannelIcon from '@icon/duotone/hash-duotone.svg';
@@ -102,7 +104,7 @@ function ChatAttachment(props: {
   attachment: Attachment;
   onRemove: () => void;
 }) {
-  const { replaceOrInsertSplit } = useSplitLayout();
+  const { insertSplit, replaceOrInsertSplit } = useSplitLayout();
   const name = createMemo(() => {
     const attachment = props.attachment;
     if (!attachment.metadata) return '';
@@ -127,16 +129,19 @@ function ChatAttachment(props: {
         : 'channel';
   });
 
-  const onClick = () => {
+  const onClick = (e: MouseEvent) => {
     const attachment = props.attachment;
     if (isImageAttachment(attachment)) return;
     const block_ = block();
     if (!block_) return;
-    replaceOrInsertSplit({
+    const inNewSplit = openInNewSplitForMention(e.altKey, true);
+    const open = inNewSplit ? insertSplit : replaceOrInsertSplit;
+    open({
       id: attachment.attachmentId,
       type: block_,
-    });
+    })?.activate?.();
   };
+  const navHandlers = useSplitNavigationHandler<HTMLDivElement>(onClick);
   return (
     <Switch>
       <Match when={isImageAttachment(props.attachment)}>
@@ -152,7 +157,7 @@ function ChatAttachment(props: {
       hover:bg-hover hover-transition-bg cursor-default
       text-sm
       `}
-          onClick={onClick}
+          {...navHandlers}
         >
           <Switch>
             <Match

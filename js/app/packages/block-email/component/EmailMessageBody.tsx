@@ -219,7 +219,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
       }}
     >
       <div
-        class="text-sm relative"
+        class="relative"
         classList={{
           isPersonal: isPersonal(),
           'line-clamp-3': !props.isBodyExpanded(),

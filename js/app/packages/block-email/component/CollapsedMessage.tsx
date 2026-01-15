@@ -52,12 +52,9 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
 
   return (
     <div class="shrink-0 flex justify-center w-full">
-      <div class="macro-message-width w-full">
-        <BozzyBracket
-          active={props.isFocused}
-          hover={hover()}
-          class="[--user-icon-width:30px] @sm:[--user-icon-width:40px] [--left-of-connector:20px] @sm:[--left-of-connector:28px]"
-        >
+      {/* These pl/pr below are needed to align with expanded messages at mobile width. */}
+      <div class="macro-message-width w-full pl-2 pr-4 sm:px-0">
+        <BozzyBracket active={props.isFocused} hover={hover()} class="">
           <div
             class="relative flex flex-row items-center w-full py-2 cursor-pointer opacity-60 hover:opacity-100 transition-all"
             data-message-body-id={props.message.db_id}
@@ -74,7 +71,6 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
                 left: 'var(--left-of-connector)',
               }}
             />
-
             {/* Avatar - centered on the rail, in front of rail */}
             <div
               class="relative z-10 flex justify-center items-center shrink-0"
@@ -94,10 +90,9 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
                 suppressClick={true}
               />
             </div>
-
             {/* Sender + Snippet - aligned with expanded message content */}
             <div
-              class="flex-1 flex items-center min-w-0 text-sm"
+              class="flex-1 flex items-center min-w-0"
               style={{
                 'padding-left':
                   'calc(var(--left-of-connector) - var(--user-icon-width) / 2)',
@@ -108,9 +103,8 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
               </span>
               <span class="text-ink-extra-muted truncate">{snippet()}</span>
             </div>
-
             {/* Date */}
-            <div class="text-xs text-ink-muted shrink-0 ml-4 pr-2">
+            <div class="text-xs touch:mobile-width:text-sm text-ink-muted shrink-0 ml-4 pr-2">
               {props.message.internal_date_ts &&
                 new Date(props.message.internal_date_ts).toLocaleDateString(
                   'en-US',

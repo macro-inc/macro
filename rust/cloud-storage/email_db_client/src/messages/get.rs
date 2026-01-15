@@ -1,11 +1,14 @@
 use std::collections::HashMap;
 
-use crate::contacts;
 use crate::labels::get;
 use crate::parse::db_to_service;
+use crate::parse::db_to_service::map_attachmentless_db_message_to_service;
+use crate::{attachments, contacts, labels, messages};
 use anyhow::Context;
+use futures::future::try_join_all;
 use models_email::email::db;
 use models_email::email::service::message::Message;
+use models_email::service;
 use models_email::service::address::ContactInfo;
 use models_email::service::message::{MessageSenderInfo, MessageToSend};
 use sqlx::PgPool;
@@ -441,4 +444,133 @@ pub async fn draft_exists_with_id(
     .await?;
 
     Ok(exists)
+}
+
+/// Fetches messages for a thread with pagination
+#[tracing::instrument(skip(pool), err)]
+pub async fn get_messages_by_thread_id(
+    pool: &PgPool,
+    thread_db_id: Uuid,
+    offset: i64,
+    limit: i64,
+) -> anyhow::Result<Vec<db::message::Message>> {
+    let db_messages = sqlx::query_as!(
+        db::message::Message,
+        r#"
+        SELECT
+            id,
+            provider_id,
+            global_id,
+            thread_id,
+            provider_thread_id,
+            replying_to_id,
+            link_id,
+            provider_history_id,
+            internal_date_ts,
+            snippet,
+            size_estimate,
+            subject,
+            from_name,
+            from_contact_id,
+            sent_at,
+            has_attachments,
+            is_read,
+            is_starred,
+            is_sent,
+            is_draft,
+            body_text,
+            body_html_sanitized,
+            body_macro,
+            headers_jsonb,
+            created_at,
+            updated_at
+        FROM email_messages
+        WHERE thread_id = $1
+        ORDER BY internal_date_ts DESC
+        LIMIT $2 OFFSET $3
+        "#,
+        thread_db_id,
+        limit,
+        offset
+    )
+    .fetch_all(pool)
+    .await
+    .with_context(|| {
+        format!(
+            "Failed to fetch paginated messages for thread DB ID {}",
+            thread_db_id
+        )
+    })?;
+
+    Ok(db_messages)
+}
+
+/// Converts a list of db messages to service messages by fetching associated data concurrently
+pub async fn convert_db_messages_to_service(
+    pool: &PgPool,
+    db_messages: Vec<db::message::Message>,
+) -> anyhow::Result<Vec<service::message::Message>> {
+    let message_processing_futures = db_messages.into_iter().map(|db_message| {
+        let pool_clone = pool.clone();
+        async move { get_service_message_data(&pool_clone, db_message).await }
+    });
+
+    try_join_all(message_processing_futures)
+        .await
+        .context("Failed processing messages concurrently")
+}
+
+/// Fetches associated data for a db message and converts it to a service message
+#[tracing::instrument(skip(pool, db_message), err)]
+pub async fn get_service_message_data(
+    pool: &PgPool,
+    db_message: db::message::Message,
+) -> anyhow::Result<service::message::Message> {
+    // fetch data from each table concurrently
+    let (
+        sender_res,
+        recipients_res,
+        scheduled_res,
+        labels_res,
+        attachments_res,
+        macro_attachments_res,
+        draft_attachments_res,
+    ) = tokio::try_join!(
+        contacts::get::get_sender_by_message_id(pool, db_message.id),
+        contacts::get::fetch_db_recipients(pool, db_message.id),
+        messages::scheduled::get::get_scheduled_message_no_auth(pool, db_message.id),
+        labels::get::fetch_message_labels(pool, db_message.id),
+        async {
+            if db_message.has_attachments {
+                attachments::provider::fetch_db_attachments(pool, db_message.id).await
+            } else {
+                Ok(Vec::new())
+            }
+        },
+        async { attachments::marco::fetch_db_macro_attachments(pool, db_message.id).await },
+        async {
+            // only need to check if the message is a draft created in Macro
+            if db_message.is_draft && db_message.provider_id.is_none() {
+                attachments::draft::fetch_db_draft_attachments(pool, db_message.id).await
+            } else {
+                Ok(Vec::new())
+            }
+        },
+    )?;
+
+    let service_message = map_attachmentless_db_message_to_service(
+        db_message,
+        sender_res,
+        recipients_res,
+        scheduled_res,
+        labels_res,
+    );
+
+    // parse db-layer structs into service-layer message struct
+    db_to_service::map_db_message_attachments_to_service(
+        service_message,
+        attachments_res,
+        macro_attachments_res,
+        draft_attachments_res,
+    )
 }

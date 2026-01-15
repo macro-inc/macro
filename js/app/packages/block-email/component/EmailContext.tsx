@@ -413,7 +413,8 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
           query: {
             hasMore: () => threadQuery.hasNextPage ?? false,
             fetchNextPage: threadQuery.fetchNextPage,
-            isFetching: () => threadQuery.isFetching,
+            isFetching: () =>
+              threadQuery.isLoading || threadQuery.isFetchingNextPage,
             refetch: threadQuery.refetch,
           },
           drafts: {

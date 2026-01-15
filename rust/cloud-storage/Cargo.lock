@@ -46,6 +46,7 @@ name = "ai"
 version = "0.1.0"
 dependencies = [
  "ai_format",
+ "ai_toolset",
  "anthropic",
  "anyhow",
  "async-openai",
@@ -87,9 +88,11 @@ version = "0.1.0"
 dependencies = [
  "ai",
  "ai_format",
+ "ai_toolset",
  "anthropic",
  "anyhow",
  "async-trait",
+ "axum",
  "chrono",
  "comms_service_client",
  "cool_asserts",
@@ -114,6 +117,23 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
+]
+
+[[package]]
+name = "ai_toolset"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "axum-macros",
+ "futures",
+ "macro_user_id",
+ "schemars",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "utoipa",
 ]
 
 [[package]]

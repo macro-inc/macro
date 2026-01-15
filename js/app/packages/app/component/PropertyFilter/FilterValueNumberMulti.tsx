@@ -61,7 +61,7 @@ export const FilterValueNumberMulti: Component<FilterValueNumberMultiProps> = (
       {/* Selected value pills */}
       <For each={props.values}>
         {(value) => (
-          <div class="group relative h-6 px-1.5 text-[10px] text-ink border border-edge bg-panel font-mono flex items-center">
+          <div class="group relative h-6 px-1.5 text-xxs text-ink border border-edge bg-panel font-mono flex items-center">
             <span class="whitespace-nowrap">{String(value)}</span>
             {/* X shows on hover, overlays the text */}
             <button
@@ -83,7 +83,7 @@ export const FilterValueNumberMulti: Component<FilterValueNumberMultiProps> = (
             <button
               type="button"
               onClick={handleAddClick}
-              class="h-6 px-2 text-[10px] text-ink-muted border border-edge hover:bg-hover font-mono flex items-center"
+              class="h-6 px-2 text-xxs text-ink-muted border border-edge hover:bg-hover font-mono flex items-center"
             >
               {props.values.length === 0 ? 'Add value...' : '+'}
             </button>
@@ -98,7 +98,7 @@ export const FilterValueNumberMulti: Component<FilterValueNumberMultiProps> = (
             onBlur={handleConfirm}
             onKeyDown={handleKeyDown}
             placeholder="Enter value..."
-            class="h-6 px-2 min-w-8 w-fit text-[10px] text-ink border border-edge hover:bg-hover focus:ring-1 focus:ring-accent font-mono placeholder:text-ink-muted"
+            class="h-6 px-2 min-w-8 w-fit text-xxs text-ink border border-edge hover:bg-hover focus:ring-1 focus:ring-accent font-mono placeholder:text-ink-muted"
           />
         </Show>
       </div>

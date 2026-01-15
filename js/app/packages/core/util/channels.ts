@@ -12,6 +12,7 @@ import type {
   SimpleMention,
 } from '@service-comms/generated/models';
 import { createCallback } from '@solid-primitives/rootless';
+import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 
 type SendContent = {
   content: string;
@@ -76,7 +77,7 @@ export function useSendMessageToPeople() {
       });
       const handle = await orchestrator.getBlockHandle(channelId);
       await handle?.goToLocationFromParams({
-        message_id: messageResponse.id,
+        [CHANNEL_PARAMS.message]: messageResponse.id,
       });
     };
 

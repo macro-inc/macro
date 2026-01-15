@@ -115,7 +115,7 @@ new FusionAuthWebhook(
     url: `${AUTHENTICATION_SERVICE_DOMAIN}/webhooks/user/delete`,
     global: true,
     eventsEnabled: {
-      userDelete: true,
+      userDeleteComplete: true,
     },
     headers: {
       'x-internal-auth-key': pulumi.interpolate`${AUTHENTICATION_SERVICE_INTERNAL_SECRET}`,

@@ -6,23 +6,21 @@ use crate::types::ExtendedClient;
 use anthropic::openai::request::{AnthropicRequestExtension, AnthropicRequestExtensions};
 use std::sync::Arc;
 
-pub struct ToolLoop<I, T, R>
+pub struct ToolLoop<I, T>
 where
     I: ExtendedClient + Clone + Send + Sync,
     T: Clone + Send + Sync,
-    R: Clone + Send + Sync,
 {
     client: I,
     context: T,
-    toolset: Arc<AsyncToolSet<T, R>>,
+    toolset: Arc<AsyncToolSet<T>>,
 }
 
-impl<T, R> ToolLoop<AnthropicClient, T, R>
+impl<T> ToolLoop<AnthropicClient, T>
 where
     T: Clone + Send + Sync,
-    R: Clone + Send + Sync,
 {
-    pub fn new(toolset: AsyncToolSet<T, R>, context: T) -> Self {
+    pub fn new(toolset: AsyncToolSet<T>, context: T) -> Self {
         let extensions = AnthropicRequestExtensions(vec![
             AnthropicRequestExtension::WebSearchTool,
             AnthropicRequestExtension::FetchTool,
@@ -37,13 +35,12 @@ where
     }
 }
 
-impl<I, T, R> ToolLoop<I, T, R>
+impl<I, T> ToolLoop<I, T>
 where
     I: ExtendedClient + Clone + Send + Sync,
     T: Clone + Send + Sync,
-    R: Clone + Send + Sync,
 {
-    pub fn chat(&self) -> Chat<I, T, R> {
+    pub fn chat(&self) -> Chat<I, T> {
         Chat::new(
             self.client.clone(),
             self.toolset.clone(),
@@ -51,7 +48,7 @@ where
         )
     }
 
-    pub fn chained(&self) -> Chained<I, T, R> {
+    pub fn chained(&self) -> Chained<I, T> {
         Chained::new(
             self.client.clone(),
             self.toolset.clone(),

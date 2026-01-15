@@ -1,22 +1,15 @@
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
 import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
-import {
-  MACRO_EMAIL_SIGNATURE,
-  MAX_ATTACHMENTS_BYTES_SIZE,
-} from '@block-email/constants';
+import { MAX_ATTACHMENTS_BYTES_SIZE } from '@block-email/constants';
 import { useHasPaidAccess } from '@core/auth';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
-import {
-  createFilesReadyHandler,
-  getDragDropPosition,
-} from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
+import { createFilesReadyHandler } from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { handleFileFolderDrop } from '@core/util/upload';
 import TextAa from '@icon/regular/text-aa.svg';
-import { $appendWatermarkNodeToLast } from '@lexical-core';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import ArrowFatLineUp from '@phosphor-icons/core/fill/arrow-fat-line-up-fill.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
@@ -32,48 +25,29 @@ import {
   type LexicalEditor,
   type TextFormatType,
 } from 'lexical';
-import { createSignal, onMount, Show } from 'solid-js';
+import { createSignal, For, Match, onMount, Show, Switch } from 'solid-js';
 import { type FocusableElement, tabbable } from 'tabbable';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
-import { prepareEmailBody } from '../util/prepareEmailBody';
 import { Button } from '@ui/components/Button';
 import { fileSelector } from '@core/directive/fileSelector';
 import { toast } from '@core/component/Toast/Toast';
 import { plural } from '@core/util/string';
+import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
+import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
 
 false && fileFolderDrop;
 
-export type ComposeInputData = {
-  body: {
-    text: string;
-    html: string;
-    raw: string;
-  };
-};
-
-export type ComposeAttachment =
-  | {
-      type: 'local';
-      file: File;
-      attachmentID?: string;
-    }
-  | {
-      type: 'remote';
-      url: string;
-      fileName: string;
-      contentType: string;
-      attachmentID: string;
-      fileSize: number;
-    };
-
 type ComposeEmailInputProps = {
   inputRef?: (el: HTMLDivElement) => void;
-  onSubmit: (data: ComposeInputData) => void;
+  captureEditor?: (editor: LexicalEditor) => void;
+  onSubmit: () => void;
   disabled?: boolean;
   loading?: boolean;
   isSubmitting?: boolean;
-  attachments?: ComposeAttachment[];
-  onAddAttachments?: (attachments: ComposeAttachment[]) => void;
+  attachments?: DraftFormAttachment[];
+  onAddAttachments?: (attachments: DraftFormAttachment[]) => void;
+  onRemoveAttachment?: (attachment: DraftFormAttachment) => void;
+  onContentChange?: (content: string) => void;
 };
 
 export function ComposeEmailInput(props: ComposeEmailInputProps) {
@@ -84,8 +58,6 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
   const [isDragging, setIsDragging] = createSignal<boolean>();
 
   const [showFormatRibbon, setShowFormatRibbon] = createSignal<boolean>(false);
-
-  const [content, setContent] = createSignal('');
 
   const panel = useSplitPanel();
 
@@ -120,31 +92,8 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
     HTMLElement | undefined
   >();
 
-  async function handleSend() {
-    const currentEditor = editor();
-
-    // We handle cleaning up the signature after we've sent the request because
-    // otherwise the `bodyMacro` signal would update after the clean up call and
-    // not contain the signature in the request data
-    const cleanupWatermark = $appendWatermarkNodeToLast(
-      currentEditor,
-      !hasPaidAccess() ? MACRO_EMAIL_SIGNATURE : undefined
-    );
-
-    const prepared = prepareEmailBody(currentEditor, undefined);
-    if (!prepared) return;
-
-    const bodyMacro = content();
-
-    props.onSubmit({
-      body: {
-        text: prepared.bodyText,
-        html: prepared.bodyHtml,
-        raw: bodyMacro,
-      },
-    });
-
-    cleanupWatermark();
+  function handleSend() {
+    props.onSubmit();
   }
 
   onMount(() => {
@@ -155,15 +104,10 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
 
   const onAddFilesAndDirs = (
     files: FileSystemFileEntry[],
-    directories: FileSystemDirectoryEntry[],
-    dropEvent?: DragEvent
+    directories: FileSystemDirectoryEntry[]
   ) => {
     const editor_ = editor();
     if (!editor_) return;
-
-    const getPositionCallback = dropEvent
-      ? () => getDragDropPosition(editor_, dropEvent, true)
-      : undefined;
 
     handleFileFolderDrop(
       files,
@@ -172,7 +116,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
         editor_,
         undefined,
         undefined,
-        getPositionCallback,
+        undefined,
         (uploadedItemIds) => {
           uploadedItemIds.forEach((itemId) => {
             makeAttachmentPublic(itemId);
@@ -230,6 +174,11 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
     );
   };
 
+  const captureEditor = (editor: LexicalEditor) => {
+    setEditor(editor);
+    props.captureEditor?.(editor);
+  };
+
   return (
     <div
       ref={setComposeContainerRef}
@@ -258,7 +207,11 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
           use:fileFolderDrop={{
             onDragStart: () => setIsDragging(true),
             onDragEnd: () => setIsDragging(false),
-            onDrop: onAddFilesAndDirs,
+            onDrop: (files, dirs) => {
+              handleFileFolderDrop(files, dirs, (u) =>
+                handleAddAttachments(u.map((f) => f.file))
+              );
+            },
           }}
         >
           <div class={`${!isDragging() && 'hidden'} absolute inset-0`}>
@@ -266,12 +219,12 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
           </div>
           <MarkdownTextarea
             domRef={props.inputRef}
-            captureEditor={setEditor}
+            captureEditor={captureEditor}
             class="text-sm break-words text-ink"
             editable={() => !props.disabled}
             placeholder="Use `@` to reference files"
             watermark={!hasPaidAccess() ? <MacroSignatureButton /> : undefined}
-            onChange={setContent}
+            onChange={props.onContentChange}
             onFocusLeaveStart={(e) => {
               e.preventDefault();
               focusSibling('prev');
@@ -283,6 +236,43 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
             portalScope="local"
             onPasteFilesAndDirs={onAddFilesAndDirs}
           />
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <For each={props.attachments}>
+            {(attachment) => {
+              const handleRemoveAttachment = () => {
+                props.onRemoveAttachment?.(attachment);
+              };
+              return (
+                <Switch>
+                  <Match when={attachment.type === 'local' && attachment}>
+                    {(attachment) => (
+                      <EmailAttachmentPill
+                        attachment={{
+                          fileName: attachment().file.name,
+                          mimeType: attachment().file.type,
+                        }}
+                        removable
+                        onRemove={handleRemoveAttachment}
+                      />
+                    )}
+                  </Match>
+                  <Match when={attachment.type === 'remote' && attachment}>
+                    {(attachment) => (
+                      <EmailAttachmentPill
+                        attachment={{
+                          fileName: attachment().fileName,
+                          mimeType: attachment().contentType,
+                        }}
+                        removable
+                        onRemove={handleRemoveAttachment}
+                      />
+                    )}
+                  </Match>
+                </Switch>
+              );
+            }}
+          </For>
         </div>
       </div>
       <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 allow-css-brackets mt-2">

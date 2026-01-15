@@ -21,8 +21,8 @@ use teams::{
 };
 
 use crate::api::context::{
-    ApiContext, MacroApiTokenContext, MacroApiTokenIssuer, MacroApiTokenPrivateSecretKey,
-    StripeWebhookSecretKey,
+    ApiContext, MacroApiTokenContext, MacroApiTokenExpirySeconds, MacroApiTokenIssuer,
+    MacroApiTokenPrivateSecretKey, StripeWebhookSecretKey,
 };
 use std::sync::Arc;
 
@@ -227,6 +227,10 @@ async fn main() -> anyhow::Result<()> {
             token_context: MacroApiTokenContext {
                 issuer: MacroApiTokenIssuer::new()?,
                 macro_api_token_private_key,
+                expiry_seconds: MacroApiTokenExpirySeconds::new()?
+                    .as_ref()
+                    .parse()
+                    .context("failed to parse MACRO_API_TOKEN_EXPIRY_SECONDS as usize")?,
             },
             internal_api_key,
             stripe_webhook_secret,

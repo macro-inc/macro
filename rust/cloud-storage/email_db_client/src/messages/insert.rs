@@ -1,6 +1,7 @@
 use crate::attachments::{marco, provider};
 use crate::messages::replying_to_id;
-use crate::messages::scheduled::{delete_scheduled_message, upsert_scheduled_message};
+use crate::messages::scheduled::delete::delete_scheduled_message;
+use crate::messages::scheduled::upsert::upsert_scheduled_message;
 use crate::parse::service_to_db::{addresses_from_message, map_message_to_send_to_db};
 use crate::{contacts, labels, parse, threads};
 use anyhow::Context;
