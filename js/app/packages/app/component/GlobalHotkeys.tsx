@@ -252,4 +252,6 @@ export default function GlobalShortcuts() {
     },
     runWithInputFocused: true,
   });
+
+  return null;
 }
