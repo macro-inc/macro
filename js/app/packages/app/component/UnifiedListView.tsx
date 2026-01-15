@@ -2,7 +2,11 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
-import { VIEW_CLIENT_FILTERS } from '@app/component/ViewConfig';
+import {
+  explicitNoiseFilter,
+  noiseFilter,
+  signalFilter,
+} from '@app/component/soupFilters';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { codeFileExtensions } from '@block-code/util/languageSupport';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
@@ -747,21 +751,28 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     };
   });
 
-  // Client filters from VIEW_CLIENT_FILTERS based on current view
-  const viewClientFilter = createMemo(() => {
-    const filters = VIEW_CLIENT_FILTERS[selectedView()] ?? [];
-    if (filters.length === 0) return undefined;
-    return (entity: WithNotification<EntityData>) =>
-      filters.every((f) => f.predicate(entity, { soupContext }));
-  });
-
   // NOTE: these filters are required because the backend doesn't support these filters yet
   createEffect(() => {
     const filterFns: EntityFilter<EntityData>[] = [];
 
-    // Apply view-specific client filters (signal/noise/explicitNoise)
-    const viewFilter = viewClientFilter();
-    if (viewFilter) filterFns.push(viewFilter);
+    // Apply focus filters (inbox/other) based on focusFilters state
+    const focusFilters_ = focusFilters();
+    const hasSignalFilter = focusFilters_?.includes('signal') === true;
+    const hasNoiseFilter = focusFilters_?.includes('noise') === true;
+
+    if (hasSignalFilter && !hasNoiseFilter) {
+      filterFns.push((entity) =>
+        signalFilter.predicate(entity, { soupContext })
+      );
+    } else if (hasNoiseFilter && !hasSignalFilter) {
+      filterFns.push((entity) =>
+        noiseFilter.predicate(entity, { soupContext })
+      );
+    } else if (!hasSignalFilter && !hasNoiseFilter) {
+      filterFns.push(
+        (entity) => !explicitNoiseFilter.predicate(entity, { soupContext })
+      );
+    }
 
     if (importantFilter()) filterFns.push(importantFilterFn);
 

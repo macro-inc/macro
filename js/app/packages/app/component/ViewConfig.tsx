@@ -25,7 +25,6 @@ import stringify from 'json-stable-stringify';
 import { queryClient } from '../../macro-entity/src/queries/client';
 import type { PropertyFilter } from './PropertyFilterTypes';
 import type { SoupContext } from './SoupContext';
-import { explicitNoiseFilter, noiseFilter, signalFilter } from './soupFilters';
 
 // for custom views that extend the unified list view
 export type ViewType = 'project';
@@ -359,35 +358,6 @@ export const VIEWCONFIG_FILTER_DOCUMENT_TYPE_FILTER: readonly FilterOptions['doc
   ['md', 'pdf', 'canvas', 'code', 'image', 'unknown'] as const;
 export const VIEWCONFIG_FILTER_ENTITY_TYPE: readonly FilterOptions['typeFilter'][number][] =
   ['channel', 'chat', 'document', 'email', 'project', 'task'] as const;
-
-// Default filter that excludes promotional/update emails unless explicitly requested
-const excludeExplicitNoiseFilter: ClientFilter = {
-  id: 'excludeExplicitNoise',
-  predicate: (entity, ctx) => !explicitNoiseFilter.predicate(entity, ctx),
-};
-
-export const VIEW_CLIENT_FILTERS: Record<ViewId, ClientFilter[]> = {
-  signal: [signalFilter],
-  noise: [noiseFilter],
-  people: [],
-  files: [],
-  tasks: [],
-  folders: [],
-  all: [excludeExplicitNoiseFilter],
-};
-
-export function applyClientFilters(
-  entityList: WithNotification<EntityData>[],
-  viewId: ViewId,
-  ctx?: ClientFilterContext
-): WithNotification<EntityData>[] {
-  const filters = VIEW_CLIENT_FILTERS[viewId] ?? [];
-  if (filters.length === 0) return entityList;
-
-  return entityList.filter((entity) => {
-    return filters.every((filter) => filter.predicate(entity, ctx));
-  });
-}
 
 export async function archiveEmail(
   id: string,
