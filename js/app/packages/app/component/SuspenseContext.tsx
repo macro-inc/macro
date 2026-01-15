@@ -32,6 +32,7 @@ export const SuspenseContextComp: ParentComponent<{
   fallback?: JSX.Element;
 }> = (props) => {
   const _id = props.id ?? createUniqueId(); // for debugging
+
   const Fallback: ParentComponent = () => {
     setIsPending(true);
     onCleanup(() => {
