@@ -117,9 +117,9 @@ describe('fuzzyScoreCommaSeparated', () => {
     expect(score).toBeLessThanOrEqual(1);
   });
 
-  it('returns 0 when no match', () => {
+  it('returns -1 when no match', () => {
     const score = fuzzyScoreCommaSeparated('alice,bob', 'Nick Noble,teo,hutch');
-    expect(score).toBe(0);
+    expect(score).toBe(-1);
   });
 
   it('returns 1 for empty query', () => {

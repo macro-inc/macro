@@ -4,7 +4,7 @@
  */
 import type { FilterResult } from 'fuzzy';
 import fuzzy from 'fuzzy';
-import { fuzzyScoreCommaSeparated, fuzzyTestCommaSeparated } from './fuzzy';
+import { fuzzyScoreCommaSeparated } from './fuzzy';
 
 export interface FreshSortConfig {
   /** Weight for fuzzy match (0-1). Higher values prioritize search relevance. Default: 0.7 */
@@ -209,8 +209,8 @@ export function createFreshSearch<T extends TimestampedItem>(
       for (const item of items) {
         if (isChannelItem(item)) {
           const name = extractor(item);
-          if (fuzzyTestCommaSeparated(query, name)) {
-            const score = fuzzyScoreCommaSeparated(query, name);
+          const score = fuzzyScoreCommaSeparated(query, name);
+          if (score >= 0) {
             channelResults.push({
               original: item,
               string: name,

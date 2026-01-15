@@ -135,6 +135,7 @@ export function fuzzyTestCommaSeparated(query: string, text: string): boolean {
 /**
  * Calculates a score for comma-separated fuzzy matching.
  * Returns the average of best match scores for each query part.
+ * Returns -1 if any query part fails to match (can be used instead of fuzzyTestCommaSeparated).
  */
 export function fuzzyScoreCommaSeparated(query: string, text: string): number {
   if (!query) return 1;
@@ -149,12 +150,12 @@ export function fuzzyScoreCommaSeparated(query: string, text: string): number {
     .filter((p) => p.length > 0);
 
   if (queryParts.length === 0) return 1;
-  if (textParts.length === 0) return 0;
+  if (textParts.length === 0) return -1;
 
   let totalScore = 0;
 
   for (const queryPart of queryParts) {
-    let bestScore = 0;
+    let bestScore = -1;
     for (const textPart of textParts) {
       // Simple scoring: ratio of query length to text length when it matches
       if (fuzzyTest(queryPart, textPart)) {
@@ -163,6 +164,7 @@ export function fuzzyScoreCommaSeparated(query: string, text: string): number {
         bestScore = Math.max(bestScore, Math.min(1, score));
       }
     }
+    if (bestScore < 0) return -1;
     totalScore += bestScore;
   }
 
