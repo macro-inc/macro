@@ -5,8 +5,10 @@ use schemars::{
     transform::{RecursiveTransform, Transform},
 };
 
-// validates the input schema for a tool using custom validation for OpenAI spec
-// see: https://platform.openai.com/docs/guides/structured-outputs?api-mode=responses#supported-schemas
+/// Validates a tool's input schema against OpenAI's structured output requirements.
+///
+/// Returns the tool's name and description extracted from the schema metadata.
+/// See: <https://platform.openai.com/docs/guides/structured-outputs?api-mode=responses#supported-schemas>
 pub fn validate_tool_schema(schema: &Schema) -> Result<(String, String), ValidationError> {
     let name = schema
         .get("title")
@@ -143,6 +145,10 @@ impl Transform for AdditionalPropertiesFalse {
     }
 }
 
+/// Creates a schema generator configured for tool input schemas.
+///
+/// The generated schemas include `required` arrays for all properties and
+/// `additionalProperties: false` as required by OpenAI's structured outputs.
 pub fn input_schema_generator() -> SchemaGenerator {
     SchemaSettings::draft2020_12()
         .with(|s| {
@@ -154,11 +160,13 @@ pub fn input_schema_generator() -> SchemaGenerator {
         .into_generator()
 }
 
+/// Schema transform that simplifies output schemas for AI consumption.
+///
+/// Removes unnecessary fields like `title`, `format`, `required`, `type`, etc.,
+/// keeping only property names and descriptions.
 #[derive(Debug, Clone)]
 pub struct MinimizedOutput;
 
-// Simplifies schema to only include property names and descriptions for AI consumption
-// Not an exact match, but should be good enough for now
 impl Transform for MinimizedOutput {
     fn transform(&mut self, schema: &mut Schema) {
         if let Some(obj) = schema.as_object_mut() {
@@ -173,6 +181,9 @@ impl Transform for MinimizedOutput {
     }
 }
 
+/// Creates a schema generator that produces minimized output schemas.
+///
+/// Uses [`MinimizedOutput`] transform to strip unnecessary schema fields.
 pub fn minimized_output_schema_generator() -> SchemaGenerator {
     SchemaSettings::draft2020_12()
         .with(|s| {
@@ -183,6 +194,9 @@ pub fn minimized_output_schema_generator() -> SchemaGenerator {
         .into_generator()
 }
 
+/// Creates a schema generator for tool output schemas.
+///
+/// Uses draft 2020-12 settings with inlined subschemas and no meta schema.
 pub fn output_schema_generator() -> SchemaGenerator {
     SchemaSettings::draft2020_12()
         .with(|s| {
@@ -192,18 +206,25 @@ pub fn output_schema_generator() -> SchemaGenerator {
         .into_generator()
 }
 
+/// Generates a JSON schema for a tool's input parameters.
+///
+/// Uses [`input_schema_generator`] to create a schema compliant with
+/// OpenAI's structured output requirements.
 #[macro_export]
 macro_rules! generate_tool_input_schema {
     ($tool:ty) => {{
-        use $crate::tool::types::tool_object::input_schema_generator;
+        use $crate::tool_object::input_schema_generator;
         input_schema_generator().into_root_schema_for::<$tool>()
     }};
 }
 
+/// Generates a JSON schema for a tool's output type.
+///
+/// Uses [`output_schema_generator`] to create a standard JSON schema.
 #[macro_export]
 macro_rules! generate_tool_output_schema {
     ($tool:ty) => {{
-        use $crate::tool::types::tool_object::output_schema_generator;
+        use $crate::tool_object::output_schema_generator;
         output_schema_generator().into_root_schema_for::<$tool>()
     }};
 }

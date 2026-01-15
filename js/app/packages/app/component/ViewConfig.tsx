@@ -152,7 +152,7 @@ export const VIEWCONFIG_BASE: ViewConfigBase = {
     documentTypeFilter: [],
     projectFilter: undefined,
     fromFilter: [],
-    focusFilters: ['signal'],
+    focusFilters: [],
     unreadOnly: false,
     channelCategoryFilter: [],
     propertyFilters: [],

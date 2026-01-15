@@ -1,6 +1,6 @@
 use super::tool::*;
-use ai::generate_tool_input_schema;
-use ai::tool::types::tool_object::validate_tool_schema;
+use ai_toolset::generate_tool_input_schema;
+use ai_toolset::tool_object::validate_tool_schema;
 use cool_asserts::assert_matches;
 use email::inbound::ApiPaginatedThreadCursor;
 use models_email::service::thread::PreviewViewStandardLabel;
@@ -17,7 +17,7 @@ fn print_input_schema() {
 #[test]
 #[ignore = "prints the output schema"]
 fn print_output_schema() {
-    let generator = ai::tool::minimized_output_schema_generator();
+    let generator = ai_toolset::tool_object::minimized_output_schema_generator();
     let schema = generator.into_root_schema_for::<ApiPaginatedThreadCursor>();
     println!("{}", serde_json::to_string_pretty(&schema).unwrap());
 }

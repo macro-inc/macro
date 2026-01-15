@@ -1,9 +1,13 @@
-use crate::tool::types::ToolCallError;
-use crate::tool::{AsyncTool, Tool, ToolResult};
+use crate::ToolCallError;
+use crate::{AsyncTool, Tool, ToolResult};
 
+/// Wrapper that converts a synchronous tool's output to JSON.
+///
+/// This wraps a [`Tool`] and serializes its output to a [`serde_json::Value`].
 pub struct JsonTool<Sc, Rc, O>(Box<dyn Tool<Sc, Rc, Output = O>>);
 
 impl<Sc, Rc, O> JsonTool<Sc, Rc, O> {
+    /// Creates a new `JsonTool` from a boxed tool.
     pub fn from_boxed<T>(t: Box<T>) -> Self
     where
         T: Tool<Sc, Rc, Output = O> + 'static,
@@ -13,9 +17,13 @@ impl<Sc, Rc, O> JsonTool<Sc, Rc, O> {
     }
 }
 
+/// Wrapper that converts an asynchronous tool's output to JSON.
+///
+/// This wraps an [`AsyncTool`] and serializes its output to a [`serde_json::Value`].
 pub struct JsonAsyncTool<Sc, Rc, O>(Box<dyn AsyncTool<Sc, Rc, Output = O>>);
 
 impl<Sc, Rc, O> JsonAsyncTool<Sc, Rc, O> {
+    /// Creates a new `JsonAsyncTool` from a boxed async tool.
     pub fn from_boxed<T>(t: Box<T>) -> Self
     where
         T: AsyncTool<Sc, Rc, Output = O> + 'static,
