@@ -1,82 +1,482 @@
 {
   "schemas": [
     {
-      "name": "ListChannels",
+      "name": "MarkdownRewrite",
       "inputSchema": {
         "additionalProperties": false,
-        "description": "List all chat channels the user has access to. Returns channel names, IDs, and types. Use this tool to discover available channels for reading messages or participating in conversations.",
+        "description": "Instruct an agent to edit a markdown file identified by an id.\n    This tool should be used when the user include a markdown file in context and requests a revision or edit to that file",
         "properties": {
-          "unused": {
+          "instructions": {
             "additionalProperties": false,
-            "default": null,
-            "type": "null"
+            "description": "Instructions for the revision agent to follow to edit the markdown. These instructions will be provided by the user.",
+            "type": "string"
+          },
+          "markdown_file_id": {
+            "additionalProperties": false,
+            "description": "The markdown file id to target for editing. This file id will be in your context and labeled as a markdown (md) document",
+            "type": "string"
           }
         },
         "required": [
-          "unused"
+          "instructions",
+          "markdown_file_id"
         ],
-        "title": "ListChannels",
+        "title": "MarkdownRewrite",
         "type": "object"
       },
       "outputSchema": {
-        "description": "Response from listing channels",
+        "additionalProperties": false,
         "properties": {
-          "channels": {
-            "description": "The list of channels the user has access to",
+          "diffs": {
             "items": {
-              "description": "A channel item returned by the list channels tool",
+              "additionalProperties": false,
               "properties": {
-                "channelType": {
-                  "description": "The type of channel (public, private, organization, or direct_message)",
-                  "enum": [
-                    "public",
-                    "organization",
-                    "private",
-                    "direct_message"
-                  ],
+                "markdown_text": {
                   "type": "string"
                 },
+                "node_key": {
+                  "type": "string"
+                },
+                "operation": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "operation",
+                "node_key",
+                "markdown_text"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "diffs"
+        ],
+        "title": "AIDiffResponse",
+        "type": "object"
+      }
+    },
+    {
+      "name": "ListEmails",
+      "inputSchema": {
+        "additionalProperties": false,
+        "description": "List the emails the user has access to. Use this tool to find all emails from / to a specific person. Prefer using the search tool to search on a specific matching string within the content or the name of the entity.",
+        "properties": {
+          "cursor": {
+            "additionalProperties": false,
+            "default": null,
+            "description": "A preview response will tell you what the next cursor id is.\n        If expected emails are not in the current response and it gives you a cursor id, use this field to list the next page of emails. If no cursor id is provided you've reached the end",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "limit": {
+            "additionalProperties": false,
+            "default": 20,
+            "description": "limit the max emails returned. This defaults to 20 and has a maximum of 500",
+            "format": "int64",
+            "type": "integer"
+          },
+          "sortMethod": {
+            "additionalProperties": false,
+            "default": "viewed_at",
+            "description": "Sort response by one of: viewed_at | updated_at | created_at | viewed_updated. Prefer viewed_at unless the otherwise specified",
+            "enum": [
+              "viewed_at",
+              "updated_at",
+              "created_at",
+              "viewed_updated"
+            ],
+            "type": "string"
+          },
+          "view": {
+            "additionalProperties": false,
+            "default": {
+              "standardLabel": null,
+              "userLabel": null
+            },
+            "description": "Choose the view to list emails from. One of either standard label or user label must be specified, otherwise defaults to important.",
+            "properties": {
+              "standardLabel": {
+                "additionalProperties": false,
+                "description": "Prefer important or all. Leave empty if using a user label",
+                "enum": [
+                  "Inbox",
+                  "Sent",
+                  "Drafts",
+                  "Starred",
+                  "All",
+                  "Important",
+                  "Other",
+                  null
+                ],
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "userLabel": {
+                "additionalProperties": false,
+                "description": "Choose a custom user label to filter by (optional). Standard label will take precedence over user label if both are specified.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "standardLabel",
+              "userLabel"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "cursor",
+          "limit",
+          "sortMethod",
+          "view"
+        ],
+        "title": "ListEmails",
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "attachments": {
+                  "items": {
+                    "properties": {
+                      "contentId": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "createdAt": {
+                        "format": "int64",
+                        "type": "integer"
+                      },
+                      "filename": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "messageId": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "mimeType": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "providerAttachmentId": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "sizeBytes": {
+                        "format": "int64",
+                        "type": [
+                          "integer",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "messageId",
+                      "createdAt"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "contacts": {
+                  "items": {
+                    "properties": {
+                      "emailAddress": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "linkId": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "sfsPhotoUrl": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "linkId"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "createdAt": {
+                  "format": "int64",
+                  "type": "integer"
+                },
+                "frecencyScore": {
+                  "format": "double",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
                 "id": {
-                  "description": "The channel's unique identifier",
                   "format": "uuid",
                   "type": "string"
                 },
+                "inboxVisible": {
+                  "type": "boolean"
+                },
+                "isDraft": {
+                  "type": "boolean"
+                },
+                "isImportant": {
+                  "type": "boolean"
+                },
+                "isRead": {
+                  "type": "boolean"
+                },
+                "labels": {
+                  "items": {
+                    "properties": {
+                      "createdAt": {
+                        "format": "date-time",
+                        "type": "string"
+                      },
+                      "id": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "labelListVisibility": {
+                        "enum": [
+                          "LabelShow",
+                          "LabelShowIfUnread",
+                          "LabelHide"
+                        ],
+                        "type": "string"
+                      },
+                      "linkId": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "messageListVisibility": {
+                        "enum": [
+                          "Show",
+                          "Hide"
+                        ],
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "providerLabelId": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "enum": [
+                          "System",
+                          "User"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "linkId",
+                      "providerLabelId",
+                      "name",
+                      "createdAt",
+                      "messageListVisibility",
+                      "labelListVisibility",
+                      "type"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "macroAttachments": {
+                  "items": {
+                    "properties": {
+                      "dbId": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "itemId": {
+                        "format": "uuid",
+                        "type": "string"
+                      },
+                      "itemType": {
+                        "type": "string"
+                      },
+                      "messageId": {
+                        "format": "uuid",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "dbId",
+                      "messageId",
+                      "itemId",
+                      "itemType"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "metadata": {
+                  "properties": {
+                    "calendar_invite": {
+                      "description": "if any email contains a calendar invite",
+                      "type": "boolean"
+                    },
+                    "generic_sender": {
+                      "description": "if any sender in the thread is a generic email",
+                      "type": "boolean"
+                    },
+                    "known_sender": {
+                      "description": "if user has previously emailed any sender in the thread",
+                      "type": "boolean"
+                    },
+                    "tabular": {
+                      "description": "if any email contains a <table> html tag",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "known_sender",
+                    "tabular",
+                    "calendar_invite",
+                    "generic_sender"
+                  ],
+                  "type": "object"
+                },
                 "name": {
-                  "description": "The channel's display name (may be None for direct messages)",
                   "type": [
                     "string",
+                    "null"
+                  ]
+                },
+                "ownerId": {
+                  "type": "string"
+                },
+                "providerId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "senderEmail": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "senderName": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "senderPhotoUrl": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "snippet": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sortTs": {
+                  "format": "int64",
+                  "type": "integer"
+                },
+                "updatedAt": {
+                  "format": "int64",
+                  "type": "integer"
+                },
+                "viewedAt": {
+                  "format": "int64",
+                  "type": [
+                    "integer",
                     "null"
                   ]
                 }
               },
               "required": [
                 "id",
-                "channelType"
+                "ownerId",
+                "inboxVisible",
+                "isRead",
+                "isDraft",
+                "isImportant",
+                "sortTs",
+                "createdAt",
+                "updatedAt",
+                "attachments",
+                "macroAttachments",
+                "contacts",
+                "labels",
+                "metadata"
               ],
               "type": "object"
             },
             "type": "array"
           },
-          "total": {
-            "description": "Total number of channels returned",
-            "format": "uint",
-            "minimum": 0,
-            "type": "integer"
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
-          "channels",
-          "total"
+          "items"
         ],
-        "title": "ListChannelsResponse",
+        "title": "ApiPaginatedThreadCursor",
         "type": "object"
       }
     },
     {
-      "name": "ContentSearch",
+      "name": "NameSearch",
       "inputSchema": {
         "additionalProperties": false,
-        "description": "Search for items by their content. For documents, this searches the document body text. For emails, this searches the email message body. For chats, this searches the message content. This tool finds items based on what's inside them, not their titles or names.",
+        "description": "Search for items by their name or title. For documents, this searches the document name. For emails, this searches the subject line. For chats, this searches the chat title. For projects (folders), this searches the project name. This tool finds items based on what they're called, not their content.",
         "properties": {
           "entityTypes": {
             "additionalProperties": false,
@@ -95,17 +495,17 @@
             },
             "type": "array"
           },
-          "query": {
+          "name": {
             "additionalProperties": false,
-            "description": "The text content to search for. This searches within the body of documents, emails, and messages.",
+            "description": "The name or title to search for. For emails, this is the subject line. For channels, this can be the channel name or participant names.",
             "type": "string"
           }
         },
         "required": [
           "entityTypes",
-          "query"
+          "name"
         ],
-        "title": "ContentSearch",
+        "title": "NameSearch",
         "type": "object"
       },
       "outputSchema": {
@@ -1038,420 +1438,6 @@
       }
     },
     {
-      "name": "ListEmails",
-      "inputSchema": {
-        "additionalProperties": false,
-        "description": "List the emails the user has access to. Use this tool to find all emails from / to a specific person. Prefer using the search tool to search on a specific matching string within the content or the name of the entity.",
-        "properties": {
-          "cursor": {
-            "additionalProperties": false,
-            "default": null,
-            "description": "A preview response will tell you what the next cursor id is.\n        If expected emails are not in the current response and it gives you a cursor id, use this field to list the next page of emails. If no cursor id is provided you've reached the end",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "limit": {
-            "additionalProperties": false,
-            "default": 20,
-            "description": "limit the max emails returned. This defaults to 20 and has a maximum of 500",
-            "format": "int64",
-            "type": "integer"
-          },
-          "sortMethod": {
-            "additionalProperties": false,
-            "default": "viewed_at",
-            "description": "Sort response by one of: viewed_at | updated_at | created_at | viewed_updated. Prefer viewed_at unless the otherwise specified",
-            "enum": [
-              "viewed_at",
-              "updated_at",
-              "created_at",
-              "viewed_updated"
-            ],
-            "type": "string"
-          },
-          "view": {
-            "additionalProperties": false,
-            "default": {
-              "standardLabel": null,
-              "userLabel": null
-            },
-            "description": "Choose the view to list emails from. One of either standard label or user label must be specified, otherwise defaults to important.",
-            "properties": {
-              "standardLabel": {
-                "additionalProperties": false,
-                "description": "Prefer important or all. Leave empty if using a user label",
-                "enum": [
-                  "Inbox",
-                  "Sent",
-                  "Drafts",
-                  "Starred",
-                  "All",
-                  "Important",
-                  "Other",
-                  null
-                ],
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "userLabel": {
-                "additionalProperties": false,
-                "description": "Choose a custom user label to filter by (optional). Standard label will take precedence over user label if both are specified.",
-                "type": [
-                  "string",
-                  "null"
-                ]
-              }
-            },
-            "required": [
-              "standardLabel",
-              "userLabel"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "cursor",
-          "limit",
-          "sortMethod",
-          "view"
-        ],
-        "title": "ListEmails",
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "items": {
-            "items": {
-              "properties": {
-                "attachments": {
-                  "items": {
-                    "properties": {
-                      "contentId": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "createdAt": {
-                        "format": "int64",
-                        "type": "integer"
-                      },
-                      "filename": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "id": {
-                        "format": "uuid",
-                        "type": "string"
-                      },
-                      "messageId": {
-                        "format": "uuid",
-                        "type": "string"
-                      },
-                      "mimeType": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "providerAttachmentId": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "sizeBytes": {
-                        "format": "int64",
-                        "type": [
-                          "integer",
-                          "null"
-                        ]
-                      }
-                    },
-                    "required": [
-                      "id",
-                      "messageId",
-                      "createdAt"
-                    ],
-                    "type": "object"
-                  },
-                  "type": "array"
-                },
-                "contacts": {
-                  "items": {
-                    "properties": {
-                      "emailAddress": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "id": {
-                        "format": "uuid",
-                        "type": "string"
-                      },
-                      "linkId": {
-                        "format": "uuid",
-                        "type": "string"
-                      },
-                      "name": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      },
-                      "sfsPhotoUrl": {
-                        "type": [
-                          "string",
-                          "null"
-                        ]
-                      }
-                    },
-                    "required": [
-                      "id",
-                      "linkId"
-                    ],
-                    "type": "object"
-                  },
-                  "type": "array"
-                },
-                "createdAt": {
-                  "format": "int64",
-                  "type": "integer"
-                },
-                "frecencyScore": {
-                  "format": "double",
-                  "type": [
-                    "number",
-                    "null"
-                  ]
-                },
-                "id": {
-                  "format": "uuid",
-                  "type": "string"
-                },
-                "inboxVisible": {
-                  "type": "boolean"
-                },
-                "isDraft": {
-                  "type": "boolean"
-                },
-                "isImportant": {
-                  "type": "boolean"
-                },
-                "isRead": {
-                  "type": "boolean"
-                },
-                "labels": {
-                  "items": {
-                    "properties": {
-                      "createdAt": {
-                        "format": "date-time",
-                        "type": "string"
-                      },
-                      "id": {
-                        "format": "uuid",
-                        "type": "string"
-                      },
-                      "labelListVisibility": {
-                        "enum": [
-                          "LabelShow",
-                          "LabelShowIfUnread",
-                          "LabelHide"
-                        ],
-                        "type": "string"
-                      },
-                      "linkId": {
-                        "format": "uuid",
-                        "type": "string"
-                      },
-                      "messageListVisibility": {
-                        "enum": [
-                          "Show",
-                          "Hide"
-                        ],
-                        "type": "string"
-                      },
-                      "name": {
-                        "type": "string"
-                      },
-                      "providerLabelId": {
-                        "type": "string"
-                      },
-                      "type": {
-                        "enum": [
-                          "System",
-                          "User"
-                        ],
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "id",
-                      "linkId",
-                      "providerLabelId",
-                      "name",
-                      "createdAt",
-                      "messageListVisibility",
-                      "labelListVisibility",
-                      "type"
-                    ],
-                    "type": "object"
-                  },
-                  "type": "array"
-                },
-                "macroAttachments": {
-                  "items": {
-                    "properties": {
-                      "dbId": {
-                        "format": "uuid",
-                        "type": "string"
-                      },
-                      "itemId": {
-                        "format": "uuid",
-                        "type": "string"
-                      },
-                      "itemType": {
-                        "type": "string"
-                      },
-                      "messageId": {
-                        "format": "uuid",
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "dbId",
-                      "messageId",
-                      "itemId",
-                      "itemType"
-                    ],
-                    "type": "object"
-                  },
-                  "type": "array"
-                },
-                "metadata": {
-                  "properties": {
-                    "calendar_invite": {
-                      "description": "if any email contains a calendar invite",
-                      "type": "boolean"
-                    },
-                    "generic_sender": {
-                      "description": "if any sender in the thread is a generic email",
-                      "type": "boolean"
-                    },
-                    "known_sender": {
-                      "description": "if user has previously emailed any sender in the thread",
-                      "type": "boolean"
-                    },
-                    "tabular": {
-                      "description": "if any email contains a <table> html tag",
-                      "type": "boolean"
-                    }
-                  },
-                  "required": [
-                    "known_sender",
-                    "tabular",
-                    "calendar_invite",
-                    "generic_sender"
-                  ],
-                  "type": "object"
-                },
-                "name": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "ownerId": {
-                  "type": "string"
-                },
-                "providerId": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "senderEmail": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "senderName": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "senderPhotoUrl": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "snippet": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "sortTs": {
-                  "format": "int64",
-                  "type": "integer"
-                },
-                "updatedAt": {
-                  "format": "int64",
-                  "type": "integer"
-                },
-                "viewedAt": {
-                  "format": "int64",
-                  "type": [
-                    "integer",
-                    "null"
-                  ]
-                }
-              },
-              "required": [
-                "id",
-                "ownerId",
-                "inboxVisible",
-                "isRead",
-                "isDraft",
-                "isImportant",
-                "sortTs",
-                "createdAt",
-                "updatedAt",
-                "attachments",
-                "macroAttachments",
-                "contacts",
-                "labels",
-                "metadata"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "next_cursor": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "items"
-        ],
-        "title": "ApiPaginatedThreadCursor",
-        "type": "object"
-      }
-    },
-    {
       "name": "Read",
       "inputSchema": {
         "additionalProperties": false,
@@ -1714,10 +1700,10 @@
       }
     },
     {
-      "name": "NameSearch",
+      "name": "ContentSearch",
       "inputSchema": {
         "additionalProperties": false,
-        "description": "Search for items by their name or title. For documents, this searches the document name. For emails, this searches the subject line. For chats, this searches the chat title. For projects (folders), this searches the project name. This tool finds items based on what they're called, not their content.",
+        "description": "Search for items by their content. For documents, this searches the document body text. For emails, this searches the email message body. For chats, this searches the message content. This tool finds items based on what's inside them, not their titles or names.",
         "properties": {
           "entityTypes": {
             "additionalProperties": false,
@@ -1736,17 +1722,17 @@
             },
             "type": "array"
           },
-          "name": {
+          "query": {
             "additionalProperties": false,
-            "description": "The name or title to search for. For emails, this is the subject line. For channels, this can be the channel name or participant names.",
+            "description": "The text content to search for. This searches within the body of documents, emails, and messages.",
             "type": "string"
           }
         },
         "required": [
           "entityTypes",
-          "name"
+          "query"
         ],
-        "title": "NameSearch",
+        "title": "ContentSearch",
         "type": "object"
       },
       "outputSchema": {
@@ -2838,60 +2824,74 @@
       }
     },
     {
-      "name": "MarkdownRewrite",
+      "name": "ListChannels",
       "inputSchema": {
         "additionalProperties": false,
-        "description": "Instruct an agent to edit a markdown file identified by an id.\n    This tool should be used when the user include a markdown file in context and requests a revision or edit to that file",
+        "description": "List all chat channels the user has access to. Returns channel names, IDs, and types. Use this tool to discover available channels for reading messages or participating in conversations.",
         "properties": {
-          "instructions": {
+          "unused": {
             "additionalProperties": false,
-            "description": "Instructions for the revision agent to follow to edit the markdown. These instructions will be provided by the user.",
-            "type": "string"
-          },
-          "markdown_file_id": {
-            "additionalProperties": false,
-            "description": "The markdown file id to target for editing. This file id will be in your context and labeled as a markdown (md) document",
-            "type": "string"
+            "default": null,
+            "type": "null"
           }
         },
         "required": [
-          "instructions",
-          "markdown_file_id"
+          "unused"
         ],
-        "title": "MarkdownRewrite",
+        "title": "ListChannels",
         "type": "object"
       },
       "outputSchema": {
-        "additionalProperties": false,
+        "description": "Response from listing channels",
         "properties": {
-          "diffs": {
+          "channels": {
+            "description": "The list of channels the user has access to",
             "items": {
-              "additionalProperties": false,
+              "description": "A channel item returned by the list channels tool",
               "properties": {
-                "markdown_text": {
+                "channelType": {
+                  "description": "The type of channel (public, private, organization, or direct_message)",
+                  "enum": [
+                    "public",
+                    "organization",
+                    "private",
+                    "direct_message"
+                  ],
                   "type": "string"
                 },
-                "node_key": {
+                "id": {
+                  "description": "The channel's unique identifier",
+                  "format": "uuid",
                   "type": "string"
                 },
-                "operation": {
-                  "type": "string"
+                "name": {
+                  "description": "The channel's display name (may be None for direct messages)",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 }
               },
               "required": [
-                "operation",
-                "node_key",
-                "markdown_text"
+                "id",
+                "channelType"
               ],
               "type": "object"
             },
             "type": "array"
+          },
+          "total": {
+            "description": "Total number of channels returned",
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
           }
         },
         "required": [
-          "diffs"
+          "channels",
+          "total"
         ],
-        "title": "AIDiffResponse",
+        "title": "ListChannelsResponse",
         "type": "object"
       }
     },
@@ -3196,6 +3196,447 @@
           "content"
         ],
         "title": "WebFetchResponse",
+        "type": "object"
+      }
+    },
+    {
+      "name": "bash_code_execution",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "The expected shape of the streamed JSON following a `server_tool_use` for bash_code_execution",
+        "properties": {
+          "command": {
+            "description": "The bash command to execute",
+            "type": "string"
+          }
+        },
+        "required": [
+          "command"
+        ],
+        "title": "BashCodeExecutionToolCall",
+        "type": "object"
+      },
+      "outputSchema": {
+        "$defs": {
+          "BashCodeExecutionContent": {
+            "description": "Content of a bash code execution response - either a result or an error",
+            "oneOf": [
+              {
+                "$ref": "#/$defs/BashCodeExecutionResult",
+                "properties": {
+                  "type": {
+                    "const": "bash_code_execution_result",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/BashCodeExecutionToolError",
+                "properties": {
+                  "type": {
+                    "const": "bash_code_execution_tool_result_error",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "BashCodeExecutionResult": {
+            "description": "Successful bash code execution result",
+            "properties": {
+              "content": {
+                "description": "Files generated during execution",
+                "items": {
+                  "$ref": "#/$defs/CodeExecutionFile"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "return_code": {
+                "description": "Exit code (0 for success, non-zero for failure)",
+                "format": "int32",
+                "type": "integer"
+              },
+              "stderr": {
+                "description": "Standard error from the command",
+                "type": "string"
+              },
+              "stdout": {
+                "description": "Standard output from the command",
+                "type": "string"
+              }
+            },
+            "required": [
+              "stdout",
+              "stderr",
+              "return_code"
+            ],
+            "type": "object"
+          },
+          "BashCodeExecutionToolError": {
+            "description": "Error from bash code execution",
+            "properties": {
+              "error_code": {
+                "$ref": "#/$defs/CodeExecutionErrorCode"
+              }
+            },
+            "required": [
+              "error_code"
+            ],
+            "type": "object"
+          },
+          "CodeExecutionErrorCode": {
+            "description": "Error codes for code execution failures",
+            "oneOf": [
+              {
+                "const": "unavailable",
+                "description": "The tool is temporarily unavailable",
+                "type": "string"
+              },
+              {
+                "const": "execution_time_exceeded",
+                "description": "Execution exceeded maximum time limit",
+                "type": "string"
+              },
+              {
+                "const": "container_expired",
+                "description": "Container expired and is no longer available",
+                "type": "string"
+              },
+              {
+                "const": "invalid_tool_input",
+                "description": "Invalid parameters provided to the tool",
+                "type": "string"
+              },
+              {
+                "const": "too_many_requests",
+                "description": "Rate limit exceeded for tool usage",
+                "type": "string"
+              },
+              {
+                "const": "file_not_found",
+                "description": "File doesn't exist (for view/edit operations) - text_editor only",
+                "type": "string"
+              },
+              {
+                "const": "string_not_found",
+                "description": "The old_str not found in file (for str_replace) - text_editor only",
+                "type": "string"
+              }
+            ]
+          },
+          "CodeExecutionFile": {
+            "description": "A file generated during code execution",
+            "properties": {
+              "file_id": {
+                "description": "File ID for retrieval via Files API",
+                "type": "string"
+              }
+            },
+            "required": [
+              "file_id"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "Response from bash_code_execution tool",
+        "properties": {
+          "content": {
+            "$ref": "#/$defs/BashCodeExecutionContent"
+          },
+          "tool_use_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tool_use_id",
+          "content"
+        ],
+        "title": "BashCodeExecutionResponse",
+        "type": "object"
+      }
+    },
+    {
+      "name": "text_editor_code_execution",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "The expected shape of the streamed JSON following a `server_tool_use` for text_editor_code_execution",
+        "properties": {
+          "command": {
+            "description": "The command to execute: \"view\", \"create\", or \"str_replace\"",
+            "type": "string"
+          },
+          "file_text": {
+            "description": "File content for create operations",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "new_str": {
+            "description": "Replacement string for str_replace operations",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "old_str": {
+            "description": "String to find for str_replace operations",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "path": {
+            "description": "Path to the file",
+            "type": "string"
+          }
+        },
+        "required": [
+          "command",
+          "path"
+        ],
+        "title": "TextEditorCodeExecutionToolCall",
+        "type": "object"
+      },
+      "outputSchema": {
+        "$defs": {
+          "CodeExecutionErrorCode": {
+            "description": "Error codes for code execution failures",
+            "oneOf": [
+              {
+                "const": "unavailable",
+                "description": "The tool is temporarily unavailable",
+                "type": "string"
+              },
+              {
+                "const": "execution_time_exceeded",
+                "description": "Execution exceeded maximum time limit",
+                "type": "string"
+              },
+              {
+                "const": "container_expired",
+                "description": "Container expired and is no longer available",
+                "type": "string"
+              },
+              {
+                "const": "invalid_tool_input",
+                "description": "Invalid parameters provided to the tool",
+                "type": "string"
+              },
+              {
+                "const": "too_many_requests",
+                "description": "Rate limit exceeded for tool usage",
+                "type": "string"
+              },
+              {
+                "const": "file_not_found",
+                "description": "File doesn't exist (for view/edit operations) - text_editor only",
+                "type": "string"
+              },
+              {
+                "const": "string_not_found",
+                "description": "The old_str not found in file (for str_replace) - text_editor only",
+                "type": "string"
+              }
+            ]
+          },
+          "TextEditorCodeExecutionContent": {
+            "description": "Content of a text editor code execution response - either a result or an error",
+            "oneOf": [
+              {
+                "$ref": "#/$defs/TextEditorCodeExecutionResult",
+                "properties": {
+                  "type": {
+                    "const": "text_editor_code_execution_view_result",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/TextEditorCodeExecutionResult",
+                "properties": {
+                  "type": {
+                    "const": "text_editor_code_execution_create_result",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/TextEditorCodeExecutionResult",
+                "properties": {
+                  "type": {
+                    "const": "text_editor_code_execution_str_replace_result",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "type": "object"
+              },
+              {
+                "$ref": "#/$defs/TextEditorCodeExecutionToolError",
+                "properties": {
+                  "type": {
+                    "const": "text_editor_code_execution_tool_result_error",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "TextEditorCodeExecutionResult": {
+            "description": "Result from text editor operations (view, create, str_replace)\nFields are optional as different operations return different fields",
+            "properties": {
+              "content": {
+                "description": "File content (for view operations)",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "file_type": {
+                "description": "Type of file (e.g., \"text\")",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "is_file_update": {
+                "description": "Whether the file already existed (true = update, false = create)",
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "lines": {
+                "description": "Diff lines (prefixed with +/-)",
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "newLines": {
+                "description": "Number of new lines",
+                "format": "uint32",
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "newStart": {
+                "description": "New content start line",
+                "format": "uint32",
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "numLines": {
+                "description": "Number of lines returned",
+                "format": "uint32",
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "oldLines": {
+                "description": "Number of old lines changed",
+                "format": "uint32",
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "oldStart": {
+                "description": "Old content start line",
+                "format": "uint32",
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "startLine": {
+                "description": "Starting line number",
+                "format": "uint32",
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "totalLines": {
+                "description": "Total lines in file",
+                "format": "uint32",
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "TextEditorCodeExecutionToolError": {
+            "description": "Error from text editor code execution",
+            "properties": {
+              "error_code": {
+                "$ref": "#/$defs/CodeExecutionErrorCode"
+              }
+            },
+            "required": [
+              "error_code"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "Response from text_editor_code_execution tool",
+        "properties": {
+          "content": {
+            "$ref": "#/$defs/TextEditorCodeExecutionContent"
+          },
+          "tool_use_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tool_use_id",
+          "content"
+        ],
+        "title": "TextEditorCodeExecutionResponse",
         "type": "object"
       }
     }
