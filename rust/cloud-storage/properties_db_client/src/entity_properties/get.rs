@@ -237,12 +237,12 @@ pub async fn lookup_entity_property(
 ) -> Result<Option<EntityPropertyReference>> {
     let row = sqlx::query!(
         r#"
-        SELECT 
-            ep.entity_id,
-            ep.entity_type as "entity_type: EntityType",
-            ep.property_definition_id
-        FROM entity_properties ep
-        WHERE ep.id = $1
+SELECT
+    ep.entity_id,
+    ep.entity_type as "entity_type: EntityType",
+    ep.property_definition_id
+FROM entity_properties ep
+WHERE ep.id = $1
         "#,
         entity_property_id
     )
@@ -266,26 +266,26 @@ pub async fn get_entity_properties_values(
 ) -> Result<Vec<EntityPropertyWithDefinition>> {
     let rows = sqlx::query!(
         r#"
-        SELECT 
-            ep.id as entity_property_id,
-            ep.entity_id,
-            ep.entity_type as "entity_type: EntityType",
-            ep.property_definition_id,
-            ep.values as "values: sqlx::types::JsonValue",
-            ep.created_at as entity_property_created_at,
-            ep.updated_at as entity_property_updated_at,
-            pd.organization_id as definition_organization_id,
-            pd.user_id as definition_user_id,
-            pd.display_name,
-            pd.data_type as "data_type: DataType",
-            pd.is_multi_select,
-            pd.specific_entity_type as "specific_entity_type: Option<EntityType>",
-            pd.created_at as definition_created_at,
-            pd.updated_at as definition_updated_at,
-            pd.is_system as definition_is_system
-        FROM entity_properties ep
-        INNER JOIN property_definitions pd ON ep.property_definition_id = pd.id
-        WHERE ep.entity_id = $1 AND ep.entity_type = $2
+SELECT
+    ep.id as entity_property_id,
+    ep.entity_id,
+    ep.entity_type as "entity_type: EntityType",
+    ep.property_definition_id,
+    ep.values as "values: sqlx::types::JsonValue",
+    ep.created_at as entity_property_created_at,
+    ep.updated_at as entity_property_updated_at,
+    pd.organization_id as definition_organization_id,
+    pd.user_id as definition_user_id,
+    pd.display_name,
+    pd.data_type as "data_type: DataType",
+    pd.is_multi_select,
+    pd.specific_entity_type as "specific_entity_type: Option<EntityType>",
+    pd.created_at as definition_created_at,
+    pd.updated_at as definition_updated_at,
+    pd.is_system as definition_is_system
+FROM entity_properties ep
+INNER JOIN property_definitions pd ON ep.property_definition_id = pd.id
+WHERE ep.entity_id = $1 AND ep.entity_type = $2
         "#,
         entity_id,
         entity_type as EntityType
@@ -343,29 +343,29 @@ pub async fn get_bulk_entity_properties_values(
 
     let rows = sqlx::query!(
         r#"
-        SELECT 
-            ep.id as entity_property_id,
-            ep.entity_id,
-            ep.entity_type as "entity_type: EntityType",
-            ep.property_definition_id,
-            ep.values as "values: sqlx::types::JsonValue",
-            ep.created_at as entity_property_created_at,
-            ep.updated_at as entity_property_updated_at,
-            pd.organization_id as definition_organization_id,
-            pd.user_id as definition_user_id,
-            pd.display_name,
-            pd.data_type as "data_type: DataType",
-            pd.is_multi_select,
-            pd.specific_entity_type as "specific_entity_type: Option<EntityType>",
-            pd.created_at as definition_created_at,
-            pd.updated_at as definition_updated_at,
-            pd.is_system as definition_is_system
-        FROM entity_properties ep
-        INNER JOIN property_definitions pd ON ep.property_definition_id = pd.id
-        WHERE (ep.entity_id) IN (
-            SELECT * FROM UNNEST($1::TEXT[])
-        )
-        "#,
+SELECT
+    ep.id as entity_property_id,
+    ep.entity_id,
+    ep.entity_type as "entity_type: EntityType",
+    ep.property_definition_id,
+    ep.values as "values: sqlx::types::JsonValue",
+    ep.created_at as entity_property_created_at,
+    ep.updated_at as entity_property_updated_at,
+    pd.organization_id as definition_organization_id,
+    pd.user_id as definition_user_id,
+    pd.display_name,
+    pd.data_type as "data_type: DataType",
+    pd.is_multi_select,
+    pd.specific_entity_type as "specific_entity_type: Option<EntityType>",
+    pd.created_at as definition_created_at,
+    pd.updated_at as definition_updated_at,
+    pd.is_system as definition_is_system
+FROM entity_properties ep
+INNER JOIN property_definitions pd ON ep.property_definition_id = pd.id
+WHERE (ep.entity_id) IN (
+    SELECT * FROM UNNEST($1::TEXT[])
+)
+"#,
         &entity_ids,
     )
     .fetch_all(db)
@@ -434,29 +434,29 @@ pub async fn get_bulk_entity_properties_values_filtered(
 
     let rows = sqlx::query!(
         r#"
-        SELECT 
-            ep.id as entity_property_id,
-            ep.entity_id,
-            ep.entity_type as "entity_type: EntityType",
-            ep.property_definition_id,
-            ep.values as "values: sqlx::types::JsonValue",
-            ep.created_at as entity_property_created_at,
-            ep.updated_at as entity_property_updated_at,
-            pd.organization_id as definition_organization_id,
-            pd.user_id as definition_user_id,
-            pd.display_name,
-            pd.data_type as "data_type: DataType",
-            pd.is_multi_select,
-            pd.specific_entity_type as "specific_entity_type: Option<EntityType>",
-            pd.created_at as definition_created_at,
-            pd.updated_at as definition_updated_at,
-            pd.is_system as definition_is_system
-        FROM entity_properties ep
-        INNER JOIN property_definitions pd ON ep.property_definition_id = pd.id
-        WHERE (ep.entity_id) IN (
-            SELECT * FROM UNNEST($1::TEXT[])
-        )
-        AND pd.id = ANY($2::UUID[])
+SELECT
+    ep.id as entity_property_id,
+    ep.entity_id,
+    ep.entity_type as "entity_type: EntityType",
+    ep.property_definition_id,
+    ep.values as "values: sqlx::types::JsonValue",
+    ep.created_at as entity_property_created_at,
+    ep.updated_at as entity_property_updated_at,
+    pd.organization_id as definition_organization_id,
+    pd.user_id as definition_user_id,
+    pd.display_name,
+    pd.data_type as "data_type: DataType",
+    pd.is_multi_select,
+    pd.specific_entity_type as "specific_entity_type: Option<EntityType>",
+    pd.created_at as definition_created_at,
+    pd.updated_at as definition_updated_at,
+    pd.is_system as definition_is_system
+FROM entity_properties ep
+INNER JOIN property_definitions pd ON ep.property_definition_id = pd.id
+WHERE (ep.entity_id) IN (
+    SELECT * FROM UNNEST($1::TEXT[])
+)
+AND pd.id = ANY($2::UUID[])
         "#,
         &entity_ids,
         &property_ids
