@@ -9,6 +9,10 @@ import * as schemas from './schemas';
 import type * as types from './types';
 
 type ToolParserMap = {
+  bash_code_execution: {
+    call: types.BashCodeExecutionToolCall;
+    response: types.BashCodeExecutionResponse;
+  };
   ContentSearch: {
     call: types.ContentSearch;
     response: types.SearchToolResponse;
@@ -31,6 +35,10 @@ type ToolParserMap = {
   };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
   Read: { call: types.Read; response: types.ReadResponse };
+  text_editor_code_execution: {
+    call: types.TextEditorCodeExecutionToolCall;
+    response: types.TextEditorCodeExecutionResponse;
+  };
   web_fetch: { call: types.WebFetchToolCall; response: types.WebFetchResponse };
   web_search: {
     call: types.WebSearchToolCall;
@@ -39,6 +47,10 @@ type ToolParserMap = {
 };
 
 const toolParserMap = {
+  bash_code_execution: {
+    call: schemas.BashCodeExecutionToolCall,
+    response: schemas.BashCodeExecutionResponse,
+  },
   ContentSearch: {
     call: schemas.ContentSearch,
     response: schemas.SearchToolResponse,
@@ -64,6 +76,10 @@ const toolParserMap = {
     response: schemas.SearchToolResponse,
   },
   Read: { call: schemas.Read, response: schemas.ReadResponse },
+  text_editor_code_execution: {
+    call: schemas.TextEditorCodeExecutionToolCall,
+    response: schemas.TextEditorCodeExecutionResponse,
+  },
   web_fetch: {
     call: schemas.WebFetchToolCall,
     response: schemas.WebFetchResponse,
@@ -83,6 +99,10 @@ type NamedRawTool = {
 };
 
 type ToolDataMap = {
+  bash_code_execution: {
+    call: types.BashCodeExecutionToolCall;
+    response: types.BashCodeExecutionResponse;
+  };
   ContentSearch: {
     call: types.ContentSearch;
     response: types.SearchToolResponse;
@@ -105,6 +125,10 @@ type ToolDataMap = {
   };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
   Read: { call: types.Read; response: types.ReadResponse };
+  text_editor_code_execution: {
+    call: types.TextEditorCodeExecutionToolCall;
+    response: types.TextEditorCodeExecutionResponse;
+  };
   web_fetch: { call: types.WebFetchToolCall; response: types.WebFetchResponse };
   web_search: {
     call: types.WebSearchToolCall;
