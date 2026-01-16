@@ -12,6 +12,8 @@ If you have the [nix](https://nixos.org/learn/) package manager installed on you
 
 `nix develop`
 
+## Using Claude/Playwright
+To setup the authentication please make sure you create a `.env` file with **REFRESH_TOKEN** environment variable set to your dev macro refresh token. This can be found in your cookies.
 
 ## Tauri 🤝 Macro
 
