@@ -210,6 +210,12 @@ fn map_stream_extended(mut stream: MessageCompletionResponseStream) -> ExtendedS
                             ContentDeltaEvent::WebFetchToolResult(web_fetch_response) => {
                                 yield Ok(AnthropicResponseExtension::WebFetchToolResponse(web_fetch_response).into());
                             }
+                            ContentDeltaEvent::BashCodeExecutionToolResult(bash_response) => {
+                                yield Ok(AnthropicResponseExtension::BashCodeExecutionToolResponse(bash_response).into());
+                            }
+                            ContentDeltaEvent::TextEditorCodeExecutionToolResult(text_editor_response) => {
+                                yield Ok(AnthropicResponseExtension::TextEditorCodeExecutionToolResponse(text_editor_response).into());
+                            }
                             _ => {}
                         }
                         // Skip content block start events
@@ -227,6 +233,12 @@ fn map_stream_extended(mut stream: MessageCompletionResponseStream) -> ExtendedS
                             }
                             ContentDeltaEvent::WebFetchToolResult(web_fetch_response) => {
                                 yield Ok(AnthropicResponseExtension::WebFetchToolResponse(web_fetch_response).into());
+                            }
+                            ContentDeltaEvent::BashCodeExecutionToolResult(bash_response) => {
+                                yield Ok(AnthropicResponseExtension::BashCodeExecutionToolResponse(bash_response).into());
+                            }
+                            ContentDeltaEvent::TextEditorCodeExecutionToolResult(text_editor_response) => {
+                                yield Ok(AnthropicResponseExtension::TextEditorCodeExecutionToolResponse(text_editor_response).into());
                             }
                             ContentDeltaEvent::TextDelta { text } | ContentDeltaEvent::StartTextDelta { text } => {
                                 yield Ok(create_response(
