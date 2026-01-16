@@ -1,8 +1,9 @@
 use chrono::Utc;
 use document_sub_type::DocumentSubType;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use uuid::Uuid;
+
+use crate::SoupProperty;
 
 /// Sub type of a document with associated properties encoded in each variant.
 /// This ensures type-safety: task properties only exist when the document is a task.
@@ -103,5 +104,5 @@ pub struct SoupDocument {
     pub sub_type: Option<SoupDocumentSubType>,
 
     /// Properties
-    pub properties: Vec<EntityPropertyWithDefinition>,
+    pub properties: Vec<SoupProperty>,
 }

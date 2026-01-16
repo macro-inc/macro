@@ -1,8 +1,9 @@
 use chrono::Utc;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+use crate::SoupProperty;
 
 #[derive(Serialize, Clone, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -38,5 +39,5 @@ pub struct SoupProject {
     pub viewed_at: Option<chrono::DateTime<Utc>>,
 
     /// Properties
-    pub properties: Vec<EntityPropertyWithDefinition>,
+    pub properties: Vec<SoupProperty>,
 }

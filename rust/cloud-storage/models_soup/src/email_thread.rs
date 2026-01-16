@@ -1,9 +1,10 @@
 use chrono::{DateTime, Utc};
 use doppleganger::Doppleganger;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+use crate::SoupProperty;
 
 #[derive(Debug, Doppleganger, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -156,5 +157,5 @@ pub struct SoupEnrichedEmailThreadPreview {
     pub participants: Vec<SoupContact>,
     pub metadata: SoupEmailThreadPreviewMetadata,
     pub labels: Vec<SoupLabel>,
-    pub properties: Vec<EntityPropertyWithDefinition>,
+    pub properties: Vec<SoupProperty>,
 }

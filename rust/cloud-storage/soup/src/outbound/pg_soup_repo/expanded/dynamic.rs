@@ -12,6 +12,7 @@ use item_filters::ast::{
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_pagination::{Query, SimpleSortMethod};
 use models_soup::{
+    SoupProperty,
     chat::SoupChat,
     document::{SoupDocument, SoupDocumentSubType},
     item::SoupItem,
@@ -23,7 +24,7 @@ use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
 use crate::outbound::pg_soup_repo::type_err;
-use models_properties::{EntityReference, EntityType};
+use models_properties::{ EntityReference, EntityType};
 
 static PREFIX: &str = r#"
     WITH RECURSIVE ProjectHierarchy AS (
@@ -566,19 +567,28 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
                 x.properties = properties_map
                     .get(&x.id.to_string())
                     .cloned()
-                    .unwrap_or_default();
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(SoupProperty::from)
+                    .collect();
             }
             SoupItem::Project(x) => {
                 x.properties = properties_map
                     .get(&x.id.to_string())
                     .cloned()
-                    .unwrap_or_default();
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(SoupProperty::from)
+                    .collect();
             }
             SoupItem::EmailThread(x) => {
                 x.properties = properties_map
                     .get(&x.thread.id.to_string())
                     .cloned()
-                    .unwrap_or_default();
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(SoupProperty::from)
+                    .collect();
             }
             _ => {}
         }
