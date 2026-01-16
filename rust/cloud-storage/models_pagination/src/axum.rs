@@ -42,7 +42,7 @@ pub enum CursorExtractErr {
     #[error(transparent)]
     DecodeErr(Base64SerdeErr<serde_json::Error>),
     /// The query was too large to deserialize
-    #[error("Query is too large, must be < 32kb")]
+    #[error("Query is too large, must be < 500kb")]
     SizeErr,
 }
 
@@ -64,7 +64,7 @@ impl IntoResponse for CursorExtractErr {
             CursorExtractErr::SizeErr => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "Query is too large, must be <32kb",
+                    message: "Query is too large, must be <500kb",
                 }),
             ),
         }
@@ -98,7 +98,7 @@ where
             Base64Str::new_from_string(cursor);
 
         let bytes = encoded.len();
-        if bytes > 32_000 {
+        if bytes > 500_000 {
             return Err(CursorExtractErr::SizeErr);
         }
 
