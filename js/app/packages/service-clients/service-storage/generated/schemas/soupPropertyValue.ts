@@ -6,4 +6,4 @@
  */
 import type { PropertyValue } from './propertyValue';
 
-export type EntityPropertyWithDefinitionValue = null | PropertyValue;
+export type SoupPropertyValue = null | PropertyValue;

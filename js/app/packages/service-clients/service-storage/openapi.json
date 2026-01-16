@@ -6063,71 +6063,6 @@
           }
         }
       },
-      "EntityProperty": {
-        "type": "object",
-        "description": "Assignment of a property definition to a specific entity (service representation).",
-        "required": [
-          "id",
-          "entity_id",
-          "entity_type",
-          "property_definition_id",
-          "created_at",
-          "updated_at"
-        ],
-        "properties": {
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "entity_id": {
-            "type": "string"
-          },
-          "entity_type": {
-            "$ref": "#/components/schemas/EntityType"
-          },
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "property_definition_id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time"
-          }
-        }
-      },
-      "EntityPropertyWithDefinition": {
-        "type": "object",
-        "description": "Entity property with its definition, value, and options (service representation).",
-        "required": ["property", "definition"],
-        "properties": {
-          "definition": {
-            "$ref": "#/components/schemas/PropertyDefinition"
-          },
-          "options": {
-            "type": ["array", "null"],
-            "items": {
-              "$ref": "#/components/schemas/PropertyOption"
-            }
-          },
-          "property": {
-            "$ref": "#/components/schemas/EntityProperty"
-          },
-          "value": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/PropertyValue"
-              }
-            ]
-          }
-        }
-      },
       "EntityReference": {
         "type": "object",
         "description": "Entity reference for entity-type property values.",
@@ -7799,79 +7734,6 @@
           }
         }
       },
-      "PropertyOption": {
-        "type": "object",
-        "description": "A selectable option for select-type properties (service representation).",
-        "required": [
-          "id",
-          "property_definition_id",
-          "display_order",
-          "value",
-          "created_at",
-          "updated_at"
-        ],
-        "properties": {
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "display_order": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "property_definition_id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "value": {
-            "$ref": "#/components/schemas/PropertyOptionValue"
-          }
-        }
-      },
-      "PropertyOptionValue": {
-        "oneOf": [
-          {
-            "type": "object",
-            "description": "String value for SelectString properties",
-            "required": ["value", "type"],
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": ["string"]
-              },
-              "value": {
-                "type": "string",
-                "description": "String value for SelectString properties"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "Number value for SelectNumber properties",
-            "required": ["value", "type"],
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": ["number"]
-              },
-              "value": {
-                "type": "number",
-                "format": "double",
-                "description": "Number value for SelectNumber properties"
-              }
-            }
-          }
-        ],
-        "description": "The value of a property option - either a string or a number."
-      },
       "PropertyOwner": {
         "oneOf": [
           {
@@ -8577,7 +8439,7 @@
           "properties": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/EntityPropertyWithDefinition"
+              "$ref": "#/components/schemas/SoupProperty"
             },
             "description": "Properties"
           },
@@ -8771,7 +8633,7 @@
               "properties": {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/EntityPropertyWithDefinition"
+                  "$ref": "#/components/schemas/SoupProperty"
                 }
               }
             }
@@ -8979,7 +8841,7 @@
           "properties": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/EntityPropertyWithDefinition"
+              "$ref": "#/components/schemas/SoupProperty"
             },
             "description": "Properties"
           },
@@ -8992,6 +8854,25 @@
             "type": ["integer", "null"],
             "format": "int64",
             "description": "The time the document was last viewed"
+          }
+        }
+      },
+      "SoupProperty": {
+        "type": "object",
+        "required": ["definition"],
+        "properties": {
+          "definition": {
+            "$ref": "#/components/schemas/PropertyDefinition"
+          },
+          "value": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PropertyValue"
+              }
+            ]
           }
         }
       },
