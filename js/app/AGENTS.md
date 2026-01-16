@@ -49,7 +49,6 @@ The app uses cookie-based authentication (`credentials: 'include'`) since `ENABL
    }
    ```
    This second navigation will work because the route interception is now active and auth requests succeed.
-5. Always dismiss/disallow browser notification prompts by default unless otherwise specified
 
 **Why this is needed:** The app checks authentication via API calls to `.macro.com` endpoints using `credentials: 'include'`. Without valid cookies or an auth header, `useIsAuthenticated()` returns false and the `Soup` component redirects to `/` → `/signup`. The initial redirect happens before route interception can authenticate the first requests, but forcing a second navigation resolves this.
 
