@@ -20,6 +20,8 @@ import {
   closePropertyEditor,
   propertyEditorOpen,
   propertyEditorState,
+  setPropertyEditorMode,
+  setPropertyEditorTarget,
   togglePropertyEditor,
 } from './state/propertyEditor';
 import { mergeRefs } from '@solid-primitives/refs';
@@ -29,6 +31,10 @@ import { usePropertySelection } from '@core/component/Properties/hooks';
 import { cn } from '@ui/utils/classname';
 import type { EntityData } from '@macro-entity';
 import { InlineEntity } from '../../../macro-entity/src/components/InlineEntity';
+import {
+  Property,
+  PropertyDefinitionDomain,
+} from '@core/component/Properties/types';
 
 export function PropertyEditorModal() {
   const [attach, hotkeyScope] = useHotkeyDOMScope('property-editor-modal');
@@ -68,7 +74,7 @@ export function PropertyEditorModal() {
           <div ref={mergeRefs(attach)}>
             <Dialog.Content>
               <ClippedPanel tl={!beveledCorners()} active>
-                <div class="flex flex-col max-h-108 overflow-hidden bracket-never">
+                <div class="flex flex-col max-h-108 overflow-hidden bracket-never text-sm">
                   <Switch>
                     <Match when={propertyEditorState.mode === 'selector'}>
                       <div class="flex items-center gap-2 bg-panel px-2 h-[40px] border-b border-edge-muted shrink-0">
@@ -89,6 +95,18 @@ export function PropertyEditorModal() {
                       <div class="overflow-scroll scrollbar-hidden p-2">
                         <PropertyList
                           searchTerm={searchValue()}
+                          focusedIndex={selectedIndex}
+                          setFocusedIndex={setSelectedIndex}
+                        />
+                      </div>
+                    </Match>
+                    <Match when={propertyEditorState.mode === 'direct'}>
+                      <div class="flex items-center gap-2 bg-panel px-2 h-[40px] border-b border-edge-muted shrink-0">
+                        <span class="pl-2 pointer-events-none">❯</span>
+                        <SearchInput
+                          placeHolder={`Set ${propertyEditorState.targetProperty?.displayName}...`}
+                          value={searchValue}
+                          setValue={setSearchValue}
                           focusedIndex={selectedIndex}
                           setFocusedIndex={setSelectedIndex}
                         />
@@ -139,7 +157,7 @@ function PropertyList(props: {
   let containerRef: HTMLDivElement | undefined;
   let searchInputRef: HTMLInputElement | undefined;
 
-  const { filteredProperties, togglePropertySelection } = usePropertySelection(
+  const { filteredProperties } = usePropertySelection(
     () => [],
     properties,
     () => props.searchTerm
@@ -176,7 +194,7 @@ function PropertyList(props: {
           e.preventDefault();
           const focusedProperty = items[props.focusedIndex()];
           if (focusedProperty) {
-            togglePropertySelection(focusedProperty.id);
+            setProperty(focusedProperty);
           }
           break;
       }
@@ -190,17 +208,18 @@ function PropertyList(props: {
     }
   });
 
-  // Scroll focused item into view
   createEffect(() => {
     const index = props.focusedIndex();
-    if (containerRef) {
-      const buttons = containerRef.querySelectorAll('button');
-      const focusedButton = buttons[index];
-      if (focusedButton) {
-        focusedButton.scrollIntoView({ block: 'nearest' });
-      }
+    const elem = document.getElementById(`property-editor-option-${index}`);
+    if (elem) {
+      elem.scrollIntoView({ block: 'nearest' });
     }
   });
+
+  const setProperty = (property: Property | PropertyDefinitionDomain) => {
+    setPropertyEditorMode('direct');
+    setPropertyEditorTarget(property);
+  };
 
   const selector = createSelector(props.focusedIndex);
 
@@ -215,16 +234,17 @@ function PropertyList(props: {
             return (
               <button
                 type="button"
+                id={`property-editor-option-${index()}`}
                 class={cn('w-full px-2.5 py-1.5 text-left scroll-m-2', {
                   'bg-edge/20 bracket': selector(index()),
                   'hover:bg-edge/10': !selector(index()),
                 })}
-                onClick={() => togglePropertySelection(property.id)}
+                onClick={() => setProperty(property)}
                 onMouseEnter={() => props.setFocusedIndex(index())}
               >
                 <div class="flex items-center justify-between">
                   <div class="flex-1">
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-2 font-medium">
                       <p>{property.displayName}</p>
                     </div>
                   </div>
@@ -257,7 +277,7 @@ function EditingEntityPreview(props: { entities: EntityData[] }) {
         }}
       </For>
       <Show when={remainingCount() > 0}>
-        <div class="text-sm text-muted-foreground px-2 py-1">
+        <div class="text-muted-foreground px-2 py-1">
           +{remainingCount()} more
         </div>
       </Show>

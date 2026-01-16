@@ -1,5 +1,8 @@
 import type { EntityData } from '@macro-entity';
-import type { Property } from '@core/component/Properties/types';
+import type {
+  Property,
+  PropertyDefinitionDomain,
+} from '@core/component/Properties/types';
 import { createStore, reconcile } from 'solid-js/store';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 
@@ -11,7 +14,7 @@ export const [propertyEditorOpen, setPropertyEditorOpen] =
 interface PropertyEditorState {
   mode: PropertyEditorMode;
   selectedEntities: EntityData[];
-  targetProperty?: Property;
+  targetProperty?: Property | PropertyDefinitionDomain;
 }
 
 const [state, setState] = createStore<PropertyEditorState>({
@@ -59,7 +62,9 @@ export function setPropertyEditorMode(mode: PropertyEditorMode) {
   setState('mode', mode);
 }
 
-export function setPropertyEditorTarget(property: Property) {
+export function setPropertyEditorTarget(
+  property: Property | PropertyDefinitionDomain
+) {
   setState('targetProperty', property);
 }
 
