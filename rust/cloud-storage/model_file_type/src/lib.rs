@@ -277,6 +277,10 @@ generate_file_types!(
     (Heif, "heif", "image/heif", Image),
     // Archives
     (Zip, "zip", "application/zip", Archive),
+    (Tar, "tar", "application/x-tar", Archive),
+    (TarGz, "tar.gz", "application/gzip", Archive),
+    (Tgz, "tgz", "application/gzip", Archive),
+    (Gz, "gz", "application/gzip", Archive),
     // Video files
     (Mp4, "mp4", "video/mp4", Video),
     // Document formats
