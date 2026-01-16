@@ -24,7 +24,7 @@ use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
 use crate::outbound::pg_soup_repo::type_err;
-use models_properties::{ EntityReference, EntityType};
+use models_properties::{EntityReference, EntityType};
 
 static PREFIX: &str = r#"
     WITH RECURSIVE ProjectHierarchy AS (
