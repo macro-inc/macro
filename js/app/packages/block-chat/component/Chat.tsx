@@ -17,6 +17,7 @@ import {
   type StoredStuff,
   storeChatState,
 } from '@core/component/AI/util/storage';
+import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
@@ -41,6 +42,7 @@ export function Chat(props: { data: ChatData }) {
   const blockElement = blockElementSignal.get;
   const { navigatedFromJK } = useNavigatedFromJK();
   const [chatEditor, setChatEditor] = createSignal<LexicalEditor>();
+  const [scrollRef, setScrollRef] = createSignal<HTMLElement>();
 
   const [stream, setStream] = createSignal<MessageStream>();
   const cancelStream = () => {
@@ -179,12 +181,17 @@ export function Chat(props: { data: ChatData }) {
       uploadQueue={uploadQueue}
     >
       <TopBar />
-      <div class="size-full flex-1 min-h-0 p-2">
-        <div data-chat-scroll class="h-full min-h-0 overflow-auto">
+      <div class="size-full flex-1 min-h-0 p-2 relative">
+        <div
+          data-chat-scroll
+          class="h-full min-h-0 overflow-auto scrollbar-hidden"
+          ref={setScrollRef}
+        >
           <div class="mx-auto w-full max-w-3xl">
             <ChatMessages />
           </div>
         </div>
+        <CustomScrollbar scrollContainer={scrollRef} />
       </div>
       <Show when={!disabled()}>
         <div class="flex w-full justify-center pb-2 px-4">
