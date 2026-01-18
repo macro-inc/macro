@@ -18,6 +18,7 @@ import {
   getChatInputStoredState,
   storeChatState,
 } from '@core/component/AI/util/storage';
+import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { ReferencesModal } from '@core/component/ReferencesModal';
@@ -265,7 +266,8 @@ export function Rightbar(props: {
   isBig?: boolean;
   setIsBig?: (val: boolean) => void;
 }) {
-  let messagesContainerRef!: HTMLDivElement;
+  const [messagesContainerRef, setMessagesContainerRef] =
+    createSignal<HTMLElement>();
 
   createEffect(() => {
     const stream_ = props.stream();
@@ -377,19 +379,22 @@ export function Rightbar(props: {
             </div>
           </Show>
           <Show when={props.messages().length > 0 || !props.isBig}>
-            <div
-              data-chat-scroll
-              class="flex-1 overflow-y-auto overflow-x-hidden scroll-smooth flex justify-center w-full"
-              ref={messagesContainerRef}
-            >
-              <div class="w-full macro-message-width">
-                <ChatMessages
-                  chatId={props.chatId}
-                  messages={[props.messages, props.setState.setMessages]}
-                  messageActions={undefined}
-                  stream={[props.stream, props.setState.setStream]}
-                />
+            <div class="relative flex-1 min-h-0 w-full">
+              <div
+                data-chat-scroll
+                class="size-full overflow-y-auto overflow-x-hidden scroll-smooth flex justify-center scrollbar-hidden"
+                ref={setMessagesContainerRef}
+              >
+                <div class="w-full macro-message-width">
+                  <ChatMessages
+                    chatId={props.chatId}
+                    messages={[props.messages, props.setState.setMessages]}
+                    messageActions={undefined}
+                    stream={[props.stream, props.setState.setStream]}
+                  />
+                </div>
               </div>
+              <CustomScrollbar scrollContainer={messagesContainerRef} />
             </div>
           </Show>
 
