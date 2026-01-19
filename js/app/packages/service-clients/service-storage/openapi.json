@@ -8311,7 +8311,8 @@
           "isPersistent",
           "createdAt",
           "updatedAt",
-          "viewedAt"
+          "viewedAt",
+          "properties"
         ],
         "properties": {
           "createdAt": {
@@ -8340,6 +8341,13 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "The project id of the chat"
+          },
+          "properties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SoupProperty"
+            },
+            "description": "Properties"
           },
           "updatedAt": {
             "type": "integer",
@@ -8859,10 +8867,12 @@
       },
       "SoupProperty": {
         "type": "object",
+        "description": "A property attached to a Soup item.\n\nThis is a simplified representation that includes only the definition and value,\nomitting the entity property assignment metadata and options.",
         "required": ["definition"],
         "properties": {
           "definition": {
-            "$ref": "#/components/schemas/PropertyDefinition"
+            "$ref": "#/components/schemas/PropertyDefinition",
+            "description": "The property definition"
           },
           "value": {
             "oneOf": [
@@ -8870,7 +8880,8 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/PropertyValue"
+                "$ref": "#/components/schemas/PropertyValue",
+                "description": "The property value, if set"
               }
             ]
           }
