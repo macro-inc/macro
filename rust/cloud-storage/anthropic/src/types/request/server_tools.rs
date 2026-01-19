@@ -27,11 +27,10 @@ pub static WEB_FETCH_TOOL_HEADER: (reqwest::header::HeaderName, reqwest::header:
     reqwest::header::HeaderValue::from_static("web-fetch-2025-09-10"),
 );
 
-pub static CODE_EXECUTION_TOOL_HEADER: (reqwest::header::HeaderName, reqwest::header::HeaderValue) =
-    (
-        reqwest::header::HeaderName::from_static("anthropic-beta"),
-        reqwest::header::HeaderValue::from_static("code-execution-2025-08-25"),
-    );
+pub static CODE_EXECUTION_TOOL_HEADER: (reqwest::header::HeaderName, reqwest::header::HeaderValue) = (
+    reqwest::header::HeaderName::from_static("anthropic-beta"),
+    reqwest::header::HeaderValue::from_static("code-execution-2025-08-25"),
+);
 
 lazy_static! {
     static ref re: Regex = Regex::new("<m-link>(.+?)</m-link>").expect("link-regex");
