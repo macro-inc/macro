@@ -340,6 +340,7 @@ pub async fn get_bulk_entity_properties_values(
 
     // Use UNNEST to match entity_id and entity_type as pairs
     let entity_ids: Vec<String> = entity_refs.iter().map(|r| r.entity_id.clone()).collect();
+    let entity_types: Vec<EntityType> = entity_refs.iter().map(|r| r.entity_type).collect();
 
     let rows = sqlx::query!(
         r#"
@@ -362,11 +363,12 @@ SELECT
     pd.is_system as definition_is_system
 FROM entity_properties ep
 INNER JOIN property_definitions pd ON ep.property_definition_id = pd.id
-WHERE (ep.entity_id) IN (
-    SELECT * FROM UNNEST($1::TEXT[])
+WHERE (ep.entity_id, ep.entity_type) IN (
+    SELECT * FROM UNNEST($1::TEXT[], $2::property_entity_type[])
 )
 "#,
         &entity_ids,
+        &entity_types as &[EntityType]
     )
     .fetch_all(db)
     .await?;
@@ -414,6 +416,13 @@ WHERE (ep.entity_id) IN (
         attach_property_options(db, properties).await?;
     }
 
+    // Ensure all requested entity_ids are present in the result, even if they have no properties
+    for entity_ref in entity_refs {
+        entity_properties_map
+            .entry(entity_ref.entity_id.clone())
+            .or_default();
+    }
+
     Ok(entity_properties_map)
 }
 
@@ -427,10 +436,16 @@ pub async fn get_bulk_entity_properties_values_filtered(
     property_ids: &[Uuid],
 ) -> Result<HashMap<String, Vec<EntityPropertyWithDefinition>>> {
     if entity_refs.is_empty() || property_ids.is_empty() {
-        return Ok(HashMap::new());
+        // If no property_ids specified, return empty map for each entity
+        let mut result = HashMap::new();
+        for entity_ref in entity_refs {
+            result.insert(entity_ref.entity_id.clone(), Vec::new());
+        }
+        return Ok(result);
     }
 
     let entity_ids: Vec<String> = entity_refs.iter().map(|r| r.entity_id.clone()).collect();
+    let entity_types: Vec<EntityType> = entity_refs.iter().map(|r| r.entity_type).collect();
 
     let rows = sqlx::query!(
         r#"
@@ -453,12 +468,13 @@ SELECT
     pd.is_system as definition_is_system
 FROM entity_properties ep
 INNER JOIN property_definitions pd ON ep.property_definition_id = pd.id
-WHERE (ep.entity_id) IN (
-    SELECT * FROM UNNEST($1::TEXT[])
+WHERE (ep.entity_id, ep.entity_type) IN (
+    SELECT * FROM UNNEST($1::TEXT[], $2::property_entity_type[])
 )
-AND pd.id = ANY($2::UUID[])
+AND pd.id = ANY($3::UUID[])
         "#,
         &entity_ids,
+        &entity_types as &[EntityType],
         &property_ids
     )
     .fetch_all(db)
@@ -500,6 +516,13 @@ AND pd.id = ANY($2::UUID[])
 
     for properties in entity_properties_map.values_mut() {
         attach_property_options(db, properties).await?;
+    }
+
+    // Ensure all requested entity_ids are present in the result
+    for entity_ref in entity_refs {
+        entity_properties_map
+            .entry(entity_ref.entity_id.clone())
+            .or_default();
     }
 
     Ok(entity_properties_map)
