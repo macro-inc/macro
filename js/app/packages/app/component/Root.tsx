@@ -17,7 +17,6 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createBlockOrchestrator } from '@core/orchestrator';
 import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
 import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
-import { isErr } from '@core/util/maybeResult';
 import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
 import { MaybeTauriProvider } from '@macro/tauri';
@@ -31,8 +30,7 @@ import { maybeHandlePlatformNotification } from '@notifications/notification-pla
 import { setUser, useObserveRouting } from '@observability';
 import { fetchAndCacheHistory } from '@queries/history/history';
 import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
-import { authServiceClient } from '@service-auth/client';
-import { invalidateUserInfo } from '@queries/auth/user-info';
+import { invalidateUserInfo, prefetchUserInfo } from '@queries/auth/user-info';
 import { MetaProvider, Title } from '@solidjs/meta';
 import {
   HashRouter,
@@ -120,15 +118,18 @@ const rootPreload: RoutePreloadFunc = async (args) => {
 };
 
 /**
- * Component that preloads user info inside the QueryClientProvider context.
- * Uses createResource to suspend until user info is fetched.
+ * Component that preloads user info and populates the TanStack Query cache.
+ * Uses createResource with prefetchUserInfo so it works outside QueryClientProvider context.
  */
 function UserInfoPreloader(props: ParentProps) {
-  const [userInfoResource] = createResource(async () => {
-    const userInfoResult = await authServiceClient.getLegacyUserPermissions();
-    if (isErr(userInfoResult)) return null;
+  const [userInfoResource] = createResource(prefetchUserInfo);
 
-    const [, { id, email, hasChromeExt, ...userInfo }] = userInfoResult;
+  // Run side effects when user data is available
+  createEffect(() => {
+    const data = userInfoResource();
+    if (!data) return;
+
+    const { id, email, hasChromeExt, ...userInfo } = data;
     const platform = detect(navigator.userAgent);
     const os = `${platform?.os?.replaceAll(' ', '')}`;
 
@@ -150,8 +151,6 @@ function UserInfoPreloader(props: ParentProps) {
         // Non-blocking - command menu will still work without prefetch
       });
     }
-
-    return userInfoResult;
   });
 
   return (

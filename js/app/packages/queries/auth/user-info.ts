@@ -34,20 +34,24 @@ export function invalidateUserInfo() {
   });
 }
 
+/** Prefetch user info and populate the query cache. Can be used outside QueryClientProvider. */
+export async function prefetchUserInfo() {
+  return queryClient.fetchQuery(userInfoQueryOptions());
+}
+
 /**
  * @deprecated Use invalidateUserInfo() instead
  */
 export const updateUserInfo = invalidateUserInfo;
 
-// Derived state hooks - these derive from useAuthUserInfo (createResource-based)
-// so they work anywhere, even outside QueryClientProvider
+// Derived state hooks - these use the singleton resource (works outside QueryClientProvider)
 
 /** Returns the current user's ID. */
 export function useUserId() {
   const [resource] = useAuthUserInfo();
   return createMemo(() => {
     const [, data] = resource.latest;
-    return data?.userId;
+    return data?.id;
   });
 }
 
