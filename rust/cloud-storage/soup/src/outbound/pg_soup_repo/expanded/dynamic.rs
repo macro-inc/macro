@@ -456,6 +456,7 @@ impl SoupRow {
                 created_at,
                 updated_at,
                 viewed_at,
+                properties: Default::default(),
             }),
             SoupRow::Project(ProjectRow {
                 id,
@@ -529,7 +530,7 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
         .fetch_all(db)
         .await?;
 
-    // Collect entity references for items that have properties (Documents and Projects)
+    // Collect entity references for items that have properties
     let entity_refs: Vec<EntityReference> = items
         .iter()
         .filter_map(|item| match item {
@@ -545,6 +546,9 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
                 email.thread.id.to_string(),
                 EntityType::Thread,
             )),
+            SoupItem::Chat(chat) => {
+                Some(EntityReference::new(chat.id.to_string(), EntityType::Chat))
+            }
             _ => None,
         })
         .collect();
@@ -584,6 +588,15 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
             SoupItem::EmailThread(x) => {
                 x.properties = properties_map
                     .get(&x.thread.id.to_string())
+                    .cloned()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(SoupProperty::from)
+                    .collect();
+            }
+            SoupItem::Chat(x) => {
+                x.properties = properties_map
+                    .get(&x.id.to_string())
                     .cloned()
                     .unwrap_or_default()
                     .into_iter()

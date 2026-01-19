@@ -3,6 +3,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::SoupProperty;
+
 #[derive(Serialize, Clone, Deserialize, Debug)]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
 #[serde(rename_all = "camelCase")]
@@ -39,4 +41,7 @@ pub struct SoupChat {
     #[serde(with = "chrono::serde::ts_milliseconds_option")]
     #[cfg_attr(feature = "schema", schema(value_type = i64, nullable = true))]
     pub viewed_at: Option<chrono::DateTime<Utc>>,
+
+    /// Properties
+    pub properties: Vec<SoupProperty>,
 }
