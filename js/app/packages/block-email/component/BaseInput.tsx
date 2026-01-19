@@ -225,7 +225,6 @@ export function BaseInput(props: {
         trackMention(blockId, 'document', mention.documentId);
       });
       pendingMentions = [];
-      await deleteDraftAndReset();
       refetchThreadMessages();
       props.sideEffectOnSend?.(message.db_id ?? null);
       if (shouldMarkDoneOnSuccess()) {
