@@ -53,7 +53,9 @@ function CodeFence(props: { content: string; maxLines: number }) {
       </Show>
       <pre
         class="text-ink-muted bg-background-secondary overflow-x-auto rounded p-2 pr-8 font-mono text-xs whitespace-pre-wrap"
-        classList={{ 'max-h-32 overflow-hidden': !expanded() && needsTruncation() }}
+        classList={{
+          'max-h-32 overflow-hidden': !expanded() && needsTruncation(),
+        }}
       >
         {displayContent()}
       </pre>
@@ -69,7 +71,10 @@ function ViewResult(props: { result: TextEditorCodeExecutionViewResult }) {
       when={hasContent()}
       fallback={<span class="text-ink-muted">Empty file</span>}
     >
-      <CodeFence content={props.result.content ?? ''} maxLines={MAX_OUTPUT_LINES} />
+      <CodeFence
+        content={props.result.content ?? ''}
+        maxLines={MAX_OUTPUT_LINES}
+      />
     </Show>
   );
 }
@@ -108,9 +113,7 @@ function TextEditorResult(props: { content: TextEditorCodeExecutionContent }) {
         }
       >
         {(result) => (
-          <ViewResult
-            result={result() as TextEditorCodeExecutionViewResult}
-          />
+          <ViewResult result={result() as TextEditorCodeExecutionViewResult} />
         )}
       </Match>
       <Match
