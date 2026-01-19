@@ -6,9 +6,9 @@
  */
 
 /**
- * Request body for creating a Stripe billing portal session
+ * Request body for creating a Stripe portal session
  */
 export interface CreatePortalSessionRequest {
-  /** The URL to redirect to when the user exits the portal */
+  /** The URL to redirect to after leaving the portal */
   returnUrl: string;
 }

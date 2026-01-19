@@ -29,7 +29,9 @@ export function useUserInfoQuery() {
 
 /** Invalidate the user info query to trigger a refetch. */
 export function invalidateUserInfo() {
-  return queryClient.invalidateQueries({ queryKey: authKeys.userInfo.queryKey });
+  return queryClient.invalidateQueries({
+    queryKey: authKeys.userInfo.queryKey,
+  });
 }
 
 /**

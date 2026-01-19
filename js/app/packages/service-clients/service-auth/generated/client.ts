@@ -8,10 +8,8 @@ import type {
   AppleLoginRequest,
   CreateAccountMergeRequest,
   CreateCheckoutSessionRequest,
-  CreateCheckoutSessionResponse,
   CreateInProgressLinkResponse,
   CreatePortalSessionRequest,
-  CreatePortalSessionResponse,
   CreateTeamRequest,
   CreateUserRequest,
   EmptyResponse,
@@ -41,6 +39,7 @@ import type {
   ResendFusionauthVerifyUserEmailRequest,
   SsoLoginParams,
   SsoRequiredResponse,
+  StripeSessionResponse,
   Team,
   TeamInvitesResponse,
   TeamWithUsers,
@@ -3051,22 +3050,22 @@ export const getUserQuota = async (
  * @summary Creates a Stripe checkout session for the user to subscribe.
  */
 export type createCheckoutSessionResponse200 = {
-  data: CreateCheckoutSessionResponse;
+  data: StripeSessionResponse;
   status: 200;
 };
 
 export type createCheckoutSessionResponse400 = {
-  data: ErrorResponse;
+  data: string;
   status: 400;
 };
 
 export type createCheckoutSessionResponse404 = {
-  data: ErrorResponse;
+  data: string;
   status: 404;
 };
 
 export type createCheckoutSessionResponse500 = {
-  data: ErrorResponse;
+  data: string;
   status: 500;
 };
 
@@ -3114,20 +3113,20 @@ export const createCheckoutSession = async (
 };
 
 /**
- * @summary Creates a Stripe billing portal session for the user to manage their subscription.
+ * @summary Creates a Stripe billing portal session.
  */
 export type createPortalSessionResponse200 = {
-  data: CreatePortalSessionResponse;
+  data: StripeSessionResponse;
   status: 200;
 };
 
 export type createPortalSessionResponse400 = {
-  data: ErrorResponse;
+  data: string;
   status: 400;
 };
 
 export type createPortalSessionResponse500 = {
-  data: ErrorResponse;
+  data: string;
   status: 500;
 };
 

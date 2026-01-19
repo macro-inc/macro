@@ -1,6 +1,6 @@
 import { throwOnErr } from '@core/util/maybeResult';
 import { authServiceClient } from '@service-auth/client';
-import type { PatchUserOnboardingRequest } from '../../codegen/auth_service/auth_service_rpc';
+import type { PatchUserOnboardingRequest } from '@service-auth/generated/schemas/patchUserOnboardingRequest';
 import { useMutation } from '@tanstack/solid-query';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { queryClient } from '../client';
@@ -18,12 +18,16 @@ export function useCompleteOnboardingMutation(
 ) {
   return useMutation(() => ({
     mutationFn: async (args: PatchUserOnboardingRequest) => {
-      await throwOnErr(async () => await authServiceClient.completeOnboarding(args));
+      await throwOnErr(
+        async () => await authServiceClient.completeOnboarding(args)
+      );
     },
     ...withCallbacks<void, Error, PatchUserOnboardingRequest>(
       {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: authKeys.userInfo.queryKey });
+          queryClient.invalidateQueries({
+            queryKey: authKeys.userInfo.queryKey,
+          });
         },
       },
       callbacks
@@ -42,7 +46,9 @@ export function useSetGroupMutation(callbacks?: SetGroupCallbacks) {
     ...withCallbacks<void, Error, { group: string }>(
       {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: authKeys.userInfo.queryKey });
+          queryClient.invalidateQueries({
+            queryKey: authKeys.userInfo.queryKey,
+          });
         },
       },
       callbacks

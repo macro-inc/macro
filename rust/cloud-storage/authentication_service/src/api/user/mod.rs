@@ -1,4 +1,3 @@
-use auth_service_rpc::LegacyApiRpcRouterBuilder;
 use axum::{
     Router,
     routing::{delete, get, patch, post, put},
@@ -7,11 +6,9 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use tower::ServiceBuilder;
 use tower_cookies::CookieManagerLayer;
 
-use crate::api::{ApiContext, user::legacy_rpc::AuthRpcState};
+use crate::api::ApiContext;
 
 // needs to be public in api crate for swagger
-pub(in crate::api) mod create_checkout_session;
-pub(in crate::api) mod create_portal_session;
 pub(in crate::api) mod create_user;
 pub(in crate::api) mod delete_user;
 pub(in crate::api) mod get_legacy_user_permissions;
@@ -20,8 +17,8 @@ pub(in crate::api) mod get_user_info;
 pub(in crate::api) mod get_user_link_exists;
 pub(in crate::api) mod get_user_organization;
 pub(in crate::api) mod get_user_quota;
-pub(in crate::api) mod legacy_rpc;
 pub(in crate::api) mod patch_tutorial;
+pub(in crate::api) mod stripe;
 pub(in crate::api) mod patch_user_group;
 pub(in crate::api) mod patch_user_onboarding;
 pub(in crate::api) mod post_get_names;
@@ -40,10 +37,7 @@ pub fn router(state: ApiContext, jwt_args: JwtValidationArgs) -> Router<ApiConte
 }
 
 fn router_with_auth(state: ApiContext, jwt_args: JwtValidationArgs) -> Router<ApiContext> {
-    let rpc_router = LegacyApiRpcRouterBuilder::new(AuthRpcState(state.clone())).build();
-
     Router::new()
-        .merge(rpc_router)
         .route("/me", get(get_user_info::handler))
         .route("/me", delete(delete_user::handler))
         .route("/profile_pictures", post(post_profile_pictures::handler))
@@ -66,9 +60,9 @@ fn router_with_auth(state: ApiContext, jwt_args: JwtValidationArgs) -> Router<Ap
         )
         .route(
             "/stripe/checkout",
-            post(create_checkout_session::handler),
+            post(stripe::create_checkout_session),
         )
-        .route("/stripe/portal", post(create_portal_session::handler))
+        .route("/stripe/portal", post(stripe::create_portal_session))
         .route(
             "/legacy_user_permissions",
             get(get_legacy_user_permissions::handler),

@@ -21,4 +21,7 @@ export {
   useOrganizationId,
   useOrganizationName,
 } from './organization';
-export { useCompleteOnboardingMutation, useSetGroupMutation } from './mutations';
+export {
+  useCompleteOnboardingMutation,
+  useSetGroupMutation,
+} from './mutations';

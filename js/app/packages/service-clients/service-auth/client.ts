@@ -5,8 +5,8 @@ import { fetchWithToken } from '@core/util/fetchWithToken';
 import {
   isOk,
   mapOk,
-  ok,
   type ObjectLike,
+  ok,
   resultError,
 } from '@core/util/maybeResult';
 import { registerClient } from '@core/util/mockClient';
@@ -14,19 +14,18 @@ import { type SafeFetchInit, safeFetch } from '@core/util/safeFetch';
 import { logger } from '@observability';
 import { makePersisted } from '@solid-primitives/storage';
 import { createSignal } from 'solid-js';
-import type { GetLegacyUserPermissionsResponse } from './generated/schemas/getLegacyUserPermissionsResponse';
-import type { PatchUserGroupRequest } from './generated/schemas/patchUserGroupRequest';
-import type { PatchUserOnboardingRequest } from './generated/schemas/patchUserOnboardingRequest';
-import type { UserOrganizationResponse } from './generated/schemas/userOrganizationResponse';
 import { fetchWithAuth as _fetchWithAuth } from './fetch';
 import type { PatchUserTutorialRequest, UserQuota } from './generated/schemas';
 import type { AppleLoginRequest } from './generated/schemas/appleLoginRequest';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
 import type { GenericSuccessResponse } from './generated/schemas/genericSuccessResponse';
+import type { GetLegacyUserPermissionsResponse } from './generated/schemas/getLegacyUserPermissionsResponse';
 import type { GetProfilePicturesRequestBody } from './generated/schemas/getProfilePicturesRequestBody';
 import type { GetUserInfo } from './generated/schemas/getUserInfo';
 import type { MacroApiTokenResponse } from './generated/schemas/macroApiTokenResponse';
 import type { PasswordRequest } from './generated/schemas/passwordRequest';
+import type { PatchUserGroupRequest } from './generated/schemas/patchUserGroupRequest';
+import type { PatchUserOnboardingRequest } from './generated/schemas/patchUserOnboardingRequest';
 import type { PostGetNamesRequestBody } from './generated/schemas/postGetNamesRequestBody';
 import type { ProfilePictures } from './generated/schemas/profilePictures';
 import type { PutProfilePictureParams } from './generated/schemas/putProfilePictureParams';
@@ -34,6 +33,7 @@ import type { PutUserNameQueryParams } from './generated/schemas/putUserNameQuer
 import type { UserLinkResponse } from './generated/schemas/userLinkResponse';
 import type { UserName } from './generated/schemas/userName';
 import type { UserNames } from './generated/schemas/userNames';
+import type { UserOrganizationResponse } from './generated/schemas/userOrganizationResponse';
 import type { UserTokensResponse } from './generated/schemas/userTokensResponse';
 
 const authHost = SERVER_HOSTS['auth-service'];

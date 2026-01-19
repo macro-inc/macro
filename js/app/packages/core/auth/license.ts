@@ -10,10 +10,6 @@ export function useHasPaidAccess() {
     if (isNativeMobilePlatform()) return true;
 
     const status = licenseStatus();
-    return (
-      !!organizationId() ||
-      status === 'trialing' ||
-      status === 'active'
-    );
+    return !!organizationId() || status === 'trialing' || status === 'active';
   });
 }

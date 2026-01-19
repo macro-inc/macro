@@ -2637,7 +2637,7 @@
     },
     "/user/stripe/checkout": {
       "post": {
-        "tags": ["user::create_checkout_session"],
+        "tags": ["user::stripe"],
         "summary": "Creates a Stripe checkout session for the user to subscribe.",
         "operationId": "create_checkout_session",
         "requestBody": {
@@ -2656,7 +2656,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CreateCheckoutSessionResponse"
+                  "$ref": "#/components/schemas/StripeSessionResponse"
                 }
               }
             }
@@ -2664,9 +2664,9 @@
           "400": {
             "description": "",
             "content": {
-              "application/json": {
+              "text/plain": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "type": "string"
                 }
               }
             }
@@ -2674,9 +2674,9 @@
           "404": {
             "description": "",
             "content": {
-              "application/json": {
+              "text/plain": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "type": "string"
                 }
               }
             }
@@ -2684,9 +2684,9 @@
           "500": {
             "description": "",
             "content": {
-              "application/json": {
+              "text/plain": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "type": "string"
                 }
               }
             }
@@ -2696,8 +2696,8 @@
     },
     "/user/stripe/portal": {
       "post": {
-        "tags": ["user::create_portal_session"],
-        "summary": "Creates a Stripe billing portal session for the user to manage their subscription.",
+        "tags": ["user::stripe"],
+        "summary": "Creates a Stripe billing portal session.",
         "operationId": "create_portal_session",
         "requestBody": {
           "content": {
@@ -2715,7 +2715,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CreatePortalSessionResponse"
+                  "$ref": "#/components/schemas/StripeSessionResponse"
                 }
               }
             }
@@ -2723,9 +2723,9 @@
           "400": {
             "description": "",
             "content": {
-              "application/json": {
+              "text/plain": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "type": "string"
                 }
               }
             }
@@ -2733,9 +2733,9 @@
           "500": {
             "description": "",
             "content": {
-              "application/json": {
+              "text/plain": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "type": "string"
                 }
               }
             }
@@ -2850,17 +2850,6 @@
           }
         }
       },
-      "CreateCheckoutSessionResponse": {
-        "type": "object",
-        "description": "Response containing the Stripe checkout session URL",
-        "required": ["url"],
-        "properties": {
-          "url": {
-            "type": "string",
-            "description": "The URL to redirect the user to for checkout"
-          }
-        }
-      },
       "CreateInProgressLinkResponse": {
         "type": "object",
         "required": ["link_id"],
@@ -2873,23 +2862,12 @@
       },
       "CreatePortalSessionRequest": {
         "type": "object",
-        "description": "Request body for creating a Stripe billing portal session",
+        "description": "Request body for creating a Stripe portal session",
         "required": ["returnUrl"],
         "properties": {
           "returnUrl": {
             "type": "string",
-            "description": "The URL to redirect to when the user exits the portal"
-          }
-        }
-      },
-      "CreatePortalSessionResponse": {
-        "type": "object",
-        "description": "Response containing the Stripe billing portal URL",
-        "required": ["url"],
-        "properties": {
-          "url": {
-            "type": "string",
-            "description": "The URL to redirect the user to for the billing portal"
+            "description": "The URL to redirect to after leaving the portal"
           }
         }
       },
@@ -3244,6 +3222,17 @@
           "idp_id": {
             "type": "string",
             "description": "The idp_id you need to perform sso login with."
+          }
+        }
+      },
+      "StripeSessionResponse": {
+        "type": "object",
+        "description": "Response containing the Stripe session URL",
+        "required": ["url"],
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The URL to redirect the user to"
           }
         }
       },
