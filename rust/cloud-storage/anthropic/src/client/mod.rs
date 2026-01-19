@@ -27,7 +27,10 @@ impl Client {
                     WEB_FETCH_TOOL_HEADER.1.clone(),
                 );
             }
-            if extensions.0.contains(&AnthropicRequestExtension::CodeExecutionTool) {
+            if extensions
+                .0
+                .contains(&AnthropicRequestExtension::CodeExecutionTool)
+            {
                 tracing::debug!("Adding code_execution beta header");
                 config.headers.append(
                     CODE_EXECUTION_TOOL_HEADER.0.clone(),
