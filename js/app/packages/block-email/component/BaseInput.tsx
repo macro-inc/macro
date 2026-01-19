@@ -553,6 +553,7 @@ export function BaseInput(props: {
     });
 
     resetState();
+    clearDraftState();
 
     cleanupWatermark();
   };
@@ -564,18 +565,22 @@ export function BaseInput(props: {
     form().reset();
   };
 
+  const clearDraftState = () => {
+    const replyingToId = props.replyingTo()?.db_id;
+    if (replyingToId) {
+      ctx.drafts.deleteDraftForMessage(replyingToId);
+    }
+    props.setShowReply?.(false);
+  };
+
   const deleteDraftAndReset = async () => {
     const draftId = savedDraftId();
     if (draftId) {
       await deleteEmailDraft(draftId);
       refetchThreadMessages();
     }
-    const replyingToId = props.replyingTo()?.db_id;
-    if (replyingToId) {
-      ctx.drafts.deleteDraftForMessage(replyingToId);
-    }
     resetState();
-    props.setShowReply?.(false);
+    clearDraftState();
   };
 
   const handleUserMention = (mention: UserMentionRecord) => {
