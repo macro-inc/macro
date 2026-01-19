@@ -367,6 +367,7 @@ export function BaseInput(props: {
 
     const draftResponse = await saveEmailDraft({
       ...draftToSave,
+      db_id: savedDraftId(),
       link_id: linkId!,
       provider_thread_id: currentThread?.provider_id,
       thread_db_id: currentThread?.db_id,
