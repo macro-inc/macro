@@ -6,7 +6,6 @@ use uuid::Uuid;
 use crate::SoupProperty;
 
 #[derive(Serialize, Clone, Deserialize, Debug)]
-#[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct SoupChat {
