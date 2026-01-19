@@ -20,22 +20,14 @@ impl Client {
     pub fn dangerously_try_from_env(extensions: Option<AnthropicRequestExtensions>) -> Self {
         let mut config = Config::dangrously_try_from_env();
         if let Some(ref extensions) = extensions {
-            if extensions
-                .0
-                .iter()
-                .any(|f| *f == AnthropicRequestExtension::FetchTool)
-            {
+            if extensions.0.contains(&AnthropicRequestExtension::FetchTool) {
                 tracing::debug!("Adding web_fetch beta header");
                 config.headers.append(
                     WEB_FETCH_TOOL_HEADER.0.clone(),
                     WEB_FETCH_TOOL_HEADER.1.clone(),
                 );
             }
-            if extensions
-                .0
-                .iter()
-                .any(|f| *f == AnthropicRequestExtension::CodeExecutionTool)
-            {
+            if extensions.0.contains(&AnthropicRequestExtension::CodeExecutionTool) {
                 tracing::debug!("Adding code_execution beta header");
                 config.headers.append(
                     CODE_EXECUTION_TOOL_HEADER.0.clone(),
