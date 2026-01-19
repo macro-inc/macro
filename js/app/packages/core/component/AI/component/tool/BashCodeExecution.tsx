@@ -47,7 +47,9 @@ function CodeFence(props: { content: string; maxLines: number }) {
       </Show>
       <pre
         class="text-ink-muted bg-background-secondary overflow-x-auto rounded p-2 pr-8 font-mono text-xs whitespace-pre-wrap"
-        classList={{ 'max-h-24 overflow-hidden': !expanded() && needsTruncation() }}
+        classList={{
+          'max-h-24 overflow-hidden': !expanded() && needsTruncation(),
+        }}
       >
         {displayContent()}
       </pre>
@@ -72,9 +74,7 @@ function BashResult(props: { result: BashCodeExecutionResult }) {
   return (
     <div class="flex flex-col gap-1">
       <Show when={props.result.return_code !== 0}>
-        <span class="text-ink-error">
-          Exit code {props.result.return_code}
-        </span>
+        <span class="text-ink-error">Exit code {props.result.return_code}</span>
       </Show>
       <Show when={hasOutput()}>
         <CodeFence content={output()} maxLines={MAX_OUTPUT_LINES} />

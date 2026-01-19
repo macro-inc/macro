@@ -56,6 +56,7 @@ export const SUPPORTED_CHAT_ATTACHMENT_BLOCKS: (BlockName | BlockAlias)[] = [
   'pdf',
   'md',
   'code',
+  'csv',
   'canvas',
   'email',
   'task',
