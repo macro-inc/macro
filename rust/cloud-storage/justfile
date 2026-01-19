@@ -3,6 +3,26 @@ DATABASE_URL := "postgres://user:password@localhost:5432"
 
 mod sqlx './sqlx.just'
 
+# Run all services locally using docker-compose
+# Requires .env file with dev environment variables
+run-local:
+    docker compose up
+
+run-local-build:
+    docker compose up --build
+
+# Run all services in detached mode
+run-local-detached:
+    docker compose up --build -d
+
+# Stop all local services
+stop-local:
+    docker compose down
+
+# View logs for local services
+logs-local *ARGS:
+    docker compose logs {{ ARGS }}
+
 check:
     RUSTFLAGS=-Dwarnings RUSTDOCFLAGS=-Dwarnings CARGO_TERM_COLOR=always SQLX_OFFLINE=true cargo check
 
