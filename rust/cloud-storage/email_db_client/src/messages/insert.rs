@@ -296,8 +296,6 @@ pub async fn insert_message_to_send_db(
 
     service_message.db_id = Some(message_db_id);
 
-    // moving field to be outside of the message struct - keeping backwards compatability for now
-    let send_time = send_time.or(service_message.send_time);
     process_scheduled_message(tx, service_message, send_time, message_db_id).await?;
 
     if let Some(mut attachments) = service_message.attachments_macro.clone() {
