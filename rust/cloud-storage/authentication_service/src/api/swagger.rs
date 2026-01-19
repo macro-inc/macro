@@ -17,6 +17,12 @@ use crate::api::user::create_user::CreateUserRequest;
 use crate::api::user::get_legacy_user_permissions::GetLegacyUserPermissionsResponse;
 use crate::api::user::get_user_link_exists::UserLinkResponse;
 use crate::api::user::get_user_organization::UserOrganizationResponse;
+use crate::api::user::create_checkout_session::{
+    CreateCheckoutSessionRequest, CreateCheckoutSessionResponse,
+};
+use crate::api::user::create_portal_session::{
+    CreatePortalSessionRequest, CreatePortalSessionResponse,
+};
 use crate::api::user::patch_tutorial::PatchUserTutorialRequest;
 use crate::api::user::patch_user_group::PatchUserGroupRequest;
 use crate::api::user::patch_user_onboarding::PatchUserOnboardingRequest;
@@ -87,6 +93,8 @@ use model::user::{
                 user::get_user_quota::handler,
                 user::get_legacy_user_permissions::handler,
                 user::patch_tutorial::handler,
+                user::create_checkout_session::handler,
+                user::create_portal_session::handler,
 
                 /// /session
                 session::session_login::handler,
@@ -145,6 +153,12 @@ use model::user::{
                         UserOrganizationResponse,
                         GetLegacyUserPermissionsResponse,
                         PatchUserTutorialRequest,
+
+                        // Stripe
+                        CreateCheckoutSessionRequest,
+                        CreateCheckoutSessionResponse,
+                        CreatePortalSessionRequest,
+                        CreatePortalSessionResponse,
 
                         // User onboarding
                         PatchUserGroupRequest,

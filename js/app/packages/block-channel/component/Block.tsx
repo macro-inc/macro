@@ -8,7 +8,7 @@ import { useChannelName } from '@core/context/channels';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { useChannelQuery } from '@queries/channel/channel';
 import { commsServiceClient } from '@service-comms/client';
-import { useUserId } from '@service-gql/client';
+import { useUserId } from '@queries/auth/user-info';
 import {
   createSignal,
   type JSXElement,

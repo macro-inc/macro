@@ -14,7 +14,7 @@ import TextAa from '@icon/regular/text-aa.svg';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import ArrowFatLineUp from '@phosphor-icons/core/fill/arrow-fat-line-up-fill.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
-import { useUserId } from '@service-gql/client';
+import { useUserId } from '@queries/auth/user-info';
 import { defaultSelectionData } from 'core/component/LexicalMarkdown/plugins';
 import {
   NODE_TRANSFORM,

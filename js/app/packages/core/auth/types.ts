@@ -2,7 +2,7 @@ import type { ResultType } from '@core/util/maybeResult';
 import type { authServiceClient } from '@service-auth/client';
 
 export type MaybeAuthUserInfo = Awaited<
-  ReturnType<typeof authServiceClient.getUserInfo>
+  ReturnType<typeof authServiceClient.getLegacyUserPermissions>
 >;
 
 export type AuthUserInfo = ResultType<MaybeAuthUserInfo>;

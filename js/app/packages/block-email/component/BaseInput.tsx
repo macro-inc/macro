@@ -47,7 +47,7 @@ import type {
   MessageToSendDbId,
   MessageWithBodyReplyless,
 } from '@service-email/generated/schemas';
-import { useEmail, useUserId } from '@service-gql/client';
+import { useEmail, useUserId } from '@queries/auth/user-info';
 import { Button } from '@ui/components/Button';
 import {
   defaultSelectionData,

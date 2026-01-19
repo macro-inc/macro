@@ -21,7 +21,7 @@ import type {
   Attachment,
   MessageWithBodyReplyless,
 } from '@service-email/generated/schemas';
-import { useEmail, useUserId } from '@service-gql/client';
+import { useEmail, useUserId } from '@queries/auth/user-info';
 import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import {

@@ -9,7 +9,7 @@ import type { RedirectLocation } from '@core/util/authRedirect';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
 import { isOk } from '@core/util/maybeResult';
 import { authServiceClient } from '@service-auth/client';
-import { gqlServiceClient, updateUserInfo } from '@service-gql/client';
+import { invalidateUserInfo } from '@queries/auth/user-info';
 import { Navigate, useLocation, useSearchParams } from '@solidjs/router';
 import {
   createEffect,
@@ -52,12 +52,12 @@ export function Login() {
       console.log({ session_code });
       unsetTokenPromise();
       authServiceClient.getUserInfo.invalidate();
-      gqlServiceClient.getUserInfo.invalidate();
+      invalidateUserInfo();
       authServiceClient.sessionLogin({ session_code }).then((res) => {
         console.log({ res });
         if (isOk(res)) {
           updateUserAuth();
-          updateUserInfo();
+          invalidateUserInfo();
         }
       });
     }
@@ -70,7 +70,7 @@ export function Login() {
     );
     setActiveModal();
     unsetTokenPromise();
-    gqlServiceClient.getUserInfo.invalidate();
+    invalidateUserInfo();
     authServiceClient.getUserInfo.invalidate();
     const [err, userInfo] = (await refetchAuthUserInfo()) ?? [];
     if (

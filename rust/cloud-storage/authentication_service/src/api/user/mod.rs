@@ -10,6 +10,8 @@ use tower_cookies::CookieManagerLayer;
 use crate::api::{ApiContext, user::legacy_rpc::AuthRpcState};
 
 // needs to be public in api crate for swagger
+pub(in crate::api) mod create_checkout_session;
+pub(in crate::api) mod create_portal_session;
 pub(in crate::api) mod create_user;
 pub(in crate::api) mod delete_user;
 pub(in crate::api) mod get_legacy_user_permissions;
@@ -62,6 +64,18 @@ fn router_with_auth(state: ApiContext, jwt_args: JwtValidationArgs) -> Router<Ap
                 macro_middleware::user_permissions::attach_user_permissions::handler,
             )),
         )
+        .route(
+            "/stripe/checkout",
+            post(create_checkout_session::handler),
+        )
+        .route("/stripe/portal", post(create_portal_session::handler))
+        .route(
+            "/legacy_user_permissions",
+            get(get_legacy_user_permissions::handler),
+        )
+        .route("/organization", get(get_user_organization::handler))
+        .route("/group", patch(patch_user_group::handler))
+        .route("/onboarding", patch(patch_user_onboarding::handler))
         .layer(
             ServiceBuilder::new()
                 .layer(CookieManagerLayer::new())

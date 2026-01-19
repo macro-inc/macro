@@ -2,7 +2,7 @@ import { TEMPLATES, type Template } from '@block-md/component/templates';
 import { createBlockSignal } from '@core/block';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { setEditorStateFromMarkdown } from '@core/component/LexicalMarkdown/utils';
-import { useEmail } from '@service-gql/client';
+import { useEmail } from '@queries/auth/user-info';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce } from '@solid-primitives/scheduled';
 import type { LexicalEditor } from 'lexical';

@@ -10,7 +10,7 @@ import {
   $isDiffNode,
 } from '@lexical-core';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
-import { useUserId } from '@service-gql/client';
+import { useUserId } from '@queries/auth/user-info';
 import type { LexicalEditor } from 'lexical';
 import {
   COMMAND_PRIORITY_CRITICAL,

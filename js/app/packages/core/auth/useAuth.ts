@@ -17,7 +17,7 @@ function matchChange(
 }
 
 export const useAuthUserInfo = createSingletonRoot(() =>
-  createResource(authServiceClient.getUserInfo, {
+  createResource(authServiceClient.getLegacyUserPermissions, {
     initialValue: persistedUserInfo[0](),
     storage: () => persistedUserInfo as any,
   })
@@ -32,10 +32,11 @@ export function useIsAuthenticated() {
 }
 
 export function useIsOrganizationMember() {
-  const [u] = useAuthUserInfo();
+  // Import dynamically to avoid circular dependency
+  const { useOrganizationId } = require('@core/user');
+  const organizationId = useOrganizationId();
   return createMemo((): boolean | undefined => {
-    const [errs, user] = u.latest;
-    return !errs && user.organizationId !== undefined;
+    return organizationId() !== undefined;
   });
 }
 

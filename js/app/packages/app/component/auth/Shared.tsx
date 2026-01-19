@@ -1,7 +1,8 @@
 import { withAnalytics } from '@coparse/analytics';
 import { useOrganization } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
-import { gqlServiceClient, updateUserInfo } from '@service-gql/client';
+import { authServiceClient } from '@service-auth/client';
+import { invalidateUserInfo } from '@queries/auth/user-info';
 import { detect } from 'detect-browser';
 import type { JSX } from 'solid-js';
 import { createSignal, onMount, Show } from 'solid-js';
@@ -22,7 +23,8 @@ export const identifyUser = async () => {
   const [, { refetch: refetchOrganization }] = useOrganization();
   await refetchOrganization();
 
-  const userInfoResult = await updateUserInfo();
+  await invalidateUserInfo();
+  const userInfoResult = await authServiceClient.getLegacyUserPermissions();
 
   if (userInfoResult && isErr(userInfoResult)) return;
   const userInfo = userInfoResult ? userInfoResult[1] : null;
@@ -42,7 +44,7 @@ export const identifyUser = async () => {
 
 export const assignABGroup = async () => {
   const randomGroup = Math.random() < 0.5 ? 'A' : 'B';
-  gqlServiceClient.setGroup({ group: randomGroup });
+  await authServiceClient.setGroup({ group: randomGroup });
   return randomGroup;
 };
 

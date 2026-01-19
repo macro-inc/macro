@@ -8,7 +8,7 @@ import {
 } from '@core/block';
 import { isErr } from '@core/util/maybeResult';
 import { createConnectionBlockWebsocketEffect } from '@service-connection/websocket';
-import { useUserId } from '@service-gql/client';
+import { useUserId } from '@queries/auth/user-info';
 import { storageServiceClient } from '@service-storage/client';
 import type { AnnotationIncrementalUpdate } from '@service-storage/generated/schemas/annotationIncrementalUpdate';
 import type { Comment } from '@service-storage/generated/schemas/comment';

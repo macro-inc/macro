@@ -47,6 +47,12 @@ enum ABGroup {
     B,
 }
 
+impl IntoResponse for GetLegacyUserPermissionsResponse {
+    fn into_response(self) -> Response {
+        Json(self).into_response()
+    }
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum GetLegacyUserPermissionsError {
     #[error("Internal error")]

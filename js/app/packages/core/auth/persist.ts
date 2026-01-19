@@ -4,10 +4,17 @@ import { createSignal } from 'solid-js';
 import { AuthState, type AuthUserInfo, type MaybeAuthUserInfo } from './types';
 
 const defaultUserInfo: AuthUserInfo = {
-  userId: undefined,
+  id: '',
+  userId: '',
   authenticated: false,
   permissions: [],
-  organizationId: undefined,
+  email: '',
+  name: null,
+  licenseStatus: '',
+  tutorialComplete: false,
+  group: null,
+  hasChromeExt: false,
+  hasTrialed: false,
 };
 
 export const persistedUserInfo = makePersisted(

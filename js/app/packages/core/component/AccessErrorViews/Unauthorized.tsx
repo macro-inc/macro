@@ -1,6 +1,6 @@
 import { useIsAuthenticated } from '@core/auth';
 import Lock from '@phosphor-icons/core/regular/lock.svg?component-solid';
-import { useEmail } from '@service-gql/client';
+import { useEmail } from '@queries/auth/user-info';
 import { onMount } from 'solid-js';
 import { openLoginModal } from '../TopBar/LoginButton';
 

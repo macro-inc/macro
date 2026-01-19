@@ -1,5 +1,5 @@
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { useAuthor } from '@service-gql/client';
+import { useAuthor } from '@queries/auth/user-info';
 import {
   createEffect,
   createMemo,
