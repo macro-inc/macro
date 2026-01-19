@@ -57,13 +57,13 @@ VALUES
 
 INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
 VALUES
-    -- Document in A: Priority = High, Status = In Progress
+    -- Document in A: Priority = Low, Status = In Progress
     (
         'e1111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa', -- id of this thing?
         '11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa', -- doc a id
         'DOCUMENT',                             -- entity_type
         '00000001-0000-0000-0000-000000000003', -- property_def_id Priority
-        '{"type": "SelectOption", "value": ["00000001-0000-0000-0003-000000000001"]}' -- values. id of "High" in property_options
+        '{"type": "SelectOption", "value": ["00000001-0000-0000-0003-000000000001"]}' -- values. id of "Low" in property_options
     ),
     (
         'e2222222-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
