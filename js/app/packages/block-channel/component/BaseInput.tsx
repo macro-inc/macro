@@ -39,7 +39,6 @@ import Trash from '@icon/regular/trash.svg';
 import XIcon from '@icon/regular/x.svg';
 import { logger } from '@observability';
 import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
-import { useUserId } from '@service-gql/client';
 import { staticFileClient } from '@service-static-files/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { leading, throttle } from '@solid-primitives/scheduled';
@@ -66,6 +65,7 @@ import { Attachment } from './Attachment';
 import { FormatRibbon } from './FormatRibbon';
 import { useChannelMarkdownArea } from './MarkdownArea';
 import { TaskPreviewPanel } from './TaskPreviewPanel';
+import { useUserId } from '@queries/auth/user-info';
 
 false && fileFolderDrop;
 
