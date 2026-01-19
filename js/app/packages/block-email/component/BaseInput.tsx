@@ -532,6 +532,7 @@ export function BaseInput(props: {
     const processedMacroBody = prepareMacroBody(bodyMacro());
 
     const currentDraftID = savedDraftId();
+    if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
 
     sendMutation.mutate({
       message: {
