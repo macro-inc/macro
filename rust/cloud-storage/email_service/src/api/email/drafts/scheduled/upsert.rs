@@ -93,6 +93,7 @@ pub async fn handler(
         message_id: draft_id,
         send_time: request.send_time,
         sent: false,
+        processing: false,
     };
 
     // Upsert the scheduled message

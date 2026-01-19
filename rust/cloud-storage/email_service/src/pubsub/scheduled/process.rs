@@ -4,12 +4,14 @@ use crate::util::gmail::send::{
     cleanup_draft_attachments, fetch_and_attach_draft_attachments, generate_email_threading_headers,
 };
 use anyhow::Context;
-use email_db_client::messages::scheduled::get::get_scheduled_message;
+use chrono::Utc;
+use email_db_client::messages::scheduled::get::get_and_start_processing_scheduled_message;
 use models_email::service::message::MessageToSend;
 use models_email::service::pubsub::ScheduledPubsubMessage;
 use sqlx_core::any::AnyConnectionBackend;
 use sqs_worker::cleanup_message;
 
+#[tracing::instrument(skip(ctx, message), err)]
 pub async fn process_message(
     ctx: ScheduledContext,
     message: &aws_sdk_sqs::types::Message,
@@ -31,10 +33,12 @@ pub async fn process_message(
 
     // Get scheduled message from database
     let scheduled_message =
-        match get_scheduled_message(&ctx.db, data.link_id, data.message_id).await {
+        match get_and_start_processing_scheduled_message(&ctx.db, data.link_id, data.message_id)
+            .await
+        {
             Ok(Some(msg)) => msg,
             Ok(None) => {
-                tracing::error!(
+                tracing::info!(
                     link_id = ?data.link_id,
                     message_id = ?data.message_id,
                     "Scheduled message not found"
@@ -50,7 +54,20 @@ pub async fn process_message(
             }
         };
 
-    if !scheduled_message.sent {
+    if scheduled_message.sent {
+        tracing::warn!(
+            message_id=%data.message_id,
+            link_id=%data.link_id,
+            "Scheduled message already sent - skipping"
+        );
+    } else if scheduled_message.send_time > Utc::now() {
+        tracing::warn!(
+            message_id=%data.message_id,
+            link_id=%data.link_id,
+            send_time=scheduled_message.send_time.to_string(),
+            "Scheduled message send_time is in the future - skipping"
+        );
+    } else {
         // fetch message from db
         let (mut message_to_send, sender_contact) =
             email_db_client::messages::get::get_message_to_send(
@@ -100,8 +117,7 @@ pub async fn process_message(
             .await
             .context("Failed to begin transaction")?;
 
-        // mark scheduled_messages and messages db rows as sent in single txn
-        let result = mark_messages_as_sent(tx.as_mut(), &message_to_send).await;
+        let result = process_sent_message(tx.as_mut(), &message_to_send).await;
 
         match result {
             Ok(_) => {
@@ -159,15 +175,22 @@ fn extract_scheduled_message(
         .context("Failed to deserialize message body to ScheduledPubsubMessage")
 }
 
-/// Mark both the scheduled message and the regular message as sent
+/// Mark both the scheduled message and the regular message as sent, and update thread metadata
 ///
-/// This function handles both database updates in a single transaction
+/// This function handles all database updates in a single transaction
 #[expect(
     clippy::useless_asref,
     reason = "We actually need the as_mut so we don't transfer ownership of the transaction"
 )]
-#[tracing::instrument(skip(tx), level = "info")]
-async fn mark_messages_as_sent(
+#[tracing::instrument(
+    skip(tx, message),
+    fields(
+        message_db_id = message.db_id.unwrap().to_string(),
+        link_id = message.link_id.to_string()
+    ),
+    err
+)]
+async fn process_sent_message(
     tx: &mut sqlx::PgConnection,
     message: &MessageToSend,
 ) -> anyhow::Result<()> {
@@ -177,11 +200,7 @@ async fn mark_messages_as_sent(
         message.link_id,
         message.db_id.unwrap(),
     )
-    .await
-    .context(format!(
-        "Failed to update scheduled message as sent for message_id {}",
-        message.db_id.unwrap()
-    ))?;
+    .await?;
 
     // mark message as non-draft
     email_db_client::messages::update::mark_message_as_sent(
@@ -191,26 +210,27 @@ async fn mark_messages_as_sent(
         message.link_id,
         message.db_id.unwrap(),
     )
-    .await
-    .context(format!(
-        "Failed to update message as sent for message_id {}",
-        message.db_id.unwrap()
-    ))?;
+    .await?;
+
+    // safe as it was fetched from the database - message is only inserted once thread is created
+    let thread_db_id = message.thread_db_id.unwrap();
 
     // set provider id of thread - needed in case it's a thread with no other messages, as it wouldn't
     // have a provider id yet
     email_db_client::threads::update::update_thread_provider_id(
         tx.as_mut(),
-        message.thread_db_id.unwrap(),
+        thread_db_id,
         message.link_id,
         &message.provider_thread_id.clone().unwrap(),
     )
-    .await
-    .context(format!(
-        "Failed to update provider id to {} for thread {}",
-        message.provider_thread_id.clone().unwrap(),
-        message.thread_db_id.unwrap()
-    ))?;
+    .await?;
+
+    email_db_client::threads::update::update_thread_metadata(
+        tx.as_mut(),
+        thread_db_id,
+        message.link_id,
+    )
+    .await?;
 
     Ok(())
 }

@@ -21,3 +21,6 @@ tracing = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["openssl"]
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }

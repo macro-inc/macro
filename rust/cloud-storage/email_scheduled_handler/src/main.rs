@@ -1,6 +1,8 @@
 mod config;
 mod context;
 mod handler;
+#[cfg(test)]
+mod test;
 
 use anyhow::Context;
 use aws_lambda_events::event::eventbridge::EventBridgeEvent;

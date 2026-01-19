@@ -4,8 +4,10 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
+use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use email_db_client::contacts::upsert_message::parse_and_upsert_message_contacts;
-use email_db_client::messages::insert::insert_message_to_send;
+use email_db_client::messages::insert::insert_message_to_send_db;
 use email_db_client::parse::service_to_db::addresses_from_message;
 use email_db_client::user_history::upsert_user_history;
 use model::response::ErrorResponse;
@@ -13,6 +15,7 @@ use model::user::UserContext;
 use models_email::email::db::address::UpsertedRecipients;
 use models_email::service::link::Link;
 use models_email::service::{message, thread};
+use sqlx::PgPool;
 use sqlx::types::chrono::{DateTime, Utc};
 use strum_macros::AsRefStr;
 use thiserror::Error;
@@ -28,24 +31,25 @@ pub enum CreateDraftError {
 
     #[error("A database transaction error occurred")]
     TransactionError(#[from] sqlx::Error),
+
+    #[error("Failed to decode base64 HTML body")]
+    Base64DecodeError(#[from] base64::DecodeError),
+
+    #[error("Failed to convert decoded HTML body to UTF-8")]
+    Utf8Error(#[from] std::string::FromUtf8Error),
 }
 
 impl IntoResponse for CreateDraftError {
     fn into_response(self) -> Response {
         let status_code = match &self {
             CreateDraftError::Validation(e) => e.status_code(),
+            CreateDraftError::Base64DecodeError(_) | CreateDraftError::Utf8Error(_) => {
+                StatusCode::BAD_REQUEST
+            }
             CreateDraftError::InsertError(_) | CreateDraftError::TransactionError(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
         };
-
-        if status_code.is_server_error() {
-            tracing::error!(
-                nested_error = ?self,
-                error_type = "CreateDraftError",
-                variant = self.as_ref(),
-                "Internal server error");
-        }
 
         (status_code, self.to_string()).into_response()
     }
@@ -55,6 +59,7 @@ impl IntoResponse for CreateDraftError {
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
 pub struct CreateDraftRequest {
     pub draft: message::MessageToSend,
+    pub send_time: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
@@ -81,7 +86,8 @@ pub struct CreateDraftResponse {
     fields(
         user_id = user_context.user_id,
         fusionauth_user_id = user_context.fusion_user_id
-    )
+    ),
+    err
 )]
 pub async fn handler(
     State(ctx): State<ApiContext>,
@@ -89,31 +95,56 @@ pub async fn handler(
     link: Extension<Link>,
     Json(request_body): Json<CreateDraftRequest>,
 ) -> Result<Response, CreateDraftError> {
-    let mut draft = request_body.draft;
+    // falling back to old value for backwards compatability for now.
+    let send_time = request_body.send_time.or(request_body.draft.send_time);
+    let draft =
+        process_message_to_send(&ctx.db, &link, request_body.draft, send_time, true).await?;
+    Ok((StatusCode::CREATED, Json(CreateDraftResponse { draft })).into_response())
+}
+
+pub async fn process_message_to_send(
+    db: &PgPool,
+    link: &Link,
+    mut draft: message::MessageToSend,
+    send_time: Option<DateTime<Utc>>,
+    is_draft: bool,
+) -> Result<message::MessageToSend, CreateDraftError> {
     // TODO: Create api layer struct that doesn't have this value
     draft.link_id = link.id;
 
-    validation::validate_existing_message(&ctx.db, &link.fusionauth_user_id, &mut draft).await?;
+    validation::validate_existing_message(db, &link.fusionauth_user_id, &mut draft).await?;
 
-    validation::validate_replying_to_id(&ctx.db, &mut draft, &link).await?;
+    validation::validate_replying_to_id(db, &mut draft, link).await?;
 
     let from_email = link.email_address.0.as_ref();
+
+    // html comes in as a base64 encoded string, need to decode before inserting
+    if let Some(html_body) = draft.body_html {
+        let decoded_html = URL_SAFE_NO_PAD.decode(html_body.as_bytes())?;
+        let decoded_html_str = String::from_utf8(decoded_html)?;
+
+        // Store the decoded HTML back into the message
+        draft.body_html = Some(decoded_html_str);
+    }
 
     // Parse and upsert contacts before starting the transaction to avoid deadlocks.
     // Contacts are shared across messages so they must be inserted outside the transaction.
     let addresses = addresses_from_message(&draft);
-    let recipients = parse_and_upsert_message_contacts(&ctx.db, link.id, addresses)
+    let recipients = parse_and_upsert_message_contacts(db, link.id, addresses)
         .await
         .map_err(CreateDraftError::InsertError)?;
 
-    let mut tx = ctx.db.begin().await?;
+    let mut tx = db.begin().await?;
 
-    let result = insert_draft(&mut tx, &mut draft, from_email, recipients).await;
+    let result = insert_message_to_send(
+        &mut tx, &mut draft, send_time, is_draft, from_email, recipients,
+    )
+    .await;
 
     match result {
         Ok(_) => {
             tx.commit().await?;
-            Ok((StatusCode::CREATED, Json(CreateDraftResponse { draft })).into_response())
+            Ok(draft)
         }
         Err(e) => {
             if let Err(rollback_err) = tx.rollback().await {
@@ -125,9 +156,11 @@ pub async fn handler(
 }
 
 #[tracing::instrument(skip(tx, recipients), err)]
-async fn insert_draft(
+async fn insert_message_to_send(
     tx: &mut sqlx::PgConnection,
     draft: &mut message::MessageToSend,
+    send_time: Option<DateTime<Utc>>,
+    is_draft: bool,
     from_email: &str,
     recipients: UpsertedRecipients,
 ) -> anyhow::Result<()> {
@@ -162,7 +195,16 @@ async fn insert_draft(
     let from_email_id =
         email_db_client::contacts::get::fetch_id_by_email(tx, link_id, from_email).await?;
 
-    insert_message_to_send(tx, draft, thread_db_id, from_email_id, true, recipients).await?;
+    insert_message_to_send_db(
+        tx,
+        draft,
+        send_time,
+        thread_db_id,
+        from_email_id,
+        is_draft,
+        recipients,
+    )
+    .await?;
 
     upsert_user_history(tx, link_id, thread_db_id).await?;
 
