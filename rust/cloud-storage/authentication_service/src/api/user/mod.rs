@@ -18,7 +18,6 @@ pub(in crate::api) mod get_user_link_exists;
 pub(in crate::api) mod get_user_organization;
 pub(in crate::api) mod get_user_quota;
 pub(in crate::api) mod patch_tutorial;
-pub(in crate::api) mod stripe;
 pub(in crate::api) mod patch_user_group;
 pub(in crate::api) mod patch_user_onboarding;
 pub(in crate::api) mod post_get_names;
@@ -26,6 +25,7 @@ pub(in crate::api) mod post_get_names_with_email;
 pub(in crate::api) mod post_profile_pictures;
 pub(in crate::api) mod put_name;
 pub(in crate::api) mod put_profile_picture;
+pub(in crate::api) mod stripe;
 
 pub fn router(state: ApiContext, jwt_args: JwtValidationArgs) -> Router<ApiContext> {
     Router::new()
@@ -58,10 +58,7 @@ fn router_with_auth(state: ApiContext, jwt_args: JwtValidationArgs) -> Router<Ap
                 macro_middleware::user_permissions::attach_user_permissions::handler,
             )),
         )
-        .route(
-            "/stripe/checkout",
-            post(stripe::create_checkout_session),
-        )
+        .route("/stripe/checkout", post(stripe::create_checkout_session))
         .route("/stripe/portal", post(stripe::create_portal_session))
         .route(
             "/legacy_user_permissions",

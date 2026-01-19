@@ -166,8 +166,7 @@ pub async fn create_checkout_session(
         .url
         .ok_or(StripeOperationError::UnexpectedStripeResponse)?;
 
-    let url =
-        url::Url::parse(&url).map_err(|_| StripeOperationError::UnexpectedStripeResponse)?;
+    let url = url::Url::parse(&url).map_err(|_| StripeOperationError::UnexpectedStripeResponse)?;
 
     Ok(Json(StripeSessionResponse {
         url: url.to_string(),

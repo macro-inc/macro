@@ -17,14 +17,14 @@ use crate::api::user::create_user::CreateUserRequest;
 use crate::api::user::get_legacy_user_permissions::GetLegacyUserPermissionsResponse;
 use crate::api::user::get_user_link_exists::UserLinkResponse;
 use crate::api::user::get_user_organization::UserOrganizationResponse;
-use crate::api::user::stripe::{
-    CreateCheckoutSessionRequest, CreatePortalSessionRequest, StripeSessionResponse,
-};
 use crate::api::user::patch_tutorial::PatchUserTutorialRequest;
 use crate::api::user::patch_user_group::PatchUserGroupRequest;
 use crate::api::user::patch_user_onboarding::PatchUserOnboardingRequest;
 use crate::api::user::post_get_names::PostGetNamesRequestBody;
 use crate::api::user::post_get_names_with_email::GetNamesWithEmailRequestBody;
+use crate::api::user::stripe::{
+    CreateCheckoutSessionRequest, CreatePortalSessionRequest, StripeSessionResponse,
+};
 use crate::api::{
     email, health, jwt, link, login, logout, merge, oauth, oauth2, permissions, session, team, user,
 };
