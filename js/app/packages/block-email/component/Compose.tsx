@@ -46,7 +46,10 @@ import {
   $appendWatermarkNodeToLast,
   $removeAllWatermarkNodes,
 } from '@lexical-core';
-import { prepareEmailBody } from '@block-email/util/prepareEmailBody';
+import {
+  clearEmailBody,
+  prepareEmailBody,
+} from '@block-email/util/prepareEmailBody';
 import { convertEmailRecipientToContactInfo } from '@block-email/util/recipientConversion';
 import {
   deleteEmailDraft,
@@ -57,6 +60,8 @@ import {
   useUploadDraftAttachmentsMutation,
 } from '@queries/email/attachment';
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
+import { useMaybeEmailContext } from '@block-email/component/EmailContext';
+import { decodeBase64Utf8 } from '@block-email/util/decodeBase64';
 
 const DRAFT_DEBOUNCE_MS = 1000;
 
@@ -82,7 +87,11 @@ type EmailComposeElementRefs = {
   messageInput: HTMLElement | undefined;
 };
 
-export function EmailCompose() {
+type EmailComposeProps = {
+  draftID?: string;
+};
+
+export function EmailCompose(props: EmailComposeProps) {
   const hasPaidAccess = useHasPaidAccess();
   const { showPaywall } = usePaywallState();
 
@@ -124,14 +133,31 @@ export function EmailCompose() {
 
   const { users: destinationOptions } = useCombinedRecipients();
 
-  const form = createEmailFormState();
+  const emailContext = useMaybeEmailContext();
+
+  const form = createEmailFormState(
+    props.draftID
+      ? {
+          type: 'draft',
+          messageID: props.draftID,
+        }
+      : undefined,
+    emailContext
+      ? {
+          getMessageByID: (id) =>
+            emailContext.messages.unfiltered().find((m) => m.db_id === id),
+          getDraftForMessageReply: emailContext.drafts.getDraftForMessage,
+          onRecipientsChange: emailContext.onRecipientsChange,
+        }
+      : undefined
+  );
 
   const [editor, setEditor] = createSignal<LexicalEditor | undefined>();
 
   const [content, setContent] = createSignal('');
-  const [currentDraftID, setCurrentDraftID] = createSignal<
-    string | undefined
-  >();
+  const [currentDraftID, setCurrentDraftID] = createSignal<string | undefined>(
+    props.draftID
+  );
 
   const uploadAttachmentMutation = useUploadDraftAttachmentsMutation();
 
@@ -186,6 +212,7 @@ export function EmailCompose() {
 
     const draftResponse = await saveEmailDraft({
       ...draftToSave,
+      db_id: currentDraftID(),
       link_id: linkID,
     });
 
@@ -487,10 +514,34 @@ export function EmailCompose() {
     cleanupWatermark();
   };
 
+  const resetState = () => {
+    clearEmailBody(editor());
+    setContent('');
+    setCurrentDraftID(undefined);
+    form.clear();
+  };
+
+  const deleteDraftAndReset = async () => {
+    const draftId = currentDraftID();
+    if (draftId) {
+      await deleteEmailDraft(draftId);
+    }
+    resetState();
+  };
+
   const withValidationError = (type: EmailComposeErrors) => {
     const error = validationError();
     if (error?.type === type) return error;
     return undefined;
+  };
+
+  const initialHtml = () => {
+    const draft = form.draft;
+    if (!draft || !draft.body_html_sanitized) return;
+
+    const decodedHtml = decodeBase64Utf8(draft.body_html_sanitized);
+
+    return decodedHtml;
   };
 
   return (
@@ -713,12 +764,15 @@ export function EmailCompose() {
                 <ComposeEmailInput
                   captureEditor={setEditor}
                   inputRef={registerRef('messageInput')}
+                  initialHtml={initialHtml()}
                   onContentChange={onContentChange}
                   onAddAttachments={onAddAttachments}
                   onRemoveAttachment={handleRemoveAttachment}
                   attachments={form.attachments.list()}
                   onSubmit={onSubmit}
                   isSubmitting={sendMutation.isPending}
+                  hasDraft={currentDraftID() != null}
+                  onDraftDeletePress={deleteDraftAndReset}
                   disabled={hasLinkError() || sendMutation.isPending}
                 />
                 <Show when={withValidationError('no_message')}>

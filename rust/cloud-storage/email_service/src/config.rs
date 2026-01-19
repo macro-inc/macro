@@ -44,6 +44,9 @@ pub struct Config {
     /// The SQS queue name for the sfs_uploader process
     pub sfs_uploader_queue: String,
 
+    /// The SQS queue name for the sfs_delete process
+    pub sfs_delete_queue: String,
+
     /// The SQS queue name for contacts service
     pub contacts_queue: String,
 
@@ -167,6 +170,9 @@ impl Config {
         let sfs_uploader_queue =
             std::env::var("SFS_UPLOADER_QUEUE").context("SFS_UPLOADER_QUEUE must be provided")?;
 
+        let sfs_delete_queue =
+            std::env::var("SFS_DELETE_QUEUE").context("SFS_DELETE_QUEUE must be provided")?;
+
         let attachment_bucket =
             std::env::var("ATTACHMENT_BUCKET").context("ATTACHMENT_BUCKET must be provided")?;
 
@@ -277,6 +283,7 @@ impl Config {
             notification_queue,
             backfill_queue,
             sfs_uploader_queue,
+            sfs_delete_queue,
             contacts_queue,
             attachment_bucket,
             notifications_enabled,

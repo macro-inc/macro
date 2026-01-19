@@ -1,6 +1,7 @@
 import { EntityIcon } from '@core/component/EntityIcon';
 import type { Property } from '@core/component/Properties/types';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+import '@core/directive/dnd';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { matches } from '@core/util/match';
@@ -9,7 +10,8 @@ import { tryToTypedNotification } from '@notifications';
 import { useEmail, useUserId } from '@service-gql/client';
 import { syncServiceClient } from '@service-sync/client';
 import { mergeRefs } from '@solid-primitives/refs';
-import { createDraggable, createDroppable } from '@thisbeyond/solid-dnd';
+import { createDraggable } from '@thisbeyond/solid-dnd';
+import { useDragOperation } from '@app/component/ItemDragAndDrop';
 import { getIconConfig } from 'core/component/EntityIcon';
 import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
@@ -20,6 +22,7 @@ import {
   createDeferred,
   createMemo,
   createSignal,
+  createUniqueId,
   For,
   Match,
   onCleanup,
@@ -48,6 +51,7 @@ import type {
   SearchLocation,
   WithSearch,
 } from '../types/search';
+import type { EntityDragData } from '../types/drag';
 import { KeyPropertiesGrid } from './EntityPropertyValues';
 
 export type EntityClickEvent = Parameters<
@@ -469,6 +473,7 @@ interface EntityProps<T extends WithNotification<EntityData>>
   onChecked?: (checked: boolean, shiftKey?: boolean) => void;
   checked?: boolean;
   searchActive?: boolean;
+  splitId?: string;
 }
 
 const [hoveredComponentId, setHoveredComponentId] = createSignal<Symbol>(
@@ -868,10 +873,26 @@ export function EntityWithEverything(
     );
   });
 
-  const draggable = createDraggable(props.entity.id, props.entity);
+  const { isAltKey } = useDragOperation();
+  const operation = createMemo(() => {
+    switch (props.entity.type) {
+      case 'document':
+        return isAltKey() ? 'copy' : 'move';
+      case 'chat':
+        return isAltKey() ? 'copy' : 'move';
+      default:
+        return 'move';
+    }
+  });
+  const draggableId = `${props.entity.id}-${props.splitId ?? createUniqueId()}`;
+  const dragData: EntityDragData = {
+    dragType: 'entity',
+    splitId: props.splitId,
+    ...props.entity,
+    operation,
+  };
+  const draggable = createDraggable(draggableId, dragData);
   false && draggable;
-  const droppable = createDroppable(props.entity.id, props.entity);
-  false && droppable;
 
   // The main click handler for the entity row should navigate to an entity
   // without forcing focus back to the source split until after navigation.
@@ -913,7 +934,6 @@ export function EntityWithEverything(
   return (
     <div
       use:draggable
-      use:droppable
       data-checked={props.checked}
       class="everything-entity w-full relative group/entity hover:bg-hover/30 text-sm touch:mobile-width:text-base mx-[1px]"
       style={{
@@ -1028,6 +1048,7 @@ export function EntityWithEverything(
           class="min-h-10 min-w-[50px] flex flex-row items-center gap-2 col-2 @max-md/uList:col-auto @max-md/uList:w-full @max-md/uList:min-h-0 @max-md/uList:items-start"
           classList={{
             grow: props.contentPlacement === 'bottom-row',
+            'opacity-70': props.fadeIfRead && !props.unreadIndicatorActive,
           }}
         >
           {/* When the left checkbox column is hidden in narrow split containers, we still want

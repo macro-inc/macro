@@ -11,13 +11,8 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_auth::{
-    error::MacroAuthError,
-    middleware::decode_jwt::{JwtValidationArgs, decode_macro_access_token_allow_expired},
-};
-use macro_db_client::advisory_lock::try_acquire_user_refresh_xact_lock;
+use macro_auth::{error::MacroAuthError, middleware::decode_jwt::JwtValidationArgs};
 use model::response::UserTokensResponse;
-use sqlx::PgPool;
 use std::sync::Arc;
 use tower_cookies::Cookies;
 
@@ -26,6 +21,7 @@ pub enum RefreshError {
     #[error("internal server error")]
     InternalServerError,
     #[error("refresh in progress")]
+    #[allow(dead_code)]
     RefreshInProgress,
     #[error("invalid refresh token")]
     InvalidRefreshToken,
@@ -64,10 +60,9 @@ impl IntoResponse for RefreshError {
             (status = 500, body=String),
         )
     )]
-#[tracing::instrument(skip(auth_client, db, jwt, token_context, cookies))]
+#[tracing::instrument(skip(auth_client, jwt, token_context, cookies))]
 pub async fn handler(
     State(auth_client): State<Arc<FusionAuthClient>>,
-    State(db): State<PgPool>,
     State(jwt): State<JwtValidationArgs>,
     token_context: Extension<TokenContext>,
     cookies: Cookies,
@@ -94,30 +89,31 @@ pub async fn handler(
         },
     }
 
-    // Decode the JWT (allowing expired) to get the user ID for the advisory lock
-    let user_id = decode_macro_access_token_allow_expired(&token_context.access_token, &jwt)
-        .map_err(|e| {
-            // Keeping this log in here to see why we couldn't decode the jwt
-            tracing::error!(error=?e, "unable to decode jwt for user id");
-            RefreshError::Unauthorized
-        })?;
-
-    // Acquire advisory lock to prevent concurrent refresh requests for the same user
-    let mut txn = db.begin().await.map_err(|e| {
-        tracing::error!(error=?e, "unable to start transaction");
-        RefreshError::InternalServerError
-    })?;
-
-    let lock_acquired = try_acquire_user_refresh_xact_lock(&mut txn, &user_id)
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "unable to acquire advisory lock");
-            RefreshError::InternalServerError
-        })?;
-
-    if !lock_acquired {
-        return Err(RefreshError::RefreshInProgress);
-    }
+    // NOTE: Disabled until we fix FE auth setup.
+    // // Decode the JWT (allowing expired) to get the user ID for the advisory lock
+    // let user_id = decode_macro_access_token_allow_expired(&token_context.access_token, &jwt)
+    //     .map_err(|e| {
+    //         // Keeping this log in here to see why we couldn't decode the jwt
+    //         tracing::error!(error=?e, "unable to decode jwt for user id");
+    //         RefreshError::Unauthorized
+    //     })?;
+    //
+    // // Acquire advisory lock to prevent concurrent refresh requests for the same user
+    // let mut txn = db.begin().await.map_err(|e| {
+    //     tracing::error!(error=?e, "unable to start transaction");
+    //     RefreshError::InternalServerError
+    // })?;
+    //
+    // let lock_acquired = try_acquire_user_refresh_xact_lock(&mut txn, &user_id)
+    //     .await
+    //     .map_err(|e| {
+    //         tracing::error!(error=?e, "unable to acquire advisory lock");
+    //         RefreshError::InternalServerError
+    //     })?;
+    //
+    // if !lock_acquired {
+    //     return Err(RefreshError::RefreshInProgress);
+    // }
 
     let (access_token, refresh_token) = auth_client
         .refresh_token(&token_context.access_token, &token_context.refresh_token)

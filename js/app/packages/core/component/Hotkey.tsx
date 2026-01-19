@@ -124,19 +124,19 @@ export const Hotkey = (props: HotkeyProps) => {
     'children',
     'lowercase',
   ]);
-  const tokenShortcut = local.token
-    ? getPrettyHotkeyStringByToken(local.token)
-    : undefined;
+  const tokenShortcut = createMemo(() =>
+    local.token ? getPrettyHotkeyStringByToken(local.token) : undefined
+  );
 
   const hotkey = createMemo(() => {
     // fallback for when we specify a shortcut directly instead of a hotkey token
-    if (local.shortcut && !tokenShortcut) {
+    if (local.shortcut && !tokenShortcut()) {
       return breakApartHotkeyString(local.shortcut);
     }
-    if (!tokenShortcut) {
+    if (!tokenShortcut()) {
       return { key: '', modifiers: [] };
     }
-    return breakApartHotkeyString(tokenShortcut);
+    return breakApartHotkeyString(tokenShortcut() ?? '');
   });
 
   const normalizedKey = () => {

@@ -49,6 +49,13 @@ export class StaticFileCloudFront extends pulumi.ComponentResource {
     const responseHeadersPolicy = new aws.cloudfront.ResponseHeadersPolicy(
       'corp-policy',
       {
+        securityHeadersConfig: {
+          contentSecurityPolicy: {
+            contentSecurityPolicy:
+              "default-src 'none'; style-src 'unsafe-inline'; img-src data:;",
+            override: true,
+          },
+        },
         customHeadersConfig: {
           items: [
             {

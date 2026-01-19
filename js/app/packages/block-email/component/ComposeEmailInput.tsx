@@ -1,4 +1,5 @@
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
+import Trash from '@icon/regular/trash.svg';
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
 import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
 import { MAX_ATTACHMENTS_BYTES_SIZE } from '@block-email/constants';
@@ -42,9 +43,11 @@ type ComposeEmailInputProps = {
   captureEditor?: (editor: LexicalEditor) => void;
   onSubmit: () => void;
   disabled?: boolean;
-  loading?: boolean;
   isSubmitting?: boolean;
+  hasDraft?: boolean;
+  onDraftDeletePress?: VoidFunction;
   attachments?: DraftFormAttachment[];
+  initialHtml?: string;
   onAddAttachments?: (attachments: DraftFormAttachment[]) => void;
   onRemoveAttachment?: (attachment: DraftFormAttachment) => void;
   onContentChange?: (content: string) => void;
@@ -220,6 +223,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
           <MarkdownTextarea
             domRef={props.inputRef}
             captureEditor={captureEditor}
+            initialHtml={props.initialHtml}
             class="text-sm break-words text-ink"
             editable={() => !props.disabled}
             placeholder="Use `@` to reference files"
@@ -300,17 +304,26 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
               setShowFormatRibbon(!showFormatRibbon());
             }}
           />
+          <Show when={props.hasDraft}>
+            <Button
+              onclick={props.onDraftDeletePress}
+              tooltip="Delete draft"
+              class="aspect-square *:h-5 p-1"
+            >
+              <Trash />
+            </Button>
+          </Show>
         </div>
         <button
           type="button"
-          disabled={props.loading || props.isSubmitting || props.disabled}
+          disabled={props.isSubmitting || props.disabled}
           onClick={() => {
             handleSend();
           }}
           class="text-ink-muted focus:scale-110 hover:scale-110 transition ease-in-out delay-150 flex gap-2 justify-center items-center hover:bg-hover py-1 px-2 text-sm"
         >
           <Show
-            when={!props.loading && !props.isSubmitting}
+            when={!props.isSubmitting}
             fallback={<Spinner class="w-5 h-5 animate-spin cursor-disabled" />}
           >
             <span class="font-medium font-mono uppercase">Send</span>

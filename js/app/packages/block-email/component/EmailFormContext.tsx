@@ -1,4 +1,3 @@
-import { logger } from '@observability/logger';
 import { createContext, type ParentProps, useContext } from 'solid-js';
 import {
   createEmailFormState,
@@ -7,8 +6,16 @@ import {
 
 type EmailFormContextValue = ReturnType<typeof createEmailFormState>;
 
+type FormAccessKey =
+  | { type: 'replying_to'; messageID: string }
+  | { type: 'draft'; messageID: string };
+
+const stringifyKey = (key: FormAccessKey) => {
+  return `${key.type}_${key.messageID}`;
+};
+
 type RegistryApi = {
-  getOrInit: (key: string) => EmailFormContextValue;
+  getOrInit: (key?: FormAccessKey) => EmailFormContextValue;
 };
 
 const EmailFormRegistryCtx = createContext<RegistryApi>();
@@ -20,12 +27,13 @@ export function EmailFormContextProvider(
 
   const getOrInit: RegistryApi['getOrInit'] = (key) => {
     if (!key) {
-      logger.error('Key is required');
+      return createEmailFormState();
     }
-    let existing = map.get(key);
+    const stringifiedKey = stringifyKey(key);
+    let existing = map.get(stringifiedKey);
     if (!existing) {
       existing = createEmailFormState(key, props.formOptions);
-      map.set(key, existing);
+      map.set(stringifiedKey, existing);
     }
     return existing;
   };
@@ -47,7 +55,9 @@ export function getEmailFormRegistry(): RegistryApi {
   return ctx;
 }
 
-export function getOrInitEmailFormContext(key: string): EmailFormContextValue {
+export function getOrInitEmailFormContext(
+  key?: FormAccessKey
+): EmailFormContextValue {
   const ctx = useContext(EmailFormRegistryCtx);
   if (!ctx)
     throw new Error(

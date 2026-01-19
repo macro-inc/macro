@@ -107,7 +107,6 @@
   --transition: 0.s;
   /*--transition: 0.15s;*/
 
-
   --color-*: initial; /* Disable default tailwind color palette */
 
   /* Semantic Color names, use these when writing tailwind */

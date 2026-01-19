@@ -144,8 +144,10 @@ function RecipientList(props: {
 }
 
 export function BaseInput(props: {
-  replyingTo: Accessor<MessageWithBodyReplyless>;
+  replyingTo: Accessor<MessageWithBodyReplyless | undefined>;
+  // TODO: Remove `newMessage` props. It's not used...
   newMessage?: boolean;
+  isEditingExisting?: boolean;
   draft?: MessageWithBodyReplyless;
   preloadedBody?: string;
   preloadedHtml?: string;
@@ -156,9 +158,37 @@ export function BaseInput(props: {
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
 }) {
   const ctx = useEmailContext();
-  const form = createMemo(() =>
-    getOrInitEmailFormContext(props.replyingTo().db_id!)
-  );
+  const form = createMemo(() => {
+    const replyingTo = props.replyingTo();
+
+    // If neither `replyingTo` or `draft` exist, we'll have an empty
+    // initial state
+    if (!replyingTo && !props.draft) {
+      return getOrInitEmailFormContext();
+    }
+
+    // If we have `replyingTo`, we're going to be
+    // creating a reply to a message so we can derive our state
+    // from the `replyingTo` and a possible existing draft
+    if (replyingTo && replyingTo.db_id) {
+      return getOrInitEmailFormContext({
+        type: 'replying_to',
+        messageID: replyingTo.db_id,
+      });
+    }
+
+    // If we only have the draft available, then we're most likely
+    // editing a draft in a new thread with no other messages
+    if (props.draft && props.draft.db_id) {
+      return getOrInitEmailFormContext({
+        type: 'draft',
+        messageID: props.draft.db_id,
+      });
+    }
+
+    // Fallback to empty state
+    return getOrInitEmailFormContext();
+  });
   const blockId = useBlockId();
   const emailLinksQuery = useEmailLinksQuery();
 
@@ -166,7 +196,6 @@ export function BaseInput(props: {
   const [expandedRecipientsRef, setExpandedRecipientsRef] =
     createSignal<HTMLDivElement>();
   const [editor, setEditor] = createSignal<LexicalEditor>();
-  const [showSubject, _] = createSignal(props.newMessage ?? false);
   const [showExpandedRecipients, setShowExpandedRecipients] =
     createSignal<boolean>(false);
   const [isDragging, setIsDragging] = createSignal<boolean>();
@@ -482,10 +511,17 @@ export function BaseInput(props: {
       !hasPaidAccess() ? MACRO_EMAIL_SIGNATURE : undefined
     );
 
-    const prepared = prepareEmailBody(currentEditor, {
-      replyType: effectiveReplyType(),
-      replyingTo: props.replyingTo(),
-    });
+    const replyingTo = props.replyingTo();
+
+    const prepared = prepareEmailBody(
+      currentEditor,
+      replyingTo
+        ? {
+            replyType: effectiveReplyType(),
+            replyingTo,
+          }
+        : undefined
+    );
     if (!prepared) {
       return;
     }
@@ -887,8 +923,10 @@ export function BaseInput(props: {
           </div>
         </Show>
       </div>
-      <div class={`${showSubject() ? 'flex' : 'hidden'} flex-row items-center`}>
-        <div class="text-xs min-w-16">Subject</div>
+      <div
+        class={`${props.isEditingExisting || props.newMessage ? 'flex' : 'hidden'} flex-row items-center`}
+      >
+        <div class="text-sm min-w-16 pl-4">Subject</div>
         <input
           type="text"
           class="flex-1 text-sm bg-transparent outline-none border-0 px-3 py-1"

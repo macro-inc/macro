@@ -102,15 +102,24 @@ function SplitSpotlightButton() {
 
 function SplitCloseButton() {
   const context = useContext(SplitPanelContext);
-  if (!context) return null;
+  const layout = useContext(SplitLayoutContext);
+  if (!context || !layout) return null;
+
+  const label = createMemo(() => {
+    const isOnlySplit = layout.manager.splits().length === 1;
+    const isNotUnifiedList = context.handle.content().id !== 'unified-list';
+    return isOnlySplit && isNotUnifiedList ? 'Return to list' : 'Close';
+  });
 
   return (
     <Button
       class="p-1"
-      tooltip={<LabelAndHotKey label="Close" />}
+      tooltip={
+        <LabelAndHotKey label={label()} hotkeyToken={TOKENS.split.close} />
+      }
       onClick={context.handle.close}
     >
-      <CloseIcon class="h-4" />
+      <CloseIcon class="w-4 h-4" />
     </Button>
   );
 }

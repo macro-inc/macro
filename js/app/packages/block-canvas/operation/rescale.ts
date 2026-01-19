@@ -7,9 +7,9 @@ import {
   type CanvasEdge,
   type CanvasId,
   type CanvasNode,
-  type FileNode,
+  type EntityMentionNode,
   type ImageNode,
-  isFileNode,
+  isEntityMentionNode,
   isImageNode,
   isPencilNode,
   isShapeNode,
@@ -108,7 +108,11 @@ const rescaleShape: RescaleNodeFunction<ShapeNode> = (
   });
 };
 
-const rescaleFile: RescaleNodeFunction<FileNode> = (nodes, node, innerRect) => {
+const rescaleFile: RescaleNodeFunction<EntityMentionNode> = (
+  nodes,
+  node,
+  innerRect
+) => {
   const ratio = fileWidth / fileHeight;
   const largerWidth = Math.abs(innerRect.w) / Math.abs(innerRect.h) > ratio;
   nodes.updateNode(node.id, {
@@ -228,7 +232,7 @@ export const useRescale = sharedInstance((): Operator => {
           rescaleMediaNode(nodes, node, newInnerRect, undefined, flip);
         } else if (isTextNode(node)) {
           rescaleText(nodes, node, newInnerRect);
-        } else if (isFileNode(node)) {
+        } else if (isEntityMentionNode(node)) {
           rescaleFile(nodes, node, newInnerRect);
         } else if (isVideoNode(node)) {
           const flip = op.initialFlip[node.id];

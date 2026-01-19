@@ -50,7 +50,7 @@ export const FilterButton: Component<FilterButtonProps> = (props) => (
     >
       <button
         type="button"
-        class={`flex items-center gap-1 h-[22px] ${props.paddingClass ?? 'pl-2 pr-2.5'} active:bg-accent active:text-panel rounded-full`}
+        class={`flex items-center gap-1 h-[22px] touch:mobile-width:h-9 ${props.paddingClass ?? 'pl-2 pr-2.5'} active:bg-accent active:text-panel rounded-full`}
         classList={{
           'bg-accent text-panel': props.isActive(),
           'text-ink-muted hover:text-accent hover:bg-accent/20':
@@ -59,7 +59,7 @@ export const FilterButton: Component<FilterButtonProps> = (props) => (
         onClick={props.onClick}
       >
         <Dynamic component={props.icon} class="size-4.5" />
-        <span class="text-xs leading-none">
+        <span class="leading-none">
           <ShortcutLabel label={props.label} shortcut={props.shortcut} />
         </span>
       </button>

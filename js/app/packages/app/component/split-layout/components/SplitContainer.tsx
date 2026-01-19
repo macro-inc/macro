@@ -18,6 +18,7 @@ import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
 import { SplitModalProvider } from './SplitModalContext';
 import { SplitToolbar } from './SplitToolbar';
+import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { globalSplitManager } from '@app/signal/splitLayout';
 
@@ -110,7 +111,13 @@ export function SplitContainer(
               <Show when={panel.handle.isSpotLight()}>
                 <MacroJump tabbableParent={ref} />
               </Show>
-              <Show when={isTouchDevice() && isMobileWidth()}>
+              <Show
+                when={
+                  isTouchDevice() &&
+                  isMobileWidth() &&
+                  !virtualKeyboardVisible()
+                }
+              >
                 <MobileDock />
               </Show>
             </div>

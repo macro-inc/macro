@@ -2,6 +2,8 @@ use crate::SQS;
 use models_email::email::service::backfill::BackfillPubsubMessage;
 use models_email::email::service::pubsub::LinkManagerMessage;
 use models_email::service::pubsub::{SFSUploaderMessage, ScheduledPubsubMessage};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 impl SQS {
     pub fn email_link_manager_queue(mut self, link_manager_queue: &str) -> Self {
@@ -22,6 +24,12 @@ impl SQS {
     #[cfg(feature = "sfs_uploader")]
     pub fn sfs_uploader_queue(mut self, email_sfs_uploader_queue: &str) -> Self {
         self.email_sfs_uploader_queue = Some(email_sfs_uploader_queue.to_string());
+        self
+    }
+
+    #[cfg(feature = "sfs_delete")]
+    pub fn sfs_delete_queue(mut self, email_sfs_delete_queue: &str) -> Self {
+        self.email_sfs_delete_queue = Some(email_sfs_delete_queue.to_string());
         self
     }
 
@@ -75,6 +83,19 @@ impl SQS {
         Err(anyhow::anyhow!(
             "email_sfs_uploader_queue is not configured"
         ))
+    }
+
+    /// Sends a message to the sfs delete queue
+    #[cfg(feature = "sfs_delete")]
+    #[tracing::instrument(skip(self), err)]
+    pub async fn enqueue_sfs_delete_message(
+        &self,
+        message: SFSDeleteMessage,
+    ) -> anyhow::Result<()> {
+        if let Some(queue) = &self.email_sfs_delete_queue {
+            return enqueue_sfs_delete_message(&self.inner, queue, message).await;
+        }
+        anyhow::bail!("email_sfs_delete_queue is not configured")
     }
 }
 
@@ -154,4 +175,33 @@ pub async fn enqueue_sfs_uploader_message(
         .await?;
 
     Ok(())
+}
+
+#[cfg(feature = "sfs_delete")]
+#[tracing::instrument(skip(sqs_client))]
+pub async fn enqueue_sfs_delete_message(
+    sqs_client: &aws_sdk_sqs::Client,
+    queue_url: &str,
+    message: SFSDeleteMessage,
+) -> anyhow::Result<()> {
+    let message_str = serde_json::to_string(&message)?;
+
+    sqs_client
+        .send_message()
+        .queue_url(queue_url)
+        .message_body(message_str)
+        .send()
+        .await?;
+
+    Ok(())
+}
+
+/// The message we send to the sfs_delete
+#[cfg(feature = "sfs_delete")]
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SFSDeleteMessage {
+    /// The ID of the row in email_attachments_sfs
+    pub db_id: Uuid,
+    /// The ID of the item in SFS
+    pub sfs_id: Uuid,
 }

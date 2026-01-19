@@ -8,7 +8,7 @@ import { decodeBase64Utf8 } from '../util/decodeBase64';
 import { BaseInput } from './BaseInput';
 
 interface EmailInputProps {
-  replyingTo: Accessor<MessageWithBodyReplyless>;
+  replyingTo: Accessor<MessageWithBodyReplyless | undefined>;
   draft?: MessageWithBodyReplyless;
   setShowReply?: Setter<boolean>;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
@@ -33,7 +33,7 @@ export function EmailInput(props: EmailInputProps) {
   }
 
   return (
-    <Show when={props.replyingTo() && ctx.drafts.initialDraftsSettled()}>
+    <Show when={ctx.drafts.initialDraftsSettled()}>
       <BaseInput
         replyingTo={props.replyingTo}
         draft={props.draft}
@@ -42,6 +42,7 @@ export function EmailInput(props: EmailInputProps) {
         onMarkDone={ctx.archiveThread}
         setShowReply={props.setShowReply}
         markdownDomRef={props.markdownDomRef}
+        isEditingExisting={props.replyingTo() == null && props.draft != null}
       />
     </Show>
   );

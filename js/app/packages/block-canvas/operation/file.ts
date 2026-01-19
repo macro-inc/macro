@@ -5,7 +5,7 @@ import { copiedItem } from '@core/state/clipboard';
 import type { ItemType } from '@service-storage/client';
 import { unwrap } from 'solid-js/store';
 import { OPERATION_LOGGING, Tools } from '../constants';
-import type { FileNode } from '../model/CanvasModel';
+import type { EntityMentionNode } from '../model/CanvasModel';
 import { useCanvasHistory } from '../signal/canvasHistory';
 import { useToolManager } from '../signal/toolManager';
 import { highestOrderSignal, useCanvasNodes } from '../store/canvasData';
@@ -33,7 +33,7 @@ function _log(message: string) {
 export type FileOperation = Operation & {
   type: 'file';
   initialMousePos: Vector2;
-  node: FileNode;
+  node: EntityMentionNode;
 };
 
 export const currentFileOperationSignal = createBlockSignal<FileOperation>();
@@ -89,9 +89,14 @@ export const useFile = sharedInstance((): Operator => {
       }
       const node = createNode(
         {
-          type: 'file',
+          type: 'entitymention',
           file: id,
-          isChat: type === 'chat',
+          entityType: type as
+            | 'document'
+            | 'chat'
+            | 'project'
+            | 'channel'
+            | 'email',
           x: mousePos.x - fileWidth / 2,
           y: mousePos.y - fileHeight / 2,
           width: fileWidth,
@@ -102,7 +107,7 @@ export const useFile = sharedInstance((): Operator => {
           sortOrder: highestOrder() + 1,
         },
         { preview: true }
-      ) as FileNode;
+      ) as EntityMentionNode;
 
       setCurrentFileOperation({
         type: 'file',
@@ -123,7 +128,7 @@ export const useFile = sharedInstance((): Operator => {
 
       // Track document mention and store the UUID
       let mentionUuid: string | undefined;
-      if (blockId && op.node.file && !op.node.isChat && !op.node.isRss) {
+      if (blockId && op.node.file && op.node.entityType === 'document') {
         mentionUuid = await trackMention(blockId, 'document', op.node.file);
       }
 

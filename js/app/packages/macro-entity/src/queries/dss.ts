@@ -5,6 +5,7 @@ import {
   renameItem,
 } from '@core/component/FileList/itemOperations';
 import { itemToSafeName } from '@core/constant/allBlocks';
+import { toast } from '@core/component/Toast/Toast';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
 import type { ItemType } from '@service-storage/client';
@@ -282,12 +283,29 @@ const selectData: (
 
           if (item.tag === 'channel') {
             const out: ChannelEntity = {
-              ...item.data.channel,
-              channelType: item.data.channel.channel_type,
               type: 'channel',
               id: item.data.channel.id,
-              name: item.data.channel.name || 'New Channel',
+              name: item.data.channel.name || 'Unknown Channel',
+              channelType: item.data.channel.channel_type,
               ownerId: item.data.channel.owner_id,
+              frecencyScore: item.frecency_score ?? 0,
+              updatedAt: Date.parse(item.data.channel.updated_at),
+              createdAt: Date.parse(item.data.channel.created_at),
+              participantIds: item.data.participants.map((p) => p.user_id),
+              viewedAt: item.data.viewed_at
+                ? Date.parse(item.data.viewed_at)
+                : item.data.interacted_at
+                  ? Date.parse(item.data.interacted_at)
+                  : undefined,
+              latestMessage: item.data.latest_non_thread_message
+                ? {
+                    content: item.data.latest_non_thread_message.content,
+                    senderId: item.data.latest_non_thread_message.sender_id,
+                    createdAt: Date.parse(
+                      item.data.latest_non_thread_message.created_at
+                    ),
+                  }
+                : undefined,
             };
             return out;
           }
@@ -393,11 +411,13 @@ export function createDeleteDssItemMutation() {
       );
     },
     onSettled: (data, error, entity) => {
-      if (data?.success === false || error)
+      if (data?.success === false || error) {
         console.error(`Failed to delete dss item ${entity}`, data, error);
+        toast.failure('Failed to delete item');
+      }
 
       queryClient.invalidateQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
+        queryKey: queryKeys.all.dss,
       });
     },
   }));
@@ -508,6 +528,7 @@ export function createBulkDeleteDssItemsMutation() {
     },
     onError: (error, entities, _context) => {
       console.error(`Failed to delete dss items`, entities, error);
+      toast.failure('Failed to delete items');
       // Rollback on error - restore the deleted items
       queryClient.invalidateQueries({
         queryKey: queryKeys.all.dss,
@@ -595,11 +616,13 @@ export function createRenameDssEntityMutation(
           );
         },
         onSettled: (data, error, { entity: { id } }) => {
-          if (data?.success === false || error)
+          if (data?.success === false || error) {
             console.error(`Failed to rename dss item ${id}`, data, error);
+            toast.failure('Failed to rename item');
+          }
 
           queryClient.invalidateQueries({
-            queryKey: queryKeys.dss({ infinite: true }),
+            queryKey: queryKeys.all.dss,
           });
         },
       },
@@ -617,7 +640,7 @@ export function createBulkRenameDssEntityMutation() {
       entities: (EntityData & { name: string })[];
       name: (oldName: string) => string | string;
     }) => {
-      if (entities.every(isEntityRenameSupported)) {
+      if (!entities.every(isEntityRenameSupported)) {
         throw new Error(`Unsupported entity type provided`);
       }
       return await Promise.all(
@@ -671,13 +694,49 @@ export function createBulkRenameDssEntityMutation() {
     onSettled: (data, error, { entities }) => {
       if (error) {
         console.error(`Failed bulk rename`, entities, data, error);
+        toast.failure('Failed to rename items');
       }
 
       queryClient.invalidateQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
+        queryKey: queryKeys.all.dss,
       });
     },
   }));
+}
+
+function createMoveOptimisticUpdate(entityIds: string[], projectId: string) {
+  return (
+    prev: { pages: { items: EntityData[] }[] } | undefined
+  ): { pages: { items: EntityData[] }[] } | undefined => {
+    if (!prev) return prev;
+    const pages = prev.pages.map((page) => ({
+      ...page,
+      items: page.items.map((item) =>
+        entityIds.includes(item.id) ? { ...item, projectId } : item
+      ),
+    }));
+    return {
+      ...prev,
+      pages,
+    };
+  };
+}
+
+function invalidateAfterMove(hasProjects: boolean, failed?: boolean) {
+  if (failed) {
+    toast.failure('Failed to move item');
+  }
+
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.all.dss,
+  });
+  queryClient.invalidateQueries({ queryKey: ['entity'] });
+  // If moving a project, invalidate all project queries since nested projects' breadcrumbs change too
+  if (hasProjects) {
+    queryClient.invalidateQueries({
+      queryKey: ['project'],
+    });
+  }
 }
 
 export function createMoveToProjectDssEntityMutation() {
@@ -686,57 +745,44 @@ export function createMoveToProjectDssEntityMutation() {
       entity: { id, type },
       project: { id: projectId },
     }: {
-      entity: EntityData & { name: string };
-      project: { id: string; name: string };
+      entity: EntityData & { type: 'document' | 'chat' | 'project' };
+      project: { id: string };
     }) => {
       const success = await moveToFolder({
-        itemType: type as 'document' | 'chat' | 'project',
-        id: id,
+        itemType: type,
+        id,
         folderId: projectId,
       });
 
       return { success };
     },
     onMutate: async ({
-      entity: { id },
+      entity: { id, type },
       project: { id: projectId },
     }: {
-      entity: EntityData & { name: string };
-      project: { id: string; name: string };
+      entity: EntityData & { type: 'document' | 'chat' | 'project' };
+      project: { id: string };
     }) => {
       queryClient.cancelQueries({
         queryKey: queryKeys.dss({ infinite: true }),
       });
-      function updateEntityProjectIdInQueryData(
-        prev: { pages: { items: EntityData[] }[] } | undefined
-      ): { pages: { items: EntityData[] }[] } | undefined {
-        if (!prev) return prev;
-        const pages = prev.pages.map((page) => ({
-          ...page,
-          items: page.items.map((item) =>
-            item.id === id ? { ...item, projectId: projectId } : item
-          ),
-        }));
-        return {
-          ...prev,
-          pages,
-        };
-      }
-      queryClient.setQueriesData(
-        { queryKey: queryKeys.dss({ infinite: true }) },
-        (prev) =>
-          updateEntityProjectIdInQueryData(
-            prev as { pages: { items: EntityData[] }[] } | undefined
-          )
-      );
-    },
-    onSettled: (data, error, { entity: { id } }) => {
-      if (data?.success === false || error)
-        console.error(`Failed to move dss item ${id}`, data, error);
 
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
-      });
+      // Only do optimistic updates for documents and chats
+      // Projects have complex path data that we can't compute client-side
+      if (type !== 'project') {
+        queryClient.setQueriesData(
+          { queryKey: queryKeys.all.dss },
+          createMoveOptimisticUpdate([id], projectId)
+        );
+      }
+    },
+    onSettled: (data, error, { entity: { id, type } }) => {
+      const failed = data?.success === false || !!error;
+      if (failed) {
+        console.error(`Failed to move dss item ${id}`, data, error);
+      }
+
+      invalidateAfterMove(type === 'project', failed);
     },
   }));
 }
@@ -746,24 +792,19 @@ export function createCopyDssEntityMutation() {
     mutationFn: async ({
       entity: { id, type, name },
     }: {
-      entity: EntityData & { name: string };
+      entity: EntityData & { type: 'document' | 'chat' };
     }) => {
-      if (type !== 'chat' && type !== 'document')
-        throw new Error(
-          `Unsupported entity type: ${type} for id ${id}. Projects cannot be copied.`
-        );
-
-      const success = await copyItem({
-        itemType: type as 'document' | 'chat',
+      const newId = await copyItem({
+        itemType: type,
         id,
         name,
       });
 
-      if (!success) {
+      if (!newId) {
         throw new Error(`Failed to copy ${type} with id ${id}`);
       }
 
-      return { success: true };
+      return newId;
     },
     onMutate: async () => {
       queryClient.cancelQueries({
@@ -773,11 +814,14 @@ export function createCopyDssEntityMutation() {
       // The new item will be added when the mutation completes and queries are invalidated
     },
     onSettled: (data, error, { entity: { id } }) => {
-      if (error) console.error(`Failed to copy dss item ${id}`, data, error);
-
+      if (error) {
+        console.error(`Failed to copy dss item ${id}`, data, error);
+        toast.failure('Failed to copy item');
+      }
       queryClient.invalidateQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
+        queryKey: queryKeys.all.dss,
       });
+      queryClient.invalidateQueries({ queryKey: ['entity'] });
     },
   }));
 }
@@ -828,12 +872,14 @@ export function createBulkCopyDssEntityMutation() {
     onSettled: (data, error, { entities }) => {
       if (error) {
         console.error(`Failed bulk copy`, entities, data, error);
+        toast.failure('Failed to copy items');
       }
 
       // Trigger refetch so new items appear
       queryClient.invalidateQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
+        queryKey: queryKeys.all.dss,
       });
+      queryClient.invalidateQueries({ queryKey: ['entity'] });
     },
   }));
 }
@@ -884,41 +930,30 @@ export function createBulkMoveToProjectDssEntityMutation() {
         queryKey: queryKeys.dss({ infinite: true }),
       });
 
-      function updateEntityProjectIdInQueryData(
-        prev: { pages: { items: EntityData[] }[] } | undefined
-      ): { pages: { items: EntityData[] }[] } | undefined {
-        if (!prev) return prev;
-        const entityIds = entities.map((e) => e.id);
-        const pages = prev.pages.map((page) => ({
-          ...page,
-          items: page.items.map((item) =>
-            entityIds.includes(item.id)
-              ? { ...item, projectId: project.id }
-              : item
-          ),
-        }));
-        return {
-          ...prev,
-          pages,
-        };
-      }
+      // Only do optimistic updates for documents and chats
+      // Projects have complex path data that we can't compute client-side
+      const nonProjectIds = entities
+        .filter((e) => e.type !== 'project')
+        .map((e) => e.id);
 
-      queryClient.setQueriesData(
-        { queryKey: queryKeys.dss({ infinite: true }) },
-        (prev) =>
-          updateEntityProjectIdInQueryData(
-            prev as { pages: { items: EntityData[] }[] } | undefined
-          )
-      );
+      if (nonProjectIds.length > 0) {
+        queryClient.setQueriesData(
+          { queryKey: queryKeys.dss({ infinite: true }) },
+          createMoveOptimisticUpdate(nonProjectIds, project.id)
+        );
+      }
     },
 
     onSettled: (data, error, { entities }) => {
-      if (data?.success === false || error)
+      const failed = data?.success === false || !!error;
+      if (failed) {
         console.error(`Failed to bulk move dss items`, entities, data, error);
+      }
 
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
-      });
+      invalidateAfterMove(
+        entities.some((e) => e.type === 'project'),
+        failed
+      );
     },
   }));
 }

@@ -104,6 +104,7 @@ jobs:
       deleted_item_poller: ${{ steps.changes.outputs.deleted_item_poller }}
       email_refresh_handler: ${{ steps.changes.outputs.email_refresh_handler }}
       email_scheduled_handler: ${{ steps.changes.outputs.email_scheduled_handler }}
+      email_sfs_delete_handler: ${{ steps.changes.outputs.email_sfs_delete_handler }}
       user_link_cleanup_handler: ${{ steps.changes.outputs.user_link_cleanup_handler }}
     steps:
       - uses: actions/checkout@v4
@@ -125,6 +126,7 @@ jobs:
             deleted_item_poller: ./rust/cloud-storage/deleted_item_poller/*
             email_refresh_handler: ./rust/cloud-storage/email_refresh_handler/*
             email_scheduled_handler: ./rust/cloud-storage/email_scheduled_handler/*
+            email_sfs_delete_handler: ./rust/cloud-storage/email_sfs_delete_handler/*
             user_link_cleanup_handler: ./rust/cloud-storage/user_link_cleanup_handler/*
             lambda_aggregate_frecency: ./rust/cloud-storage/lambda_aggregate_frecency/*
 
@@ -150,6 +152,7 @@ jobs:
           - service: deleted_item_poller
           - service: email_refresh_handler
           - service: email_scheduled_handler
+          - service: email_sfs_delete_handler
           - service: user_link_cleanup_handler
     steps:
       - name: setup env var

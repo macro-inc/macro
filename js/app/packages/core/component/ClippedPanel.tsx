@@ -1,7 +1,5 @@
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { cornerClip } from '@core/util/clipPath';
-import { type JSX, type JSXElement, type Ref, Show } from 'solid-js';
+import type { JSX, JSXElement, Ref } from 'solid-js';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
 
 interface PanelProps {
@@ -17,57 +15,52 @@ interface PanelProps {
 
 export function ClippedPanel(props: PanelProps) {
   return (
-    <Show
-      when={!isTouchDevice() || !isMobileWidth()}
-      fallback={<div class="size-full">{props.children}</div>}
-    >
-      <div
-        style={{
-          'background-image': `linear-gradient(${props.active ? `var(--color-accent), ${props.edgeMutedColor || 'var(--color-edge-muted)'} 80%` : `${props.edgeMutedColor || 'var(--color-edge-muted)'}`} )`,
-          'clip-path': !beveledCorners()
-            ? cornerClip(
-                props.tl ? '0.5rem' : 0,
-                props.tr ? '0.5rem' : 0,
-                props.br ? '0.5rem' : 0,
-                props.bl ? '0.5rem' : 0
-              )
-            : '',
-          'border-radius': beveledCorners()
-            ? `
+    <div
+      style={{
+        'background-image': `linear-gradient(${props.active ? `var(--color-accent), ${props.edgeMutedColor || 'var(--color-edge-muted)'} 80%` : `${props.edgeMutedColor || 'var(--color-edge-muted)'}`} )`,
+        'clip-path': !beveledCorners()
+          ? cornerClip(
+              props.tl ? '0.5rem' : 0,
+              props.tr ? '0.5rem' : 0,
+              props.br ? '0.5rem' : 0,
+              props.bl ? '0.5rem' : 0
+            )
+          : '',
+        'border-radius': beveledCorners()
+          ? `
             ${props.tl ? '16px' : '4px'}
             ${props.tr ? '16px' : '4px'}
             ${props.br ? '16px' : '4px'}
             ${props.bl ? '16px' : '4px'}
           `
-            : '0',
-        }}
-        class="p-px h-full w-full box-border"
-      >
-        <div
-          style={{
-            'clip-path': !beveledCorners()
-              ? cornerClip(
-                  props.tl ? 'calc(0.5rem - 0.5px)' : 0,
-                  props.tr ? 'calc(0.5rem - 0.5px)' : 0,
-                  props.br ? 'calc(0.5rem - 0.5px)' : 0,
-                  props.bl ? 'calc(0.5rem - 0.5px)' : 0
-                )
-              : '',
-            'border-radius': beveledCorners()
-              ? `
+          : '0',
+      }}
+      class="p-px h-full w-full box-border"
+    >
+      <div
+        style={{
+          'clip-path': !beveledCorners()
+            ? cornerClip(
+                props.tl ? 'calc(0.5rem - 0.5px)' : 0,
+                props.tr ? 'calc(0.5rem - 0.5px)' : 0,
+                props.br ? 'calc(0.5rem - 0.5px)' : 0,
+                props.bl ? 'calc(0.5rem - 0.5px)' : 0
+              )
+            : '',
+          'border-radius': beveledCorners()
+            ? `
               ${props.tl ? '15.5px' : '3.3px'}
               ${props.tr ? '15.5px' : '3.3px'}
               ${props.br ? '15.5px' : '3.3px'}
               ${props.bl ? '15.5px' : '3.3px'}
             `
-              : '0',
-          }}
-          class="h-full w-full box-border overflow-hidden bg-panel"
-          ref={props.ref}
-        >
-          {props.children}
-        </div>
+            : '0',
+        }}
+        class="h-full w-full box-border overflow-hidden bg-panel"
+        ref={props.ref}
+      >
+        {props.children}
       </div>
-    </Show>
+    </div>
   );
 }

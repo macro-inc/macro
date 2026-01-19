@@ -101,6 +101,23 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
       select(data) {
         const messages = data.pages.flatMap((t) => t.messages);
 
+        // Sort all messages by recency
+        messages.sort((a, b) => {
+          if (a.internal_date_ts && b.internal_date_ts) {
+            return (
+              new Date(a.internal_date_ts).getTime() -
+              new Date(b.internal_date_ts).getTime()
+            );
+          }
+          // Below is fallback for when internal_date_ts is not set
+          else if (a.sent_at && b.sent_at) {
+            return (
+              new Date(a.sent_at).getTime() - new Date(b.sent_at).getTime()
+            );
+          }
+          return 0;
+        });
+
         const filtered = [];
         const messageDraftMap: Record<string, MessageWithBodyReplyless> = {};
 
@@ -120,22 +137,6 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
 
           messageDraftMap[replyingToId] = message;
         }
-
-        filtered.sort((a, b) => {
-          if (a.internal_date_ts && b.internal_date_ts) {
-            return (
-              new Date(a.internal_date_ts).getTime() -
-              new Date(b.internal_date_ts).getTime()
-            );
-          }
-          // Below is fallback for when internal_date_ts is not set
-          else if (a.sent_at && b.sent_at) {
-            return (
-              new Date(a.sent_at).getTime() - new Date(b.sent_at).getTime()
-            );
-          }
-          return 0;
-        });
 
         return {
           ...data.pages[0],
@@ -459,4 +460,8 @@ export function useEmailContext() {
     throw new Error('useEmailContext must be used within an EmailProvider');
   }
   return ctx;
+}
+
+export function useMaybeEmailContext() {
+  return useContext(EmailContext);
 }

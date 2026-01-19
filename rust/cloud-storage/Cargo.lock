@@ -58,6 +58,7 @@ dependencies = [
  "futures",
  "image",
  "lazy_static",
+ "macro_user_id",
  "model_file_type",
  "rand 0.9.0",
  "reqwest",
@@ -3250,6 +3251,23 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "email_sfs_delete_handler"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aws-config",
+ "aws-sdk-sqs",
+ "aws_lambda_events",
+ "lambda_runtime",
+ "macro_entrypoint",
+ "macro_env",
+ "sqlx",
+ "sqs_client",
  "tokio",
  "tracing",
 ]

@@ -114,7 +114,10 @@ export class StaticFileService extends pulumi.ComponentResource {
     const staticFilesBucket = new aws.s3.Bucket(STATIC_FILE_BUCKET, {
       bucket: STATIC_FILE_BUCKET,
       forceDestroy: stack !== 'prod',
-
+      versioning: {
+        enabled: true,
+        mfaDelete: false,
+      },
       corsRules: [
         {
           allowedHeaders: ['*'],

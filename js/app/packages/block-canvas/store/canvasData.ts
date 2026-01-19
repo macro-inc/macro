@@ -792,40 +792,43 @@ export const useExportCanvasData = sharedInstance(() => {
   };
 });
 
-// save block-level canvas data to DSS
-export const useSaveCanvasData = sharedInstance(() => {
+// Immediate save function (not debounced)
+export const useSaveCanvasDataImmediate = sharedInstance(() => {
   const exportCanvasData = useExportCanvasData();
   const [, setPendingUpdates] = pendingUpdates;
   const setCurrentSavedFile = currentSavedFile.set;
 
-  return debounce(
-    createCallback(async () => {
-      const dssFile = blockDataSignal()?.dssFile;
-      if (!dssFile) {
-        console.error('no dss file');
-        return;
-      }
-      const { documentId } = dssFile.getMetadata();
+  return createCallback(async () => {
+    const dssFile = blockDataSignal()?.dssFile;
+    if (!dssFile) {
+      console.error('no dss file');
+      return;
+    }
+    const { documentId } = dssFile.getMetadata();
 
-      const canvas = exportCanvasData();
-      const encoder = new TextEncoder();
-      const buffer = encoder.encode(JSON.stringify(canvas));
+    const canvas = exportCanvasData();
+    const encoder = new TextEncoder();
+    const buffer = encoder.encode(JSON.stringify(canvas));
 
-      const file = new Blob([buffer], { type: 'application/x-macro-canvas' });
+    const file = new Blob([buffer], { type: 'application/x-macro-canvas' });
 
-      const saveRes = await storageServiceClient.simpleSave({
-        documentId,
-        file,
-      });
+    const saveRes = await storageServiceClient.simpleSave({
+      documentId,
+      file,
+    });
 
-      if (isErr(saveRes)) {
-        console.error('error on canvas save');
-      }
+    if (isErr(saveRes)) {
+      console.error('error on canvas save');
+    }
 
-      setCurrentSavedFile(() => file);
+    setCurrentSavedFile(() => file);
 
-      setPendingUpdates(false);
-    }),
-    1500
-  );
+    setPendingUpdates(false);
+  });
+});
+
+// save block-level canvas data to DSS (debounced)
+export const useSaveCanvasData = sharedInstance(() => {
+  const saveImmediate = useSaveCanvasDataImmediate();
+  return debounce(saveImmediate, 1500);
 });

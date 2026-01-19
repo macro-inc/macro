@@ -10,7 +10,7 @@ export const BrowserNotificationModal = () => {
   if (!settings.isSupported) return null;
 
   const shouldShow = createMemo(
-    () => isAuthenticated() && settings.shouldPrompt()
+    () => !import.meta.env.DEV && isAuthenticated() && settings.shouldPrompt()
   );
 
   const handleEnable = async () => {

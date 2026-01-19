@@ -1,12 +1,18 @@
 import WideChannel from '@macro-icons/wide/channel.svg';
-import WideEmail from '@macro-icons/wide/email.svg';
-import WideCode from '@macro-icons/wide/file-code.svg';
+import SignalIcon from '@macro-icons/wide/signal.svg';
+import WideFolder from '@macro-icons/wide/folder.svg';
 import WidePlus from '@macro-icons/wide/plus.svg';
 import WideTask from '@macro-icons/wide/task.svg';
-import type { Component, JSX } from 'solid-js';
+import { batch, type Component, type JSX } from 'solid-js';
 import { setCreateMenuOpen } from '../Launcher';
 import { useSplitPanelOrThrow } from '../split-layout/layoutUtils';
-import { VIEWCONFIG_DEFAULTS_IDS_ENUM } from '../ViewConfig';
+import { VIEWCONFIG_BASE } from '../ViewConfig';
+import { FOCUS_FILTER_CONFIGS } from '../Soup/utils/filterConfigs';
+import {
+  isEntityTypeFilterActive,
+  isFocusFilterActive,
+  sameSet,
+} from '../Soup/utils/filterHelpers';
 
 type MobileDockButtonProps = {
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
@@ -33,66 +39,135 @@ function MobileDockButton(props: MobileDockButtonProps) {
 
 export function MobileDock() {
   const splitContext = useSplitPanelOrThrow();
-  const { selectedView, setSelectedView } = splitContext.soupContext;
+  const { selectedView, setViewDataStore, viewsDataStore } =
+    splitContext.soupContext;
+
+  const splitContent = () => splitContext.handle.content();
+  const view = () => viewsDataStore[selectedView()];
+  const filters = () => view()?.filters ?? VIEWCONFIG_BASE.filters;
+  const typeFilter = () => filters().typeFilter ?? [];
+  const channelCategoryFilter = () => filters().channelCategoryFilter ?? [];
+  const focusFilters = () => filters().focusFilters ?? [];
+
+  const splitIsUnifiedList = () =>
+    splitContent().type === 'component' && splitContent().id === 'unified-list';
 
   const ensureUnifiedList = () => {
-    const content = splitContext.handle.content();
-    if (content.type === 'component' && content.id === 'unified-list') return;
+    if (splitIsUnifiedList()) return;
     splitContext.handle.replace({
       next: { type: 'component', id: 'unified-list' },
     });
   };
 
-  const focusSearchInput = (viewId: string) => {
-    setTimeout(() => {
-      const el = document.getElementById(
-        `search-input-${splitContext.handle.id}-${viewId}`
-      );
-      if (el instanceof HTMLInputElement) {
-        el.focus();
-      } else {
-        (el as HTMLElement | null)?.focus?.();
-      }
-    }, 0);
+  const isInboxActive = () =>
+    isFocusFilterActive(focusFilters(), 'signal') && splitIsUnifiedList();
+  const isPeopleTeamsActive = () =>
+    isEntityTypeFilterActive(typeFilter(), 'channel') &&
+    sameSet(channelCategoryFilter(), ['people', 'groups']) &&
+    splitIsUnifiedList();
+  const isTasksActive = () =>
+    isEntityTypeFilterActive(typeFilter(), 'task') && splitIsUnifiedList();
+  const isAllActive = () =>
+    !isInboxActive() &&
+    !isPeopleTeamsActive() &&
+    !isTasksActive() &&
+    splitIsUnifiedList();
+
+  const setFocusFilter = (target: 'signal' | 'noise' | 'none') => {
+    const config =
+      target === 'none'
+        ? FOCUS_FILTER_CONFIGS.none
+        : FOCUS_FILTER_CONFIGS[target];
+    const viewId = selectedView();
+    setViewDataStore(viewId, 'filters', 'focusFilters', [
+      ...config.focusFilters,
+    ]);
+    setViewDataStore(
+      viewId,
+      'filters',
+      'notificationFilter',
+      config.notificationFilter
+    );
+    setViewDataStore(
+      viewId,
+      'display',
+      'unrollNotifications',
+      config.unrollNotifications
+    );
+  };
+
+  const setTypeFilters = ({
+    type,
+    channelCategories = [],
+  }: {
+    type: Array<'channel' | 'chat' | 'document' | 'email' | 'project' | 'task'>;
+    channelCategories?: Array<'people' | 'groups'>;
+  }) => {
+    const viewId = selectedView();
+    setViewDataStore(viewId, 'filters', 'typeFilter', type);
+    setViewDataStore(viewId, 'filters', 'documentTypeFilter', []);
+    setViewDataStore(viewId, 'filters', 'channelCategoryFilter', [
+      ...channelCategories,
+    ]);
+  };
+
+  const clearSearchFilters = () => {
+    const viewId = selectedView();
+    batch(() => {
+      setTypeFilters({ type: [], channelCategories: [] });
+      setFocusFilter('none');
+      setViewDataStore(viewId, 'filters', 'unreadOnly', false);
+    });
   };
 
   return (
     <div class="flex flex-row justify-between bg-linear-to-t from-page to-panel border-t border-edge-muted">
       <MobileDockButton
-        icon={WideCode}
-        label="Search"
-        active={selectedView() === VIEWCONFIG_DEFAULTS_IDS_ENUM.all}
+        icon={WideFolder}
+        label="All"
+        active={isAllActive()}
         onClick={() => {
           ensureUnifiedList();
-          setSelectedView(VIEWCONFIG_DEFAULTS_IDS_ENUM.all);
-          focusSearchInput(VIEWCONFIG_DEFAULTS_IDS_ENUM.all);
+          clearSearchFilters();
         }}
       />
       <MobileDockButton
-        icon={WideEmail}
+        icon={SignalIcon}
         label="Inbox"
-        active={selectedView() === VIEWCONFIG_DEFAULTS_IDS_ENUM.signal}
+        active={isInboxActive()}
         onClick={() => {
           ensureUnifiedList();
-          setSelectedView(VIEWCONFIG_DEFAULTS_IDS_ENUM.signal);
+          batch(() => {
+            setFocusFilter('signal');
+            setTypeFilters({ type: [] });
+          });
         }}
       />
       <MobileDockButton
         icon={WideChannel}
         label="People"
-        active={selectedView() === VIEWCONFIG_DEFAULTS_IDS_ENUM.people}
+        active={isPeopleTeamsActive()}
         onClick={() => {
           ensureUnifiedList();
-          setSelectedView(VIEWCONFIG_DEFAULTS_IDS_ENUM.people);
+          batch(() => {
+            setFocusFilter('none');
+            setTypeFilters({
+              type: ['channel'],
+              channelCategories: ['people', 'groups'],
+            });
+          });
         }}
       />
       <MobileDockButton
         icon={WideTask}
         label="Tasks"
-        active={selectedView() === VIEWCONFIG_DEFAULTS_IDS_ENUM.tasks}
+        active={isTasksActive()}
         onClick={() => {
           ensureUnifiedList();
-          setSelectedView(VIEWCONFIG_DEFAULTS_IDS_ENUM.tasks);
+          batch(() => {
+            setFocusFilter('none');
+            setTypeFilters({ type: ['task'] });
+          });
         }}
       />
       <MobileDockButton

@@ -42,6 +42,7 @@ build_lambdas:
     just email_refresh_handler/build
     just user_link_cleanup_handler/build
     just email_scheduled_handler/build
+    just email_sfs_delete_handler/build
 
 # TESTING
 

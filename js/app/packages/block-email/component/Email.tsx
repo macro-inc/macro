@@ -16,8 +16,10 @@ import {
   type Accessor,
   createEffect,
   createMemo,
+  Match,
   onMount,
   Show,
+  Switch,
   untrack,
 } from 'solid-js';
 import { isScrollingToMessage } from '../signal/scrollState';
@@ -27,13 +29,14 @@ import { EmailFormContextProvider } from './EmailFormContext';
 import { EmailInput } from './EmailInput';
 import { MessageList } from './MessageList';
 import { TopBar } from './TopBar';
+import { EmailCompose } from '@block-email/component/Compose';
 
 const TARGET_MESSAGE_HIGHLIGHT_MS = 800;
 const SCROLL_ANIMATION_MS = 1000;
 const SCROLL_AFTER_SEND_DELAY_MS = 100;
 
 type EmailViewProps = {
-  title: Accessor<string>;
+  title: string;
   threadId: Accessor<string>;
 };
 
@@ -394,62 +397,106 @@ function EmailContent(props: EmailViewProps) {
     hide: true,
   });
 
+  const emailReplyInfo = createMemo(() => {
+    const filtered = context.messages.list();
+
+    // If there are non draft messages in this thread, the bottom input will
+    // be for sending a reply to the last message
+    if (filtered.length !== 0) {
+      const lastMessage = filtered.at(-1);
+      if (!lastMessage || !lastMessage.db_id) return;
+      return {
+        replyingTo: lastMessage,
+        draft: context.drafts.getDraftForMessage(lastMessage.db_id),
+      };
+    }
+
+    // Otherwise, if the other messages in the thread are drafts,
+    // the bottom input will be for editing and sending the latest/last draft
+    const unfiltered = context.messages.unfiltered();
+
+    if (unfiltered.length === 0) return;
+
+    const latest = unfiltered.at(-1);
+
+    if (!latest || !latest.is_draft) return;
+
+    return { replyingTo: undefined, draft: latest };
+  });
+
   return (
-    <EmailFormContextProvider
-      formOptions={{
-        getMessageByID: (id) =>
-          context.messages.list().find((m) => m.db_id === id),
-        getDraftForMessageReply: context.drafts.getDraftForMessage,
-        onRecipientsChange: context.onRecipientsChange,
-      }}
-    >
-      <div class="w-full h-full bg-panel select-none overscroll-none overflow-hidden flex flex-col">
-        <TopBar id={props.threadId()} title={props.title()} />
-        <div
-          class="w-full flex-1 flex flex-col items-center overflow-hidden"
-          ref={context.registerMessagesContainer}
-        >
-          <MessageList
-            initialLoadComplete={context.initialLoadComplete()}
-            title={props.title()}
-          />
-          <CustomScrollbar reverse scrollContainer={context.messagesListRef} />
-        </div>
-        <FloatingInputLoader
-          isLoading={context.query.isFetching}
-          loadingText="Loading messages"
-          class="top-2"
-        />
-        <Show
-          when={
-            context.permissions().isOwner &&
-            context.drafts.initialDraftsSettled() &&
-            context.messages.list().at(-1)
-          }
-        >
-          {(lastMessage) => {
-            return (
-              <div class="shrink-0 w-full px-4 pb-2">
-                <div class="relative w-full flex flex-row justify-center bg-panel macro-message-width mx-auto">
-                  <EmailInput
-                    replyingTo={lastMessage}
-                    draft={
-                      lastMessage().db_id
-                        ? context.drafts.getDraftForMessage(
-                            lastMessage().db_id!
-                          )
-                        : undefined
-                    }
-                    markdownDomRef={(el) => {
-                      markdownDomRef = el;
-                    }}
-                  />
-                </div>
-              </div>
-            );
+    <Switch>
+      <Match
+        when={
+          emailReplyInfo()?.replyingTo == null &&
+          emailReplyInfo()?.draft?.db_id != null &&
+          emailReplyInfo()?.draft
+        }
+      >
+        {(draft) => <EmailCompose draftID={draft().db_id!} />}
+      </Match>
+
+      <Match when={true}>
+        <EmailFormContextProvider
+          formOptions={{
+            getMessageByID: (id) =>
+              context.messages.unfiltered().find((m) => m.db_id === id),
+            getDraftForMessageReply: context.drafts.getDraftForMessage,
+            onRecipientsChange: context.onRecipientsChange,
           }}
-        </Show>
-      </div>
-    </EmailFormContextProvider>
+        >
+          <div class="w-full h-full bg-panel select-none overscroll-none overflow-hidden flex flex-col">
+            <TopBar
+              id={props.threadId()}
+              title={props.title}
+              isDraft={
+                emailReplyInfo()?.replyingTo == null &&
+                emailReplyInfo()?.draft !== null
+              }
+            />
+            <div
+              class="w-full flex-1 flex flex-col items-center overflow-hidden"
+              ref={context.registerMessagesContainer}
+            >
+              <MessageList
+                initialLoadComplete={context.initialLoadComplete()}
+                title={props.title}
+              />
+              <CustomScrollbar
+                reverse
+                scrollContainer={context.messagesListRef}
+              />
+            </div>
+            <Show
+              when={
+                context.permissions().isOwner &&
+                context.drafts.initialDraftsSettled() &&
+                emailReplyInfo()
+              }
+            >
+              {(info) => {
+                return (
+                  <div class="shrink-0 w-full px-4 pb-2">
+                    <div class="relative w-full flex flex-row justify-center bg-panel macro-message-width mx-auto">
+                      <FloatingInputLoader
+                        isLoading={context.query.isFetching}
+                        loadingText="Loading messages"
+                      />
+                      <EmailInput
+                        replyingTo={() => info().replyingTo}
+                        draft={info().draft}
+                        markdownDomRef={(el) => {
+                          markdownDomRef = el;
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              }}
+            </Show>
+          </div>
+        </EmailFormContextProvider>
+      </Match>
+    </Switch>
   );
 }
