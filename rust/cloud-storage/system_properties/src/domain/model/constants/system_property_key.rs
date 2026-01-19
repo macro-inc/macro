@@ -128,3 +128,150 @@ impl SystemPropertyKey {
         Self::required_property_ids_for_entity(entity_type).contains(&property_definition_id)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_from_uuid_returns_none_for_unknown_uuid() {
+        let unknown_uuid = Uuid::from_u128(0xdeadbeef_dead_beef_dead_beefdeadbeef);
+        assert_eq!(SystemPropertyKey::from_uuid(unknown_uuid), None);
+    }
+
+    #[test]
+    fn test_is_system_uuid_returns_true_for_system_uuids() {
+        assert!(SystemPropertyKey::is_system_uuid(
+            SystemPropertyKey::ASSIGNEES_UUID
+        ));
+        assert!(SystemPropertyKey::is_system_uuid(
+            SystemPropertyKey::STATUS_UUID
+        ));
+        assert!(SystemPropertyKey::is_system_uuid(
+            SystemPropertyKey::SUBJECT_UUID
+        ));
+    }
+
+    #[test]
+    fn test_is_system_uuid_returns_false_for_unknown_uuid() {
+        let unknown_uuid = Uuid::from_u128(0xdeadbeef_dead_beef_dead_beefdeadbeef);
+        assert!(!SystemPropertyKey::is_system_uuid(unknown_uuid));
+    }
+
+    #[test]
+    fn test_all_system_property_keys_returns_all_uuids() {
+        let all_keys = SystemPropertyKey::all_system_property_keys();
+        assert_eq!(all_keys.len(), 15);
+        assert!(all_keys.contains(&SystemPropertyKey::ASSIGNEES_UUID));
+        assert!(all_keys.contains(&SystemPropertyKey::STATUS_UUID));
+        assert!(all_keys.contains(&SystemPropertyKey::PRIORITY_UUID));
+        assert!(all_keys.contains(&SystemPropertyKey::DUE_DATE_UUID));
+        assert!(all_keys.contains(&SystemPropertyKey::PARENT_TASK_UUID));
+        assert!(all_keys.contains(&SystemPropertyKey::SUBTASKS_UUID));
+        assert!(all_keys.contains(&SystemPropertyKey::DEPENDS_ON_UUID));
+        assert!(all_keys.contains(&SystemPropertyKey::EFFORT_UUID));
+        assert!(all_keys.contains(&SystemPropertyKey::STORY_POINTS_UUID));
+        assert!(all_keys.contains(&SystemPropertyKey::RELEVANT_DOCUMENTS_UUID));
+        assert!(all_keys.contains(&SystemPropertyKey::SOURCE_UUID));
+        assert!(all_keys.contains(&SystemPropertyKey::COMPANIES_UUID));
+        assert!(all_keys.contains(&SystemPropertyKey::SENDER_UUID));
+        assert!(all_keys.contains(&SystemPropertyKey::RECIPIENTS_UUID));
+        assert!(all_keys.contains(&SystemPropertyKey::SUBJECT_UUID));
+    }
+
+    #[test]
+    fn test_required_property_ids_for_task() {
+        let required = SystemPropertyKey::required_property_ids_for_entity(EntityType::Task);
+        assert_eq!(required.len(), 10);
+        assert!(required.contains(&SystemPropertyKey::ASSIGNEES_UUID));
+        assert!(required.contains(&SystemPropertyKey::STATUS_UUID));
+        assert!(required.contains(&SystemPropertyKey::PRIORITY_UUID));
+        assert!(required.contains(&SystemPropertyKey::DUE_DATE_UUID));
+        assert!(required.contains(&SystemPropertyKey::PARENT_TASK_UUID));
+        assert!(required.contains(&SystemPropertyKey::SUBTASKS_UUID));
+        assert!(required.contains(&SystemPropertyKey::DEPENDS_ON_UUID));
+        assert!(required.contains(&SystemPropertyKey::EFFORT_UUID));
+        assert!(required.contains(&SystemPropertyKey::STORY_POINTS_UUID));
+        assert!(required.contains(&SystemPropertyKey::RELEVANT_DOCUMENTS_UUID));
+    }
+
+    #[test]
+    fn test_required_property_ids_for_non_task_entity_returns_empty() {
+        let required = SystemPropertyKey::required_property_ids_for_entity(EntityType::Document);
+        assert!(required.is_empty());
+    }
+
+    #[test]
+    fn test_is_required_for_entity_returns_true_for_task_properties() {
+        assert!(SystemPropertyKey::is_required_for_entity(
+            SystemPropertyKey::ASSIGNEES_UUID,
+            EntityType::Task
+        ));
+        assert!(SystemPropertyKey::is_required_for_entity(
+            SystemPropertyKey::STATUS_UUID,
+            EntityType::Task
+        ));
+    }
+
+    #[test]
+    fn test_is_required_for_entity_returns_false_for_non_task_properties() {
+        assert!(!SystemPropertyKey::is_required_for_entity(
+            SystemPropertyKey::SOURCE_UUID,
+            EntityType::Task
+        ));
+        assert!(!SystemPropertyKey::is_required_for_entity(
+            SystemPropertyKey::SENDER_UUID,
+            EntityType::Task
+        ));
+    }
+
+    #[test]
+    fn test_is_required_for_entity_returns_false_for_non_task_entity() {
+        assert!(!SystemPropertyKey::is_required_for_entity(
+            SystemPropertyKey::ASSIGNEES_UUID,
+            EntityType::Document
+        ));
+    }
+
+    #[test]
+    fn test_uuids_are_unique() {
+        let all_keys = SystemPropertyKey::all_system_property_keys();
+        let mut seen = std::collections::HashSet::new();
+        for uuid in all_keys {
+            assert!(seen.insert(uuid), "Duplicate UUID found: {:?}", uuid);
+        }
+    }
+
+    #[test]
+    fn test_uuid_roundtrip() {
+        // Test that uuid() -> from_uuid() roundtrips correctly for all variants
+        let variants = [
+            SystemPropertyKey::Assignees,
+            SystemPropertyKey::Status,
+            SystemPropertyKey::Priority,
+            SystemPropertyKey::DueDate,
+            SystemPropertyKey::ParentTask,
+            SystemPropertyKey::Subtasks,
+            SystemPropertyKey::DependsOn,
+            SystemPropertyKey::Effort,
+            SystemPropertyKey::StoryPoints,
+            SystemPropertyKey::RelevantDocuments,
+            SystemPropertyKey::Source,
+            SystemPropertyKey::Companies,
+            SystemPropertyKey::Sender,
+            SystemPropertyKey::Recipients,
+            SystemPropertyKey::Subject,
+        ];
+
+        for variant in variants {
+            let uuid = variant.uuid();
+            let recovered = SystemPropertyKey::from_uuid(uuid);
+            assert_eq!(
+                recovered,
+                Some(variant),
+                "Roundtrip failed for {:?}",
+                variant
+            );
+        }
+    }
+}
