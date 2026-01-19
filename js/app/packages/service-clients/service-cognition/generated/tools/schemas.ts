@@ -445,24 +445,6 @@ export const ApiPaginatedThreadCursor = z.object({
   next_cursor: z.union([z.string(), z.null()]).optional(),
 });
 
-export const MarkdownRewrite = z
-  .object({ instructions: z.string(), markdown_file_id: z.string() })
-  .strict();
-
-export const AIDiffResponse = z
-  .object({
-    diffs: z.array(
-      z
-        .object({
-          markdown_text: z.string(),
-          node_key: z.string(),
-          operation: z.string(),
-        })
-        .strict()
-    ),
-  })
-  .strict();
-
 export const NameSearch = z
   .object({
     entityTypes: z

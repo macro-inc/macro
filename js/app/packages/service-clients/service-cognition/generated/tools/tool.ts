@@ -29,10 +29,6 @@ type ToolParserMap = {
     call: types.ListEmails;
     response: types.ApiPaginatedThreadCursor;
   };
-  MarkdownRewrite: {
-    call: types.MarkdownRewrite;
-    response: types.AIDiffResponse;
-  };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
   Read: { call: types.Read; response: types.ReadResponse };
   text_editor_code_execution: {
@@ -66,10 +62,6 @@ const toolParserMap = {
   ListEmails: {
     call: schemas.ListEmails,
     response: schemas.ApiPaginatedThreadCursor,
-  },
-  MarkdownRewrite: {
-    call: schemas.MarkdownRewrite,
-    response: schemas.AIDiffResponse,
   },
   NameSearch: {
     call: schemas.NameSearch,
@@ -118,10 +110,6 @@ type ToolDataMap = {
   ListEmails: {
     call: types.ListEmails;
     response: types.ApiPaginatedThreadCursor;
-  };
-  MarkdownRewrite: {
-    call: types.MarkdownRewrite;
-    response: types.AIDiffResponse;
   };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
   Read: { call: types.Read; response: types.ReadResponse };

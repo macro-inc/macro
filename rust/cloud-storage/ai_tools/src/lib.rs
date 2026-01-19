@@ -4,7 +4,8 @@ pub mod code_execution;
 pub mod list;
 pub mod prompts;
 pub mod read;
-pub mod rewrite;
+#[allow(dead_code)]
+mod rewrite;
 pub mod search;
 mod tool_context;
 pub mod web_fetch;
@@ -41,9 +42,7 @@ pub fn all_tools() -> ToolSetWithPrompt {
         .add_toolset(list_toolset())
         .expect("failed to add list toolset")
         .add_tool::<read::Read, Arc<ToolScribe>>()
-        .expect("read tool")
-        .add_tool::<rewrite::MarkdownRewrite, Arc<ToolScribe>>()
-        .expect("markdown revision tool");
+        .expect("read tool");
     let prompt = prompts::TOOLS_PROMPT;
     ToolSetWithPrompt { toolset, prompt }
 }

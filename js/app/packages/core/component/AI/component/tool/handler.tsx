@@ -14,7 +14,6 @@ import { bashCodeExecutionHandler } from './BashCodeExecution';
 import { listChannelsHandler } from './ListChannels';
 import { listDocumentsHandler } from './ListDocuments';
 import { listEmailsHandler } from './ListEmails';
-import { rewriteHandler } from './MarkdownRewrite';
 import { readHandler } from './Read';
 import { contentSearchHandler, nameSearchHandler } from './Search';
 import { textEditorCodeExecutionHandler } from './TextEditorCodeExecution';
@@ -32,7 +31,6 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ListChannels: listChannelsHandler,
   ListDocuments: listDocumentsHandler,
   ListEmails: listEmailsHandler,
-  MarkdownRewrite: rewriteHandler,
   NameSearch: nameSearchHandler,
   Read: readHandler,
   text_editor_code_execution: textEditorCodeExecutionHandler,

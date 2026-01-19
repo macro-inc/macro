@@ -20,7 +20,11 @@ import {
 import { createEffect } from 'solid-js';
 import { mapRegisterDelete } from '../shared/utils';
 
-type Diff = NamedTool<'MarkdownRewrite', 'response'>['data']['diffs'][number];
+interface Diff {
+  operation: string;
+  node_key: string;
+  markdown_text: string;
+}
 
 export type DiffPluginArgs = {
   revisionsSignal: ReturnType<typeof createBlockSignal<Diff[] | undefined>>;
