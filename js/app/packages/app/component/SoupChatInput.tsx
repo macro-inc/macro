@@ -1,6 +1,11 @@
 import { useChatInput } from '@core/component/AI/component/input/useChatInput';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
-import type { CreateAndSend, Send } from '@core/component/AI/types';
+import type {
+  Attachment,
+  CreateAndSend,
+  Model,
+  Send,
+} from '@core/component/AI/types';
 import { useBigChat } from '@core/signal/layout';
 
 export function SoupChatInput() {
@@ -10,8 +15,8 @@ export function SoupChatInput() {
 
   // Store content before send since ChatInput clears it before calling onSend
   let pendingContent = '';
-  let pendingAttachments: any[] = [];
-  let pendingModel: any;
+  let pendingAttachments: Attachment[] = [];
+  let pendingModel: Model;
 
   // Track changes to capture content before it's cleared
   const captureState = () => {
