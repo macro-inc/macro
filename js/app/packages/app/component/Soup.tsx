@@ -55,6 +55,7 @@ import {
   Switch,
 } from 'solid-js';
 import { PreviewPanel } from './PreviewPanel';
+import { SoupChatInput } from './SoupChatInput';
 import { SuspenseContextComp } from './SuspenseContext';
 import {
   SplitHeaderLeft,
@@ -768,6 +769,7 @@ export function Soup() {
           />
         </Show>
       </div>
+      <SoupChatInput />
     </div>
   );
 }
