@@ -69,7 +69,7 @@ macro_rules! define_system_properties {
             }
 
             /// Returns all system property keys.
-            pub const fn all_system_propperty_keys() -> &'static [Uuid] {
+            pub const fn all_system_property_keys() -> &'static [Uuid] {
                 &[$(Self::$const_name),*]
             }
         }
