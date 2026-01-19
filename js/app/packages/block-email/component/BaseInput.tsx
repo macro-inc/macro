@@ -551,6 +551,8 @@ export function BaseInput(props: {
       },
     });
 
+    resetState();
+
     cleanupWatermark();
   };
 
