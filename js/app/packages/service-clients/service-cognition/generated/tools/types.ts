@@ -30,8 +30,23 @@ export interface BashCodeExecutionToolCall {
  * Content of a bash code execution response - either a result or an error
  */
 export type BashCodeExecutionContent =
-  | BashCodeExecutionResult
-  | BashCodeExecutionToolError;
+  | (BashCodeExecutionResult & {
+      type: 'bash_code_execution_result';
+    })
+  | (BashCodeExecutionToolError & {
+      type: 'bash_code_execution_tool_result_error';
+    });
+/**
+ * Error codes for code execution failures
+ */
+export type CodeExecutionErrorCode =
+  | 'unavailable'
+  | 'execution_time_exceeded'
+  | 'container_expired'
+  | 'invalid_tool_input'
+  | 'too_many_requests'
+  | 'file_not_found'
+  | 'string_not_found';
 
 /**
  * Response from bash_code_execution tool
@@ -44,17 +59,37 @@ export interface BashCodeExecutionResponse {
  * Successful bash code execution result
  */
 export interface BashCodeExecutionResult {
-  type: 'bash_code_execution_result';
-  stdout: string;
-  stderr: string;
+  /**
+   * Files generated during execution
+   */
+  content?: CodeExecutionFile[] | null;
+  /**
+   * Exit code (0 for success, non-zero for failure)
+   */
   return_code: number;
+  /**
+   * Standard error from the command
+   */
+  stderr: string;
+  /**
+   * Standard output from the command
+   */
+  stdout: string;
+}
+/**
+ * A file generated during code execution
+ */
+export interface CodeExecutionFile {
+  /**
+   * File ID for retrieval via Files API
+   */
+  file_id: string;
 }
 /**
  * Error from bash code execution
  */
 export interface BashCodeExecutionToolError {
-  type: 'bash_code_execution_tool_result_error';
-  error_code: string;
+  error_code: CodeExecutionErrorCode;
 }
 
 /* eslint-disable */
@@ -987,10 +1022,21 @@ export interface TextEditorCodeExecutionToolCall {
  * Content of a text editor code execution response - either a result or an error
  */
 export type TextEditorCodeExecutionContent =
-  | TextEditorCodeExecutionViewResult
-  | TextEditorCodeExecutionCreateResult
-  | TextEditorCodeExecutionStrReplaceResult
-  | TextEditorCodeExecutionToolError;
+  | (TextEditorCodeExecutionResult & {
+      type: 'text_editor_code_execution_view_result';
+    })
+  | (TextEditorCodeExecutionResult & {
+      type: 'text_editor_code_execution_create_result';
+    })
+  | (TextEditorCodeExecutionResult & {
+      type: 'text_editor_code_execution_str_replace_result';
+    })
+  | (TextEditorCodeExecutionToolError & {
+      type: 'text_editor_code_execution_tool_result_error';
+    });
+/**
+ * Error codes for code execution failures
+ */
 
 /**
  * Response from text_editor_code_execution tool
@@ -1000,40 +1046,60 @@ export interface TextEditorCodeExecutionResponse {
   tool_use_id: string;
 }
 /**
- * Result from text editor view operation
+ * Result from text editor operations (view, create, str_replace)
+ * Fields are optional as different operations return different fields
  */
-export interface TextEditorCodeExecutionViewResult {
-  type: 'text_editor_code_execution_view_result';
-  file_type?: string;
-  content?: string;
-  numLines?: number;
-  startLine?: number;
-  totalLines?: number;
-}
-/**
- * Result from text editor create operation
- */
-export interface TextEditorCodeExecutionCreateResult {
-  type: 'text_editor_code_execution_create_result';
-  is_file_update?: boolean;
-}
-/**
- * Result from text editor str_replace operation
- */
-export interface TextEditorCodeExecutionStrReplaceResult {
-  type: 'text_editor_code_execution_str_replace_result';
-  oldStart?: number;
-  oldLines?: number;
-  newStart?: number;
-  newLines?: number;
-  lines?: string[];
+export interface TextEditorCodeExecutionResult {
+  /**
+   * File content (for view operations)
+   */
+  content?: string | null;
+  /**
+   * Type of file (e.g., "text")
+   */
+  file_type?: string | null;
+  /**
+   * Whether the file already existed (true = update, false = create)
+   */
+  is_file_update?: boolean | null;
+  /**
+   * Diff lines (prefixed with +/-)
+   */
+  lines?: string[] | null;
+  /**
+   * Number of new lines
+   */
+  newLines?: number | null;
+  /**
+   * New content start line
+   */
+  newStart?: number | null;
+  /**
+   * Number of lines returned
+   */
+  numLines?: number | null;
+  /**
+   * Number of old lines changed
+   */
+  oldLines?: number | null;
+  /**
+   * Old content start line
+   */
+  oldStart?: number | null;
+  /**
+   * Starting line number
+   */
+  startLine?: number | null;
+  /**
+   * Total lines in file
+   */
+  totalLines?: number | null;
 }
 /**
  * Error from text editor code execution
  */
 export interface TextEditorCodeExecutionToolError {
-  type: 'text_editor_code_execution_tool_result_error';
-  error_code: string;
+  error_code: CodeExecutionErrorCode;
 }
 
 /* eslint-disable */
@@ -1060,7 +1126,25 @@ export interface WebFetchToolCall {
 /**
  * Content of a web fetch response - either a successful result or an error
  */
-export type WebFetchContent = WebFetchResult | WebFetchToolError;
+export type WebFetchContent =
+  | (WebFetchResult & {
+      type: 'web_fetch_result';
+    })
+  | (WebFetchToolError & {
+      type: 'web_fetch_tool_result_error';
+    });
+/**
+ * Possible error codes for web fetch failures
+ */
+export type WebFetchErrorCode =
+  | 'invalid_input'
+  | 'url_too_long'
+  | 'url_not_allowed'
+  | 'url_not_accessible'
+  | 'too_many_requests'
+  | 'unsupported_content_type'
+  | 'max_uses_exceeded'
+  | 'unavailable';
 
 /**
  * Web fetch tool response content returned by Claude when using the web_fetch tool
@@ -1073,13 +1157,54 @@ export interface WebFetchResponse {
  * Successful web fetch result containing the fetched content
  */
 export interface WebFetchResult {
-  type: 'web_fetch_result';
+  content: WebFetchDocument;
+  /**
+   * Timestamp when the content was retrieved
+   */
+  retrieved_at: string;
+  /**
+   * The URL that was fetched
+   */
+  url: string;
+}
+/**
+ * The fetched document content
+ */
+export interface WebFetchDocument {
+  /**
+   * Optional citations configuration
+   */
+  citations?: CitationsConfig | null;
+  /**
+   * The source content (text or base64)
+   */
+  source:
+    | {
+        data: string;
+        media_type: string;
+        type: 'text';
+      }
+    | {
+        data: string;
+        media_type: string;
+        type: 'base64';
+      };
+  /**
+   * Optional title of the document
+   */
+  title?: string | null;
+}
+/**
+ * Citations configuration for web fetch
+ */
+export interface CitationsConfig {
+  enabled: boolean;
 }
 /**
  * Error returned when web fetch fails
  */
 export interface WebFetchToolError {
-  type: 'web_fetch_tool_result_error';
+  error_code: WebFetchErrorCode;
 }
 
 /* eslint-disable */

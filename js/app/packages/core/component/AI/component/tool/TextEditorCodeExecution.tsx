@@ -3,10 +3,19 @@ import CaretRight from '@phosphor-icons/core/regular/caret-right.svg';
 import File from '@phosphor-icons/core/regular/file.svg';
 import type {
   TextEditorCodeExecutionContent,
-  TextEditorCodeExecutionCreateResult,
-  TextEditorCodeExecutionStrReplaceResult,
-  TextEditorCodeExecutionViewResult,
+  TextEditorCodeExecutionResult,
 } from '@service-cognition/generated/tools/types';
+
+// Type aliases for backwards compatibility with discriminated union variants
+type TextEditorCodeExecutionViewResult = TextEditorCodeExecutionResult & {
+  type: 'text_editor_code_execution_view_result';
+};
+type TextEditorCodeExecutionCreateResult = TextEditorCodeExecutionResult & {
+  type: 'text_editor_code_execution_create_result';
+};
+type TextEditorCodeExecutionStrReplaceResult = TextEditorCodeExecutionResult & {
+  type: 'text_editor_code_execution_str_replace_result';
+};
 import { createSignal, Match, Show, Switch } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
