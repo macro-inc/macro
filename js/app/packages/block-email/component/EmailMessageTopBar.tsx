@@ -23,7 +23,7 @@ import { type EmailMessageAction, MessageActions } from './MessageActions';
 interface EmailMessageTopBarProps {
   message: MessageWithBodyReplyless;
   focused: boolean;
-  setExpandedBodyId: (expanded: boolean) => void;
+  onExpandMessageBody: (expanded: boolean) => void;
   isBodyExpanded: Accessor<boolean>;
   expandedHeader: Accessor<boolean>;
   setExpandedHeader: Setter<boolean>;
@@ -226,7 +226,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
     const id = props.message.db_id;
     if (id) props.setFocusedMessageId(id);
     if (shouldIgnoreClick(e.target as Element)) return;
-    if (id) props.setExpandedBodyId(!props.isBodyExpanded());
+    if (id) props.onExpandMessageBody(!props.isBodyExpanded());
   };
 
   return (

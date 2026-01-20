@@ -24,15 +24,7 @@ import type {
 import { useEmail, useUserId } from '@queries/auth/user-info';
 import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  Match,
-  Show,
-  Switch,
-} from 'solid-js';
+import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { Portal } from 'solid-js/web';
 
 interface MessageContainerProps {
@@ -230,7 +222,7 @@ export function MessageContainer(props: MessageContainerProps) {
               <EmailMessageTopBar
                 message={props.message}
                 focused={props.isFocused}
-                setExpandedBodyId={props.onToggleBodyExpand}
+                onExpandMessageBody={props.onToggleBodyExpand}
                 isBodyExpanded={isBodyExpanded}
                 expandedHeader={expandedHeader}
                 setExpandedHeader={setExpandedHeader}
@@ -248,7 +240,7 @@ export function MessageContainer(props: MessageContainerProps) {
               <EmailMessageBody
                 message={props.message}
                 isBodyExpanded={isBodyExpanded}
-                setExpandedMessageBody={() => props.onToggleBodyExpand(true)}
+                onExpandMessageBody={() => props.onToggleBodyExpand(true)}
                 setFocusedMessageId={context.messages.setFocused}
                 isFirstMessageInThread={props.isFirstMessage}
               />
