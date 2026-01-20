@@ -2,7 +2,7 @@ import type { Entity } from '@core/types';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { useMarkThreadAsSeenMutation } from '@queries/email/thread';
-import { onCleanup, onMount } from 'solid-js';
+import { onMount } from 'solid-js';
 import {
   markNotificationForEntityIdAsRead,
   markNotificationsForEntityAsRead,
@@ -21,13 +21,6 @@ export const makeDebouncedMarker = (
   props: DebouncedMarkerProps
 ): VoidFunction => {
   const debounceTime = props.debounceTime ?? DEFAULT_DEBOUNCE_TIME;
-  let timeout: ReturnType<typeof setTimeout> | undefined;
-
-  onCleanup(() => {
-    if (timeout) {
-      clearTimeout(timeout);
-    }
-  });
 
   const trigger = debounce(props.debouncedFn, debounceTime);
 
