@@ -45,14 +45,10 @@ where
             .await
             .map_err(|_| AccessLevelErr::BadRequest)?;
 
-        let access_level: Option<AccessLevel> = get_users_access_level_v2(
-            &db,
-            &user_context.user_id,
-            &item_id,
-            &item_type,
-        )
-        .await
-        .map_err(AccessLevelErr::DbErr)?;
+        let access_level: Option<AccessLevel> =
+            get_users_access_level_v2(&db, &user_context.user_id, &item_id, &item_type)
+                .await
+                .map_err(AccessLevelErr::DbErr)?;
 
         let desired = T::into_access_level();
 

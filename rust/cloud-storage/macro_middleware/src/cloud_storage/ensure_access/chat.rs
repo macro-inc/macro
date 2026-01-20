@@ -58,14 +58,10 @@ where
             return Err(AccessLevelErr::UnAuthorized);
         }
 
-        let access_level: Option<AccessLevel> = get_users_access_level_v2(
-            &db,
-            &user_context.user_id,
-            &chat_context.id,
-            "chat",
-        )
-        .await
-        .map_err(AccessLevelErr::DbErr)?;
+        let access_level: Option<AccessLevel> =
+            get_users_access_level_v2(&db, &user_context.user_id, &chat_context.id, "chat")
+                .await
+                .map_err(AccessLevelErr::DbErr)?;
 
         let desired = T::into_access_level();
 

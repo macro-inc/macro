@@ -45,10 +45,7 @@ impl PermissionService for PermissionServiceImpl {
 
         let access_level =
             macro_middleware::cloud_storage::ensure_access::get_users_access_level_v2(
-                &self.db,
-                user_id,
-                entity_id,
-                item_type,
+                &self.db, user_id, entity_id, item_type,
             )
             .await
             .map_err(|(status_code, message)| {

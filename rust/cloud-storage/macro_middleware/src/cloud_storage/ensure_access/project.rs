@@ -62,14 +62,10 @@ where
             ));
         }
 
-        let access_level: Option<AccessLevel> = get_users_access_level_v2(
-            &db,
-            &user_context.user_id,
-            &project_context.id,
-            "project",
-        )
-        .await
-        .map_err(AccessLevelErr::DbErr)?;
+        let access_level: Option<AccessLevel> =
+            get_users_access_level_v2(&db, &user_context.user_id, &project_context.id, "project")
+                .await
+                .map_err(AccessLevelErr::DbErr)?;
 
         let desired = T::into_access_level();
 
@@ -168,14 +164,10 @@ where
             return Ok(Self::ProjectNotInBody { body: cb()? });
         };
 
-        let access_level: Option<AccessLevel> = get_users_access_level_v2(
-            &db,
-            &user_context.user_id,
-            project.id(),
-            "project",
-        )
-        .await
-        .map_err(AccessLevelErr::DbErr)?;
+        let access_level: Option<AccessLevel> =
+            get_users_access_level_v2(&db, &user_context.user_id, project.id(), "project")
+                .await
+                .map_err(AccessLevelErr::DbErr)?;
 
         let desired = T::into_access_level();
 
