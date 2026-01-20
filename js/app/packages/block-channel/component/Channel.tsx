@@ -33,7 +33,10 @@ import { blockHandleSignal } from '@core/signal/load';
 import { createTabFocusEffect } from '@core/signal/tabFocus';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
 import { handleFileFolderDrop } from '@core/util/upload';
-import { ChannelDebouncedNotificationReadMarker } from '@notifications';
+import {
+  ChannelDebouncedNotificationReadMarker,
+  createEffectOnEntityTypeNotification,
+} from '@notifications';
 import { useChannelQuery } from '@queries/channel/channel';
 import type { Message } from '@service-comms/generated/models';
 import { connectionGatewayClient } from '@service-connection/client';
@@ -323,6 +326,16 @@ export function Channel(props: {
     notificationSource: notificationSource,
     channelId,
   });
+
+  createEffectOnEntityTypeNotification(
+    notificationSource,
+    'channel',
+    (notification) => {
+      if (splitContext.isPanelActive()) {
+        debouncedMarkAsRead();
+      }
+    }
+  );
 
   const splitContext = useSplitPanelOrThrow();
 
