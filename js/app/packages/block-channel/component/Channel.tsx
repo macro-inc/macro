@@ -328,6 +328,8 @@ export function Channel(props: {
     channelId,
   });
 
+  // Listen for any incoming notifications and while the panel is active,
+  // mark them as read
   createEffectOnEntityTypeNotification(notificationSource, 'channel', () => {
     if (splitContext.isPanelActive()) {
       debouncedMarkAsRead();
@@ -341,6 +343,8 @@ export function Channel(props: {
 
   const splitContext = useSplitPanelOrThrow();
 
+  // Track panel active state. When the panel is focused and it was not previously
+  // mark notifications as read if there are any
   createEffect(
     on(splitContext.isPanelActive, (isPanelActive, wasPanelActive) => {
       if (wasPanelActive !== false) return;
