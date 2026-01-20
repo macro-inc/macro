@@ -39,6 +39,7 @@ import {
   type SelectionData,
   selectionDataPlugin,
   tabIndentationPlugin,
+  textPastePlugin,
 } from '../../plugins';
 import { checkboxToTaskPlugin } from '../../plugins/checkbox-to-task';
 import { restoreFocusPlugin } from '../../plugins/restore-focus';
@@ -55,6 +56,7 @@ import { FloatingLinkMenu } from '../menu/FloatingLinkMenu';
 import { MentionsMenu } from '../menu/MentionsMenu';
 import { DecoratorRenderer } from './DecoratorRenderer';
 import { NodeAccessoryRenderer } from './NodeAccessoryRenderer';
+import { textSpanOverlap } from 'typescript';
 
 /**
  * @param editable - A signal that indicates whether the textarea is editable
@@ -193,6 +195,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
         : selectionDataPlugin(lexicalWrapper)
     )
     .use(tabIndentationPlugin())
+    .use(textPastePlugin())
     .use(
       mentionsPlugin({
         menu: mentionsMenuOperations,

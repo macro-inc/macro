@@ -7,6 +7,7 @@ import type { Property } from '../../types';
 import { CreatePropertyModal } from './CreatePropertyModal';
 import { EditPropertyValueModal } from './EditPropertyValueModal';
 import { SelectPropertyModal } from './SelectPropertyModal';
+import { KeyboardDatePicker } from '@core/component/KeyboardDatePicker';
 
 export const Modals: Component = () => {
   const {
@@ -71,6 +72,7 @@ export const Modals: Component = () => {
         )}
       </Show>
 
+      {/* Date picker now handled by EditPropertyValueModal with PropertyDateSelector
       <Show when={datePickerModal()}>
         {(state) => {
           const property = state().property;
@@ -80,7 +82,7 @@ export const Modals: Component = () => {
 
           return anchor ? (
             <ScopedPortal scope="local">
-              <DatePicker
+              <KeyboardDatePicker
                 value={dateValue}
                 onChange={(newDate) => handleDateSaved(newDate, property)}
                 onClose={closeDatePicker}
@@ -90,6 +92,7 @@ export const Modals: Component = () => {
           ) : null;
         }}
       </Show>
+      */}
 
       <Show when={createPropertyModal()}>
         <CreatePropertyModal
