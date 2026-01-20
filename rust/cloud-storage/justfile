@@ -72,6 +72,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ MACRODB }}" >> ./properties/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./name_search/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./email_contact_search/.env
+    echo "DATABASE_URL={{ MACRODB }}" >> ./email_scheduled_handler/.env
 
 setup_macrodb:
     just macro_db_client/create_db

@@ -1,7 +1,6 @@
 import { mountGlobalFocusListener } from '@app/signal/focus';
 import { useIsAuthenticated } from '@core/auth';
 import { Resize } from '@core/component/Resize';
-import { useABTest } from '@core/constant/ABTest';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import {
@@ -86,8 +85,6 @@ export function Layout(props: RouteSectionProps) {
 
   mountGlobalFocusListener();
 
-  useABTest();
-
   attachGlobalDOMScope(document.body);
 
   return (
@@ -118,7 +115,10 @@ export function Layout(props: RouteSectionProps) {
           <ShortcutsHelper />
         </Show>
         <Show
-          when={!isAuthenticated() && !AUTH_URLS.includes(location.pathname)}
+          when={
+            isAuthenticated() === false &&
+            !AUTH_URLS.includes(location.pathname)
+          }
         >
           <Banner />
         </Show>

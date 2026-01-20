@@ -2,7 +2,7 @@ import { createBlockSignal, createBlockStore } from '@core/block';
 import { isStaticAttachmentType } from '@core/store/cacheChannelInput';
 import type { Attachment } from '@service-comms/generated/models/attachment';
 import { createConnectionBlockWebsocketEffect } from '@service-connection/websocket';
-import { useUserId } from '@queries/auth/user-info';
+import { useUserId } from '@core/context/user';
 import { isItemType } from '@service-storage/client';
 import { channelStore } from './channel';
 

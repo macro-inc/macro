@@ -26,7 +26,7 @@ import Logout from '@icon/regular/sign-out.svg';
 import { Popover } from '@kobalte/core';
 import IconUpload from '@macro-icons/macro-upload.svg';
 import { authServiceClient } from '@service-auth/client';
-import { useEmail, useLicenseStatus, useUserId } from '@queries/auth/user-info';
+import { useEmail, useLicenseStatus, useUserId } from '@core/context/user';
 import { createMemo, createResource, createSignal, Show } from 'solid-js';
 import {
     useEmailLinks,

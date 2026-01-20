@@ -57,3 +57,30 @@ where
     // Return whether a row was actually updated
     Ok(result.rows_affected() > 0)
 }
+
+/// Set processing to false, on failure of sending scheduled message
+#[tracing::instrument(skip(executor), err)]
+pub async fn clear_scheduled_message_processing<'e, E>(
+    executor: E,
+    link_id: sqlx::types::Uuid,
+    message_id: sqlx::types::Uuid,
+) -> anyhow::Result<bool>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
+    let result = sqlx::query!(
+        r#"
+        UPDATE email_scheduled_messages
+        SET
+            processing = false,
+            updated_at = NOW()
+        WHERE link_id = $1 AND message_id = $2
+        "#,
+        link_id,
+        message_id,
+    )
+    .execute(executor)
+    .await?;
+
+    Ok(result.rows_affected() > 0)
+}

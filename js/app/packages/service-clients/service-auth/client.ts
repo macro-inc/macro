@@ -365,7 +365,9 @@ export const authServiceClient = {
     }
 
     return ok({
-      organizationId: String(response[1].organizationId) as string | undefined,
+      organizationId: response[1].organizationId
+        ? String(response[1].organizationId)
+        : undefined,
       organizationName: response[1].organizationName as string | undefined,
     });
   },

@@ -2,8 +2,8 @@ import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { setHotkeyRoot, useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { withAnalytics } from '@coparse/analytics';
-import { useIsAuthenticated } from '@core/auth';
 import { ChannelsContextProvider } from '@core/context/channels';
+import { UserContextProvider } from '@core/context/user';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
@@ -28,9 +28,13 @@ import {
 } from '@notifications';
 import { maybeHandlePlatformNotification } from '@notifications/notification-platform';
 import { setUser, useObserveRouting } from '@observability';
-import { fetchAndCacheHistory } from '@queries/history/history';
+import { prefetchHistory } from '@queries/history/history';
 import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
-import { invalidateUserInfo, prefetchUserInfo } from '@queries/auth/user-info';
+import {
+  invalidateUserInfo,
+  prefetchUserInfo,
+  useUserInfoQuery,
+} from '@queries/auth/user-info';
 import { MetaProvider, Title } from '@solidjs/meta';
 import {
   HashRouter,
@@ -45,13 +49,14 @@ import { useHotKeyRoot } from 'core/hotkey/hotkeys';
 import { detect } from 'detect-browser';
 import {
   createEffect,
-  createResource,
   type JSX,
   lazy,
+  Match,
   onCleanup,
   onMount,
   type ParentProps,
   Show,
+  Switch,
 } from 'solid-js';
 import { currentThemeId } from '../../block-theme/signals/themeSignals';
 import {
@@ -78,6 +83,9 @@ const { track, identify, TrackingEvents } = withAnalytics();
 
 const rootPreload: RoutePreloadFunc = async (args) => {
   useObserveRouting();
+
+  await prefetchUserInfo();
+  prefetchHistory();
 
   // even though we are using the transformUrl prop, we may still need to replace the url in the history
   const url = new URL(window.location.href);
@@ -113,52 +121,9 @@ const rootPreload: RoutePreloadFunc = async (args) => {
     url.pathname = transformedPathname;
     window.history.replaceState(args.location.state, '', url);
   }
+
   track(TrackingEvents.AUTH.START);
-  // User info fetch moved to UserInfoPreloader component (inside QueryClientProvider)
 };
-
-/**
- * Component that preloads user info and populates the TanStack Query cache.
- * Uses createResource with prefetchUserInfo so it works outside QueryClientProvider context.
- */
-function UserInfoPreloader(props: ParentProps) {
-  const [userInfoResource] = createResource(prefetchUserInfo);
-
-  // Run side effects when user data is available
-  createEffect(() => {
-    const data = userInfoResource();
-    if (!data) return;
-
-    const { id, email, hasChromeExt, ...userInfo } = data;
-    const platform = detect(navigator.userAgent);
-    const os = `${platform?.os?.replaceAll(' ', '')}`;
-
-    if (id) {
-      if (email) {
-        setUser({
-          ...userInfo,
-          id,
-          email,
-          hasChromeExt,
-        });
-      }
-
-      if (PROD_MODE_ENV) {
-        identify(id, { email, os, hasChromeExt });
-      }
-
-      fetchAndCacheHistory().catch(() => {
-        // Non-blocking - command menu will still work without prefetch
-      });
-    }
-  });
-
-  return (
-    <Show when={!userInfoResource.loading} fallback={null}>
-      {props.children}
-    </Show>
-  );
-}
 
 function BasePathComponent() {
   const [searchParams] = useSearchParams();
@@ -184,17 +149,25 @@ function BasePathComponent() {
     return;
   }
 
-  const authenticated = useIsAuthenticated();
-  if (!authenticated()) return <Navigate href="/signup" />;
+  const userInfoQuery = useUserInfoQuery();
 
   // Preserve existing query parameters when redirecting
   const params = new URLSearchParams(window.location.search);
   const queryString =
     params.toString().length > 0 ? `?${params.toString()}` : '';
-
   const redirectPath = `${DEFAULT_ROUTE}${queryString}`;
 
-  return <Navigate href={redirectPath} />;
+  return (
+    <Switch>
+      <Match when={userInfoQuery.isLoading}>{null}</Match>
+      <Match when={userInfoQuery.data?.authenticated === false}>
+        <Navigate href="/signup" />
+      </Match>
+      <Match when={userInfoQuery.data?.authenticated}>
+        <Navigate href={redirectPath} />
+      </Match>
+    </Switch>
+  );
 }
 
 function NotFound() {
@@ -313,28 +286,14 @@ export function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   );
 }
 
-const clearBodyInlineStyleColor = () => {
-  // index.html has inline script to set page color to theme surface to prevent page color flash.
-  // removes page color inline style to prevent overriding main stylesheet
-  document.body.style.backgroundColor = '';
-};
+/** Sets user info for observability, analytics, and login cookie. Must be inside QueryClientProvider. */
+function UserInfoSideEffects() {
+  const userInfoQuery = useUserInfoQuery();
 
-export function Root() {
-  const isAuthenticated = useIsAuthenticated();
-  setHotkeyRoot(useHotKeyRoot());
-
-  useSubscribeToKeypress((context) => {
-    if (ENABLE_WHICHKEY_OVERLAY && context.commandScopeActivated) {
-      setOpenWhichKey(true);
-    }
-  });
-
-  useSoundHover();
-
-  clearBodyInlineStyleColor();
-
+  // Set login cookie based on auth state
   createEffect(() => {
-    const isAuth = isAuthenticated();
+    if (userInfoQuery.isLoading) return;
+    const isAuth = userInfoQuery.data?.authenticated ?? false;
 
     if (isAuth) {
       const currentDate = new Date();
@@ -357,6 +316,52 @@ export function Root() {
       });
     }
   });
+
+  // Set user info for observability and analytics
+  createEffect(() => {
+    if (userInfoQuery.isLoading) return;
+    const data = userInfoQuery.data;
+    if (!data?.id) return;
+
+    const platform = detect(navigator.userAgent);
+    const os = platform?.os?.replaceAll(' ', '') ?? '';
+
+    setUser({
+      id: data.id,
+      email: data.email,
+      hasChromeExt: data.hasChromeExt,
+    });
+
+    if (PROD_MODE_ENV) {
+      identify(data.id, {
+        email: data.email,
+        os,
+        hasChromeExt: data.hasChromeExt,
+      });
+    }
+  });
+
+  return null;
+}
+
+const clearBodyInlineStyleColor = () => {
+  // index.html has inline script to set page color to theme surface to prevent page color flash.
+  // removes page color inline style to prevent overriding main stylesheet
+  document.body.style.backgroundColor = '';
+};
+
+export function Root() {
+  setHotkeyRoot(useHotKeyRoot());
+
+  useSubscribeToKeypress((context) => {
+    if (ENABLE_WHICHKEY_OVERLAY && context.commandScopeActivated) {
+      setOpenWhichKey(true);
+    }
+  });
+
+  useSoundHover();
+
+  clearBodyInlineStyleColor();
 
   createEffect(() => {
     const cleanup = licenseChannel.subscribe(() => {
@@ -403,7 +408,8 @@ export function Root() {
     <MaybeTauriProvider>
       <MetaProvider>
         <EntityProvider>
-          <UserInfoPreloader>
+          <UserContextProvider>
+            <UserInfoSideEffects />
             <ConfiguredGlobalAppStateProvider>
               <ChannelsContextProvider>
                 <Title>{tabTitle()}</Title>
@@ -432,7 +438,7 @@ export function Root() {
                 </Show>
               </ChannelsContextProvider>
             </ConfiguredGlobalAppStateProvider>
-          </UserInfoPreloader>
+          </UserContextProvider>
         </EntityProvider>
       </MetaProvider>
     </MaybeTauriProvider>

@@ -1,4 +1,4 @@
-import { useUserId } from '@queries/auth/user-info';
+import { useUserId } from '@core/context/user';
 import type { Item } from '@service-storage/generated/schemas/item';
 
 export type SortType =

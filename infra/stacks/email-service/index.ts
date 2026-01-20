@@ -42,6 +42,7 @@ const AUDIENCE = aws.secretsmanager
   .apply((secret) => secret.secretString);
 const ISSUER = config.require(`fusionauth_issuer`);
 const NOTIFICATIONS_ENABLED = config.require(`notifications_enabled`);
+const SENT_UNDO_DELAY_SECS = config.require(`sent_undo_delay_secs`);
 const REDIS_RATE_LIMIT_REQS = config.require(`redis_rate_limit_reqs`);
 const REDIS_RATE_LIMIT_REQS_BACKFILL = config.require(
   `redis_rate_limit_reqs_backfill`
@@ -178,7 +179,6 @@ export const linkManagerQueueName = pulumi.interpolate`${link_manager_queue.queu
 
 const scheduled_queue = new Queue('email-service-scheduled', {
   tags,
-  fifoQueue: true,
 });
 
 export const scheduledQueueArn = pulumi.interpolate`${scheduled_queue.queue.arn}`;
@@ -437,6 +437,10 @@ const containerEnvVars = [
   {
     name: 'SEARCH_EVENT_QUEUE',
     value: pulumi.interpolate`${searchEventQueueName}`,
+  },
+  {
+    name: 'SENT_UNDO_DELAY_SECS',
+    value: pulumi.interpolate`${SENT_UNDO_DELAY_SECS}`,
   },
   {
     name: 'REDIS_RATE_LIMIT_REQS',

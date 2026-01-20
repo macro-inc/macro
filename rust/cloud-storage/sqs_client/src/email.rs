@@ -63,9 +63,16 @@ impl SQS {
     pub async fn enqueue_email_scheduled_message(
         &self,
         message: ScheduledPubsubMessage,
+        delay_seconds: Option<i32>,
     ) -> anyhow::Result<()> {
         if let Some(email_scheduled_queue) = &self.email_scheduled_queue {
-            return enqueue_scheduled_message(&self.inner, email_scheduled_queue, message).await;
+            return enqueue_scheduled_message(
+                &self.inner,
+                email_scheduled_queue,
+                message,
+                delay_seconds,
+            )
+            .await;
         }
         Err(anyhow::anyhow!("email_scheduled_queue is not configured"))
     }
@@ -140,19 +147,20 @@ pub async fn enqueue_scheduled_message(
     sqs_client: &aws_sdk_sqs::Client,
     queue_url: &str,
     message: ScheduledPubsubMessage,
+    delay_seconds: Option<i32>,
 ) -> anyhow::Result<()> {
     let message_str = serde_json::to_string(&message)?;
-    let message_db_id = message.message_id.to_string();
 
-    // Send the message with the serialized body
-    sqs_client
+    let mut request = sqs_client
         .send_message()
         .queue_url(queue_url)
-        .message_body(message_str)
-        .message_group_id(message_db_id.clone())
-        .message_deduplication_id(message_db_id)
-        .send()
-        .await?;
+        .message_body(message_str);
+
+    if let Some(delay) = delay_seconds {
+        request = request.delay_seconds(delay);
+    }
+
+    request.send().await?;
 
     Ok(())
 }

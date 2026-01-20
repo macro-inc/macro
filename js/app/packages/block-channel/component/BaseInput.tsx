@@ -65,7 +65,7 @@ import { Attachment } from './Attachment';
 import { FormatRibbon } from './FormatRibbon';
 import { useChannelMarkdownArea } from './MarkdownArea';
 import { TaskPreviewPanel } from './TaskPreviewPanel';
-import { useUserId } from '@queries/auth/user-info';
+import { useUserId } from '@core/context/user';
 
 false && fileFolderDrop;
 

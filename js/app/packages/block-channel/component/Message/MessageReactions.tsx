@@ -9,7 +9,7 @@ import { touchHandler } from '@core/directive/touchHandler';
 import { idToDisplayName } from '@core/user';
 import Tooltip from '@corvu/tooltip';
 
-import { useUserId } from '@queries/auth/user-info';
+import { useUserId } from '@core/context/user';
 import { createCallback } from '@solid-primitives/rootless';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { ReactionSelector } from '../ReactionSelector';

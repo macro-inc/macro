@@ -4,14 +4,13 @@ use axum::extract::{Path, Request, State};
 use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::Response;
-use email_service_client::EmailServiceClient;
 use macro_user_id::cowlike::CowLike;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::thread::EmailThreadPermission;
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use serde::Deserialize;
 use sqlx::{PgPool, Pool, Postgres};
-use std::sync::Arc;
 
 #[derive(Deserialize)]
 pub struct ThreadParams {
@@ -21,12 +20,11 @@ pub struct ThreadParams {
 /// Validates the thread exists and inserts EmailThreadPermission into req context
 pub async fn handler(
     State(db): State<PgPool>,
-    State(email_client): State<Arc<EmailServiceClient>>,
     Path(ThreadParams { thread_id }): Path<ThreadParams>,
     mut req: Request,
     next: Next,
 ) -> Result<Response, Response> {
-    let permission = insert_thread_share_permissions(&db, &email_client, &thread_id)
+    let permission = insert_thread_share_permissions(&db, &thread_id)
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "failed to ensure thread exists");
@@ -37,10 +35,9 @@ pub async fn handler(
     Ok(next.run(req).await)
 }
 
-// insert SharePermission and EmailThreadPermission for thread if it doesn't already exist.
+/// Insert SharePermission and EmailThreadPermission for thread if it doesn't already exist.
 pub async fn insert_thread_share_permissions(
     db: &Pool<Postgres>,
-    email_service_client: &email_service_client::EmailServiceClient,
     thread_id: &str,
 ) -> anyhow::Result<EmailThreadPermission> {
     // Ensure permissions don't already exist
@@ -54,12 +51,18 @@ pub async fn insert_thread_share_permissions(
     }
 
     // Get the thread owner
-    let owner_result = email_service_client
-        .get_thread_owner(thread_id)
-        .await
-        .context("Failed to get thread owner from email-service")?;
+    let owner_result: Option<String> =
+        macro_db_client::share_permission::get::get_macro_id_from_thread_id(db, thread_id)
+            .await
+            .context("Failed to get thread owner for email")?;
 
-    let owner_id = owner_result.user_id;
+    let owner_id = if let Some(owner_result) = owner_result {
+        MacroUserIdStr::parse_from_str(&owner_result)
+            .context("invalid macro user id")?
+            .into_owned()
+    } else {
+        anyhow::bail!("thread not found");
+    };
 
     // Create a new share permission
     let share_permission = SharePermissionV2 {

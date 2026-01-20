@@ -14,7 +14,7 @@ import type {
 } from '@block-pdf/type/comments';
 import { getHighlightsFromSelection } from '@block-pdf/util/pdfjsUtils';
 import { createBlockMemo, createBlockSignal } from '@core/block';
-import { useUserId } from '@queries/auth/user-info';
+import { useUserId } from '@core/context/user';
 import { createCallback } from '@solid-primitives/rootless';
 import { batch } from 'solid-js';
 import { produce } from 'solid-js/store';

@@ -1,3 +1,4 @@
+use anyhow::Context;
 use model::thread::EmailThreadPermission;
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
@@ -351,6 +352,31 @@ pub async fn get_email_thread_permission(
         user_id: row.user_id,
         project_id: row.project_id,
     }))
+}
+
+/// THIS IS COPIED FROM EMAIL_DB_CLIENT and is needed in the `insert_thread_share_permission`
+/// in macro_middleware crate
+#[tracing::instrument(skip(pool))]
+pub async fn get_macro_id_from_thread_id(
+    pool: &sqlx::Pool<sqlx::Postgres>,
+    thread_id: &str,
+) -> anyhow::Result<Option<String>> {
+    let thread_id = macro_uuid::string_to_uuid(thread_id).context("invalid uuid")?;
+
+    let macro_id = sqlx::query_scalar!(
+        r#"
+        SELECT l.macro_id
+        FROM email_threads t
+        JOIN email_links l ON t.link_id = l.id
+        WHERE t.id = $1
+        "#,
+        &thread_id
+    )
+    .fetch_optional(pool)
+    .await
+    .with_context(|| format!("Failed to fetch macro_id for thread ID {}", thread_id))?;
+
+    Ok(macro_id)
 }
 
 /// Retrieves all document, chat, and project IDs associated with the given share permission IDs

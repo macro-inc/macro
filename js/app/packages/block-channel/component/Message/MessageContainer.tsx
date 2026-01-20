@@ -25,7 +25,7 @@ import { formatRelativeDate, isSameDay } from '@core/util/time';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { usePatchMessageMutation } from '@queries/channel/message';
 import type { Message as MessageType } from '@service-comms/generated/models/message';
-import { useUserId } from '@queries/auth/user-info';
+import { useUserId } from '@core/context/user';
 import { createCallback } from '@solid-primitives/rootless';
 import { activeElement } from 'app/signal/focus';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';

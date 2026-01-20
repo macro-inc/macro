@@ -12,6 +12,10 @@ function organizationQueryOptions() {
     queryKey: authKeys.organization.queryKey,
     queryFn: async () => throwOnErr(authServiceClient.getOrganization),
     staleTime: ORGANIZATION_STALE_TIME,
+    initialData: {
+      organizationId: undefined,
+      organizationName: undefined,
+    },
   };
 }
 

@@ -13,7 +13,6 @@ use config::{Config, Environment};
 use connection_gateway_client::client::ConnectionGatewayClient;
 use dynamodb_client::DynamodbClient;
 use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
-use email_service_client::EmailServiceClient;
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
@@ -161,11 +160,6 @@ async fn main() -> anyhow::Result<()> {
         config.vars.comms_service_url.as_ref().to_string(),
     );
 
-    let email_service_client = EmailServiceClient::new(
-        dss_auth_key.as_ref().to_string(),
-        config.vars.email_service_url.as_ref().to_string(),
-    );
-
     let conn_gateway_client = ConnectionGatewayClient::new(
         internal_api_secret.as_ref().to_string(),
         config.vars.connection_gateway_url.as_ref().to_string(),
@@ -254,7 +248,6 @@ async fn main() -> anyhow::Result<()> {
         dynamo_db,
         sqs_client: Arc::new(sqs_client),
         macro_notify_client: Arc::new(macro_notify_client),
-        email_service_client: Arc::new(email_service_client),
         comms_service_client: Arc::new(comms_service_client),
         conn_gateway_client: Arc::new(conn_gateway_client),
         sync_service_client: Arc::new(sync_service_client),
