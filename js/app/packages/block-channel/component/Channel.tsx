@@ -36,6 +36,7 @@ import { handleFileFolderDrop } from '@core/util/upload';
 import {
   ChannelDebouncedNotificationReadMarker,
   createEffectOnEntityTypeNotification,
+  useEntityHasUnreadNotifications,
 } from '@notifications';
 import { useChannelQuery } from '@queries/channel/channel';
 import type { Message } from '@service-comms/generated/models';
@@ -337,13 +338,18 @@ export function Channel(props: {
     }
   );
 
+  const hasNotifications = useEntityHasUnreadNotifications(notificationSource, {
+    type: 'channel',
+    id: channelId,
+  });
+
   const splitContext = useSplitPanelOrThrow();
 
   createEffect(
     on(splitContext.isPanelActive, (isPanelActive, wasPanelActive) => {
       if (wasPanelActive !== false) return;
 
-      if (isPanelActive) {
+      if (isPanelActive && hasNotifications()) {
         debouncedMarkAsRead();
       }
     })
