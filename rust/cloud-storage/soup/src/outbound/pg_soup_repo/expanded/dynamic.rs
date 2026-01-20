@@ -534,10 +534,15 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
     let entity_refs: Vec<EntityReference> = items
         .iter()
         .filter_map(|item| match item {
-            SoupItem::Document(doc) => Some(EntityReference::new(
-                doc.id.to_string(),
-                EntityType::Document,
-            )),
+            SoupItem::Document(doc) => {
+                // Task properties are stored with EntityType::Task, not Document
+                let entity_type = if doc.sub_type.is_some() {
+                    EntityType::Task
+                } else {
+                    EntityType::Document
+                };
+                Some(EntityReference::new(doc.id.to_string(), entity_type))
+            }
             SoupItem::Project(proj) => Some(EntityReference::new(
                 proj.id.to_string(),
                 EntityType::Project,
@@ -555,55 +560,45 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
 
     // Fetch properties in bulk for all relevant entities, filtered to system properties only
     let property_ids = SystemPropertyKey::all_system_property_keys();
-    let properties_map =
+    let mut properties_map =
         properties_db_client::entity_properties::get::get_bulk_entity_properties_values_filtered(
             db,
             &entity_refs,
             property_ids,
         )
         .await
-        .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
+        .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+
+    // Helper to extract and convert properties for an entity ID
+    let extract_properties = |id: &str,
+                              map: &mut std::collections::HashMap<
+        String,
+        Vec<models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition>,
+    >| {
+        map.remove(id)
+            .unwrap_or_default()
+            .into_iter()
+            .map(SoupProperty::from)
+            .collect()
+    };
 
     // Assign properties to each item that supports them
     for item in &mut items {
         match item {
             SoupItem::Document(x) => {
-                x.properties = properties_map
-                    .get(&x.id.to_string())
-                    .cloned()
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(SoupProperty::from)
-                    .collect();
+                x.properties = extract_properties(&x.id.to_string(), &mut properties_map);
             }
             SoupItem::Project(x) => {
-                x.properties = properties_map
-                    .get(&x.id.to_string())
-                    .cloned()
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(SoupProperty::from)
-                    .collect();
+                x.properties = extract_properties(&x.id.to_string(), &mut properties_map);
             }
             SoupItem::EmailThread(x) => {
-                x.properties = properties_map
-                    .get(&x.thread.id.to_string())
-                    .cloned()
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(SoupProperty::from)
-                    .collect();
+                x.properties = extract_properties(&x.thread.id.to_string(), &mut properties_map);
             }
             SoupItem::Chat(x) => {
-                x.properties = properties_map
-                    .get(&x.id.to_string())
-                    .cloned()
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(SoupProperty::from)
-                    .collect();
+                x.properties = extract_properties(&x.id.to_string(), &mut properties_map);
             }
-            _ => {}
+            // Channels don't support properties yet
+            SoupItem::Channel(_) => {}
         }
     }
 

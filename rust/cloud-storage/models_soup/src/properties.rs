@@ -23,6 +23,11 @@ pub struct SoupProperty {
 }
 
 impl From<EntityPropertyWithDefinition> for SoupProperty {
+    /// Converts from the full entity property representation.
+    ///
+    /// Note: The `options` field from `EntityPropertyWithDefinition` is intentionally
+    /// omitted as Soup items only need the definition and current value. Select options
+    /// should be fetched separately when needed for editing UI.
     fn from(prop: EntityPropertyWithDefinition) -> Self {
         Self {
             definition: prop.definition,
