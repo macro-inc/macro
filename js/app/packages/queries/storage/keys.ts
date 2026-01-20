@@ -12,6 +12,13 @@ export const deletedKeys = createQueryKeys('deleted', {
   list: null,
 });
 
+export const instructionsMdKeys = createQueryKeys('instructionsMd', {
+  id: null,
+  text: (id: string) => ({
+    queryKey: [id],
+  }),
+});
+
 /**
  * @deprecated Use `projectsKeys`, `pinsKeys`, or `deletedKeys` directly
  */

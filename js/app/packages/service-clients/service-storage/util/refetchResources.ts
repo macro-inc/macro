@@ -2,7 +2,7 @@ import { refetchDocumentShareButtonResource } from '@core/component/TopBar/Share
 import { invalidateDeletedItems } from '@queries/storage/deleted';
 import { invalidatePins } from '@queries/storage/pins';
 import { invalidateProjects } from '@queries/storage/projects';
-import { invalidateUserQuota } from '@service-auth/userQuota';
+import { invalidateUserQuota } from '@queries/auth';
 import { refetchHistory } from '@queries/history/history';
 
 type StorageServiceResource = 'documents' | 'history' | 'pins' | 'projects';

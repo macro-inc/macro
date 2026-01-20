@@ -2,7 +2,7 @@ import { isOk, throwOnErr } from '@core/util/maybeResult';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { storageServiceClient } from '@service-storage/client';
 import type { CloudStorageItemType } from '@service-storage/generated/schemas/cloudStorageItemType';
-import { useInstructionsMdIdQuery } from '@service-storage/instructionsMd';
+import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import {
   type UseQueryResult,
   useMutation,

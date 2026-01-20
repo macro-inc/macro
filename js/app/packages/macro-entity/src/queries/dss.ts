@@ -18,7 +18,7 @@ import type {
 } from '@service-storage/generated/schemas';
 import type { GetItemsSoupParams } from '@service-storage/generated/schemas/getItemsSoupParams';
 import type { SoupPage } from '@service-storage/generated/schemas/soupPage';
-import { useInstructionsMdIdQuery } from '@service-storage/instructionsMd';
+import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import {
   hashKey,
   type InfiniteData,

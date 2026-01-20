@@ -1,4 +1,4 @@
-import { useInstructionsMdTextQuery } from '@service-storage/instructionsMd';
+import { useInstructionsMdTextQuery } from '@queries/storage/instructions-md';
 import { createMemo } from 'solid-js';
 
 const ABOUT_MACRO = `

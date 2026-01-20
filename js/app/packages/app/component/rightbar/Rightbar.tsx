@@ -45,7 +45,7 @@ import NotepadIcon from '@icon/regular/notepad.svg';
 import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { invalidateUserQuota } from '@service-auth/userQuota';
+import { invalidateUserQuota } from '@queries/auth';
 import {
   cognitionApiServiceClient,
   cognitionWebsocketServiceClient,
