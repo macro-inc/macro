@@ -5,6 +5,7 @@ import { onElementConnect } from '@solid-primitives/lifecycle';
 import {
   COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_HIGH,
+  INSERT_LINE_BREAK_COMMAND,
   KEY_ENTER_COMMAND,
   KEY_ESCAPE_COMMAND,
   KEY_TAB_COMMAND,
@@ -55,6 +56,12 @@ import { FloatingLinkMenu } from '../menu/FloatingLinkMenu';
 import { MentionsMenu } from '../menu/MentionsMenu';
 import { DecoratorRenderer } from './DecoratorRenderer';
 import { NodeAccessoryRenderer } from './NodeAccessoryRenderer';
+import {
+  IS_IOS,
+  IS_SAFARI,
+  IS_APPLE_WEBKIT,
+  CAN_USE_BEFORE_INPUT,
+} from '@lexical/utils';
 
 /**
  * @param editable - A signal that indicates whether the textarea is editable
@@ -98,6 +105,7 @@ export interface MarkdownTextareaProps {
     files: FileSystemFileEntry[],
     directories: FileSystemDirectoryEntry[]
   ) => void;
+  preferLineBreaks?: boolean;
 }
 
 export function MarkdownTextarea(props: MarkdownTextareaProps) {
@@ -230,6 +238,45 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
       }
     }
   );
+
+  const registerPrefersLineBreaksComamnd = () => {
+    // Taken from the rich text plugin internals. This overrides
+    // the default behavior for pressing enter to always act like
+    // shift+enter to fix line spacing by not creating a new node
+    // each time but instead using line breaks
+    return editor.registerCommand<KeyboardEvent | null>(
+      KEY_ENTER_COMMAND,
+      (event) => {
+        if (!props.preferLineBreaks) return false;
+
+        if (event !== null) {
+          // If we have beforeinput, then we can avoid blocking
+          // the default behavior. This ensures that the iOS can
+          // intercept that we're actually inserting a paragraph,
+          // and autocomplete, autocapitalize etc work as intended.
+          // This can also cause a strange performance issue in
+          // Safari, where there is a noticeable pause due to
+          // preventing the key down of enter.
+          if (
+            (IS_IOS || IS_SAFARI || IS_APPLE_WEBKIT) &&
+            CAN_USE_BEFORE_INPUT
+          ) {
+            return false;
+          }
+          event.preventDefault();
+        }
+        return editor.dispatchCommand(INSERT_LINE_BREAK_COMMAND, false);
+      },
+      COMMAND_PRIORITY_HIGH
+    );
+  };
+
+  createEffect(() => {
+    if (!props.preferLineBreaks) return;
+
+    const cleanupComamnd = registerPrefersLineBreaksComamnd();
+    onCleanup(cleanupComamnd);
+  });
 
   let cleanupEnterListener: () => void = () => {};
   createEffect(() => {
