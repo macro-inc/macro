@@ -18,7 +18,7 @@ import {
 } from 'solid-js';
 import { Channel } from './Channel';
 import { JoinChannelDialog } from './JoinChannelDialog';
-import type { URL_PARAMS } from '@block-channel/constants';
+import { URL_PARAMS } from '@block-channel/constants';
 
 export function WithTopBar(props: { children: JSXElement }) {
   return <div>{props.children}</div>;
@@ -130,8 +130,8 @@ export default function BlockChannel(props: BlockChannelProps) {
               <Channel
                 data={channelData()}
                 target={{
-                  messageId: props.channel_message_id,
-                  threadId: props.channel_thread_id,
+                  messageId: props[URL_PARAMS.message],
+                  threadId: props[URL_PARAMS.thread],
                 }}
               />
             )}
