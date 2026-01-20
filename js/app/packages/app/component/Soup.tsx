@@ -9,6 +9,7 @@ import { getIconConfig } from '@core/component/EntityIcon';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { IS_MAC } from '@core/constant/isMac';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
@@ -769,7 +770,9 @@ export function Soup() {
             />
           </Show>
         </div>
-        <SoupChatInput />
+        <Show when={ENABLE_UNIFIED_LIST_AI_INPUT}>
+          <SoupChatInput />
+        </Show>
       </div>
     </Show>
   );
