@@ -54,7 +54,7 @@ pub async fn insert_thread_share_permissions(
     let owner_result: Option<String> =
         macro_db_client::share_permission::get::get_macro_id_from_thread_id(db, thread_id)
             .await
-            .context("Failedto get thread owner for email")?;
+            .context("Failed to get thread owner for email")?;
 
     let owner_id = if let Some(owner_result) = owner_result {
         MacroUserIdStr::parse_from_str(&owner_result)
