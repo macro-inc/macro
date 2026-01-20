@@ -18,7 +18,7 @@ import {
 } from 'solid-js';
 import { Channel } from './Channel';
 import { JoinChannelDialog } from './JoinChannelDialog';
-import type { TargetMessageInfo } from './MessageList/MessageList';
+import type { URL_PARAMS } from '@block-channel/constants';
 
 export function WithTopBar(props: { children: JSXElement }) {
   return <div>{props.children}</div>;
@@ -26,9 +26,12 @@ export function WithTopBar(props: { children: JSXElement }) {
 
 export type JoinState = 'REQUIRED' | 'NOT_REQUIRED';
 
-export type BlockChannelProps = {
-  target?: TargetMessageInfo;
-};
+type IncomingParams = Record<
+  (typeof URL_PARAMS)[keyof typeof URL_PARAMS],
+  string
+>;
+
+export type BlockChannelProps = IncomingParams & {};
 
 export default function BlockChannel(props: BlockChannelProps) {
   const channelId = useBlockId();
@@ -124,7 +127,13 @@ export default function BlockChannel(props: BlockChannelProps) {
           </Match>
           <Match when={validChannelData()}>
             {(channelData) => (
-              <Channel data={channelData()} target={props.target} />
+              <Channel
+                data={channelData()}
+                target={{
+                  messageId: props.channel_message_id,
+                  threadId: props.channel_thread_id,
+                }}
+              />
             )}
           </Match>
         </Switch>
