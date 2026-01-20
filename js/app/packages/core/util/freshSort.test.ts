@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { createFreshSearch } from './freshSort';
-import {
-  fuzzyScoreCommaSpaceSeparated,
-  fuzzyTestCommaSpaceSeparated,
-} from './fuzzy';
 
 interface MockItem {
   id: string;
@@ -70,106 +66,6 @@ describe('freshSort ordering', () => {
     const results = search(items, '');
 
     expect(results.map((r) => r.item.id)).toEqual(['2', '1', '3']);
-  });
-});
-
-describe('fuzzyTestCommaSpaceSeparated', () => {
-  it('matches when all query parts match text parts', () => {
-    expect(
-      fuzzyTestCommaSpaceSeparated('nick,hutch', 'Nick Noble,teo,hutch')
-    ).toBe(true);
-  });
-
-  it('matches regardless of order', () => {
-    expect(
-      fuzzyTestCommaSpaceSeparated('teo,nick', 'Nick Noble,teo,hutch')
-    ).toBe(true);
-  });
-
-  it('matches single query term against multi-part name', () => {
-    expect(fuzzyTestCommaSpaceSeparated('teo', 'Nick Noble,teo,hutch')).toBe(
-      true
-    );
-  });
-
-  it('does not match when a query part is missing', () => {
-    expect(
-      fuzzyTestCommaSpaceSeparated('nick,alice', 'Nick Noble,teo,hutch')
-    ).toBe(false);
-  });
-
-  it('handles fuzzy matching within parts', () => {
-    expect(
-      fuzzyTestCommaSpaceSeparated('nob,teo', 'Nick Noble,teo,hutch')
-    ).toBe(true);
-  });
-
-  it('handles whitespace around commas', () => {
-    expect(
-      fuzzyTestCommaSpaceSeparated('nick , hutch', 'Nick Noble , teo , hutch')
-    ).toBe(true);
-  });
-
-  it('returns true for empty query', () => {
-    expect(fuzzyTestCommaSpaceSeparated('', 'Nick Noble,teo,hutch')).toBe(true);
-  });
-});
-
-describe('fuzzyScoreCommaSpaceSeparated', () => {
-  it('returns score between 0 and 1 with comma-separated query', () => {
-    const score = fuzzyScoreCommaSpaceSeparated(
-      'nick,teo',
-      'Nick Noble,teo,hutch'
-    );
-    expect(score).toBeGreaterThan(0);
-    expect(score).toBeLessThanOrEqual(1);
-  });
-
-  it('matches space-separated query terms in any order', () => {
-    const score = fuzzyScoreCommaSpaceSeparated(
-      'jackson jacob',
-      'jackson kustec, gabriel birman, jacob, eric hayes'
-    );
-    expect(score).toBeGreaterThan(0);
-    expect(score).toBeLessThanOrEqual(1);
-  });
-
-  it('matches when query terms are reversed', () => {
-    const score = fuzzyScoreCommaSpaceSeparated(
-      'jacob jackson',
-      'jackson kustec, gabriel birman, jacob, eric hayes'
-    );
-    expect(score).toBeGreaterThan(0);
-    expect(score).toBeLessThanOrEqual(1);
-  });
-
-  it('matches mixed space and comma query', () => {
-    const score = fuzzyScoreCommaSpaceSeparated(
-      'jackson, jacob',
-      'jackson kustec, gabriel birman, jacob, eric hayes'
-    );
-    expect(score).toBeGreaterThan(0);
-  });
-
-  it('returns -1 when no match', () => {
-    const score = fuzzyScoreCommaSpaceSeparated(
-      'alice,bob',
-      'Nick Noble,teo,hutch'
-    );
-    expect(score).toBe(-1);
-  });
-
-  it('returns -1 when a term does not match (space-separated)', () => {
-    const score = fuzzyScoreCommaSpaceSeparated(
-      'jackson alice',
-      'jackson kustec, gabriel birman, jacob, eric hayes'
-    );
-    expect(score).toBe(-1);
-  });
-
-  it('returns 1 for empty query', () => {
-    const score = fuzzyScoreCommaSpaceSeparated('', 'Nick Noble,teo,hutch');
-    expect(score).toBe(1);
   });
 });
 
