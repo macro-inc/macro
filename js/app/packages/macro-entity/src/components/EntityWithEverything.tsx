@@ -1063,14 +1063,13 @@ export function EntityWithEverything(
         >
           {/* When the left checkbox column is hidden in narrow split containers, we still want
               unread indicators to be visible. */}
-          <Show
-            when={
-              props.showLeftColumnIndicator &&
-              !props.checked &&
-              !props.highlighted
-            }
-          >
-            <div class="flex size-4 items-center justify-center @min-md/split:hidden">
+          <Show when={props.showLeftColumnIndicator && !props.checked}>
+            <div
+              class="flex size-4 items-center justify-center @min-md/split:hidden"
+              classList={{
+                invisible: props.highlighted,
+              }}
+            >
               <UnreadIndicator active={props.unreadIndicatorActive} />
             </div>
           </Show>
