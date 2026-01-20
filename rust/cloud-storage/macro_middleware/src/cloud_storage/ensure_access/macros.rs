@@ -5,12 +5,11 @@ use axum::{
     extract::{FromRef, FromRequestParts, Path},
     http::request::Parts,
 };
-use comms_service_client::CommsServiceClient;
 use model::user::UserContext;
 use models_permissions::share_permission::access_level::AccessLevel;
 use serde::Deserialize;
 use sqlx::PgPool;
-use std::{marker::PhantomData, sync::Arc};
+use std::marker::PhantomData;
 
 #[derive(Deserialize)]
 pub struct Params {
@@ -32,7 +31,6 @@ impl<T, S> FromRequestParts<S> for MacrosAccessLevelExtractor<T>
 where
     T: BuildAccessLevel,
     PgPool: FromRef<S>,
-    Arc<CommsServiceClient>: FromRef<S>,
     S: Send + Sync + 'static,
 {
     type Rejection = AccessLevelErr;
@@ -40,7 +38,6 @@ where
     #[tracing::instrument(ret, err, skip(parts, state))]
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let db = PgPool::from_ref(state);
-        let comms_client = <Arc<CommsServiceClient>>::from_ref(state);
         let Extension(user_context) = <Extension<UserContext>>::from_request_parts(parts, state)
             .await
             .map_err(|_| AccessLevelErr::UnAuthorized)?;
@@ -48,15 +45,10 @@ where
             .await
             .map_err(|_| AccessLevelErr::BadRequest)?;
 
-        let access_level: Option<AccessLevel> = get_users_access_level_v2(
-            &db,
-            &comms_client,
-            &user_context.user_id,
-            &macro_prompt_id,
-            "macro",
-        )
-        .await
-        .map_err(AccessLevelErr::DbErr)?;
+        let access_level: Option<AccessLevel> =
+            get_users_access_level_v2(&db, &user_context.user_id, &macro_prompt_id, "macro")
+                .await
+                .map_err(AccessLevelErr::DbErr)?;
 
         let desired_level = T::into_access_level();
 

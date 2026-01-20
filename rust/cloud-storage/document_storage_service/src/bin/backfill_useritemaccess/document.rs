@@ -1,7 +1,6 @@
 use crate::{CONCURRENT_PROCESSING_LIMIT, DB_FETCH_SIZE, INSERT_BATCH_SIZE};
 use anyhow::Context;
 use chrono::Utc;
-use comms_service_client::CommsServiceClient;
 use futures::future::join_all;
 use model::document::DocumentMetadata;
 use models_permissions::share_permission::access_level::AccessLevel;
@@ -11,7 +10,6 @@ use sqlx::PgPool;
 /// Processes a single document to generate its corresponding UserItemAccess records.
 async fn process_single_document(
     db: PgPool,
-    comms_service_client: CommsServiceClient,
     document: DocumentMetadata, // Assuming DocumentMetadata implements Clone
 ) -> anyhow::Result<Vec<UserItemAccess>> {
     let mut generated_items = Vec::new();
@@ -46,12 +44,12 @@ async fn process_single_document(
         let channel_id = uuid::Uuid::parse_str(&csp.channel_id)
             .with_context(|| format!("Failed to parse channel UUID: {}", csp.channel_id))?;
 
-        let participants = comms_service_client
-            .get_channel_participants(&csp.channel_id)
-            .await
-            .with_context(|| {
-                format!("Failed to get participants for channel {}", csp.channel_id)
-            })?;
+        let participants =
+            comms_db_client::participants::get_participants::get_participants(&db, &channel_id)
+                .await
+                .with_context(|| {
+                    format!("Failed to get participants for channel {}", csp.channel_id)
+                })?;
 
         for participant in participants {
             if participant.user_id != user_id {
@@ -75,7 +73,6 @@ async fn process_single_document(
 /// Backfills UserItemAccess records for documents with concurrent processing.
 pub async fn backfill_documents_updated(
     db: &PgPool,
-    comms_service_client: &CommsServiceClient,
     start_offset: Option<i64>,
 ) -> anyhow::Result<()> {
     let mut offset = start_offset.unwrap_or(0);
@@ -120,13 +117,11 @@ pub async fn backfill_documents_updated(
             let mut tasks = Vec::new();
             for document in chunk {
                 let db_clone = db.clone();
-                let client_clone = comms_service_client.clone();
                 // Assumes DocumentMetadata implements Clone. If not, add `#[derive(Clone)]`.
                 let document_clone = document.clone();
 
                 tasks.push(tokio::spawn(process_single_document(
                     db_clone,
-                    client_clone,
                     document_clone,
                 )));
             }

@@ -76,12 +76,18 @@ pub async fn handler(
     .await?
     .ok_or(DeleteScheduledError::NotFound)?;
 
-    if scheduled_message.sent {
+    if scheduled_message.sent || scheduled_message.processing {
         return Err(DeleteScheduledError::AlreadySent);
     }
 
     email_db_client::messages::scheduled::delete::delete_scheduled_message(
         &mut *tx, link.id, message_id,
+    )
+    .await?;
+
+    // if we undo send for a message, turn it back into a draft
+    email_db_client::messages::update::update_message_draft_status(
+        &mut tx, message_id, link.id, true,
     )
     .await?;
 

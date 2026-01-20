@@ -8,6 +8,7 @@ import { matches } from '@core/util/match';
 import CheckIcon from '@icon/regular/check.svg';
 import { tryToTypedNotification } from '@notifications';
 import { useEmail, useUserId } from '@core/context/user';
+import { formatDocumentName } from '@service-storage/util/filename';
 import { syncServiceClient } from '@service-sync/client';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable } from '@thisbeyond/solid-dnd';
@@ -549,6 +550,15 @@ export function EntityWithEverything(
   const searchHighlightName = () =>
     isSearchEntity(props.entity) && props.entity.search.nameHighlight;
 
+  const displayName = createMemo(() => {
+    if (props.entity.type === 'document') {
+      return formatDocumentName(props.entity.name, props.entity.fileType, {
+        fullyQualifiedBlockName: true,
+      });
+    }
+    return props.entity.name;
+  });
+
   const contentHitData = () => {
     if (!isSearchEntity(props.entity)) return [];
     return props.entity.search.contentHitData ?? [];
@@ -701,7 +711,7 @@ export function EntityWithEverything(
                 </Show>
                 <Show
                   when={isSearch() && searchHighlightName()}
-                  fallback={props.entity.name}
+                  fallback={displayName()}
                 >
                   {(name) => (
                     <StaticMarkdown
@@ -816,7 +826,7 @@ export function EntityWithEverything(
             >
               <Show
                 when={isSearch() && searchHighlightName()}
-                fallback={props.entity.name}
+                fallback={displayName()}
               >
                 {(name) => (
                   <StaticMarkdown

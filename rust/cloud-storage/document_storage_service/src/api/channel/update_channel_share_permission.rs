@@ -47,7 +47,6 @@ pub async fn handler(
     // Get users max access level to the item
     let user_access_level = get_users_access_level_v2(
         &ctx.db,
-        &ctx.comms_service_client,
         req.user_id.0.as_ref(),
         &req.item_id,
         &req.item_type,
@@ -130,9 +129,7 @@ pub async fn handler(
                 .into_response()
         })?;
 
-        let channel_participants = ctx
-            .comms_service_client
-            .get_channel_participants(&req.channel_id)
+        let channel_participants = comms_db_client::participants::get_participants::get_participants(&ctx.db, &channel_id)
             .await
             .map_err(|e| {
                 tracing::error!(error=?e, "failed to get channel participants");

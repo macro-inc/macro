@@ -53,7 +53,6 @@ pub async fn get_models_for_attachments_handler(
         if attachment.attachment_type == AttachmentType::Document {
             get_users_access_level_v2(
                 &state.db,
-                &state.comms_service_client,
                 &user_context.user_id,
                 &attachment.attachment_id,
                 "document",
@@ -67,7 +66,6 @@ pub async fn get_models_for_attachments_handler(
         } else if attachment.attachment_type == AttachmentType::Channel {
             get_users_access_level_v2(
                 &state.db,
-                &state.comms_service_client,
                 &user_context.user_id,
                 &attachment.attachment_id,
                 "channel",

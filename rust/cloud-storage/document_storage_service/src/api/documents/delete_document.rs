@@ -177,10 +177,11 @@ pub async fn permanently_delete_document_handler(
         })?;
 
     // Delete entity mentions where this doc is the source
-    if let Err(e) = state
-        .comms_service_client
-        .delete_mentions_by_source(vec![document_id.clone()])
-        .await
+    if let Err(e) = comms_db_client::entity_mentions::delete_entity_mentions_by_source(
+        &state.db,
+        vec![document_id.clone()],
+    )
+    .await
     {
         tracing::error!(error=?e, "unable to delete entity mentions");
     }

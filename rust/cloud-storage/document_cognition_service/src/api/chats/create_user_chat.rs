@@ -48,7 +48,6 @@ pub(in crate::api) async fn create_chat_handler(
         if attachment.attachment_type == AttachmentType::Document {
             get_users_access_level_v2(
                 &state.db,
-                &state.comms_service_client,
                 user_context.macro_user_id.as_ref(),
                 &attachment.attachment_id,
                 "document",

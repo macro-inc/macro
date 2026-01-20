@@ -224,7 +224,6 @@ async fn patch_project_transaction(
     if let Some(share_permission) = share_permission {
         update_user_item_access(
             &mut transaction,
-            &ctx.comms_service_client,
             &user_context.user_id,
             &project_context.id,
             "project",

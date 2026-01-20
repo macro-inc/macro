@@ -7,21 +7,16 @@ use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
 use crate::domain::ports::PermissionService;
-use comms_service_client::CommsServiceClient;
 use email_db_client::threads::get::get_macro_id_from_thread_id;
 
-/// Permission service implementation using database and comms service client.
+/// Permission service implementation using database.
 pub struct PermissionServiceImpl {
     db: Pool<Postgres>,
-    comms_service_client: CommsServiceClient,
 }
 
 impl PermissionServiceImpl {
-    pub fn new(db: Pool<Postgres>, comms_service_client: CommsServiceClient) -> Self {
-        Self {
-            db,
-            comms_service_client,
-        }
+    pub fn new(db: Pool<Postgres>) -> Self {
+        Self { db }
     }
 }
 
@@ -50,11 +45,7 @@ impl PermissionService for PermissionServiceImpl {
 
         let access_level =
             macro_middleware::cloud_storage::ensure_access::get_users_access_level_v2(
-                &self.db,
-                &self.comms_service_client,
-                user_id,
-                entity_id,
-                item_type,
+                &self.db, user_id, entity_id, item_type,
             )
             .await
             .map_err(|(status_code, message)| {

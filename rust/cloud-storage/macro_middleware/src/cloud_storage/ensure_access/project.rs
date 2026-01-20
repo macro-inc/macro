@@ -5,7 +5,6 @@ use axum::{
     extract::{FromRef, FromRequest, FromRequestParts, Request},
     http::request::Parts,
 };
-use comms_service_client::CommsServiceClient;
 use model::{
     project::BasicProject,
     user::{UserContext, axum_extractor::MacroUserExtractor},
@@ -13,7 +12,7 @@ use model::{
 use models_permissions::share_permission::access_level::AccessLevel;
 use serde::{Deserialize, de::DeserializeOwned};
 use sqlx::PgPool;
-use std::{marker::PhantomData, sync::Arc};
+use std::marker::PhantomData;
 
 /// Validates the user has the desired access level to the item
 #[derive(Debug)]
@@ -27,7 +26,6 @@ impl<T, S> FromRequestParts<S> for ProjectAccessLevelExtractor<T>
 where
     T: BuildAccessLevel,
     PgPool: FromRef<S>,
-    Arc<CommsServiceClient>: FromRef<S>,
     S: Send + Sync + 'static,
 {
     type Rejection = AccessLevelErr;
@@ -35,7 +33,6 @@ where
     #[tracing::instrument(ret, err, skip(parts, state))]
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let db = PgPool::from_ref(state);
-        let comms_client = <Arc<CommsServiceClient>>::from_ref(state);
 
         let MacroUserExtractor {
             macro_user_id,
@@ -65,15 +62,10 @@ where
             ));
         }
 
-        let access_level: Option<AccessLevel> = get_users_access_level_v2(
-            &db,
-            &comms_client,
-            &user_context.user_id,
-            &project_context.id,
-            "project",
-        )
-        .await
-        .map_err(AccessLevelErr::DbErr)?;
+        let access_level: Option<AccessLevel> =
+            get_users_access_level_v2(&db, &user_context.user_id, &project_context.id, "project")
+                .await
+                .map_err(AccessLevelErr::DbErr)?;
 
         let desired = T::into_access_level();
 
@@ -146,7 +138,6 @@ impl<T, S, V> FromRequest<S> for ProjectBodyAccessLevelExtractor<T, V>
 where
     T: BuildAccessLevel,
     PgPool: FromRef<S>,
-    Arc<CommsServiceClient>: FromRef<S>,
     S: Send + Sync + 'static,
     V: DeserializeOwned,
 {
@@ -154,7 +145,6 @@ where
 
     async fn from_request(mut req: Request, state: &S) -> Result<Self, Self::Rejection> {
         let db = PgPool::from_ref(state);
-        let comms_client = <Arc<CommsServiceClient>>::from_ref(state);
 
         let user_context: Extension<UserContext> = req
             .extract_parts()
@@ -174,15 +164,10 @@ where
             return Ok(Self::ProjectNotInBody { body: cb()? });
         };
 
-        let access_level: Option<AccessLevel> = get_users_access_level_v2(
-            &db,
-            &comms_client,
-            &user_context.user_id,
-            project.id(),
-            "project",
-        )
-        .await
-        .map_err(AccessLevelErr::DbErr)?;
+        let access_level: Option<AccessLevel> =
+            get_users_access_level_v2(&db, &user_context.user_id, project.id(), "project")
+                .await
+                .map_err(AccessLevelErr::DbErr)?;
 
         let desired = T::into_access_level();
 
