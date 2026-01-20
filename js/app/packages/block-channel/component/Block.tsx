@@ -19,6 +19,7 @@ import {
 import { Channel } from './Channel';
 import { JoinChannelDialog } from './JoinChannelDialog';
 import { URL_PARAMS } from '@block-channel/constants';
+import type { TargetMessageInfo } from '@block-channel/component/MessageList/MessageList';
 
 export function WithTopBar(props: { children: JSXElement }) {
   return <div>{props.children}</div>;
@@ -94,6 +95,17 @@ export default function BlockChannel(props: BlockChannelProps) {
     return maybeChannelName();
   };
 
+  const targetMessage = () => {
+    const messageID = props[URL_PARAMS.message];
+    if (!messageID) return;
+    const threadID = props[URL_PARAMS.thread];
+
+    return {
+      messageId: messageID,
+      threadId: threadID,
+    } satisfies TargetMessageInfo;
+  };
+
   return (
     <Suspense>
       <DocumentBlockContainer title={channelName() ?? 'Channel'}>
@@ -124,13 +136,7 @@ export default function BlockChannel(props: BlockChannelProps) {
           </Match>
           <Match when={validChannelData()}>
             {(channelData) => (
-              <Channel
-                data={channelData()}
-                target={{
-                  messageId: props[URL_PARAMS.message],
-                  threadId: props[URL_PARAMS.thread],
-                }}
-              />
+              <Channel data={channelData()} target={targetMessage()} />
             )}
           </Match>
         </Switch>
