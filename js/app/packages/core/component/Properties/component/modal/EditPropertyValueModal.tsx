@@ -116,7 +116,6 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
         break;
       }
       default:
-        // Should not reach here as modal only handles select, entity, and date types
         console.error(
           'PropertyEditor.saveChanges:',
           new Error(
@@ -164,18 +163,14 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
       ? new Date(props.property.value)
       : null;
 
-    // Both null
     if (!currentDate && !originalDate) return false;
 
-    // One is null, other isn't
     if (!currentDate || !originalDate) return true;
 
-    // Compare timestamps
     return currentDate.getTime() !== originalDate.getTime();
   };
 
   const handleClose = async () => {
-    // All properties that reach this modal (select, entity, and date types) should auto-save
     const hasUnsavedChanges =
       hasChanges() || hasEntityChanges() || hasDateChanges();
     if (hasUnsavedChanges) {
@@ -215,6 +210,7 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
           class={MODAL_BASE}
           tabIndex={-1}
           use:floatWithElement={{ element: () => props.anchorRef }}
+          // All properties that reach this modal (select, entity, and date types) should auto-save
           onClick={(e) => e.stopPropagation()}
         >
           <Show when={!isLoading()}>

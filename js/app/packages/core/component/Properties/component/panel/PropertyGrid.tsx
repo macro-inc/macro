@@ -11,7 +11,7 @@ interface PropertiesListProps {
 }
 
 export const PropertyGrid: Component<PropertiesListProps> = (props) => {
-  const { openPropertyEditor, openDatePicker } = usePropertiesContext();
+  const { openPropertyEditor } = usePropertiesContext();
 
   const blockName = useMaybeBlockAliasedName();
   const builtinPropertyIds = blockName ? getBuiltinPropertyIds(blockName) : [];

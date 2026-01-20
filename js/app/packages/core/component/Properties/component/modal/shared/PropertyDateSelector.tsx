@@ -1,6 +1,5 @@
-import { useDateSearch } from '@core/component/KeyboardDatePicker/useDateSearch';
+import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { useSearchInputFocus } from '@core/component/Properties/utils';
-import CalendarIcon from '@icon/regular/calendar.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import { format } from 'date-fns';
 import {
@@ -14,8 +13,7 @@ import {
   Show,
 } from 'solid-js';
 import type { DateProperty } from '@core/component/Properties/types';
-import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
-import { isModality } from '@core/mobile/inputModality';
+import { useKeyPressed } from '@core/util/useKeyPressed';
 
 type DateSelectorProps = {
   property: DateProperty;
@@ -28,6 +26,7 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
   const [searchQuery, setSearchQuery] = createSignal('');
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   let searchInputRef!: HTMLInputElement;
+  const keyboardMode = useKeyPressed(100);
 
   const dateOptions = useDateSearch({
     query: searchQuery,
@@ -51,35 +50,45 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
     }
   };
 
-  const handleClearDate = () => {
+  const handleClearDate = (andClose = true) => {
     props.onSelectDate(null);
-    if (props.onClose) {
+    if (props.onClose && andClose) {
       props.onClose();
+    }
+  };
+
+  const scrollSelectedIntoView = () => {
+    const options = dateOptions();
+    const currentIndex = selectedIndex();
+    if (currentIndex >= 0 && currentIndex < options.length) {
+      const element = document.querySelector(
+        `[data-date-index="${currentIndex}"]`
+      );
+      if (element) {
+        element.scrollIntoView({ block: 'nearest' });
+      }
     }
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
     const options = dateOptions();
-    if (options.length === 0 && e.key !== 'Delete' && e.key !== 'Backspace') {
-      return;
-    }
-
-    // Handle clearing date with Delete or Backspace when search is empty
     if (
       (e.key === 'Delete' || e.key === 'Backspace') &&
       !searchQuery().trim()
     ) {
+      handleClearDate(false);
       e.preventDefault();
-      handleClearDate();
       return;
     }
 
     if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'j')) {
       e.preventDefault();
       setSelectedIndex((prev) => (prev + 1) % options.length);
+      scrollSelectedIntoView();
     } else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'k')) {
       e.preventDefault();
       setSelectedIndex((prev) => (prev - 1 + options.length) % options.length);
+      scrollSelectedIntoView();
     } else if (e.key === 'Enter') {
       e.preventDefault();
       const selectedOption = options[selectedIndex()];
@@ -102,10 +111,8 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
     () => true
   );
 
-  // Format the currently selected date for display
   const currentDateDisplay = createMemo(() => {
     if (!props.selectedDate) return 'No date set';
-
     try {
       return format(props.selectedDate, "MMMM d, yyyy 'at' h:mm a");
     } catch {
@@ -115,7 +122,6 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
 
   return (
     <div>
-      {/* Search input */}
       <div class="relative">
         <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
           <SearchIcon class="h-4 w-4 text-ink-muted" />
@@ -140,15 +146,14 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
       </div>
 
       <Show when={props.selectedDate}>
-        <div class="px-3 py-2 border-b border-edge-muted">
+        <div class="px-3 py-2 border-b border-edge-muted pattern pattern-edge-muted pattern-dot-4">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
-              <CalendarIcon class="h-3 w-3 text-ink-muted" />
               <span class="text-xs text-ink-muted">Current:</span>
               <span class="text-xs font-medium">{currentDateDisplay()}</span>
             </div>
             <button
-              onClick={handleClearDate}
+              onClick={handleClearDate.bind(true)}
               class="text-xs text-ink-muted hover:text-ink underline"
             >
               Clear
@@ -157,7 +162,6 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
         </div>
       </Show>
 
-      {/* Options list */}
       <div class="p-1">
         <div class="max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden">
           <Show
@@ -166,12 +170,12 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
               <Show
                 when={searchQuery().trim()}
                 fallback={
-                  <div class="text-center py-4 text-ink-muted text-sm">
+                  <div class="text-center py-2 text-ink-muted text-sm">
                     Enter a date or duration
                   </div>
                 }
               >
-                <div class="text-center py-4 text-ink-muted text-sm">
+                <div class="text-center py-2 text-ink-muted text-sm">
                   No dates match "{searchQuery()}"
                 </div>
               </Show>
@@ -180,12 +184,13 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
             <For each={dateOptions()}>
               {(option, index) => (
                 <div
+                  data-date-index={index()}
                   class={`flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 cursor-pointer ${
                     index() === selectedIndex() ? 'bg-hover' : ''
                   }`}
                   onClick={() => handleSelectDate(option.date)}
                   onMouseEnter={() => {
-                    if (isModality('mouse')) {
+                    if (!keyboardMode()) {
                       setSelectedIndex(index());
                     }
                   }}
@@ -214,12 +219,12 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
 
       {/* Help text */}
       <div class="px-2 py-1.5 border-t border-edge-muted">
-        <div class="text-[10px] text-ink-muted">
-          <span class="font-medium">Tips:</span> Use arrow keys to navigate. Try{' '}
-          <code class="font-mono bg-active px-1 rounded">3d</code>,{' '}
-          <code class="font-mono bg-active px-1 rounded">1w</code>,{' '}
-          <code class="font-mono bg-active px-1 rounded">feb 17</code>, or{' '}
-          <code class="font-mono bg-active px-1 rounded">tomorrow</code>
+        <div class="text-xs text-ink-muted">
+          <span>Use queries like </span>
+          <code class="bg-active px-1">3d</code>,{' '}
+          <code class="bg-active px-1">1w</code>,{' '}
+          <code class="bg-active px-1">feb 17</code>, or{' '}
+          <code class="bg-active px-1">tomorrow</code>
         </div>
       </div>
     </div>

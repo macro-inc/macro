@@ -1,7 +1,16 @@
 import { createMemo, type Accessor } from 'solid-js';
 import { format, parse, isValid, setYear, getYear, addYears } from 'date-fns';
-import { parseDateFromDuration, parseDurationString } from './dateParser';
+import {
+  formatDuration,
+  parseDateFromDuration,
+  parseDurationString,
+} from './dateParser';
 import { searchPresets } from './presets';
+
+// Max number of presets to include
+const PRESET_COUNT = 5;
+
+const DEFAULT_MAX_ITEMS = 10;
 
 export interface DateOption {
   id: string;
@@ -12,7 +21,6 @@ export interface DateOption {
   score?: number;
 }
 
-// Common date formats to try
 const possibleDateFormats = [
   'MMM d', // "Jan 15"
   'MMMM d', // "January 15"
@@ -43,19 +51,15 @@ function parseNaturalDate(
   for (const formatStr of possibleDateFormats) {
     try {
       const parsed = parse(trimmed, formatStr, baseDate);
-
       if (isValid(parsed)) {
-        // If year wasn't specified in input, use smart year selection
         const hasYear = /\d{4}/.test(trimmed);
         if (!hasYear) {
           const currentYear = getYear(baseDate);
           let adjustedDate = setYear(parsed, currentYear);
 
-          // If the parsed date is more than 6 months in the past, assume next year
           const sixMonthsAgo = new Date(baseDate);
           sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-          // Compare dates without time component for consistency
           const adjustedDateOnly = new Date(adjustedDate);
           adjustedDateOnly.setHours(0, 0, 0, 0);
           const sixMonthsAgoDateOnly = new Date(sixMonthsAgo);
@@ -73,24 +77,9 @@ function parseNaturalDate(
     } catch {}
   }
 
-  // Try parsing as a relative day
   const lowerInput = trimmed.toLowerCase();
   const now = new Date(baseDate);
 
-  switch (lowerInput) {
-    case 'today':
-      return now;
-    case 'tomorrow':
-      const tomorrow = new Date(now);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      return tomorrow;
-    case 'yesterday':
-      const yesterday = new Date(now);
-      yesterday.setDate(yesterday.getDate() - 1);
-      return yesterday;
-  }
-
-  // Try day of week
   const daysOfWeek = [
     'sunday',
     'monday',
@@ -100,6 +89,7 @@ function parseNaturalDate(
     'friday',
     'saturday',
   ];
+
   const dayIndex = daysOfWeek.findIndex(
     (day) => lowerInput === day || lowerInput === day.slice(0, 3)
   );
@@ -108,7 +98,6 @@ function parseNaturalDate(
     const currentDay = now.getDay();
     let daysToAdd = dayIndex - currentDay;
 
-    // If the day is in the past or today, assume next week
     if (daysToAdd <= 0) {
       daysToAdd += 7;
     }
@@ -128,16 +117,9 @@ function scoreMatch(option: DateOption, query: string): number {
   const lowerQuery = query.toLowerCase();
   const lowerDisplay = option.displayText.toLowerCase();
 
-  // Exact match
   if (lowerDisplay === lowerQuery) return 100;
-
-  // Starts with query
   if (lowerDisplay.startsWith(lowerQuery)) return 90;
-
-  // Contains query
   if (lowerDisplay.includes(lowerQuery)) return 70;
-
-  // Check secondary text if available
   if (option.secondaryText) {
     const lowerSecondary = option.secondaryText.toLowerCase();
     if (lowerSecondary.includes(lowerQuery)) return 50;
@@ -184,6 +166,7 @@ function formatDateWithContext(
 export function useDateSearch(params: {
   query: Accessor<string>;
   baseDate?: Date;
+  maxItems?: number;
 }) {
   const baseDate = params.baseDate || new Date();
 
@@ -192,9 +175,8 @@ export function useDateSearch(params: {
     const options: DateOption[] = [];
 
     if (!query) {
-      // Return default presets when no query
       const presets = searchPresets('');
-      return presets.slice(0, 10).map(
+      return presets.slice(0, PRESET_COUNT).map(
         (preset): DateOption => ({
           id: preset.id,
           displayText: preset.label,
@@ -213,11 +195,11 @@ export function useDateSearch(params: {
       if (durationDate) {
         options.push({
           id: `duration-${query}`,
-          displayText: query,
+          displayText: `${query} (${formatDuration(parsedDuration)} from now)`,
           secondaryText: formatDateWithContext(durationDate, baseDate),
           date: durationDate,
           type: 'duration',
-          score: 100, // Exact match
+          score: 100,
         });
       }
     }
@@ -235,7 +217,6 @@ export function useDateSearch(params: {
       });
     }
 
-    // 3. Search presets
     const matchingPresets = searchPresets(query);
     matchingPresets.forEach((preset) => {
       const date = preset.getDate(baseDate);
@@ -248,74 +229,20 @@ export function useDateSearch(params: {
         score: 0,
       };
 
-      // Calculate match score
       option.score = scoreMatch(option, query);
 
-      // Only include if it has some match
       if (option.score > 0) {
         options.push(option);
       }
     });
 
-    // 4. Try common relative dates if they match the query
-    const relativeOptions = [
-      { text: 'now', date: new Date(baseDate) },
-      { text: 'today', date: new Date(baseDate) },
-      {
-        text: 'tomorrow',
-        date: (() => {
-          const d = new Date(baseDate);
-          d.setDate(d.getDate() + 1);
-          return d;
-        })(),
-      },
-      {
-        text: 'next week',
-        date: (() => {
-          const d = new Date(baseDate);
-          d.setDate(d.getDate() + 7);
-          return d;
-        })(),
-      },
-      {
-        text: 'next month',
-        date: (() => {
-          const d = new Date(baseDate);
-          d.setMonth(d.getMonth() + 1);
-          return d;
-        })(),
-      },
-    ];
-
-    relativeOptions.forEach(({ text, date }) => {
-      if (text.toLowerCase().includes(query.toLowerCase())) {
-        // Check if we already have this option
-        const exists = options.some(
-          (opt) => Math.abs(opt.date.getTime() - date.getTime()) < 1000 * 60 // Within a minute
-        );
-
-        if (!exists) {
-          options.push({
-            id: `relative-${text}`,
-            displayText: text.charAt(0).toUpperCase() + text.slice(1),
-            secondaryText: formatDateWithContext(date, baseDate),
-            date,
-            type: 'natural',
-            score: text.toLowerCase().startsWith(query.toLowerCase()) ? 85 : 60,
-          });
-        }
-      }
-    });
-
-    // Sort by score (highest first), then by date (soonest first)
     options.sort((a, b) => {
       const scoreDiff = (b.score || 0) - (a.score || 0);
       if (scoreDiff !== 0) return scoreDiff;
       return a.date.getTime() - b.date.getTime();
     });
 
-    // Limit to top 15 results
-    return options.slice(0, 15);
+    return options.slice(0, params.maxItems ?? DEFAULT_MAX_ITEMS);
   });
 
   return dateOptions;

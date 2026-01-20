@@ -56,7 +56,6 @@ import { FloatingLinkMenu } from '../menu/FloatingLinkMenu';
 import { MentionsMenu } from '../menu/MentionsMenu';
 import { DecoratorRenderer } from './DecoratorRenderer';
 import { NodeAccessoryRenderer } from './NodeAccessoryRenderer';
-import { textSpanOverlap } from 'typescript';
 
 /**
  * @param editable - A signal that indicates whether the textarea is editable
