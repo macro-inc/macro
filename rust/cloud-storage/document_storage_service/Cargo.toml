@@ -46,7 +46,6 @@ chrono = { workspace = true }
 clap = { workspace = true }
 cloudfront_sign = { workspace = true }
 comms = { path = "../comms", features = ["outbound"] }
-comms_service_client = { path = "../comms_service_client" }
 connection_gateway = { path = "../connection_gateway" }
 document_sub_type = { path = "../document_sub_type" }
 dynamodb_client = { path = "../dynamodb_client" }
@@ -121,6 +120,7 @@ utoipa = { workspace = true, features = ["axum_extras"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
 zip = { workspace = true }
+comms_db_client = { path = "../comms_db_client" }
 
 [dev-dependencies]
 cool_asserts = "2"
@@ -128,4 +128,4 @@ frecency = { path = "../frecency", features = ["mock"] }
 ordered-float = { workspace = true }
 
 [package.metadata.cargo-machete]
-ignored = ["comms_service", "connection_gateway"]
+ignored = ["connection_gateway"]

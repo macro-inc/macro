@@ -129,9 +129,7 @@ pub async fn handler(
                 .into_response()
         })?;
 
-        let channel_participants = ctx
-            .comms_service_client
-            .get_channel_participants(&req.channel_id)
+        let channel_participants = comms_db_client::participants::get_participants::get_participants(&ctx.db, &channel_id)
             .await
             .map_err(|e| {
                 tracing::error!(error=?e, "failed to get channel participants");

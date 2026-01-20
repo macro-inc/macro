@@ -1,7 +1,6 @@
 use crate::{CONCURRENT_PROCESSING_LIMIT, DB_FETCH_SIZE, INSERT_BATCH_SIZE};
 use anyhow::Context;
 use chrono::Utc;
-use comms_service_client::CommsServiceClient;
 use futures::future::join_all;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::user_item_access::UserItemAccess;
@@ -9,7 +8,6 @@ use sqlx::PgPool;
 
 async fn process_single_chat(
     db: PgPool,
-    comms_service_client: CommsServiceClient,
     chat_id: String,
     user_id: String,
 ) -> anyhow::Result<Vec<UserItemAccess>> {
@@ -37,12 +35,12 @@ async fn process_single_chat(
         let channel_id = uuid::Uuid::parse_str(&csp.channel_id)
             .with_context(|| format!("Failed to parse channel UUID: {}", csp.channel_id))?;
 
-        let participants = comms_service_client
-            .get_channel_participants(&csp.channel_id)
-            .await
-            .with_context(|| {
-                format!("Failed to get participants for channel {}", csp.channel_id)
-            })?;
+        let participants =
+            comms_db_client::participants::get_participants::get_participants(&db, &channel_id)
+                .await
+                .with_context(|| {
+                    format!("Failed to get participants for channel {}", csp.channel_id)
+                })?;
 
         // Add an access record for each participant
         for participant in participants {
@@ -65,11 +63,7 @@ async fn process_single_chat(
 }
 
 /// Backfills UserItemAccess records for chats with concurrent processing.
-pub async fn backfill_chats_updated(
-    db: &PgPool,
-    comms_service_client: &CommsServiceClient,
-    start_offset: Option<i64>,
-) -> anyhow::Result<()> {
+pub async fn backfill_chats_updated(db: &PgPool, start_offset: Option<i64>) -> anyhow::Result<()> {
     let mut offset = start_offset.unwrap_or(0);
 
     if let Some(so) = start_offset {
@@ -113,13 +107,11 @@ pub async fn backfill_chats_updated(
                 // Clone the resources needed for the concurrent task.
                 // Cloning PgPool and the client should be cheap.
                 let db_clone = db.clone();
-                let client_clone = comms_service_client.clone();
                 let chat_id_clone = chat_id.clone();
                 let user_id_clone = user_id.clone();
 
                 tasks.push(tokio::spawn(process_single_chat(
                     db_clone,
-                    client_clone,
                     chat_id_clone,
                     user_id_clone,
                 )));

@@ -2726,7 +2726,7 @@ dependencies = [
  "clap",
  "cloudfront_sign",
  "comms",
- "comms_service_client",
+ "comms_db_client",
  "connection_gateway",
  "cool_asserts",
  "document_sub_type",
@@ -5150,6 +5150,7 @@ name = "macro_share_permissions"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "comms_db_client",
  "comms_service_client",
  "macro_db_client",
  "macro_user_id",
