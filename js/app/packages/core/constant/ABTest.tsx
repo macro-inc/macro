@@ -1,11 +1,8 @@
 import { withAnalytics } from '@coparse/analytics';
 import { useIsAuthenticated } from '@core/auth';
 import { authServiceClient } from '@service-auth/client';
-import {
-  invalidateUserInfo,
-  useGroup,
-  useUserId,
-} from '@queries/auth/user-info';
+import { invalidateUserInfo } from '@queries/auth/user-info';
+import { useGroup, useUserId } from '@core/context/user';
 import { createSingletonRoot } from '@solid-primitives/rootless';
 import { type Component, createEffect, createSignal, Show } from 'solid-js';
 

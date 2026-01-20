@@ -1,10 +1,8 @@
 import { createMemo } from 'solid-js';
-import {
-  invalidateUserInfo,
-  useIsAuthenticated,
-} from '@queries/auth/user-info';
+import { invalidateUserInfo } from '@queries/auth/user-info';
+import { useIsAuthenticated } from '@core/context/user';
 
-// Re-export useIsAuthenticated from queries for backwards compatibility
+// Re-export useIsAuthenticated from context for backwards compatibility
 export { useIsAuthenticated };
 
 export function useIsOrganizationMember() {

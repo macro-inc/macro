@@ -11,7 +11,7 @@ import {
   type Root,
 } from '@core/collab/comments/commentType';
 import { MARK_SELECTED_COMMENT_COMMAND } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
-import { useUserId } from '@queries/auth/user-info';
+import { useUserId } from '@core/context/user';
 import { makePersisted } from '@solid-primitives/storage';
 import type { NodeKey } from 'lexical';
 import { createSignal, untrack } from 'solid-js';

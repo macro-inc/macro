@@ -42,7 +42,7 @@ import {
   useQueryClient as useEntityQueryClient,
 } from '@macro-entity';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
-import { useUserId } from '@queries/auth/user-info';
+import { useUserId } from '@core/context/user';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import { debounce } from '@solid-primitives/scheduled';

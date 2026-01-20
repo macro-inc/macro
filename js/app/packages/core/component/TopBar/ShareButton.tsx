@@ -37,7 +37,7 @@ import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { commsServiceClient } from '@service-comms/client';
-import { useUserId } from '@queries/auth/user-info';
+import { useUserId } from '@core/context/user';
 import {
   blockNameToItemType,
   type ItemType,

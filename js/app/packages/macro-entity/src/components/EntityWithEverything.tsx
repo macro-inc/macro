@@ -7,7 +7,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { matches } from '@core/util/match';
 import CheckIcon from '@icon/regular/check.svg';
 import { tryToTypedNotification } from '@notifications';
-import { useEmail, useUserId } from '@queries/auth/user-info';
+import { useEmail, useUserId } from '@core/context/user';
 import { syncServiceClient } from '@service-sync/client';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable } from '@thisbeyond/solid-dnd';

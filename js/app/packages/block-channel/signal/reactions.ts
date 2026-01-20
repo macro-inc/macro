@@ -3,7 +3,7 @@ import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
 import { createBlockStore } from '@core/block';
 import { commsServiceClient } from '@service-comms/client';
 import { createConnectionBlockWebsocketEffect } from '@service-connection/websocket';
-import { useUserId } from '@queries/auth/user-info';
+import { useUserId } from '@core/context/user';
 import { channelStore } from './channel';
 
 type CountedReaction = {

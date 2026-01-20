@@ -1,7 +1,6 @@
 import { withAnalytics } from '@coparse/analytics';
-import { isErr } from '@core/util/maybeResult';
+import { fetchUserInfo, invalidateUserInfo } from '@queries/auth/user-info';
 import { authServiceClient } from '@service-auth/client';
-import { invalidateUserInfo } from '@queries/auth/user-info';
 import { detect } from 'detect-browser';
 import type { JSX } from 'solid-js';
 import { createSignal, onMount, Show } from 'solid-js';
@@ -21,10 +20,9 @@ export const LOGIN_COOKIE_AGE = 2592000; // 1 month in seconds
 export const identifyUser = async () => {
   invalidateOrganization();
   await invalidateUserInfo();
-  const userInfoResult = await authServiceClient.getLegacyUserPermissions();
+  // Use fetchUserInfo which leverages the query cache instead of direct API call
+  const userInfo = await fetchUserInfo();
 
-  if (userInfoResult && isErr(userInfoResult)) return;
-  const userInfo = userInfoResult ? userInfoResult[1] : null;
   if (!userInfo) {
     return;
   }

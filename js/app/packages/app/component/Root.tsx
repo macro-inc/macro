@@ -3,6 +3,7 @@ import { setHotkeyRoot, useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { withAnalytics } from '@coparse/analytics';
 import { ChannelsContextProvider } from '@core/context/channels';
+import { UserContextProvider } from '@core/context/user';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
@@ -407,35 +408,37 @@ export function Root() {
     <MaybeTauriProvider>
       <MetaProvider>
         <EntityProvider>
-          <UserInfoSideEffects />
-          <ConfiguredGlobalAppStateProvider>
-            <ChannelsContextProvider>
-              <Title>{tabTitle()}</Title>
-              <MacroJump />
-              <Visor />
-              <Show when={ENABLE_WHICHKEY_OVERLAY}>
-                <WhichKey />
-              </Show>
-              <SuspenseContextComp fallback={<RootSuspenseFallback />}>
-                <IsomorphicRouter
-                  transformUrl={transformShortIdInUrlPathname}
-                  root={Layout}
-                  rootPreload={rootPreload}
-                  base={routerBase}
-                >
-                  {{
-                    path: '/',
-                    component: TauriRouteListener,
-                    children: ROUTES,
-                  }}
-                </IsomorphicRouter>
-              </SuspenseContextComp>
-              <ToastRegion />
-              <Show when={ENABLE_WEBSOCKET_DEBUGGER}>
-                <WebsocketDebugger />
-              </Show>
-            </ChannelsContextProvider>
-          </ConfiguredGlobalAppStateProvider>
+          <UserContextProvider>
+            <UserInfoSideEffects />
+            <ConfiguredGlobalAppStateProvider>
+              <ChannelsContextProvider>
+                <Title>{tabTitle()}</Title>
+                <MacroJump />
+                <Visor />
+                <Show when={ENABLE_WHICHKEY_OVERLAY}>
+                  <WhichKey />
+                </Show>
+                <SuspenseContextComp fallback={<RootSuspenseFallback />}>
+                  <IsomorphicRouter
+                    transformUrl={transformShortIdInUrlPathname}
+                    root={Layout}
+                    rootPreload={rootPreload}
+                    base={routerBase}
+                  >
+                    {{
+                      path: '/',
+                      component: TauriRouteListener,
+                      children: ROUTES,
+                    }}
+                  </IsomorphicRouter>
+                </SuspenseContextComp>
+                <ToastRegion />
+                <Show when={ENABLE_WEBSOCKET_DEBUGGER}>
+                  <WebsocketDebugger />
+                </Show>
+              </ChannelsContextProvider>
+            </ConfiguredGlobalAppStateProvider>
+          </UserContextProvider>
         </EntityProvider>
       </MetaProvider>
     </MaybeTauriProvider>

@@ -10,7 +10,7 @@ import {
 } from '@core/email';
 import DotsThree from '@icon/regular/dots-three.svg';
 import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
-import { useEmail } from '@queries/auth/user-info';
+import { useEmail } from '@core/context/user';
 import {
   type Accessor,
   createEffect,
