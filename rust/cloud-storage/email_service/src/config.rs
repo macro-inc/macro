@@ -50,7 +50,7 @@ pub struct Config {
     /// The SQS queue name for contacts service
     pub contacts_queue: String,
 
-    /// The amount of time to delay processing of a sent message (undo send window)
+    /// The amount of time to delay processing of a sent message (undo send window) - default 10s
     pub sent_undo_delay_secs: u32,
 
     /// The SQS bucket for storing attachments

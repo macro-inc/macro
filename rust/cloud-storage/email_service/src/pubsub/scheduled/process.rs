@@ -60,6 +60,12 @@ pub async fn process_message(
             link_id=%data.link_id,
             "Scheduled message already sent - skipping"
         );
+    } else if scheduled_message.processing {
+        tracing::warn!(
+            message_id=%data.message_id,
+            link_id=%data.link_id,
+            "Scheduled message already being processed - skipping"
+        );
     } else if scheduled_message.send_time > Utc::now() {
         tracing::warn!(
             message_id=%data.message_id,

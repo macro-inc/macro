@@ -16,7 +16,7 @@ pub async fn handler(
     let notifications = fetch_pending_scheduled_messages(&ctx.db)
         .await
         .unwrap_or_else(|e| {
-            tracing::error!("Error fetching scheduled messages: {}", e);
+            tracing::error!(error=?e, "Error fetching scheduled messages");
             Vec::new()
         });
 
