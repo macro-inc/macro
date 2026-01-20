@@ -27,7 +27,7 @@ import { themeUpdate } from '../../block-theme/signals/themeSignals';
 interface EmailMessageBodyProps {
   message: MessageWithBodyReplyless;
   isBodyExpanded: Accessor<boolean>;
-  onExpandMessageBody: () => void;
+  setExpandedMessageBody: (id: string) => void;
   setFocusedMessageId: (messageID: string | undefined) => void;
   isFirstMessageInThread: boolean;
 }
@@ -211,7 +211,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
       class="flex flex-col pt-2"
       onPointerDown={() => {
         if (!props.isBodyExpanded() && props.message.db_id) {
-          props.onExpandMessageBody();
+          props.setExpandedMessageBody(props.message.db_id);
           props.setFocusedMessageId(props.message.db_id);
         } else if (props.message.db_id) {
           props.setFocusedMessageId(props.message.db_id);

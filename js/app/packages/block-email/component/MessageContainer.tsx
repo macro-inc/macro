@@ -34,7 +34,6 @@ interface MessageContainerProps {
   isFocused: boolean;
   isTarget: boolean;
   isExpanded: boolean;
-  onToggleBodyExpand: (expanded: boolean) => void;
 }
 
 export function MessageContainer(props: MessageContainerProps) {
@@ -188,7 +187,7 @@ export function MessageContainer(props: MessageContainerProps) {
 
   const handleExpand = () => {
     if (props.message.db_id) {
-      props.onToggleBodyExpand(true);
+      context.messages.setExpandedBodyId(props.message.db_id, true);
       context.messages.setFocused(props.message.db_id);
     }
   };
@@ -222,7 +221,7 @@ export function MessageContainer(props: MessageContainerProps) {
               <EmailMessageTopBar
                 message={props.message}
                 focused={props.isFocused}
-                onExpandMessageBody={props.onToggleBodyExpand}
+                setExpandedBodyId={context.messages.setExpandedBodyId}
                 isBodyExpanded={isBodyExpanded}
                 expandedHeader={expandedHeader}
                 setExpandedHeader={setExpandedHeader}
@@ -240,7 +239,9 @@ export function MessageContainer(props: MessageContainerProps) {
               <EmailMessageBody
                 message={props.message}
                 isBodyExpanded={isBodyExpanded}
-                onExpandMessageBody={() => props.onToggleBodyExpand(true)}
+                setExpandedMessageBody={(id) =>
+                  context.messages.setExpandedBodyId(id, true)
+                }
                 setFocusedMessageId={context.messages.setFocused}
                 isFirstMessageInThread={props.isFirstMessage}
               />
