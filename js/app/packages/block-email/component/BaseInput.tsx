@@ -1008,7 +1008,6 @@ export function BaseInput(props: {
             formatState={formatState}
             setFormatState={setFormatState}
             domRef={props.markdownDomRef}
-            preferLineBreaks
             onPasteFilesAndDirs={(files, directories) => {
               const editor_ = editor();
               if (!editor_) return;

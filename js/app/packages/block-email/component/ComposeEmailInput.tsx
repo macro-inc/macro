@@ -221,7 +221,6 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
             <FileDropOverlay>Drop file(s) to attach</FileDropOverlay>
           </div>
           <MarkdownTextarea
-            preferLineBreaks
             domRef={props.inputRef}
             captureEditor={captureEditor}
             initialHtml={props.initialHtml}
