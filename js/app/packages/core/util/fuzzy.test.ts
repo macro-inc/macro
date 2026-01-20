@@ -243,4 +243,52 @@ describe('fuzzyMatch with delimiter-separated channel matching', () => {
     expect(results[0].nameHighlight).toBe('Channel 1');
     expect(results[1].nameHighlight).toBe('Channel 2');
   });
+
+  it('correctly orders non-channel items by match quality', () => {
+    const items: TestItem[] = [
+      { id: '1', name: 'test document', type: 'document' },
+      { id: '2', name: 'test', type: 'document' },
+      { id: '3', name: 'testing something else', type: 'document' },
+    ];
+
+    const results = fuzzyMatch('test', items, (item) => item.name);
+
+    expect(results.length).toBe(3);
+    expect(results[0].item.name).toBe('test');
+    expect(results[1].item.name).toBe('test document');
+    expect(results[2].item.name).toBe('testing something else');
+  });
+
+  it('correctly orders channels and non-channels by match quality with single-term query', () => {
+    const items: TestItem[] = [
+      { id: '1', name: 'design document', type: 'document' },
+      { id: '2', name: 'design, alice, bob', type: 'channel' },
+      { id: '3', name: 'design', type: 'document' },
+      { id: '4', name: 'design team, charlie', type: 'channel' },
+    ];
+
+    const results = fuzzyMatch('design', items, (item) => item.name);
+
+    expect(results.length).toBe(4);
+    expect(results[0].item.name).toBe('design');
+    expect(results[1].item.name).toBe('design document');
+    expect(results[2].item.name).toBe('design team, charlie');
+    expect(results[3].item.name).toBe('design, alice, bob');
+  });
+
+  it('correctly interleaves channels and non-channels by match quality with multi-term query', () => {
+    const items: TestItem[] = [
+      { id: '1', name: 'alice, bob', type: 'channel' },
+      { id: '2', name: 'alice bob', type: 'document' },
+      { id: '3', name: 'bob notes', type: 'document' },
+      { id: '4', name: 'alice, charlie, bob', type: 'channel' },
+    ];
+
+    // Use space-separated query to trigger channel-specific matching
+    const results = fuzzyMatch('alice bob', items, (item) => item.name);
+
+    expect(results.length).toBe(3);
+    expect(results[0].item.name).toBe('alice, bob');
+    expect(results[1].item.name).toBe('alice, charlie, bob');
+  });
 });
