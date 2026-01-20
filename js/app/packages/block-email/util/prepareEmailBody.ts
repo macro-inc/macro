@@ -428,8 +428,9 @@ function flattenConsecutiveParagraphs(container: Element) {
 
     for (let j = 0; j < group.length; j++) {
       const p = group[j];
-      while (p.firstChild) {
-        div.appendChild(p.firstChild);
+
+      if (p.children.length) {
+        div.append(...p.children);
       }
 
       if (j < group.length - 1) {
