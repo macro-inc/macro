@@ -6,6 +6,10 @@
  */
 import type { ToolSchema } from './toolSchema';
 
+/**
+ * A collection of tool schemas, typically used for API responses.
+ */
 export interface ToolSchemas {
+  /** The list of tool schemas. */
   schemas: ToolSchema[];
 }

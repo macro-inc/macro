@@ -20,30 +20,24 @@ pub async fn chat_access(
     chat_id: &str,
     stream_id: String,
 ) -> Result<AccessLevel, WebSocketError> {
-    get_users_access_level_v2(
-        &ctx.db,
-        &ctx.comms_service_client,
-        &user_ctx.user_id,
-        chat_id,
-        "chat",
-    )
-    .await
-    .map_err(|e| {
-        tracing::error!(
-            error = ?e,
-            "Failed to get user access level"
-        );
-        WebSocketError::StreamError(StreamError::Unauthorized {
-            stream_id: stream_id.clone(),
+    get_users_access_level_v2(&ctx.db, &user_ctx.user_id, chat_id, "chat")
+        .await
+        .map_err(|e| {
+            tracing::error!(
+                error = ?e,
+                "Failed to get user access level"
+            );
+            WebSocketError::StreamError(StreamError::Unauthorized {
+                stream_id: stream_id.clone(),
+            })
         })
-    })
-    .and_then(|access| match access {
-        Some(access) => Ok(access),
-        None => {
-            tracing::error!("User has no access to chat");
-            Err(WebSocketError::StreamError(StreamError::Unauthorized {
-                stream_id,
-            }))
-        }
-    })
+        .and_then(|access| match access {
+            Some(access) => Ok(access),
+            None => {
+                tracing::error!("User has no access to chat");
+                Err(WebSocketError::StreamError(StreamError::Unauthorized {
+                    stream_id,
+                }))
+            }
+        })
 }

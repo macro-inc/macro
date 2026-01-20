@@ -4,3 +4,4 @@
 .idea/
 **/.DS_Store
 .run/
+.claude/.local

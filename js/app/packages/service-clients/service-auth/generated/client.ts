@@ -7,7 +7,9 @@
 import type {
   AppleLoginRequest,
   CreateAccountMergeRequest,
+  CreateCheckoutSessionRequest,
   CreateInProgressLinkResponse,
+  CreatePortalSessionRequest,
   CreateTeamRequest,
   CreateUserRequest,
   EmptyResponse,
@@ -37,6 +39,7 @@ import type {
   ResendFusionauthVerifyUserEmailRequest,
   SsoLoginParams,
   SsoRequiredResponse,
+  StripeSessionResponse,
   Team,
   TeamInvitesResponse,
   TeamWithUsers,
@@ -3041,6 +3044,132 @@ export const getUserQuota = async (
     status: res.status,
     headers: res.headers,
   } as getUserQuotaResponse;
+};
+
+/**
+ * @summary Creates a Stripe checkout session for the user to subscribe.
+ */
+export type createCheckoutSessionResponse200 = {
+  data: StripeSessionResponse;
+  status: 200;
+};
+
+export type createCheckoutSessionResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type createCheckoutSessionResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type createCheckoutSessionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type createCheckoutSessionResponseSuccess =
+  createCheckoutSessionResponse200 & {
+    headers: Headers;
+  };
+export type createCheckoutSessionResponseError = (
+  | createCheckoutSessionResponse400
+  | createCheckoutSessionResponse404
+  | createCheckoutSessionResponse500
+) & {
+  headers: Headers;
+};
+
+export type createCheckoutSessionResponse =
+  | createCheckoutSessionResponseSuccess
+  | createCheckoutSessionResponseError;
+
+export const getCreateCheckoutSessionUrl = () => {
+  return `/user/stripe/checkout`;
+};
+
+export const createCheckoutSession = async (
+  createCheckoutSessionRequest: CreateCheckoutSessionRequest,
+  options?: RequestInit
+): Promise<createCheckoutSessionResponse> => {
+  const res = await fetch(getCreateCheckoutSessionUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createCheckoutSessionRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createCheckoutSessionResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createCheckoutSessionResponse;
+};
+
+/**
+ * @summary Creates a Stripe billing portal session.
+ */
+export type createPortalSessionResponse200 = {
+  data: StripeSessionResponse;
+  status: 200;
+};
+
+export type createPortalSessionResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type createPortalSessionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type createPortalSessionResponseSuccess =
+  createPortalSessionResponse200 & {
+    headers: Headers;
+  };
+export type createPortalSessionResponseError = (
+  | createPortalSessionResponse400
+  | createPortalSessionResponse500
+) & {
+  headers: Headers;
+};
+
+export type createPortalSessionResponse =
+  | createPortalSessionResponseSuccess
+  | createPortalSessionResponseError;
+
+export const getCreatePortalSessionUrl = () => {
+  return `/user/stripe/portal`;
+};
+
+export const createPortalSession = async (
+  createPortalSessionRequest: CreatePortalSessionRequest,
+  options?: RequestInit
+): Promise<createPortalSessionResponse> => {
+  const res = await fetch(getCreatePortalSessionUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createPortalSessionRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createPortalSessionResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createPortalSessionResponse;
 };
 
 /**

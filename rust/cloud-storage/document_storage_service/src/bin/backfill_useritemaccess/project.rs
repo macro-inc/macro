@@ -1,7 +1,6 @@
 use crate::{CONCURRENT_PROCESSING_LIMIT, DB_FETCH_SIZE, INSERT_BATCH_SIZE};
 use anyhow::Context;
 use chrono::Utc;
-use comms_service_client::CommsServiceClient;
 use futures::future::join_all;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::user_item_access::UserItemAccess;
@@ -9,7 +8,6 @@ use sqlx::PgPool;
 
 pub async fn process_single_project(
     db: PgPool,
-    comms_service_client: CommsServiceClient,
     project_id: String,
     user_id: String,
 ) -> anyhow::Result<Vec<UserItemAccess>> {
@@ -37,12 +35,12 @@ pub async fn process_single_project(
         let channel_id = uuid::Uuid::parse_str(&csp.channel_id)
             .with_context(|| format!("Failed to parse channel UUID: {}", csp.channel_id))?;
 
-        let participants = comms_service_client
-            .get_channel_participants(&csp.channel_id)
-            .await
-            .with_context(|| {
-                format!("Failed to get participants for channel {}", csp.channel_id)
-            })?;
+        let participants =
+            comms_db_client::participants::get_participants::get_participants(&db, &channel_id)
+                .await
+                .with_context(|| {
+                    format!("Failed to get participants for channel {}", csp.channel_id)
+                })?;
 
         for participant in participants {
             if participant.user_id.as_ref() != user_id {
@@ -66,7 +64,6 @@ pub async fn process_single_project(
 /// Backfills UserItemAccess records for projects with concurrent processing.
 pub async fn backfill_projects_updated(
     db: &PgPool,
-    comms_service_client: &CommsServiceClient,
     start_offset: Option<i64>,
 ) -> anyhow::Result<()> {
     let mut offset = start_offset.unwrap_or(0);
@@ -110,13 +107,11 @@ pub async fn backfill_projects_updated(
             let mut tasks = Vec::new();
             for (project_id, user_id) in chunk {
                 let db_clone = db.clone();
-                let client_clone = comms_service_client.clone();
                 let project_id_clone = project_id.clone();
                 let user_id_clone = user_id.clone();
 
                 tasks.push(tokio::spawn(process_single_project(
                     db_clone,
-                    client_clone,
                     project_id_clone,
                     user_id_clone,
                 )));

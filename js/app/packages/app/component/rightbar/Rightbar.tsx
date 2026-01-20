@@ -2,8 +2,10 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { useIsAuthenticated } from '@core/auth';
 import { AiChatEmptyState } from '@core/component/AI/component/AIChatEmptyState';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
+import { useBuildChatSendRequest } from '@core/component/AI/component/input/buildRequest';
 import { useChatInput } from '@core/component/AI/component/input/useChatInput';
 import { ChatMessages } from '@core/component/AI/component/message/ChatMessages';
+import { getPendingSend } from '@core/component/AI/signal/pendingSend';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
 import type {
   Attachment,
@@ -565,6 +567,28 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
       console.error('Invalid send request', request);
     }
   };
+
+  const buildChatSendRequest = useBuildChatSendRequest();
+
+  // Check for pending sends from SoupChatInput when bigchat opens
+  createEffect(
+    on(bigChatOpen, async (isOpen, wasOpen) => {
+      if (isOpen && !wasOpen) {
+        const pending = getPendingSend();
+        if (pending) {
+          // Build and send the request
+          const request = await buildChatSendRequest({
+            chatId: chatId(),
+            userRequest: pending.content,
+            attachments: pending.attachments,
+            model: pending.model,
+            isPersistent: true,
+          });
+          onSend(request);
+        }
+      }
+    })
+  );
 
   // load chat state
   createEffect(

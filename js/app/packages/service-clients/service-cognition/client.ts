@@ -17,7 +17,6 @@ import type { DocumentTextPart } from '@service-cognition/generated/schemas/docu
 import { uuid } from 'short-uuid';
 import { waitExtractionStatus } from './extraction';
 import type { CreateChatRequest } from './generated/schemas/createChatRequest';
-import type { CreateMacroRequest } from './generated/schemas/createMacroRequest';
 import { DocumentCognitionServiceApiVersion } from './generated/schemas/documentCognitionServiceApiVersion';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
 import type { GetBatchPreviewRequest } from './generated/schemas/getBatchPreviewRequest';
@@ -25,13 +24,10 @@ import type { GetBatchPreviewResponse } from './generated/schemas/getBatchPrevie
 import type { GetChatPermissionsResponseV2 } from './generated/schemas/getChatPermissionsResponseV2';
 import type { GetChatResponse } from './generated/schemas/getChatResponse';
 import type { GetChatsForAttachmentResponse } from './generated/schemas/getChatsForAttachmentResponse';
-import type { GetMacroResponse } from './generated/schemas/getMacroResponse';
 import type { GetModelsForAttachmentsRequest } from './generated/schemas/getModelsForAttachmentsRequest';
 import type { GetModelsForAttachmentsResponse } from './generated/schemas/getModelsForAttachmentsResponse';
 import type { GetModelsResponse } from './generated/schemas/getModelsResponse';
-import type { MacrosResponse } from './generated/schemas/macrosResponse';
 import type { PatchChatRequestV2 } from './generated/schemas/patchChatRequestV2';
-import type { PatchMacroRequest } from './generated/schemas/patchMacroRequest';
 import type { StringIDResponse } from './generated/schemas/stringIDResponse';
 import type { StructedOutputCompletionRequest } from './generated/schemas/structedOutputCompletionRequest';
 import type { StructedOutputCompletionResponse } from './generated/schemas/structedOutputCompletionResponse';
@@ -62,7 +58,6 @@ type WithChatId = { chat_id: string };
 type WithDocumentId = { document_id: string };
 type WithName = { name: string };
 type WithProjectId = { project_id: string };
-type WithMacroPromptId = { macro_prompt_id: string };
 
 export function dcsFetch(
   url: string,
@@ -232,52 +227,6 @@ export const cognitionApiServiceClient = {
       ),
       (result) => result
     );
-  },
-  async getMacro(args: WithMacroPromptId) {
-    const { macro_prompt_id } = args;
-    return dcsFetch<GetMacroResponse>(`/macros/${macro_prompt_id}`, {
-      method: 'GET',
-    });
-  },
-  async getMacros() {
-    return dcsFetch<MacrosResponse>(`/macros`, {
-      method: 'GET',
-    });
-  },
-  async getMacroPermissions(args: WithMacroPromptId) {
-    const { macro_prompt_id } = args;
-    return dcsFetch<GetChatPermissionsResponseV2>(
-      `/macros/${macro_prompt_id}/permissions`,
-      {
-        method: 'GET',
-      }
-    );
-  },
-  async createMacro(args: CreateMacroRequest) {
-    const { title, prompt, icon, color, requiredDocs } = args;
-    return dcsFetch<StringIDResponse>(`/macros`, {
-      method: 'POST',
-      body: JSON.stringify({
-        title,
-        prompt,
-        icon,
-        color,
-        requiredDocs,
-      }),
-    });
-  },
-  async updateMacro(args: PatchMacroRequest & WithMacroPromptId) {
-    const { macro_prompt_id, ...rest } = args;
-    return dcsFetch(`/macros/${macro_prompt_id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(rest),
-    });
-  },
-  async deleteMacro(args: WithMacroPromptId) {
-    const { macro_prompt_id } = args;
-    return dcsFetch(`/macros/${macro_prompt_id}`, {
-      method: 'DELETE',
-    });
   },
   async verifyAttachments(args: VerifyAttachmentsRequest) {
     return mapOk(

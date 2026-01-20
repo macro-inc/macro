@@ -11,7 +11,7 @@ interface PropertiesListProps {
 }
 
 export const PropertyGrid: Component<PropertiesListProps> = (props) => {
-  const { openPropertyEditor, openDatePicker } = usePropertiesContext();
+  const { openPropertyEditor } = usePropertiesContext();
 
   const blockName = useMaybeBlockAliasedName();
   const builtinPropertyIds = blockName ? getBuiltinPropertyIds(blockName) : [];
@@ -59,9 +59,8 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
   );
 
   const handleValueClick = (property: Property, anchor?: HTMLElement) => {
-    if (property.valueType === 'DATE') {
-      openDatePicker(property, anchor);
-    } else if (
+    if (
+      property.valueType === 'DATE' ||
       property.valueType === 'SELECT_STRING' ||
       property.valueType === 'SELECT_NUMBER' ||
       property.valueType === 'ENTITY'

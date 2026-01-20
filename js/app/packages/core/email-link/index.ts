@@ -8,7 +8,7 @@ import { isErr } from '@core/util/maybeResult';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
 import { emailClient } from '@service-email/client';
 import type { ListLinksResponse } from '@service-email/generated/schemas';
-import { updateUserInfo } from '@service-gql/client';
+import { invalidateUserInfo } from '@queries/auth/user-info';
 import type { UseQueryResult } from '@tanstack/solid-query';
 import { err, okAsync, ResultAsync } from 'neverthrow';
 import { createMemo, createSignal } from 'solid-js';
@@ -128,7 +128,7 @@ export function useEmailLinks() {
   const invalidations = async () => {
     invalidateEmailLinks();
     await updateUserAuth();
-    await updateUserInfo();
+    await invalidateUserInfo();
   };
 
   const query = useEmailLinksQuery();

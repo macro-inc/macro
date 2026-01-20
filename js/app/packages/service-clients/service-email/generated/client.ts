@@ -20,6 +20,8 @@ import type {
   GetAttachmentDocumentIDResponse,
   GetAttachmentResponse,
   GetBackfillJobResponse,
+  GetScheduledMessagesParams,
+  GetScheduledResponse,
   GetThreadMessagesHandlerParams,
   GetThreadParams,
   GetThreadResponse,
@@ -36,6 +38,8 @@ import type {
   SendMessageResponse,
   UpdateLabelBatchRequest,
   UpdateLabelBatchResponse,
+  UpsertScheduledRequest,
+  UpsertScheduledResponse,
 } from './schemas';
 
 /**
@@ -487,6 +491,221 @@ export const createDraft = async (
     status: res.status,
     headers: res.headers,
   } as createDraftResponse;
+};
+
+/**
+ * @summary List scheduled drafts.
+ */
+export type getScheduledMessagesResponse200 = {
+  data: GetScheduledResponse;
+  status: 200;
+};
+
+export type getScheduledMessagesResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type getScheduledMessagesResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getScheduledMessagesResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getScheduledMessagesResponseSuccess =
+  getScheduledMessagesResponse200 & {
+    headers: Headers;
+  };
+export type getScheduledMessagesResponseError = (
+  | getScheduledMessagesResponse400
+  | getScheduledMessagesResponse401
+  | getScheduledMessagesResponse500
+) & {
+  headers: Headers;
+};
+
+export type getScheduledMessagesResponse =
+  | getScheduledMessagesResponseSuccess
+  | getScheduledMessagesResponseError;
+
+export const getGetScheduledMessagesUrl = (
+  params?: GetScheduledMessagesParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/email/drafts/scheduled?${stringifiedParams}`
+    : `/email/drafts/scheduled`;
+};
+
+export const getScheduledMessages = async (
+  params?: GetScheduledMessagesParams,
+  options?: RequestInit
+): Promise<getScheduledMessagesResponse> => {
+  const res = await fetch(getGetScheduledMessagesUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getScheduledMessagesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getScheduledMessagesResponse;
+};
+
+/**
+ * @summary Schedule or update a scheduled draft.
+ */
+export type upsertScheduledMessageResponse200 = {
+  data: UpsertScheduledResponse;
+  status: 200;
+};
+
+export type upsertScheduledMessageResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type upsertScheduledMessageResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type upsertScheduledMessageResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type upsertScheduledMessageResponseSuccess =
+  upsertScheduledMessageResponse200 & {
+    headers: Headers;
+  };
+export type upsertScheduledMessageResponseError = (
+  | upsertScheduledMessageResponse401
+  | upsertScheduledMessageResponse404
+  | upsertScheduledMessageResponse500
+) & {
+  headers: Headers;
+};
+
+export type upsertScheduledMessageResponse =
+  | upsertScheduledMessageResponseSuccess
+  | upsertScheduledMessageResponseError;
+
+export const getUpsertScheduledMessageUrl = (id: string) => {
+  return `/email/drafts/scheduled/${id}`;
+};
+
+export const upsertScheduledMessage = async (
+  id: string,
+  upsertScheduledRequest: UpsertScheduledRequest,
+  options?: RequestInit
+): Promise<upsertScheduledMessageResponse> => {
+  const res = await fetch(getUpsertScheduledMessageUrl(id), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(upsertScheduledRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: upsertScheduledMessageResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as upsertScheduledMessageResponse;
+};
+
+/**
+ * @summary Remove the scheduled send from a draft.
+ */
+export type deleteScheduledDraftResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type deleteScheduledDraftResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type deleteScheduledDraftResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type deleteScheduledDraftResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type deleteScheduledDraftResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type deleteScheduledDraftResponseSuccess =
+  deleteScheduledDraftResponse204 & {
+    headers: Headers;
+  };
+export type deleteScheduledDraftResponseError = (
+  | deleteScheduledDraftResponse400
+  | deleteScheduledDraftResponse401
+  | deleteScheduledDraftResponse404
+  | deleteScheduledDraftResponse500
+) & {
+  headers: Headers;
+};
+
+export type deleteScheduledDraftResponse =
+  | deleteScheduledDraftResponseSuccess
+  | deleteScheduledDraftResponseError;
+
+export const getDeleteScheduledDraftUrl = (messageId: string) => {
+  return `/email/drafts/scheduled/${messageId}`;
+};
+
+export const deleteScheduledDraft = async (
+  messageId: string,
+  options?: RequestInit
+): Promise<deleteScheduledDraftResponse> => {
+  const res = await fetch(getDeleteScheduledDraftUrl(messageId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteScheduledDraftResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteScheduledDraftResponse;
 };
 
 /**

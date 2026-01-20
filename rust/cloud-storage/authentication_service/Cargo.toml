@@ -34,9 +34,6 @@ async-stripe = { workspace = true, default-features = false, features = [
   "runtime-tokio-hyper",
 ] }
 async-stripe-webhook = { version = "1.0.0-alpha.4", default-features = false }
-auth_service_rpc = { path = "../rpc-interface/auth_service", features = [
-  "server",
-] }
 aws-config = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sesv2 = { workspace = true }

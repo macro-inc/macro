@@ -19,7 +19,55 @@ const mark = (part: string, matched: boolean) =>
 const append = (accum: string, part: string) => accum + part;
 
 /**
+ * Highlights matched query terms in a comma-separated text.
+ * Query can be space or comma-separated. Each query term is highlighted
+ * in the text parts where it matches.
+ */
+export function highlightCommaSpaceSeparatedMatches(
+  query: string,
+  text: string
+): string {
+  if (!query) return text;
+
+  const queryParts = query
+    .split(/[\s,]+/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+  const textParts = text.split(',').map((p) => p.trim());
+
+  const highlightedParts = textParts.map((textPart) => {
+    let highlighted = textPart;
+
+    // Try to highlight each query part in this text part
+    for (const queryPart of queryParts) {
+      const haystack = [textPart];
+      const idxs = uf.filter(haystack, queryPart);
+
+      if (idxs && idxs.length > 0) {
+        const info = uf.info(idxs, haystack, queryPart);
+        if (info.ranges && info.ranges[0]) {
+          highlighted = uFuzzy.highlight(
+            textPart,
+            info.ranges[0],
+            mark,
+            '',
+            append
+          );
+          break; // Only highlight once per text part
+        }
+      }
+    }
+
+    return highlighted;
+  });
+
+  return highlightedParts.join(', ');
+}
+
+/**
  * Fuzzy matches items against a query, returning filtered and ranked results with highlighted matches.
+ * For channel items (type === 'channel'), supports delimiter-separated matching where query terms
+ * separated by spaces or commas can match in any order.
  * Returns all items with no highlights if query is empty.
  */
 export function fuzzyMatch<T>(
@@ -34,30 +82,71 @@ export function fuzzyMatch<T>(
       score: 0,
     }));
 
-  const haystack = items.map(extract);
+  const hasMultipleTerms = /[\s,]/.test(query);
+  const channelItems: T[] = [];
+  const nonChannelItems: T[] = [];
+
+  // Separate channels from other items if query has multiple terms
+  if (hasMultipleTerms) {
+    for (const item of items) {
+      if ((item as any).type === 'channel') {
+        channelItems.push(item);
+      } else {
+        nonChannelItems.push(item);
+      }
+    }
+  }
+
+  const results: FuzzyNameMatchResultWithItem<T>[] = [];
+
+  // Handle channel items with delimiter-separated matching
+  if (hasMultipleTerms && channelItems.length > 0) {
+    for (const item of channelItems) {
+      const name = extract(item);
+      const score = fuzzyScoreCommaSpaceSeparated(query, name);
+      if (score >= 0) {
+        results.push({
+          item,
+          nameHighlight: highlightCommaSpaceSeparatedMatches(query, name),
+          score: score * 100,
+        });
+      }
+    }
+  }
+
+  // Handle non-channel items (or all items if no multiple terms)
+  const itemsToSearch = hasMultipleTerms ? nonChannelItems : items;
+  const haystack = itemsToSearch.map(extract);
   const idxs = uf.filter(haystack, query);
 
-  if (!idxs || idxs.length === 0) return [];
+  if (idxs && idxs.length > 0) {
+    const info = uf.info(idxs, haystack, query);
+    const order = uf.sort(info, haystack, query);
 
-  const info = uf.info(idxs, haystack, query);
-  const order = uf.sort(info, haystack, query);
+    if (order && order.length > 0) {
+      order.forEach((orderIdx, position) => {
+        const infoIdx = info.idx[orderIdx];
+        const ranges = info.ranges[orderIdx];
 
-  if (!order || order.length === 0) return [];
+        const nameHighlight = ranges
+          ? uFuzzy.highlight(haystack[infoIdx], ranges, mark, '', append)
+          : haystack[infoIdx];
 
-  return order.map((orderIdx) => {
-    const infoIdx = info.idx[orderIdx];
-    const ranges = info.ranges[orderIdx];
+        results.push({
+          item: itemsToSearch[infoIdx],
+          nameHighlight,
+          // Normalize score: position 0 (best match) should get highest score
+          // Use 100 - position to put on same scale as channel scores (0-100)
+          score: 100 - position,
+        });
+      });
+    }
+  }
 
-    const nameHighlight = ranges
-      ? uFuzzy.highlight(haystack[infoIdx], ranges, mark, '', append)
-      : haystack[infoIdx];
+  // Sort by score (higher is better for both channels and non-channels)
+  results.sort((a, b) => b.score - a.score);
 
-    return {
-      item: items[infoIdx],
-      nameHighlight,
-      score: orderIdx,
-    };
-  });
+  return results;
 }
 
 /**
@@ -98,15 +187,20 @@ export function fuzzyTest(query: string, text: string): boolean {
 }
 
 /**
- * Tests if a comma-separated query matches against a comma-separated text.
- * Each query part must fuzzy-match at least one text part.
- * e.g., query "nick,hutch" matches text "Nick Noble,teo,hutch"
+ * Tests if a delimiter-separated query matches against a comma-separated text.
+ * Query can be separated by commas or spaces. Text is always comma-separated.
+ * Each query part must fuzzy-match at least one text part in any order.
+ * e.g., query "nick hutch" or "nick,hutch" matches text "Nick Noble,teo,hutch"
+ * e.g., query "jackson jacob" matches text "jacob, jackson kustec, gabriel"
  */
-export function fuzzyTestCommaSeparated(query: string, text: string): boolean {
+export function fuzzyTestCommaSpaceSeparated(
+  query: string,
+  text: string
+): boolean {
   if (!query) return true;
 
   const queryParts = query
-    .split(',')
+    .split(/[\s,]+/)
     .map((p) => p.trim())
     .filter((p) => p.length > 0);
   const textParts = text
@@ -133,15 +227,21 @@ export function fuzzyTestCommaSeparated(query: string, text: string): boolean {
 }
 
 /**
- * Calculates a score for comma-separated fuzzy matching.
+ * Calculates a score for delimiter-separated fuzzy matching.
+ * Query can be separated by commas or spaces. Text is always comma-separated.
  * Returns the average of best match scores for each query part.
- * Returns -1 if any query part fails to match (can be used instead of fuzzyTestCommaSeparated).
+ * Returns -1 if any query part fails to match.
+ * e.g., query "nick hutch" or "nick,hutch" matches text "Nick Noble,teo,hutch"
+ * e.g., query "jackson jacob" matches text "jacob, jackson kustec, gabriel"
  */
-export function fuzzyScoreCommaSeparated(query: string, text: string): number {
+export function fuzzyScoreCommaSpaceSeparated(
+  query: string,
+  text: string
+): number {
   if (!query) return 1;
 
   const queryParts = query
-    .split(',')
+    .split(/[\s,]+/)
     .map((p) => p.trim())
     .filter((p) => p.length > 0);
   const textParts = text

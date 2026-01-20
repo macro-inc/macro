@@ -4,7 +4,7 @@ import { LoadingBlock } from '@core/component/LoadingBlock';
 import { toast } from '@core/component/Toast/Toast';
 import { useEmailLinks } from '@core/email-link';
 import { whenSettled } from '@core/util/whenSettled';
-import { updateUserInfo } from '@service-gql/client';
+import { updateUserInfo } from '@queries/auth/user-info';
 import { useNavigate } from '@solidjs/router';
 import { onMount, Suspense } from 'solid-js';
 

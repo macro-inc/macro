@@ -136,7 +136,7 @@ export type PropertyEditorProps = {
   property: Property;
   onClose: () => void;
   onSaved: () => void;
-  position?: { top: number; left: number };
+  anchorRef?: HTMLElement;
   entityType: EntityType;
 };
 

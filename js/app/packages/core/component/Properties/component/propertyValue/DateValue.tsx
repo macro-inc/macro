@@ -7,6 +7,7 @@ import {
   PropertyValueDeleteButton,
   type PropertyValueProps,
 } from './ValueComponents';
+import { cn } from '@ui/utils/classname';
 
 /**
  * Display component for date properties
@@ -56,10 +57,13 @@ export const DateValue: Component<PropertyValueProps> = (props) => {
     >
       <button
         onClick={handleClick}
-        class="text-left px-2 py-0.5 border border-edge-muted bg-transparent inline-block max-w-full break-words shrink-0"
-        classList={{
-          'text-ink-muted cursor-default': true,
-        }}
+        class={cn(
+          'inline-flex items-center leading-none shrink-0 py-1.5 h-6.5 transition-colors border border-edge-muted px-1.5',
+          {
+            'cursor-pointer hover:border-edge-muted hover:bg-hover/50':
+              props.canEdit,
+          }
+        )}
       >
         <Show when={displayValue} fallback={<EmptyValue />}>
           <span class="block truncate max-w-full">{displayValue}</span>

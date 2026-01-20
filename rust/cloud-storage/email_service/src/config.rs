@@ -50,6 +50,9 @@ pub struct Config {
     /// The SQS queue name for contacts service
     pub contacts_queue: String,
 
+    /// The amount of time to delay processing of a sent message (undo send window) - default 10s
+    pub sent_undo_delay_secs: u32,
+
     /// The SQS bucket for storing attachments
     pub attachment_bucket: String,
 
@@ -176,6 +179,11 @@ impl Config {
         let attachment_bucket =
             std::env::var("ATTACHMENT_BUCKET").context("ATTACHMENT_BUCKET must be provided")?;
 
+        let sent_undo_delay_secs: u32 = std::env::var("SENT_UNDO_DELAY_SECS")
+            .unwrap_or("10".to_string())
+            .parse::<u32>()
+            .unwrap();
+
         let notifications_enabled = std::env::var("NOTIFICATIONS_ENABLED")
             .context("NOTIFICATIONS_ENABLED must be provided")?
             .parse::<bool>()
@@ -286,6 +294,7 @@ impl Config {
             sfs_delete_queue,
             contacts_queue,
             attachment_bucket,
+            sent_undo_delay_secs,
             notifications_enabled,
             queue_max_messages,
             queue_wait_time_seconds,

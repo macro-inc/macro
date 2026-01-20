@@ -21,18 +21,10 @@ import type {
   Attachment,
   MessageWithBodyReplyless,
 } from '@service-email/generated/schemas';
-import { useEmail, useUserId } from '@service-gql/client';
+import { useEmail, useUserId } from '@core/context/user';
 import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  Match,
-  Show,
-  Switch,
-} from 'solid-js';
+import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { Portal } from 'solid-js/web';
 
 interface MessageContainerProps {
@@ -41,6 +33,7 @@ interface MessageContainerProps {
   isLastMessage: boolean;
   isFocused: boolean;
   isTarget: boolean;
+  isExpanded: boolean;
 }
 
 export function MessageContainer(props: MessageContainerProps) {
@@ -84,7 +77,7 @@ export function MessageContainer(props: MessageContainerProps) {
   );
 
   const isBodyExpanded = createMemo(() => {
-    return context.messages.isBodyExpanded(props.message.db_id ?? '');
+    return props.isExpanded;
   });
 
   const isNewMessage = createMemo(() => {
@@ -140,16 +133,6 @@ export function MessageContainer(props: MessageContainerProps) {
         (!a.mime_type?.startsWith('image/') &&
           !a.mime_type?.startsWith('video/'))
     );
-  });
-
-  createEffect(() => {
-    const id = props.message.db_id;
-    if (props.isLastMessage && id) {
-      context.messages.setExpandedBodyId(id, true);
-    }
-    if (isNewMessage() && id) {
-      context.messages.setExpandedBodyId(id, true);
-    }
   });
 
   const { replaceOrInsertSplit } = useSplitLayout();

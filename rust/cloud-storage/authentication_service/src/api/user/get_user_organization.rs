@@ -5,12 +5,10 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use doppleganger::Doppleganger;
 use model::response::ErrorResponse;
 use model::user::UserContext;
 
-#[derive(Debug, serde::Serialize, utoipa::ToSchema, Doppleganger)]
-#[dg(forward = auth_service_rpc::UserOrganizationResponse)]
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserOrganizationResponse {
     /// The id of the organization

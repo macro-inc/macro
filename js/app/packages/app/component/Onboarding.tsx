@@ -6,7 +6,7 @@ import { ActionSequence } from '@core/component/FormControls/ActionSequence';
 import MacroLogo from '@core/component/MacroLogo';
 import { useEmailLinks, useEmailLinksStatus } from '@core/email-link';
 import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
-import { updateUserInfo } from '@service-gql/client';
+import { updateUserInfo } from '@queries/auth/user-info';
 import { stripeServiceClient } from '@service-stripe/client';
 import { useNavigate, useSearchParams } from '@solidjs/router';
 import { createEffect, onCleanup, Show } from 'solid-js';

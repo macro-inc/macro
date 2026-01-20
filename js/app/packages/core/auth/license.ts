@@ -1,20 +1,15 @@
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { useOrganizationId } from '@core/user';
-import { useUserInfo } from '@service-gql/client';
+import { useLicenseStatus } from '@core/context/user';
 import { createMemo } from 'solid-js';
 
 export function useHasPaidAccess() {
-  const [userInfo] = useUserInfo();
+  const licenseStatus = useLicenseStatus();
   const organizationId = useOrganizationId();
   return createMemo((): boolean => {
     if (isNativeMobilePlatform()) return true;
 
-    const [erru, info] = userInfo();
-    if (erru) return false;
-    return (
-      !!organizationId() ||
-      info.licenseStatus === 'trialing' ||
-      info.licenseStatus === 'active'
-    );
+    const status = licenseStatus();
+    return !!organizationId() || status === 'trialing' || status === 'active';
   });
 }

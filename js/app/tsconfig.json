@@ -73,9 +73,6 @@
       "@block-project/*": [
         "./packages/block-project/*"
       ],
-      "@service-gql/*": [
-        "./packages/service-clients/service-gql/*"
-      ],
       "@service-auth/*": [
         "./packages/service-clients/service-auth/*"
       ],

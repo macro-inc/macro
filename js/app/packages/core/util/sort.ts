@@ -1,4 +1,4 @@
-import { useUserId } from '@service-gql/client';
+import { useUserId } from '@core/context/user';
 import type { Item } from '@service-storage/generated/schemas/item';
 
 export type SortType =

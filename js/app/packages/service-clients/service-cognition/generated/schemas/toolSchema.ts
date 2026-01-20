@@ -5,8 +5,14 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * Schema information for a single tool, serializable for API responses.
+ */
 export interface ToolSchema {
+  /** The JSON schema for the tool's input parameters. */
   inputSchema: unknown;
+  /** The name of the tool. */
   name: string;
+  /** The JSON schema for the tool's output. */
   outputSchema: unknown;
 }

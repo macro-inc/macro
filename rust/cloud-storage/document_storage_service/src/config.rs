@@ -41,8 +41,6 @@ env_var! {
         pub RedisUri,
         pub NotificationQueue,
         pub SearchEventQueue,
-        pub CommsServiceUrl,
-        pub EmailServiceUrl,
         pub ConnectionGatewayUrl,
         pub BulkUploadRequestsTable,
         pub UploadStagingBucket,

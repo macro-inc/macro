@@ -20,13 +20,6 @@ pub mod get_document_name_and_type;
 pub mod get_documents;
 pub mod get_documents_count;
 
-// Macro queries
-pub mod create_macro;
-pub mod delete_macro;
-pub mod get_macro;
-pub mod get_macros;
-pub mod patch_macro;
-
 // Text queries
 pub mod batch_verify;
 pub mod get_document_text;

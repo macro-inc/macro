@@ -399,6 +399,34 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     });
   };
 
+  const onExpandMessageBody = (messageID: string, expanded: boolean) => {
+    const listContainer = messagesListRef();
+
+    const lastScrollPosition = listContainer?.scrollTop;
+    const lastScrollHeight = listContainer?.scrollHeight;
+
+    setExpandedMessageBodyIds(messageID, expanded);
+
+    if (
+      !listContainer ||
+      lastScrollPosition == null ||
+      lastScrollHeight == null
+    )
+      return;
+
+    // Maintain the scroll position when expansion changes
+    queueMicrotask(() => {
+      const lastPos = lastScrollHeight + lastScrollPosition;
+      const currentPos = listContainer.scrollHeight + listContainer.scrollTop;
+
+      // List is reversed, we need a negative value to maintain scroll
+      // position
+      const diff = lastPos - currentPos;
+
+      messagesListRef()?.scrollBy({ top: diff });
+    });
+  };
+
   return (
     <Suspense>
       <EmailContext.Provider
@@ -431,8 +459,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
             list: createMemo(() => threadQuery.data?.filtered ?? []),
             unfiltered: createMemo(() => threadQuery.data?.messages ?? []),
             expandedBodyIds: expandedMessageBodyIds,
-            setExpandedBodyId: (id: string, expanded: boolean) =>
-              setExpandedMessageBodyIds(id, expanded),
+            setExpandedBodyId: onExpandMessageBody,
             isBodyExpanded: (id: string) => expandedMessageBodyIds[id] ?? false,
             replyingToMessageId,
             setReplyingToMessageId,

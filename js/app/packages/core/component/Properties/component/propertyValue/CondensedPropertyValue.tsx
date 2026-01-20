@@ -6,7 +6,6 @@ import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
 import type { Property } from '../../types';
 import {
-  isDateProperty,
   hasValue,
   isSelectProperty,
   isEntityProperty,
@@ -27,8 +26,7 @@ type CondensedPropertyValueProps = {
 export const CondensedPropertyValue: Component<CondensedPropertyValueProps> = (
   props
 ) => {
-  const { canEdit, openPropertyEditor, openDatePicker } =
-    usePropertiesContext();
+  const { canEdit, openPropertyEditor } = usePropertiesContext();
 
   const validValue = () => hasValue(props.property);
 
@@ -37,18 +35,7 @@ export const CondensedPropertyValue: Component<CondensedPropertyValueProps> = (
     e.preventDefault();
     e.stopPropagation();
     const target = e.currentTarget as HTMLElement;
-    if (isDateProperty(props.property)) {
-      openDatePicker(props.property, target);
-    } else {
-      openPropertyEditor(props.property, target);
-    }
-  };
-
-  const isUserProperty = () => {
-    return (
-      isEntityProperty(props.property) &&
-      props.property.specificEntityType === 'USER'
-    );
+    openPropertyEditor(props.property, target);
   };
 
   return (
@@ -59,11 +46,10 @@ export const CondensedPropertyValue: Component<CondensedPropertyValueProps> = (
     >
       <div
         class={cn(
-          'inline-flex items-center text-xs leading-none text-ink-muted shrink-0 py-1.5 h-6.5 transition-colors',
+          'inline-flex items-center text-xs leading-none text-ink-muted shrink-0 py-1.5 h-6.5 transition-colors border border-edge-muted/50 px-1.5',
           {
             'cursor-pointer hover:border-edge-muted hover:bg-hover/50': canEdit,
             'opacity-50': !validValue(),
-            'border border-edge-muted/50 px-1.5': !isUserProperty(),
           }
         )}
         onClick={handleClick}

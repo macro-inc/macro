@@ -2,8 +2,8 @@ import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { setHotkeyRoot, useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { withAnalytics } from '@coparse/analytics';
-import { useIsAuthenticated } from '@core/auth';
 import { ChannelsContextProvider } from '@core/context/channels';
+import { UserContextProvider } from '@core/context/user';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
@@ -17,7 +17,6 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createBlockOrchestrator } from '@core/orchestrator';
 import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
 import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
-import { isErr } from '@core/util/maybeResult';
 import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
 import { MaybeTauriProvider } from '@macro/tauri';
@@ -29,9 +28,13 @@ import {
 } from '@notifications';
 import { maybeHandlePlatformNotification } from '@notifications/notification-platform';
 import { setUser, useObserveRouting } from '@observability';
-import { fetchAndCacheHistory } from '@queries/history/history';
+import { prefetchHistory } from '@queries/history/history';
 import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
-import { gqlServiceClient } from '@service-gql/client';
+import {
+  invalidateUserInfo,
+  prefetchUserInfo,
+  useUserInfoQuery,
+} from '@queries/auth/user-info';
 import { MetaProvider, Title } from '@solidjs/meta';
 import {
   HashRouter,
@@ -48,10 +51,12 @@ import {
   createEffect,
   type JSX,
   lazy,
+  Match,
   onCleanup,
   onMount,
   type ParentProps,
   Show,
+  Switch,
 } from 'solid-js';
 import { currentThemeId } from '../../block-theme/signals/themeSignals';
 import {
@@ -61,9 +66,9 @@ import {
 } from '../../block-theme/utils/themeUtils';
 import { TauriRouteListener } from '../../tauri/src/TauriProvider';
 import { useSoundHover } from '../util/soundHover';
-import { updateCookie } from '../util/updateCookie';
+import { getLoginCookieOptions, updateCookie } from '@core/util/cookies';
 import { Login } from './auth/Login';
-import { LOGIN_COOKIE_AGE, setCookie } from './auth/Shared';
+import { setCookie } from './auth/Shared';
 import { makeEmailAuthComponents } from './EmailAuth';
 import { GlobalAppStateProvider } from './GlobalAppState';
 import { Layout } from './Layout';
@@ -76,8 +81,25 @@ import { setOpenWhichKey, WhichKey } from './WhichKey';
 
 const { track, identify, TrackingEvents } = withAnalytics();
 
+/** Syncs login cookie with auth state. Only updates on successful query (not errors/loading). */
+function useSyncLoginCookie() {
+  const userInfoQuery = useUserInfoQuery();
+
+  createEffect(() => {
+    if (!userInfoQuery.isSuccess) return;
+
+    const { value, ...options } = getLoginCookieOptions(
+      userInfoQuery.data.authenticated ?? false
+    );
+    updateCookie('login', value, options);
+  });
+}
+
 const rootPreload: RoutePreloadFunc = async (args) => {
   useObserveRouting();
+
+  await prefetchUserInfo();
+  prefetchHistory();
 
   // even though we are using the transformUrl prop, we may still need to replace the url in the history
   const url = new URL(window.location.href);
@@ -113,34 +135,8 @@ const rootPreload: RoutePreloadFunc = async (args) => {
     url.pathname = transformedPathname;
     window.history.replaceState(args.location.state, '', url);
   }
+
   track(TrackingEvents.AUTH.START);
-  // TODO: load general data like sidepanel, etc.
-  const userInfoResult = await gqlServiceClient.getUserInfo();
-  if (isErr(userInfoResult)) return;
-
-  const [, { id, email, hasChromeExt, ...userInfo }] = userInfoResult;
-  const platform = detect(navigator.userAgent);
-  const os = `${platform?.os?.replaceAll(' ', '')}`;
-
-  if (id) {
-    if (email) {
-      setUser({
-        ...userInfo,
-        id,
-        email,
-        hasChromeExt,
-        // ...utmObj,
-      });
-    }
-
-    if (PROD_MODE_ENV) {
-      identify(id, { email, os, hasChromeExt });
-    }
-
-    fetchAndCacheHistory().catch(() => {
-      // Non-blocking - command menu will still work without prefetch
-    });
-  }
 };
 
 function BasePathComponent() {
@@ -167,17 +163,25 @@ function BasePathComponent() {
     return;
   }
 
-  const authenticated = useIsAuthenticated();
-  if (!authenticated()) return <Navigate href="/signup" />;
+  const userInfoQuery = useUserInfoQuery();
 
   // Preserve existing query parameters when redirecting
   const params = new URLSearchParams(window.location.search);
   const queryString =
     params.toString().length > 0 ? `?${params.toString()}` : '';
-
   const redirectPath = `${DEFAULT_ROUTE}${queryString}`;
 
-  return <Navigate href={redirectPath} />;
+  return (
+    <Switch>
+      <Match when={userInfoQuery.isLoading}>{null}</Match>
+      <Match when={userInfoQuery.data?.authenticated === false}>
+        <Navigate href="/signup" />
+      </Match>
+      <Match when={userInfoQuery.data?.authenticated}>
+        <Navigate href={redirectPath} />
+      </Match>
+    </Switch>
+  );
 }
 
 function NotFound() {
@@ -296,6 +300,38 @@ export function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   );
 }
 
+/** Sets user info for observability, analytics, and login cookie. Must be inside QueryClientProvider. */
+function UserInfoSideEffects() {
+  useSyncLoginCookie();
+
+  // Set user info for observability and analytics
+  const userInfoQuery = useUserInfoQuery();
+  createEffect(() => {
+    if (userInfoQuery.isLoading) return;
+    const data = userInfoQuery.data;
+    if (!data?.id) return;
+
+    const platform = detect(navigator.userAgent);
+    const os = platform?.os?.replaceAll(' ', '') ?? '';
+
+    setUser({
+      id: data.id,
+      email: data.email,
+      hasChromeExt: data.hasChromeExt,
+    });
+
+    if (PROD_MODE_ENV) {
+      identify(data.id, {
+        email: data.email,
+        os,
+        hasChromeExt: data.hasChromeExt,
+      });
+    }
+  });
+
+  return null;
+}
+
 const clearBodyInlineStyleColor = () => {
   // index.html has inline script to set page color to theme surface to prevent page color flash.
   // removes page color inline style to prevent overriding main stylesheet
@@ -303,7 +339,6 @@ const clearBodyInlineStyleColor = () => {
 };
 
 export function Root() {
-  const isAuthenticated = useIsAuthenticated();
   setHotkeyRoot(useHotKeyRoot());
 
   useSubscribeToKeypress((context) => {
@@ -317,33 +352,8 @@ export function Root() {
   clearBodyInlineStyleColor();
 
   createEffect(() => {
-    const isAuth = isAuthenticated();
-
-    if (isAuth) {
-      const currentDate = new Date();
-      const oneMonthFromNow = new Date(
-        currentDate.setMonth(currentDate.getMonth() + 1)
-      );
-
-      updateCookie('login', 'true', {
-        expires: oneMonthFromNow,
-        maxAge: LOGIN_COOKIE_AGE,
-        path: '/',
-        sameSite: 'Lax',
-      });
-    } else {
-      updateCookie('login', 'false', {
-        expires: new Date(0),
-        maxAge: 0,
-        path: '/',
-        sameSite: 'Lax',
-      });
-    }
-  });
-
-  createEffect(() => {
     const cleanup = licenseChannel.subscribe(() => {
-      gqlServiceClient.getUserInfo.invalidate();
+      invalidateUserInfo();
     });
 
     onCleanup(() => cleanup());
@@ -386,34 +396,37 @@ export function Root() {
     <MaybeTauriProvider>
       <MetaProvider>
         <EntityProvider>
-          <ConfiguredGlobalAppStateProvider>
-            <ChannelsContextProvider>
-              <Title>{tabTitle()}</Title>
-              <MacroJump />
-              <Visor />
-              <Show when={ENABLE_WHICHKEY_OVERLAY}>
-                <WhichKey />
-              </Show>
-              <SuspenseContextComp fallback={<RootSuspenseFallback />}>
-                <IsomorphicRouter
-                  transformUrl={transformShortIdInUrlPathname}
-                  root={Layout}
-                  rootPreload={rootPreload}
-                  base={routerBase}
-                >
-                  {{
-                    path: '/',
-                    component: TauriRouteListener,
-                    children: ROUTES,
-                  }}
-                </IsomorphicRouter>
-              </SuspenseContextComp>
-              <ToastRegion />
-              <Show when={ENABLE_WEBSOCKET_DEBUGGER}>
-                <WebsocketDebugger />
-              </Show>
-            </ChannelsContextProvider>
-          </ConfiguredGlobalAppStateProvider>
+          <UserContextProvider>
+            <UserInfoSideEffects />
+            <ConfiguredGlobalAppStateProvider>
+              <ChannelsContextProvider>
+                <Title>{tabTitle()}</Title>
+                <MacroJump />
+                <Visor />
+                <Show when={ENABLE_WHICHKEY_OVERLAY}>
+                  <WhichKey />
+                </Show>
+                <SuspenseContextComp fallback={<RootSuspenseFallback />}>
+                  <IsomorphicRouter
+                    transformUrl={transformShortIdInUrlPathname}
+                    root={Layout}
+                    rootPreload={rootPreload}
+                    base={routerBase}
+                  >
+                    {{
+                      path: '/',
+                      component: TauriRouteListener,
+                      children: ROUTES,
+                    }}
+                  </IsomorphicRouter>
+                </SuspenseContextComp>
+                <ToastRegion />
+                <Show when={ENABLE_WEBSOCKET_DEBUGGER}>
+                  <WebsocketDebugger />
+                </Show>
+              </ChannelsContextProvider>
+            </ConfiguredGlobalAppStateProvider>
+          </UserContextProvider>
         </EntityProvider>
       </MetaProvider>
     </MaybeTauriProvider>

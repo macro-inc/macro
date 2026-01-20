@@ -5,6 +5,13 @@ publish = false
 version = "0.1.0"
 
 [features]
+ai_tools = [
+  "dep:ai",
+  "dep:async-trait",
+  "dep:schemars",
+  "models_soup/schema",
+  "ports",
+]
 axum = [
   "dep:axum",
   "dep:axum-extra",
@@ -22,7 +29,9 @@ ports = ["dep:tokio", "frecency/ports"]
 
 
 [dependencies]
+ai = { path = "../ai", optional = true }
 anyhow = { workspace = true }
+async-trait = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 chrono = { workspace = true }
@@ -42,6 +51,7 @@ models_pagination = { path = "../models_pagination" }
 models_soup = { path = "../models_soup" }
 non_empty = { path = "../non_empty" }
 recursion = { workspace = true }
+schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 sqlx = { workspace = true }
 thiserror = { workspace = true }

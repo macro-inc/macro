@@ -26,11 +26,6 @@ runs:
     - name: Install just
       uses: extractions/setup-just@v2
 
-    - name: Build auth_service_rpc WASM
-      shell: bash
-      working-directory: rust/cloud-storage/rpc-interface/auth_service
-      run: just generate
-
     - name: Setup bunfig.toml
       working-directory: js/app
       shell: bash

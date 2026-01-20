@@ -1,7 +1,0 @@
-out_dir := "../../../../js/app/packages/codegen/" + file_name(justfile_directory())
-
-generate:
-    wasm-pack build --target bundler --features client
-    rm -rf {{ out_dir }}
-    mkdir -p ../../../../js/app/packages/codegen
-    mv pkg {{ out_dir }}

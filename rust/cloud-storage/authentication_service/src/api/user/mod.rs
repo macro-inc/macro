@@ -1,4 +1,3 @@
-use auth_service_rpc::LegacyApiRpcRouterBuilder;
 use axum::{
     Router,
     routing::{delete, get, patch, post, put},
@@ -7,7 +6,7 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use tower::ServiceBuilder;
 use tower_cookies::CookieManagerLayer;
 
-use crate::api::{ApiContext, user::legacy_rpc::AuthRpcState};
+use crate::api::ApiContext;
 
 // needs to be public in api crate for swagger
 pub(in crate::api) mod create_user;
@@ -18,7 +17,6 @@ pub(in crate::api) mod get_user_info;
 pub(in crate::api) mod get_user_link_exists;
 pub(in crate::api) mod get_user_organization;
 pub(in crate::api) mod get_user_quota;
-pub(in crate::api) mod legacy_rpc;
 pub(in crate::api) mod patch_tutorial;
 pub(in crate::api) mod patch_user_group;
 pub(in crate::api) mod patch_user_onboarding;
@@ -27,6 +25,7 @@ pub(in crate::api) mod post_get_names_with_email;
 pub(in crate::api) mod post_profile_pictures;
 pub(in crate::api) mod put_name;
 pub(in crate::api) mod put_profile_picture;
+pub(in crate::api) mod stripe;
 
 pub fn router(state: ApiContext, jwt_args: JwtValidationArgs) -> Router<ApiContext> {
     Router::new()
@@ -38,10 +37,7 @@ pub fn router(state: ApiContext, jwt_args: JwtValidationArgs) -> Router<ApiConte
 }
 
 fn router_with_auth(state: ApiContext, jwt_args: JwtValidationArgs) -> Router<ApiContext> {
-    let rpc_router = LegacyApiRpcRouterBuilder::new(AuthRpcState(state.clone())).build();
-
     Router::new()
-        .merge(rpc_router)
         .route("/me", get(get_user_info::handler))
         .route("/me", delete(delete_user::handler))
         .route("/profile_pictures", post(post_profile_pictures::handler))
@@ -62,6 +58,15 @@ fn router_with_auth(state: ApiContext, jwt_args: JwtValidationArgs) -> Router<Ap
                 macro_middleware::user_permissions::attach_user_permissions::handler,
             )),
         )
+        .route("/stripe/checkout", post(stripe::create_checkout_session))
+        .route("/stripe/portal", post(stripe::create_portal_session))
+        .route(
+            "/legacy_user_permissions",
+            get(get_legacy_user_permissions::handler),
+        )
+        .route("/organization", get(get_user_organization::handler))
+        .route("/group", patch(patch_user_group::handler))
+        .route("/onboarding", patch(patch_user_onboarding::handler))
         .layer(
             ServiceBuilder::new()
                 .layer(CookieManagerLayer::new())
