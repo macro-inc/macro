@@ -24,7 +24,7 @@ import type { DateProperty } from '../../types';
 
 // Common CSS classes
 const MODAL_BASE =
-  'absolute z-action-menu bg-menu border border-edge-muted max-h-96 overflow-hidden flex flex-col w-full max-w-md';
+  'absolute z-action-menu bg-menu border border-edge-muted max-h-96 overflow-hidden flex flex-col w-full max-w-sm';
 
 export function EditPropertyValueModal(props: PropertyEditorProps) {
   const propertyOptionsQuery = usePropertyOptionsQuery(
