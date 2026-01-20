@@ -358,9 +358,11 @@ export function Channel(props: {
     on(splitContext.isPanelActive, (isPanelActive, wasPanelActive) => {
       if (wasPanelActive !== false) return;
 
-      if (isPanelActive && hasNotifications()) {
-        debouncedMarkAsRead();
+      if (!isPanelActive || !hasNotifications()) {
+        return;
       }
+
+      debouncedMarkAsRead();
     })
   );
 
