@@ -39,18 +39,50 @@ import type {
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue';
 import { Hotkey } from '@core/component/Hotkey';
-import SearchIcon from '@icon/regular/magnifying-glass.svg';
+
 import { fuzzyFilter } from '@core/util/fuzzy';
 import { mergeRefs } from '@solid-primitives/refs';
 import { PropertyDataTypeIcon } from '@core/component/Properties/utils';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
-import { useKeyPressed } from '@core/util/useKeyPressed';
+
+import { useEntitiesForProperty } from './hooks/useEntitiesForProperty';
+import {
+  getEntityName,
+  getEntityType,
+  type CombinedEntity,
+} from '@core/component/Properties/component/modal/shared/entityUtils';
+import { usePropertyEntityDisplay } from '@core/component/Properties/hooks/usePropertyEntityDisplay';
 
 type ListNavActions = {
   next: VoidFunction;
   previous: VoidFunction;
   select: VoidFunction;
 };
+
+function ListItem(props: {
+  id: string;
+  isSelected: boolean;
+  onClick: () => void;
+  onMouseEnter: () => void;
+  children: any;
+}) {
+  return (
+    <button
+      type="button"
+      id={props.id}
+      class={cn(
+        'flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 scroll-my-1',
+        {
+          'bg-hover bracket': props.isSelected,
+        }
+      )}
+      onClick={props.onClick}
+      onMouseEnter={props.onMouseEnter}
+    >
+      {props.children}
+    </button>
+  );
+}
 
 function createListKeybindings(elem: Accessor<HTMLElement | undefined>) {
   let actions: ListNavActions | undefined;
@@ -286,15 +318,9 @@ function PropertyList(props: {
         <For each={filteredProperties()}>
           {(property, index) => {
             return (
-              <button
-                type="button"
+              <ListItem
                 id={`property-editor-option-${index()}`}
-                class={cn(
-                  'flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2',
-                  {
-                    'bg-hover bracket': selector(index()),
-                  }
-                )}
+                isSelected={selector(index())}
                 onClick={() => setProperty(property)}
                 onMouseEnter={() => props.setFocusedIndexFromMouse(index())}
               >
@@ -302,7 +328,7 @@ function PropertyList(props: {
                 <div class="flex-1 text-left flex">
                   <p class="text-sm font-medium">{property.displayName}</p>
                 </div>
-              </button>
+              </ListItem>
             );
           }}
         </For>
@@ -381,7 +407,10 @@ function PropertyValueEditor(props: {
           setSearchValue={props.setSearchValue}
           selectedIndex={props.selectedIndex}
           setSelectedIndex={props.setSelectedIndex}
+          setSelectedIndexFromMouse={props.setSelectedIndexFromMouse}
           onSubmit={handleSubmit}
+          setKeybindings={props.setKeybindings}
+          setPlaceholder={props.setPlaceholder}
         />
       </Match>
       <Match
@@ -473,15 +502,9 @@ function SelectPropertyEditor(props: {
       >
         <For each={filteredOptions()}>
           {(option, index) => (
-            <button
-              type="button"
+            <ListItem
               id={`property-value-option-${index()}`}
-              class={cn(
-                'flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2',
-                {
-                  'bg-hover bracket': selector(index()),
-                }
-              )}
+              isSelected={selector(index())}
               onClick={() => props.onSubmit(option.id)}
               onMouseEnter={() => props.setSelectedIndexFromMouse(index())}
             >
@@ -494,7 +517,7 @@ function SelectPropertyEditor(props: {
                   <Hotkey shortcut={`${index() + 1}`} />
                 </div>
               </Show>
-            </button>
+            </ListItem>
           )}
         </For>
       </Show>
@@ -508,26 +531,106 @@ function EntityPropertyEditor(props: {
   setSearchValue: Setter<string>;
   selectedIndex: Accessor<number>;
   setSelectedIndex: Setter<number>;
+  setSelectedIndexFromMouse: (index: number) => void;
   onSubmit: (value: EntityReference) => void;
+  setKeybindings: (binding: ListNavActions) => void;
+  setPlaceholder: Setter<string>;
 }) {
-  // TODO: Implement entity search/selection logic
-  // This would typically use an entity search query
+  const { entities } = useEntitiesForProperty(
+    () => props.property,
+    props.searchValue
+  );
+
+  createEffect(() => {
+    const entityTypeLabel =
+      props.property?.specificEntityType?.toLowerCase() || 'entity';
+    props.setPlaceholder(`Search for ${entityTypeLabel}...`);
+  });
+
+  createEffect(() => {
+    props.searchValue();
+    props.setSelectedIndex(0);
+  });
+
+  props.setKeybindings({
+    select: () => {
+      const selected = entities()[props.selectedIndex()];
+      if (selected) {
+        const entityRef: EntityReference = {
+          entity_id: selected.id,
+          entity_type: getEntityType(selected),
+        };
+        props.onSubmit(entityRef);
+      }
+    },
+    next: () => {
+      const len = entities().length;
+      props.setSelectedIndex((prev) => (prev + 1) % len);
+    },
+    previous: () => {
+      const len = entities().length;
+      props.setSelectedIndex((prev) => (prev - 1 + len) % len);
+    },
+  });
+
+  createEffect(() => {
+    const index = props.selectedIndex();
+    const elem = document.getElementById(`entity-option-${index}`);
+    if (elem) {
+      elem.scrollIntoView({ block: 'nearest' });
+    }
+  });
+
+  const selector = createSelector(props.selectedIndex);
+
+  return (
+    <div class="p-1 max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden">
+      <Show
+        when={entities().length > 0}
+        fallback={
+          <div class="text-center py-4 text-ink-muted text-sm">
+            {props.searchValue().trim()
+              ? 'No matching entities found'
+              : 'No entities available'}
+          </div>
+        }
+      >
+        <For each={entities()}>
+          {(entity, index) => (
+            <ListItem
+              id={`entity-option-${index()}`}
+              isSelected={selector(index())}
+              onClick={() => {
+                const entityRef: EntityReference = {
+                  entity_id: entity.id,
+                  entity_type: getEntityType(entity),
+                };
+                props.onSubmit(entityRef);
+              }}
+              onMouseEnter={() => props.setSelectedIndexFromMouse(index())}
+            >
+              <EntityRowContent entity={entity} />
+            </ListItem>
+          )}
+        </For>
+      </Show>
+    </div>
+  );
+}
+
+function EntityRowContent(props: { entity: CombinedEntity }) {
+  const { icon } = usePropertyEntityDisplay(
+    () => props.entity.id,
+    () => getEntityType(props.entity)
+  );
 
   return (
     <>
-      <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted shrink-0">
-        <SearchIcon class="h-4 w-4 text-ink-muted" />
-        <SearchInput
-          placeHolder={`Search for ${props.property?.displayName}...`}
-          value={props.searchValue}
-          setValue={props.setSearchValue}
-          focusedIndex={props.selectedIndex}
-          setFocusedIndex={props.setSelectedIndex}
-        />
-      </div>
-      <div class="p-4 text-center text-ink-muted text-sm">
-        Entity search coming soon
-        {/* TODO: Implement entity search results list */}
+      <span class="size-4 flex items-center justify-center shrink-0">
+        {icon()}
+      </span>
+      <div class="flex-1 text-left">
+        <p class="text-sm font-medium">{getEntityName(props.entity)}</p>
       </div>
     </>
   );
@@ -688,15 +791,9 @@ function DatePropertyEditor(props: {
         >
           <For each={dateOptions()}>
             {(option, index) => (
-              <button
-                type="button"
+              <ListItem
                 id={`date-option-${index()}`}
-                class={cn(
-                  'flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2',
-                  {
-                    'bg-hover bracket': selector(index()),
-                  }
-                )}
+                isSelected={selector(index())}
                 onClick={() => props.onSubmit(option.date)}
                 onMouseEnter={() => props.setSelectedIndexFromMouse(index())}
               >
@@ -706,7 +803,7 @@ function DatePropertyEditor(props: {
                 <span class="text-xs text-ink-muted">
                   {option.secondaryText}
                 </span>
-              </button>
+              </ListItem>
             )}
           </For>
         </Show>
