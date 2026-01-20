@@ -303,6 +303,8 @@ pub async fn insert_message_to_send(
 
     contacts::upsert_message::upsert_message_recipients(tx, message_db_id, &recipients).await?;
 
+    threads::update::update_thread_metadata(tx, thread_id, db_message_to_send.link_id).await?;
+
     Ok(())
 }
 

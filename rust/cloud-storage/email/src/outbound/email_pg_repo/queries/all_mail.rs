@@ -98,7 +98,6 @@ pub(crate) async fn all_mail_preview_cursor(
                 m.from_name
             FROM email_messages m
             WHERE m.thread_id = t.id
-              AND m.is_draft = FALSE
               AND NOT EXISTS (
                   SELECT 1 FROM email_message_labels ml
                   WHERE ml.message_id = m.id

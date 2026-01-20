@@ -178,11 +178,23 @@ pub async fn update_thread_metadata(
         .map(|msg| msg.internal_date_ts)
         .unwrap_or_else(|| None);
 
-    let latest_non_spam_message_ts = messages
+    // latest non-spam message timestamp is the latest macro draft or provider message
+    let latest_provider_message_ts = messages
         .iter()
         .find(|msg| !is_spam_or_trash(msg))
         .map(|msg| msg.internal_date_ts)
         .unwrap_or_else(|| None);
+
+    let latest_draft_ts = messages
+        .iter()
+        .filter(|msg| msg.is_draft && msg.provider_id.is_none())
+        .map(|msg| msg.updated_at)
+        .max();
+
+    let latest_non_spam_message_ts = [latest_provider_message_ts, latest_draft_ts]
+        .into_iter()
+        .flatten()
+        .max();
 
     update_db_thread_metadata(
         &mut *tx,
