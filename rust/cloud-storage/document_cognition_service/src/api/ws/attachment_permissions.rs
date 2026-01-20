@@ -18,7 +18,6 @@ pub async fn ensure_user_attachment_access(
             async move {
                 get_users_access_level_v2(
                     &ctx.db,
-                    &ctx.comms_service_client,
                     &user_ctx.user_id,
                     attachment_id.as_str(),
                     &attachment_type

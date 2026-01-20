@@ -52,7 +52,6 @@ pub(crate) struct ApiContext {
     pub soup_router_state: DssSoupState,
     pub sqs_client: Arc<sqs_client::SQS>,
     pub macro_notify_client: Arc<macro_notify::MacroNotify>,
-    pub comms_service_client: Arc<comms_service_client::CommsServiceClient>,
     pub conn_gateway_client: Arc<ConnectionGatewayClient>,
     pub sync_service_client: Arc<SyncServiceClient>,
     pub system_properties_service: Arc<SystemPropertiesService>,

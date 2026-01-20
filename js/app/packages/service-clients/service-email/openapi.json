@@ -2698,6 +2698,10 @@
         "properties": {
           "draft": {
             "$ref": "#/components/schemas/MessageToSend"
+          },
+          "send_time": {
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         }
       },

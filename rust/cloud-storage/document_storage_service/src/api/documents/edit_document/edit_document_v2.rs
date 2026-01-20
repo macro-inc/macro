@@ -119,7 +119,6 @@ async fn edit_document_transaction(
     if let Some(share_permission) = share_permission {
         update_user_item_access(
             &mut transaction,
-            &ctx.comms_service_client,
             &user_context.user_id,
             &document_context.document_id,
             "document",

@@ -4,6 +4,7 @@ use doppleganger::Mirror;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::comms::ChannelId;
+use sqlx::Transaction;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
@@ -14,6 +15,42 @@ pub enum DbParticipantRole {
     Admin,
     Member,
     Owner,
+}
+
+#[tracing::instrument(skip(tsx))]
+pub async fn get_participants_tsx<'t>(
+    tsx: &mut Transaction<'t, Postgres>,
+    channel_id: &Uuid,
+) -> Result<Vec<models_comms::channel::ChannelParticipant>, sqlx::Error> {
+    let participants = sqlx::query!(
+        r#"
+        SELECT
+            user_id,
+            channel_id,
+            joined_at,
+            left_at,
+            role as "role: DbParticipantRole"
+        FROM comms_channel_participants
+        WHERE channel_id = $1
+        ORDER BY joined_at DESC
+        "#,
+        channel_id
+    )
+    .try_map(|row| {
+        Ok(models_comms::channel::ChannelParticipant {
+            channel_id: ChannelId(row.channel_id),
+            user_id: macro_user_id::user_id::MacroUserIdStr::parse_from_str(&row.user_id)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+                .into_owned(),
+            role: DbParticipantRole::mirror(row.role),
+            joined_at: row.joined_at,
+            left_at: row.left_at,
+        })
+    })
+    .fetch_all(tsx.as_mut())
+    .await?;
+
+    Ok(participants)
 }
 
 #[tracing::instrument(skip(db))]

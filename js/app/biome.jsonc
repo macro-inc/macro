@@ -142,7 +142,7 @@
       }
     },
     {
-      "includes": ["packages/service-clients/**"],
+      "includes": ["packages/service-clients/**/generated/**"],
       "assist": {
         "actions": {
           "source": {

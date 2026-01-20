@@ -314,12 +314,6 @@ const cloudStorageService = new CloudStorageService(
         value: pulumi.interpolate`${searchEventQueueName}`,
       },
       {
-        name: 'COMMS_SERVICE_URL',
-        value: `https://comms-service${
-          stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
-      },
-      {
         name: 'DOCUMENT_PERMISSION_JWT_SECRET_KEY',
         value: pulumi.interpolate`${DOCUMENT_STORAGE_PERMISSIONS_KEY}`,
       },

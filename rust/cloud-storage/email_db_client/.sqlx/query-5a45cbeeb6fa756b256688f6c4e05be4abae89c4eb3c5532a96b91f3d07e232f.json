@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT link_id, message_id, send_time, sent\n        FROM email_scheduled_messages\n        WHERE message_id = $1 and sent = false\n        ",
+  "query": "\n        SELECT link_id, message_id, send_time, sent, processing\n        FROM email_scheduled_messages\n        WHERE message_id = $1 and sent = false\n        ",
   "describe": {
     "columns": [
       {
@@ -22,6 +22,11 @@
         "ordinal": 3,
         "name": "sent",
         "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "processing",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
@@ -33,8 +38,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "afc61b70dea215da99c078aeb2c7b45549cbf1c118b342ac0644921d3978869d"
+  "hash": "5a45cbeeb6fa756b256688f6c4e05be4abae89c4eb3c5532a96b91f3d07e232f"
 }

@@ -1,4 +1,3 @@
-import type { BlockChannelProps } from '@block-channel/component/Block';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
@@ -73,12 +72,10 @@ export const openEntityInSplitFromUnifiedList = async (
   // Build params for channel entities with location
   const params =
     entity.type === 'channel' && location?.type === 'channel'
-      ? ({
-          target: {
-            threadId: location.threadId,
-            messageId: location.messageId,
-          },
-        } as BlockChannelProps)
+      ? {
+          [CHANNEL_PARAMS.message]: location.messageId,
+          [CHANNEL_PARAMS.thread]: location.threadId,
+        }
       : undefined;
 
   // Create or replace split based on openInNewSplit option

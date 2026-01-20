@@ -9,6 +9,7 @@ config:
   email-service:internal_auth_key: document-storage-service-auth-key-prod
   email-service:cf_private_key: email-attachments-private-key-prod
   email-service:notifications_enabled: true
+  email-service:sent_undo_delay_secs: 5
   email-service:redis_rate_limit_reqs: 14000
   email-service:redis_rate_limit_reqs_backfill: 13000
   email-service:redis_rate_limit_window_secs: 60

@@ -15,8 +15,6 @@ export function setCookie(name: string, value: string, days: number) {
   document.cookie = `${name}=${encodeURIComponent(value)}${expires}; path=/`;
 }
 
-export const LOGIN_COOKIE_AGE = 2592000; // 1 month in seconds
-
 export const identifyUser = async () => {
   invalidateOrganization();
   await invalidateUserInfo();

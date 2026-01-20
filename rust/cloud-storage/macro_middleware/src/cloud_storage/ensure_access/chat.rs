@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, sync::Arc};
+use std::marker::PhantomData;
 
 use super::get_users_access_level_v2;
 use crate::cloud_storage::ensure_access::{AccessLevelErr, BuildAccessLevel};
@@ -7,7 +7,6 @@ use axum::{
     extract::{FromRef, FromRequestParts},
     http::request::Parts,
 };
-use comms_service_client::CommsServiceClient;
 use model::{chat::ChatBasic, user::axum_extractor::MacroUserExtractor};
 use models_permissions::share_permission::access_level::AccessLevel;
 use sqlx::PgPool;
@@ -25,7 +24,6 @@ impl<T, S> FromRequestParts<S> for ChatAccessLevelExtractor<T>
 where
     T: BuildAccessLevel,
     PgPool: FromRef<S>,
-    Arc<CommsServiceClient>: FromRef<S>,
     S: Send + Sync + 'static,
 {
     type Rejection = AccessLevelErr;
@@ -33,7 +31,6 @@ where
     #[tracing::instrument(ret, err, skip(parts, state))]
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let db = PgPool::from_ref(state);
-        let comms_client = <Arc<CommsServiceClient>>::from_ref(state);
 
         let MacroUserExtractor {
             macro_user_id,
@@ -61,15 +58,10 @@ where
             return Err(AccessLevelErr::UnAuthorized);
         }
 
-        let access_level: Option<AccessLevel> = get_users_access_level_v2(
-            &db,
-            &comms_client,
-            &user_context.user_id,
-            &chat_context.id,
-            "chat",
-        )
-        .await
-        .map_err(AccessLevelErr::DbErr)?;
+        let access_level: Option<AccessLevel> =
+            get_users_access_level_v2(&db, &user_context.user_id, &chat_context.id, "chat")
+                .await
+                .map_err(AccessLevelErr::DbErr)?;
 
         let desired = T::into_access_level();
 

@@ -283,12 +283,19 @@ pub struct MessageToSend {
     pub send_time: Option<DateTime<Utc>>,
 }
 
+/// Represents a scheduled message that will be sent to the provider at a later time.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScheduledMessage {
+    /// the id of the link that the message is associated with.
     pub link_id: Uuid,
+    /// the id of the message in our database.
     pub message_id: Uuid,
+    /// the time the message is scheduled to be sent.
     pub send_time: DateTime<Utc>,
+    /// whether the message has been sent to the provider yet.
     pub sent: bool,
+    /// whether the message is currently being processed by the background job.
+    pub processing: bool,
 }
 
 impl From<db::message::ScheduledMessage> for ScheduledMessage {
@@ -298,6 +305,7 @@ impl From<db::message::ScheduledMessage> for ScheduledMessage {
             message_id: other.message_id,
             send_time: other.send_time,
             sent: other.sent,
+            processing: other.processing,
         }
     }
 }

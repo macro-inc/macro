@@ -379,6 +379,31 @@ pub async fn get_macro_id_from_thread_id(
     Ok(macro_id)
 }
 
+/// COPIED FROM COMMS_DB_CLIENT and is needed in the `get_users_access_level_v2`
+/// in macro_middleware
+pub async fn check_channels_for_user(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    user_id: &str,
+    channel_ids: &[uuid::Uuid],
+) -> Result<Vec<uuid::Uuid>, sqlx::Error> {
+    let channels = sqlx::query!(
+        r#"
+        SELECT c.id
+        FROM comms_channels c
+        INNER JOIN comms_channel_participants cp ON cp.channel_id = c.id 
+        WHERE cp.user_id = $1 AND cp.left_at IS NULL
+        AND c.id = ANY($2::uuid[])
+        "#,
+        user_id,
+        channel_ids
+    )
+    .map(|row| row.id)
+    .fetch_all(db)
+    .await?;
+
+    Ok(channels)
+}
+
 /// Retrieves all document, chat, and project IDs associated with the given share permission IDs
 /// Returns a map where the key is the share_permission_id, and the value is a tuple containing the
 /// item id and type
