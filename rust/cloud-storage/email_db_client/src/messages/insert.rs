@@ -314,13 +314,13 @@ async fn process_scheduled_message(
     send_time: Option<chrono::DateTime<Utc>>,
     message_db_id: Uuid,
 ) -> anyhow::Result<()> {
-    if send_time.is_some() {
+    if let Some(send_time) = send_time {
         upsert_scheduled_message(
             tx,
             ScheduledMessage {
                 link_id: service_message.link_id,
                 message_id: message_db_id,
-                send_time: send_time.unwrap(),
+                send_time,
                 sent: false,
                 processing: false,
             },
