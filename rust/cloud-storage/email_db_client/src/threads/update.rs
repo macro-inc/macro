@@ -3,6 +3,7 @@ use anyhow::Context;
 use chrono::{DateTime, Utc};
 use models_email::email::service::message::{is_inbound, is_outbound, is_spam_or_trash};
 use models_email::service;
+use models_email::service::message::is_macro_draft;
 use sqlx::types::Uuid;
 
 /// Updates a thread's metadata
@@ -161,16 +162,28 @@ pub async fn update_thread_metadata(
             .labels
             .iter()
             .any(|label| label.provider_label_id == service::label::system_labels::INBOX)
+            || (is_macro_draft(message))
     });
 
     // if any message in the thread is unread, the thread is considered unread in the FE
     let is_read = !messages.iter().any(|message| !message.is_read);
+
+    let latest_draft_ts = messages
+        .iter()
+        .filter(|msg| is_macro_draft(msg))
+        .map(|msg| msg.updated_at)
+        .max();
 
     let latest_inbound_timestamp_ts = messages
         .iter()
         .find(|msg| is_inbound(msg))
         .map(|msg| msg.internal_date_ts)
         .unwrap_or_else(|| None);
+
+    let latest_inbound_or_draft_ts = [latest_inbound_timestamp_ts, latest_draft_ts]
+        .into_iter()
+        .flatten()
+        .max();
 
     let latest_outbound_message_ts = messages
         .iter()
@@ -185,12 +198,6 @@ pub async fn update_thread_metadata(
         .map(|msg| msg.internal_date_ts)
         .unwrap_or_else(|| None);
 
-    let latest_draft_ts = messages
-        .iter()
-        .filter(|msg| msg.is_draft && msg.provider_id.is_none())
-        .map(|msg| msg.updated_at)
-        .max();
-
     let latest_non_spam_message_ts = [latest_provider_message_ts, latest_draft_ts]
         .into_iter()
         .flatten()
@@ -202,7 +209,7 @@ pub async fn update_thread_metadata(
         link_id,
         inbox_visible,
         is_read,
-        latest_inbound_timestamp_ts,
+        latest_inbound_or_draft_ts,
         latest_outbound_message_ts,
         latest_non_spam_message_ts,
     )

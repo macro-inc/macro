@@ -94,7 +94,6 @@ pub(crate) async fn new_inbox_preview_cursor(
                    m.is_draft
             FROM email_messages m
             WHERE m.thread_id = t.id
-              AND m.is_draft = FALSE
               AND NOT EXISTS (
                 SELECT 1 FROM email_message_labels ml
                 WHERE ml.message_id = m.id
