@@ -8,6 +8,7 @@ import {
   markNotificationsForEntityAsRead,
 } from '../notification-helpers';
 import type { NotificationSource } from '../notification-source';
+import { debounce } from '@solid-primitives/scheduled';
 
 const DEFAULT_DEBOUNCE_TIME = 2_000;
 
@@ -16,7 +17,9 @@ type DebouncedMarkerProps = {
   debounceTime?: number;
 };
 
-export const makeDebouncedMarker = (props: DebouncedMarkerProps) => {
+export const makeDebouncedMarker = (
+  props: DebouncedMarkerProps
+): VoidFunction => {
   const debounceTime = props.debounceTime ?? DEFAULT_DEBOUNCE_TIME;
   let timeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -26,11 +29,7 @@ export const makeDebouncedMarker = (props: DebouncedMarkerProps) => {
     }
   });
 
-  const trigger = () => {
-    timeout = setTimeout(() => {
-      props.debouncedFn();
-    }, debounceTime);
-  };
+  const trigger = debounce(props.debouncedFn, debounceTime);
 
   return trigger;
 };

@@ -326,6 +326,7 @@ export function Channel(props: {
   const debouncedMarkAsRead = makeDebouncedChannelNoficiationReadMarker({
     notificationSource: notificationSource,
     channelId,
+    debounceTime: 500,
   });
 
   // Listen for any incoming notifications and while the panel is active,
