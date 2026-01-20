@@ -1,4 +1,3 @@
-import { Hotkey } from '@core/component/Hotkey';
 import { useDateSearch } from '@core/component/KeyboardDatePicker/useDateSearch';
 import { useSearchInputFocus } from '@core/component/Properties/utils';
 import CalendarIcon from '@icon/regular/calendar.svg';
@@ -9,11 +8,14 @@ import {
   createMemo,
   createSignal,
   For,
+  on,
   onCleanup,
   onMount,
   Show,
 } from 'solid-js';
 import type { DateProperty } from '@core/component/Properties/types';
+import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
+import { isModality } from '@core/mobile/inputModality';
 
 type DateSelectorProps = {
   property: DateProperty;
@@ -25,9 +27,6 @@ type DateSelectorProps = {
 export const PropertyDateSelector = (props: DateSelectorProps) => {
   const [searchQuery, setSearchQuery] = createSignal('');
   const [selectedIndex, setSelectedIndex] = createSignal(0);
-  const [keyboardNavigationTimeout, setKeyboardNavigationTimeout] =
-    createSignal<number | null>(null);
-
   let searchInputRef!: HTMLInputElement;
 
   const dateOptions = useDateSearch({
@@ -35,23 +34,15 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
     baseDate: props.selectedDate || undefined,
   });
 
-  createEffect(() => {
-    const options = dateOptions();
-    if (options.length === 0) {
-      setSelectedIndex(0);
-    } else {
-      setSelectedIndex(Math.min(selectedIndex(), options.length - 1));
-    }
-  });
-
-  const isKeyboardNavigating = () => {
-    const timeout = keyboardNavigationTimeout();
-    return timeout !== null && Date.now() - timeout < 150;
-  };
-
-  const shouldShowHotkeys = createMemo(() => {
-    return !searchQuery().trim() && dateOptions().length <= 9;
-  });
+  createEffect(
+    on(dateOptions, (options) => {
+      if (options.length === 0) {
+        setSelectedIndex(0);
+      } else {
+        setSelectedIndex(Math.min(selectedIndex(), options.length - 1));
+      }
+    })
+  );
 
   const handleSelectDate = (date: Date) => {
     props.onSelectDate(date);
@@ -85,11 +76,9 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
 
     if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'j')) {
       e.preventDefault();
-      setKeyboardNavigationTimeout(Date.now());
       setSelectedIndex((prev) => (prev + 1) % options.length);
     } else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'k')) {
       e.preventDefault();
-      setKeyboardNavigationTimeout(Date.now());
       setSelectedIndex((prev) => (prev - 1 + options.length) % options.length);
     } else if (e.key === 'Enter') {
       e.preventDefault();
@@ -196,7 +185,7 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
                   }`}
                   onClick={() => handleSelectDate(option.date)}
                   onMouseEnter={() => {
-                    if (!isKeyboardNavigating()) {
+                    if (isModality('mouse')) {
                       setSelectedIndex(index());
                     }
                   }}
@@ -215,11 +204,6 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
                     <span class="text-xs text-ink-muted">
                       {option.secondaryText}
                     </span>
-                    <Show when={shouldShowHotkeys() && index() < 9}>
-                      <div class="text-[0.625rem] px-1.5 py-0.5 border border-edge-muted text-ink-muted font-mono rounded-xs">
-                        <Hotkey shortcut={`${index() + 1}`} />
-                      </div>
-                    </Show>
                   </div>
                 </div>
               )}
