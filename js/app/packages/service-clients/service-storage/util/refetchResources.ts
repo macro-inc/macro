@@ -1,9 +1,9 @@
 import { refetchDocumentShareButtonResource } from '@core/component/TopBar/ShareButton';
+import { invalidateDeletedItems } from '@queries/storage/deleted';
+import { invalidatePins } from '@queries/storage/pins';
+import { invalidateProjects } from '@queries/storage/projects';
 import { invalidateUserQuota } from '@service-auth/userQuota';
-import { refetchDeletedItems } from '@service-storage/deleted';
-import { refetchHistory } from '@service-storage/history';
-import { refetchPins } from '@service-storage/pins';
-import { refetchProjects } from '@service-storage/projects';
+import { refetchHistory } from '@queries/history/history';
 
 type StorageServiceResource = 'documents' | 'history' | 'pins' | 'projects';
 type RefetchResourcesOptions = {
@@ -17,15 +17,15 @@ export function refetchResources(options?: RefetchResourcesOptions) {
     // refetchDocuments();
     invalidateUserQuota();
     refetchHistory();
-    refetchPins();
+    invalidatePins();
     refetchProjectResources();
-    refetchDeletedItems();
+    invalidateDeletedItems();
     return;
   }
 }
 
-export async function refetchProjectResources(force = false) {
-  await refetchProjects(force);
+export async function refetchProjectResources(_force = false) {
+  await invalidateProjects();
 
   refetchDocumentShareButtonResource();
 }

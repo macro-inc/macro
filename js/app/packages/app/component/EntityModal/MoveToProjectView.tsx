@@ -10,8 +10,8 @@ import Fragment from '@core/util/Fragment';
 import { scrollToKeepGap } from '@core/util/scrollToKeepGap';
 import CaretRight from '@icon/regular/caret-right.svg';
 import ArrowRight from '@phosphor-icons/core/regular/arrow-right.svg?component-solid';
+import { useProjectsQuery } from '@queries/storage/projects';
 import type { Project } from '@service-storage/generated/schemas';
-import { useProjects } from '@service-storage/projects';
 import {
   createEffect,
   createMemo,
@@ -33,7 +33,8 @@ export const MoveToProjectView = (props: {
 }) => {
   let listRef!: HTMLDivElement;
   const moveToProjectMutation = createMoveToProjectDssEntityMutation();
-  const projects = useProjects();
+  const projectsQuery = useProjectsQuery();
+  const projects = () => projectsQuery.data ?? [];
   const [searchQuery, setSearchQuery] = createSignal('');
   const [selectedProject, setSelectedProject] = createSignal<Project | null>(
     null

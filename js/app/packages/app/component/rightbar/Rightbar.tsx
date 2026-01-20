@@ -51,7 +51,7 @@ import {
   cognitionWebsocketServiceClient,
 } from '@service-cognition/client';
 import { createCognitionWebsocketEffect } from '@service-cognition/websocket';
-import { refetchHistory, useHistory } from '@service-storage/history';
+import { invalidateHistory, useHistoryQuery } from '@queries/history/history';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
 import type { LexicalEditor } from 'lexical';
 import {
@@ -112,9 +112,11 @@ const getChatData = async (chatId: string): Promise<ChatData> => {
 };
 
 const usePersistentChats = () => {
-  const history = useHistory();
+  const historyQuery = useHistoryQuery();
   return createMemo(() =>
-    history().filter((item) => item.type === 'chat' && item.isPersistent)
+    (historyQuery.data ?? []).filter(
+      (item) => item.type === 'chat' && item.isPersistent
+    )
   );
 };
 
@@ -541,9 +543,9 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
       // TODO: move this into a separate resource so we don't have to refetch history
       // refetch history immediately to have the new chat id
       // then rename again when the server provides a default name
-      refetchHistory();
+      invalidateHistory();
       waitChatRename(newChatId).then((_name) => {
-        refetchHistory();
+        invalidateHistory();
       });
       return await onSend(response);
     } else if (request.type === 'send') {

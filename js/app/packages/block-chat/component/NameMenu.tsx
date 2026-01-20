@@ -29,13 +29,13 @@ import { useEmail } from '@queries/auth/user-info';
 import {
   refetchHistory,
   useUpdatedDssItemName,
-} from '@service-storage/history';
+} from '@queries/history/history';
 import {
+  invalidatePins,
   pinItem,
-  refetchPins,
   unpinItem,
-  usePinnedIds,
-} from '@service-storage/pins';
+  usePinnedIdsQuery,
+} from '@queries/storage/pins';
 import { refetchResources } from '@service-storage/util/refetchResources';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
@@ -50,11 +50,11 @@ type Props = { data: ChatData };
 export function ChatNameMenu(props: Props) {
   const [chatMenuOpen, setChatMenuOpen] = createSignal(false);
   const isAuthenticated = useIsAuthenticated();
-  const pinnedIds = usePinnedIds();
+  const pinnedIdsQuery = usePinnedIdsQuery();
   const panelContext = useSplitPanelOrThrow();
 
   const isPinned = createCallback(() => {
-    return pinnedIds().includes(props.data.chat.id);
+    return (pinnedIdsQuery.data ?? []).includes(props.data.chat.id);
   });
 
   const mutatePin = (
@@ -81,7 +81,7 @@ export function ChatNameMenu(props: Props) {
     });
     if (isErr(maybeRenameResult)) return;
 
-    if (isPinned()) refetchPins();
+    if (isPinned()) invalidatePins();
 
     refetchHistory();
   };
@@ -92,7 +92,7 @@ export function ChatNameMenu(props: Props) {
     });
     if (isErr(maybeDeletedChat)) return;
 
-    if (isPinned()) refetchPins();
+    if (isPinned()) invalidatePins();
 
     refetchResources();
     panelContext?.handle.close();

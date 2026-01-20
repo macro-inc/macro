@@ -11,14 +11,16 @@ import type {
   FileType,
 } from '@service-cognition/generated/schemas';
 import { emailClient } from '@service-email/client';
-import { useHistory } from '@service-storage/history';
+import { useHistoryQuery } from '@queries/history/history';
 import { useQuery } from '@tanstack/solid-query';
 import type { SplitContent } from 'app/component/split-layout/layoutManager';
 import { globalSplitManager } from 'app/signal/splitLayout';
 import type { Accessor } from 'solid-js';
 import { createMemo } from 'solid-js';
 
-type Item = ReturnType<ReturnType<typeof useHistory>>[number] | null;
+import type { HistoryItem } from '@queries/history/history';
+
+type Item = HistoryItem | null;
 
 function convertSplitToAttachment(
   split: SplitContent,
@@ -92,7 +94,7 @@ function convertSplitToAttachment(
 }
 
 export function useTabAttachments(): Accessor<ChatAttachmentWithName[]> {
-  const history = useHistory();
+  const historyQuery = useHistoryQuery();
   const channelsContext = useChannelsContext();
   const channels = channelsContext.channels;
   const emails = useEmails();
@@ -103,7 +105,7 @@ export function useTabAttachments(): Accessor<ChatAttachmentWithName[]> {
     if (!splitManager) return [];
 
     const splits = splitManager.splits();
-    const historyItems = history();
+    const historyItems = historyQuery.data ?? [];
     const channelList = channels();
     const emailList = emails();
 

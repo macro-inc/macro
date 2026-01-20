@@ -10,7 +10,7 @@ import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import type { DocumentMentionInfo } from '@lexical-core';
 import type { Item } from '@service-storage/generated/schemas/item';
-import { useHistory } from '@service-storage/history';
+import { useHistoryQuery } from '@queries/history/history';
 import fuzzy from 'fuzzy';
 import {
   createMemo,
@@ -41,13 +41,13 @@ function truncate(str: string, maxLength: number = 30) {
 }
 
 export function AttachMenu(props: AttachMenuProps) {
-  const history = useHistory();
+  const historyQuery = useHistoryQuery();
   const attachedItems = () => props.attachedItems?.() ?? [];
 
   const [input, setInput] = createSignal('');
 
   const baseHistory = createMemo(() => {
-    return [...history()].filter(
+    return [...(historyQuery.data ?? [])].filter(
       (item) => !attachedItems().find((a) => a.id === item.id)
     );
   });

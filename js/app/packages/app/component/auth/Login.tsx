@@ -46,7 +46,6 @@ export function Login() {
       const session_code = searchParams.session_code;
       console.log({ session_code });
       unsetTokenPromise();
-      authServiceClient.getUserInfo.invalidate();
       invalidateUserInfo();
       authServiceClient.sessionLogin({ session_code }).then((res) => {
         console.log({ res });
@@ -65,7 +64,6 @@ export function Login() {
     setActiveModal();
     unsetTokenPromise();
     invalidateUserInfo();
-    authServiceClient.getUserInfo.invalidate();
     const userInfo = await prefetchUserInfo();
     if (
       userInfo?.authenticated &&

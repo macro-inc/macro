@@ -18,7 +18,7 @@ import {
 } from '@macro-entity';
 import XIcon from '@phosphor-icons/core/assets/regular/x.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { useHistory } from '@service-storage/history';
+import { useHistoryQuery } from '@queries/history/history';
 import { debounce } from '@solid-primitives/scheduled';
 import type { Component } from 'solid-js';
 import {
@@ -88,7 +88,7 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
   const contacts = useContacts();
   const channelsContext = useChannelsContext();
   const channels = channelsContext.channels;
-  const history = useHistory();
+  const historyQuery = useHistoryQuery();
 
   // Email queries for THREAD type or generic ENTITY (no specific type)
   const needsEmailSearch = () =>
@@ -133,7 +133,7 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
     if (!entityType) {
       return [
         ...contacts().map(entityMapper('user')),
-        ...history().map(entityMapper('item')),
+        ...(historyQuery.data ?? []).map(entityMapper('item')),
         ...channels().map(entityMapper('channel')),
         ...emails().map(threadMapper),
       ];
@@ -154,13 +154,13 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
     // Item-based types: DOCUMENT, PROJECT, CHAT
     const itemTypes: EntityType[] = ['DOCUMENT', 'PROJECT', 'CHAT'];
     if (itemTypes.includes(entityType)) {
-      return history()
+      return (historyQuery.data ?? [])
         .filter((item) => item.type.toUpperCase() === entityType)
         .map(entityMapper('item'));
     }
 
     if (entityType === 'TASK') {
-      return history()
+      return (historyQuery.data ?? [])
         .filter(
           (item) => item.type === 'document' && item.subType?.type === 'task'
         )

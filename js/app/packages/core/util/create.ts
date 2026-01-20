@@ -9,7 +9,7 @@ import type { CreateChatRequest } from '@service-cognition/generated/schemas';
 import { staticFileClient } from '@service-static-files/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { PropertyInput } from '@service-storage/generated/schemas/propertyInput';
-import { postNewHistoryItem } from '@service-storage/history';
+import { postNewHistoryItem } from '@queries/history/history';
 import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';
 import { syncServiceClient } from '@service-sync/client';
 import { contentHash } from './hash';

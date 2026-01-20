@@ -20,7 +20,7 @@ import { useGetPermissions } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import Notepad from '@icon/regular/notepad.svg';
 import { createCognitionWebsocketEffect } from '@service-cognition/websocket';
-import { refetchHistory } from '@service-storage/history';
+import { refetchHistory } from '@queries/history/history';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
 import { onCleanup, onMount } from 'solid-js';
 

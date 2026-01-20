@@ -1,9 +1,12 @@
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
-import { ok } from '@core/util/maybeResult';
 import type { ItemType } from '@service-storage/client';
-import { refetchDeletedItems, useDeletedItems } from '@service-storage/deleted';
+import {
+  getDeletedItems,
+  invalidateDeletedItems,
+  setDeletedItems,
+} from '@queries/storage/deleted';
 import type { Item } from '@service-storage/generated/schemas/item';
-import { usePinnedIds } from '@service-storage/pins';
+import { getPinnedIds } from '@queries/storage/pins';
 import {
   createCallback,
   createSingletonRoot,
@@ -124,8 +127,8 @@ export const useItemOperations = createSingletonRoot(() => {
   );
 
   const bulkTogglePin = createCallback(async (items: Item[]) => {
-    const pinnedIds = usePinnedIds();
-    const wasPinned = pinnedIds().includes(items[0].id);
+    const pinnedIds = getPinnedIds();
+    const wasPinned = pinnedIds.includes(items[0].id);
     const action = wasPinned ? 'unpin' : 'pin';
 
     const result = await toast.promise(bulkTogglePinOp(items), {
@@ -220,20 +223,17 @@ export const useItemOperations = createSingletonRoot(() => {
     // If items have failed to permanently delete, we can't just refetch resources, because items delete so slowly everything that had been successfully deleted will reappear.
     // So we need to undo our optimistic removal here.
     if (result.failedItems.length > 0) {
-      await refetchDeletedItems();
-      const { deletedItems, mutate } = useDeletedItems();
-      mutate(
-        ok({
-          items:
-            deletedItems()?.filter((item) => {
-              return (
-                result.failedItems.some(
-                  (failedItem) => failedItem.id === item.id
-                ) || !items.some((argItem) => argItem.id === item.id)
-              );
-            }) ?? [],
-        })
-      );
+      await invalidateDeletedItems();
+      const deletedItems = getDeletedItems();
+      setDeletedItems(() => ({
+        items: deletedItems.filter((item) => {
+          return (
+            result.failedItems.some(
+              (failedItem) => failedItem.id === item.id
+            ) || !items.some((argItem) => argItem.id === item.id)
+          );
+        }),
+      }));
     }
 
     return result;

@@ -5,12 +5,12 @@ import { cognitionApiServiceClient } from '@service-cognition/client';
 import { commsServiceClient } from '@service-comms/client';
 import { type ItemType, storageServiceClient } from '@service-storage/client';
 import {
+  getDeletedTree,
   optimisticallyRemoveDeletedItem,
-  useDeletedTree,
-} from '@service-storage/deleted';
+} from '@queries/storage/deleted';
 import type { Item } from '@service-storage/generated/schemas/item';
-import { removeHistoryItem } from '@service-storage/history';
-import { pinItem, unpinItem, usePinnedIds } from '@service-storage/pins';
+import { removeHistoryItem } from '@queries/history/history';
+import { getPinnedIds, pinItem, unpinItem } from '@queries/storage/pins';
 import { refetchResources } from '@service-storage/util/refetchResources';
 import {
   getPermissions,
@@ -404,8 +404,8 @@ export async function togglePin(args: {
   id: string;
 }): Promise<boolean> {
   const { itemType, id } = args;
-  const pinnedIds = usePinnedIds();
-  const pinned = pinnedIds().includes(id);
+  const pinnedIds = getPinnedIds();
+  const pinned = pinnedIds.includes(id);
 
   if (pinned) {
     return unpinItem(itemType, id);
@@ -418,12 +418,11 @@ export async function bulkTogglePin(
   selectedItems: Item[],
   chunkSize: number = DEFAULT_CHUNK_SIZE
 ): Promise<{ success: boolean; failedItems: Item[] }> {
-  const pinnedIds = usePinnedIds();
+  const pinnedIds = getPinnedIds();
   // Check if all items have the same pinned state
   const allItemsHaveSameState = selectedItems.every(
     (item) =>
-      pinnedIds().includes(item.id) ===
-      pinnedIds().includes(selectedItems[0].id)
+      pinnedIds.includes(item.id) === pinnedIds.includes(selectedItems[0].id)
   );
   if (!allItemsHaveSameState) {
     return {
@@ -520,10 +519,10 @@ export async function permanentlyDelete(args: {
       break;
     }
     case 'project': {
-      const deleteTree = useDeletedTree();
+      const deleteTree = getDeletedTree();
       const findAllDescendants = (projectId: string): string[] => {
         const descendantIds: string[] = [];
-        const node = deleteTree().itemMap[projectId];
+        const node = deleteTree.itemMap[projectId];
         if (node && node.children) {
           node.children.forEach((child) => {
             descendantIds.push(child.id);
@@ -570,7 +569,7 @@ export async function bulkPermanentlyDelete(
   const failedItems: Item[] = [];
 
   const selectedItemIds = new Set(selectedItems.map((item) => item.id));
-  const deleteTree = useDeletedTree();
+  const deleteTree = getDeletedTree();
 
   const descendants: Item[] = [];
 
@@ -582,14 +581,14 @@ export async function bulkPermanentlyDelete(
     let currentItem = item;
     while (currentItem) {
       const parentId = getParentId(currentItem);
-      if (!parentId || !deleteTree().itemMap[parentId]?.item) break;
+      if (!parentId || !deleteTree.itemMap[parentId]?.item) break;
 
       if (selectedItemIds.has(parentId)) {
         descendants.push(item);
         return false;
       }
 
-      currentItem = deleteTree().itemMap[parentId]?.item;
+      currentItem = deleteTree.itemMap[parentId]?.item;
       if (!currentItem) break;
     }
 
@@ -624,7 +623,7 @@ export async function bulkPermanentlyDelete(
 
         const findChildren = (item: Item): Item[] => {
           const children: Item[] = [];
-          const node = deleteTree().itemMap[item.id];
+          const node = deleteTree.itemMap[item.id];
           if (!node) return children;
 
           node.children.forEach((child) => {

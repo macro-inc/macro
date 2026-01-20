@@ -12,7 +12,7 @@ import Pin from '@icon/regular/push-pin.svg';
 import Trash from '@icon/regular/trash-simple.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { blockNameToItemType, type ItemType } from '@service-storage/client';
-import { usePinnedIds } from '@service-storage/pins';
+import { usePinnedIdsQuery } from '@queries/storage/pins';
 import {
   type Component,
   createMemo,
@@ -71,8 +71,8 @@ export function SplitFileMenu(props: {
   const [open, setOpen] = createSignal(false);
   const itemOperations = useItemOperations();
 
-  const pinnedIds = usePinnedIds();
-  const isPinned = () => pinnedIds().includes(props.id);
+  const pinnedIdsQuery = usePinnedIdsQuery();
+  const isPinned = () => (pinnedIdsQuery.data ?? []).includes(props.id);
 
   const modal = useSplitModal();
 
