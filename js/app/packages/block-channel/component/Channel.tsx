@@ -325,6 +325,7 @@ export function Channel(props: {
       <ChannelDebouncedNotificationReadMarker
         notificationSource={notificationSource}
         channelId={channelId}
+        debounceTime={500}
       />
       <StaticMarkdownContext>
         <Suspense>
