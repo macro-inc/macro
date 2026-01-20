@@ -22,7 +22,6 @@ pub async fn chat_access(
 ) -> Result<AccessLevel, WebSocketError> {
     get_users_access_level_v2(
         &ctx.db,
-        &ctx.comms_service_client,
         &user_ctx.user_id,
         chat_id,
         "chat",

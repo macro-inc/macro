@@ -201,13 +201,7 @@ async fn main() -> anyhow::Result<()> {
         EmailServiceImpl::new(EmailPgRepo::new(db.clone()), frecency_service.clone());
     let system_properties_service =
         SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(db.clone()));
-    let permission_checker = PermissionServiceImpl::new(
-        db.clone(),
-        CommsServiceClient::new(
-            dss_auth_key.as_ref().to_string(),
-            config.vars.comms_service_url.as_ref().to_string(),
-        ),
-    );
+    let permission_checker = PermissionServiceImpl::new(db.clone());
     let notification_service = NotificationServiceImpl::new(Arc::new(macro_notify_client.clone()));
     let properties_service = PropertiesServiceImpl::new(
         PropertiesPgRepo::new(db.clone()),

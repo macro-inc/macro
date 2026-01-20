@@ -8,11 +8,10 @@ pub mod thread;
 
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use models_permissions::share_permission::access_level::ViewAccessLevel;
 use models_permissions::share_permission::access_level::{
     AccessLevel, CommentAccessLevel, EditAccessLevel, OwnerAccessLevel,
 };
-use models_permissions::share_permission::channel_share_permission::ChannelSharePermission;
-use models_permissions::share_permission::{SharePermissionV2, access_level::ViewAccessLevel};
 use std::str::FromStr;
 use std::time::Instant;
 use thiserror::Error;
@@ -85,10 +84,9 @@ impl IntoResponse for AccessLevelErr {
 
 /// Gets the users AccessLevel for a given item
 /// This is for the new permission system
-#[tracing::instrument(skip(db, comms_service_client))]
+#[tracing::instrument(skip(db))]
 pub async fn get_users_access_level_v2(
     db: &Pool<Postgres>,
-    comms_service_client: &comms_service_client::CommsServiceClient,
     user_id: &str,
     item_id: &str,
     item_type: &str,
@@ -98,31 +96,26 @@ pub async fn get_users_access_level_v2(
         return get_highest_access_level(db, user_id, item_id, item_type).await;
     }
 
-    let start_time = Instant::now();
-    let share_permissions: Vec<SharePermissionV2> = match item_type {
-        "macro" => {
-            let share_permission =
-                macro_db_client::share_permission::get::get_macro_share_permission(db, item_id)
-                    .await
-                    .map_err(|_e| {
-                        (
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            "failed to get macro share permission".to_string(),
-                        )
-                    })?;
-
-            Ok(vec![share_permission])
-        }
+    // We need to simply check if the user is part of the channel
+    match item_type {
         "channel" => {
             let channel_id = Uuid::from_str(item_id)
                 .map_err(|_| (StatusCode::BAD_REQUEST, "invalid channel id".to_string()))?;
-            let user_channels = comms_service_client
-                .check_channels_for_user(user_id, &[channel_id])
-                .await
-                .map_err(|err| {
-                    tracing::error!(error=?err, "internal server error checking channel membership");
-                    (StatusCode::INTERNAL_SERVER_ERROR, "internal server error".to_string())
-                })?;
+
+            let user_channels = macro_db_client::share_permission::get::check_channels_for_user(
+                db,
+                user_id,
+                &[channel_id],
+            )
+            .await
+            .map_err(|err| {
+                tracing::error!(error=?err, "internal server error checking channel membership");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "internal server error".to_string(),
+                )
+            })?;
+
             if !user_channels.contains(&channel_id) {
                 return Err((StatusCode::UNAUTHORIZED, "permission".to_string()));
             }
@@ -134,100 +127,6 @@ pub async fn get_users_access_level_v2(
                 format!("unsupported item type {item_type}"),
             ));
         }
-    }
-        .map_err(|e: (StatusCode, String)| {
-            tracing::error!(error=?e, "failed to get user permission");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "failed to get user permission".to_string(),
-            )
-        })?;
-
-    // Check if the user is an owner in any of the share permissions
-    let is_owner = share_permissions
-        .iter()
-        .any(|share_permission| share_permission.owner == user_id);
-
-    if is_owner {
-        tracing::trace!("user is owner of a share permission");
-        return Ok(Some(AccessLevel::Owner));
-    }
-
-    // Get all public share permission access levels
-    let mut access_levels: Vec<AccessLevel> = share_permissions
-        .iter()
-        .filter_map(|share_permission| {
-            if share_permission.is_public {
-                Some(
-                    share_permission
-                        .public_access_level
-                        .unwrap_or(AccessLevel::View),
-                )
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    // Get all channel share permissions and get user's highest access level from it if it exists
-    let channel_share_permissions: Vec<ChannelSharePermission> = share_permissions
-        .into_iter()
-        .flat_map(|share_permission| {
-            share_permission
-                .channel_share_permissions
-                .unwrap_or_default()
-        })
-        .collect();
-
-    // Add the highest access level from the channel if it exists
-    if !channel_share_permissions.is_empty() {
-        tracing::trace!("channel share permissions exist");
-        let channel_ids: Vec<Uuid> = channel_share_permissions
-            .iter()
-            .filter_map(|channel_share_permission| {
-                Uuid::from_str(channel_share_permission.channel_id.as_str()).ok()
-            })
-            .collect();
-
-        let user_channels = comms_service_client
-            .check_channels_for_user(user_id, &channel_ids)
-            .await
-            .map_err(|e| {
-                tracing::error!(error=?e, "failed to get user channels");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "failed to get user channels".to_string(),
-                )
-            })?;
-
-        tracing::trace!("user has channels");
-        let user_channels: Vec<String> = user_channels
-            .iter()
-            .map(|channel| channel.to_string())
-            .collect();
-
-        let user_access_levels: Vec<AccessLevel> = channel_share_permissions
-            .iter()
-            .filter_map(|channel_share_permission| {
-                if user_channels.contains(&channel_share_permission.channel_id.to_string()) {
-                    Some(channel_share_permission.access_level)
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        access_levels.extend(user_access_levels);
-    }
-
-    tracing::trace!(elapsed_time = ?start_time.elapsed(), "get_users_access_level_v2 took");
-
-    if access_levels.is_empty() {
-        Ok(None)
-    } else {
-        // Sort access levels from lowest to highest
-        access_levels.sort();
-        Ok(Some(*access_levels.last().unwrap()))
     }
 }
 

@@ -5064,7 +5064,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
- "comms_service_client",
  "http-body-util",
  "macro_auth",
  "macro_db_client",
@@ -6654,7 +6653,6 @@ name = "properties"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "comms_service_client",
  "email_db_client",
  "futures",
  "macro_db_client",

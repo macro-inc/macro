@@ -85,7 +85,6 @@ async fn get_access_level(
 
     let access_level = macro_middleware::cloud_storage::ensure_access::get_users_access_level_v2(
         &context.db,
-        &context.comms_service_client,
         user_id,
         &entity_ref.entity_id,
         item_type,

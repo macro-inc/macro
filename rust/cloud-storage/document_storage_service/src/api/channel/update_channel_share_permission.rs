@@ -47,7 +47,6 @@ pub async fn handler(
     // Get users max access level to the item
     let user_access_level = get_users_access_level_v2(
         &ctx.db,
-        &ctx.comms_service_client,
         req.user_id.0.as_ref(),
         &req.item_id,
         &req.item_type,
