@@ -42,6 +42,7 @@ import { Hotkey } from '@core/component/Hotkey';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import { fuzzyFilter } from '@core/util/fuzzy';
 import { mergeRefs } from '@solid-primitives/refs';
+import { PropertyDataTypeIcon } from '@core/component/Properties/utils';
 
 type ListNavActions = {
   next: VoidFunction;
@@ -88,8 +89,8 @@ export function PropertyEditorModal() {
   const [searchValue, setSearchValue] = createSignal('');
   const [selectedIndex, setSelectedIndex] = createSignal(0);
 
-  const [placeholder, setPlaceholder] = createSignal('');
   const defaultPlaceholder = 'Choose a property...';
+  const [placeholder, setPlaceholder] = createSignal('');
 
   const { dispose } = registerHotkey({
     hotkey: ['escape'],
@@ -108,6 +109,7 @@ export function PropertyEditorModal() {
       () => {
         setSelectedIndex(0);
         setSearchValue('');
+        setPlaceholder('');
       }
     )
   );
@@ -149,7 +151,7 @@ export function PropertyEditorModal() {
                   </div>
                   <Switch>
                     <Match when={propertyEditorState.mode === 'selector'}>
-                      <div class="overflow-scroll scrollbar-hidden p-2">
+                      <div class="overflow-scroll scrollbar-hidden">
                         <PropertyList
                           searchTerm={searchValue()}
                           focusedIndex={selectedIndex}
@@ -236,10 +238,12 @@ function PropertyList(props: {
 
   props.setKeybindings({
     next: () => {
-      props.setFocusedIndex((prev) => (prev + 1) % filteredProperties().length);
+      const len = filteredProperties().length;
+      props.setFocusedIndex((prev) => (prev + 1) % len);
     },
     previous: () => {
-      props.setFocusedIndex((prev) => (prev - 1) % filteredProperties().length);
+      const len = filteredProperties().length;
+      props.setFocusedIndex((prev) => (prev - 1 + len) % len);
     },
     select: () => {
       const focusedProperty = filteredProperties()[props.focusedIndex()];
@@ -275,7 +279,7 @@ function PropertyList(props: {
     >
       <div
         ref={containerRef}
-        class="max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden"
+        class="max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden p-1"
       >
         <For each={filteredProperties()}>
           {(property, index) => {
@@ -292,7 +296,8 @@ function PropertyList(props: {
                 onClick={() => setProperty(property)}
                 onMouseEnter={() => props.setFocusedIndexFromMouse(index())}
               >
-                <div class="flex-1 text-left">
+                <PropertyDataTypeIcon property={property} class="opacity-50" />
+                <div class="flex-1 text-left flex">
                   <p class="text-sm font-medium">{property.displayName}</p>
                 </div>
               </button>
@@ -433,7 +438,10 @@ function SelectPropertyEditor(props: {
   });
 
   props.setKeybindings({
-    select: () => {},
+    select: () => {
+      const selected = filteredOptions()[props.selectedIndex()];
+      props.onSubmit(selected.value.value.toString());
+    },
     next: () => {
       const len = filteredOptions().length;
       props.setSelectedIndex((prev) => (prev + 1) % len);
