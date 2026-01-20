@@ -27,7 +27,7 @@ import { themeUpdate } from '../../block-theme/signals/themeSignals';
 interface EmailMessageBodyProps {
   message: MessageWithBodyReplyless;
   isBodyExpanded: Accessor<boolean>;
-  setExpandedMessageBody: (id: string) => void;
+  setExpandedMessageBody: () => void;
   setFocusedMessageId: (messageID: string | undefined) => void;
   isFirstMessageInThread: boolean;
 }

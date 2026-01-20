@@ -41,6 +41,8 @@ interface MessageContainerProps {
   isLastMessage: boolean;
   isFocused: boolean;
   isTarget: boolean;
+  isExpanded: boolean;
+  onToggleBodyExpand: (expanded: boolean) => void;
 }
 
 export function MessageContainer(props: MessageContainerProps) {
@@ -84,7 +86,7 @@ export function MessageContainer(props: MessageContainerProps) {
   );
 
   const isBodyExpanded = createMemo(() => {
-    return context.messages.isBodyExpanded(props.message.db_id ?? '');
+    return props.isExpanded;
   });
 
   const isNewMessage = createMemo(() => {
@@ -142,16 +144,6 @@ export function MessageContainer(props: MessageContainerProps) {
     );
   });
 
-  createEffect(() => {
-    const id = props.message.db_id;
-    if (props.isLastMessage && id) {
-      context.messages.setExpandedBodyId(id, true);
-    }
-    if (isNewMessage() && id) {
-      context.messages.setExpandedBodyId(id, true);
-    }
-  });
-
   const { replaceOrInsertSplit } = useSplitLayout();
   const entityQueryClient = useQueryClient();
 
@@ -204,7 +196,7 @@ export function MessageContainer(props: MessageContainerProps) {
 
   const handleExpand = () => {
     if (props.message.db_id) {
-      context.messages.setExpandedBodyId(props.message.db_id, true);
+      props.onToggleBodyExpand(true);
       context.messages.setFocused(props.message.db_id);
     }
   };
@@ -238,7 +230,7 @@ export function MessageContainer(props: MessageContainerProps) {
               <EmailMessageTopBar
                 message={props.message}
                 focused={props.isFocused}
-                setExpandedBodyId={context.messages.setExpandedBodyId}
+                setExpandedBodyId={props.onToggleBodyExpand}
                 isBodyExpanded={isBodyExpanded}
                 expandedHeader={expandedHeader}
                 setExpandedHeader={setExpandedHeader}
@@ -256,9 +248,7 @@ export function MessageContainer(props: MessageContainerProps) {
               <EmailMessageBody
                 message={props.message}
                 isBodyExpanded={isBodyExpanded}
-                setExpandedMessageBody={(id) =>
-                  context.messages.setExpandedBodyId(id, true)
-                }
+                setExpandedMessageBody={() => props.onToggleBodyExpand(true)}
                 setFocusedMessageId={context.messages.setFocused}
                 isFirstMessageInThread={props.isFirstMessage}
               />
