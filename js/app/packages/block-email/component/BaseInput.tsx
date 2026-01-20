@@ -153,8 +153,7 @@ function TruncatedRecipientList(props: {
 
     // Add "cc" recipients (show "cc" prefix only if no "to" recipients)
     props.ccRecipients.forEach((r, i) => {
-      const prefix =
-        i === 0 && props.toRecipients.length === 0 ? 'cc ' : '';
+      const prefix = i === 0 && props.toRecipients.length === 0 ? 'cc ' : '';
       result.push({ recipient: r, prefix });
     });
 
