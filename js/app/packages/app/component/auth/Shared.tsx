@@ -1,11 +1,11 @@
 import { withAnalytics } from '@coparse/analytics';
-import { useOrganization } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import { authServiceClient } from '@service-auth/client';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { detect } from 'detect-browser';
 import type { JSX } from 'solid-js';
 import { createSignal, onMount, Show } from 'solid-js';
+import { invalidateOrganization } from '@queries/auth';
 
 const { track, identify, TrackingEvents } = withAnalytics();
 
@@ -19,10 +19,7 @@ export function setCookie(name: string, value: string, days: number) {
 export const LOGIN_COOKIE_AGE = 2592000; // 1 month in seconds
 
 export const identifyUser = async () => {
-  // NOTE: organization is a singleton so this is ok for now
-  const [, { refetch: refetchOrganization }] = useOrganization();
-  await refetchOrganization();
-
+  invalidateOrganization();
   await invalidateUserInfo();
   const userInfoResult = await authServiceClient.getLegacyUserPermissions();
 

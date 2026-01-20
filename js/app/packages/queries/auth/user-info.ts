@@ -1,5 +1,4 @@
-import { useAuthUserInfo } from '@core/auth';
-import { throwOnErr } from '@core/util/maybeResult';
+import { catchToResult, throwOnErr } from '@core/util/maybeResult';
 import { authServiceClient } from '@service-auth/client';
 import { useQuery } from '@tanstack/solid-query';
 import { createMemo } from 'solid-js';
@@ -8,23 +7,25 @@ import { authKeys } from './keys';
 
 export { authKeys } from './keys';
 
-const USER_INFO_STALE_TIME = 15_000; // 15 seconds (matches previous cache)
+const USER_INFO_STALE_TIME = 15_000; // 15 seconds
 
 type UserInfoData = Awaited<
   ReturnType<typeof authServiceClient.getLegacyUserPermissions>
 >[1];
 
-function userInfoQueryOptions() {
-  return {
-    queryKey: authKeys.userInfo.queryKey,
-    queryFn: async () => throwOnErr(authServiceClient.getLegacyUserPermissions),
-    staleTime: USER_INFO_STALE_TIME,
-  };
-}
-
-/** Query for the current user's info and permissions. Use this when you need TanStack Query features. */
+/** Query for the current user's info and permissions. */
 export function useUserInfoQuery() {
-  return useQuery(() => userInfoQueryOptions());
+  return useQuery(
+    () => ({
+      queryKey: authKeys.userInfo.queryKey,
+      queryFn: async () =>
+        throwOnErr(authServiceClient.getLegacyUserPermissions),
+      staleTime: USER_INFO_STALE_TIME,
+      suspense: false,
+      refetchOnMount: false,
+    }),
+    () => queryClient
+  );
 }
 
 /** Invalidate the user info query to trigger a refetch. */
@@ -34,9 +35,21 @@ export function invalidateUserInfo() {
   });
 }
 
-/** Prefetch user info and populate the query cache. Can be used outside QueryClientProvider. */
+/** Ensure user info is in the query cache. Fetches if not present. */
 export async function prefetchUserInfo() {
-  return queryClient.fetchQuery(userInfoQueryOptions());
+  await catchToResult(
+    async () =>
+      await queryClient.ensureQueryData({
+        queryKey: authKeys.userInfo.queryKey,
+      })
+  );
+}
+
+/** Fetch user info and return the data. Use when you need the result. */
+export async function fetchUserInfo() {
+  return queryClient.fetchQuery({
+    queryKey: authKeys.userInfo.queryKey,
+  });
 }
 
 /**
@@ -44,94 +57,104 @@ export async function prefetchUserInfo() {
  */
 export const updateUserInfo = invalidateUserInfo;
 
-// Derived state hooks - these use the singleton resource (works outside QueryClientProvider)
+// Derived state hooks - all use TanStack Query as single source of truth
+
+/** Returns whether the user is authenticated. Returns undefined while loading. */
+export function useIsAuthenticated() {
+  const query = useUserInfoQuery();
+  return createMemo((): boolean | undefined => {
+    if (query.isLoading) return undefined;
+    if (!query.data) return false;
+    return query.data.authenticated ?? false;
+  });
+}
 
 /** Returns the current user's ID. */
 export function useUserId() {
-  const [resource] = useAuthUserInfo();
+  const query = useUserInfoQuery();
   return createMemo(() => {
-    const [, data] = resource.latest;
-    return data?.id;
+    if (query.isLoading) return undefined;
+    return query.data?.id;
   });
 }
 
 /** Returns the current user's email. */
 export function useEmail() {
-  const [resource] = useAuthUserInfo();
+  const query = useUserInfoQuery();
   return createMemo(() => {
-    const [, data] = resource.latest;
-    return data?.email;
+    if (query.isLoading) return undefined;
+    return query.data?.email;
   });
 }
 
 /** Returns the current user's permissions. */
 export function usePermissions() {
-  const [resource] = useAuthUserInfo();
+  const query = useUserInfoQuery();
   return createMemo(() => {
-    const [, data] = resource.latest;
-    return data?.permissions ?? [];
+    if (query.isLoading) return [];
+    return query.data?.permissions ?? [];
   });
 }
 
 /** Returns the current user's display name for authoring. */
 export function useAuthor() {
-  const [resource] = useAuthUserInfo();
+  const query = useUserInfoQuery();
   return createMemo(() => {
-    const [, data] = resource.latest;
-    return data?.name || data?.email || 'Macro User';
+    if (query.isLoading) return 'Macro User';
+    return query.data?.name || query.data?.email || 'Macro User';
   });
 }
 
 /** Returns the current user's license status. */
 export function useLicenseStatus() {
-  const [resource] = useAuthUserInfo();
+  const query = useUserInfoQuery();
   return createMemo(() => {
-    const [, data] = resource.latest;
-    return data?.licenseStatus;
+    if (query.isLoading) return undefined;
+    return query.data?.licenseStatus;
   });
 }
 
 /** Returns whether the user has completed the tutorial. */
 export function useTutorialCompleted() {
-  const [resource] = useAuthUserInfo();
+  const query = useUserInfoQuery();
   return createMemo(() => {
-    const [, data] = resource.latest;
-    return data?.tutorialComplete;
+    if (query.isLoading) return undefined;
+    return query.data?.tutorialComplete;
   });
 }
 
 /** Returns the user's group for A/B testing. */
 export function useGroup() {
-  const [resource] = useAuthUserInfo();
+  const query = useUserInfoQuery();
   return createMemo(() => {
-    const [, data] = resource.latest;
-    return data?.group;
+    if (query.isLoading) return undefined;
+    return query.data?.group;
   });
 }
 
 /** Returns whether the user has the Chrome extension. */
 export function useHasChromeExt() {
-  const [resource] = useAuthUserInfo();
+  const query = useUserInfoQuery();
   return createMemo(() => {
-    const [, data] = resource.latest;
-    return data?.hasChromeExt;
+    if (query.isLoading) return undefined;
+    return query.data?.hasChromeExt;
   });
 }
 
 /** Returns whether the user has trialed. */
 export function useHasTrialed() {
-  const [resource] = useAuthUserInfo();
+  const query = useUserInfoQuery();
   return createMemo(() => {
-    const [, data] = resource.latest;
-    return data?.hasTrialed;
+    if (query.isLoading) return undefined;
+    return query.data?.hasTrialed;
   });
 }
 
 /** Returns the full user info data. */
 export function useUserInfo() {
-  const [resource] = useAuthUserInfo();
+  const query = useUserInfoQuery();
   return createMemo((): UserInfoData | undefined => {
-    const [, data] = resource.latest;
-    return data;
+    if (query.isLoading) return undefined;
+    return query.data;
   });
 }

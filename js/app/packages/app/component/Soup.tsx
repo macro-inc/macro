@@ -4,7 +4,7 @@ import {
 } from '@app/component/GlobalAppState';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { playSound } from '@app/util/sound';
-import { useIsAuthenticated } from '@core/auth';
+import { useUserInfoQuery } from '@queries/auth/user-info';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
@@ -613,8 +613,10 @@ const ViewWithSearch: Component<{
 };
 
 export function Soup() {
-  const authenticated = useIsAuthenticated();
-  if (!authenticated()) return <Navigate href="/" />;
+  const userInfoQuery = useUserInfoQuery();
+
+  // Only redirect when explicitly not authenticated (not during loading)
+  if (userInfoQuery.data?.authenticated === false) return <Navigate href="/" />;
 
   const splitPanelContext = useSplitPanelOrThrow();
   const {

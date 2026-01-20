@@ -1,7 +1,6 @@
 import { mountGlobalFocusListener } from '@app/signal/focus';
 import { useIsAuthenticated } from '@core/auth';
 import { Resize } from '@core/component/Resize';
-import { useABTest } from '@core/constant/ABTest';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import {
@@ -85,8 +84,6 @@ export function Layout(props: RouteSectionProps) {
   }, isAuthenticated());
 
   mountGlobalFocusListener();
-
-  useABTest();
 
   attachGlobalDOMScope(document.body);
 

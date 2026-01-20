@@ -5,11 +5,10 @@ import {
   idToDisplayName,
 } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
-import { authServiceClient } from '@service-auth/client';
+import { useOrganizationQuery } from '@queries/auth';
 import { organizationServiceClient } from '@service-organization/client';
 import { createSingletonRoot } from '@solid-primitives/rootless';
-import { makePersisted } from '@solid-primitives/storage';
-import { createMemo, createResource, createSignal } from 'solid-js';
+import { createMemo, createResource } from 'solid-js';
 
 const USERS_PER_PAGE = 50;
 
@@ -75,43 +74,22 @@ export function useOrganizationUsers() {
   });
 }
 
-export const useOrganization = createSingletonRoot(() => {
-  return createResource<{
-    organizationId?: string | undefined;
-    organizationName?: string | undefined;
-  }>(
-    async () => {
-      const result = await authServiceClient.getOrganization();
-      if (result[0] === null) {
-        return result[1];
-      }
-      return { organizationId: undefined, organizationName: undefined };
-    },
-    {
-      initialValue: {
-        organizationId: undefined,
-        organizationName: undefined,
-      },
-      storage: (init) => {
-        const [get, set] = makePersisted(createSignal(init), {
-          name: 'organization',
-        });
-        return [get, set];
-      },
-    }
-  );
-});
-
 export function useOrganizationName() {
-  const [organization] = useOrganization();
+  const organizationQuery = useOrganizationQuery();
   return createMemo((): string | undefined => {
-    return organization()?.organizationName;
+    if (organizationQuery.isLoading) return undefined;
+    if (!organizationQuery.data) return undefined;
+
+    return organizationQuery.data.organizationName;
   });
 }
 
 export function useOrganizationId() {
-  const [organization] = useOrganization();
+  const organizationQuery = useOrganizationQuery();
   return createMemo((): string | undefined => {
-    return organization()?.organizationId;
+    if (organizationQuery.isLoading) return undefined;
+    if (!organizationQuery.data) return undefined;
+
+    return organizationQuery.data.organizationId;
   });
 }
