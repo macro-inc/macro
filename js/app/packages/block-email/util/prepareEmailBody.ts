@@ -429,11 +429,15 @@ function flattenConsecutiveParagraphs(container: Element) {
     for (let j = 0; j < group.length; j++) {
       const p = group[j];
 
+      const isEmpty =
+        !p.textContent?.trim() &&
+        !p.querySelector('img, video, iframe, canvas');
+
       if (p.children.length) {
         div.append(...p.children);
       }
 
-      if (j < group.length - 1) {
+      if (j < group.length - 1 && !isEmpty) {
         div.appendChild(document.createElement('br'));
       }
     }
