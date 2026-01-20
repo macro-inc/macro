@@ -3,7 +3,7 @@ import { keyNavigationPlugin } from '@block-md/plugins/keyboardNavigation';
 import { markdownBlockErrorSignal } from '@block-md/signal/error';
 import { FindAndReplaceStore } from '@block-md/signal/findAndReplaceStore';
 import { revisionsSignal, rewriteSignal } from '@block-md/signal/rewriteSignal';
-import { useUserId } from '@service-gql/client';
+import { useUserId } from '@queries/auth/user-info';
 import {
   type BlockName,
   useBlockId,

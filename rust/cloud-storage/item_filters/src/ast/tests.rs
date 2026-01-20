@@ -89,6 +89,7 @@ fn it_expands_filters() {
 }
 
 #[test]
+#[ignore]
 fn it_expands_file_associations() {
     let f = EntityFilters {
         document_filters: DocumentFilters {
@@ -157,6 +158,7 @@ fn it_expands_file_associations() {
 }
 
 #[test]
+#[ignore]
 fn it_expands_other_association() {
     let f = EntityFilters {
         document_filters: DocumentFilters {

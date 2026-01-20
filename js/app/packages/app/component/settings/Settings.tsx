@@ -3,7 +3,7 @@ import { type SettingsTab, useSettingsState } from '@core/constant/SettingsState
 import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
-import { MacroPermissions, usePermissions } from '@service-gql/client';
+import { usePermissions } from '@queries/auth/user-info';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import ContractIcon from '@icon/regular/arrows-in.svg';
@@ -120,7 +120,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
     ];
 
     if(!orgName() && !isNativeMobilePlatform()){tabs.push({value: 'Subscription', label: 'Subscription'})}
-    if(orgName() && permissions()?.includes(MacroPermissions.WriteItPanel)){tabs.push({value: 'Organization', label: 'Organization'})}
+    if(orgName() && permissions()?.includes('WriteItPanel')){tabs.push({value: 'Organization', label: 'Organization'})}
     if(isNativeMobilePlatform() && DEV_MODE_ENV){tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' })}
     if(DEV_MODE_ENV){tabs.push({ value: 'Inbox', label: 'Inbox' })}
 
@@ -260,7 +260,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                     <Subscription />
                   </Tabs.Content>
                 </Show>
-                <Show when={ orgName() && permissions()?.includes(MacroPermissions.WriteItPanel)}>
+                <Show when={ orgName() && permissions()?.includes('WriteItPanel')}>
                   <Tabs.Content value="Organization" class="absolute inset-0">
                     <Organization />
                   </Tabs.Content>

@@ -14,7 +14,7 @@ import type {
 } from '@block-pdf/type/comments';
 import type { IPlaceable, IThreadPlaceable } from '@block-pdf/type/placeables';
 import { createBlockMemo } from '@core/block';
-import { useUserId } from '@service-gql/client';
+import { useUserId } from '@queries/auth/user-info';
 import {
   anchorsResource,
   commentThreadsResource,

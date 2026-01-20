@@ -1,6 +1,6 @@
 import { ENABLE_PROJECT_SHARING } from '@core/constant/featureFlags';
 import { isOk, ok } from '@core/util/maybeResult';
-import { useUserId } from '@service-gql/client';
+import { useUserId } from '@queries/auth/user-info';
 import { createSingletonRoot } from '@solid-primitives/rootless';
 import { createMemo, createResource } from 'solid-js';
 import { v4 as uuidv4 } from 'uuid';

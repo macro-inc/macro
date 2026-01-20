@@ -1,7 +1,7 @@
 import { createBlockSignal } from '@core/block';
 import { commsServiceClient } from '@service-comms/client';
 import { createConnectionBlockWebsocketEffect } from '@service-connection/websocket';
-import { useUserId } from '@service-gql/client';
+import { useUserId } from '@queries/auth/user-info';
 import { channelStore } from './channel';
 
 export const usersTypingSignal = createBlockSignal<

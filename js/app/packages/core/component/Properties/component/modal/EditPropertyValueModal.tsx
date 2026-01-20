@@ -1,23 +1,14 @@
+import { floatWithElement } from '@core/component/LexicalMarkdown/directive/floatWithElement';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import {
-  constrainModalToViewport,
-  MODAL_VIEWPORT_CLASSES,
-} from '@core/util/modalUtils';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import { mergeRefs } from '@solid-primitives/refs';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  onCleanup,
-  onMount,
-  Show,
-} from 'solid-js';
-import { MODAL_DIMENSIONS } from '../../constants';
+import { createSignal, onMount, Show } from 'solid-js';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import { usePropertyEditor } from '../../hooks/usePropertyEditor';
 import type { PropertyApiValues, PropertyEditorProps } from '../../types';
+
+false && floatWithElement;
 import {
   entityReferencesToIdSet,
   updateEntityReferences,
@@ -31,7 +22,7 @@ import {
 
 // Common CSS classes
 const MODAL_BASE =
-  'absolute bg-menu border border-edge-muted max-h-96 overflow-hidden flex flex-col w-full max-w-md';
+  'absolute z-action-menu bg-menu border border-edge-muted max-h-96 overflow-hidden flex flex-col w-full max-w-md';
 
 export function EditPropertyValueModal(props: PropertyEditorProps) {
   const propertyOptionsQuery = usePropertyOptionsQuery(
@@ -40,7 +31,7 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
 
   const addPropertyOptionMutation = useAddPropertyOptionMutation({});
 
-  const propertyOptions = createMemo(() => {
+  const propertyOptions = () => {
     if (
       propertyOptionsQuery.isLoading ||
       propertyOptionsQuery.isError ||
@@ -48,7 +39,7 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
     )
       return [];
     return propertyOptionsQuery.data;
-  });
+  };
 
   const isLoading = () =>
     propertyOptionsQuery.isLoading || addPropertyOptionMutation.isPending;
@@ -179,24 +170,6 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
     });
   });
 
-  createEffect(() => {
-    const handleResize = () => {
-      if (modalRef && props.position) {
-        const constrainedPosition = constrainModalToViewport(
-          props.position,
-          MODAL_DIMENSIONS.DEFAULT_WIDTH,
-          MODAL_DIMENSIONS.DEFAULT_HEIGHT
-        );
-
-        modalRef.style.top = `${constrainedPosition.top}px`;
-        modalRef.style.left = `${constrainedPosition.left}px`;
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-    onCleanup(() => window.removeEventListener('resize', handleResize));
-  });
-
   return (
     <ScopedPortal scope="local">
       <div class="fixed inset-0 z-modal" onClick={handleClose}>
@@ -204,28 +177,9 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
           ref={mergeRefs((ref) => {
             modalRef = ref;
           })}
-          class={`${MODAL_BASE} ${MODAL_VIEWPORT_CLASSES}`}
+          class={MODAL_BASE}
           tabIndex={-1}
-          style={createMemo(() => {
-            if (!props.position) {
-              return {
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-              };
-            }
-
-            const constrainedPosition = constrainModalToViewport(
-              props.position,
-              MODAL_DIMENSIONS.DEFAULT_WIDTH,
-              MODAL_DIMENSIONS.DEFAULT_HEIGHT
-            );
-
-            return {
-              top: `${constrainedPosition.top}px`,
-              left: `${constrainedPosition.left}px`,
-            };
-          })()}
+          use:floatWithElement={{ element: () => props.anchorRef }}
           onClick={(e) => e.stopPropagation()}
         >
           <Show when={!isLoading()}>

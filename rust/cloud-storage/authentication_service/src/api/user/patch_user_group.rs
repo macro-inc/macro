@@ -4,7 +4,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use doppleganger::Doppleganger;
 use macro_user_id::user_id::MacroUserId;
 
 use crate::api::context::ApiContext;
@@ -15,8 +14,7 @@ use model::{
 };
 use utoipa::ToSchema;
 
-#[derive(Default, Debug, serde::Serialize, serde::Deserialize, ToSchema, Doppleganger)]
-#[dg(backward = auth_service_rpc::PatchUserGroupRequest)]
+#[derive(Default, Debug, serde::Serialize, serde::Deserialize, ToSchema)]
 pub struct PatchUserGroupRequest {
     /// The group to add the user to
     pub group: String,

@@ -1,45 +1,40 @@
 import { withAnalytics } from '@coparse/analytics';
 import { useIsAuthenticated } from '@core/auth';
-import { isErr } from '@core/util/maybeResult';
+import { authServiceClient } from '@service-auth/client';
 import {
-  gqlServiceClient,
-  updateUserInfo,
-  useUserInfo,
-} from '@service-gql/client';
+  invalidateUserInfo,
+  useGroup,
+  useUserId,
+} from '@queries/auth/user-info';
 import { createSingletonRoot } from '@solid-primitives/rootless';
 import { type Component, createEffect, createSignal, Show } from 'solid-js';
 
 const { identify } = withAnalytics();
 const useABTestInternal = () => {
   const [ABGroup, setABGroup] = createSignal<'A' | 'B' | undefined>(undefined);
-  const [userInfo] = useUserInfo();
+  const userGroup = useGroup();
+  const userId = useUserId();
   const authenticated = useIsAuthenticated();
 
   const setGroup = async (group: 'A' | 'B') => {
     setABGroup(group);
-    await gqlServiceClient.setGroup({ group });
-    gqlServiceClient.getUserInfo.invalidate();
-    const userInfoResult = await updateUserInfo();
-    if (!userInfoResult || isErr(userInfoResult)) return;
-    const userInfo = userInfoResult[1];
-    if (userInfo.id) {
-      identify(userInfo.id, {
+    await authServiceClient.setGroup({ group });
+    await invalidateUserInfo();
+    const id = userId();
+    if (id) {
+      identify(id, {
         group,
       });
     }
   };
 
   createEffect(() => {
-    if (
-      !authenticated() ||
-      (userInfo() && isErr(userInfo())) ||
-      ABGroup() !== undefined
-    ) {
+    if (!authenticated() || ABGroup() !== undefined) {
       return;
     }
-    const userInfoResult = userInfo()[1];
-    if (userInfoResult?.group) {
-      setABGroup(userInfoResult?.group);
+    const existingGroup = userGroup();
+    if (existingGroup) {
+      setABGroup(existingGroup);
     } else {
       const randomGroup = Math.random() < 0.5 ? 'A' : 'B';
       setGroup(randomGroup);

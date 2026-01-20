@@ -1,15 +1,11 @@
-import {
-  updateUserAuth,
-  useAuthUserInfo,
-  useIsAuthenticated,
-} from '@core/auth';
+import { useIsAuthenticated } from '@core/auth';
 import { ENABLE_NAME_IN_LOGIN } from '@core/constant/featureFlags';
 import { setActiveModal } from '@core/signal/activeModal';
 import type { RedirectLocation } from '@core/util/authRedirect';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
 import { isOk } from '@core/util/maybeResult';
 import { authServiceClient } from '@service-auth/client';
-import { gqlServiceClient, updateUserInfo } from '@service-gql/client';
+import { invalidateUserInfo, prefetchUserInfo } from '@queries/auth/user-info';
 import { Navigate, useLocation, useSearchParams } from '@solidjs/router';
 import {
   createEffect,
@@ -27,7 +23,6 @@ import ThreeWireframe from './ThreeWireframe';
 import { VerifyForm } from './VerifyForm';
 
 export function Login() {
-  const [, { refetch: refetchAuthUserInfo }] = useAuthUserInfo();
   const [stage, setStage] = createSignal(Stage.None);
   const location = useLocation<RedirectLocation>();
   const authenticated = useIsAuthenticated();
@@ -52,12 +47,11 @@ export function Login() {
       console.log({ session_code });
       unsetTokenPromise();
       authServiceClient.getUserInfo.invalidate();
-      gqlServiceClient.getUserInfo.invalidate();
+      invalidateUserInfo();
       authServiceClient.sessionLogin({ session_code }).then((res) => {
         console.log({ res });
         if (isOk(res)) {
-          updateUserAuth();
-          updateUserInfo();
+          invalidateUserInfo();
         }
       });
     }
@@ -70,11 +64,10 @@ export function Login() {
     );
     setActiveModal();
     unsetTokenPromise();
-    gqlServiceClient.getUserInfo.invalidate();
+    invalidateUserInfo();
     authServiceClient.getUserInfo.invalidate();
-    const [err, userInfo] = (await refetchAuthUserInfo()) ?? [];
+    const userInfo = await prefetchUserInfo();
     if (
-      !err &&
       userInfo?.authenticated &&
       location.state?.originalLocation &&
       location.state.originalLocation.pathname !== location.pathname

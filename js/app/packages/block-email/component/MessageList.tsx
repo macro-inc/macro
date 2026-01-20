@@ -72,6 +72,30 @@ export function MessageList(props: MessageListProps) {
               return normalized;
             });
 
+            const isLastMessage = createMemo(() => {
+              return (
+                normalizedIndex() === (context.messages.list().length ?? 0) - 1
+              );
+            });
+
+            const isNewMessage = createMemo(() => {
+              return (
+                message().labels.find(
+                  (l) => l.provider_label_id === 'UNREAD'
+                ) !== undefined
+              );
+            });
+
+            const isExpanded = createMemo(() => {
+              const messageID = message().db_id;
+
+              if (!messageID) return false;
+              const manuallyExpanded =
+                context.messages.isBodyExpanded(messageID);
+
+              return manuallyExpanded || isLastMessage() || isNewMessage();
+            });
+
             return (
               <MessageContainer
                 isFirstMessage={normalizedIndex() === 0}
@@ -82,6 +106,7 @@ export function MessageList(props: MessageListProps) {
                 isFocused={isFocusedSelector(message().db_id ?? undefined)}
                 isTarget={isTargetSelector(message().db_id ?? undefined)}
                 message={message()}
+                isExpanded={isExpanded()}
               />
             );
           }}

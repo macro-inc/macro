@@ -1,5 +1,5 @@
 import { ENABLE_LIVE_INDICATORS } from '@core/constant/featureFlags';
-import { useUserId } from '@service-gql/client';
+import { useUserId } from '@queries/auth/user-info';
 import { createMemo, For, Show } from 'solid-js';
 import { useUserIndicators } from '../state/liveIndicators';
 import { Tooltip } from './Tooltip';

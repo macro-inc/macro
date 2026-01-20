@@ -22,6 +22,9 @@ use crate::api::user::patch_user_group::PatchUserGroupRequest;
 use crate::api::user::patch_user_onboarding::PatchUserOnboardingRequest;
 use crate::api::user::post_get_names::PostGetNamesRequestBody;
 use crate::api::user::post_get_names_with_email::GetNamesWithEmailRequestBody;
+use crate::api::user::stripe::{
+    CreateCheckoutSessionRequest, CreatePortalSessionRequest, StripeSessionResponse,
+};
 use crate::api::{
     email, health, jwt, link, login, logout, merge, oauth, oauth2, permissions, session, team, user,
 };
@@ -87,6 +90,8 @@ use model::user::{
                 user::get_user_quota::handler,
                 user::get_legacy_user_permissions::handler,
                 user::patch_tutorial::handler,
+                user::stripe::create_checkout_session,
+                user::stripe::create_portal_session,
 
                 /// /session
                 session::session_login::handler,
@@ -145,6 +150,11 @@ use model::user::{
                         UserOrganizationResponse,
                         GetLegacyUserPermissionsResponse,
                         PatchUserTutorialRequest,
+
+                        // Stripe
+                        CreateCheckoutSessionRequest,
+                        CreatePortalSessionRequest,
+                        StripeSessionResponse,
 
                         // User onboarding
                         PatchUserGroupRequest,

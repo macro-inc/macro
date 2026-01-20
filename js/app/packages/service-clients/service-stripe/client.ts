@@ -1,28 +1,6 @@
-import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
-import { SERVER_HOSTS } from '@core/constant/servers';
+import { isOk } from '@core/util/maybeResult';
 import { registerClient } from '@core/util/mockClient';
-import { getAccessToken } from '@service-auth/client';
-import { LegacyApiRpcClient } from '../../codegen/auth_service/auth_service_rpc';
-
-// Create a singleton instance of the RPC client
-let rpcClientInstance: LegacyApiRpcClient | null = null;
-
-async function getRpcClient(): Promise<LegacyApiRpcClient> {
-  if (!rpcClientInstance) {
-    const headers = new Headers();
-
-    if (ENABLE_BEARER_TOKEN_AUTH) {
-      const token = await getAccessToken();
-      if (token) headers.set('Authorization', `Bearer ${token}`);
-    }
-
-    rpcClientInstance = LegacyApiRpcClient.construct_with_headers(
-      `${SERVER_HOSTS['auth-service']}/user`,
-      () => headers
-    );
-  }
-  return rpcClientInstance;
-}
+import { authServiceClient } from '@service-auth/client';
 
 export const stripeServiceClient = {
   /**
@@ -30,30 +8,36 @@ export const stripeServiceClient = {
    * @returns The URL of the checkout session
    */
   createCheckoutSession: async (type: string = '', discount?: string) => {
-    const variables = {
+    const result = await authServiceClient.createCheckoutSession({
       successUrl: `${window.location.origin}/app/?subscriptionSuccess=true${type ? `&type=${type}` : ''}`,
       cancelUrl: `${window.location.origin}/app`,
       discount: discount ?? null,
-    };
+    });
 
-    const client = await getRpcClient();
-    const data = await client.create_checkout_session(variables);
+    if (!isOk(result)) {
+      throw new Error(
+        result[0]?.[0]?.message ?? 'Failed to create checkout session'
+      );
+    }
 
-    return data.url;
+    return result[1];
   },
   /**
    * Creates a portal session
-   * @returns
+   * @returns The URL of the portal session
    */
   createPortalSession: async () => {
-    const variables = {
+    const result = await authServiceClient.createPortalSession({
       returnUrl: `${window.location.origin}/app`,
-    };
+    });
 
-    const client = await getRpcClient();
-    const res = await client.create_portal_session(variables);
+    if (!isOk(result)) {
+      throw new Error(
+        result[0]?.[0]?.message ?? 'Failed to create portal session'
+      );
+    }
 
-    return res.url;
+    return result[1];
   },
 };
 

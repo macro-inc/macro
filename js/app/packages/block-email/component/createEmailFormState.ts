@@ -1,4 +1,4 @@
-import { useEmail } from '@service-gql/client';
+import { useEmail } from '@queries/auth/user-info';
 import type { LexicalEditor } from 'lexical';
 import { createSignal, type Setter } from 'solid-js';
 import { createStore, reconcile, unwrap } from 'solid-js/store';

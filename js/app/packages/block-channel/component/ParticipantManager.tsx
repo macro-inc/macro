@@ -23,7 +23,7 @@ import { Dialog } from '@kobalte/core/dialog';
 import BracketLeft from '@macro-icons/macro-group-bracket-left.svg';
 import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
 import { ChannelType } from '@service-comms/generated/models/channelType';
-import { useUserId } from '@service-gql/client';
+import { useUserId } from '@queries/auth/user-info';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { VList } from 'virtua/solid';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';

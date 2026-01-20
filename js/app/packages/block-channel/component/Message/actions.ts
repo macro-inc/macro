@@ -7,7 +7,7 @@ import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
 import Pencil from '@phosphor-icons/core/regular/pencil.svg?component-solid';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { useDeleteMessageMutation } from '@queries/channel/message';
-import { useUserId } from '@service-gql/client';
+import { useUserId } from '@queries/auth/user-info';
 import { toast } from 'core/component/Toast/Toast';
 import type { Accessor, Component } from 'solid-js';
 import { createMemo } from 'solid-js';

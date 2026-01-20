@@ -42,7 +42,7 @@ import { debouncedDependent } from '@core/util/debounce';
 import { createFromMarkdownText } from '@core/util/md';
 import { getScrollParentElement } from '@core/util/scrollParent';
 import type { NodeIdMappings } from '@lexical-core';
-import { useUserId } from '@service-gql/client';
+import { useUserId } from '@queries/auth/user-info';
 import MacroGridLoader from '@macro-icons/macro-grid-noise-loader-4.svg';
 import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';

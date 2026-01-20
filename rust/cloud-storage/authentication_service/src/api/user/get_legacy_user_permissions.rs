@@ -6,7 +6,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use doppleganger::Doppleganger;
 use macro_middleware::user_permissions::attach_user_permissions::PermissionsExtractor;
 use macro_user_id::user_id::MacroUserId;
 use roles_and_permissions::domain::model::PermissionId;
@@ -16,8 +15,7 @@ use crate::api::context::ApiContext;
 use model::response::ErrorResponse;
 use model::user::UserContext;
 
-#[derive(serde::Serialize, Debug, utoipa::ToSchema, Doppleganger)]
-#[dg(forward = auth_service_rpc::GetLegacyUserPermissionsResponse)]
+#[derive(serde::Serialize, Debug, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GetLegacyUserPermissionsResponse {
     /// The user id
@@ -40,11 +38,16 @@ pub struct GetLegacyUserPermissionsResponse {
     has_trialed: bool,
 }
 
-#[derive(serde::Serialize, Debug, utoipa::ToSchema, Doppleganger)]
-#[dg(forward = auth_service_rpc::ABGroup)]
+#[derive(serde::Serialize, Debug, utoipa::ToSchema)]
 enum ABGroup {
     A,
     B,
+}
+
+impl IntoResponse for GetLegacyUserPermissionsResponse {
+    fn into_response(self) -> Response {
+        Json(self).into_response()
+    }
 }
 
 #[derive(thiserror::Error, Debug)]

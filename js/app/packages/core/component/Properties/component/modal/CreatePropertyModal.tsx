@@ -4,7 +4,7 @@ import { MODAL_VIEWPORT_CLASSES } from '@core/util/modalUtils';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
 import { useCreatePropertyDefinitionMutation } from '@queries/properties/definitions';
-import { useUserId } from '@service-gql/client';
+import { useUserId } from '@queries/auth/user-info';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { PropertyDataType } from '@service-properties/generated/schemas/propertyDataType';
 import {

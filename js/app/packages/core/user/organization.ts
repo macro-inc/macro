@@ -5,7 +5,7 @@ import {
   idToDisplayName,
 } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
-import { gqlServiceClient } from '@service-gql/client';
+import { authServiceClient } from '@service-auth/client';
 import { organizationServiceClient } from '@service-organization/client';
 import { createSingletonRoot } from '@solid-primitives/rootless';
 import { makePersisted } from '@solid-primitives/storage';
@@ -79,18 +79,27 @@ export const useOrganization = createSingletonRoot(() => {
   return createResource<{
     organizationId?: string | undefined;
     organizationName?: string | undefined;
-  }>(gqlServiceClient.getOrganization, {
-    initialValue: {
-      organizationId: undefined,
-      organizationName: undefined,
+  }>(
+    async () => {
+      const result = await authServiceClient.getOrganization();
+      if (result[0] === null) {
+        return result[1];
+      }
+      return { organizationId: undefined, organizationName: undefined };
     },
-    storage: (init) => {
-      const [get, set] = makePersisted(createSignal(init), {
-        name: 'organization',
-      });
-      return [get, set];
-    },
-  });
+    {
+      initialValue: {
+        organizationId: undefined,
+        organizationName: undefined,
+      },
+      storage: (init) => {
+        const [get, set] = makePersisted(createSignal(init), {
+          name: 'organization',
+        });
+        return [get, set];
+      },
+    }
+  );
 });
 
 export function useOrganizationName() {

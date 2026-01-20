@@ -25,7 +25,7 @@ import {
   useComboboxContext,
 } from '@kobalte/core/combobox';
 import type { Channel } from '@service-comms/generated/models/channel';
-import { useEmail, useUserId } from '@service-gql/client';
+import { useEmail, useUserId } from '@queries/auth/user-info';
 import { debounce } from '@solid-primitives/scheduled';
 import * as EmailValidator from 'email-validator';
 import {

@@ -19,7 +19,7 @@ import type { Message } from '@service-comms/generated/models/message';
 import type { ParticipantAccess } from '@service-comms/generated/models/participantAccess';
 import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
 import { createConnectionBlockWebsocketEffect } from '@service-connection/websocket';
-import { useUserId } from '@service-gql/client';
+import { useUserId } from '@queries/auth/user-info';
 import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { toast } from 'core/component/Toast/Toast';

@@ -6,6 +6,7 @@ import {
   isOk,
   mapOk,
   type ObjectLike,
+  ok,
   resultError,
 } from '@core/util/maybeResult';
 import { registerClient } from '@core/util/mockClient';
@@ -18,10 +19,13 @@ import type { PatchUserTutorialRequest, UserQuota } from './generated/schemas';
 import type { AppleLoginRequest } from './generated/schemas/appleLoginRequest';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
 import type { GenericSuccessResponse } from './generated/schemas/genericSuccessResponse';
+import type { GetLegacyUserPermissionsResponse } from './generated/schemas/getLegacyUserPermissionsResponse';
 import type { GetProfilePicturesRequestBody } from './generated/schemas/getProfilePicturesRequestBody';
 import type { GetUserInfo } from './generated/schemas/getUserInfo';
 import type { MacroApiTokenResponse } from './generated/schemas/macroApiTokenResponse';
 import type { PasswordRequest } from './generated/schemas/passwordRequest';
+import type { PatchUserGroupRequest } from './generated/schemas/patchUserGroupRequest';
+import type { PatchUserOnboardingRequest } from './generated/schemas/patchUserOnboardingRequest';
 import type { PostGetNamesRequestBody } from './generated/schemas/postGetNamesRequestBody';
 import type { ProfilePictures } from './generated/schemas/profilePictures';
 import type { PutProfilePictureParams } from './generated/schemas/putProfilePictureParams';
@@ -29,6 +33,7 @@ import type { PutUserNameQueryParams } from './generated/schemas/putUserNameQuer
 import type { UserLinkResponse } from './generated/schemas/userLinkResponse';
 import type { UserName } from './generated/schemas/userName';
 import type { UserNames } from './generated/schemas/userNames';
+import type { UserOrganizationResponse } from './generated/schemas/userOrganizationResponse';
 import type { UserTokensResponse } from './generated/schemas/userTokensResponse';
 
 const authHost = SERVER_HOSTS['auth-service'];
@@ -116,6 +121,8 @@ export async function getAccessToken(): Promise<string | null> {
 
   return accessToken;
 }
+
+export type { GetLegacyUserPermissionsResponse, UserOrganizationResponse };
 
 export const authServiceClient = {
   async logout() {
@@ -291,7 +298,7 @@ export const authServiceClient = {
   async macroApiToken() {
     const accessToken = await getAccessToken();
     if (!accessToken) {
-      console.warn('No access token found, fetching with cookies');
+      logger.warn('No access token found, fetching with cookies');
       return authApiFetch<MacroApiTokenResponse>('/jwt/macro_api_token');
     }
 
@@ -318,6 +325,99 @@ export const authServiceClient = {
         body: JSON.stringify(args),
       }),
       (result) => result
+    );
+  },
+
+  // HTTP methods (migrated from RPC)
+  async getLegacyUserPermissions() {
+    const result = await fetchWithAuth<GetLegacyUserPermissionsResponse>(
+      `${authHost}/user/legacy_user_permissions`,
+      { method: 'GET' }
+    );
+
+    return mapOk(result, (data) => ({
+      id: data.userId,
+      permissions: data.permissions,
+      email: data.email,
+      name: data.name,
+      licenseStatus: data.licenseStatus,
+      tutorialComplete: data.tutorialComplete,
+      group: data.group,
+      hasChromeExt: data.hasChromeExt,
+      authenticated: !!data.userId,
+      userId: data.userId,
+      hasTrialed: data.hasTrialed,
+    }));
+  },
+
+  async getOrganization() {
+    const response = await fetchWithAuth<UserOrganizationResponse>(
+      `${authHost}/user/organization`,
+      { method: 'GET' }
+    );
+
+    // If the response is an error, treat as no organization (204 No Content or other errors)
+    if (!isOk(response)) {
+      return ok({
+        organizationId: undefined as string | undefined,
+        organizationName: undefined as string | undefined,
+      });
+    }
+
+    return ok({
+      organizationId: String(response[1].organizationId) as string | undefined,
+      organizationName: response[1].organizationName as string | undefined,
+    });
+  },
+
+  async completeOnboarding(args: PatchUserOnboardingRequest) {
+    return mapOk(
+      await fetchWithAuth<EmptyResponse>(`${authHost}/user/onboarding`, {
+        method: 'PATCH',
+        body: JSON.stringify(args),
+      }),
+      () => undefined
+    );
+  },
+
+  async setGroup(args: PatchUserGroupRequest) {
+    return mapOk(
+      await fetchWithAuth<EmptyResponse>(`${authHost}/user/group`, {
+        method: 'PATCH',
+        body: JSON.stringify(args),
+      }),
+      () => undefined
+    );
+  },
+
+  // Stripe HTTP methods (replacing RPC calls)
+  async createCheckoutSession(args: {
+    successUrl: string;
+    cancelUrl: string;
+    discount?: string | null;
+  }) {
+    return mapOk(
+      await fetchWithAuth<{ url: string }>(`${authHost}/user/stripe/checkout`, {
+        method: 'POST',
+        body: JSON.stringify({
+          successUrl: args.successUrl,
+          cancelUrl: args.cancelUrl,
+          discount: args.discount ?? undefined,
+        }),
+      }),
+      (result) => result.url
+    );
+  },
+
+  async createPortalSession(args: { returnUrl: string }) {
+    return mapOk(
+      await fetchWithAuth<{ url: string }>(`${authHost}/user/stripe/portal`, {
+        method: 'POST',
+        body: JSON.stringify({
+          returnUrl: args.returnUrl,
+        }),
+      }),
+      (result) => result.url
     );
   },
 };

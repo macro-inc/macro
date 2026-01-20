@@ -3,8 +3,8 @@ use either::Either;
 use filter_ast::{ExpandFrame, Expr, FoldTree, TryExpandNode};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_file_type::{
-    Archive, Audio, Canvas, Code, Data, Database, Document, Executable, FileAssociation, FileType,
-    Font, Image, Md, Media, Pdf, ThreeD, ValueError, Vector, Video, Vm, Write,
+    Archive, Canvas, Code, Document, FileAssociation, FileType, Image, Md, Pdf, ValueError, Video,
+    Write,
 };
 use nom::{
     IResult, Parser, branch::alt, bytes::complete::tag, combinator::eof, sequence::separated_pair,
@@ -48,17 +48,8 @@ fn file_association(s: &str) -> IResult<&str, FileAssociation> {
         assotiation::<Code>("code").map(FileAssociation::from),
         assotiation::<Image>("image").map(FileAssociation::from),
         assotiation::<Archive>("archive").map(FileAssociation::from),
-        assotiation::<Executable>("executable").map(FileAssociation::from),
-        assotiation::<Audio>("audio").map(FileAssociation::from),
         assotiation::<Video>("video").map(FileAssociation::from),
-        assotiation::<Font>("font").map(FileAssociation::from),
         assotiation::<Document>("document").map(FileAssociation::from),
-        assotiation::<Database>("database").map(FileAssociation::from),
-        assotiation::<Data>("data").map(FileAssociation::from),
-        assotiation::<Vector>("vector").map(FileAssociation::from),
-        assotiation::<ThreeD>("3d").map(FileAssociation::from),
-        assotiation::<Vm>("vm").map(FileAssociation::from),
-        assotiation::<Media>("media").map(FileAssociation::from),
     ))
     .parse(s)
 }

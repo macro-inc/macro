@@ -17,7 +17,6 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createBlockOrchestrator } from '@core/orchestrator';
 import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
 import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
-import { isErr } from '@core/util/maybeResult';
 import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
 import { MaybeTauriProvider } from '@macro/tauri';
@@ -31,7 +30,7 @@ import { maybeHandlePlatformNotification } from '@notifications/notification-pla
 import { setUser, useObserveRouting } from '@observability';
 import { fetchAndCacheHistory } from '@queries/history/history';
 import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
-import { gqlServiceClient } from '@service-gql/client';
+import { invalidateUserInfo, prefetchUserInfo } from '@queries/auth/user-info';
 import { MetaProvider, Title } from '@solidjs/meta';
 import {
   HashRouter,
@@ -46,6 +45,7 @@ import { useHotKeyRoot } from 'core/hotkey/hotkeys';
 import { detect } from 'detect-browser';
 import {
   createEffect,
+  createResource,
   type JSX,
   lazy,
   onCleanup,
@@ -114,34 +114,51 @@ const rootPreload: RoutePreloadFunc = async (args) => {
     window.history.replaceState(args.location.state, '', url);
   }
   track(TrackingEvents.AUTH.START);
-  // TODO: load general data like sidepanel, etc.
-  const userInfoResult = await gqlServiceClient.getUserInfo();
-  if (isErr(userInfoResult)) return;
+  // User info fetch moved to UserInfoPreloader component (inside QueryClientProvider)
+};
 
-  const [, { id, email, hasChromeExt, ...userInfo }] = userInfoResult;
-  const platform = detect(navigator.userAgent);
-  const os = `${platform?.os?.replaceAll(' ', '')}`;
+/**
+ * Component that preloads user info and populates the TanStack Query cache.
+ * Uses createResource with prefetchUserInfo so it works outside QueryClientProvider context.
+ */
+function UserInfoPreloader(props: ParentProps) {
+  const [userInfoResource] = createResource(prefetchUserInfo);
 
-  if (id) {
-    if (email) {
-      setUser({
-        ...userInfo,
-        id,
-        email,
-        hasChromeExt,
-        // ...utmObj,
+  // Run side effects when user data is available
+  createEffect(() => {
+    const data = userInfoResource();
+    if (!data) return;
+
+    const { id, email, hasChromeExt, ...userInfo } = data;
+    const platform = detect(navigator.userAgent);
+    const os = `${platform?.os?.replaceAll(' ', '')}`;
+
+    if (id) {
+      if (email) {
+        setUser({
+          ...userInfo,
+          id,
+          email,
+          hasChromeExt,
+        });
+      }
+
+      if (PROD_MODE_ENV) {
+        identify(id, { email, os, hasChromeExt });
+      }
+
+      fetchAndCacheHistory().catch(() => {
+        // Non-blocking - command menu will still work without prefetch
       });
     }
+  });
 
-    if (PROD_MODE_ENV) {
-      identify(id, { email, os, hasChromeExt });
-    }
-
-    fetchAndCacheHistory().catch(() => {
-      // Non-blocking - command menu will still work without prefetch
-    });
-  }
-};
+  return (
+    <Show when={!userInfoResource.loading} fallback={null}>
+      {props.children}
+    </Show>
+  );
+}
 
 function BasePathComponent() {
   const [searchParams] = useSearchParams();
@@ -343,7 +360,7 @@ export function Root() {
 
   createEffect(() => {
     const cleanup = licenseChannel.subscribe(() => {
-      gqlServiceClient.getUserInfo.invalidate();
+      invalidateUserInfo();
     });
 
     onCleanup(() => cleanup());
@@ -386,34 +403,36 @@ export function Root() {
     <MaybeTauriProvider>
       <MetaProvider>
         <EntityProvider>
-          <ConfiguredGlobalAppStateProvider>
-            <ChannelsContextProvider>
-              <Title>{tabTitle()}</Title>
-              <MacroJump />
-              <Visor />
-              <Show when={ENABLE_WHICHKEY_OVERLAY}>
-                <WhichKey />
-              </Show>
-              <SuspenseContextComp fallback={<RootSuspenseFallback />}>
-                <IsomorphicRouter
-                  transformUrl={transformShortIdInUrlPathname}
-                  root={Layout}
-                  rootPreload={rootPreload}
-                  base={routerBase}
-                >
-                  {{
-                    path: '/',
-                    component: TauriRouteListener,
-                    children: ROUTES,
-                  }}
-                </IsomorphicRouter>
-              </SuspenseContextComp>
-              <ToastRegion />
-              <Show when={ENABLE_WEBSOCKET_DEBUGGER}>
-                <WebsocketDebugger />
-              </Show>
-            </ChannelsContextProvider>
-          </ConfiguredGlobalAppStateProvider>
+          <UserInfoPreloader>
+            <ConfiguredGlobalAppStateProvider>
+              <ChannelsContextProvider>
+                <Title>{tabTitle()}</Title>
+                <MacroJump />
+                <Visor />
+                <Show when={ENABLE_WHICHKEY_OVERLAY}>
+                  <WhichKey />
+                </Show>
+                <SuspenseContextComp fallback={<RootSuspenseFallback />}>
+                  <IsomorphicRouter
+                    transformUrl={transformShortIdInUrlPathname}
+                    root={Layout}
+                    rootPreload={rootPreload}
+                    base={routerBase}
+                  >
+                    {{
+                      path: '/',
+                      component: TauriRouteListener,
+                      children: ROUTES,
+                    }}
+                  </IsomorphicRouter>
+                </SuspenseContextComp>
+                <ToastRegion />
+                <Show when={ENABLE_WEBSOCKET_DEBUGGER}>
+                  <WebsocketDebugger />
+                </Show>
+              </ChannelsContextProvider>
+            </ConfiguredGlobalAppStateProvider>
+          </UserInfoPreloader>
         </EntityProvider>
       </MetaProvider>
     </MaybeTauriProvider>

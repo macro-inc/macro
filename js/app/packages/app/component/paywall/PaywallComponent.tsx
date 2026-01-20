@@ -3,7 +3,7 @@ import { type PaywallKey, PaywallMessages } from '@core/constant/PaywallState';
 import IconCheck from '@icon/regular/check-circle.svg';
 import IconX from '@icon/regular/x.svg';
 import Dot from '@phosphor-icons/core/regular/dot.svg?component-solid';
-import { useUserInfo } from '@service-gql/client';
+import { useHasTrialed } from '@queries/auth/user-info';
 import { stripeServiceClient } from '@service-stripe/client';
 import { createSignal, For, onMount, Show } from 'solid-js';
 
@@ -30,7 +30,7 @@ interface PaywallComponent {
 }
 
 const PaywallComponent = (props: PaywallComponent) => {
-  const [userInfo] = useUserInfo();
+  const hasTrialedQuery = useHasTrialed();
   const [hasTrialed, setHasTrialed] = createSignal(false);
   const [selectedPlan, setSelectedPlan] = createSignal<'guest' | 'member'>(
     'member'
@@ -38,7 +38,7 @@ const PaywallComponent = (props: PaywallComponent) => {
   const hasPaid = useHasPaidAccess();
 
   onMount(() => {
-    if (userInfo()[1]?.hasTrialed) {
+    if (hasTrialedQuery()) {
       setHasTrialed(true);
     }
   });
