@@ -11,23 +11,35 @@ import type { NotificationSource } from '../notification-source';
 
 const DEFAULT_DEBOUNCE_TIME = 2_000;
 
-function DebouncedMarker(props: {
+type DebouncedMarkerProps = {
   debouncedFn: () => void;
   debounceTime?: number;
-}) {
+};
+
+export const makeDebouncedMarker = (props: DebouncedMarkerProps) => {
   const debounceTime = props.debounceTime ?? DEFAULT_DEBOUNCE_TIME;
   let timeout: ReturnType<typeof setTimeout> | undefined;
-
-  onMount(() => {
-    timeout = setTimeout(() => {
-      props.debouncedFn();
-    }, debounceTime);
-  });
 
   onCleanup(() => {
     if (timeout) {
       clearTimeout(timeout);
     }
+  });
+
+  const trigger = () => {
+    timeout = setTimeout(() => {
+      props.debouncedFn();
+    }, debounceTime);
+  };
+
+  return trigger;
+};
+
+function DebouncedMarker(props: DebouncedMarkerProps) {
+  const triggerDebounce = makeDebouncedMarker(props);
+
+  onMount(() => {
+    triggerDebounce();
   });
 
   return '';
@@ -90,11 +102,29 @@ export function DocumentDebouncedNotificationReadMarker(props: {
   );
 }
 
-export function ChannelDebouncedNotificationReadMarker(props: {
+type ChannelDebouncedNotificationReadMarkerProps = {
   notificationSource: NotificationSource;
   debounceTime?: number;
   channelId: string;
-}) {
+};
+
+export const makeDebouncedChannelNoficiationReadMarker = (
+  props: ChannelDebouncedNotificationReadMarkerProps
+) => {
+  return makeDebouncedMarker({
+    debounceTime: props.debounceTime,
+    debouncedFn() {
+      markNotificationsForEntityAsRead(props.notificationSource, {
+        type: 'channel',
+        id: props.channelId,
+      });
+    },
+  });
+};
+
+export function ChannelDebouncedNotificationReadMarker(
+  props: ChannelDebouncedNotificationReadMarkerProps
+) {
   return (
     <DebouncedNotificationReadMarker
       notificationSource={props.notificationSource}
