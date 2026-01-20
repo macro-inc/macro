@@ -43,6 +43,8 @@ import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import { fuzzyFilter } from '@core/util/fuzzy';
 import { mergeRefs } from '@solid-primitives/refs';
 import { PropertyDataTypeIcon } from '@core/component/Properties/utils';
+import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
+import { useKeyPressed } from '@core/util/useKeyPressed';
 
 type ListNavActions = {
   next: VoidFunction;
@@ -394,7 +396,12 @@ function PropertyValueEditor(props: {
           property={props.property}
           searchValue={props.searchValue}
           setSearchValue={props.setSearchValue}
+          selectedIndex={props.selectedIndex}
+          setSelectedIndex={props.setSelectedIndex}
+          setSelectedIndexFromMouse={props.setSelectedIndexFromMouse}
           onSubmit={handleSubmit}
+          setKeybindings={props.setKeybindings}
+          setPlaceholder={props.setPlaceholder}
         />
       </Match>
       <Match when={propertyType() === 'LINK'}>
@@ -530,8 +537,29 @@ function DirectEditPropertyEditor(props: {
   property?: Property | PropertyDefinitionDomain;
   searchValue: Accessor<string>;
   setSearchValue: Setter<string>;
+  selectedIndex: Accessor<number>;
+  setSelectedIndex: Setter<number>;
+  setSelectedIndexFromMouse: (index: number) => void;
   onSubmit: (value: string | number | boolean | Date) => void;
+  setKeybindings: (binding: ListNavActions) => void;
+  setPlaceholder: Setter<string>;
 }) {
+  // Show date picker for DATE type properties
+  if (props.property?.valueType === 'DATE') {
+    return (
+      <DatePropertyEditor
+        property={props.property}
+        searchValue={props.searchValue}
+        selectedIndex={props.selectedIndex}
+        setSelectedIndex={props.setSelectedIndex}
+        setSelectedIndexFromMouse={props.setSelectedIndexFromMouse}
+        onSubmit={props.onSubmit as (value: Date) => void}
+        setKeybindings={props.setKeybindings}
+        setPlaceholder={props.setPlaceholder}
+      />
+    );
+  }
+
   let inputRef: HTMLInputElement | undefined;
 
   onMount(() => {
@@ -549,68 +577,149 @@ function DirectEditPropertyEditor(props: {
       }
     } else if (type === 'BOOLEAN') {
       props.onSubmit(value.toLowerCase() === 'true');
-    } else if (type === 'DATE') {
-      const date = new Date(value);
-      if (!isNaN(date.getTime())) {
-        props.onSubmit(date);
-      }
     } else {
       props.onSubmit(value);
     }
   };
 
-  const getInputType = () => {
-    switch (props.property?.valueType) {
-      case 'NUMBER':
-        return 'number';
-      case 'DATE':
-        return 'datetime-local';
-      default:
-        return 'text';
-    }
-  };
-
-  const getPlaceholder = () => {
+  createEffect(() => {
     const name = props.property?.displayName || 'value';
-    switch (props.property?.valueType) {
-      case 'BOOLEAN':
-        return `Enter true or false for ${name}`;
-      case 'NUMBER':
-        return `Enter number for ${name}`;
-      case 'DATE':
-        return `Enter date for ${name}`;
-      default:
-        return `Enter ${name}`;
+    const type = props.property?.valueType;
+
+    let placeholderText = `Enter ${name}`;
+    if (type === 'BOOLEAN') {
+      placeholderText = `Enter true or false for ${name}`;
+    } else if (type === 'NUMBER') {
+      placeholderText = `Enter number for ${name}`;
     }
-  };
+
+    props.setPlaceholder(placeholderText);
+  });
+
+  props.setKeybindings({
+    select: () => {
+      handleSubmit();
+    },
+    next: () => {},
+    previous: () => {},
+  });
+
+  return (
+    <div class="p-2 border-t border-edge-muted">
+      <button
+        type="button"
+        class="flex items-center justify-center w-full px-3 py-2 bg-hover text-sm font-medium"
+        onClick={handleSubmit}
+      >
+        Set Value
+      </button>
+    </div>
+  );
+}
+
+function DatePropertyEditor(props: {
+  property: Property | PropertyDefinitionDomain;
+  searchValue: Accessor<string>;
+  selectedIndex: Accessor<number>;
+  setSelectedIndex: Setter<number>;
+  setSelectedIndexFromMouse: (index: number) => void;
+  onSubmit: (value: Date) => void;
+  setKeybindings: (binding: ListNavActions) => void;
+  setPlaceholder: Setter<string>;
+}) {
+  createEffect(() => {
+    props.setPlaceholder(`Set ${props.property.displayName.toLowerCase()}...`);
+  });
+
+  const dateOptions = useDateSearch({
+    query: props.searchValue,
+  });
+
+  createEffect(
+    on(dateOptions, (options) => {
+      if (options.length === 0) {
+        props.setSelectedIndex(0);
+      } else {
+        props.setSelectedIndex(
+          Math.min(props.selectedIndex(), options.length - 1)
+        );
+      }
+    })
+  );
+
+  props.setKeybindings({
+    select: () => {
+      const selected = dateOptions()[props.selectedIndex()];
+      if (selected) {
+        props.onSubmit(selected.date);
+      }
+    },
+    next: () => {
+      const len = dateOptions().length;
+      props.setSelectedIndex((prev) => (prev + 1) % len);
+    },
+    previous: () => {
+      const len = dateOptions().length;
+      props.setSelectedIndex((prev) => (prev - 1 + len) % len);
+    },
+  });
+
+  const selector = createSelector(props.selectedIndex);
 
   return (
     <>
-      <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted shrink-0">
-        <input
-          ref={inputRef}
-          class="w-full caret-accent"
-          type={getInputType()}
-          placeholder={getPlaceholder()}
-          value={props.searchValue()}
-          onInput={(e) => props.setSearchValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              handleSubmit();
-            }
-          }}
-          autofocus
-        />
-      </div>
-      <div class="p-2 border-t border-edge-muted">
-        <button
-          type="button"
-          class="flex items-center justify-center w-full px-3 py-2 bg-hover text-sm font-medium"
-          onClick={handleSubmit}
+      <div class="p-1 max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden">
+        <Show
+          when={dateOptions().length > 0}
+          fallback={
+            <Show
+              when={props.searchValue().trim()}
+              fallback={
+                <div class="text-center py-4 text-ink-muted text-sm">
+                  Enter a date or duration
+                </div>
+              }
+            >
+              <div class="text-center py-4 text-ink-muted text-sm">
+                No dates match "{props.searchValue()}"
+              </div>
+            </Show>
+          }
         >
-          Set Value
-        </button>
+          <For each={dateOptions()}>
+            {(option, index) => (
+              <button
+                type="button"
+                id={`date-option-${index()}`}
+                class={cn(
+                  'flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2',
+                  {
+                    'bg-hover bracket': selector(index()),
+                  }
+                )}
+                onClick={() => props.onSubmit(option.date)}
+                onMouseEnter={() => props.setSelectedIndexFromMouse(index())}
+              >
+                <div class="flex-1 text-left">
+                  <p class="text-sm font-medium">{option.displayText}</p>
+                </div>
+                <span class="text-xs text-ink-muted">
+                  {option.secondaryText}
+                </span>
+              </button>
+            )}
+          </For>
+        </Show>
+      </div>
+
+      <div class="px-2 py-1.5 border-t border-edge-muted">
+        <div class="text-xs text-ink-muted">
+          <span>Use queries like </span>
+          <code class="bg-active px-1">3d</code>,{' '}
+          <code class="bg-active px-1">1w</code>,{' '}
+          <code class="bg-active px-1">feb 17</code>, or{' '}
+          <code class="bg-active px-1">tomorrow</code>
+        </div>
       </div>
     </>
   );
