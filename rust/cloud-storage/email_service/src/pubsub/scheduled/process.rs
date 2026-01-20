@@ -19,11 +19,47 @@ pub async fn process_message(
     // Parse the incoming message
     let data = extract_scheduled_message(message)?;
 
+    let result = process_scheduled_message_inner(&ctx, &data).await;
+
+    if let Err(ref e) = result {
+        tracing::error!(
+            error = ?e,
+            message_id = %data.message_id,
+            link_id = %data.link_id,
+            "Failed to process scheduled message - clearing processing flag"
+        );
+        if let Err(clear_err) =
+            email_db_client::messages::scheduled::upsert::clear_scheduled_message_processing(
+                &ctx.db,
+                data.link_id,
+                data.message_id,
+            )
+            .await
+        {
+            tracing::error!(
+                error = ?clear_err,
+                message_id = %data.message_id,
+                link_id = %data.link_id,
+                "Failed to clear processing flag"
+            );
+        }
+        return result;
+    }
+
+    cleanup_message(&ctx.sqs_worker, message).await?;
+
+    Ok(())
+}
+
+#[tracing::instrument(skip(ctx), err)]
+async fn process_scheduled_message_inner(
+    ctx: &ScheduledContext,
+    data: &ScheduledPubsubMessage,
+) -> anyhow::Result<()> {
     let link = email_db_client::links::get::fetch_link_by_id(&ctx.db, data.link_id).await?;
 
     let Some(link) = link else {
         tracing::debug!(link_id=%data.link_id, "Link not found - skipping");
-        cleanup_message(&ctx.sqs_worker, message).await?;
         return Ok(());
     };
 
@@ -43,7 +79,6 @@ pub async fn process_message(
                     message_id = ?data.message_id,
                     "Scheduled message not found"
                 );
-                cleanup_message(&ctx.sqs_worker, message).await?;
                 return Ok(());
             }
             Err(e) => {
@@ -60,12 +95,14 @@ pub async fn process_message(
             link_id=%data.link_id,
             "Scheduled message already sent - skipping"
         );
+        return Ok(());
     } else if scheduled_message.processing {
         tracing::warn!(
             message_id=%data.message_id,
             link_id=%data.link_id,
             "Scheduled message already being processed - skipping"
         );
+        return Ok(());
     } else if scheduled_message.send_time > Utc::now() {
         tracing::warn!(
             message_id=%data.message_id,
@@ -73,100 +110,94 @@ pub async fn process_message(
             send_time=scheduled_message.send_time.to_string(),
             "Scheduled message send_time is in the future - skipping"
         );
-    } else {
-        // fetch message from db
-        let (mut message_to_send, sender_contact) =
-            email_db_client::messages::get::get_message_to_send(
-                &ctx.db,
-                data.message_id,
-                data.link_id,
-            )
+        return Ok(());
+    }
+
+    // fetch message from db
+    let (mut message_to_send, sender_contact) =
+        email_db_client::messages::get::get_message_to_send(&ctx.db, data.message_id, data.link_id)
             .await
             .context(format!(
                 "Failed to fetch message to gmail api for message_id {}",
                 data.message_id
             ))?;
 
-        // generate headers
-        let (parent_message_id, references) =
-            generate_email_threading_headers(&ctx.db, message_to_send.replying_to_id, data.link_id)
-                .await;
+    // generate headers
+    let (parent_message_id, references) =
+        generate_email_threading_headers(&ctx.db, message_to_send.replying_to_id, data.link_id)
+            .await;
 
-        // Include attachments for message
-        let db_attachments = fetch_and_attach_draft_attachments(
-            &ctx.db,
-            &ctx.s3_client,
-            ctx.attachment_bucket.as_str(),
-            &link,
+    // Include attachments for message
+    let db_attachments = fetch_and_attach_draft_attachments(
+        &ctx.db,
+        &ctx.s3_client,
+        ctx.attachment_bucket.as_str(),
+        &link,
+        &mut message_to_send,
+    )
+    .await?;
+
+    // send message to gmail api
+    ctx.gmail_client
+        .send_message(
+            gmail_access_token.as_str(),
             &mut message_to_send,
+            &sender_contact,
+            parent_message_id,
+            references,
         )
-        .await?;
+        .await
+        .context(format!(
+            "Failed to send message to gmail api for message_id {}",
+            data.message_id
+        ))?;
 
-        // send message to gmail api
-        ctx.gmail_client
-            .send_message(
-                gmail_access_token.as_str(),
-                &mut message_to_send,
-                &sender_contact,
-                parent_message_id,
-                references,
-            )
-            .await
-            .context(format!(
-                "Failed to send message to gmail api for message_id {}",
-                data.message_id
-            ))?;
+    let mut tx = ctx
+        .db
+        .begin()
+        .await
+        .context("Failed to begin transaction")?;
 
-        let mut tx = ctx
-            .db
-            .begin()
-            .await
-            .context("Failed to begin transaction")?;
+    let result = process_sent_message(tx.as_mut(), &message_to_send).await;
 
-        let result = process_sent_message(tx.as_mut(), &message_to_send).await;
+    match result {
+        Ok(_) => {
+            tx.as_mut()
+                .commit()
+                .await
+                .context("Failed to commit transaction")?;
 
-        match result {
-            Ok(_) => {
-                tx.as_mut()
-                    .commit()
-                    .await
-                    .context("Failed to commit transaction")?;
-
-                // Cleanup attachments in the background after successful send
-                if let (Some(draft_id), Some(attachments)) = (message_to_send.db_id, db_attachments)
-                {
-                    let db = ctx.db.clone();
-                    let s3_client = ctx.s3_client.clone();
-                    let bucket = ctx.attachment_bucket.clone();
-                    let link_id = link.id;
-                    tokio::spawn(async move {
-                        cleanup_draft_attachments(
-                            db,
-                            &s3_client,
-                            bucket,
-                            link_id,
-                            draft_id,
-                            attachments,
-                        )
-                        .await;
-                    });
-                }
-            }
-            Err(e) => {
-                if let Err(rollback_err) = tx.as_mut().rollback().await {
-                    tracing::error!(
-                        error = ?rollback_err,
-                        link_id = ?data.link_id,
-                        message_id = ?data.message_id,
-                        "Failed to rollback transaction after marking messages as sent failure"
-                    );
-                }
-                return Err(e);
+            // Cleanup attachments in the background after successful send
+            if let (Some(draft_id), Some(attachments)) = (message_to_send.db_id, db_attachments) {
+                let db = ctx.db.clone();
+                let s3_client = ctx.s3_client.clone();
+                let bucket = ctx.attachment_bucket.clone();
+                let link_id = link.id;
+                tokio::spawn(async move {
+                    cleanup_draft_attachments(
+                        db,
+                        &s3_client,
+                        bucket,
+                        link_id,
+                        draft_id,
+                        attachments,
+                    )
+                    .await;
+                });
             }
         }
+        Err(e) => {
+            if let Err(rollback_err) = tx.as_mut().rollback().await {
+                tracing::error!(
+                    error = ?rollback_err,
+                    link_id = ?data.link_id,
+                    message_id = ?data.message_id,
+                    "Failed to rollback transaction after marking messages as sent failure"
+                );
+            }
+            return Err(e);
+        }
     }
-
-    cleanup_message(&ctx.sqs_worker, message).await?;
 
     Ok(())
 }
