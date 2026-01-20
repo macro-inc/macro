@@ -57,6 +57,8 @@ import { type FocusableElement, tabbable } from 'tabbable';
 import { ChannelInput } from './ChannelInput';
 import { MessageList, type TargetMessageInfo } from './MessageList/MessageList';
 import { Top } from './Top';
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import { makeDebouncedChannelNoficiationReadMarker } from '@notifications/components/DebouncedNotificationReadMarker';
 
 false && fileFolderDrop;
 
@@ -314,6 +316,23 @@ export function Channel(props: {
       onCleanup(() => {
         resizeObserver.disconnect();
       });
+    })
+  );
+
+  const debouncedMarkAsRead = makeDebouncedChannelNoficiationReadMarker({
+    notificationSource: notificationSource,
+    channelId,
+  });
+
+  const splitContext = useSplitPanelOrThrow();
+
+  createEffect(
+    on(splitContext.isPanelActive, (isPanelActive, wasPanelActive) => {
+      if (wasPanelActive !== false) return;
+
+      if (isPanelActive) {
+        debouncedMarkAsRead();
+      }
     })
   );
 
