@@ -1,4 +1,5 @@
 import { catchToResult, throwOnErr } from '@core/util/maybeResult';
+import { hasLoginCookie } from '@core/util/cookies';
 import { authServiceClient } from '@service-auth/client';
 import { useQuery } from '@tanstack/solid-query';
 import { queryClient } from '../client';
@@ -55,21 +56,6 @@ export async function invalidateUserInfo() {
       queryKey: authKeys.userInfo.queryKey,
     });
   }
-}
-
-/**
- * Check if the user appears to be authenticated based on the login cookie.
- */
-function hasLoginCookie(): boolean {
-  if (typeof document === 'undefined') return false;
-  const cookies = document.cookie.split(';');
-  for (const cookie of cookies) {
-    const [name, value] = cookie.trim().split('=');
-    if (name === 'login' && value === 'true') {
-      return true;
-    }
-  }
-  return false;
 }
 
 /** Ensure user info is in the query cache. Fetches if not present. */

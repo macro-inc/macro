@@ -7,7 +7,8 @@ export const BrowserNotificationModal = () => {
 
   if (!settings.isSupported) return null;
 
-  // TODO: should add auth check back
+  // Note: Auth check removed - this component renders outside UserContextProvider.
+  // The modal only shows after shouldPrompt() which requires user interaction anyway.
   const shouldShow = createMemo(
     () => !import.meta.env.DEV && settings.shouldPrompt()
   );

@@ -1,23 +1,8 @@
 import { createMemo, createSignal, type Accessor } from 'solid-js';
 import { useUserInfoQuery, type UserInfoData } from '@queries/auth/user-info';
 import { queryReadyGate } from '@queries/gate';
+import { hasLoginCookie } from '@core/util/cookies';
 import { createAssertedContextProvider } from './createContext';
-
-/**
- * Check if the user appears to be authenticated based on the login cookie.
- * This prevents making auth requests during unauthenticated flows (like signup).
- */
-function hasLoginCookie(): boolean {
-  if (typeof document === 'undefined') return false;
-  const cookies = document.cookie.split(';');
-  for (const cookie of cookies) {
-    const [name, value] = cookie.trim().split('=');
-    if (name === 'login' && value === 'true') {
-      return true;
-    }
-  }
-  return false;
-}
 
 // Signal to track if we should enable the user info query.
 // Initially based on login cookie, can be enabled after authentication.
