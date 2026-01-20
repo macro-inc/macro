@@ -115,7 +115,10 @@ export function Layout(props: RouteSectionProps) {
           <ShortcutsHelper />
         </Show>
         <Show
-          when={!isAuthenticated() && !AUTH_URLS.includes(location.pathname)}
+          when={
+            isAuthenticated() === false &&
+            !AUTH_URLS.includes(location.pathname)
+          }
         >
           <Banner />
         </Show>
