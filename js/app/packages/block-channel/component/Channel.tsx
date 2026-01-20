@@ -328,15 +328,11 @@ export function Channel(props: {
     channelId,
   });
 
-  createEffectOnEntityTypeNotification(
-    notificationSource,
-    'channel',
-    (notification) => {
-      if (splitContext.isPanelActive()) {
-        debouncedMarkAsRead();
-      }
+  createEffectOnEntityTypeNotification(notificationSource, 'channel', () => {
+    if (splitContext.isPanelActive()) {
+      debouncedMarkAsRead();
     }
-  );
+  });
 
   const hasNotifications = useEntityHasUnreadNotifications(notificationSource, {
     type: 'channel',
