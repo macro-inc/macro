@@ -174,7 +174,7 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
                   </span>
                 </div>
                 <button
-                  onClick={handleClearDate.bind(true)}
+                  onClick={() => handleClearDate(true)}
                   class="text-xs text-ink-muted hover:text-ink underline"
                 >
                   Clear
