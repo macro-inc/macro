@@ -1,10 +1,6 @@
 import { $isCodeNode } from '@lexical/code';
 import { $findMatchingParent } from '@lexical/utils';
-import type {
-  LexicalNode,
-  RangeSelection,
-  SerializedLexicalNode,
-} from 'lexical';
+import type { LexicalNode, SerializedLexicalNode } from 'lexical';
 
 export * from './document';
 export * from './languageSupport';
@@ -37,17 +33,4 @@ export function $isChildOfCode(node: LexicalNode) {
     return $isCodeNode(node);
   });
   return Boolean(parent);
-}
-
-/**
- * Resets the capitalization of the selection to default.
- * Called when the user presses space, tab, or enter key.
- * @param selection The selection to reset the capitalization of.
- */
-export function $resetCapitalization(selection: RangeSelection) {
-  for (const format of ['lowercase', 'uppercase', 'capitalize'] as const) {
-    if (selection.hasFormat(format)) {
-      selection.toggleFormat(format);
-    }
-  }
 }

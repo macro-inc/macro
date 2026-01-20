@@ -3,11 +3,8 @@ import type { EditorType } from '@lexical-core';
 import type { Item } from '@service-storage/generated/schemas/item';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import {
-  $getSelection,
-  $isRangeSelection,
   COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_HIGH,
-  INSERT_LINE_BREAK_COMMAND,
   KEY_ENTER_COMMAND,
   KEY_ESCAPE_COMMAND,
   KEY_TAB_COMMAND,
@@ -58,13 +55,6 @@ import { FloatingLinkMenu } from '../menu/FloatingLinkMenu';
 import { MentionsMenu } from '../menu/MentionsMenu';
 import { DecoratorRenderer } from './DecoratorRenderer';
 import { NodeAccessoryRenderer } from './NodeAccessoryRenderer';
-import {
-  IS_IOS,
-  IS_SAFARI,
-  IS_APPLE_WEBKIT,
-  CAN_USE_BEFORE_INPUT,
-} from '@lexical/utils';
-import { $resetCapitalization } from '@lexical-core/utils';
 
 /**
  * @param editable - A signal that indicates whether the textarea is editable
