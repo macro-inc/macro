@@ -295,7 +295,6 @@ export async function removeHistoryItem(
   itemType: CloudStorageItemType,
   itemId: string
 ): Promise<boolean> {
-  // Optimistically remove from cache
   queryClient.setQueryData<HistoryQueryResponse>(
     historyKeys.list.queryKey,
     (old) => {
@@ -363,13 +362,11 @@ export async function insertProjectIntoHistory(projectId: string) {
   const newData: HistoryQueryResponse['data'] = [];
   const ids = [projectId];
 
-  // Upsert the project to history on server
   storageServiceClient.upsertItemToUserHistory({
     itemId: projectId,
     itemType: 'project',
   });
 
-  // Recursively fetch all nested project content
   while (ids.length > 0) {
     const id = ids.shift();
     if (!id) continue;
@@ -378,7 +375,6 @@ export async function insertProjectIntoHistory(projectId: string) {
       id,
     });
     if (isOk(projectContent)) {
-      // Queue nested projects for processing
       ids.push(
         ...projectContent[1].data.reduce<string[]>((acc, { item }) => {
           if (
@@ -394,7 +390,6 @@ export async function insertProjectIntoHistory(projectId: string) {
     }
   }
 
-  // Optimistically update the cache
   queryClient.setQueryData<HistoryQueryResponse>(
     historyKeys.list.queryKey,
     (old) => {
@@ -406,7 +401,6 @@ export async function insertProjectIntoHistory(projectId: string) {
     }
   );
 
-  // Upsert new items to server
   const upsertResults = newData
     .filter((item) => !prevData.some(({ id }) => id === item.id))
     .map(({ id, type }) =>
@@ -416,7 +410,5 @@ export async function insertProjectIntoHistory(projectId: string) {
       })
     );
   await Promise.all(upsertResults);
-
-  // Refetch to ensure consistency
   await refetchHistory();
 }

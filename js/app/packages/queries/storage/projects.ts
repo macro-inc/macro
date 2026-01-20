@@ -96,12 +96,10 @@ export async function createProject(params: {
 
   if (isOk(maybeResult)) {
     const projectId = maybeResult[1].id;
-    // Upsert to history
     await storageServiceClient.upsertItemToUserHistory({
       itemId: projectId,
       itemType: 'project',
     });
-    // Invalidate caches
     await Promise.all([invalidateProjects(), refetchHistory()]);
     return projectId;
   }

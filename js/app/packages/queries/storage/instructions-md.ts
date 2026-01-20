@@ -65,9 +65,7 @@ const getInstructionsMdText = async (id: string | null | undefined) => {
     documentId: id,
   });
 
-  // Create lexical editor with raw JSON state
   const { editor } = createLexicalWrapper({
-    // this should be plain-text but there might be edge cases so we don't want to throw
     type: 'markdown',
     namespace: 'instructions-md-text-extractor',
     isInteractable: () => false,
