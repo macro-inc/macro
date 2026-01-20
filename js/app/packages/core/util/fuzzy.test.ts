@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   fuzzyMatch,
-  fuzzyScoreCommaSeparated,
-  fuzzyTestCommaSeparated,
-  highlightCommaSeparatedMatches,
+  fuzzyScoreCommaSpaceSeparated,
+  fuzzyTestCommaSpaceSeparated,
+  highlightCommaSpaceSeparatedMatches,
 } from './fuzzy';
 
 interface TestItem {
@@ -12,64 +12,75 @@ interface TestItem {
   type?: string;
 }
 
-describe('fuzzyTestCommaSeparated', () => {
+describe('fuzzyTestCommaSpaceSeparated', () => {
   it('matches comma-separated query terms', () => {
-    expect(fuzzyTestCommaSeparated('nick,hutch', 'Nick Noble,teo,hutch')).toBe(
-      true
-    );
+    expect(
+      fuzzyTestCommaSpaceSeparated('nick,hutch', 'Nick Noble,teo,hutch')
+    ).toBe(true);
   });
 
   it('matches space-separated query terms', () => {
     expect(
-      fuzzyTestCommaSeparated('jackson jacob', 'jacob, jackson kustec, gabriel')
+      fuzzyTestCommaSpaceSeparated(
+        'jackson jacob',
+        'jacob, jackson kustec, gabriel'
+      )
     ).toBe(true);
   });
 
   it('matches regardless of order', () => {
-    expect(fuzzyTestCommaSeparated('teo,nick', 'Nick Noble,teo,hutch')).toBe(
-      true
-    );
     expect(
-      fuzzyTestCommaSeparated('jacob jackson', 'jackson kustec, jacob, gabriel')
+      fuzzyTestCommaSpaceSeparated('teo,nick', 'Nick Noble,teo,hutch')
+    ).toBe(true);
+    expect(
+      fuzzyTestCommaSpaceSeparated(
+        'jacob jackson',
+        'jackson kustec, jacob, gabriel'
+      )
     ).toBe(true);
   });
 
   it('matches single query term against multi-part name', () => {
-    expect(fuzzyTestCommaSeparated('teo', 'Nick Noble,teo,hutch')).toBe(true);
-  });
-
-  it('does not match when a query part is missing', () => {
-    expect(fuzzyTestCommaSeparated('nick,alice', 'Nick Noble,teo,hutch')).toBe(
-      false
-    );
-  });
-
-  it('handles fuzzy matching within parts', () => {
-    expect(fuzzyTestCommaSeparated('nob,teo', 'Nick Noble,teo,hutch')).toBe(
+    expect(fuzzyTestCommaSpaceSeparated('teo', 'Nick Noble,teo,hutch')).toBe(
       true
     );
   });
 
+  it('does not match when a query part is missing', () => {
+    expect(
+      fuzzyTestCommaSpaceSeparated('nick,alice', 'Nick Noble,teo,hutch')
+    ).toBe(false);
+  });
+
+  it('handles fuzzy matching within parts', () => {
+    expect(
+      fuzzyTestCommaSpaceSeparated('nob,teo', 'Nick Noble,teo,hutch')
+    ).toBe(true);
+  });
+
   it('handles whitespace around commas', () => {
     expect(
-      fuzzyTestCommaSeparated('nick , hutch', 'Nick Noble , teo , hutch')
+      fuzzyTestCommaSpaceSeparated('nick , hutch', 'Nick Noble , teo , hutch')
     ).toBe(true);
   });
 
   it('returns true for empty query', () => {
-    expect(fuzzyTestCommaSeparated('', 'Nick Noble,teo,hutch')).toBe(true);
+    expect(fuzzyTestCommaSpaceSeparated('', 'Nick Noble,teo,hutch')).toBe(true);
   });
 });
 
-describe('fuzzyScoreCommaSeparated', () => {
+describe('fuzzyScoreCommaSpaceSeparated', () => {
   it('returns score between 0 and 1 with comma-separated query', () => {
-    const score = fuzzyScoreCommaSeparated('nick,teo', 'Nick Noble,teo,hutch');
+    const score = fuzzyScoreCommaSpaceSeparated(
+      'nick,teo',
+      'Nick Noble,teo,hutch'
+    );
     expect(score).toBeGreaterThan(0);
     expect(score).toBeLessThanOrEqual(1);
   });
 
   it('matches space-separated query terms in any order', () => {
-    const score = fuzzyScoreCommaSeparated(
+    const score = fuzzyScoreCommaSpaceSeparated(
       'jackson jacob',
       'jackson kustec, gabriel birman, jacob, eric hayes'
     );
@@ -78,7 +89,7 @@ describe('fuzzyScoreCommaSeparated', () => {
   });
 
   it('matches when query terms are reversed', () => {
-    const score = fuzzyScoreCommaSeparated(
+    const score = fuzzyScoreCommaSpaceSeparated(
       'jacob jackson',
       'jackson kustec, gabriel birman, jacob, eric hayes'
     );
@@ -87,7 +98,7 @@ describe('fuzzyScoreCommaSeparated', () => {
   });
 
   it('matches mixed space and comma query', () => {
-    const score = fuzzyScoreCommaSeparated(
+    const score = fuzzyScoreCommaSpaceSeparated(
       'jackson, jacob',
       'jackson kustec, gabriel birman, jacob, eric hayes'
     );
@@ -95,12 +106,15 @@ describe('fuzzyScoreCommaSeparated', () => {
   });
 
   it('returns -1 when no match', () => {
-    const score = fuzzyScoreCommaSeparated('alice,bob', 'Nick Noble,teo,hutch');
+    const score = fuzzyScoreCommaSpaceSeparated(
+      'alice,bob',
+      'Nick Noble,teo,hutch'
+    );
     expect(score).toBe(-1);
   });
 
   it('returns -1 when a term does not match (space-separated)', () => {
-    const score = fuzzyScoreCommaSeparated(
+    const score = fuzzyScoreCommaSpaceSeparated(
       'jackson alice',
       'jackson kustec, gabriel birman, jacob, eric hayes'
     );
@@ -108,14 +122,14 @@ describe('fuzzyScoreCommaSeparated', () => {
   });
 
   it('returns 1 for empty query', () => {
-    const score = fuzzyScoreCommaSeparated('', 'Nick Noble,teo,hutch');
+    const score = fuzzyScoreCommaSpaceSeparated('', 'Nick Noble,teo,hutch');
     expect(score).toBe(1);
   });
 });
 
-describe('highlightCommaSeparatedMatches', () => {
+describe('highlightCommaSpaceSeparatedMatches', () => {
   it('highlights comma-separated query terms', () => {
-    const result = highlightCommaSeparatedMatches(
+    const result = highlightCommaSpaceSeparatedMatches(
       'hutch,gab',
       'hutch, gab, eric'
     );
@@ -124,7 +138,7 @@ describe('highlightCommaSeparatedMatches', () => {
   });
 
   it('highlights space-separated query terms', () => {
-    const result = highlightCommaSeparatedMatches(
+    const result = highlightCommaSpaceSeparatedMatches(
       'hutch gab',
       'hutch, gab, eric'
     );
@@ -133,7 +147,7 @@ describe('highlightCommaSeparatedMatches', () => {
   });
 
   it('highlights terms in any order', () => {
-    const result = highlightCommaSeparatedMatches(
+    const result = highlightCommaSpaceSeparatedMatches(
       'jackson jacob',
       'jacob, jackson kustec, gabriel'
     );
@@ -142,7 +156,7 @@ describe('highlightCommaSeparatedMatches', () => {
   });
 
   it('highlights partial fuzzy matches', () => {
-    const result = highlightCommaSeparatedMatches(
+    const result = highlightCommaSpaceSeparatedMatches(
       'jac gab',
       'jacob, jackson kustec, gabriel'
     );
@@ -151,7 +165,7 @@ describe('highlightCommaSeparatedMatches', () => {
   });
 
   it('preserves comma separators in output', () => {
-    const result = highlightCommaSeparatedMatches(
+    const result = highlightCommaSpaceSeparatedMatches(
       'hutch gab',
       'hutch, gab, eric'
     );
@@ -159,12 +173,15 @@ describe('highlightCommaSeparatedMatches', () => {
   });
 
   it('returns original text for empty query', () => {
-    const result = highlightCommaSeparatedMatches('', 'hutch, gab, eric');
+    const result = highlightCommaSpaceSeparatedMatches('', 'hutch, gab, eric');
     expect(result).toBe('hutch, gab, eric');
   });
 
   it('does not highlight unmatched terms', () => {
-    const result = highlightCommaSeparatedMatches('hutch', 'hutch, gab, eric');
+    const result = highlightCommaSpaceSeparatedMatches(
+      'hutch',
+      'hutch, gab, eric'
+    );
     expect(result).toContain('<macro_em>hutch</macro_em>');
     expect(result).not.toContain('<macro_em>gab</macro_em>');
     expect(result).not.toContain('<macro_em>eric</macro_em>');

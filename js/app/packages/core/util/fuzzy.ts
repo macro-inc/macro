@@ -23,7 +23,7 @@ const append = (accum: string, part: string) => accum + part;
  * Query can be space or comma-separated. Each query term is highlighted
  * in the text parts where it matches.
  */
-export function highlightCommaSeparatedMatches(
+export function highlightCommaSpaceSeparatedMatches(
   query: string,
   text: string
 ): string {
@@ -103,11 +103,11 @@ export function fuzzyMatch<T>(
   if (hasMultipleTerms && channelItems.length > 0) {
     for (const item of channelItems) {
       const name = extract(item);
-      const score = fuzzyScoreCommaSeparated(query, name);
+      const score = fuzzyScoreCommaSpaceSeparated(query, name);
       if (score >= 0) {
         results.push({
           item,
-          nameHighlight: highlightCommaSeparatedMatches(query, name),
+          nameHighlight: highlightCommaSpaceSeparatedMatches(query, name),
           score: score * 100,
         });
       }
@@ -191,7 +191,10 @@ export function fuzzyTest(query: string, text: string): boolean {
  * e.g., query "nick hutch" or "nick,hutch" matches text "Nick Noble,teo,hutch"
  * e.g., query "jackson jacob" matches text "jacob, jackson kustec, gabriel"
  */
-export function fuzzyTestCommaSeparated(query: string, text: string): boolean {
+export function fuzzyTestCommaSpaceSeparated(
+  query: string,
+  text: string
+): boolean {
   if (!query) return true;
 
   const queryParts = query
@@ -229,7 +232,10 @@ export function fuzzyTestCommaSeparated(query: string, text: string): boolean {
  * e.g., query "nick hutch" or "nick,hutch" matches text "Nick Noble,teo,hutch"
  * e.g., query "jackson jacob" matches text "jacob, jackson kustec, gabriel"
  */
-export function fuzzyScoreCommaSeparated(query: string, text: string): number {
+export function fuzzyScoreCommaSpaceSeparated(
+  query: string,
+  text: string
+): number {
   if (!query) return 1;
 
   const queryParts = query
