@@ -6,6 +6,7 @@ import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { useBuildChatSendRequest } from '@core/component/AI/component/input/buildRequest';
 import { useChatInput } from '@core/component/AI/component/input/useChatInput';
 import { useChatMessages } from '@core/component/AI/component/message';
+import { getPendingSend } from '@core/component/AI/signal/pendingSend';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
 import type {
   CreateAndSend,
@@ -149,6 +150,18 @@ export function Chat(props: { data: ChatData }) {
       setPendingLocation(params);
     },
   });
+
+  // Check for pending send data (e.g., from SoupChatInput) and send it
+  const pendingSend = getPendingSend();
+  if (pendingSend) {
+    buildChatSendRequest({
+      chatId: props.data.chat.id,
+      userRequest: pendingSend.content,
+      attachments: pendingSend.attachments,
+      model: pendingSend.model,
+      isPersistent: true,
+    }).then((request) => onSend(request));
+  }
 
   registerScopeSignalHotkey(scopeId, {
     hotkey: 'enter',
