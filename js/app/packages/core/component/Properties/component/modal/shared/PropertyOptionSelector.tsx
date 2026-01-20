@@ -36,8 +36,6 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
   const [searchQuery, setSearchQuery] = createSignal('');
   const [isAddingOption, setIsAddingOption] = createSignal(false);
   const [selectedIndex, setSelectedIndex] = createSignal(0);
-  const [keyboardNavigationTimeout, setKeyboardNavigationTimeout] =
-    createSignal<number | null>(null);
 
   let searchInputRef!: HTMLInputElement;
 

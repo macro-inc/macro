@@ -72,28 +72,6 @@ export const Modals: Component = () => {
         )}
       </Show>
 
-      {/* Date picker now handled by EditPropertyValueModal with PropertyDateSelector
-      <Show when={datePickerModal()}>
-        {(state) => {
-          const property = state().property;
-          const dateValue =
-            property.value != null ? new Date(property.value) : new Date();
-          const anchor = state().anchor;
-
-          return anchor ? (
-            <ScopedPortal scope="local">
-              <KeyboardDatePicker
-                value={dateValue}
-                onChange={(newDate) => handleDateSaved(newDate, property)}
-                onClose={closeDatePicker}
-                anchorRef={anchor}
-              />
-            </ScopedPortal>
-          ) : null;
-        }}
-      </Show>
-      */}
-
       <Show when={createPropertyModal()}>
         <CreatePropertyModal
           isOpen={true}
