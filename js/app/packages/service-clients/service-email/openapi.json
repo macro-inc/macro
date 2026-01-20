@@ -429,6 +429,214 @@
         }
       }
     },
+    "/email/drafts/scheduled": {
+      "get": {
+        "tags": ["Draft Scheduling"],
+        "summary": "List scheduled drafts.",
+        "operationId": "get_scheduled_messages",
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "The number of scheduled messages to skip.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "The maximum number of scheduled messages to return.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetScheduledResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/drafts/scheduled/{id}": {
+      "put": {
+        "tags": ["Draft Scheduling"],
+        "summary": "Schedule or update a scheduled draft.",
+        "operationId": "upsert_scheduled_message",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The ID of the draft message to schedule",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertScheduledRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpsertScheduledResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/drafts/scheduled/{message_id}": {
+      "delete": {
+        "tags": ["Draft Scheduling"],
+        "summary": "Remove the scheduled send from a draft.",
+        "operationId": "delete_scheduled_draft",
+        "parameters": [
+          {
+            "name": "message_id",
+            "in": "path",
+            "description": "The ID of the draft",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Scheduled send deleted successfully"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/drafts/{id}": {
       "delete": {
         "tags": ["Drafts"],
@@ -2604,6 +2812,18 @@
           }
         }
       },
+      "GetScheduledResponse": {
+        "type": "object",
+        "required": ["messages"],
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            }
+          }
+        }
+      },
       "GetThreadResponse": {
         "type": "object",
         "description": "The response returned from the get thread endpoint",
@@ -3433,6 +3653,31 @@
               "type": "string",
               "format": "uuid"
             }
+          }
+        }
+      },
+      "UpsertScheduledRequest": {
+        "type": "object",
+        "required": ["send_time"],
+        "properties": {
+          "send_time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The time to send the message (ISO 8601 format)"
+          }
+        }
+      },
+      "UpsertScheduledResponse": {
+        "type": "object",
+        "required": ["message_id", "send_time"],
+        "properties": {
+          "message_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "send_time": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
