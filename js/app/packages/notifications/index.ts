@@ -4,7 +4,7 @@ export {
   DebouncedNotificationReadMarker,
   DocumentDebouncedNotificationReadMarker,
   EmailDebouncedReadMarker,
-  makeDebouncedChannelNoficiationReadMarker,
+  makeDebouncedChannelNotificationReadMarker,
 } from './components/DebouncedNotificationReadMarker';
 export type {
   CreateAppNotificationInterface,

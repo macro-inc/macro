@@ -100,7 +100,7 @@ type ChannelDebouncedNotificationReadMarkerProps = {
   channelId: string;
 };
 
-export const makeDebouncedChannelNoficiationReadMarker = (
+export const makeDebouncedChannelNotificationReadMarker = (
   props: ChannelDebouncedNotificationReadMarkerProps
 ) => {
   return makeDebouncedMarker({

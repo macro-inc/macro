@@ -35,6 +35,7 @@ import type { InputAttachment } from '@core/store/cacheChannelInput';
 import { handleFileFolderDrop } from '@core/util/upload';
 import {
   ChannelDebouncedNotificationReadMarker,
+  makeDebouncedChannelNotificationReadMarker,
   createEffectOnEntityTypeNotification,
   useEntityHasUnreadNotifications,
 } from '@notifications';
@@ -62,7 +63,6 @@ import { ChannelInput } from './ChannelInput';
 import { MessageList, type TargetMessageInfo } from './MessageList/MessageList';
 import { Top } from './Top';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import { makeDebouncedChannelNoficiationReadMarker } from '@notifications/components/DebouncedNotificationReadMarker';
 
 false && fileFolderDrop;
 
@@ -323,7 +323,7 @@ export function Channel(props: {
     })
   );
 
-  const debouncedMarkAsRead = makeDebouncedChannelNoficiationReadMarker({
+  const debouncedMarkAsRead = makeDebouncedChannelNotificationReadMarker({
     notificationSource: notificationSource,
     channelId,
     debounceTime: 500,
