@@ -111,32 +111,40 @@ const TopBar: Component<MessageTopBarProps> = (props) => {
     'tagIcon',
   ]);
   return (
-    <Show when={!context.isConsecutive}>
-      <div class="font-mono flex flex-row items-center justify-between">
-        {/*  Name */}
-        <div class="shrink-1 min-w-0 text-sm touch:mobile-width:text-base truncate text-ink-muted">
-          {local.name}
+    <>
+      {/* Hover date for consecutive messages */}
+      <Show when={context.isConsecutive && local.timestamp && context.hover()}>
+        <div class="absolute left-0 -translate-x-full pr-2 text-xs text-ink-muted whitespace-nowrap font-mono">
+          {formatDate(new Date(local.timestamp!).getTime() / 1000)}
         </div>
-        {/* Tag */}
-        <Show when={local.tagLabel}>
-          <div class="inline-flex items-center ml-2 px-0.5 text-xs touch:mobile-width:text-sm bg-edge/15 text-ink border-1 border-edge/30 max-w-[240px] min-w-0">
-            <div class="flex-shrink-0 px-0.5">
-              <Show when={local.tagIcon}>
-                <CustomEntityIcon icon={local.tagIcon!} size="xs" />
-              </Show>
+      </Show>
+      <Show when={!context.isConsecutive}>
+        <div class="font-mono flex flex-row items-center justify-between">
+          {/*  Name */}
+          <div class="shrink-1 min-w-0 text-sm touch:mobile-width:text-base truncate text-ink-muted">
+            {local.name}
+          </div>
+          {/* Tag */}
+          <Show when={local.tagLabel}>
+            <div class="inline-flex items-center ml-2 px-0.5 text-xs touch:mobile-width:text-sm bg-edge/15 text-ink border-1 border-edge/30 max-w-[240px] min-w-0">
+              <div class="flex-shrink-0 px-0.5">
+                <Show when={local.tagIcon}>
+                  <CustomEntityIcon icon={local.tagIcon!} size="xs" />
+                </Show>
+              </div>
+              <span class="truncate">{local.tagLabel}</span>
             </div>
-            <span class="truncate">{local.tagLabel}</span>
-          </div>
-        </Show>
-        {/* Date */}
-        <Show when={local.timestamp}>
-          <div class="text-xs touch:mobile-width:text-sm text-ink-muted">
-            {local.timestamp &&
-              formatDate(new Date(local.timestamp).getTime() / 1000)}
-          </div>
-        </Show>
-      </div>
-    </Show>
+          </Show>
+          {/* Date */}
+          <Show when={local.timestamp}>
+            <div class="text-xs touch:mobile-width:text-sm text-ink-muted">
+              {local.timestamp &&
+                formatDate(new Date(local.timestamp).getTime() / 1000)}
+            </div>
+          </Show>
+        </div>
+      </Show>
+    </>
   );
 };
 
