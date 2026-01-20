@@ -15,7 +15,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { updateCookie } from '../../util/updateCookie';
+import { updateCookie } from '@core/util/cookies';
 import { EmailForm } from './EmailForm';
 import { LoginOptions } from './LoginOptions';
 import { Input, identifyUser, Stage } from './Shared';

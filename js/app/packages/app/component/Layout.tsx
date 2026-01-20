@@ -10,7 +10,7 @@ import {
 import { type RouteSectionProps, useLocation } from '@solidjs/router';
 import { attachGlobalDOMScope } from 'core/hotkey/hotkeys';
 import { createEffect, onMount, Show, Suspense } from 'solid-js';
-import { updateCookie } from '../util/updateCookie';
+import { updateCookie } from '@core/util/cookies';
 import Banner from './banner/Banner';
 import { GlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
 import { KommandMenu } from './command/Konsole';
