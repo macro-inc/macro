@@ -58,6 +58,7 @@ where
     Ok(result.rows_affected() > 0)
 }
 
+/// Set processing to false, on failure of sending scheduled message
 #[tracing::instrument(skip(executor), err)]
 pub async fn clear_scheduled_message_processing<'e, E>(
     executor: E,
