@@ -198,11 +198,13 @@ export function createFreshSearch<T extends TimestampedItem>(
 ) {
   return (items: T[], query: string): FreshSortResult<T>[] => {
     const finalConfig = { ...DEFAULT_CONFIG, ...config };
-    const useCommaSeparated =
-      finalConfig.commaSeparatedChannelMatch && query.includes(',');
+    const hasComma = query.includes(',');
+    const hasSpace = query.includes(' ');
+    const useMultiTermChannelMatch =
+      finalConfig.commaSeparatedChannelMatch && (hasComma || hasSpace);
 
-    if (useCommaSeparated) {
-      // For comma-separated queries, handle channel items specially
+    if (useMultiTermChannelMatch) {
+      // For comma or space-separated queries, handle channel items specially
       const channelResults: FilterResult<T>[] = [];
       const nonChannelItems: T[] = [];
 

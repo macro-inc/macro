@@ -111,14 +111,48 @@ describe('fuzzyTestCommaSeparated', () => {
 });
 
 describe('fuzzyScoreCommaSeparated', () => {
-  it('returns score between 0 and 1', () => {
+  it('returns score between 0 and 1 with comma-separated query', () => {
     const score = fuzzyScoreCommaSeparated('nick,teo', 'Nick Noble,teo,hutch');
     expect(score).toBeGreaterThan(0);
     expect(score).toBeLessThanOrEqual(1);
   });
 
+  it('matches space-separated query terms in any order', () => {
+    const score = fuzzyScoreCommaSeparated(
+      'jackson jacob',
+      'jackson kustec, gabriel birman, jacob, eric hayes'
+    );
+    expect(score).toBeGreaterThan(0);
+    expect(score).toBeLessThanOrEqual(1);
+  });
+
+  it('matches when query terms are reversed', () => {
+    const score = fuzzyScoreCommaSeparated(
+      'jacob jackson',
+      'jackson kustec, gabriel birman, jacob, eric hayes'
+    );
+    expect(score).toBeGreaterThan(0);
+    expect(score).toBeLessThanOrEqual(1);
+  });
+
+  it('matches mixed space and comma query', () => {
+    const score = fuzzyScoreCommaSeparated(
+      'jackson, jacob',
+      'jackson kustec, gabriel birman, jacob, eric hayes'
+    );
+    expect(score).toBeGreaterThan(0);
+  });
+
   it('returns -1 when no match', () => {
     const score = fuzzyScoreCommaSeparated('alice,bob', 'Nick Noble,teo,hutch');
+    expect(score).toBe(-1);
+  });
+
+  it('returns -1 when a term does not match (space-separated)', () => {
+    const score = fuzzyScoreCommaSeparated(
+      'jackson alice',
+      'jackson kustec, gabriel birman, jacob, eric hayes'
+    );
     expect(score).toBe(-1);
   });
 
@@ -198,5 +232,28 @@ describe('createFreshSearch with comma-separated channel matching', () => {
 
     // Both should match - channel via comma-separated, item via regular fuzzy
     expect(results.length).toBe(2);
+  });
+
+  it('matches channel with space-separated query in any order', () => {
+    const now = Date.now();
+    const items: MockItem[] = [
+      {
+        id: '1',
+        name: 'jackson kustec, gabriel birman, jacob, eric hayes',
+        type: 'channel',
+        viewedAt: now,
+      },
+      { id: '2', name: 'Other Channel', type: 'channel', viewedAt: now },
+    ];
+
+    const search = createCommaSeparatedSearch();
+
+    const results1 = search(items, 'jackson jacob');
+    expect(results1.length).toBe(1);
+    expect(results1[0].item.id).toBe('1');
+
+    const results2 = search(items, 'jacob jackson');
+    expect(results2.length).toBe(1);
+    expect(results2[0].item.id).toBe('1');
   });
 });
