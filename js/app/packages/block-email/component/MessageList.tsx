@@ -96,37 +96,6 @@ export function MessageList(props: MessageListProps) {
               return manuallyExpanded || isLastMessage() || isNewMessage();
             });
 
-            const onToggleMessage = (expanded: boolean) => {
-              const messageID = message().db_id;
-              if (!messageID) return;
-              const listContainer = context.messagesListRef();
-
-              const lastScrollPosition = listContainer?.scrollTop;
-              const lastScrollHeight = listContainer?.scrollHeight;
-
-              context.messages.setExpandedBodyId(messageID, expanded);
-
-              if (
-                !listContainer ||
-                lastScrollPosition == null ||
-                lastScrollHeight == null
-              )
-                return;
-
-              // Maintain the scroll position when expansion changes
-              queueMicrotask(() => {
-                const lastPos = lastScrollHeight + lastScrollPosition;
-                const currentPos =
-                  listContainer.scrollHeight + listContainer.scrollTop;
-
-                // List is reversed, we need a negative value to maintain scroll
-                // position
-                const diff = lastPos - currentPos;
-
-                context.messagesListRef()?.scrollBy({ top: diff });
-              });
-            };
-
             return (
               <MessageContainer
                 isFirstMessage={normalizedIndex() === 0}
@@ -138,7 +107,6 @@ export function MessageList(props: MessageListProps) {
                 isTarget={isTargetSelector(message().db_id ?? undefined)}
                 message={message()}
                 isExpanded={isExpanded()}
-                onToggleBodyExpand={onToggleMessage}
               />
             );
           }}
