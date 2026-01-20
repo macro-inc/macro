@@ -124,7 +124,7 @@ export function fuzzyMatch<T>(
     const order = uf.sort(info, haystack, query);
 
     if (order && order.length > 0) {
-      for (const orderIdx of order) {
+      order.forEach((orderIdx, position) => {
         const infoIdx = info.idx[orderIdx];
         const ranges = info.ranges[orderIdx];
 
@@ -135,13 +135,15 @@ export function fuzzyMatch<T>(
         results.push({
           item: itemsToSearch[infoIdx],
           nameHighlight,
-          score: orderIdx,
+          // Normalize score: position 0 (best match) should get highest score
+          // Use 100 - position to put on same scale as channel scores (0-100)
+          score: 100 - position,
         });
-      }
+      });
     }
   }
 
-  // Sort by score (lower is better for uf scores, higher is better for delimiter scores)
+  // Sort by score (higher is better for both channels and non-channels)
   results.sort((a, b) => b.score - a.score);
 
   return results;
