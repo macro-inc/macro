@@ -3,6 +3,8 @@ import type { EditorType } from '@lexical-core';
 import type { Item } from '@service-storage/generated/schemas/item';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import {
+  $getSelection,
+  $isRangeSelection,
   COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_HIGH,
   INSERT_LINE_BREAK_COMMAND,
@@ -62,6 +64,7 @@ import {
   IS_APPLE_WEBKIT,
   CAN_USE_BEFORE_INPUT,
 } from '@lexical/utils';
+import { $resetCapitalization } from '@lexical-core/utils';
 
 /**
  * @param editable - A signal that indicates whether the textarea is editable
@@ -248,6 +251,13 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
       KEY_ENTER_COMMAND,
       (event) => {
         if (!props.preferLineBreaks) return false;
+
+        const selection = $getSelection();
+        if (!$isRangeSelection(selection)) {
+          return false;
+        }
+
+        $resetCapitalization(selection);
 
         if (event !== null) {
           // If we have beforeinput, then we can avoid blocking
