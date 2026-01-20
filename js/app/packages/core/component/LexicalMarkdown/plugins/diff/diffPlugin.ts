@@ -9,7 +9,6 @@ import {
   $getNodeById,
   $isDiffNode,
 } from '@lexical-core';
-import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { useUserId } from '@core/context/user';
 import type { LexicalEditor } from 'lexical';
 import {
