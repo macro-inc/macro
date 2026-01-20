@@ -5,8 +5,6 @@ import { useQuery } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { authKeys } from './keys';
 
-export { authKeys } from './keys';
-
 const USER_QUOTA_STALE_TIME = 1000 * 60 * 5; // 5 minutes
 
 /**

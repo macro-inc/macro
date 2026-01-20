@@ -31,16 +31,16 @@ function deletedItemsQueryOptions() {
   };
 }
 
+function transformItems(items: Item[]): Item[] {
+  return items.map((item) => ({ ...item, name: itemToSafeName(item) }));
+}
+
 export function useDeletedItemsQuery() {
   return useQuery(() => ({
     ...deletedItemsQueryOptions(),
     placeholderData: (prev) => prev,
-    select: (data: DeletedItemsQueryResponse): Item[] => {
-      return data.items.map((item) => ({
-        ...item,
-        name: itemToSafeName(item),
-      }));
-    },
+    select: (data: DeletedItemsQueryResponse): Item[] =>
+      transformItems(data.items),
   }));
 }
 
@@ -50,13 +50,8 @@ export function useDeletedTreeQuery() {
   return useQuery(() => ({
     ...deletedItemsQueryOptions(),
     placeholderData: (prev) => prev,
-    select: (data: DeletedItemsQueryResponse): FileTree => {
-      const items = data.items.map((item) => ({
-        ...item,
-        name: itemToSafeName(item),
-      }));
-      return buildFileTree(items);
-    },
+    select: (data: DeletedItemsQueryResponse): FileTree =>
+      buildFileTree(transformItems(data.items)),
   }));
 }
 
@@ -74,12 +69,7 @@ export function getDeletedItems(): Item[] {
   const data = queryClient.getQueryData<DeletedItemsQueryResponse>(
     storageKeys.deleted.list.queryKey
   );
-  return (
-    data?.items.map((item) => ({
-      ...item,
-      name: itemToSafeName(item),
-    })) ?? []
-  );
+  return data ? transformItems(data.items) : [];
 }
 
 /**
@@ -90,14 +80,9 @@ export function getDeletedTree(): FileTree {
   const data = queryClient.getQueryData<DeletedItemsQueryResponse>(
     storageKeys.deleted.list.queryKey
   );
-  if (data) {
-    const items = data.items.map((item) => ({
-      ...item,
-      name: itemToSafeName(item),
-    }));
-    return buildFileTree(items);
-  }
-  return { rootItems: [], itemMap: {} };
+  return data
+    ? buildFileTree(transformItems(data.items))
+    : { rootItems: [], itemMap: {} };
 }
 
 /**

@@ -13,7 +13,6 @@ import { useQuery } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { instructionsMdKeys } from './keys';
 
-export { instructionsMdKeys } from './keys';
 export { default as AiInstructionsIcon } from '@icon/regular/notepad.svg';
 
 /**
