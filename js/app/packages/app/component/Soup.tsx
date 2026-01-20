@@ -4,7 +4,7 @@ import {
 } from '@app/component/GlobalAppState';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { playSound } from '@app/util/sound';
-import { useIsAuthenticated } from '@core/auth';
+import { useIsAuthenticated } from '@core/context/user';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
@@ -613,8 +613,7 @@ const ViewWithSearch: Component<{
 };
 
 export function Soup() {
-  const authenticated = useIsAuthenticated();
-  if (!authenticated()) return <Navigate href="/" />;
+  const isAuthenticated = useIsAuthenticated();
 
   const splitPanelContext = useSplitPanelOrThrow();
   const {
@@ -707,70 +706,72 @@ export function Soup() {
   });
 
   return (
-    <div
-      class="relative flex flex-col bg-panel size-full"
-      use:fileFolderDrop={{
-        onDrop: (fileEntries, folderEntries) => {
-          handleFileFolderDrop(fileEntries, folderEntries, handleFileUpload);
-        },
-        onDragStart: () => {
-          setIsValidDrag(true);
-          setIsDragging(true);
-        },
-        onDragEnd: () => setIsDragging(false),
-      }}
-    >
-      <Show when={isDragging()}>
-        <FileDropOverlay valid={isValidDrag()}>
-          <Show when={!isValidDrag()}>
-            <div class="text-failure">[!] Invalid file type</div>
-          </Show>
-          <div>Drop any file here to add it to your workspace</div>
-        </FileDropOverlay>
-      </Show>
-
-      <div class="relative flex-grow min-h-0 flex max-sm:flex-col flex-row size-full">
-        <SplitPanelContext.Provider
-          value={{
-            ...splitPanelContext,
-            halfSplitState: () =>
-              preview() ? { side: 'left', percentage: 30 } : undefined,
-          }}
-        >
-          <Tabs
-            ref={tabsRef}
-            class="@container/soup [container-type:inline-size] flex flex-col gap-1 size-full overflow-x-clip"
-            classList={{
-              'border-r border-edge-muted': preview(),
-            }}
-            value={selectedView()}
-            onChange={setSelectedView}
-          >
-            <SplitHeaderLeft>
-              <EntityTypeIconFilter />
-            </SplitHeaderLeft>
-            <SplitHeaderRight>
-              <div class="flex items-center h-full gap-0.5">
-                <ClearFiltersButton />
-                <div class="mx-0.5 w-px h-5 bg-edge-muted/50 shrink-0" />
-                <SettingsButton />
-              </div>
-            </SplitHeaderRight>
-            <For each={Object.keys(viewsData)}>
-              {(viewId) => <ViewWithSearch viewId={viewId} />}
-            </For>
-          </Tabs>
-        </SplitPanelContext.Provider>
-        <Show when={preview()}>
-          <PreviewPanel
-            selectedEntity={selectedEntity()}
-            orchestrator={orchestrator}
-            splitPanelContext={splitPanelContext}
-          />
+    <Show when={isAuthenticated() !== false} fallback={<Navigate href="/" />}>
+      <div
+        class="relative flex flex-col bg-panel size-full"
+        use:fileFolderDrop={{
+          onDrop: (fileEntries, folderEntries) => {
+            handleFileFolderDrop(fileEntries, folderEntries, handleFileUpload);
+          },
+          onDragStart: () => {
+            setIsValidDrag(true);
+            setIsDragging(true);
+          },
+          onDragEnd: () => setIsDragging(false),
+        }}
+      >
+        <Show when={isDragging()}>
+          <FileDropOverlay valid={isValidDrag()}>
+            <Show when={!isValidDrag()}>
+              <div class="text-failure">[!] Invalid file type</div>
+            </Show>
+            <div>Drop any file here to add it to your workspace</div>
+          </FileDropOverlay>
         </Show>
+
+        <div class="relative flex-grow min-h-0 flex max-sm:flex-col flex-row size-full">
+          <SplitPanelContext.Provider
+            value={{
+              ...splitPanelContext,
+              halfSplitState: () =>
+                preview() ? { side: 'left', percentage: 30 } : undefined,
+            }}
+          >
+            <Tabs
+              ref={tabsRef}
+              class="@container/soup [container-type:inline-size] flex flex-col gap-1 size-full overflow-x-clip"
+              classList={{
+                'border-r border-edge-muted': preview(),
+              }}
+              value={selectedView()}
+              onChange={setSelectedView}
+            >
+              <SplitHeaderLeft>
+                <EntityTypeIconFilter />
+              </SplitHeaderLeft>
+              <SplitHeaderRight>
+                <div class="flex items-center h-full gap-0.5">
+                  <ClearFiltersButton />
+                  <div class="mx-0.5 w-px h-5 bg-edge-muted/50 shrink-0" />
+                  <SettingsButton />
+                </div>
+              </SplitHeaderRight>
+              <For each={Object.keys(viewsData)}>
+                {(viewId) => <ViewWithSearch viewId={viewId} />}
+              </For>
+            </Tabs>
+          </SplitPanelContext.Provider>
+          <Show when={preview()}>
+            <PreviewPanel
+              selectedEntity={selectedEntity()}
+              orchestrator={orchestrator}
+              splitPanelContext={splitPanelContext}
+            />
+          </Show>
+        </div>
+        <SoupChatInput />
       </div>
-      <SoupChatInput />
-    </div>
+    </Show>
   );
 }
 

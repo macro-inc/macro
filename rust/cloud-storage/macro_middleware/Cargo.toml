@@ -9,7 +9,6 @@ all = ["auth", "cloud_storage", "tracking", "user_permissions"]
 auth = ["dep:macro_auth", "dep:url"]
 cloud_storage = [
   "dep:comms_service_client",
-  "dep:email_service_client",
   "dep:macro_share_permissions",
   "dep:permission",
   "macro_db_client",
@@ -24,7 +23,6 @@ user_permissions = ["dep:macro_user_id", "dep:user_quota", "macro_db_client"]
 anyhow = { workspace = true }
 axum = { workspace = true, features = ["macros"] }
 comms_service_client = { path = "../comms_service_client", optional = true }
-email_service_client = { path = "../email_service_client", optional = true }
 http-body-util = { workspace = true }
 macro_auth = { path = "../macro_auth", optional = true }
 macro_db_client = { path = "../macro_db_client", optional = true }

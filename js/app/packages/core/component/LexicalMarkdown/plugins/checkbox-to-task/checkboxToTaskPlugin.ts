@@ -11,9 +11,7 @@ import {
   type LexicalEditor,
 } from 'lexical';
 import { err, ok } from 'neverthrow';
-import { SYSTEM_PROPERTY_IDS } from '../../../Properties/constants';
-import { createTask } from '../../../../util/create';
-import type { PropertyInput } from '@service-storage/generated/schemas/propertyInput';
+import { createTaskFromData } from '../../../../util/taskCreation';
 import type {
   ConvertCheckboxesOptions,
   ConvertCheckboxesPluginOptions,
@@ -29,70 +27,6 @@ import { $parseCheckboxNodes } from './checkboxParsing';
 export const CONVERT_CHECKBOXES_TO_TASKS: LexicalCommand<ConvertCheckboxesOptions> =
   createCommand('CONVERT_CHECKBOXES_TO_TASKS');
 
-function maybeFallbackToCurrentAssignee(
-  asigneeUserIds: string[],
-  currentUserId?: string
-): string[] {
-  if (asigneeUserIds.length > 0) return asigneeUserIds;
-  if (currentUserId) return [currentUserId];
-  return [];
-}
-
-/**
- * Build PropertyInput array from parsed checkbox data.
- * Auto-assigns to current user when no assignees are extracted.
- */
-function buildPropertyValues(
-  checkbox: ParsedCheckbox,
-  currentUserId?: string,
-  parentTaskId?: string
-): PropertyInput[] {
-  const properties: PropertyInput[] = [];
-
-  const assigneeIds = maybeFallbackToCurrentAssignee(
-    checkbox.assigneeUserIds,
-    currentUserId
-  );
-
-  if (assigneeIds) {
-    properties.push({
-      propertyId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
-      value: {
-        type: 'multi_entity_reference',
-        references: assigneeIds.map((userId) => ({
-          entity_id: userId,
-          entity_type: 'USER' as const,
-        })),
-      },
-    });
-  }
-
-  if (checkbox.dueDate) {
-    properties.push({
-      propertyId: SYSTEM_PROPERTY_IDS.DUE_DATE,
-      value: {
-        type: 'date',
-        value: checkbox.dueDate,
-      },
-    });
-  }
-
-  if (parentTaskId) {
-    properties.push({
-      propertyId: SYSTEM_PROPERTY_IDS.PARENT_TASK,
-      value: {
-        type: 'entity_reference',
-        reference: {
-          entity_id: parentTaskId,
-          entity_type: 'TASK' as const,
-        },
-      },
-    });
-  }
-
-  return properties;
-}
-
 /**
  * Create a single task from a parsed checkbox
  */
@@ -101,25 +35,14 @@ async function createTaskFromCheckbox(
   currentUserId?: string,
   parentTaskId?: string
 ): Promise<TaskCreationResult> {
-  if (!checkbox.title.trim()) {
-    return err({ tag: 'EmptyCheckbox', nodeKey: checkbox.nodeKey });
-  }
-
   try {
-    const propertyValues = buildPropertyValues(
-      checkbox,
+    const documentId = await createTaskFromData(checkbox, {
       currentUserId,
-      parentTaskId
-    );
-
-    const documentId = await createTask({
-      title: checkbox.title,
-      content: '',
-      propertyValues,
+      parentTaskId,
     });
 
     if (!documentId) {
-      return err({ tag: 'NoDocumentId', nodeKey: checkbox.nodeKey });
+      return err({ tag: 'EmptyCheckbox', nodeKey: checkbox.nodeKey });
     }
 
     return ok({

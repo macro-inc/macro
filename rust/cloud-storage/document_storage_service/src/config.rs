@@ -42,7 +42,6 @@ env_var! {
         pub NotificationQueue,
         pub SearchEventQueue,
         pub CommsServiceUrl,
-        pub EmailServiceUrl,
         pub ConnectionGatewayUrl,
         pub BulkUploadRequestsTable,
         pub UploadStagingBucket,

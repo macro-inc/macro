@@ -6,7 +6,7 @@ import {
 } from '@core/constant/allBlocks';
 import { uploadFiles } from '@core/util/upload';
 import Dialog from '@corvu/dialog';
-import { useUserId } from '@queries/auth/user-info';
+import { useUserId } from '@core/context/user';
 import { Show } from 'solid-js';
 
 export const FILE_DROP_ZONE_DIALOG_CONTEXT_NAME = 'file-drop-zone-modal';

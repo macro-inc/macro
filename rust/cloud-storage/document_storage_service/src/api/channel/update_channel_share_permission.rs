@@ -30,7 +30,7 @@ pub async fn handler(
 
     // ensure thread share permissions exist before getting access level
     if req.item_type == "thread" {
-        insert_thread_share_permissions(&ctx.db, &ctx.email_service_client, &req.item_id)
+        insert_thread_share_permissions(&ctx.db, &req.item_id)
             .await
             .map_err(|e| {
                 tracing::error!(error=?e, "failed to insert thread share permissions");

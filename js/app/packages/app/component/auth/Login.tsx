@@ -5,7 +5,7 @@ import type { RedirectLocation } from '@core/util/authRedirect';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
 import { isOk } from '@core/util/maybeResult';
 import { authServiceClient } from '@service-auth/client';
-import { invalidateUserInfo, prefetchUserInfo } from '@queries/auth/user-info';
+import { fetchUserInfo, invalidateUserInfo } from '@queries/auth/user-info';
 import { Navigate, useLocation, useSearchParams } from '@solidjs/router';
 import {
   createEffect,
@@ -64,7 +64,7 @@ export function Login() {
     setActiveModal();
     unsetTokenPromise();
     invalidateUserInfo();
-    const userInfo = await prefetchUserInfo();
+    const userInfo = await fetchUserInfo();
     if (
       userInfo?.authenticated &&
       location.state?.originalLocation &&

@@ -1,7 +1,7 @@
 import type { IModificationDataOnServer } from '@block-pdf/type/coParse';
 import { createBlockSignal, useBlockId } from '@core/block';
 import { ENABLE_PDF_MODIFICATION_DATA_AUTOSAVE } from '@core/constant/featureFlags';
-import { useUserId } from '@queries/auth/user-info';
+import { useUserId } from '@core/context/user';
 import { storageServiceClient } from '@service-storage/client';
 import { refetchHistory } from '@queries/history/history';
 import { createMemo } from 'solid-js';

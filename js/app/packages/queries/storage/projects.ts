@@ -1,6 +1,6 @@
 import { ENABLE_PROJECT_SHARING } from '@core/constant/featureFlags';
+import { useUserId } from '@core/context/user';
 import { isOk } from '@core/util/maybeResult';
-import { useUserId } from '@queries/auth/user-info';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { storageServiceClient } from '@service-storage/client';
 import type { Project } from '@service-storage/generated/schemas/project';

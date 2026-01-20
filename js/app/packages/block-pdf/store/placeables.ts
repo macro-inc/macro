@@ -38,7 +38,7 @@ import {
   createBlockMemo,
   createBlockSignal,
 } from '@core/block';
-import { useUserId } from '@queries/auth/user-info';
+import { useUserId } from '@core/context/user';
 import { createCallback } from '@solid-primitives/rootless';
 import type { PageViewport } from 'pdfjs-dist';
 import { batch } from 'solid-js';

@@ -3,7 +3,7 @@ import { type SettingsTab, useSettingsState } from '@core/constant/SettingsState
 import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
-import { usePermissions } from '@queries/auth/user-info';
+import { usePermissions } from '@core/context/user';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import ContractIcon from '@icon/regular/arrows-in.svg';

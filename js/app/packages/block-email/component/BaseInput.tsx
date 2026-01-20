@@ -47,7 +47,7 @@ import type {
   MessageToSendDbId,
   MessageWithBodyReplyless,
 } from '@service-email/generated/schemas';
-import { useEmail, useUserId } from '@queries/auth/user-info';
+import { useEmail, useUserId } from '@core/context/user';
 import { Button } from '@ui/components/Button';
 import {
   defaultSelectionData,
@@ -225,7 +225,6 @@ export function BaseInput(props: {
         trackMention(blockId, 'document', mention.documentId);
       });
       pendingMentions = [];
-      await deleteDraftAndReset();
       refetchThreadMessages();
       props.sideEffectOnSend?.(message.db_id ?? null);
       if (shouldMarkDoneOnSuccess()) {
@@ -368,6 +367,7 @@ export function BaseInput(props: {
 
     const draftResponse = await saveEmailDraft({
       ...draftToSave,
+      db_id: savedDraftId(),
       link_id: linkId!,
       provider_thread_id: currentThread?.provider_id,
       thread_db_id: currentThread?.db_id,
@@ -532,6 +532,7 @@ export function BaseInput(props: {
     const processedMacroBody = prepareMacroBody(bodyMacro());
 
     const currentDraftID = savedDraftId();
+    if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
 
     sendMutation.mutate({
       message: {
@@ -551,6 +552,9 @@ export function BaseInput(props: {
       },
     });
 
+    resetState();
+    clearDraftState();
+
     cleanupWatermark();
   };
 
@@ -561,18 +565,22 @@ export function BaseInput(props: {
     form().reset();
   };
 
+  const clearDraftState = () => {
+    const replyingToId = props.replyingTo()?.db_id;
+    if (replyingToId) {
+      ctx.drafts.deleteDraftForMessage(replyingToId);
+    }
+    props.setShowReply?.(false);
+  };
+
   const deleteDraftAndReset = async () => {
     const draftId = savedDraftId();
     if (draftId) {
       await deleteEmailDraft(draftId);
       refetchThreadMessages();
     }
-    const replyingToId = props.replyingTo()?.db_id;
-    if (replyingToId) {
-      ctx.drafts.deleteDraftForMessage(replyingToId);
-    }
     resetState();
-    props.setShowReply?.(false);
+    clearDraftState();
   };
 
   const handleUserMention = (mention: UserMentionRecord) => {

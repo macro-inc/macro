@@ -25,7 +25,7 @@ import ShareFat from '@icon/regular/share-fat.svg';
 import TrashSimple from '@icon/regular/trash-simple.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { cognitionApiServiceClient } from '@service-cognition/client';
-import { useEmail } from '@queries/auth/user-info';
+import { useEmail } from '@core/context/user';
 import {
   refetchHistory,
   useUpdatedDssItemName,

@@ -320,12 +320,6 @@ const cloudStorageService = new CloudStorageService(
         }.macro.com`,
       },
       {
-        name: 'EMAIL_SERVICE_URL',
-        value: `https://email-service${
-          stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
-      },
-      {
         name: 'DOCUMENT_PERMISSION_JWT_SECRET_KEY',
         value: pulumi.interpolate`${DOCUMENT_STORAGE_PERMISSIONS_KEY}`,
       },

@@ -1,16 +1,16 @@
-import { useIsAuthenticated } from '@core/auth';
 import { Dialog } from '@kobalte/core/dialog';
 import { createMemo } from 'solid-js';
 import { useNotificationSettings } from '../notification-settings';
 
 export const BrowserNotificationModal = () => {
-  const isAuthenticated = useIsAuthenticated();
   const settings = useNotificationSettings();
 
   if (!settings.isSupported) return null;
 
+  // Note: Auth check removed - this component renders outside UserContextProvider.
+  // The modal only shows after shouldPrompt() which requires user interaction anyway.
   const shouldShow = createMemo(
-    () => !import.meta.env.DEV && isAuthenticated() && settings.shouldPrompt()
+    () => !import.meta.env.DEV && settings.shouldPrompt()
   );
 
   const handleEnable = async () => {

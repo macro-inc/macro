@@ -3,6 +3,10 @@ export {
   useUserInfoQuery,
   invalidateUserInfo,
   updateUserInfo,
+  type UserInfoData,
+} from './user-info';
+// Re-export user context hooks for backwards compatibility
+export {
   useUserId,
   useEmail,
   usePermissions,
@@ -13,7 +17,8 @@ export {
   useHasChromeExt,
   useHasTrialed,
   useUserInfo,
-} from './user-info';
+  useIsAuthenticated,
+} from '@core/context/user';
 export {
   useOrganizationQuery,
   invalidateOrganization,
