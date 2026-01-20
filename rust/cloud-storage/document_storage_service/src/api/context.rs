@@ -7,7 +7,6 @@ use comms::{
 use connection_gateway_client::client::ConnectionGatewayClient;
 use dynamodb_client::DynamodbClient;
 use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
-use email_service_client::EmailServiceClient;
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_env_var::env_var;
@@ -54,7 +53,6 @@ pub(crate) struct ApiContext {
     pub sqs_client: Arc<sqs_client::SQS>,
     pub macro_notify_client: Arc<macro_notify::MacroNotify>,
     pub comms_service_client: Arc<comms_service_client::CommsServiceClient>,
-    pub email_service_client: Arc<EmailServiceClient>,
     pub conn_gateway_client: Arc<ConnectionGatewayClient>,
     pub sync_service_client: Arc<SyncServiceClient>,
     pub system_properties_service: Arc<SystemPropertiesService>,

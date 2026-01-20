@@ -51,7 +51,6 @@ connection_gateway = { path = "../connection_gateway" }
 document_sub_type = { path = "../document_sub_type" }
 dynamodb_client = { path = "../dynamodb_client" }
 email = { path = "../email", features = ["outbound", "ports"] }
-email_service_client = { path = "../email_service_client" }
 frecency = { path = "../frecency", features = ["postgres"] }
 futures = { workspace = true }
 hex = { workspace = true }
