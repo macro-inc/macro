@@ -137,6 +137,5 @@ export const ENABLE_CREATE_TASK = true;
 export const ENABLE_TASKS_TABS = true;
 
 export const ENABLE_EMAIL_SHARING = true;
-export const ENABLE_PUBLIC_EMAIL_SHARING = false;
 
 export const ENABLE_FRECENCY = false;

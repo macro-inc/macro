@@ -11,10 +11,7 @@ import {
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { UserIcon } from '@core/component/UserIcon';
-import {
-  ENABLE_MARKDOWN_COMMENTS,
-  ENABLE_PUBLIC_EMAIL_SHARING,
-} from '@core/constant/featureFlags';
+import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import clickOutside from '@core/directive/clickOutside';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -586,9 +583,7 @@ export function ShareModal(props: ShareModalProps) {
               <Show
                 when={
                   props.userPermissions === Permissions.OWNER &&
-                  (props.itemType === 'email'
-                    ? ENABLE_PUBLIC_EMAIL_SHARING
-                    : true)
+                  props.itemType !== 'email'
                 }
               >
                 <div class="border-t-1 border-edge-muted flex flex-col">
