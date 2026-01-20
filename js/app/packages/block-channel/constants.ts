@@ -1,7 +1,7 @@
 export const URL_PARAMS = {
   thread: 'channel_thread_id',
   message: 'channel_message_id',
-} as const;
+};
 
 // The index of the last message in a collapsed thread that will be shown
 export const COLLAPSED_THREAD_INDEX_CUTOFF = 2;

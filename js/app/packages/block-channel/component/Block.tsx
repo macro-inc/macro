@@ -26,10 +26,7 @@ export function WithTopBar(props: { children: JSXElement }) {
 
 export type JoinState = 'REQUIRED' | 'NOT_REQUIRED';
 
-type IncomingParams = Record<
-  (typeof URL_PARAMS)[keyof typeof URL_PARAMS],
-  string
->;
+type IncomingParams = Record<string, string>;
 
 export type BlockChannelProps = IncomingParams & {};
 
