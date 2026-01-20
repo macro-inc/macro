@@ -18,9 +18,6 @@ use crate::{
         },
         document_text::upsert_document_text,
         health,
-        macros::{
-            create_macro, delete_macro, get_macro, get_macro_permissions, get_macros, patch_macro,
-        },
         models::get_models,
         preview::get_batch_preview,
         ws::{self},
@@ -32,12 +29,10 @@ use crate::{
                 PatchChatRequest, PatchChatRequestV2,
             },
             document_text::{CreateTextRequestBody, CreateTextRequestParams},
-            macros::{CreateMacroRequest, GetMacroPathParams, PatchMacroRequest},
         },
         response::{
             attachments::GetChatsForAttachmentResponse,
             chats::{GetChatPermissionsResponseV2, GetChatResponse, GetModelsResponse},
-            macros::GetMacroResponse,
             models::AIModel,
         },
         ws::{
@@ -60,7 +55,6 @@ use model::{
         ChatHistory, ChatMessage, ChatMessageWithAttachments, ConversationRecord,
         MessageWithAttachments, NewChatMessage, NewMessageAttachment,
     },
-    macros::{Macro, MacroResponse, MacrosResponse},
     response::{GenericErrorResponse, StringIDResponse},
     version::DocumentCognitionServiceApiVersion,
 };
@@ -90,12 +84,6 @@ use utoipa::OpenApi;
             delete_chat::permanently_delete_chat_handler,
             get_models::get_models_handler,
             get_chats::get_chats_handler,
-            get_macro::get_macro_handler,
-            get_macros::get_macros_handler,
-            get_macro_permissions::get_macro_permissions_handler,
-            delete_macro::delete_macro_handler,
-            create_macro::create_macro_handler,
-            patch_macro::patch_macro_handler,
             upsert_document_text::upsert_text_handler,
             get_chats_for_attachment::get_chats_for_attachment_handler,
             verify_attachments::verify_attachments_handler,
@@ -159,16 +147,6 @@ use utoipa::OpenApi;
                 // Document Text
                 CreateTextRequestBody,
                 CreateTextRequestParams,
-
-                // Macro Prompt
-                Macro,
-                MacroResponse,
-                CreateMacroRequest,
-                GetMacroPathParams,
-                GetMacroResponse,
-                MacrosResponse,
-                PatchMacroRequest,
-
 
                 // Share Permission
                 UpdateOperation,

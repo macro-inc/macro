@@ -14,7 +14,7 @@ import {
   type UnifiedNotification,
 } from '@notifications';
 import type { ApiChannelWithLatest as ChannelWithLatest } from '@service-comms/generated/models';
-import { useUserId } from '@queries/auth/user-info';
+import { useUserId } from '@core/context/user';
 import { NotificationEventType } from '@service-notification/generated/schemas';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 

@@ -3,7 +3,7 @@ import { commentPlaceables } from '@block-pdf/store/comments/freeComments';
 import { highlightsUuidMap } from '@block-pdf/store/highlight';
 import { createBlockMemo } from '@core/block';
 import { useCanEdit } from '@core/signal/permissions';
-import { useUserId } from '@queries/auth/user-info';
+import { useUserId } from '@core/context/user';
 import { createSelector } from 'solid-js';
 
 export const useCanEditModificationData = useCanEdit;

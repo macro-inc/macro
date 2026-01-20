@@ -19,7 +19,7 @@ import {
   createUnifiedSearchInfiniteQuery,
   type EmailEntity,
 } from '@macro-entity';
-import { useUserId } from '@queries/auth/user-info';
+import { useUserId } from '@core/context/user';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { useHistory } from '@service-storage/history';
 import { debounce } from '@solid-primitives/scheduled';

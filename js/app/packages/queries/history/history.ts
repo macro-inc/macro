@@ -1,4 +1,4 @@
-import { throwOnErr } from '@core/util/maybeResult';
+import { throwOnErr, catchToResult } from '@core/util/maybeResult';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { storageServiceClient } from '@service-storage/client';
 import type { CloudStorageItemType } from '@service-storage/generated/schemas/cloudStorageItemType';
@@ -62,8 +62,10 @@ export function useHistoryQuery(options?: {
   }));
 }
 
-export async function fetchAndCacheHistory(): Promise<HistoryQueryResponse> {
-  return queryClient.fetchQuery(historyQueryOptions());
+export async function prefetchHistory() {
+  void (await catchToResult(
+    async () => await queryClient.prefetchQuery(historyQueryOptions())
+  ));
 }
 
 export function refetchHistory() {

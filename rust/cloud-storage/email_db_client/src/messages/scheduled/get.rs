@@ -17,9 +17,42 @@ where
     let record = sqlx::query_as!(
         service::message::ScheduledMessage,
         r#"
-        SELECT link_id, message_id, send_time, sent
+        SELECT link_id, message_id, send_time, sent, processing
         FROM email_scheduled_messages
         WHERE link_id = $1 AND message_id = $2
+        "#,
+        link_id,
+        message_id,
+    )
+    .fetch_optional(db)
+    .await?;
+
+    Ok(record)
+}
+
+/// Retrieves a scheduled message by link_id and message_id, and sets processing to true
+/// Returns the message with the OLD processing value (before it was set to true)
+/// Returns None if the message doesn't exist
+#[tracing::instrument(skip(db), err)]
+pub async fn get_and_start_processing_scheduled_message(
+    db: &sqlx::PgPool,
+    link_id: Uuid,
+    message_id: Uuid,
+) -> anyhow::Result<Option<service::message::ScheduledMessage>> {
+    let record = sqlx::query_as!(
+        service::message::ScheduledMessage,
+        r#"
+        WITH old AS (
+            SELECT link_id, message_id, send_time, sent, processing
+            FROM email_scheduled_messages
+            WHERE link_id = $1 AND message_id = $2
+        ), updated AS (
+            UPDATE email_scheduled_messages
+            SET processing = true, updated_at = NOW()
+            WHERE link_id = $1 AND message_id = $2
+        )
+        SELECT link_id, message_id, send_time, sent, processing
+        FROM old
         "#,
         link_id,
         message_id,
@@ -40,7 +73,7 @@ pub async fn get_scheduled_message_no_auth(
     let record = sqlx::query_as!(
         db::message::ScheduledMessage,
         r#"
-        SELECT link_id, message_id, send_time, sent
+        SELECT link_id, message_id, send_time, sent, processing
         FROM email_scheduled_messages
         WHERE message_id = $1 and sent = false
         "#,

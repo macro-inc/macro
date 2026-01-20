@@ -2726,13 +2726,12 @@ dependencies = [
  "clap",
  "cloudfront_sign",
  "comms",
- "comms_service_client",
+ "comms_db_client",
  "connection_gateway",
  "cool_asserts",
  "document_sub_type",
  "dynamodb_client",
  "email",
- "email_service_client",
  "frecency",
  "futures",
  "hex",
@@ -3137,6 +3136,7 @@ dependencies = [
  "aws_lambda_events",
  "chrono",
  "lambda_runtime",
+ "macro_db_migrator",
  "macro_entrypoint",
  "macro_env",
  "models_email",
@@ -3160,6 +3160,7 @@ dependencies = [
  "axum-extra",
  "base64 0.22.1",
  "bytes",
+ "chrono",
  "cloudfront_sign",
  "connection_gateway",
  "document_storage_service_client",
@@ -5065,8 +5066,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
- "comms_service_client",
- "email_service_client",
  "http-body-util",
  "macro_auth",
  "macro_db_client",
@@ -5153,6 +5152,7 @@ name = "macro_share_permissions"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "comms_db_client",
  "comms_service_client",
  "macro_db_client",
  "macro_user_id",
@@ -6656,7 +6656,6 @@ name = "properties"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "comms_service_client",
  "email_db_client",
  "futures",
  "macro_db_client",

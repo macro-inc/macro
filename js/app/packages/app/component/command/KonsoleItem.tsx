@@ -26,7 +26,7 @@ import PushPin from '@phosphor-icons/core/regular/push-pin.svg?component-solid';
 import Terminal from '@phosphor-icons/core/regular/terminal.svg?component-solid';
 import type { Channel } from '@service-comms/generated/models/channel';
 import type { Attachment } from '@service-email/generated/schemas';
-import { useUserId } from '@queries/auth/user-info';
+import { useUserId } from '@core/context/user';
 import type { BasicDocumentSubTypeProperty } from '@service-storage/generated/schemas';
 import type { BasicDocumentFileType } from '@service-storage/generated/schemas/basicDocumentFileType';
 import type { Item } from '@service-storage/generated/schemas/item';

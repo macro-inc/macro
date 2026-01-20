@@ -3,7 +3,7 @@ import { type PaywallKey, PaywallMessages } from '@core/constant/PaywallState';
 import IconCheck from '@icon/regular/check-circle.svg';
 import IconX from '@icon/regular/x.svg';
 import Dot from '@phosphor-icons/core/regular/dot.svg?component-solid';
-import { useHasTrialed } from '@queries/auth/user-info';
+import { useHasTrialed } from '@core/context/user';
 import { stripeServiceClient } from '@service-stripe/client';
 import { createSignal, For, onMount, Show } from 'solid-js';
 

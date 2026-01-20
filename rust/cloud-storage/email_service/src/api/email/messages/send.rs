@@ -1,83 +1,43 @@
 use crate::api::context::ApiContext;
-use crate::api::email::validation::{self, ValidationError};
-use anyhow::Context;
+use crate::api::email::drafts::create::{CreateDraftError, process_message_to_send};
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
-use base64::Engine;
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use email_db_client::contacts::upsert_message::parse_and_upsert_message_contacts;
-use email_db_client::messages::insert::insert_message_to_send;
-use email_db_client::parse::service_to_db::addresses_from_message;
-use email_service::util::gmail::send;
+use chrono::Duration;
 use model::response::ErrorResponse;
 use model::user::UserContext;
-use models_email::email::db::address::UpsertedRecipients;
-use models_email::email::service::address::ContactInfo;
-use models_email::email::service::{message, thread};
+use models_email::email::service::message;
 use models_email::service::link::Link;
-use sqlx::types::chrono::{DateTime, Utc};
+use models_email::service::pubsub::ScheduledPubsubMessage;
+use sqlx::types::chrono::Utc;
 use strum_macros::AsRefStr;
 use thiserror::Error;
 use utoipa::ToSchema;
-
 #[derive(Debug, Error, AsRefStr)]
 pub enum SendMessageError {
-    #[error("Validation error: {0}")]
-    Validation(#[from] ValidationError),
+    #[error("Failed to create draft: {0}")]
+    DraftError(#[from] CreateDraftError),
 
-    #[error("Sender contact not found")]
-    SenderContactNotFound,
+    #[error("Failed to enqueue scheduled message: {0}")]
+    EnqueueError(#[from] anyhow::Error),
 
-    #[error("Failed to decode base64 HTML body")]
-    Base64DecodeError(#[from] base64::DecodeError),
-
-    #[error("Failed to convert decoded HTML body to UTF-8")]
-    Utf8Error(#[from] std::string::FromUtf8Error),
-
-    #[error("Failed to send message via Gmail")]
-    GmailSendError(#[from] anyhow::Error),
-
-    #[error("Failed to fetch attachments for message: {0}")]
-    AttachmentError(anyhow::Error),
-
-    #[error("Internal error")]
-    InternalError(#[from] sqlx::Error),
+    #[error("Draft ID not found after creation")]
+    MissingDraftId,
 }
 
 impl IntoResponse for SendMessageError {
     fn into_response(self) -> Response {
-        let status_code = match &self {
-            SendMessageError::Validation(e) => e.status_code(),
-            SendMessageError::Base64DecodeError(_) | SendMessageError::Utf8Error(_) => {
-                StatusCode::BAD_REQUEST
-            }
-            SendMessageError::SenderContactNotFound
-            | SendMessageError::GmailSendError(_)
-            | SendMessageError::AttachmentError(_)
-            | SendMessageError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        };
-
-        let error_message = match &self {
-            SendMessageError::AttachmentError(_) => {
-                "Failed to fetch attachments for message".to_string()
-            }
-            SendMessageError::Validation(_)
-            | SendMessageError::SenderContactNotFound
-            | SendMessageError::Base64DecodeError(_)
-            | SendMessageError::Utf8Error(_)
-            | SendMessageError::GmailSendError(_)
-            | SendMessageError::InternalError(_) => self.to_string(),
-        };
-
-        (
-            status_code,
-            Json(ErrorResponse {
-                message: error_message.as_str(),
-            }),
-        )
-            .into_response()
+        match self {
+            SendMessageError::DraftError(e) => e.into_response(),
+            SendMessageError::EnqueueError(_) | SendMessageError::MissingDraftId => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "Internal server error",
+                }),
+            )
+                .into_response(),
+        }
     }
 }
 
@@ -107,204 +67,37 @@ pub struct SendMessageResponse {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context, gmail_token, request_body), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id), err)]
+#[tracing::instrument(skip(ctx, user_context, request_body), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id), err)]
 pub async fn send_handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
-    gmail_token: Extension<String>,
     link: Extension<Link>,
     Json(request_body): Json<SendMessageRequest>,
 ) -> Result<Response, SendMessageError> {
-    let mut message_to_send = request_body.message;
-    // TODO: Make api-layer struct that doesn't have this or provider ids
-    message_to_send.link_id = link.id;
+    let undo_delay_secs = ctx.config.sent_undo_delay_secs;
+    let send_time = Utc::now() + Duration::seconds(undo_delay_secs as i64);
 
-    validation::validate_existing_message(&ctx.db, &link.fusionauth_user_id, &mut message_to_send)
-        .await?;
+    let draft =
+        process_message_to_send(&ctx.db, &link, request_body.message, Some(send_time), false)
+            .await?;
 
-    validation::validate_replying_to_id(&ctx.db, &mut message_to_send, &link).await?;
+    let message_db_id = draft.db_id.ok_or(SendMessageError::MissingDraftId)?;
 
-    let sender_contact = email_db_client::contacts::get::fetch_contact_by_email(
-        &ctx.db,
-        link.id,
-        link.email_address.0.as_ref(),
-    )
-    .await?
-    .ok_or(SendMessageError::SenderContactNotFound)?;
-
-    let from_contact = ContactInfo {
-        email: link.email_address.0.as_ref().to_string(),
-        name: sender_contact.name,
-        photo_url: sender_contact.photo_url,
+    let scheduled_message = ScheduledPubsubMessage {
+        link_id: link.id,
+        message_id: message_db_id,
     };
 
-    // Generate email headers that are used for threading
-    let (parent_message_id, references) =
-        send::generate_email_threading_headers(&ctx.db, message_to_send.replying_to_id, link.id)
-            .await;
+    // small delay to give user more time to undo send
+    let delay_seconds = undo_delay_secs as i32 + 2;
 
-    // html comes in as a base64 encoded string, need to decode before inserting
-    if let Some(html_body) = message_to_send.body_html {
-        let decoded_html = URL_SAFE_NO_PAD.decode(html_body.as_bytes())?;
-        let decoded_html_str = String::from_utf8(decoded_html)?;
-
-        // Store the decoded HTML back into the message
-        message_to_send.body_html = Some(decoded_html_str);
-    }
-
-    // if we are creating a new thread, we need to have a ts for the message in the db less than
-    // the actual sent time. this is so the value gets updated in the inbox sync when gmail sends us the
-    // processed message post-send
-    let before_send_ts = Utc::now();
-
-    // Include attachments for message
-    let db_attachments = send::fetch_and_attach_draft_attachments(
-        &ctx.db,
-        &ctx.s3_client,
-        ctx.config.attachment_bucket.as_str(),
-        &link,
-        &mut message_to_send,
-    )
-    .await
-    .map_err(SendMessageError::AttachmentError)?;
-
-    ctx.gmail_client
-        .send_message(
-            gmail_token.as_str(),
-            &mut message_to_send,
-            &from_contact,
-            parent_message_id,
-            references,
-        )
+    ctx.sqs_client
+        .enqueue_email_scheduled_message(scheduled_message, Some(delay_seconds))
         .await?;
 
-    // Parse and upsert contacts before starting the transaction to avoid deadlocks.
-    // Contacts are shared across messages so they must be inserted outside the transaction.
-    let addresses = addresses_from_message(&message_to_send);
-    let recipients = parse_and_upsert_message_contacts(&ctx.db, link.id, addresses)
-        .await
-        .context("Failed to upsert message contacts")?;
-
-    let mut tx = ctx.db.begin().await?;
-
-    let result = insert_sent_message(
-        &mut tx,
-        &mut message_to_send,
-        from_contact,
-        before_send_ts,
-        recipients,
+    Ok((
+        StatusCode::CREATED,
+        Json(SendMessageResponse { message: draft }),
     )
-    .await;
-
-    match result {
-        Ok(_) => {
-            tx.commit().await?;
-
-            // Cleanup attachments in the background
-            if let (Some(draft_id), Some(attachments)) = (message_to_send.db_id, db_attachments) {
-                let db = ctx.db.clone();
-                let bucket = ctx.config.attachment_bucket.clone();
-                let link_id = link.id;
-                tokio::spawn(async move {
-                    send::cleanup_draft_attachments(
-                        db,
-                        &ctx.s3_client,
-                        bucket,
-                        link_id,
-                        draft_id,
-                        attachments,
-                    )
-                    .await;
-                });
-            }
-
-            Ok((
-                StatusCode::CREATED,
-                Json(SendMessageResponse {
-                    message: message_to_send,
-                }),
-            )
-                .into_response())
-        }
-        Err(e) => {
-            if let Err(rollback_err) = tx.rollback().await {
-                tracing::error!(error=?rollback_err, provider_id=?message_to_send.provider_id, "Failed to rollback transaction after sent message insert failure");
-            }
-            Err(SendMessageError::from(e))
-        }
-    }
-}
-
-async fn insert_sent_message(
-    tx: &mut sqlx::PgConnection,
-    message_to_send: &mut message::MessageToSend,
-    from_contact: ContactInfo,
-    before_send_ts: DateTime<Utc>,
-    recipients: UpsertedRecipients,
-) -> anyhow::Result<()> {
-    let mut thread_db_id = message_to_send.thread_db_id;
-    let thread_provider_id = message_to_send.provider_thread_id.clone();
-    let now: DateTime<Utc> = Utc::now();
-    let link_id = message_to_send.link_id;
-
-    // if there isn't already a thread associated with this message, create one
-    match thread_db_id {
-        None => {
-            let thread = thread::Thread {
-                db_id: None,
-                provider_id: Some(thread_provider_id.clone().unwrap()), // safe bc it always gets populated in gmail_client
-                link_id,
-                // if we're creating a thread with a sent message, it's not visible in the inbox
-                inbox_visible: true,
-                is_read: true,
-                latest_inbound_message_ts: None,
-                latest_outbound_message_ts: Some(before_send_ts),
-                latest_non_spam_message_ts: Some(before_send_ts),
-                created_at: now,
-                updated_at: now,
-                messages: Vec::new(),
-            };
-
-            thread_db_id = Option::from(
-                email_db_client::threads::insert::insert_thread(&mut *tx, &thread, link_id)
-                    .await
-                    .context("unable to insert thread")?,
-            );
-            message_to_send.thread_db_id = thread_db_id;
-        }
-        Some(thread_db_id) => {
-            // need to upsert the thread's provider_id in case it doesn't exist already (e.g. if we are
-            // sending a previously existing draft that is the first message in the thread)
-            email_db_client::threads::update::update_thread_provider_id(
-                tx,
-                thread_db_id,
-                link_id,
-                &thread_provider_id.clone().unwrap(),
-            )
-            .await
-            .context(format!(
-                "Failed to update provider id to {} for thread {}",
-                thread_provider_id.clone().unwrap(),
-                thread_db_id
-            ))?;
-        }
-    }
-
-    let from_email_id =
-        // safe because we always populate the from field before calling this function
-        email_db_client::contacts::get::fetch_id_by_email(tx, link_id, from_contact.email.as_str())
-            .await.context("unable to fetch from email id")?;
-
-    insert_message_to_send(
-        tx,
-        message_to_send,
-        thread_db_id.unwrap(),
-        from_email_id,
-        false,
-        recipients,
-    )
-    .await
-    .context("unable to insert message to send")?;
-
-    Ok(())
+        .into_response())
 }

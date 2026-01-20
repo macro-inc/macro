@@ -16,7 +16,6 @@ export {
   tryMacroId,
 } from './macroId';
 export {
-  useOrganization,
   useOrganizationId,
   useOrganizationName,
   useOrganizationUsers,

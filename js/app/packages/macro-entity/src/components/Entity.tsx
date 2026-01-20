@@ -4,6 +4,7 @@ import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import type { Component, JSX, ParentProps, Ref } from 'solid-js';
 import { children, createMemo, Show, Suspense } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { formatDocumentName } from '@service-storage/util/filename';
 import { createProfilePictureQuery } from '../queries/auth';
 import type { EntityData } from '../types/entity';
 import type { EntityClickHandler } from './EntityWithEverything';
@@ -94,6 +95,15 @@ export function Entity<T extends EntityData = EntityData>(
     });
   });
 
+  const displayName = createMemo(() => {
+    if (props.entity.type === 'document') {
+      return formatDocumentName(props.entity.name, props.entity.fileType, {
+        fullyQualifiedBlockName: true,
+      });
+    }
+    return props.entity.name;
+  });
+
   return (
     <div
       data-entity
@@ -113,7 +123,7 @@ export function Entity<T extends EntityData = EntityData>(
           />
         </div>
         <span class="@md:w-52 truncate font-medium text-sm">
-          {props.entity.name}
+          {displayName()}
         </span>
       </div>
 
