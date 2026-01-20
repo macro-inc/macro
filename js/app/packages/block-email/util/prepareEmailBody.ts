@@ -433,8 +433,8 @@ function flattenConsecutiveParagraphs(container: Element) {
         !p.textContent?.trim() &&
         !p.querySelector('img, video, iframe, canvas');
 
-      if (p.children.length) {
-        div.append(...p.children);
+      if (p.childNodes.length) {
+        div.append(...p.childNodes);
       }
 
       if (j < group.length - 1 && !isEmpty) {
