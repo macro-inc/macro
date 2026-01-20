@@ -1,13 +1,9 @@
-import { DatePicker } from '@core/component/DatePicker';
-import { ScopedPortal } from '@core/component/ScopedPortal';
 import { type Component, createMemo } from 'solid-js';
 import { Show } from 'solid-js/web';
 import { usePropertiesContext } from '../../context/PropertiesContext';
-import type { Property } from '../../types';
 import { CreatePropertyModal } from './CreatePropertyModal';
 import { EditPropertyValueModal } from './EditPropertyValueModal';
 import { SelectPropertyModal } from './SelectPropertyModal';
-import { KeyboardDatePicker } from '@core/component/KeyboardDatePicker';
 
 export const Modals: Component = () => {
   const {
@@ -15,14 +11,11 @@ export const Modals: Component = () => {
     onPropertyAdded,
     properties,
     onRefresh,
-    saveHandler,
     propertySelectorModal,
     propertyEditorModal,
-    datePickerModal,
     createPropertyModal,
     closePropertySelector,
     closePropertyEditor,
-    closeDatePicker,
     closeCreateProperty,
   } = usePropertiesContext();
 
@@ -33,16 +26,6 @@ export const Modals: Component = () => {
   const handlePropertySaved = () => {
     onRefresh();
     closePropertyEditor();
-  };
-
-  const handleDateSaved = async (newDate: Date, property: Property) => {
-    try {
-      await saveHandler.saveDate(property, newDate);
-      onRefresh();
-    } catch (error) {
-      console.error('Failed to save date property:', error);
-    }
-    closeDatePicker();
   };
 
   const handlePropertyCreated = () => {

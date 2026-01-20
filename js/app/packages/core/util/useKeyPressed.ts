@@ -18,9 +18,11 @@ const startGlobalListener = () => {
 };
 
 /**
- * Hook to generate a readonly signal the will be true for durationMs after a
- * key is pressed. If no key or key array is passed, then will be true for all
- * keys pressed. Currently the utility of this is for running
+ * Hook to generate a readonly signal that will be true for durationMs after a
+ * key is pressed. If no key or key array arg is passed, then will be true for
+ * all keys pressed. Currently the utility of this is for temporarily suspending
+ * mouse-based hover selection when scrolling a list of items with keyboard or
+ * list filtering.
  * @param durationMs
  * @param key
  * @returns A readonly boolean signal
