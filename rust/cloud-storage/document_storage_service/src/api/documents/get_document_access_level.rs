@@ -37,7 +37,6 @@ pub async fn handler(
     let user_access_level: Option<AccessLevel> =
         match macro_middleware::cloud_storage::ensure_access::get_users_access_level_v2(
             &ctx.db,
-            &ctx.comms_service_client,
             &user_context.user_id,
             &document_id,
             "document",

@@ -1,5 +1,4 @@
 use std::marker::PhantomData;
-use std::sync::Arc;
 
 use crate::cloud_storage::ensure_access::{
     AccessLevelErr, BuildAccessLevel, get_users_access_level_v2,
@@ -10,7 +9,6 @@ use axum::{
     extract::{FromRequest, Path, Request},
 };
 use axum::{Json, RequestExt};
-use comms_service_client::CommsServiceClient;
 use model::user::UserContext;
 use models_permissions::share_permission::access_level::AccessLevel;
 use serde::de::DeserializeOwned;
@@ -43,7 +41,6 @@ impl<T, S, V> FromRequest<S> for PinAccessLevelExtractor<T, V>
 where
     T: BuildAccessLevel,
     PgPool: FromRef<S>,
-    Arc<CommsServiceClient>: FromRef<S>,
     V: DeserializeOwned + std::fmt::Debug,
     S: Send + Sync + 'static,
 {
@@ -52,7 +49,6 @@ where
     #[tracing::instrument(ret, err, skip(req, state))]
     async fn from_request(mut req: Request, state: &S) -> Result<Self, Self::Rejection> {
         let db = PgPool::from_ref(state);
-        let comms_client = <Arc<CommsServiceClient>>::from_ref(state);
 
         let user_context: Extension<UserContext> = req
             .extract_parts()
@@ -74,15 +70,10 @@ where
         let JsonBodyWithPinType { pin_type } =
             serde_json::from_value(json).map_err(|_| AccessLevelErr::BadRequest)?;
 
-        let access_level: Option<AccessLevel> = get_users_access_level_v2(
-            &db,
-            &comms_client,
-            &user_context.user_id,
-            &pinned_item_id,
-            &pin_type,
-        )
-        .await
-        .map_err(AccessLevelErr::DbErr)?;
+        let access_level: Option<AccessLevel> =
+            get_users_access_level_v2(&db, &user_context.user_id, &pinned_item_id, &pin_type)
+                .await
+                .map_err(AccessLevelErr::DbErr)?;
 
         let desired = T::into_access_level();
 

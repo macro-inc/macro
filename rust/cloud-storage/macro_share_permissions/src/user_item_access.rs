@@ -1,5 +1,4 @@
 use anyhow::Context;
-use comms_service_client::CommsServiceClient;
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::UpdateOperation;
@@ -10,10 +9,9 @@ use sqlx::types::uuid;
 ///
 /// This function handles the logic for adding/removing user access items based on
 /// channel share permissions in the UpdateSharePermissionRequestV2
-#[tracing::instrument(skip(transaction, comms_service_client))]
+#[tracing::instrument(skip(transaction))]
 pub async fn update_user_item_access<'t>(
     transaction: &mut sqlx::Transaction<'t, Postgres>,
-    comms_service_client: &CommsServiceClient,
     user_id: &str,
     item_id: &str,
     item_type: &str,
@@ -24,8 +22,11 @@ pub async fn update_user_item_access<'t>(
             let channel_id = uuid::Uuid::parse_str(&csp.channel_id)
                 .with_context(|| format!("Failed to parse channel_id {}", &csp.channel_id))?;
 
-            let channel_participants = comms_service_client
-                .get_channel_participants(&csp.channel_id)
+            let channel_participants =
+                comms_db_client::participants::get_participants::get_participants_tsx(
+                    transaction,
+                    &channel_id,
+                )
                 .await
                 .with_context(|| {
                     format!(

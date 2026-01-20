@@ -1,13 +1,11 @@
 //! backfill_useritemaccess.rs is used to trigger a backfill for the UserItemAccess table
 //! - DATABASE_URL
 //! - DOCUMENT_STORAGE_SERVICE_AUTH_KEY
-//! - COMMS_SERVICE_URL
 mod chat;
 mod document;
 mod project;
 
 use anyhow::Context;
-use comms_service_client::CommsServiceClient;
 use macro_entrypoint::MacroEntrypoint;
 use sqlx::postgres::PgPoolOptions;
 
@@ -57,10 +55,6 @@ async fn main() -> anyhow::Result<()> {
     println!("Starting backfill_useritemaccess script");
 
     let database_url = std::env::var("DATABASE_URL").context("DATABASE_URL not set")?;
-    let comms_internal_key = std::env::var("DOCUMENT_STORAGE_SERVICE_AUTH_KEY")
-        .context("DOCUMENT_STORAGE_SERVICE_AUTH_KEY not set")?;
-    let comms_service_url =
-        std::env::var("COMMS_SERVICE_URL").context("COMMS_SERVICE_URL not set")?;
 
     let db = PgPoolOptions::new()
         .min_connections(10)
@@ -69,27 +63,25 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("could not connect to db")?;
 
-    let comms_service_client = CommsServiceClient::new(comms_internal_key, comms_service_url);
-
     // --- Backfill Logic Controlled by Environment Variables ---
 
     if is_backfill_enabled("BACKFILL_CHATS") {
         let offset = get_offset("CHAT_OFFSET");
-        chat::backfill_chats_updated(&db, &comms_service_client, offset).await?;
+        chat::backfill_chats_updated(&db, offset).await?;
     } else {
         println!("Skipping chat backfill: BACKFILL_CHATS is not set to 'true'.");
     }
 
     if is_backfill_enabled("BACKFILL_DOCUMENTS") {
         let offset = get_offset("DOCS_OFFSET");
-        document::backfill_documents_updated(&db, &comms_service_client, offset).await?;
+        document::backfill_documents_updated(&db, offset).await?;
     } else {
         println!("Skipping document backfill: BACKFILL_DOCUMENTS is not set to 'true'.");
     }
 
     if is_backfill_enabled("BACKFILL_PROJECTS") {
         let offset = get_offset("PROJECTS_OFFSET");
-        project::backfill_projects_updated(&db, &comms_service_client, offset).await?;
+        project::backfill_projects_updated(&db, offset).await?;
     } else {
         println!("Skipping project backfill: BACKFILL_PROJECTS is not set to 'true'.");
     }

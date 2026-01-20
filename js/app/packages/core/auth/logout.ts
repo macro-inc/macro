@@ -1,15 +1,13 @@
 import { withAnalytics } from '@coparse/analytics';
-import { useOrganization } from '@core/user';
 import { authServiceClient } from '@service-auth/client';
 import { invalidateUserInfo, authKeys } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
 import { createCallback } from '@solid-primitives/rootless';
+import { invalidateOrganization } from '@queries/auth';
 
 const { track, TrackingEvents } = withAnalytics();
 
 export function useLogout() {
-  const [, { mutate: mutateOrganization }] = useOrganization();
-
   return createCallback(async (redirectUrl?: string) => {
     document.cookie =
       'login=false; expires=Thu, 01 Jan 1970 00:00:00 UTC; max-age=0; path=/; SameSite=Lax';
@@ -29,10 +27,7 @@ export function useLogout() {
       hasTrialed: false,
     });
 
-    mutateOrganization(() => ({
-      organizationId: undefined,
-      organizationName: undefined,
-    }));
+    invalidateOrganization();
 
     await authServiceClient.logout();
     invalidateUserInfo();

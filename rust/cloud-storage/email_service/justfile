@@ -31,8 +31,7 @@ create-queues:
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue \
     	--queue-name my-test-link-manager-queue
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue \
-        --queue-name my-test-scheduled-queue.fifo \
-        --attributes FifoQueue=true,ContentBasedDeduplication=true
+        --queue-name my-test-scheduled-queue
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue \
     	--queue-name backfill-queue --attributes VisibilityTimeout=61
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue \
@@ -54,7 +53,7 @@ purge-queues:
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue \
         --queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/my-test-link-manager-queue
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue \
-            --queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/my-test-scheduled-queue.fifo
+            --queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/my-test-scheduled-queue
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue \
         --queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/search-queue
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue \

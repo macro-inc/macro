@@ -100,7 +100,6 @@ pub async fn edit_thread_handler(
 
         update_user_item_access(
             &mut tx,
-            &ctx.comms_service_client,
             &user_context.user_id,
             &thread_id,
             "thread",

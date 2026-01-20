@@ -1,7 +1,7 @@
 import { BozzyBracket } from '@core/component/BozzyBracket';
 import { UserIcon } from '@core/component/UserIcon';
 import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
-import { useEmail, useUserId } from '@queries/auth/user-info';
+import { useEmail, useUserId } from '@core/context/user';
 import { createMemo, createSignal } from 'solid-js';
 import {
   getSenderDisplayName,

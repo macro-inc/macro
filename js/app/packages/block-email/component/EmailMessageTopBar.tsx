@@ -3,7 +3,7 @@ import { Tooltip } from '@core/component/Tooltip';
 import CaretDown from '@icon/regular/caret-down.svg';
 import X from '@icon/regular/x.svg';
 import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
-import { useEmail } from '@queries/auth/user-info';
+import { useEmail } from '@core/context/user';
 import {
   type Accessor,
   createMemo,

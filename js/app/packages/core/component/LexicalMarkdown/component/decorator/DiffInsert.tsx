@@ -1,6 +1,6 @@
 import type { DiffInsertDecoratorProps } from '@lexical-core';
 import { $isDiffNode } from '@lexical-core';
-import { useUserId } from '@queries/auth/user-info';
+import { useUserId } from '@core/context/user';
 import { $getNodeByKey } from 'lexical';
 import { createMemo, Show, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';

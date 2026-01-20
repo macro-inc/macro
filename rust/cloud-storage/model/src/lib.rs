@@ -13,7 +13,6 @@ pub mod document_storage_service_internal;
 pub mod experiment;
 pub mod folder;
 pub mod item;
-pub mod macros;
 pub mod organization;
 pub mod pin;
 pub mod project;

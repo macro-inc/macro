@@ -79,6 +79,7 @@ export * from './contactName';
 export * from './contactOriginalPhotoUrl';
 export * from './contactSfsPhotoUrl';
 export * from './createDraftRequest';
+export * from './createDraftRequestSendTime';
 export * from './createDraftResponse';
 export * from './createLabelRequest';
 export * from './createLabelResponse';

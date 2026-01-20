@@ -1,7 +1,6 @@
-use anyhow::Context;
 use sqlx::types::Uuid;
 
-#[tracing::instrument(skip(tx), level = "info")]
+#[tracing::instrument(skip(tx), err)]
 pub async fn update_message_read_status(
     tx: &mut sqlx::PgConnection,
     message_id: Uuid,
@@ -26,13 +25,7 @@ pub async fn update_message_read_status(
         fusionauth_user_id
     )
     .fetch_optional(tx)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to update read status for message {} for user {}",
-            message_id, fusionauth_user_id
-        )
-    })?;
+    .await?;
 
     if result.is_none() {
         tracing::warn!(
@@ -96,7 +89,7 @@ where
     Ok(updated_count)
 }
 
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn update_message_starred_status_batch(
     pool: &sqlx::PgPool,
     message_ids: Vec<Uuid>,
@@ -125,14 +118,7 @@ pub async fn update_message_starred_status_batch(
         fusionauth_user_id
     )
     .fetch_all(pool)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to update starred status for {} messages for user {}",
-            message_ids.len(),
-            fusionauth_user_id
-        )
-    })?;
+    .await?;
 
     let updated_count = result.len();
 
@@ -149,7 +135,7 @@ pub async fn update_message_starred_status_batch(
 }
 
 /// Updates draft in database to be sent, and populates with provider IDs
-#[tracing::instrument(skip(tx), level = "info")]
+#[tracing::instrument(skip(tx), err)]
 pub async fn mark_message_as_sent(
     tx: &mut sqlx::PgConnection,
     provider_id: &str,
@@ -157,7 +143,7 @@ pub async fn mark_message_as_sent(
     link_id: Uuid,
     db_id: Uuid,
 ) -> anyhow::Result<()> {
-    let result = sqlx::query!(
+    sqlx::query!(
         r#"
         UPDATE email_messages
         SET
@@ -176,21 +162,35 @@ pub async fn mark_message_as_sent(
         link_id
     )
     .execute(tx)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to mark message as sent for message {} in link {}",
-            db_id, link_id
-        )
-    })?;
+    .await?;
 
-    if result.rows_affected() == 0 {
-        tracing::warn!(
-            message_id = %db_id,
-            link_id = %link_id,
-            "No message was updated - message may not exist or link_id doesn't match"
-        );
-    }
+    Ok(())
+}
+
+/// Updates the is_draft status of a message
+#[tracing::instrument(skip(tx), err)]
+pub async fn update_message_draft_status(
+    tx: &mut sqlx::PgConnection,
+    message_id: Uuid,
+    link_id: Uuid,
+    is_draft: bool,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"
+        UPDATE email_messages
+        SET
+            is_draft = $1,
+            updated_at = NOW()
+        WHERE
+            id = $2
+            AND link_id = $3
+        "#,
+        is_draft,
+        message_id,
+        link_id
+    )
+    .execute(tx)
+    .await?;
 
     Ok(())
 }

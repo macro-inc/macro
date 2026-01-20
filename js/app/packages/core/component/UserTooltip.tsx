@@ -8,7 +8,7 @@ import WideCopy from '@macro-icons/wide/copy.svg';
 import WideChat from '@macro-icons/wide/chat.svg';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { commsServiceClient } from '@service-comms/client';
-import { useUserId } from '@queries/auth/user-info';
+import { useUserId } from '@core/context/user';
 import { Button } from '@ui/components/Button';
 import { Match, Show, Switch } from 'solid-js';
 import { ProfilePicture } from './ProfilePicture';

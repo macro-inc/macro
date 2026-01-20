@@ -27,7 +27,7 @@ import ArrowDownIcon from '@icon/regular/arrow-down.svg';
 import XIcon from '@icon/regular/x.svg';
 import type { Activity as ChannelActivity } from '@service-comms/generated/models/activity';
 import type { Message } from '@service-comms/generated/models/message';
-import { useUserId } from '@queries/auth/user-info';
+import { useUserId } from '@core/context/user';
 import { debounce } from '@solid-primitives/scheduled';
 import { activeElement } from 'app/signal/focus';
 import {

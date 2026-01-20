@@ -32,9 +32,22 @@ const getServiceClientsDir = () => path.resolve(import.meta.dirname, '../package
 // Parse arguments
 const getTargetServices = () => process.argv.slice(2).filter(arg => arg !== '--check');
 
+// Build all OpenAPI binaries in a single cargo invocation (parallelized internally by cargo)
+async function buildOpenApiBinaries(crateNames: string[], rustCloudStorageDir = getRustCloudStorageDir()): Promise<void> {
+  if (crateNames.length === 0) return;
 
-async function generateOpenApiFromCrate(crateName: string, rustCloudStorageDir = getRustCloudStorageDir()): Promise<string> {
-  const result = await $`cd ${rustCloudStorageDir} && SQLX_OFFLINE=true cargo run -p ${crateName} --bin ${crateName}_openapi`.text();
+  const packageArgs = crateNames.flatMap(crate => ['-p', crate]);
+  const binArgs = crateNames.flatMap(crate => ['--bin', `${crate}_openapi`]);
+
+  console.log(`Building ${crateNames.length} OpenAPI binaries in parallel...`);
+  await $`cd ${rustCloudStorageDir} && SQLX_OFFLINE=true cargo build --release ${packageArgs} ${binArgs}`;
+  console.log('Build complete.\n');
+}
+
+// Run pre-built binary directly (no cargo lock needed)
+async function runOpenApiBinary(crateName: string, rustCloudStorageDir = getRustCloudStorageDir()): Promise<string> {
+  const binaryPath = path.join(rustCloudStorageDir, 'target', 'release', `${crateName}_openapi`);
+  const result = await $`${binaryPath}`.text();
   return result;
 }
 
@@ -79,12 +92,12 @@ const getServicesToProcess = (targetServices: string[]) => {
 }
 
 
-// Process all services in parallel
+// Process a single service (assumes binary is already built)
 const processService = async (service: Service, { serviceClientsDir }: { serviceClientsDir: string }) => {
   const crateName = serviceToCrate[service.name];
   if (!crateName) {
     console.error(`[${service.name}] No crate mapping found, skipping`);
-    return { service: service.name, status: 'skipped' };
+    return { service: service.name, status: 'skipped' as const };
   }
 
   try {
@@ -92,55 +105,56 @@ const processService = async (service: Service, { serviceClientsDir }: { service
     const generatedDir = path.resolve(outputDir, 'generated');
     const openApiPath = path.join(outputDir, 'openapi.json');
 
-    console.log(`[${service.name}] Generating OpenAPI spec from ${crateName}...`);
+    console.log(`[${service.name}] Running OpenAPI binary...`);
 
-    // Generate OpenAPI JSON from Rust binary
-    let openApiJson = await generateOpenApiFromCrate(crateName);
-
+    // Run pre-built binary directly
+    const openApiJson = await runOpenApiBinary(crateName);
 
     // Remove existing generated dir
-    console.log(`[${service.name}] Removing existing generated dir`, generatedDir);
-    await $`rm -rf ${generatedDir}`;
+    await $`rm -rf ${generatedDir}`.quiet();
 
     // Write the OpenAPI JSON
     await write(openApiPath, openApiJson);
-    console.log(`[${service.name}] Saved OpenAPI spec to ${openApiPath}`);
+    console.log(`[${service.name}] Saved OpenAPI spec`);
 
     // Run orval to generate types
-    await $`cd ${serviceClientsDir} && bun run orval --config orval.config.ts --project ${service.orvalKey}`;
-
-    // Organize imports in generated files to ensure deterministic ordering
-    await $`bunx biome check --write --unsafe ${outputDir}`;
+    await $`cd ${serviceClientsDir} && bun run orval --config orval.config.ts --project ${service.orvalKey}`.quiet();
 
     // Special handling for document-cognition
     if (service.name === 'document-cognition') {
-      await $`cd ${path.resolve(import.meta.dirname, '..')} && bun scripts/generate-dcs-types.ts`;
+      await $`cd ${path.resolve(import.meta.dirname, '..')} && bun scripts/generate-dcs-types.ts`.quiet();
     }
 
-    console.log(`[${service.name}] Successfully processed`);
-    return { service: service.name, status: 'success' };
+    console.log(`[${service.name}] ✓ Done`);
+    return { service: service.name, status: 'success' as const };
   } catch (error) {
-    console.error(`[${service.name}] Failed to process:`, error);
-    return { service: service.name, status: 'failed', error };
+    console.error(`[${service.name}] Failed:`, error);
+    return { service: service.name, status: 'failed' as const, error };
   }
 };
 
 
-// Process services sequentially to avoid cargo lock contention
 async function main() {
   const serviceClientsDir = getServiceClientsDir();
   const checkMode = process.argv.includes('--check');
   const targetServices = getTargetServices();
   const servicesToProcess = getServicesToProcess(targetServices);
-  console.log(
-    `\nProcessing ${servicesToProcess.length} service(s)...\n`
-  );
 
-  const results = [];
-  for (const service of servicesToProcess) {
-    const result = await processService(service, { serviceClientsDir } );
-    results.push(result);
-  }
+  // Get crate names for services that have mappings
+  const crateNames = servicesToProcess
+    .map(s => serviceToCrate[s.name])
+    .filter((crate): crate is string => !!crate);
+
+  console.log(`\nProcessing ${servicesToProcess.length} service(s)...\n`);
+
+  // Phase 1: Build all binaries in a single cargo invocation (parallelized by cargo)
+  await buildOpenApiBinaries(crateNames);
+
+  // Phase 2: Run binaries and generate TypeScript in parallel
+  console.log('Generating TypeScript clients in parallel...\n');
+  const results = await Promise.all(
+    servicesToProcess.map(service => processService(service, { serviceClientsDir }))
+  );
 
   // Summary report
   console.log('\nProcessing Summary:');

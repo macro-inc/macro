@@ -68,8 +68,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Initialize properties service
     let properties_repository = properties::PropertiesPgRepo::new(db.clone());
-    let permission_service =
-        properties::PermissionServiceImpl::new(db.clone(), comms_service_client.clone());
+    let permission_service = properties::PermissionServiceImpl::new(db.clone());
 
     // Initialize notification service
     let notification_queue = std::env::var("NOTIFICATION_QUEUE")
