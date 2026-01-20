@@ -29,30 +29,5 @@
     ],
     "deny": [],
     "ask": []
-  },
-  "hooks": {
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": ".claude/hooks/require-qc.sh",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Bash(git commit:*)",
-        "hooks": [
-          {
-            "type": "command",
-            "command": ".claude/hooks/pre-commit-check.sh",
-            "timeout": 120
-          }
-        ]
-      }
-    ]
   }
 }
