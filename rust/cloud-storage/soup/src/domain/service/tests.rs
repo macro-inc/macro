@@ -158,6 +158,9 @@ async fn it_should_not_query_frecency() {
                     .collect())
             })
         });
+    soup_mock
+        .expect_populate_properties()
+        .returning(|_| Box::pin(async { Ok(()) }));
 
     let res = SoupImpl::new(
         soup_mock,
@@ -697,6 +700,9 @@ async fn cursor_should_return_simple_sort() {
                 .collect();
             Box::pin(async move { Ok(res) })
         });
+    soup_mock
+        .expect_populate_properties()
+        .returning(|_| Box::pin(async { Ok(()) }));
 
     let res = SoupImpl::new(
         soup_mock,
@@ -808,6 +814,9 @@ async fn it_should_return_is_completed_true_for_completed_tasks() {
                 ))])
             })
         });
+    soup_mock
+        .expect_populate_properties()
+        .returning(|_| Box::pin(async { Ok(()) }));
 
     let res = SoupImpl::new(
         soup_mock,
@@ -848,6 +857,9 @@ async fn it_should_return_is_completed_false_for_incomplete_tasks() {
                 ))])
             })
         });
+    soup_mock
+        .expect_populate_properties()
+        .returning(|_| Box::pin(async { Ok(()) }));
 
     let res = SoupImpl::new(
         soup_mock,
@@ -888,6 +900,9 @@ async fn it_should_return_is_completed_none_for_non_tasks() {
                 ))])
             })
         });
+    soup_mock
+        .expect_populate_properties()
+        .returning(|_| Box::pin(async { Ok(()) }));
 
     let res = SoupImpl::new(
         soup_mock,
@@ -940,6 +955,9 @@ async fn it_should_preserve_is_completed_for_mixed_items() {
                 ])
             })
         });
+    soup_mock
+        .expect_populate_properties()
+        .returning(|_| Box::pin(async { Ok(()) }));
 
     let res = SoupImpl::new(
         soup_mock,
