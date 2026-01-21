@@ -437,7 +437,16 @@ export function EmailCompose(props: EmailComposeProps) {
     },
   });
 
-  const onSubmit = () => {
+  const scheduleMessageMutation = useScheduleMessageMutation({
+    onSuccess: () => {
+      toast.success('Email scheduled');
+    },
+    onError: () => {
+      toast.failure('Failed to schedule email');
+    },
+  });
+
+  const onSubmit = async () => {
     setValidationError(null);
 
     const currentEditor = editor();
@@ -497,6 +506,25 @@ export function EmailCompose(props: EmailComposeProps) {
     }
 
     const sendTime = form.sendTime()?.toISOString();
+
+    if (sendTime) {
+      const draftID = currentDraftID() ?? (await executeSaveDraft());
+
+      if (!draftID) {
+        console.error('No draft');
+        toast.failure('Failed to schedule message', 'Draft required');
+        cleanupWatermark();
+        return;
+      }
+
+      scheduleMessageMutation.mutate({
+        draftID,
+        sendTime,
+      });
+
+      cleanupWatermark();
+      return;
+    }
 
     sendMutation.mutate({
       message: {
@@ -778,7 +806,7 @@ export function EmailCompose(props: EmailComposeProps) {
                   onRemoveAttachment={handleRemoveAttachment}
                   onSendTimeChange={form.setSendTime}
                   attachments={form.attachments.list()}
-                  onSubmit={onSubmit}
+                  onSubmit={() => void onSubmit()}
                   isSubmitting={sendMutation.isPending}
                   hasDraft={currentDraftID() != null}
                   onDraftDeletePress={deleteDraftAndReset}
