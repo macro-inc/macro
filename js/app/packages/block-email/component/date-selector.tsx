@@ -269,7 +269,7 @@ export const DateSelector = (props: DateSelectorProps) => {
             <Combobox.Listbox ref={setListboxRef} />
             <Show when={props.withTime}>
               <div class="px-2 py-1.5 border-t border-edge-muted">
-                <label class="flex items-center justify-between">
+                <label class="flex items-center justify-between text-sm">
                   Time
                   <input
                     type="time"
