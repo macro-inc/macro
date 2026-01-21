@@ -104,7 +104,7 @@ pub fn map_db_macro_attachment_to_service(
     }
 }
 
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip_all, err)]
 pub fn map_db_message_attachments_to_service(
     mut service_message: message::Message,
     attachments_res: Vec<db::attachment::Attachment>,

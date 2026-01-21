@@ -8,7 +8,7 @@ use sqlx::types::Uuid;
 
 /// Updates a thread's metadata
 #[expect(clippy::too_many_arguments, reason = "too annoying to fix right now")]
-#[tracing::instrument(skip(tx), level = "debug")]
+#[tracing::instrument(skip(tx), err)]
 async fn update_db_thread_metadata(
     tx: &mut sqlx::PgConnection,
     thread_id: Uuid,
@@ -52,7 +52,7 @@ async fn update_db_thread_metadata(
 }
 
 // updates a thread's archived status to the passed boolean without performing checks
-#[tracing::instrument(skip(conn))]
+#[tracing::instrument(skip(conn), err)]
 pub async fn update_inbox_visible_status(
     conn: &mut sqlx::PgConnection,
     thread_id: Uuid,
@@ -114,7 +114,7 @@ where
 }
 
 /// Updates a thread's provider_id
-#[tracing::instrument(skip(conn))]
+#[tracing::instrument(skip(conn), err)]
 pub async fn update_thread_provider_id(
     conn: &mut sqlx::PgConnection,
     thread_id: Uuid,
@@ -146,7 +146,7 @@ pub async fn update_thread_provider_id(
 }
 
 // Updates a thread's metadata (archived status, latest_timestamps)
-#[tracing::instrument(skip(tx), level = "debug")]
+#[tracing::instrument(skip(tx), err)]
 pub async fn update_thread_metadata(
     tx: &mut sqlx::PgConnection,
     thread_db_id: Uuid,

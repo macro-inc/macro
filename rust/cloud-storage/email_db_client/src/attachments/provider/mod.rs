@@ -13,7 +13,7 @@ use sqlx::{Executor, PgPool, Pool, Postgres};
 use std::collections::HashMap;
 
 /// inserts the metadata for attachments of an email into the database in a batch
-#[tracing::instrument(skip(tx, attachments, message_id))]
+#[tracing::instrument(skip(tx, attachments, message_id), err)]
 pub async fn insert_attachments(
     tx: &mut sqlx::PgConnection,
     message_id: Uuid,
@@ -156,7 +156,7 @@ pub async fn insert_attachments(
     Ok(())
 }
 
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(pool), err)]
 pub async fn fetch_db_attachments(
     pool: &PgPool,
     message_db_id: Uuid,
@@ -178,7 +178,7 @@ pub async fn fetch_db_attachments(
 }
 
 // deletes all attachments of a given message
-#[tracing::instrument(skip(executor), level = "info")]
+#[tracing::instrument(skip(executor), err)]
 pub async fn delete_message_attachments<'e, E>(executor: E, message_id: Uuid) -> anyhow::Result<()>
 where
     E: Executor<'e, Database = Postgres>,

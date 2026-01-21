@@ -6,7 +6,7 @@ use sqlx::types::Uuid;
 use std::collections::{HashMap, HashSet};
 
 /// retrieves a message label if it exists
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn fetch_message_label(
     pool: &PgPool,
     message_id: Uuid,
@@ -43,7 +43,7 @@ pub async fn fetch_message_label(
     Ok(record.map(Into::into))
 }
 
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(pool), err)]
 pub async fn fetch_message_labels(
     pool: &PgPool,
     message_db_id: Uuid,
@@ -72,7 +72,7 @@ pub async fn fetch_message_labels(
     .context("Failed to fetch labels")
 }
 
-#[tracing::instrument(skip(executor), level = "info")]
+#[tracing::instrument(skip(executor), err)]
 pub async fn fetch_message_labels_in_bulk<'e, E>(
     executor: E,
     message_ids: &[Uuid],
@@ -191,7 +191,7 @@ pub async fn find_missing_provider_labels(
     Ok(missing_labels)
 }
 
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn fetch_labels_by_link_id(
     pool: &PgPool,
     link_id: Uuid,
@@ -224,7 +224,7 @@ pub async fn fetch_labels_by_link_id(
     Ok(service_labels)
 }
 
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn fetch_label_by_id(
     pool: &PgPool,
     label_id: Uuid,

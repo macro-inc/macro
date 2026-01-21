@@ -3,7 +3,7 @@ use models_email::email::{db, service};
 use sqlx::types::Uuid;
 use sqlx::{Executor, PgPool, Postgres};
 
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn insert_message_label(
     pool: &PgPool,
     message_id: Uuid,
@@ -59,7 +59,7 @@ pub async fn insert_message_label(
 }
 
 /// Inserts a label for multiple messages at once
-#[tracing::instrument(skip(executor), level = "info")]
+#[tracing::instrument(skip(executor), err)]
 pub async fn insert_message_labels_batch<'e, E>(
     executor: E,
     message_ids: &Vec<Uuid>,
@@ -112,7 +112,7 @@ where
 /// Inserts or updates labels for a user.
 /// Labels are shared across messages, so this should be done separately from inserting message_labels
 /// to avoid deadlock issues.
-#[tracing::instrument(skip(pool, service_labels), fields(label_count = service_labels.len()))]
+#[tracing::instrument(skip(pool, service_labels), fields(label_count = service_labels.len()), err)]
 pub async fn insert_or_update_labels(
     pool: &PgPool,
     mut service_labels: Vec<service::label::Label>,
@@ -214,7 +214,7 @@ pub async fn insert_or_update_labels(
     Ok(())
 }
 
-#[tracing::instrument(skip(pool, service_label))]
+#[tracing::instrument(skip(pool, service_label), err)]
 pub async fn insert_label(
     pool: &PgPool,
     mut service_label: service::label::Label,
