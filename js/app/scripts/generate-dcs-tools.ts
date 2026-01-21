@@ -95,8 +95,7 @@ const AiToolsResponseSchema = z.object({
 type AiToolsResponse = z.infer<typeof AiToolsResponseSchema>["schemas"];
 
 async function fetchAIToolsSchemas(): Promise<AiToolsResponse> {
-	const path =
-		"../../rust/cloud-storage/document_cognition_service/schemas/tools.json";
+	const path = "../../rust/cloud-storage/ai_tools/schemas/tools.json";
 	try {
 		const data = await readFile(path, "utf-8");
 		const parsed = AiToolsResponseSchema.parse(JSON.parse(data));
