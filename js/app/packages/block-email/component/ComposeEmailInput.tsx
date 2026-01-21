@@ -317,7 +317,8 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
               return (
                 <Button
                   class={cn(
-                    state.selectedDate && 'bg-accent/20 text-accent-ink',
+                    state.selectedDate &&
+                      'bg-accent/20 text-accent-ink hover:bg-accent/15',
                     'aspect-square p-1'
                   )}
                   tooltip={
