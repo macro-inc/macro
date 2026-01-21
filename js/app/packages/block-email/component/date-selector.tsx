@@ -110,6 +110,7 @@ export const DateSelector = (props: DateSelectorProps) => {
 
   const resetState = () => {
     setSearchQuery('');
+    setMode('search');
   };
 
   const onOpenChange = (open: boolean) => {
