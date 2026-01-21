@@ -1,8 +1,3 @@
-# Builds convert_service with LibreOffice support (dev version using ECR cache)
-ARG CACHE_IMAGE=569036502058.dkr.ecr.us-east-1.amazonaws.com/cloud-storage-cache:latest
-FROM ${CACHE_IMAGE} AS cache
-ENV SQLX_OFFLINE=true
-
 # Download LibreOffice/Collabora Online assets
 FROM debian:trixie-slim AS lok
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -21,9 +16,6 @@ RUN cargo install cargo-strip
 WORKDIR /app
 
 FROM chef AS builder
-# Use ECR cache instead of cargo-chef
-COPY --from=cache /app/target target
-COPY --from=cache /usr/local/cargo /usr/local/cargo
 COPY . .
 
 RUN cargo build --release --bin convert_service \
