@@ -6,7 +6,6 @@
  */
 import type { Attachment } from './attachment';
 import type { AttachmentDraft } from './attachmentDraft';
-import type { AttachmentMacro } from './attachmentMacro';
 import type { ContactInfo } from './contactInfo';
 import type { Label } from './label';
 import type { MessageBodyHtmlSanitized } from './messageBodyHtmlSanitized';
@@ -32,7 +31,6 @@ export interface Message {
   attachments: Attachment[];
   /** Uploaded file attachments for the message, if it is a draft */
   attachments_draft: AttachmentDraft[];
-  attachments_macro: AttachmentMacro[];
   bcc: ContactInfo[];
   body_html_sanitized?: MessageBodyHtmlSanitized;
   body_macro?: MessageBodyMacro;
