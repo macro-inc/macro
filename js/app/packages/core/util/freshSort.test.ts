@@ -167,11 +167,6 @@ describe('createFreshSearch with comma-separated channel matching', () => {
 });
 
 describe('normalizeFuzzyScore', () => {
-  it('converts Infinity to maxPossibleScore', () => {
-    const result = normalizeFuzzyScore(Infinity, 100);
-    expect(result).toBe(1);
-  });
-
   it('normalizes regular scores correctly', () => {
     const result = normalizeFuzzyScore(50, 100);
     expect(result).toBe(0.5);
@@ -182,15 +177,28 @@ describe('normalizeFuzzyScore', () => {
     expect(normalizeFuzzyScore(150, 100)).toBe(1);
   });
 
-  it('uses default maxPossibleScore of 1 when not provided', () => {
-    expect(normalizeFuzzyScore(0.5)).toBe(0.5);
-    expect(normalizeFuzzyScore(Infinity)).toBe(1);
-  });
-
   it('handles edge cases', () => {
     expect(normalizeFuzzyScore(0, 100)).toBe(0);
     expect(normalizeFuzzyScore(100, 100)).toBe(1);
-    expect(normalizeFuzzyScore(0)).toBe(0);
+    expect(normalizeFuzzyScore(0, 1)).toBe(0);
+  });
+
+  it('throws error for Infinity fuzzyScore', () => {
+    expect(() => normalizeFuzzyScore(Infinity, 100)).toThrow(
+      'fuzzyScore must be a finite number'
+    );
+  });
+
+  it('throws error for invalid maxPossibleScore', () => {
+    expect(() => normalizeFuzzyScore(50, Infinity)).toThrow(
+      'maxPossibleScore must be a finite positive number'
+    );
+    expect(() => normalizeFuzzyScore(50, 0)).toThrow(
+      'maxPossibleScore must be a finite positive number'
+    );
+    expect(() => normalizeFuzzyScore(50, -10)).toThrow(
+      'maxPossibleScore must be a finite positive number'
+    );
   });
 });
 

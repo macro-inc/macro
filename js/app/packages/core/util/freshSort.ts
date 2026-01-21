@@ -124,12 +124,18 @@ function calculateTimeScore(
 
 export function normalizeFuzzyScore(
   fuzzyScore: number,
-  maxPossibleScore: number = 1
+  maxPossibleScore: number
 ): number {
-  // We need a valid number score so that boosts work because fuzzy library defaults
-  // to Infinity for exact matches, see: https://github.com/mattyork/fuzzy/blob/master/lib/fuzzy.js#L75
-  let score = fuzzyScore === Infinity ? maxPossibleScore : fuzzyScore;
-  return Math.max(0, Math.min(1, score / maxPossibleScore));
+  if (!Number.isFinite(fuzzyScore)) {
+    throw new Error(`fuzzyScore must be a finite number, got: ${fuzzyScore}`);
+  }
+  if (!Number.isFinite(maxPossibleScore) || maxPossibleScore <= 0) {
+    throw new Error(
+      `maxPossibleScore must be a finite positive number, got: ${maxPossibleScore}`
+    );
+  }
+
+  return Math.max(0, Math.min(1, fuzzyScore / maxPossibleScore));
 }
 
 function calculateBrevityScore(text: string): number {
@@ -159,10 +165,9 @@ export function freshSort<T extends TimestampedItem>(
       : 1;
 
   const scoredResults: FreshSortResult<T>[] = filterResults.map((result) => {
+    const rawScore = result.score === Infinity ? maxFuzzyScore : result.score;
     const fuzzyScore =
-      maxFuzzyScore === 0
-        ? 0
-        : normalizeFuzzyScore(result.score, maxFuzzyScore);
+      maxFuzzyScore === 0 ? 0 : normalizeFuzzyScore(rawScore, maxFuzzyScore);
     const timeScore = calculateTimeScore(
       extractTimestamp(result.original, finalConfig.useViewedAt),
       finalConfig
