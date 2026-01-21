@@ -1,9 +1,6 @@
 use crate::api::context::ApiContext;
 use anyhow::Context;
-use comms_service_client::CommsServiceClient;
 use config::{Config, Environment};
-use document_storage_service_client::DocumentStorageServiceClient;
-use email_service_client::EmailServiceClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
@@ -66,21 +63,6 @@ async fn main() -> anyhow::Result<()> {
         return Err(e);
     }
 
-    let comms_service_client = CommsServiceClient::new(
-        config.internal_auth_key.as_ref().to_string(),
-        config.comms_service_url.clone(),
-    );
-
-    let dss_client = DocumentStorageServiceClient::new(
-        config.internal_auth_key.as_ref().to_string(),
-        config.dss_url.clone(),
-    );
-
-    let email_service_client = EmailServiceClient::new(
-        config.internal_auth_key.as_ref().to_string(),
-        config.email_service_url.clone(),
-    );
-
     let jwt_args =
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
@@ -88,9 +70,6 @@ async fn main() -> anyhow::Result<()> {
     api::setup_and_serve(ApiContext {
         db,
         opensearch_client: Arc::new(opensearch_client),
-        comms_service_client: Arc::new(comms_service_client),
-        dss_client: Arc::new(dss_client),
-        email_service_client: Arc::new(email_service_client),
         jwt_args,
         internal_auth_key: secretsmanager_client::LocalOrRemoteSecret::Local(
             InternalApiSecretKey::new()?,
