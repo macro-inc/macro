@@ -42,7 +42,10 @@ import {
 } from '@lexical-core';
 import { logger } from '@observability';
 import { useEmailLinksQuery } from '@queries/email/link';
-import { useSendMessageMutation } from '@queries/email/thread';
+import {
+  useScheduleMessageMutation,
+  useSendMessageMutation,
+} from '@queries/email/thread';
 import type {
   AttachmentMacro,
   MessageToSendDbId,
@@ -604,6 +607,15 @@ export function BaseInput(props: {
     useHotkeyDOMScope('compose-message');
   let composeContainerRef: HTMLDivElement | undefined;
 
+  const scheduleMessageMutation = useScheduleMessageMutation({
+    onSuccess: () => {
+      toast.success('Email scheduled');
+    },
+    onError: () => {
+      toast.failure('Failed to schedule email');
+    },
+  });
+
   const sendEmail = async (markDone = false) => {
     if (sendMutation.isPending || uploadAttachmentMutation.isPending) return;
 
@@ -685,6 +697,28 @@ export function BaseInput(props: {
 
     const currentDraftID = savedDraftId();
     if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
+
+    const sendTime = form().sendTime()?.toISOString();
+
+    if (sendTime) {
+      // Just in case, always get a fresh save of the draft so we don't miss any information
+      const draftID = await executeSaveDraft();
+
+      if (!draftID) {
+        console.error('No draft');
+        toast.failure('Failed to schedule message', 'Draft required');
+        cleanupWatermark();
+        return;
+      }
+
+      scheduleMessageMutation.mutate({
+        draftID,
+        sendTime,
+      });
+
+      cleanupWatermark();
+      return;
+    }
 
     sendMutation.mutate({
       message: {
