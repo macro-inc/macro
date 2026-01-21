@@ -506,13 +506,24 @@ export function BaseInput(props: {
       linkId = linksData.links[0].id;
     }
 
-    const draftResponse = await saveEmailDraft({
-      ...draftToSave,
-      db_id: savedDraftId(),
-      link_id: linkId!,
-      provider_thread_id: currentThread?.provider_id,
-      thread_db_id: currentThread?.db_id,
-    });
+    const existingDraft = savedDraftId() !== undefined;
+
+    // If there's an existing draft, we should send the sendTime so that the send time
+    // stays up to date and is not removed
+    const sendTime = existingDraft
+      ? form().sendTime()?.toISOString()
+      : undefined;
+
+    const draftResponse = await saveEmailDraft(
+      {
+        ...draftToSave,
+        db_id: savedDraftId(),
+        link_id: linkId!,
+        provider_thread_id: currentThread?.provider_id,
+        thread_db_id: currentThread?.db_id,
+      },
+      sendTime
+    );
 
     if (draftResponse) {
       // If the email draft saved successfully, we want to upload the
