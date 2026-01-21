@@ -6,6 +6,7 @@ import type {
   MessageToSend,
   SendMessageResponse,
   APIThread as Thread,
+  UpsertScheduledResponse,
 } from '@service-email/generated/schemas';
 import type { SoupPage } from '@service-storage/generated/schemas';
 import {
@@ -323,6 +324,40 @@ export function useSendMessageMutation(
                 .queryKey,
             });
           }
+          queryClient.invalidateQueries({
+            queryKey: emailKeys.previews._def,
+          });
+        },
+      },
+      callbacks
+    ),
+  }));
+}
+
+type ScheduleMessageParams = { draftID: string; sendTime: string };
+
+/**
+ * Mutation to send an email message.
+ */
+export function useScheduleMessageMutation(
+  callbacks?: MutationCallbacks<
+    UpsertScheduledResponse,
+    Error,
+    ScheduleMessageParams
+  >
+) {
+  return useMutation(() => ({
+    mutationFn: async (vars: ScheduleMessageParams) =>
+      await throwOnErr(
+        async () =>
+          await emailClient.scheduleMessage({
+            draftID: vars.draftID,
+            send_time: vars.sendTime,
+          })
+      ),
+    ...withCallbacks<UpsertScheduledResponse, Error, ScheduleMessageParams>(
+      {
+        onSuccess: () => {
           queryClient.invalidateQueries({
             queryKey: emailKeys.previews._def,
           });
