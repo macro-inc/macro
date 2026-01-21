@@ -35,6 +35,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { plural } from '@core/util/string';
 import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
 import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
+import { DateSelector } from '@block-email/component/date-selector';
 
 false && fileFolderDrop;
 
@@ -304,6 +305,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
               setShowFormatRibbon(!showFormatRibbon());
             }}
           />
+          <DateSelector />
           <Show when={props.hasDraft}>
             <Button
               onclick={props.onDraftDeletePress}
