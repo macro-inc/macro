@@ -1,5 +1,4 @@
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
-import ClockIcon from '@phosphor-icons/core/assets/regular/clock.svg';
 import Trash from '@icon/regular/trash.svg';
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
 import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
@@ -36,10 +35,6 @@ import { toast } from '@core/component/Toast/Toast';
 import { plural } from '@core/util/string';
 import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
 import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
-import { DateSelector } from '@block-email/component/date-selector';
-import { format } from 'date-fns/format';
-import { cn } from '@ui/utils/classname';
-import { Tooltip } from '@core/component/Tooltip';
 import { EmailDateSelector } from '@block-email/component/email-date-selector';
 
 false && fileFolderDrop;
