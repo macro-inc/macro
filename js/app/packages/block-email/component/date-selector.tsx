@@ -13,6 +13,7 @@ import {
   onCleanup,
   onMount,
   Show,
+  type FlowComponent,
 } from 'solid-js';
 import { Combobox } from '@kobalte/core/combobox';
 import { cn } from '@ui/utils/classname';
@@ -130,6 +131,7 @@ export const DateSelector = (props: DateSelectorProps) => {
       allowsEmptyCollection
       placement="bottom-start"
       placeholder="Search dates"
+      closeOnSelection={false}
       defaultFilter={(option, search) =>
         option.custom
           ? true
@@ -186,46 +188,51 @@ export const DateSelector = (props: DateSelectorProps) => {
 
       <Combobox.Portal>
         <Combobox.Content class="w-full max-w-sm bg-dialog text-ink border border-edge-muted">
-          <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
-            <SearchIcon class="h-4 w-4 text-ink-muted" />
-            <Combobox.Input class="w-full caret-accent" />
-          </div>
-
-          <Show when={selectedOption()}>
-            {(option) => (
-              <CurrentValueDisplay
-                selectedOption={option()}
-                onClear={() => {
-                  onChange(null);
-                }}
-              />
-            )}
-          </Show>
-          <Show when={dateOptions().length === 0}>
-            <Show
-              when={searchQuery().trim()}
-              fallback={
-                <div class="text-center py-2 text-ink-muted text-sm">
-                  Enter a date or duration
-                </div>
-              }
-            >
-              <div class="text-center py-2 text-ink-muted text-sm">
-                No dates match "{searchQuery()}"
-              </div>
-            </Show>
-          </Show>
-          <Combobox.Listbox ref={setListboxRef} />
-
-          <div class="px-2 py-1.5 border-t border-edge-muted">
-            <div class="text-xs text-ink-muted">
-              <span>Use queries like </span>
-              <code class="bg-active px-1">3d</code>,{' '}
-              <code class="bg-active px-1">1w</code>,{' '}
-              <code class="bg-active px-1">feb 17</code>, or{' '}
-              <code class="bg-active px-1">tomorrow</code>
+          <WithCustomDateMode
+            selectedOption={selectedOption()}
+            onSelectDate={(date) => onChange({ custom: true, date })}
+          >
+            <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
+              <SearchIcon class="h-4 w-4 text-ink-muted" />
+              <Combobox.Input class="w-full caret-accent" autofocus />
             </div>
-          </div>
+
+            <Show when={selectedOption()}>
+              {(option) => (
+                <CurrentValueDisplay
+                  selectedOption={option()}
+                  onClear={() => {
+                    onChange(null);
+                  }}
+                />
+              )}
+            </Show>
+            <Show when={dateOptions().length === 0}>
+              <Show
+                when={searchQuery().trim()}
+                fallback={
+                  <div class="text-center py-2 text-ink-muted text-sm">
+                    Enter a date or duration
+                  </div>
+                }
+              >
+                <div class="text-center py-2 text-ink-muted text-sm">
+                  No dates match "{searchQuery()}"
+                </div>
+              </Show>
+            </Show>
+            <Combobox.Listbox ref={setListboxRef} />
+
+            <div class="px-2 py-1.5 border-t border-edge-muted">
+              <div class="text-xs text-ink-muted">
+                <span>Use queries like </span>
+                <code class="bg-active px-1">3d</code>,{' '}
+                <code class="bg-active px-1">1w</code>,{' '}
+                <code class="bg-active px-1">feb 17</code>, or{' '}
+                <code class="bg-active px-1">tomorrow</code>
+              </div>
+            </div>
+          </WithCustomDateMode>
         </Combobox.Content>
       </Combobox.Portal>
     </Combobox>
@@ -266,5 +273,27 @@ const CurrentValueDisplay = (props: CurrentValueDisplayProps) => {
         </button>
       </div>
     </div>
+  );
+};
+
+interface WithCustomDateModeProps {
+  selectedOption: DateSelectorOption | null;
+  onSelectDate: (date: Date) => void;
+}
+
+const WithCustomDateMode: FlowComponent<WithCustomDateModeProps> = (props) => {
+  return (
+    <Show when={props.selectedOption?.custom} fallback={props.children}>
+      <div class="border-b border-edge-muted text-sm flex justify-center">
+        <DatePickerUI
+          value={
+            props.selectedOption?.custom
+              ? props.selectedOption.date
+              : new Date()
+          }
+          onChange={props.onSelectDate}
+        />
+      </div>
+    </Show>
   );
 };
