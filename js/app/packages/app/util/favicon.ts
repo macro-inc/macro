@@ -46,50 +46,59 @@ export function updateFavicon(themeColor: string): void {
 }
 
 export function setFaviconNoty(): void {
-  const canvas = document.createElement("canvas");
+  const canvas = document.createElement('canvas');
   canvas.width = 48;
   canvas.height = 48;
-  const ctx = canvas.getContext("2d");
+  const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
   const faviconColor = getCSSColorAs('--color-accent-0', 'hex');
   const notyBadgeColor = getCSSColorAs('--color-accent-1', 'hex');
 
   const img = new Image();
-  
-  // Decode the SVG and replace currentColor
-  let svgString = decodeURIComponent(FaviconNotyURL.replace('data:image/svg+xml,', ''));
-  svgString = svgString.replace(/currentColor/g, "black");
 
-  const processedUrl = 'data:image/svg+xml,' + encodeURIComponent(svgString);
-  img.src = processedUrl
-  
+  // Decode the SVG and replace currentColor
+  let svgString = decodeURIComponent(
+    FaviconNotyURL.replace('data:image/svg+xml,', '')
+  );
+  svgString = svgString.replace(/currentColor/g, 'black');
+  const processedUrl = `data:image/svg+xml,${encodeURIComponent(svgString)}`;
+  img.src = processedUrl;
+
   img.onload = () => {
     // First, draw the image normally
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    
+
     // Then apply color using source-in composite operation
-    ctx.globalCompositeOperation = "source-in";
+    ctx.globalCompositeOperation = 'source-in';
     ctx.fillStyle = faviconColor;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Finally, draw the notification badge in the upper right corner
     const badgeRadius = 6;
-    ctx.globalCompositeOperation = "source-over";
+    ctx.globalCompositeOperation = 'source-over';
     ctx.beginPath();
-    ctx.arc(canvas.width - badgeRadius, badgeRadius, badgeRadius, 0, 2 * Math.PI);
+    ctx.arc(
+      canvas.width - badgeRadius,
+      badgeRadius,
+      badgeRadius,
+      0,
+      2 * Math.PI
+    );
     ctx.fillStyle = notyBadgeColor;
     ctx.fill();
-    
+
     const faviconUrl = canvas.toDataURL();
 
     // Remove old favicon if it exists
-    if (currentFaviconLink && currentFaviconLink.parentNode) {
+    if (currentFaviconLink?.parentNode) {
       currentFaviconLink.parentNode.removeChild(currentFaviconLink);
     }
 
     const existingLinks = document.querySelectorAll('link[rel*="icon"]');
-    existingLinks.forEach(link => link.remove());
+    existingLinks.forEach((link) => {
+      link.remove();
+    });
 
     // Create and add new favicon
     const link = document.createElement('link');

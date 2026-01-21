@@ -79,7 +79,6 @@ import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 import Visor from './Visor';
 import { setOpenWhichKey, WhichKey } from './WhichKey';
 import { setFaviconNoty, updateFavicon } from '@app/util/favicon';
-import { get, update } from 'lodash';
 import { getCSSColorAs } from '../../block-theme/utils/colorUtil';
 
 const { track, identify, TrackingEvents } = withAnalytics();
@@ -375,12 +374,14 @@ export function Root() {
     // Reset favicon in case it had a notification badge
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-          updateFavicon(getCSSColorAs('--color-accent-0', 'oklch'));
+        updateFavicon(getCSSColorAs('--color-accent-0', 'oklch'));
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    onCleanup(() => document.removeEventListener('visibilitychange', handleVisibilityChange));
+
+    onCleanup(() =>
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    );
   });
   onCleanup(() =>
     window.removeEventListener('beforeunload', handleBeforeUnload)
