@@ -266,7 +266,19 @@ export const DateSelector = (props: DateSelectorProps) => {
               </Show>
             </Show>
             <Combobox.Listbox ref={setListboxRef} />
-
+            <div class="px-2 py-1.5 border-t border-edge-muted">
+              <label class="flex items-center justify-between">
+                Time
+                <input
+                  type="time"
+                  value={
+                    selectedDate()
+                      ? format(selectedDate()!, 'HH:mm')
+                      : undefined
+                  }
+                />
+              </label>
+            </div>
             <div class="px-2 py-1.5 border-t border-edge-muted">
               <div class="text-xs text-ink-muted">
                 <span>Use queries like </span>
