@@ -1,9 +1,6 @@
 # Ignore everything in target
 /target/*
 
-#ignore tool schemas
-ai_tools/schemas/
-
 # But keep the lambda directory
 !/target/lambda/
 
