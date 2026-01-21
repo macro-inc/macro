@@ -138,6 +138,9 @@ export function createEmailFormState(
       withQuotedText: draftContainsAppendedReply(),
       subject: initialSubject,
       markdownBody: '',
+      sendTime: draft?.scheduled_send_time
+        ? new Date(draft.scheduled_send_time)
+        : undefined,
     } satisfies EmailFormState;
   };
 
