@@ -225,6 +225,7 @@ export const DateSelector = (props: DateSelectorProps) => {
         >
           <WithCustomDateMode
             selectedDate={selectedDate()}
+            disablePriorToDate={props.disablePriorToDate}
             mode={mode()}
             onSelectDate={(date) => {
               onChange({ type: 'custom', date });
