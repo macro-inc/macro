@@ -56,6 +56,7 @@ type ComposeEmailInputProps = {
   onAddAttachments?: (attachments: DraftFormAttachment[]) => void;
   onRemoveAttachment?: (attachment: DraftFormAttachment) => void;
   onContentChange?: (content: string) => void;
+  onSendTimeChange?: (date: Date | null) => void;
 };
 
 export function ComposeEmailInput(props: ComposeEmailInputProps) {
@@ -310,6 +311,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
             }}
           />
           <DateSelector
+            onSelectDate={props.onSendTimeChange}
             trigger={(state) => {
               const formattedDate = () => {
                 if (!state.selectedDate) return;
