@@ -2,7 +2,6 @@ import { mountGlobalFocusListener } from '@app/signal/focus';
 import { useIsAuthenticated } from '@core/auth';
 import { Resize } from '@core/component/Resize';
 import { usePaywallState } from '@core/constant/PaywallState';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import {
   LAYOUT_CONTEXT_ID,
   setPersistedLayoutSizes,
@@ -63,13 +62,6 @@ export function Layout(props: RouteSectionProps) {
       sessionStorage.removeItem('showUpgradeModal');
     }
   });
-
-  // This effect handles transitioning from desktop to mobile width to ensure sidebar state is properly reset
-  createEffect((_prevMobileWidth: boolean | undefined) => {
-    const currentMobileWidth = isMobileWidth();
-    // Note: No longer need to reset resizable context since we use simple boolean signal
-    return currentMobileWidth;
-  }, isMobileWidth());
 
   // This effect is to handle moving from unauthenticated to authenticated
   createEffect((prevAuth: boolean | undefined) => {

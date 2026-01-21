@@ -356,9 +356,6 @@ function NotificationRow(props: {
             }
           : undefined
       }
-      classList={{
-        'opacity-70': props.notification.viewedAt !== null,
-      }}
     >
       <div class="flex size-5 shrink-0 items-center justify-center mr-1">
         <UserIcon id={props.notification.senderId!} size="xs" />
@@ -1058,7 +1055,6 @@ export function EntityWithEverything(
           class="min-h-10 min-w-[50px] flex flex-row items-center gap-2 col-2 @max-md/uList:col-auto @max-md/uList:w-full @max-md/uList:min-h-0 @max-md/uList:items-start"
           classList={{
             grow: props.contentPlacement === 'bottom-row',
-            'opacity-70': props.fadeIfRead && !props.unreadIndicatorActive,
           }}
         >
           {/* When the left checkbox column is hidden in narrow split containers, we still want
@@ -1126,12 +1122,7 @@ export function EntityWithEverything(
           <EntityTitle />
         </div>
         {/* Date and user - top right on mobile, end on desktop  */}
-        <div
-          class="row-1 ml-2 @md:ml-4 self-center min-w-0 col-3 @max-md/uList:col-auto @max-md/uList:row-auto @max-md/uList:ml-0 @max-md/uList:mt-1 @max-md/uList:self-start @max-md/uList:w-full"
-          classList={{
-            'opacity-50': props.fadeIfRead && !props.unreadIndicatorActive,
-          }}
-        >
+        <div class="row-1 ml-2 @md:ml-4 self-center min-w-0 col-3 @max-md/uList:col-auto @max-md/uList:row-auto @max-md/uList:ml-0 @max-md/uList:mt-1 @max-md/uList:self-start @max-md/uList:w-full">
           <div class="flex flex-row items-center justify-end gap-2 min-w-0 @max-md/uList:justify-start @max-md/uList:flex-wrap">
             <Show when={sharedData()}>
               {(shared) => (

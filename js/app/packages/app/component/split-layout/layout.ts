@@ -2,6 +2,7 @@ import { useContext } from 'solid-js';
 import { globalSplitManager } from '../../signal/splitLayout';
 import { SplitPanelContext } from './context';
 import type { ReferredFrom, SplitContent } from './layoutManager';
+import { isMobile } from '@core/mobile/isMobile';
 
 export function useSplitLayout() {
   const splitPanelContext = useContext(SplitPanelContext);
@@ -76,6 +77,11 @@ export function useSplitLayout() {
     content: SplitContent,
     referredFrom: ReferredFrom = null
   ) {
+    // On mobile, replace instead of inserting a new split
+    if (isMobile()) {
+      return replaceSplit({ content, referredFrom });
+    }
+
     const splitManager = globalSplitManager();
     if (!splitManager) {
       console.error('No split manager found');

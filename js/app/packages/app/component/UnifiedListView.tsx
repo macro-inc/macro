@@ -34,8 +34,8 @@ import {
 import { useEmailLinksStatus } from '@core/email-link';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
@@ -2014,7 +2014,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
             <Show when={contextAndModalState.selectedEntity}>
               {(selectedEntity) => (
                 <ContextMenuContent mobileFullScreen>
-                  <Show when={isTouchDevice() && isMobileWidth()}>
+                  <Show when={isMobile()}>
                     <Entity
                       entity={selectedEntity()}
                       timestamp={

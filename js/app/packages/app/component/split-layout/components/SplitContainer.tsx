@@ -1,7 +1,5 @@
 import MacroJump from '@app/component/MacroJump';
 import { MobileDock } from '@app/component/mobile/MobileDock';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   type Accessor,
@@ -21,6 +19,7 @@ import { SplitToolbar } from './SplitToolbar';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { isMobile } from '@core/mobile/isMobile';
 
 export function SplitContainer(
   props: ParentProps<{
@@ -111,13 +110,7 @@ export function SplitContainer(
               <Show when={panel.handle.isSpotLight()}>
                 <MacroJump tabbableParent={ref} />
               </Show>
-              <Show
-                when={
-                  isTouchDevice() &&
-                  isMobileWidth() &&
-                  !virtualKeyboardVisible()
-                }
-              >
+              <Show when={isMobile() && !virtualKeyboardVisible()}>
                 <MobileDock />
               </Show>
             </div>

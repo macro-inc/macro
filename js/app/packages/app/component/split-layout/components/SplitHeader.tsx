@@ -5,8 +5,8 @@ import {
   ENABLE_PROJECT_VIEW_PREVIEW,
 } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import CollapseIcon from '@icon/regular/arrows-in.svg';
 import ExpandIcon from '@icon/regular/arrows-out.svg';
 import CaretLeft from '@icon/regular/caret-left.svg';
@@ -236,7 +236,7 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
         {/* space filler */}
         <div class="h-full grow-1" />
 
-        <Show when={!isTouchDevice() || !isMobileWidth()}>
+        <Show when={!isMobile()}>
           <div
             class="min-w-4 h-full shrink-0"
             ref={(ref) => {
