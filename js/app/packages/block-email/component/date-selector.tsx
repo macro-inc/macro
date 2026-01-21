@@ -252,8 +252,11 @@ export const DateSelector = (props: DateSelectorProps) => {
       }}
     >
       <Show when={typeof props.trigger !== 'undefined'}>
-        <Combobox.Control<DateSelectorOption>>
-          <Combobox.Trigger as="div">
+        <Combobox.Control>
+          <Combobox.Trigger
+            class="flex group/date-selector-trigger"
+            tabIndex={0}
+          >
             {typeof props.trigger === 'function'
               ? props.trigger({ selectedDate: selectedDate() })
               : props.trigger}

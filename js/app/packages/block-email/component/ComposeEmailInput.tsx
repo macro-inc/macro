@@ -39,6 +39,7 @@ import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
 import { DateSelector } from '@block-email/component/date-selector';
 import { format } from 'date-fns/format';
 import { cn } from '@ui/utils/classname';
+import { Tooltip } from '@core/component/Tooltip';
 
 false && fileFolderDrop;
 
@@ -315,23 +316,26 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
                 return format(state.selectedDate, "MMMM d, yyyy 'at' h:mm a");
               };
               return (
-                <Button
-                  class={cn(
-                    state.selectedDate &&
-                      'bg-accent/20 text-accent-ink hover:bg-accent/15',
-                    'aspect-square p-1'
-                  )}
+                <Tooltip
                   tooltip={
                     state.selectedDate
                       ? `Scheduled for ${formattedDate()}`
                       : 'Schedule this email'
                   }
                 >
-                  <ClockIcon class="size-5" />
-                </Button>
+                  <div
+                    class={cn(
+                      'aspect-square p-1 hover:bg-surface-4 group-data-[expanded]/date-selector-trigger:bg-surface-4',
+                      state.selectedDate &&
+                        'bg-accent/20 text-accent-ink hover:bg-accent/15 group-data-[expanded]/date-selector-trigger:bg-accent/20'
+                    )}
+                  >
+                    <ClockIcon class="size-5" />
+                  </div>
+                </Tooltip>
               );
             }}
-          />
+          ></DateSelector>
           <Show when={props.hasDraft}>
             <Button
               onclick={props.onDraftDeletePress}
