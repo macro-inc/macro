@@ -13,8 +13,8 @@ import {
 } from '@core/component/Menu';
 import { Message as MessageComponent } from '@core/component/Message';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import {
   isStaticAttachmentType,
   STATIC_IMAGE,
@@ -643,12 +643,12 @@ export function MessageContainer(props: MessageProps) {
                     handleClose={() => {
                       setReactionSearchOpen(false);
                     }}
-                    fullWidth={isTouchDevice() && isMobileWidth()}
+                    fullWidth={isMobile()}
                     insideMenu={true}
                   />
                 </Match>
               </Switch>
-              <Show when={isTouchDevice() && isMobileWidth()}>
+              <Show when={isMobile()}>
                 <ContextMenu.Item class="mt-4 shrink-1 overflow-y-scroll overflow-x-hidden">
                   <MessageComponent
                     focused={props.isFocused}

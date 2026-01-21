@@ -1,7 +1,6 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import * as stackingContext from '@core/constant/stackingContext';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { maybeThrow } from '@core/util/maybeResult';
 import ExpandIcon from '@icon/regular/arrows-out-simple.svg';
 import ClipboardIcon from '@icon/regular/clipboard.svg';
@@ -139,8 +138,6 @@ export function ImagePreview(props: ImagePreviewProps) {
   };
 
   const handleMouseMove = () => {
-    if (isMobileWidth() || isTouchDevice()) return;
-
     setIsToolbarVisible(true);
 
     if (hideToolbarTimeout) {
@@ -241,7 +238,7 @@ export function ImagePreview(props: ImagePreviewProps) {
     image.addEventListener('panzoomchange', updateCursor);
     image.addEventListener('wheel', panzoom.zoomWithWheel);
 
-    if (!isMobileWidth() && !isTouchDevice()) {
+    if (!isTouchDevice()) {
       setTimeout(() => {
         window.addEventListener('mousemove', handleMouseMove);
       }, 500);
@@ -331,10 +328,9 @@ export function ImagePreview(props: ImagePreviewProps) {
             <div
               class="absolute top-4 right-4 bg-dialog rounded-lg border border-edge p-1 flex flex-row items-center gap-1 shadow-md transition-opacity duration-300"
               classList={{
-                'opacity-100':
-                  isMobileWidth() || isTouchDevice() || isToolbarVisible(),
+                'opacity-100': isTouchDevice() || isToolbarVisible(),
                 'opacity-0 pointer-events-none':
-                  !isMobileWidth() && !isTouchDevice() && !isToolbarVisible(),
+                  !isTouchDevice() && !isToolbarVisible(),
               }}
               style={{ 'z-index': stackingContext.zModal + 1 }}
             >

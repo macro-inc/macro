@@ -1,5 +1,4 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { onKeyDownClick, onKeyUpClick } from '@core/util/click';
 import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
 import {
@@ -188,10 +187,7 @@ export function DeprecatedIconButton(props: IconButtonProps) {
         <Show when={props.showShortcut && primaryHotkeyToken()}>
           {(token) => {
             return (
-              <div
-                class="absolute bottom-[-0.5px] right-[-0.5px] text-[7.5px] uppercase pointer-events-none font-semibold"
-                classList={{ invisible: isMobileWidth() }}
-              >
+              <div class="absolute bottom-[-0.5px] right-[-0.5px] text-[7.5px] uppercase pointer-events-none font-semibold mobile-width:invisible">
                 <BasicHotkey token={token()} />
               </div>
             );

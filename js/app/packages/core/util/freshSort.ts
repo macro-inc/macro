@@ -122,10 +122,19 @@ function calculateTimeScore(
   return Math.exp(-config.timeDecayFactor * normalizedAge);
 }
 
-function normalizeFuzzyScore(
+export function normalizeFuzzyScore(
   fuzzyScore: number,
-  maxPossibleScore: number = 1
+  maxPossibleScore: number
 ): number {
+  if (!Number.isFinite(fuzzyScore)) {
+    throw new Error(`fuzzyScore must be a finite number, got: ${fuzzyScore}`);
+  }
+  if (!Number.isFinite(maxPossibleScore) || maxPossibleScore <= 0) {
+    throw new Error(
+      `maxPossibleScore must be a finite positive number, got: ${maxPossibleScore}`
+    );
+  }
+
   return Math.max(0, Math.min(1, fuzzyScore / maxPossibleScore));
 }
 
@@ -149,13 +158,16 @@ export function freshSort<T extends TimestampedItem>(
   const normalizedTimeWeight = finalConfig.timeWeight / totalWeight;
   const normalizedBrevityWeight = finalConfig.brevityWeight / totalWeight;
 
-  const maxFuzzyScore = Math.max(...filterResults.map((r) => r.score));
+  const filterNoInfResults = filterResults.filter((r) => r.score !== Infinity);
+  const maxFuzzyScore =
+    filterNoInfResults.length > 0
+      ? Math.max(...filterNoInfResults.map((r) => r.score))
+      : 1;
 
   const scoredResults: FreshSortResult<T>[] = filterResults.map((result) => {
+    const rawScore = result.score === Infinity ? maxFuzzyScore : result.score;
     const fuzzyScore =
-      maxFuzzyScore === 0
-        ? 0
-        : normalizeFuzzyScore(result.score, maxFuzzyScore);
+      maxFuzzyScore === 0 ? 0 : normalizeFuzzyScore(rawScore, maxFuzzyScore);
     const timeScore = calculateTimeScore(
       extractTimestamp(result.original, finalConfig.useViewedAt),
       finalConfig

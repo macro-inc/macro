@@ -1,4 +1,28 @@
 use super::*;
+use crate::scheme::MacroScheme;
+
+#[test]
+fn from_url_extracts_correct_path_from_universal_link() {
+    let url = Url::parse("https://macro.com/app/component/doc123").unwrap();
+    let result = MacroScheme::from_url(&url).unwrap();
+    assert_eq!(result.path(), "/component/doc123");
+    assert_eq!(result.query(), None);
+}
+
+#[test]
+fn from_url_extracts_path_and_query_from_universal_link() {
+    let url = Url::parse("https://macro.com/app/component/doc123?foo=bar").unwrap();
+    let result = MacroScheme::from_url(&url).unwrap();
+    assert_eq!(result.path(), "/component/doc123");
+    assert_eq!(result.query(), Some("foo=bar"));
+}
+
+#[test]
+fn from_url_handles_nested_path() {
+    let url = Url::parse("https://macro.com/app/component/nested/path/here").unwrap();
+    let result = MacroScheme::from_url(&url).unwrap();
+    assert_eq!(result.path(), "/component/nested/path/here");
+}
 
 #[test]
 fn transform_external_url_adds_is_mobile_when_query_exists() {
