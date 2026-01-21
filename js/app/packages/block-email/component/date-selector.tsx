@@ -49,7 +49,41 @@ export const DateSelector = (props: DateSelectorProps) => {
     query: searchQuery,
   });
 
-  const handleKeyDown = (e: KeyboardEvent) => {};
+  const dispatchKeyToListbox = (key: string) => {
+    listboxRef()?.dispatchEvent(
+      // We need to send `bubbles: true` because otherwise Kobalte ignores the event
+      new KeyboardEvent('keydown', { bubbles: true, key: key })
+    );
+  };
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    switch (e.key) {
+      case 'Delete':
+      case 'Backspace': {
+        if (searchQuery().trim()) {
+          return;
+        }
+        e.preventDefault();
+        onChange(null);
+
+        break;
+      }
+      case 'j': {
+        if (!e.ctrlKey) return;
+
+        e.preventDefault();
+        dispatchKeyToListbox('ArrowDown');
+        break;
+      }
+      case 'k': {
+        if (!e.ctrlKey) return;
+
+        e.preventDefault();
+        dispatchKeyToListbox('ArrowUp');
+        break;
+      }
+    }
+  };
 
   onMount(() => {
     document.addEventListener('keydown', handleKeyDown);
@@ -70,10 +104,7 @@ export const DateSelector = (props: DateSelectorProps) => {
     // Send the keydown event to the listbox so Kobalte's internal system can update the focus state
     // This makes it so it behaves the same as if you had manually pressed the down arrow to focus the item
     queueMicrotask(() => {
-      listboxRef()?.dispatchEvent(
-        // We need to send `bubbles: true` because otherwise Kobalte ignores the event
-        new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' })
-      );
+      dispatchKeyToListbox('ArrowDown');
     });
   };
 
