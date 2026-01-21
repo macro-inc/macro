@@ -11,7 +11,6 @@ export function ReactiveFavicon() {
 
   // Remove notification badge when app is focused
   const handleVisibilityChange = () => {
-    console.log('NOW');
     setIsAppFocused(!document.hidden);
     if (!document.hidden) {
       setShowNotificationBadge(false);
