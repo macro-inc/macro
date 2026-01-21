@@ -27,8 +27,11 @@ type DateSelectorOption =
   | { type: 'custom'; date: Date };
 
 type DateSelectorProps = {
+  open?: boolean;
+  onClose?: VoidFunction;
   selectedDate?: Date | null;
   onSelectDate?: (date: Date | null) => void;
+  placeholder?: string;
 };
 
 export const DateSelector = (props: DateSelectorProps) => {
@@ -114,7 +117,10 @@ export const DateSelector = (props: DateSelectorProps) => {
   };
 
   const onOpenChange = (open: boolean) => {
-    if (!open) resetState();
+    if (!open) {
+      resetState();
+      props.onClose?.();
+    }
   };
 
   const onChange = (option: DateSelectorOption | null) => {
@@ -175,6 +181,7 @@ export const DateSelector = (props: DateSelectorProps) => {
 
   return (
     <Combobox<DateSelectorOption>
+      open={props.open}
       multiple={false}
       value={selectedOption()}
       options={options()}
@@ -186,7 +193,7 @@ export const DateSelector = (props: DateSelectorProps) => {
       onInputChange={onInputChange}
       allowsEmptyCollection
       placement="bottom-start"
-      placeholder="Search dates"
+      placeholder={props.placeholder ?? 'Select date'}
       closeOnSelection={false}
       defaultFilter={defaultFilter}
       itemComponent={(itemProps) => {
