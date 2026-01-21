@@ -368,18 +368,6 @@ export function Root() {
     applyTheme(currentThemeId());
     ensureMinimalThemeContrast();
     window.addEventListener('beforeunload', handleBeforeUnload);
-
-    // // Reset favicon in case it had a notification badge
-    // const handleVisibilityChange = () => {
-    //   if (!document.hidden) {
-    //     updateFavicon(getCSSColorAs('--a0', 'oklch'));
-    //   }
-    // };
-    // document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    // onCleanup(() =>
-    //   document.removeEventListener('visibilitychange', handleVisibilityChange)
-    // );
   });
   onCleanup(() =>
     window.removeEventListener('beforeunload', handleBeforeUnload)

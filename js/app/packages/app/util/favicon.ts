@@ -1,6 +1,7 @@
-import FaviconURL from '@macro-icons/macro-macro.svg?url';
-import FaviconBadgeURL from '@macro-icons/macro-macro-badge.svg?url';
-import { getOklch } from '../../block-theme/utils/colorUtil';
+import FaviconSvg from '@macro-icons/macro-macro.svg?raw';
+import FaviconBadgeSvg from '@macro-icons/macro-macro-badge.svg?raw';
+
+const FAVICON_SIZE = 48;
 
 let currentFaviconLink: HTMLLinkElement | null = null;
 
@@ -9,59 +10,51 @@ function escapeColorForSvg(color: string): string {
   return color.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-/** generates a favicon data URL for the given theme color */
-export function getFaviconUrl(themeColor: string): string {
-  const safeColor = escapeColorForSvg(themeColor);
-  const svg = `<svg width="24" height="24" fill="${safeColor}" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="m6.25 4.038-2.242 0.8792v5.8184l-1.756-1.6582-2.242 0.8792v6.6766c0 0.2568 0.106 0.502 0.292 0.6784l2.794 2.6422 2.244-0.879v-5.8184l7.084 6.6974 2.244-0.879v-5.8184l7.086 6.6976 2.24-0.8792v-6.6766c0-0.2568-0.104-0.5022-0.292-0.6784l-8.124-7.6816-2.244 0.879v5.8184z"/></svg>`;
-  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+/** insert color and url encode SVG */
+function processSvg(svg: string, color: string) {
+  return `data:image/svg+xml,${encodeURIComponent(svg.replace(/currentColor/g, escapeColorForSvg(color)))}`;
 }
 
-/** updates the favicon with the current accent color */
+/**
+ * Return a data url for the macro logo svg filled with the given color.
+ * @param color
+ * @returns
+ */
+export function getFaviconUrl(color: string) {
+  return processSvg(FaviconSvg, color);
+}
+
+/**
+ * Update the site's live favicon with a new color, and optionally a notification
+ * badge with its own color.
+ * @param color
+ * @returns
+ */
 export function updateFavicon(
   faviconColor: string,
   badgeColor?: string,
   hasBadge?: boolean
 ): void {
-  if (!faviconColor || typeof faviconColor !== 'string') {
-    console.warn(
-      'Invalid theme color provided to updateFavicon:',
-      faviconColor
-    );
-    return;
-  }
-
   if (currentFaviconLink?.parentNode) {
     currentFaviconLink.parentNode.removeChild(currentFaviconLink);
     currentFaviconLink = null;
   }
 
-  // Draw new favicon
-  const faviconSize = 48;
-
   const canvas = document.createElement('canvas');
-  canvas.width = faviconSize;
-  canvas.height = faviconSize;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  const img = new Image();
+  canvas.width = FAVICON_SIZE;
+  canvas.height = FAVICON_SIZE;
 
-  let svgString = decodeURIComponent(
-    (hasBadge ? FaviconBadgeURL : FaviconURL).replace('data:image/svg+xml,', '')
-  );
-  svgString = svgString.replace(
-    /currentColor/g,
-    escapeColorForSvg(faviconColor)
-  );
-  const processedUrl = `data:image/svg+xml,${encodeURIComponent(svgString)}`;
-  img.src = processedUrl;
+  const img = new Image();
+  img.src = processSvg(hasBadge ? FaviconBadgeSvg : FaviconSvg, faviconColor);
 
   img.onload = () => {
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
     if (hasBadge) {
       const badgeRadius = 6;
-      ctx.globalCompositeOperation = 'source-over';
       ctx.beginPath();
       ctx.arc(
         canvas.width - badgeRadius,
@@ -70,14 +63,12 @@ export function updateFavicon(
         0,
         2 * Math.PI
       );
-      const { l, c, h } = getOklch(badgeColor || faviconColor);
-      ctx.fillStyle = `oklch(${l} ${c} ${h})`;
+      ctx.fillStyle = badgeColor || faviconColor;
       ctx.fill();
     }
 
     const faviconUrl = canvas.toDataURL();
 
-    // Remove old favicon if it exists
     if (currentFaviconLink?.parentNode) {
       currentFaviconLink.parentNode.removeChild(currentFaviconLink);
     }
@@ -87,7 +78,7 @@ export function updateFavicon(
       link.remove();
     });
 
-    // Create and add new favicon
+    // create and add new favicon
     const link = document.createElement('link');
     link.rel = 'icon';
     link.type = 'image/png';
@@ -95,7 +86,7 @@ export function updateFavicon(
     document.head.appendChild(link);
     currentFaviconLink = link;
 
-    // Update existing shortcut icon if present
+    // update existing shortcut icon if present
     const existingShortcutIcon = document.querySelector(
       'link[rel="shortcut icon"]'
     ) as HTMLLinkElement;
