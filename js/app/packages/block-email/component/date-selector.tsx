@@ -9,6 +9,8 @@ import {
   Show,
   type FlowComponent,
   type Component,
+  createEffect,
+  on,
 } from 'solid-js';
 import {
   Combobox,
@@ -47,6 +49,26 @@ export const DateSelector = (props: DateSelectorProps) => {
     createSignal<DateSelectorOption | null>(
       props.selectedDate ? { type: 'custom', date: props.selectedDate } : null
     );
+
+  createEffect(
+    on(
+      () => props.selectedDate,
+      () => {
+        const next = props.selectedDate
+          ? { type: 'custom' as const, date: props.selectedDate }
+          : null;
+        const current = selectedOption();
+
+        if (
+          current?.type !== 'select-custom' &&
+          current?.date.toString() === next?.date.toString()
+        )
+          return;
+
+        setSelectedOption(next);
+      }
+    )
+  );
 
   const [mode, setMode] = createSignal<DateSelectorMode>('search');
 
