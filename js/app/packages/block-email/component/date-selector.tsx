@@ -6,8 +6,6 @@ import {
   createMemo,
   createSignal,
   type JSX,
-  onCleanup,
-  onMount,
   Show,
   type FlowComponent,
 } from 'solid-js';
