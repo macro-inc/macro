@@ -41,7 +41,9 @@ export const DateSelector = (props: DateSelectorProps) => {
 
   const [searchQuery, setSearchQuery] = createSignal('');
   const [listboxRef, setListboxRef] = createSignal<HTMLElement | undefined>();
-  let searchInputRef!: HTMLInputElement;
+  const [searchInputRef, setSearchInputRef] = createSignal<
+    HTMLInputElement | undefined
+  >();
 
   const dateOptions = useDateSearch({
     query: searchQuery,
@@ -58,7 +60,7 @@ export const DateSelector = (props: DateSelectorProps) => {
   });
 
   useSearchInputFocus(
-    () => searchInputRef,
+    () => searchInputRef(),
     () => true
   );
 
@@ -214,7 +216,11 @@ export const DateSelector = (props: DateSelectorProps) => {
           >
             <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
               <SearchIcon class="h-4 w-4 text-ink-muted" />
-              <Combobox.Input class="w-full caret-accent" autofocus />
+              <Combobox.Input
+                ref={setSearchInputRef}
+                class="w-full caret-accent"
+                autofocus
+              />
             </div>
 
             <Show when={selectedOption()}>
