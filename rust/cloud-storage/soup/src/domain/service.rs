@@ -26,7 +26,7 @@ use models_soup::{
     comms::SoupChannel,
     email_thread::{
         SoupAttachment, SoupContact, SoupEmailThreadPreview, SoupEmailThreadPreviewMetadata,
-        SoupEnrichedEmailThreadPreview, SoupLabel, SoupMacroAttachment,
+        SoupEnrichedEmailThreadPreview, SoupLabel,
     },
     item::SoupItem,
 };
@@ -274,7 +274,6 @@ where
                 |EnrichedEmailThreadPreview {
                      thread,
                      attachments,
-                     attachments_macro,
                      labels,
                      metadata,
                      mut frecency_score,
@@ -285,7 +284,6 @@ where
                     let soup_email = SoupEnrichedEmailThreadPreview {
                         thread: SoupEmailThreadPreview::mirror(thread),
                         attachments: Vec::<SoupAttachment>::mirror(attachments),
-                        attachments_macro: Vec::<SoupMacroAttachment>::mirror(attachments_macro),
                         participants: Vec::<SoupContact>::mirror(participants),
                         metadata: SoupEmailThreadPreviewMetadata::mirror(metadata),
                         labels: Vec::<SoupLabel>::mirror(labels),

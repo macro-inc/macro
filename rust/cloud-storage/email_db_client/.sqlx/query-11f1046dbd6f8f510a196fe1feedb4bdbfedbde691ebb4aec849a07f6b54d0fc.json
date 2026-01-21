@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, draft_id, file_name, content_type, sha, size, s3_key\n            FROM email_attachments_drafts\n            WHERE draft_id = $1\n            ORDER BY file_name ASC\n            ",
+  "query": "\n            SELECT id, draft_id, file_name, content_type, sha, size, s3_key\n            FROM email_attachments_drafts\n            WHERE draft_id = ANY($1)\n            ORDER BY draft_id, file_name ASC\n            ",
   "describe": {
     "columns": [
       {
@@ -41,7 +41,7 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "UuidArray"
       ]
     },
     "nullable": [
@@ -54,5 +54,5 @@
       false
     ]
   },
-  "hash": "3fbfbcc254100b7a9f9fe10f2bccf7c46c18332593a1dd14ad15b5ee30765bab"
+  "hash": "11f1046dbd6f8f510a196fe1feedb4bdbfedbde691ebb4aec849a07f6b54d0fc"
 }

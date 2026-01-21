@@ -143,7 +143,6 @@ mod tests {
             body_html_sanitized: Some(dirty_html.to_string()),
             body_text: None,
             attachments: vec![],
-            attachments_macro: vec![],
             attachments_draft: vec![],
             headers_json: None,
             created_at: Default::default(),

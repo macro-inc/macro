@@ -1,4 +1,4 @@
-use crate::attachments::{marco, provider};
+use crate::attachments::provider;
 use crate::messages::replying_to_id;
 use crate::messages::scheduled::delete::delete_scheduled_message;
 use crate::messages::scheduled::upsert::upsert_scheduled_message;
@@ -277,9 +277,7 @@ pub async fn insert_message_to_send_db(
         db_message_to_send.subject,
         from_contact_id,
         Utc::now(),
-        service_message
-            .attachments_macro.clone()
-            .is_some_and(|x| !x.is_empty()),
+        false,
         true,
         false,
         false,
@@ -297,10 +295,6 @@ pub async fn insert_message_to_send_db(
     service_message.db_id = Some(message_db_id);
 
     process_scheduled_message(tx, service_message, send_time, message_db_id).await?;
-
-    if let Some(mut attachments) = service_message.attachments_macro.clone() {
-        marco::insert_macro_attachments(tx, message_db_id, &mut attachments).await?;
-    }
 
     contacts::upsert_message::upsert_message_recipients(tx, message_db_id, &recipients).await?;
 

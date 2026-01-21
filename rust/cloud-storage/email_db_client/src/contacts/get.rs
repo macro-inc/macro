@@ -298,6 +298,74 @@ where
     })
 }
 
+/// Fetches sender contacts for multiple messages and returns a map keyed by message_id
+#[tracing::instrument(skip(executor))]
+pub async fn fetch_senders_by_message_ids<'e, E>(
+    executor: E,
+    message_ids: &[Uuid],
+) -> anyhow::Result<HashMap<Uuid, db::contact::Contact>>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
+    if message_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    // Temporary struct to capture message_id along with contact data
+    struct SenderQueryResult {
+        message_id: Uuid,
+        id: Uuid,
+        link_id: Uuid,
+        email_address: Option<String>,
+        name: Option<String>,
+        original_photo_url: Option<String>,
+        sfs_photo_url: Option<String>,
+        created_at: chrono::DateTime<chrono::Utc>,
+        updated_at: chrono::DateTime<chrono::Utc>,
+    }
+
+    let results = sqlx::query_as!(
+        SenderQueryResult,
+        r#"
+            SELECT
+                m.id as message_id,
+                c.id,
+                c.link_id,
+                c.email_address,
+                COALESCE(m.from_name, c.name) as "name",
+                c.original_photo_url,
+                c.sfs_photo_url,
+                c.created_at,
+                c.updated_at
+            FROM email_messages m
+            INNER JOIN email_contacts c ON c.id = m.from_contact_id
+            WHERE m.id = ANY($1)
+            AND m.from_contact_id IS NOT NULL
+        "#,
+        message_ids
+    )
+    .fetch_all(executor)
+    .await
+    .context("Failed to fetch senders by message IDs")?;
+
+    let mut senders_map = HashMap::new();
+    for row in results {
+        let contact = db::contact::Contact {
+            id: row.id,
+            link_id: row.link_id,
+            email_address: row.email_address,
+            name: row.name,
+            original_photo_url: row.original_photo_url,
+            sfs_photo_url: row.sfs_photo_url,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        };
+        senders_map.insert(row.message_id, contact);
+    }
+
+    Ok(senders_map)
+}
+
 /// returns all email addresses and names the passed link has sent emails to.
 #[tracing::instrument(skip(pool))]
 pub async fn fetch_contacts_by_link_id(

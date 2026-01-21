@@ -1,29 +1,12 @@
 use crate::domain::models::{
-    Attachment, AttachmentMacro, EmailThreadPreview, IntermediateThreadMetadata, Label,
-    LabelListVisibility, LabelType, Link, MessageListVisibility,
+    Attachment, EmailThreadPreview, IntermediateThreadMetadata, Label, LabelListVisibility,
+    LabelType, Link, MessageListVisibility,
 };
 use chrono::{DateTime, Utc};
 use doppleganger::{Doppleganger, Mirror};
 use macro_user_id::{cowlike::CowLike, email::EmailStr, user_id::MacroUserIdStr};
 use sqlx::Type;
 use uuid::Uuid;
-
-#[derive(Doppleganger)]
-#[dg(forward = AttachmentMacro)]
-pub struct AttachmentMacroDbRow {
-    #[dg(rename = "db_id")]
-    pub id: Uuid,
-    pub message_id: Uuid,
-    pub item_id: Uuid,
-    pub item_type: String,
-    #[expect(
-        dead_code,
-        reason = "We need this field to use query_as with the current query, but we never read it"
-    )]
-    #[dg(ignore)]
-    pub(crate) created_at: DateTime<Utc>,
-    pub thread_id: Uuid,
-}
 
 #[derive(Doppleganger)]
 #[dg(forward = Attachment)]
