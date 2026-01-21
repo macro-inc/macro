@@ -52,8 +52,8 @@ export function setFaviconNoty(): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  const faviconColor = getCSSColorAs('--color-accent-0', 'hex');
-  const notyBadgeColor = getCSSColorAs('--color-accent-1', 'hex');
+  const faviconColor = getCSSColorAs('--a0', 'oklch');
+  const notyBadgeColor = getCSSColorAs('--a1', 'oklch');
 
   const img = new Image();
 

@@ -374,7 +374,7 @@ export function Root() {
     // Reset favicon in case it had a notification badge
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        updateFavicon(getCSSColorAs('--color-accent-0', 'oklch'));
+        updateFavicon(getCSSColorAs('--a0', 'oklch'));
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
