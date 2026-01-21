@@ -575,6 +575,7 @@ export function EmailCompose(props: EmailComposeProps) {
     }
 
     form.setSendTime(date);
+    scheduleDraftSave();
   };
 
   const resetState = () => {

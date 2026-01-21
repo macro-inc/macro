@@ -951,6 +951,7 @@ export function BaseInput(props: {
     }
 
     form().setSendTime(date);
+    scheduleDraftSave();
   };
 
   return (
