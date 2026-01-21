@@ -12,7 +12,6 @@ use item_filters::ast::{
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_pagination::{Query, SimpleSortMethod};
 use models_soup::{
-    SoupProperty,
     chat::SoupChat,
     document::{SoupDocument, SoupDocumentSubType},
     item::SoupItem,
@@ -23,8 +22,7 @@ use sqlx::{PgPool, Postgres, QueryBuilder, Row, postgres::PgRow, prelude::FromRo
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
-use crate::outbound::pg_soup_repo::type_err;
-use models_properties::{EntityReference, EntityType};
+use crate::outbound::pg_soup_repo::{populate_properties, type_err};
 
 static PREFIX: &str = r#"
     WITH RECURSIVE ProjectHierarchy AS (
@@ -530,77 +528,7 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
         .fetch_all(db)
         .await?;
 
-    // Collect entity references for items that have properties
-    let entity_refs: Vec<EntityReference> = items
-        .iter()
-        .filter_map(|item| match item {
-            SoupItem::Document(doc) => {
-                // Task properties are stored with EntityType::Task, not Document
-                let entity_type = if doc.sub_type.is_some() {
-                    EntityType::Task
-                } else {
-                    EntityType::Document
-                };
-                Some(EntityReference::new(doc.id.to_string(), entity_type))
-            }
-            SoupItem::Project(proj) => Some(EntityReference::new(
-                proj.id.to_string(),
-                EntityType::Project,
-            )),
-            SoupItem::EmailThread(email) => Some(EntityReference::new(
-                email.thread.id.to_string(),
-                EntityType::Thread,
-            )),
-            SoupItem::Chat(chat) => {
-                Some(EntityReference::new(chat.id.to_string(), EntityType::Chat))
-            }
-            _ => None,
-        })
-        .collect();
-
-    // Fetch properties in bulk for all relevant entities, filtered to system properties only
-    let property_ids = SystemPropertyKey::all_system_property_keys();
-    let mut properties_map =
-        properties_db_client::entity_properties::get::get_bulk_entity_properties_values_filtered(
-            db,
-            &entity_refs,
-            property_ids,
-        )
-        .await
-        .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
-
-    // Helper to extract and convert properties for an entity ID
-    let extract_properties = |id: &str,
-                              map: &mut std::collections::HashMap<
-        String,
-        Vec<models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition>,
-    >| {
-        map.remove(id)
-            .unwrap_or_default()
-            .into_iter()
-            .map(SoupProperty::from)
-            .collect()
-    };
-
-    // Assign properties to each item that supports them
-    for item in &mut items {
-        match item {
-            SoupItem::Document(x) => {
-                x.properties = extract_properties(&x.id.to_string(), &mut properties_map);
-            }
-            SoupItem::Project(x) => {
-                x.properties = extract_properties(&x.id.to_string(), &mut properties_map);
-            }
-            SoupItem::EmailThread(x) => {
-                x.properties = extract_properties(&x.thread.id.to_string(), &mut properties_map);
-            }
-            SoupItem::Chat(x) => {
-                x.properties = extract_properties(&x.id.to_string(), &mut properties_map);
-            }
-            // Channels don't support properties yet
-            SoupItem::Channel(_) => {}
-        }
-    }
+    populate_properties(db, &mut items).await?;
 
     Ok(items)
 }

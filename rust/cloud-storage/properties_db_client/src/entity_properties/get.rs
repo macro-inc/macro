@@ -228,6 +228,54 @@ async fn attach_property_options(
     Ok(())
 }
 
+/// Fetch and attach property options to properties across multiple entities in ONE query.
+/// Optimized for bulk operations - collects all unique select-type property IDs across all entities,
+/// fetches options once, then distributes to each property.
+async fn attach_property_options_bulk(
+    db: &Pool<Postgres>,
+    entity_properties_map: &mut HashMap<String, Vec<EntityPropertyWithDefinition>>,
+) -> Result<()> {
+    let property_ids_needing_options: HashSet<Uuid> = entity_properties_map
+        .values()
+        .flatten()
+        .filter(|p| {
+            matches!(
+                p.definition.data_type,
+                DataType::SelectString | DataType::SelectNumber
+            )
+        })
+        .map(|p| p.definition.id)
+        .collect();
+
+    let options_map = if !property_ids_needing_options.is_empty() {
+        let property_ids_vec: Vec<Uuid> = property_ids_needing_options.into_iter().collect();
+        crate::property_options::get::get_property_options_batch(db, &property_ids_vec).await?
+    } else {
+        HashMap::new()
+    };
+
+    for properties in entity_properties_map.values_mut() {
+        for property in properties.iter_mut() {
+            let is_select_type = matches!(
+                property.definition.data_type,
+                DataType::SelectString | DataType::SelectNumber
+            );
+            if is_select_type {
+                let options = options_map
+                    .get(&property.definition.id)
+                    .cloned()
+                    .unwrap_or_default();
+                validate_and_clean_select_option_value(property, &options);
+                property.options = Some(options);
+            } else {
+                clear_stale_select_data(property);
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Looks up an entity property by its ID.
 /// Returns entity reference (for permissions) and definition ID (for required property check).
 #[tracing::instrument(skip(db))]
@@ -409,12 +457,7 @@ WHERE (ep.entity_id, ep.entity_type) IN (
         sort_properties_by_display_name(properties);
     }
 
-    // Fetch and attach property options for all properties
-    // TODO @danielkweon - optimize by caching property options per property_definition_id
-    // to avoid redundant fetches when multiple entities share the same property definition
-    for properties in entity_properties_map.values_mut() {
-        attach_property_options(db, properties).await?;
-    }
+    attach_property_options_bulk(db, &mut entity_properties_map).await?;
 
     // Ensure all requested entity_ids are present in the result, even if they have no properties
     for entity_ref in entity_refs {
@@ -514,11 +557,8 @@ AND pd.id = ANY($3::UUID[])
         sort_properties_by_display_name(properties);
     }
 
-    for properties in entity_properties_map.values_mut() {
-        attach_property_options(db, properties).await?;
-    }
+    attach_property_options_bulk(db, &mut entity_properties_map).await?;
 
-    // Ensure all requested entity_ids are present in the result
     for entity_ref in entity_refs {
         entity_properties_map
             .entry(entity_ref.entity_id.clone())

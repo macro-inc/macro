@@ -6,8 +6,10 @@ use crate::{
     outbound::pg_soup_repo::expanded::dynamic::ExpandedDynamicCursorArgs,
 };
 use either::Either;
-use models_soup::item::SoupItem;
+use models_properties::{EntityReference, EntityType};
+use models_soup::{item::SoupItem, SoupProperty};
 use sqlx::PgPool;
+use system_properties::SystemPropertyKey;
 
 mod expanded;
 mod unexpanded;
@@ -115,6 +117,13 @@ impl SoupRepo for PgSoupRepo {
     ) -> impl Future<Output = Result<Vec<SoupItem>, Self::Err>> + Send {
         unexpanded::by_ids::unexpanded_soup_by_ids(&self.inner, req.user_id, req.entities)
     }
+
+    fn populate_properties(
+        &self,
+        items: &mut [SoupItem],
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send {
+        populate_properties(&self.inner, items)
+    }
 }
 
 #[tracing::instrument(err)]
@@ -129,6 +138,74 @@ fn type_err<E: std::fmt::Display>(e: E) -> sqlx::Error {
     sqlx::Error::TypeNotFound {
         type_name: e.to_string(),
     }
+}
+
+/// Fetches and populates properties for a slice of SoupItems.
+///
+/// This helper collects entity references from items that support properties,
+/// fetches their properties in bulk, and assigns them to each item.
+/// Tasks use `EntityType::Task` while regular documents use `EntityType::Document`.
+pub(crate) async fn populate_properties(
+    db: &PgPool,
+    items: &mut [SoupItem],
+) -> Result<(), sqlx::Error> {
+    let entity_refs: Vec<EntityReference> = items
+        .iter()
+        .filter_map(|item| match item {
+            SoupItem::Document(doc) => {
+                let entity_type = if doc.sub_type.is_some() {
+                    EntityType::Task
+                } else {
+                    EntityType::Document
+                };
+                Some(EntityReference::new(doc.id.to_string(), entity_type))
+            }
+            SoupItem::Project(p) => {
+                Some(EntityReference::new(p.id.to_string(), EntityType::Project))
+            }
+            SoupItem::EmailThread(e) => {
+                Some(EntityReference::new(e.thread.id.to_string(), EntityType::Thread))
+            }
+            SoupItem::Chat(c) => Some(EntityReference::new(c.id.to_string(), EntityType::Chat)),
+            SoupItem::Channel(_) => None,
+        })
+        .collect();
+
+    if entity_refs.is_empty() {
+        return Ok(());
+    }
+
+    let property_ids = SystemPropertyKey::all_system_property_keys();
+    let mut properties_map =
+        properties_db_client::entity_properties::get::get_bulk_entity_properties_values_filtered(
+            db,
+            &entity_refs,
+            property_ids,
+        )
+        .await
+        .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+
+    for item in items {
+        let props = match item {
+            SoupItem::Document(x) => properties_map.remove(&x.id.to_string()),
+            SoupItem::Project(x) => properties_map.remove(&x.id.to_string()),
+            SoupItem::EmailThread(x) => properties_map.remove(&x.thread.id.to_string()),
+            SoupItem::Chat(x) => properties_map.remove(&x.id.to_string()),
+            SoupItem::Channel(_) => None,
+        };
+        if let Some(props) = props {
+            let soup_props: Vec<SoupProperty> = props.into_iter().map(SoupProperty::from).collect();
+            match item {
+                SoupItem::Document(x) => x.properties = soup_props,
+                SoupItem::Project(x) => x.properties = soup_props,
+                SoupItem::EmailThread(x) => x.properties = soup_props,
+                SoupItem::Chat(x) => x.properties = soup_props,
+                SoupItem::Channel(_) => {}
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// this defines a macro which maps the soup query types for statically checked soup queries

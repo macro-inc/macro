@@ -257,14 +257,17 @@ where
         &self,
         req: Option<GetEmailsRequest>,
     ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
+        use frecency::domain::models::AggregateFrecency;
+
         let Some(req) = req else {
             return Ok(Either::Left(None.into_iter()));
         };
 
-        let emails = self
-            .email_service
-            .get_email_thread_previews(req)
-            .await?
+        let email_response = self.email_service.get_email_thread_previews(req).await?;
+
+        let mut frecency_scores: Vec<Option<AggregateFrecency>> =
+            Vec::with_capacity(email_response.items.len());
+        let mut items: Vec<SoupItem> = email_response
             .items
             .into_iter()
             .map(
@@ -278,6 +281,7 @@ where
                      participants,
                      ..
                  }| {
+                    frecency_scores.push(frecency_score.take());
                     let soup_email = SoupEnrichedEmailThreadPreview {
                         thread: SoupEmailThreadPreview::mirror(thread),
                         attachments: Vec::<SoupAttachment>::mirror(attachments),
@@ -287,14 +291,26 @@ where
                         labels: Vec::<SoupLabel>::mirror(labels),
                         properties: Default::default(),
                     };
-                    let frecency_score = frecency_score.take();
-                    FrecencySoupItem {
-                        item: SoupItem::EmailThread(soup_email),
-                        frecency_score,
-                    }
+                    SoupItem::EmailThread(soup_email)
                 },
-            );
-        Ok(Either::Right(emails))
+            )
+            .collect();
+
+        self.soup_storage
+            .populate_properties(&mut items)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        let emails_with_props: Vec<FrecencySoupItem> = items
+            .into_iter()
+            .zip(frecency_scores)
+            .map(|(item, frecency_score)| FrecencySoupItem {
+                item,
+                frecency_score,
+            })
+            .collect();
+
+        Ok(Either::Right(emails_with_props.into_iter()))
     }
 
     async fn handle_comms_request(
