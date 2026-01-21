@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import fuzzy from 'fuzzy';
 import { createFreshSearch, normalizeFuzzyScore } from './freshSort';
 
 interface MockItem {
