@@ -12,7 +12,7 @@ import { fileSelector } from '@core/directive/fileSelector';
 import ImageIcon from '@icon/regular/image.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import UploadSimple from '@phosphor-icons/core/bold/upload-simple-bold.svg?component-solid';
-import { useHistory } from '@service-storage/history';
+import { useHistoryQuery } from '@queries/history/history';
 import type { LexicalEditor } from 'lexical';
 import type { Accessor } from 'solid-js';
 import { createMemo, createSignal, For, Show } from 'solid-js';
@@ -62,12 +62,12 @@ export function MediaSelector(props: MediaSelectorProps) {
   const mdData = mdStore.get;
   const editor = () => mdData.editor;
 
-  const history = useHistory();
+  const historyQuery = useHistoryQuery();
   const [menuOpen, setMenuOpen] = createSignal(false);
 
   const userMediaFiles = createMemo(() => {
     let mediaFiles: MediaItem[] = [];
-    for (const item of history()) {
+    for (const item of historyQuery.data ?? []) {
       for (const mediaType of mediaTypes) {
         if (
           item.type === 'document' &&
@@ -115,8 +115,6 @@ export function MediaSelector(props: MediaSelectorProps) {
       });
     }
   };
-  console.log('acceptedFileExtensions', acceptedFileExtensions());
-  console.log('acceptedMimeTypes', acceptedMimeTypes());
 
   return (
     // TODO bring up to menu best practices, ie. fully focusable menu items, etc.

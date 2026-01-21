@@ -7,7 +7,7 @@ import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import FileText from '@phosphor-icons/core/regular/file-text.svg?component-solid';
 import type { ItemType } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
-import { useHistory } from '@service-storage/history';
+import { useHistoryQuery } from '@queries/history/history';
 import { createEffect, createSignal, Show } from 'solid-js';
 import { VList } from 'virtua/solid';
 import { Tools } from '../constants';
@@ -59,14 +59,14 @@ export function FileSelector() {
   const [userFiles, setUserFiles] = createSignal<
     { file: FileItem; type: string }[]
   >([]);
-  const history = useHistory();
+  const historyQuery = useHistoryQuery();
   const { focusCanvas } = useToolManager();
 
   const [fileSelectorOpen, setFileSelectorOpen] = createSignal(false);
 
   createEffect(async () => {
     const files: { file: FileItem; type: string }[] = [];
-    history().forEach((item) => {
+    (historyQuery.data ?? []).forEach((item) => {
       if (
         item.type === 'document' &&
         item.fileType &&

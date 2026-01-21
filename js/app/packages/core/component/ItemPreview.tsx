@@ -20,7 +20,7 @@ import type { FileType } from '@service-storage/generated/schemas/fileType';
 import {
   insertProjectIntoHistory,
   postNewHistoryItem,
-} from '@service-storage/history';
+} from '@queries/history/history';
 import { Match, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useSplitLayout } from '../../app/component/split-layout/layout';

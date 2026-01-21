@@ -1,4 +1,5 @@
-import { useInstructionsMdTextQuery } from '@service-storage/instructionsMd';
+import { useUserContext } from '@core/context/user';
+import { useInstructionsMdTextQuery } from '@queries/storage/instructions-md';
 import { createMemo } from 'solid-js';
 
 const ABOUT_MACRO = `
@@ -26,8 +27,13 @@ Internal terminology and knowledge
 
 export function useAdditionalInstructions() {
   const userInstructionsQuery = useInstructionsMdTextQuery();
+  const { userInfo } = useUserContext();
   return createMemo(() => {
     let prompt = ABOUT_MACRO;
+    const name = userInfo()?.name;
+    if (name) {
+      prompt += `\nYou are talking to ${name}.`;
+    }
     const userInstructions = userInstructionsQuery.data;
     if (userInstructions) {
       prompt +=

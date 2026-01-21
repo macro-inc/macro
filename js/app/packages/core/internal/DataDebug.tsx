@@ -3,7 +3,7 @@ import { Bar } from '@core/component/TopBar/Bar';
 import { useContacts } from '@core/user';
 import Refresh from '@phosphor-icons/core/regular/arrow-clockwise.svg?component-solid';
 import Copy from '@phosphor-icons/core/regular/copy.svg?component-solid';
-import { useHistory } from '@service-storage/history';
+import { useHistoryQuery } from '@queries/history/history';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 
 interface SignalDebugCardProps {
@@ -71,7 +71,7 @@ function SignalDebugCard(props: SignalDebugCardProps) {
 
 const DataDebug: Component = () => {
   const contacts = useContacts();
-  const history = useHistory();
+  const historyQuery = useHistoryQuery();
 
   const [_, setRefreshKey] = createSignal(0);
 
@@ -110,8 +110,8 @@ const DataDebug: Component = () => {
           />
 
           <SignalDebugCard
-            title="useHistory()"
-            data={history()}
+            title="useHistoryQuery()"
+            data={historyQuery.data ?? []}
             renderItem={(item) => (
               <div class="bg-surface-secondary p-2 rounded text-sm">
                 <div class="font-medium">{item.name}</div>

@@ -28,7 +28,7 @@ import WideFileMd from '@macro-icons/wide/file-md.svg';
 import WideFolder from '@macro-icons/wide/folder.svg';
 import WideStar from '@macro-icons/wide/star.svg';
 import WideTask from '@macro-icons/wide/task.svg';
-import { useCreateProject } from '@service-storage/projects';
+import { createProject } from '@queries/storage/projects';
 import { createEffect, createSignal, For, onMount, Show } from 'solid-js';
 import { type FocusableElement, tabbable } from 'tabbable';
 import { useSplitLayout } from './split-layout/layout';
@@ -239,10 +239,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     keyDownHandler: () => {
       createBlock({
         blockName: 'project',
-        createFn: () => {
-          const createProject = useCreateProject();
-          return createProject({ name: 'New Folder' });
-        },
+        createFn: () => createProject({ name: 'New Folder' }),
         shouldInsert: !pressedKeys().has('opt'),
       });
       return true;

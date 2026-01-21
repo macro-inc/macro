@@ -19,7 +19,7 @@ import type {
   ProjectSearchResult,
   UnifiedSearchResponseItem,
 } from '@service-search/generated/models';
-import { useHistory } from '@service-storage/history';
+import { useHistoryQuery } from '@queries/history/history';
 import { useInfiniteQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import type { EntityData } from '../types/entity';
@@ -164,7 +164,7 @@ const useMapSearchResponseItem = () => {
   const channelsContext = useChannelsContext();
   const channels = channelsContext.channels;
 
-  const history = useHistory();
+  const historyQuery = useHistoryQuery();
 
   return (
     result: UnifiedSearchResponseItem,
@@ -266,7 +266,9 @@ const useMapSearchResponseItem = () => {
         });
         let name = result.name;
         if (!name || name === blockNameToDefaultFile('chat')) {
-          const chat = history().find((item) => item.id === result.chat_id);
+          const chat = (historyQuery.data ?? []).find(
+            (item) => item.id === result.chat_id
+          );
           if (chat) {
             name = chat.name;
           }

@@ -1,6 +1,5 @@
 import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
-import { cache } from '@core/util/cache';
 import { fetchWithToken } from '@core/util/fetchWithToken';
 import {
   isOk,
@@ -132,24 +131,19 @@ export const authServiceClient = {
       (result) => result
     );
   },
-  getUserInfo: cache(
-    async function getUserInfo() {
-      return mapOk(
-        await fetchWithAuth<Partial<GetUserInfo>>(`${authHost}/user/me`, {
-          method: 'GET',
-        }),
-        (data) => ({
-          authenticated: !!data.user_id,
-          permissions: data.permissions || [],
-          userId: data.user_id,
-          organizationId: data.organization_id ?? undefined,
-        })
-      );
-    },
-    {
-      minutes: 15,
-    }
-  ),
+  async getUserInfo() {
+    return mapOk(
+      await fetchWithAuth<Partial<GetUserInfo>>(`${authHost}/user/me`, {
+        method: 'GET',
+      }),
+      (data) => ({
+        authenticated: !!data.user_id,
+        permissions: data.permissions || [],
+        userId: data.user_id,
+        organizationId: data.organization_id ?? undefined,
+      })
+    );
+  },
   async sessionLogin(args: { session_code: string }) {
     const maybeResult = await authApiFetch<UserTokensResponse>(
       `/session/login/${args.session_code}`

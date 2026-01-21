@@ -1,9 +1,11 @@
 import { isOk } from '@core/util/maybeResult';
-import { QueryClient, useQuery } from '@tanstack/solid-query';
-import { authServiceClient } from './client';
-import type { UserQuota } from './generated/schemas';
+import { authServiceClient } from '@service-auth/client';
+import type { UserQuota } from '@service-auth/generated/schemas';
+import { useQuery } from '@tanstack/solid-query';
+import { queryClient } from '../client';
+import { authKeys } from './keys';
 
-const queryClient = new QueryClient();
+const USER_QUOTA_STALE_TIME = 1000 * 60 * 5; // 5 minutes
 
 /**
  * Fetches the user's quota information.
@@ -23,23 +25,23 @@ const getUserQuota = async (): Promise<UserQuota> => {
   throw new Error(`Failed to get user quota: ${code} - ${message}`);
 };
 
+function userQuotaQueryOptions() {
+  return {
+    queryKey: authKeys.userQuota.queryKey,
+    queryFn: getUserQuota,
+    staleTime: USER_QUOTA_STALE_TIME,
+    throwOnError: false,
+    retry: 1,
+    retryOnMount: false,
+  };
+}
+
 /**
  * useQuery hook for retrieving the user's quota information.
  * Returns the current quota including documents, AI chat messages, and their limits.
  */
 export function useUserQuotaQuery() {
-  const query = useQuery(
-    () => ({
-      queryKey: ['userQuota'],
-      queryFn: getUserQuota,
-      staleTime: 1000 * 60 * 5, // 5 minutes
-      throwOnError: false,
-      retry: 1,
-      retryOnMount: false,
-    }),
-    () => queryClient
-  );
-  return query;
+  return useQuery(() => userQuotaQueryOptions());
 }
 
 /**
@@ -47,7 +49,9 @@ export function useUserQuotaQuery() {
  * Useful for refreshing quota data after mutations that might affect it (e.g., sending AI chat messages).
  */
 export function invalidateUserQuota() {
-  queryClient.invalidateQueries({ queryKey: ['userQuota'] });
+  return queryClient.invalidateQueries({
+    queryKey: authKeys.userQuota.queryKey,
+  });
 }
 
 /**
@@ -64,6 +68,6 @@ export function useInvalidateUserQuota() {
  */
 export function useUpdateUserQuotaCache() {
   return (quota: UserQuota) => {
-    queryClient.setQueryData(['userQuota'], quota);
+    queryClient.setQueryData(authKeys.userQuota.queryKey, quota);
   };
 }

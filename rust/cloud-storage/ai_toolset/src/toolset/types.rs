@@ -1,3 +1,4 @@
+//! types
 use super::tool_object::{AsyncToolObject, ValidationError};
 use crate::RequestContext;
 use crate::{AsyncTool, ToolResult};
@@ -139,5 +140,75 @@ where
                     .map_err(ToolSetError::Deserialization)
             })?;
         Ok(tool.call(context, request_context).await)
+    }
+
+    /// Merges a subtoolset with a narrower context into this toolset.
+    ///
+    /// The subtoolset's context type (`SubContext`) must be derivable from this
+    /// toolset's context (`ToolSetContext`) via `FromRef`. Each tool from the
+    /// subtoolset is widened to work with the parent context before being added.
+    ///
+    /// Returns an error if any tool names conflict between the two toolsets.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use ai_toolset::{AsyncTool, AsyncToolSet, RequestContext, ServiceContext, ToolResult};
+    /// use axum_macros::FromRef;
+    /// use schemars::JsonSchema;
+    /// use serde::{Deserialize, Serialize};
+    /// use std::sync::Arc;
+    ///
+    /// // Narrower context for a subset of tools
+    /// #[derive(Clone)]
+    /// struct SubContext {
+    ///     sub_api: Arc<String>,
+    /// }
+    ///
+    /// // Broader parent context that contains SubContext
+    /// #[derive(Clone, FromRef)]
+    /// struct ParentContext {
+    ///     sub: SubContext,
+    ///     other_api: Arc<String>,
+    /// }
+    ///
+    /// // A tool that works with SubContext
+    /// #[derive(JsonSchema, Deserialize)]
+    /// #[schemars(title = "SubTool", description = "A tool using SubContext")]
+    /// struct SubTool { value: String }
+    ///
+    /// #[async_trait::async_trait]
+    /// impl AsyncTool<SubContext> for SubTool {
+    ///     type Output = serde_json::Value;
+    ///     async fn call(&self, ctx: ServiceContext<SubContext>, _req: RequestContext) -> ToolResult<Self::Output> {
+    ///         Ok(serde_json::json!({"value": self.value, "api": *ctx.sub_api}))
+    ///     }
+    /// }
+    ///
+    /// // Build a subtoolset with the narrower context
+    /// let sub_toolset = AsyncToolSet::<SubContext>::new()
+    ///     .add_tool::<SubTool, SubContext>().unwrap();
+    ///
+    /// // Merge into parent toolset - tools are automatically widened
+    /// let parent_toolset = AsyncToolSet::<ParentContext>::new()
+    ///     .add_subtoolset::<SubContext>(sub_toolset).unwrap();
+    ///
+    /// assert!(parent_toolset.tools.contains_key("SubTool"));
+    /// ```
+    pub fn add_subtoolset<SubContext>(
+        mut self,
+        subtoolset: AsyncToolSet<SubContext>,
+    ) -> Result<Self, ToolSetCreationError>
+    where
+        SubContext: FromRef<ToolSetContext> + Send + Sync + 'static,
+    {
+        for (name, tool) in subtoolset.tools {
+            if self.tools.contains_key(&name) {
+                return Err(ToolSetCreationError::NameConflict(name));
+            }
+            let widened = tool.widen::<ToolSetContext>();
+            self.tools.insert(name, widened);
+        }
+        Ok(self)
     }
 }
