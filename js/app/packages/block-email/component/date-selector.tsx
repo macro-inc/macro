@@ -58,6 +58,7 @@ export const DateSelector = (props: DateSelectorProps) => {
 
   const dateOptions = useDateSearch({
     query: searchQuery,
+    baseDate: startOfDay(new Date()),
   });
 
   const dispatchKeyToListbox = (key: string) => {
