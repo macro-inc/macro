@@ -805,8 +805,9 @@ export function EmailCompose(props: EmailComposeProps) {
                   onContentChange={onContentChange}
                   onAddAttachments={onAddAttachments}
                   onRemoveAttachment={handleRemoveAttachment}
-                  onSendTimeChange={form.setSendTime}
                   attachments={form.attachments.list()}
+                  sendTime={form.sendTime()}
+                  onSendTimeChange={form.setSendTime}
                   onSubmit={() => void onSubmit()}
                   isSubmitting={sendMutation.isPending}
                   hasDraft={currentDraftID() != null}

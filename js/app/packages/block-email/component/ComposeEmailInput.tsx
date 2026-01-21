@@ -52,6 +52,7 @@ type ComposeEmailInputProps = {
   onAddAttachments?: (attachments: DraftFormAttachment[]) => void;
   onRemoveAttachment?: (attachment: DraftFormAttachment) => void;
   onContentChange?: (content: string) => void;
+  sendTime?: Date | null;
   onSendTimeChange?: (date: Date | null) => void;
 };
 
@@ -306,7 +307,10 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
               setShowFormatRibbon(!showFormatRibbon());
             }}
           />
-          <EmailDateSelector onSendTimeChange={props.onSendTimeChange} />
+          <EmailDateSelector
+            sendTime={props.sendTime}
+            onSendTimeChange={props.onSendTimeChange}
+          />
           <Show when={props.hasDraft}>
             <Button
               onclick={props.onDraftDeletePress}
