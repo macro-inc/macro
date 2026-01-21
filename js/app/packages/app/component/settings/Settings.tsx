@@ -17,8 +17,7 @@ import { Tabs } from '@kobalte/core/tabs';
 import { Account } from './Account';
 import { Inbox } from './Inbox';
 import { Shortcuts } from './Shortcuts';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
+import { isMobile } from '@core/mobile/isMobile';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
 
@@ -240,7 +239,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
               {/* Header with tabs */}
               <div class="relative isolate shrink-0 border-b border-edge-muted">
                 <div class="flex items-center px-2">
-                  <Show when={!isTouchDevice() || !isMobileWidth()}>
+                  <Show when={!isMobile()}>
                     <DeprecatedIconButton
                       icon={CloseIcon}
                       onClick={closeSettings}
@@ -321,7 +320,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
                   <div class="flex-1" />
 
-                  <Show when={!isTouchDevice() || !isMobileWidth()}>
+                  <Show when={!isMobile()}>
                     <DeprecatedIconButton
                       icon={spotlight() ? ContractIcon : ExpandIcon}
                       onClick={() => setSpotlight(!spotlight())}

@@ -1,5 +1,4 @@
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import FormatIcon from '@icon/regular/text-aa.svg';
 import Check from '@phosphor-icons/core/regular/check.svg?component-solid';
 import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
@@ -7,6 +6,7 @@ import { createSignal, onCleanup, onMount, type Setter, Show } from 'solid-js';
 import { ActionButton } from '../ActionButton';
 import { FormatRibbon } from '../FormatRibbon';
 import { useChannelMarkdownArea } from '../MarkdownArea';
+import { isMobile } from '@core/mobile/isMobile';
 
 export function EditMessageInput(props: {
   setEditing: Setter<boolean>;
@@ -56,7 +56,7 @@ export function EditMessageInput(props: {
         <MarkdownArea
           initialValue={originalContent}
           onEnter={(e: KeyboardEvent) => {
-            if (isMobileWidth()) return false;
+            if (isMobile()) return false;
             e.preventDefault();
             const currentContent = markdownState();
             if (

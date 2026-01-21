@@ -46,7 +46,7 @@ import { shortcutBadgeStyles } from '@core/component/Themes';
 import { toast } from '@core/component/Toast/Toast';
 import { TOKENS } from '@core/hotkey/tokens';
 import { getPrettyHotkeyStringByToken } from '@core/hotkey/utils';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
+import { isMobile } from '@core/mobile/isMobile';
 import type { IOrganizationUser } from '@core/user';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { $isDocumentMentionNode } from '@lexical-core';
@@ -270,7 +270,7 @@ function MarkdownArea(
     } else {
       initializeEditorEmpty(editor);
     }
-    if (!isMobileWidth() && !props.dontFocusOnMount) {
+    if (!isMobile() && !props.dontFocusOnMount) {
       editor.focus();
     }
   };

@@ -20,7 +20,6 @@ import { setEditorStateFromMarkdown } from '@core/component/LexicalMarkdown/util
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import {
   type InputAttachment,
   isStaticAttachmentType,
@@ -66,6 +65,7 @@ import { FormatRibbon } from './FormatRibbon';
 import { useChannelMarkdownArea } from './MarkdownArea';
 import { TaskPreviewPanel } from './TaskPreviewPanel';
 import { useUserId } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
 
 false && fileFolderDrop;
 
@@ -241,7 +241,7 @@ export function BaseInput(props: BaseInputProps) {
   onMount(() => {
     attachFn(containerRef);
 
-    if (!isTouchDevice() && !isMobileWidth()) {
+    if (!isTouchDevice()) {
       setTimeout(() => {
         if (
           props.autoFocusOnMount === true ||
@@ -306,7 +306,7 @@ export function BaseInput(props: BaseInputProps) {
   // Focus when external shouldFocus signal is set to true
   createEffect(() => {
     if (props.shouldFocus) {
-      if (!isMobileWidth()) {
+      if (!isMobile()) {
         requestAnimationFrame(() => {
           focusMarkdownArea();
           props.clearShouldFocus?.();
@@ -501,7 +501,7 @@ export function BaseInput(props: BaseInputProps) {
         <MarkdownArea
           placeholder={props.placeholder}
           onEnter={
-            isMobileWidth()
+            isMobile()
               ? (_e) => false
               : (_e) => {
                   if (hasPendingAttachments() || isPendingSend()) {
