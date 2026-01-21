@@ -187,9 +187,7 @@ export function DeprecatedIconButton(props: IconButtonProps) {
         <Show when={props.showShortcut && primaryHotkeyToken()}>
           {(token) => {
             return (
-              <div
-                class="absolute bottom-[-0.5px] right-[-0.5px] text-[7.5px] uppercase pointer-events-none font-semibold mobile-width:invisible"
-              >
+              <div class="absolute bottom-[-0.5px] right-[-0.5px] text-[7.5px] uppercase pointer-events-none font-semibold mobile-width:invisible">
                 <BasicHotkey token={token()} />
               </div>
             );
