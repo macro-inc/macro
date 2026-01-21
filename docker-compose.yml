@@ -1,53 +1,24 @@
 # Services
 include:
   - docker-compose-databases.yml
-services: 
+
+x-common-env: &common-env
+  env_file:
+    - .env
+
+services:
   # ============================================================================
   # authentication_service (Port 8080)
   # Primary auth service - depends on FusionAuth, Redis, MacroDB
   # ============================================================================
   authentication_service:
+    <<: *common-env
     build:
       context: ./rust/cloud-storage
       dockerfile: Dockerfile.dev
       target: authentication_service
     ports:
       - "8080:8080"
-    environment:
-      - PORT=8080
-      - DATABASE_URL=${MACRODB_URL}
-      - REDIS_URI=redis://redis:6379
-      - BASE_URL=http://authentication_service:8080
-      - FUSIONAUTH_API_KEY_SECRET_KEY=${FUSIONAUTH_API_KEY_SECRET_KEY}
-      - FUSIONAUTH_CLIENT_ID=${FUSIONAUTH_CLIENT_ID}
-      - FUSIONAUTH_CLIENT_SECRET_KEY=${FUSIONAUTH_CLIENT_SECRET_KEY}
-      - FUSIONAUTH_APPLICATION_ID=${FUSIONAUTH_APPLICATION_ID}
-      - FUSIONAUTH_BASE_URL=${FUSIONAUTH_BASE_URL}
-      - FUSIONAUTH_OAUTH_REDIRECT_URI=${FUSIONAUTH_OAUTH_REDIRECT_URI}
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-      - GOOGLE_CLIENT_SECRET_KEY=${GOOGLE_CLIENT_SECRET_KEY}
-      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
-      - STRIPE_WEBHOOK_SECRET_KEY=${STRIPE_WEBHOOK_SECRET_KEY}
-      - STRIPE_PRICE_ID=${STRIPE_PRICE_ID}
-      - SERVICE_INTERNAL_AUTH_KEY=local
-      - INTERNAL_API_SECRET_KEY=local
-      - COMMS_SERVICE_URL=http://comms_service:8080
-      - DOCUMENT_STORAGE_SERVICE_URL=http://document_storage_service:8080
-      - NOTIFICATION_SERVICE_URL=http://notification_service:8079
-      - NOTIFICATION_QUEUE=${NOTIFICATION_QUEUE}
-      - SEARCH_EVENT_QUEUE=${SEARCH_EVENT_QUEUE}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=us-east-1
-      - ENVIRONMENT=local
-      - MACRO_API_TOKEN_PRIVATE_SECRET_KEY=${MACRO_API_TOKEN_PRIVATE_SECRET_KEY}
-      - AUDIENCE=${AUDIENCE}
-      - ISSUER=${ISSUER}
-      - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
-      - MACRO_API_TOKEN_EXPIRY_SECONDS=${MACRO_API_TOKEN_EXPIRY_SECONDS}
-      - RUST_LOG=${RUST_LOG}
     networks:
       - databases
       - services
@@ -63,35 +34,13 @@ services:
   # Communications/messaging service
   # ============================================================================
   comms_service:
+    <<: *common-env
     build:
       context: ./rust/cloud-storage
       dockerfile: Dockerfile.dev
       target: comms_service
     ports:
       - "8081:8080"
-    environment:
-      - PORT=8080
-      - MACRO_DB_URL=${MACRODB_URL}
-      - DATABASE_URL=${MACRODB_URL}
-      - CONNECTION_GATEWAY_URL=http://connection_gateway:8080
-      - NOTIFICATION_QUEUE=${NOTIFICATION_QUEUE}
-      - DOCUMENT_STORAGE_SERVICE_URL=http://document_storage_service:8080
-      - CONTACTS_QUEUE=${CONTACTS_QUEUE}
-      - AUTHENTICATION_SERVICE_URL=http://authentication_service:8080
-      - AUTHENTICATION_SERVICE_SECRET_KEY=${AUTHENTICATION_SERVICE_SECRET_KEY}
-      - SEARCH_EVENT_QUEUE=${SEARCH_EVENT_QUEUE}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=us-east-1
-      - ENVIRONMENT=local
-      - AUDIENCE=${AUDIENCE}
-      - ISSUER=${ISSUER}
-      - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
-      - INTERNAL_API_SECRET_KEY=local
-      - DOCUMENT_PERMISSION_JWT_SECRET_KEY=${DOCUMENT_PERMISSION_JWT_SECRET_KEY}
-      - RUST_LOG=${RUST_LOG}
     depends_on:
       - authentication_service
       - connection_gateway
@@ -109,28 +58,13 @@ services:
   # WebSocket gateway - Redis only
   # ============================================================================
   connection_gateway:
+    <<: *common-env
     build:
       context: ./rust/cloud-storage
       dockerfile: Dockerfile.dev
       target: connection_gateway_service
     ports:
       - "8082:8080"
-    environment:
-      - PORT=8080
-      - REDIS_HOST=redis://redis:6379
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=us-east-1
-      - ENVIRONMENT=local
-      - AUDIENCE=${AUDIENCE}
-      - CONNECTION_GATEWAY_TABLE=${CONNECTION_GATEWAY_TABLE}
-      - ISSUER=${ISSUER}
-      - MACRO_DB_URL=${MACRODB_URL}
-      - INTERNAL_API_SECRET_KEY=local
-      - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
-      - RUST_LOG=${RUST_LOG}
     depends_on:
       - redis
     networks:
@@ -148,28 +82,13 @@ services:
   # Contact management - ContactsDB
   # ============================================================================
   contacts_service:
+    <<: *common-env
     build:
       context: ./rust/cloud-storage
       dockerfile: Dockerfile.dev
       target: contacts_service
     ports:
       - "8083:8080"
-    environment:
-      - PORT=8080
-      - DATABASE_URL=${CONTACTS_DB_URL}
-      - CONTACTS_QUEUE=${CONTACTS_QUEUE}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=us-east-1
-      - ENVIRONMENT=local
-      - AUDIENCE=${AUDIENCE}
-      - ISSUER=${ISSUER}
-      - MACRO_DB_URL=${MACRODB_URL}
-      - INTERNAL_API_SECRET_KEY=local
-      - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
-      - RUST_LOG=${RUST_LOG}
     networks:
       - services
     healthcheck:
@@ -184,25 +103,13 @@ services:
   # Document format conversion - requires LibreOffice
   # ============================================================================
   convert_service:
+    <<: *common-env
     build:
       context: ./rust/cloud-storage
       dockerfile: Dockerfile.convert_service.dev
       target: convert_service
     ports:
       - "8084:8080"
-    environment:
-      - PORT=8080
-      - CONVERT_QUEUE=${CONVERT_QUEUE}
-      - LOK_PATH=${LOK_PATH}
-      - DATABASE_URL=${MACRODB_URL}
-      - DOCUMENT_STORAGE_BUCKET=${DOCUMENT_STORAGE_BUCKET}
-      - WEB_SOCKET_RESPONSE_LAMBDA=${WEB_SOCKET_RESPONSE_LAMBDA}
-      - INTERNAL_API_SECRET_KEY=local
-      - ENVIRONMENT=local
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=us-east-1
-      - RUST_LOG=${RUST_LOG}
     networks:
       - services
     healthcheck:
@@ -217,40 +124,13 @@ services:
   # Document analysis and processing
   # ============================================================================
   document_cognition_service:
+    <<: *common-env
     build:
       context: ./rust/cloud-storage
       dockerfile: Dockerfile.dev
       target: document_cognition_service
     ports:
       - "8085:8080"
-    environment:
-      - PORT=8080
-      - DATABASE_URL=${MACRODB_URL}
-      - DOCUMENT_STORAGE_BUCKET=${DOCUMENT_STORAGE_BUCKET}
-      - DOCUMENT_TEXT_EXTRACTOR_QUEUE=${DOCUMENT_TEXT_EXTRACTOR_QUEUE}
-      - CHAT_DELETE_QUEUE=${CHAT_DELETE_QUEUE}
-      - NOTIFICATION_QUEUE=${NOTIFICATION_QUEUE}
-      - DOCUMENT_STORAGE_SERVICE_URL=http://document_storage_service:8080
-      - COMMS_SERVICE_URL=http://comms_service:8080
-      - SEARCH_EVENT_QUEUE=${SEARCH_EVENT_QUEUE}
-      - SYNC_SERVICE_URL=${SYNC_SERVICE_URL}
-      - SYNC_SERVICE_AUTH_KEY=${SYNC_SERVICE_AUTH_KEY}
-      - SEARCH_SERVICE_URL=http://search_service:8080
-      - LEXICAL_SERVICE_URL=${LEXICAL_SERVICE_URL}
-      - EMAIL_SERVICE_URL=http://email_service:8080
-      - STATIC_FILE_SERVICE_URL=http://static_file_service:8080
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=us-east-1
-      - ENVIRONMENT=local
-      - AUDIENCE=${AUDIENCE}
-      - ISSUER=${ISSUER}
-      - MACRO_DB_URL=${MACRODB_URL}
-      - INTERNAL_API_SECRET_KEY=local
-      - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
-      - RUST_LOG=${RUST_LOG}
     depends_on:
       - comms_service
       - document_storage_service
@@ -271,49 +151,13 @@ services:
   # Main document storage API
   # ============================================================================
   document_storage_service:
+    <<: *common-env
     build:
       context: ./rust/cloud-storage
       dockerfile: Dockerfile.dev
       target: document_storage_service
     ports:
       - "8086:8080"
-    environment:
-      - PORT=8080
-      - DATABASE_URL=${MACRODB_URL}
-      - DOCUMENT_STORAGE_BUCKET=${DOCUMENT_STORAGE_BUCKET}
-      - DOCX_DOCUMENT_UPLOAD_BUCKET=${DOCX_DOCUMENT_UPLOAD_BUCKET}
-      - DOCUMENT_DELETE_QUEUE=${DOCUMENT_DELETE_QUEUE}
-      - CLOUDFRONT_DISTRIBUTION_URL=${DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL}
-      - CLOUDFRONT_SIGNER_PUBLIC_KEY_ID=${DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID}
-      - CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME=${DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME}
-      - DOCUMENT_PERMISSION_JWT_SECRET_KEY=${DOCUMENT_PERMISSION_JWT_SECRET_KEY}
-      - REDIS_URI=redis://redis:6379
-      - NOTIFICATION_QUEUE=${NOTIFICATION_QUEUE}
-      - SEARCH_EVENT_QUEUE=${SEARCH_EVENT_QUEUE}
-      - COMMS_SERVICE_URL=http://comms_service:8080
-      - CONNECTION_GATEWAY_URL=http://connection_gateway:8080
-      - BULK_UPLOAD_REQUESTS_TABLE=${BULK_UPLOAD_REQUEST_TABLE}
-      - UPLOAD_STAGING_BUCKET=${UPLOAD_STAGING_BUCKET}
-      - SYNC_SERVICE_URL=${SYNC_SERVICE_URL}
-      - SYNC_SERVICE_AUTH_KEY=${SYNC_SERVICE_AUTH_KEY}
-      - AUTHENTICATION_SERVICE_SECRET_KEY=local
-      - DOCUMENT_STORAGE_SERVICE_AUTH_KEY=local
-      - INTERNAL_API_SECRET_KEY=local
-      - DOCUMENT_LIMIT=${DOCUMENT_LIMIT}
-      - PRESIGNED_URL_EXPIRY_SECONDS=${DOCUMENT_STORAGE_SERVICE_PRESIGNED_URL_EXPIRY_SECONDS}
-      - PRESIGNED_URL_BROWSER_CACHE_EXPIRY_SECONDS=${DOCUMENT_STORAGE_SERVICE_PRESIGNED_URL_BROWSER_CACHE_EXPIRY_SECONDS}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=us-east-1
-      - ENVIRONMENT=local
-      - EMAIL_SERVICE_URL=bogus
-      - AUTHENTICATION_SERVICE_URL=http://authentication_service:8080
-      - AUDIENCE=${AUDIENCE}
-      - ISSUER=${ISSUER}
-      - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
-      - RUST_LOG=${RUST_LOG}
     depends_on:
       - redis
       - connection_gateway
@@ -333,49 +177,13 @@ services:
   # Email processing and management
   # ============================================================================
   email_service:
+    <<: *common-env
     build:
       context: ./rust/cloud-storage
       dockerfile: Dockerfile.dev
       target: email_service
     ports:
       - "8087:8080"
-    environment:
-      - PORT=8080
-      - MACRO_DB_URL=${MACRODB_URL}
-      - REDIS_URI=redis://redis:6379
-      - LINK_MANAGER_QUEUE=${EMAIL_SERVICE_LINK_MANAGER_QUEUE}
-      - EMAIL_SCHEDULED_QUEUE=${EMAIL_SCHEDULED_QUEUE}
-      - GMAIL_INBOX_SYNC_QUEUE=${GMAIL_INBOX_SYNC_QUEUE}
-      - GMAIL_INBOX_SYNC_RETRY_QUEUE=${GMAIL_INBOX_SYNC_RETRY_QUEUE}
-      - SEARCH_EVENT_QUEUE=${SEARCH_EVENT_QUEUE}
-      - GMAIL_GCP_QUEUE=${GMAIL_GCP_QUEUE}
-      - NOTIFICATION_QUEUE=${NOTIFICATION_QUEUE}
-      - BACKFILL_QUEUE=${EMAIL_SERVICE_BACKFILL_QUEUE}
-      - CONTACTS_QUEUE=${CONTACTS_QUEUE}
-      - SFS_UPLOADER_QUEUE=${EMAIL_SERVICE_SFS_UPLOADER_QUEUE}
-      - SFS_DELETE_QUEUE=${EMAIL_SERVICE_SFS_DELETE_QUEUE}
-      - ATTACHMENT_BUCKET=${EMAIL_SERVICE_ATTACHMENT_BUCKET}
-      - NOTIFICATIONS_ENABLED=${EMAIL_SERVICE_NOTIFICATIONS_ENABLED}
-      - AUTHENTICATION_SERVICE_URL=http://authentication_service:8080
-      - AUTHENTICATION_SERVICE_SECRET_KEY=local
-      - STATIC_FILE_SERVICE_URL=http://static_file_service:8080
-      - CONNECTION_GATEWAY_URL=http://connection_gateway:8080
-      - DOCUMENT_STORAGE_SERVICE_URL=http://document_storage_service:8080
-      - CLOUDFRONT_DISTRIBUTION_URL=${EMAIL_SERVICE_CLOUDFRONT_DISTRIBUTION_URL}
-      - CLOUDFRONT_SIGNER_PUBLIC_KEY_ID=${EMAIL_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID}
-      - CLOUDFRONT_SIGNER_PRIVATE_KEY=${EMAIL_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=us-east-1
-      - ENVIRONMENT=local
-      - AUDIENCE=${AUDIENCE}
-      - ISSUER=${ISSUER}
-      - MACRO_DB_URL=${MACRODB_URL}
-      - INTERNAL_API_SECRET_KEY=local
-      - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
-      - RUST_LOG=${RUST_LOG}
     depends_on:
       - authentication_service
       - document_storage_service
@@ -397,27 +205,13 @@ services:
   # Feature flags and experiments
   # ============================================================================
   experiment_service:
+    <<: *common-env
     build:
       context: ./rust/cloud-storage
       dockerfile: Dockerfile.dev
       target: experiment_service
     ports:
       - "8088:8080"
-    environment:
-      - PORT=8080
-      - DATABASE_URL=${MACRODB_URL}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=us-east-1
-      - ENVIRONMENT=local
-      - AUDIENCE=${AUDIENCE}
-      - ISSUER=${ISSUER}
-      - MACRO_DB_URL=${MACRODB_URL}
-      - INTERNAL_API_SECRET_KEY=local
-      - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
-      - RUST_LOG=${RUST_LOG}
     networks:
       - services
     healthcheck:
@@ -432,42 +226,13 @@ services:
   # User notifications - NotificationDB (note: internal port 8079)
   # ============================================================================
   notification_service:
+    <<: *common-env
     build:
       context: ./rust/cloud-storage
       dockerfile: Dockerfile.dev
       target: notification_service
     ports:
       - "8089:8079"
-    environment:
-      - PORT=8079
-      - BASE_URL=http://localhost:8080
-      - DATABASE_URL=${NOTIFICATION_DB_URL}
-      - NOTIFICATION_URL=http://localhost:8080
-      - INTERNAL_API_SECRET_KEY=${INTERNAL_API_SECRET_KEY}
-      - NOTIFICATION_QUEUE=${NOTIFICATION_QUEUE}
-      - DOCUMENT_COGNITION_SERVICE_URL=http://document_cognition_service:8080
-      - DOCUMENT_STORAGE_SERVICE_URL=http://document_storage_service:8080
-      - CONNECTION_GATEWAY_URL=http://connection_gateway:8080
-      - SNS_APNS_PLATFORM_ARN=${SNS_APNS_PLATFORM_ARN}
-      - SNS_FCM_PLATFORM_ARN=${SNS_FCM_PLATFORM_ARN}
-      - SENDER_BASE_ADDRESS=${SENDER_BASE_ADDRESS}
-      - APPLE_BUNDLE_ID=${APPLE_BUNDLE_ID}
-      - PUSH_NOTIFICATION_EVENT_HANDLER_QUEUE=${PUSH_NOTIFICATION_EVENT_HANDLER_QUEUE}
-      - REDIS_URI=redis://redis:6379
-      - AUTHENTICATION_SERVICE_SECRET_KEY=local
-      - AUTHENTICATION_SERVICE_URL=http://authentication_service:8080
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=us-east-1
-      - ENVIRONMENT=local
-      - AUDIENCE=${AUDIENCE}
-      - ISSUER=${ISSUER}
-      - MACRO_DB_URL=${MACRODB_URL}
-      - INTERNAL_API_SECRET_KEY=local
-      - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
-      - RUST_LOG=${RUST_LOG}
     depends_on:
       - redis
       - document_cognition_service
@@ -488,32 +253,13 @@ services:
   # Organization and team management
   # ============================================================================
   organization_service:
+    <<: *common-env
     build:
       context: ./rust/cloud-storage
       dockerfile: Dockerfile.dev
       target: organization_service
     ports:
       - "8090:8080"
-    environment:
-      - PORT=8080
-      - DATABASE_URL=${MACRODB_URL}
-      - REDIS_URI=redis://redis:6379
-      - DSS_URL=http://document_storage_service:8080
-      - AUTH_URL=http://authentication_service:8080
-      - AUTH_INTERNAL_AUTH_SECRET_KEY=local
-      - INVITE_EMAIL=invite-local@macro.com
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=us-east-1
-      - ENVIRONMENT=local
-      - AUDIENCE=${AUDIENCE}
-      - ISSUER=${ISSUER}
-      - MACRO_DB_URL=${MACRODB_URL}
-      - INTERNAL_API_SECRET_KEY=local
-      - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
-      - RUST_LOG=${RUST_LOG}
     depends_on:
       - redis
       - document_storage_service
@@ -533,27 +279,13 @@ services:
   # User/document properties
   # ============================================================================
   properties_service:
+    <<: *common-env
     build:
       context: ./rust/cloud-storage
       dockerfile: Dockerfile.dev
       target: properties_service
     ports:
       - "8091:8080"
-    environment:
-      - PORT=8080
-      - DATABASE_URL=${MACRODB_URL}
-      - COMMS_SERVICE_URL=http://comms_service:8080
-      - INTERNAL_API_SECRET_KEY=local
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=us-east-1
-      - ENVIRONMENT=local
-      - AUDIENCE=${AUDIENCE}
-      - ISSUER=${ISSUER}
-      - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
-      - RUST_LOG=${RUST_LOG}
     depends_on:
       - comms_service
     networks:
@@ -570,29 +302,12 @@ services:
   # Search indexing worker
   # ============================================================================
   search_processing_service:
+    <<: *common-env
     build:
       context: ./rust/cloud-storage
       dockerfile: Dockerfile.search_processing_service.dev
     ports:
       - "8092:8080"
-    environment:
-      - PORT=8080
-      - DATABASE_URL=${MACRODB_URL}
-      - SEARCH_EVENT_QUEUE=${SEARCH_EVENT_QUEUE}
-      - OPENSEARCH_URL=${OPENSEARCH_URL}
-      - OPENSEARCH_USERNAME=${OPENSEARCH_USERNAME}
-      - OPENSEARCH_PASSWORD=${OPENSEARCH_PASSWORD}
-      - DOCUMENT_STORAGE_BUCKET=${DOCUMENT_STORAGE_BUCKET}
-      - SYNC_SERVICE_AUTH_KEY=${SYNC_SERVICE_AUTH_KEY}
-      - EMAIL_SERVICE_URL=http://email_service:8080
-      - COMMS_SERVICE_URL=http://comms_service:8080
-      - LEXICAL_SERVICE_URL=${LEXICAL_SERVICE_URL}
-      - INTERNAL_API_SECRET_KEY=local
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=us-east-1
-      - ENVIRONMENT=local
-      - RUST_LOG=${RUST_LOG}
     depends_on:
       - email_service
       - comms_service
@@ -610,32 +325,13 @@ services:
   # Search API
   # ============================================================================
   search_service:
+    <<: *common-env
     build:
       context: ./rust/cloud-storage
       dockerfile: Dockerfile.dev
       target: search_service
     ports:
       - "8093:8080"
-    environment:
-      - PORT=8080
-      - DATABASE_URL=${MACRODB_URL}
-      - OPENSEARCH_URL=${OPENSEARCH_URL}
-      - OPENSEARCH_USERNAME=${OPENSEARCH_USERNAME}
-      - OPENSEARCH_PASSWORD=${OPENSEARCH_PASSWORD}
-      - COMMS_SERVICE_URL=http://comms_service:8080
-      - EMAIL_SERVICE_URL=http://email_service:8080
-      - DOCUMENT_STORAGE_SERVICE_URL=http://document_storage_service:8080
-      - INTERNAL_API_SECRET_KEY=local
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=us-east-1
-      - ENVIRONMENT=local
-      - AUDIENCE=${AUDIENCE}
-      - ISSUER=${ISSUER}
-      - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
-      - RUST_LOG=${RUST_LOG}
     depends_on:
       - comms_service
       - email_service
@@ -654,29 +350,13 @@ services:
   # Static file serving - DynamoDB
   # ============================================================================
   static_file_service:
+    <<: *common-env
     build:
       context: ./rust/cloud-storage
       dockerfile: Dockerfile.dev
       target: static_file_service
     ports:
       - "8094:8080"
-    environment:
-      - PORT=8080
-      - DYNAMODB_TABLE_NAME=${STATIC_FILE_SERVICE_DYNAMODB_TABLE_NAME}
-      - STATIC_STORAGE_BUCKET=${STATIC_FILE_SERVICE_STATIC_STORAGE_BUCKET}
-      - SERVICE_URL=${STATIC_FILE_SERVICE_SERVICE_URL}
-      - S3_EVENT_QUEUE_URL=${STATIC_FILE_SERVICE_S3_EVENT_QUEUE_URL}
-      - INTERNAL_API_SECRET_KEY=local
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=us-east-1
-      - ENVIRONMENT=local
-      - AUDIENCE=${AUDIENCE}
-      - ISSUER=${ISSUER}
-      - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
-      - RUST_LOG=${RUST_LOG}
     networks:
       - services
     healthcheck:
@@ -691,16 +371,13 @@ services:
   # URL unfurling - no dependencies
   # ============================================================================
   unfurl_service:
+    <<: *common-env
     build:
       context: ./rust/cloud-storage
       dockerfile: Dockerfile.dev
       target: unfurl_service
     ports:
       - "8095:8080"
-    environment:
-      - PORT=8080
-      - ENVIRONMENT=local
-      - RUST_LOG=${RUST_LOG}
     networks:
       - services
     healthcheck:
