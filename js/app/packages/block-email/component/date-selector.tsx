@@ -8,8 +8,12 @@ import {
   type JSX,
   Show,
   type FlowComponent,
+  type Component,
 } from 'solid-js';
-import { Combobox } from '@kobalte/core/combobox';
+import {
+  Combobox,
+  type ComboboxRootItemComponentProps,
+} from '@kobalte/core/combobox';
 import { cn } from '@ui/utils/classname';
 import { format } from 'date-fns';
 
@@ -198,48 +202,7 @@ export const DateSelector = (props: DateSelectorProps) => {
       placeholder={props.placeholder ?? 'Select date'}
       closeOnSelection={false}
       defaultFilter={defaultFilter}
-      itemComponent={(itemProps) => {
-        const label = () => {
-          const item = itemProps.item.rawValue;
-
-          if (item.type === 'option') return item.displayText;
-
-          return 'Custom date';
-        };
-
-        const description = () => {
-          const item = itemProps.item.rawValue;
-
-          if (item.type === 'option') return item.secondaryText;
-          return 'Pick from calendar';
-        };
-
-        return (
-          <Combobox.Item
-            item={itemProps.item}
-            class={cn(
-              'flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 cursor-pointer data-[highlighted]:bg-hover',
-              itemProps.item.rawValue.type === 'select-custom' &&
-                'border-t border-edge-muted'
-            )}
-          >
-            <div class="flex items-center gap-2 flex-1 min-w-0">
-              <Combobox.ItemLabel class="text-sm font-medium truncate">
-                {label()}
-              </Combobox.ItemLabel>
-            </div>
-
-            <Show when={description()}>
-              <Combobox.ItemDescription
-                as="span"
-                class="text-xs text-ink-muted"
-              >
-                {description()}
-              </Combobox.ItemDescription>
-            </Show>
-          </Combobox.Item>
-        );
-      }}
+      itemComponent={DateSelectorItem}
     >
       <Show when={typeof props.trigger !== 'undefined'}>
         <Combobox.Control>
@@ -367,5 +330,47 @@ const WithCustomDateMode: FlowComponent<WithCustomDateModeProps> = (props) => {
         />
       </div>
     </Show>
+  );
+};
+
+const DateSelectorItem: Component<
+  ComboboxRootItemComponentProps<DateSelectorOption>
+> = (props) => {
+  const label = () => {
+    const item = props.item.rawValue;
+
+    if (item.type === 'option') return item.displayText;
+
+    return 'Custom date';
+  };
+
+  const description = () => {
+    const item = props.item.rawValue;
+
+    if (item.type === 'option') return item.secondaryText;
+    return 'Pick from calendar';
+  };
+
+  return (
+    <Combobox.Item
+      item={props.item}
+      class={cn(
+        'flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 cursor-pointer data-[highlighted]:bg-hover',
+        props.item.rawValue.type === 'select-custom' &&
+          'border-t border-edge-muted'
+      )}
+    >
+      <div class="flex items-center gap-2 flex-1 min-w-0">
+        <Combobox.ItemLabel class="text-sm font-medium truncate">
+          {label()}
+        </Combobox.ItemLabel>
+      </div>
+
+      <Show when={description()}>
+        <Combobox.ItemDescription as="span" class="text-xs text-ink-muted">
+          {description()}
+        </Combobox.ItemDescription>
+      </Show>
+    </Combobox.Item>
   );
 };
