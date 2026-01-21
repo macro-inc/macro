@@ -75,6 +75,7 @@ export const TextValue: Component<PropertyValueProps> = (props) => {
             el.setSelectionRange(el.value.length, el.value.length);
           }, 0);
         }}
+        placeholder={`Set ${props.property.displayName}...`}
         value={editor.inputValue()}
         onInput={(e) => editor.setInputValue(e.currentTarget.value)}
         onBlur={editor.save}

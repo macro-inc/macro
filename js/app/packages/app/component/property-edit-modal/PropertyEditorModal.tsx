@@ -42,7 +42,10 @@ import { Hotkey } from '@core/component/Hotkey';
 
 import { fuzzyFilter } from '@core/util/fuzzy';
 import { mergeRefs } from '@solid-primitives/refs';
-import { PropertyDataTypeIcon } from '@core/component/Properties/utils';
+import {
+  macroEntityToPropertyEntityType,
+  PropertyDataTypeIcon,
+} from '@core/component/Properties/utils';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 
 import { useEntitiesForProperty } from './hooks/useEntitiesForProperty';
@@ -55,6 +58,7 @@ import { usePropertyEntityDisplay } from '@core/component/Properties/hooks/usePr
 import type { PropertyApiValues } from '@core/component/Properties/types';
 import { toast } from '@core/component/Toast/Toast';
 import { useSavePropertyForMultiEntitites } from './hooks/useSaveProperties';
+import { useEntityPropertiesQuery } from '@queries/properties/entity';
 
 type ListNavActions = {
   next: VoidFunction;
@@ -330,21 +334,19 @@ function PropertyList(props: {
         class="max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden p-1"
       >
         <For each={filteredProperties()}>
-          {(property, index) => {
-            return (
-              <ListItem
-                id={`property-editor-option-${index()}`}
-                isSelected={selector(index())}
-                onClick={() => setProperty(property)}
-                onMouseEnter={() => props.setFocusedIndexFromMouse(index())}
-              >
-                <PropertyDataTypeIcon property={property} class="opacity-50" />
-                <div class="flex-1 text-left flex">
-                  <p class="text-sm font-medium">{property.displayName}</p>
-                </div>
-              </ListItem>
-            );
-          }}
+          {(property, index) => (
+            <ListItem
+              id={`property-editor-option-${index()}`}
+              isSelected={selector(index())}
+              onClick={() => setProperty(property)}
+              onMouseEnter={() => props.setFocusedIndexFromMouse(index())}
+            >
+              <PropertyDataTypeIcon property={property} class="opacity-50" />
+              <div class="flex-1 text-left flex">
+                <p class="text-sm font-medium">{property.displayName}</p>
+              </div>
+            </ListItem>
+          )}
         </For>
       </div>
     </Show>
@@ -727,10 +729,42 @@ function DirectEditPropertyEditor(props: {
     );
   }
 
-  let inputRef: HTMLInputElement | undefined;
+  // Fetch existing property value for single entity
+  const singleEntity = () => {
+    const entities = propertyEditorState.selectedEntities;
+    return entities.length === 1 ? entities[0] : null;
+  };
 
-  onMount(() => {
-    inputRef?.focus();
+  const entityPropertiesQuery = useEntityPropertiesQuery(
+    () => {
+      const entity = singleEntity();
+      return entity ? macroEntityToPropertyEntityType(entity) : 'DOCUMENT';
+    },
+    () => singleEntity()?.id ?? '',
+    false
+  );
+
+  const existingValue = createMemo(() => {
+    const entity = singleEntity();
+    if (!entity || !props.property) return null;
+
+    const propertyDefId =
+      'propertyDefinitionId' in props.property
+        ? props.property.propertyDefinitionId
+        : props.property.id;
+
+    const entityProperties = entityPropertiesQuery.data;
+    if (!entityProperties) return null;
+
+    const prop = entityProperties.find(
+      (p) => p.propertyDefinitionId === propertyDefId
+    );
+    if (!prop) return null;
+
+    if (prop.valueType === 'STRING' || prop.valueType === 'NUMBER') {
+      return prop.value;
+    }
+    return null;
   });
 
   const handleSubmit = () => {
@@ -752,12 +786,17 @@ function DirectEditPropertyEditor(props: {
   createEffect(() => {
     const name = props.property?.displayName || 'value';
     const type = props.property?.valueType;
+    const existing = existingValue();
 
-    let placeholderText = `Enter ${name}`;
-    if (type === 'BOOLEAN') {
+    let placeholderText: string;
+    if (existing !== null && existing !== undefined) {
+      placeholderText = String(existing);
+    } else if (type === 'BOOLEAN') {
       placeholderText = `Enter true or false for ${name}`;
     } else if (type === 'NUMBER') {
       placeholderText = `Enter number for ${name}`;
+    } else {
+      placeholderText = `Enter ${name}`;
     }
 
     props.setPlaceholder(placeholderText);
@@ -771,16 +810,30 @@ function DirectEditPropertyEditor(props: {
     previous: () => {},
   });
 
+  const displayValue = () => {
+    const value = props.searchValue();
+    return value || null;
+  };
+
   return (
-    <div class="p-2 border-t border-edge-muted">
-      <button
-        type="button"
-        class="flex items-center justify-center w-full px-3 py-2 bg-hover text-sm font-medium"
-        onClick={handleSubmit}
-      >
-        Set Value
-      </button>
-    </div>
+    <Show when={displayValue()}>
+      <div class="max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden p-1">
+        <ListItem
+          id="property-value-option-0"
+          isSelected={true}
+          onClick={handleSubmit}
+          onMouseEnter={() => {}}
+        >
+          <PropertyDataTypeIcon property={props.property!} class="opacity-50" />
+          <div class="flex-1 text-left">
+            <p class="text-sm font-medium">
+              Set {props.property?.displayName} to{' '}
+              <span class="text-ink-muted">{displayValue()}</span>
+            </p>
+          </div>
+        </ListItem>
+      </div>
+    </Show>
   );
 }
 
