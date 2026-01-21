@@ -4,10 +4,6 @@ export const projectsKeys = createQueryKeys('projects', {
   list: null,
 });
 
-export const pinsKeys = createQueryKeys('pins', {
-  list: null,
-});
-
 export const deletedKeys = createQueryKeys('deleted', {
   list: null,
 });
@@ -20,10 +16,9 @@ export const instructionsMdKeys = createQueryKeys('instructionsMd', {
 });
 
 /**
- * @deprecated Use `projectsKeys`, `pinsKeys`, or `deletedKeys` directly
+ * @deprecated Use `projectsKeys` or `deletedKeys` directly
  */
 export const storageKeys = {
   projects: projectsKeys,
-  pins: pinsKeys,
   deleted: deletedKeys,
 };

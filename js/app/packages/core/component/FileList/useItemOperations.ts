@@ -6,7 +6,6 @@ import {
   setDeletedItems,
 } from '@queries/storage/deleted';
 import type { Item } from '@service-storage/generated/schemas/item';
-import { getPinnedIds } from '@queries/storage/pins';
 import {
   createCallback,
   createSingletonRoot,
@@ -19,7 +18,6 @@ import {
   bulkPermanentlyDelete as bulkPermanentlyDeleteOp,
   bulkRename as bulkRenameOp,
   bulkRevertDelete as bulkRevertDeleteOp,
-  bulkTogglePin as bulkTogglePinOp,
   copyItem as copyItemOp,
   deleteItem as deleteItemOp,
   getItemAccessLevel as getItemAccessLevelOp,
@@ -27,7 +25,6 @@ import {
   permanentlyDelete as permanentlyDeleteOp,
   renameItem as renameItemOp,
   revertDelete as revertDeleteOp,
-  togglePin as togglePinOp,
 } from './itemOperations';
 
 export const useItemOperations = createSingletonRoot(() => {
@@ -119,34 +116,6 @@ export const useItemOperations = createSingletonRoot(() => {
       return id;
     }
   );
-  const togglePin = createCallback(
-    (args: { itemType: ItemType; id: string }) => {
-      if (!args.id) return toast.failure('Unable to pin item');
-      return togglePinOp(args);
-    }
-  );
-
-  const bulkTogglePin = createCallback(async (items: Item[]) => {
-    const pinnedIds = getPinnedIds();
-    const wasPinned = pinnedIds.includes(items[0].id);
-    const action = wasPinned ? 'unpin' : 'pin';
-
-    const result = await toast.promise(bulkTogglePinOp(items), {
-      loading: `${wasPinned ? 'Unpinning' : 'Pinning'} ${items.length} ${items.length === 1 ? 'item' : 'items'}...`,
-      success: ({ failedItems }) => {
-        if (failedItems.length > 0) {
-          return `Failed to ${action} ${failedItems.length} ${failedItems.length === 1 ? 'item' : 'items'}`;
-        }
-        return `Successfully ${action}ned ${items.length} ${items.length === 1 ? 'item' : 'items'}`;
-      },
-      error: (error) =>
-        `Failed to ${action} items: ${error.message || 'Unknown error'}`,
-      toastTypeDeterminer: (result) =>
-        result.failedItems.length > 0 ? ToastType.FAILURE : ToastType.SUCCESS,
-    });
-    return result;
-  });
-
   const bulkDelete = createCallback(async (items: Item[]) => {
     const result = await toast.promise(bulkDeleteOp(items), {
       loading: `Deleting ${items.length} ${items.length === 1 ? 'item' : 'items'}...`,
@@ -281,8 +250,6 @@ export const useItemOperations = createSingletonRoot(() => {
     deleteItem,
     moveToFolder,
     copyItem,
-    togglePin,
-    bulkTogglePin,
     bulkDelete,
     bulkCopy,
     bulkMoveToFolder,

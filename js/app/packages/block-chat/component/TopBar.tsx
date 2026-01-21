@@ -49,7 +49,6 @@ export function TopBar() {
   const openInstructions = useOpenInstructionsMd();
 
   const ops: FileOperation[] = [
-    { op: 'pin' },
     { op: 'rename' },
     { op: 'copy' },
     { op: 'moveToProject' },

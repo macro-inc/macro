@@ -10,7 +10,6 @@ import {
 } from '@queries/storage/deleted';
 import type { Item } from '@service-storage/generated/schemas/item';
 import { removeHistoryItem } from '@queries/history/history';
-import { getPinnedIds, pinItem, unpinItem } from '@queries/storage/pins';
 import { refetchResources } from '@service-storage/util/refetchResources';
 import {
   getPermissions,
@@ -378,70 +377,6 @@ export async function bulkCopy(
           itemType: item.type as Exclude<ItemType, 'project'>,
           id: item.id,
           name: item.name,
-        })
-      )
-    );
-
-    // Process results for this chunk
-    results.forEach((result, index) => {
-      if (
-        result.status === 'rejected' ||
-        (result.status === 'fulfilled' && !result.value)
-      ) {
-        failedItems.push(chunk[index]);
-      }
-    });
-  }
-
-  return {
-    success: failedItems.length === 0,
-    failedItems,
-  };
-}
-
-export async function togglePin(args: {
-  itemType: ItemType;
-  id: string;
-}): Promise<boolean> {
-  const { itemType, id } = args;
-  const pinnedIds = getPinnedIds();
-  const pinned = pinnedIds.includes(id);
-
-  if (pinned) {
-    return unpinItem(itemType, id);
-  } else {
-    return pinItem(itemType, id);
-  }
-}
-
-export async function bulkTogglePin(
-  selectedItems: Item[],
-  chunkSize: number = DEFAULT_CHUNK_SIZE
-): Promise<{ success: boolean; failedItems: Item[] }> {
-  const pinnedIds = getPinnedIds();
-  // Check if all items have the same pinned state
-  const allItemsHaveSameState = selectedItems.every(
-    (item) =>
-      pinnedIds.includes(item.id) === pinnedIds.includes(selectedItems[0].id)
-  );
-  if (!allItemsHaveSameState) {
-    return {
-      success: false,
-      failedItems: selectedItems,
-    };
-  }
-
-  const failedItems: Item[] = [];
-
-  // Process items in chunks
-  for (let i = 0; i < selectedItems.length; i += chunkSize) {
-    const chunk = selectedItems.slice(i, i + chunkSize);
-
-    const results = await Promise.allSettled(
-      chunk.map((item) =>
-        togglePin({
-          itemType: item.type,
-          id: item.id,
         })
       )
     );
