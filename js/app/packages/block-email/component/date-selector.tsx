@@ -1,15 +1,10 @@
-import {
-  useDateSearch,
-  type DateOption,
-} from '@core/util/dateSearch/useDateSearch';
+import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { useSearchInputFocus } from '@core/component/Properties/utils';
 import { DatePickerUI } from '@core/component/DatePicker/DatePickerUI';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import {
-  createEffect,
   createMemo,
   createSignal,
-  on,
   onCleanup,
   onMount,
   Show,
@@ -23,10 +18,13 @@ type DateSelectorMode = 'search' | 'calendar';
 
 type DateSelectorOption =
   | {
-      custom: false;
-      context: DateOption;
+      type: 'option';
+      displayText: string;
+      secondaryText?: string;
+      date: Date;
     }
-  | { custom: true; date: Date };
+  | { type: 'select-custom' }
+  | { type: 'custom'; date: Date };
 
 type DateSelectorProps = {
   selectedDate?: Date | null;
@@ -36,8 +34,10 @@ type DateSelectorProps = {
 export const DateSelector = (props: DateSelectorProps) => {
   const [selectedOption, setSelectedOption] =
     createSignal<DateSelectorOption | null>(
-      props.selectedDate ? { custom: true, date: props.selectedDate } : null
+      props.selectedDate ? { type: 'custom', date: props.selectedDate } : null
     );
+
+  const [mode, setMode] = createSignal<DateSelectorMode>('search');
 
   const [searchQuery, setSearchQuery] = createSignal('');
   const [listboxRef, setListboxRef] = createSignal<HTMLElement | undefined>();
@@ -84,33 +84,59 @@ export const DateSelector = (props: DateSelectorProps) => {
   };
 
   const onChange = (option: DateSelectorOption | null) => {
+    if (option?.type === 'select-custom') {
+      setMode('calendar');
+      return;
+    }
+
     setSelectedOption(option);
     if (!option) {
       props.onSelectDate?.(null);
       return;
     }
 
-    const dateValue = option.custom ? option.date : option.context.date;
+    const dateValue = option.date;
 
     props.onSelectDate?.(dateValue);
   };
 
   const options = createMemo(() => {
-    return [
-      ...dateOptions().map((o) => ({ custom: false, context: o }) as const),
-      { custom: true, date: new Date() } as const,
-    ];
+    const list: DateSelectorOption[] = [];
+
+    for (const option of dateOptions()) {
+      list.push({
+        type: 'option',
+        displayText: option.displayText,
+        secondaryText: option.secondaryText,
+        date: option.date,
+      });
+    }
+
+    list.push({
+      type: 'select-custom',
+    });
+
+    return list;
   });
 
-  const getOptionLabel = (option: DateSelectorOption) => {
-    try {
-      return format(
-        option.custom ? option.date : option.context.date,
-        "MMMM d, yyyy 'at' h:mm a"
-      );
-    } catch {
-      return 'Invalid date';
-    }
+  const getOptionValue = (option: DateSelectorOption) => {
+    if (option.type === 'select-custom') return '';
+    return option.date.toString();
+  };
+
+  const getOptionTextValue = (option: DateSelectorOption) => {
+    if (option.type === 'select-custom') return 'Custom date';
+
+    return option.type === 'option' ? option.displayText : '';
+  };
+
+  const defaultFilter = (option: DateSelectorOption, input: string) => {
+    if (option.type === 'select-custom' || option.type === 'custom')
+      return true;
+
+    return option.displayText
+      .toLocaleLowerCase()
+      .includes(input.toLocaleLowerCase());
   };
 
   return (
@@ -118,13 +144,9 @@ export const DateSelector = (props: DateSelectorProps) => {
       multiple={false}
       value={selectedOption()}
       options={options()}
-      optionValue={(o) =>
-        o.custom ? o.date.toString() : o.context.date.toString()
-      }
-      optionTextValue={(o) =>
-        o.custom ? 'Custom date' : o.context.displayText
-      }
-      optionLabel={getOptionLabel}
+      optionValue={getOptionValue}
+      optionTextValue={getOptionTextValue}
+      optionLabel={() => ''}
       onOpenChange={onOpenChange}
       onChange={onChange}
       onInputChange={onInputChange}
@@ -132,28 +154,21 @@ export const DateSelector = (props: DateSelectorProps) => {
       placement="bottom-start"
       placeholder="Search dates"
       closeOnSelection={false}
-      defaultFilter={(option, search) =>
-        option.custom
-          ? true
-          : option.context.displayText
-              .toLocaleLowerCase()
-              .includes(search.toLocaleLowerCase())
-      }
+      defaultFilter={defaultFilter}
       itemComponent={(itemProps) => {
         const label = () => {
           const item = itemProps.item.rawValue;
 
-          if (item.custom) return 'Custom date';
+          if (item.type === 'option') return item.displayText;
 
-          return item.context.displayText;
+          return 'Custom date';
         };
 
         const description = () => {
           const item = itemProps.item.rawValue;
 
-          if (item.custom) return 'Pick from calendar';
-
-          return item.context.secondaryText;
+          if (item.type === 'option') return item.secondaryText;
+          return 'Pick from calendar';
         };
 
         return (
@@ -161,7 +176,8 @@ export const DateSelector = (props: DateSelectorProps) => {
             item={itemProps.item}
             class={cn(
               'flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 cursor-pointer data-[highlighted]:bg-hover',
-              itemProps.item.rawValue.custom && 'border-t border-edge-muted'
+              itemProps.item.rawValue.type === 'select-custom' &&
+                'border-t border-edge-muted'
             )}
           >
             <div class="flex items-center gap-2 flex-1 min-w-0">
@@ -190,7 +206,11 @@ export const DateSelector = (props: DateSelectorProps) => {
         <Combobox.Content class="w-full max-w-sm bg-dialog text-ink border border-edge-muted">
           <WithCustomDateMode
             selectedOption={selectedOption()}
-            onSelectDate={(date) => onChange({ custom: true, date })}
+            mode={mode()}
+            onSelectDate={(date) => {
+              onChange({ type: 'custom', date });
+              setMode('search');
+            }}
           >
             <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
               <SearchIcon class="h-4 w-4 text-ink-muted" />
@@ -246,13 +266,9 @@ interface CurrentValueDisplayProps {
 
 const CurrentValueDisplay = (props: CurrentValueDisplayProps) => {
   const currentDateDisplay = createMemo(() => {
+    if (props.selectedOption.type === 'select-custom') return '';
     try {
-      return format(
-        props.selectedOption.custom
-          ? props.selectedOption.date
-          : props.selectedOption.context.date,
-        "MMMM d, yyyy 'at' h:mm a"
-      );
+      return format(props.selectedOption.date, "MMMM d, yyyy 'at' h:mm a");
     } catch {
       return 'Invalid date';
     }
@@ -278,16 +294,17 @@ const CurrentValueDisplay = (props: CurrentValueDisplayProps) => {
 
 interface WithCustomDateModeProps {
   selectedOption: DateSelectorOption | null;
+  mode: DateSelectorMode;
   onSelectDate: (date: Date) => void;
 }
 
 const WithCustomDateMode: FlowComponent<WithCustomDateModeProps> = (props) => {
   return (
-    <Show when={props.selectedOption?.custom} fallback={props.children}>
+    <Show when={props.mode === 'calendar'} fallback={props.children}>
       <div class="border-b border-edge-muted text-sm flex justify-center">
         <DatePickerUI
           value={
-            props.selectedOption?.custom
+            props.selectedOption?.type === 'custom'
               ? props.selectedOption.date
               : new Date()
           }
