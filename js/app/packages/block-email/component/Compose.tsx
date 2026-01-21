@@ -23,7 +23,10 @@ import {
 } from '@core/user';
 import Caution from '@icon/regular/warning.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
-import { useSendMessageMutation } from '@queries/email/thread';
+import {
+  useScheduleMessageMutation,
+  useSendMessageMutation,
+} from '@queries/email/thread';
 import {
   createMemo,
   createSignal,
@@ -207,19 +210,14 @@ export function EmailCompose(props: EmailComposeProps) {
       logger.error(
         new Error('Failed to save email draft: could not load email links')
       );
-      return false;
+      return;
     }
 
-    const sendTime = form.sendTime()?.toISOString();
-
-    const draftResponse = await saveEmailDraft(
-      {
-        ...draftToSave,
-        db_id: currentDraftID(),
-        link_id: linkID,
-      },
-      sendTime
-    );
+    const draftResponse = await saveEmailDraft({
+      ...draftToSave,
+      db_id: currentDraftID(),
+      link_id: linkID,
+    });
 
     if (draftResponse) {
       // If the email draft saved successfully, we want to upload the
@@ -248,6 +246,8 @@ export function EmailCompose(props: EmailComposeProps) {
       }
 
       setCurrentDraftID(draftResponse);
+
+      return draftResponse;
     }
   }
 
