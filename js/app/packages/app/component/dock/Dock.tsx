@@ -227,8 +227,8 @@ export function Dock() {
 
             <Show
               when={!isMobile()}
-              fallback={<div></div>
-            }>
+              fallback={<div></div>}
+            >
               <div style={{
                 'border-top': '1px solid var(--edge-muted)',
                 'color': 'var(--ink-extra-muted)',
