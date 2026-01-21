@@ -85,6 +85,26 @@ export const DateSelector = (props: DateSelectorProps) => {
     });
   };
 
+  const resetState = () => {
+    setSearchQuery('');
+  };
+
+  const onOpenChange = (open: boolean) => {
+    if (!open) resetState();
+  };
+
+  const onChange = (option: DateSelectorOption | null) => {
+    setSelectedOption(option);
+    if (!option) {
+      props.onSelectDate?.(null);
+      return;
+    }
+
+    const dateValue = option.custom ? option.date : option.context.date;
+
+    props.onSelectDate?.(dateValue);
+  };
+
   const options = createMemo(() => {
     return [
       ...dateOptions().map((o) => ({ custom: false, context: o }) as const),
@@ -102,7 +122,8 @@ export const DateSelector = (props: DateSelectorProps) => {
       optionTextValue={(o) =>
         o.custom ? 'Custom date' : o.context.displayText
       }
-      onChange={setSelectedOption}
+      onOpenChange={onOpenChange}
+      onChange={onChange}
       onInputChange={onInputChange}
       allowsEmptyCollection
       placement="bottom-start"
