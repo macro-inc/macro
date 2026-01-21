@@ -1,10 +1,13 @@
 import CaretLeft from '@icon/regular/caret-left.svg';
 import CaretRight from '@icon/regular/caret-right.svg';
 import { createSignal, For, Show } from 'solid-js';
+import { isBefore } from 'date-fns/isBefore';
+import { startOfDay } from 'date-fns/startOfDay';
 
 export type DatePickerUIProps = {
   value: Date;
   onChange: (date: Date) => void;
+  disablePriorToDate?: Date;
 };
 
 const MONTHS = [
@@ -57,8 +60,12 @@ export function DatePickerUI(props: DatePickerUIProps) {
     }
   };
 
+  const getDateForDay = (day: number) => {
+    return new Date(displayYear(), displayMonth(), day);
+  };
+
   const handleDateClick = (day: number) => {
-    const newDate = new Date(displayYear(), displayMonth(), day);
+    const newDate = getDateForDay(day);
     props.onChange(newDate);
   };
 
@@ -165,13 +172,20 @@ export function DatePickerUI(props: DatePickerUIProps) {
               <Show when={day !== null} fallback={<div class="h-8" />}>
                 <button
                   type="button"
-                  class="h-8 w-8 hover:bg-active transition-colors"
+                  class="h-8 w-8 hover:bg-active transition-colors disabled:opacity-40"
                   classList={{
                     'bg-accent text-dialog hover:bg-accent-ink': isSelected(
                       day!
                     ),
                     'ring-1 ring-accent': isToday(day!),
                   }}
+                  disabled={
+                    props.disablePriorToDate &&
+                    isBefore(
+                      getDateForDay(day!),
+                      startOfDay(props.disablePriorToDate)
+                    )
+                  }
                   onClick={() => handleDateClick(day!)}
                 >
                   {day}

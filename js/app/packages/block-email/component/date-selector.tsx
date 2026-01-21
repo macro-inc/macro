@@ -35,6 +35,7 @@ type DateSelectorProps = {
   selectedDate?: Date | null;
   onSelectDate?: (date: Date | null) => void;
   placeholder?: string;
+  disablePriorToDate?: Date;
   trigger?:
     | JSX.Element
     | ((props: { selectedDate: Date | null }) => JSX.Element);
@@ -318,6 +319,7 @@ interface WithCustomDateModeProps {
   selectedDate: Date | null;
   mode: DateSelectorMode;
   onSelectDate: (date: Date) => void;
+  disablePriorToDate?: Date;
 }
 
 const WithCustomDateMode: FlowComponent<WithCustomDateModeProps> = (props) => {
@@ -325,6 +327,7 @@ const WithCustomDateMode: FlowComponent<WithCustomDateModeProps> = (props) => {
     <Show when={props.mode === 'calendar'} fallback={props.children}>
       <div class="border-b border-edge-muted text-sm flex justify-center">
         <DatePickerUI
+          disablePriorToDate={props.disablePriorToDate}
           value={props.selectedDate ?? new Date()}
           onChange={props.onSelectDate}
         />
