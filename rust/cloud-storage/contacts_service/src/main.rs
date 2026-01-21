@@ -51,7 +51,7 @@ async fn create_sqs_worker(config: &Config) -> SQSWorker {
             .load()
             .await
     };
-    
+
     let sqs_client = aws_sdk_sqs::Client::new(&aws_config);
     sqs_worker::SQSWorker::new(
         sqs_client,
