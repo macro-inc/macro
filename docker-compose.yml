@@ -8,7 +8,7 @@ services:
     environment:
       - ALLOW_EMPTY_PASSWORD=yes
     networks:
-      - cloud-storage-network
+      - databases
   # ============================================================================
   # authentication_service (Port 8080)
   # Primary auth service - depends on FusionAuth, Redis, MacroDB
@@ -56,7 +56,7 @@ services:
       - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
       - MACRO_API_TOKEN_EXPIRY_SECONDS=${MACRO_API_TOKEN_EXPIRY_SECONDS}
     networks:
-      - cloud-storage-network
+      - services
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -102,7 +102,7 @@ services:
       - authentication_service
       - connection_gateway
     networks:
-      - cloud-storage-network
+      - services
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -140,7 +140,8 @@ services:
     depends_on:
       - redis
     networks:
-      - cloud-storage-network
+      - services
+      - databases
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -177,7 +178,7 @@ services:
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
     networks:
-      - cloud-storage-network
+      - services
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -208,7 +209,7 @@ services:
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_REGION=us-east-1
     networks:
-      - cloud-storage-network
+      - services
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -251,7 +252,7 @@ services:
   #     - email_service
   #     - static_file_service
   #   networks:
-  #     - cloud-storage-network
+  #     - services
   #   healthcheck:
   #     test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
   #     interval: 30s
@@ -310,7 +311,8 @@ services:
     depends_on:
       - redis
     networks:
-      - cloud-storage-network
+      - services
+      - databases
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -374,7 +376,8 @@ services:
       - static_file_service
       - redis
     networks:
-      - cloud-storage-network
+      - services
+      - databases
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -411,7 +414,7 @@ services:
       - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
 
     networks:
-      - cloud-storage-network
+      - services
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -451,7 +454,7 @@ services:
   #     - authentication_service
   #     - connection_gateway
   #   networks:
-  #     - cloud-storage-network
+  #     - services
   #   healthcheck:
   #     test: ["CMD", "curl", "-f", "http://localhost:8079/health"]
   #     interval: 30s
@@ -494,7 +497,8 @@ services:
     depends_on:
       - redis
     networks:
-      - cloud-storage-network
+      - services
+      - databases
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -531,7 +535,7 @@ services:
     depends_on:
       - comms_service
     networks:
-      - cloud-storage-network
+      - services
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -567,7 +571,7 @@ services:
   #     - email_service
   #     - comms_service
   #   networks:
-  #     - cloud-storage-network
+  #     - services
   #   healthcheck:
   #     test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
   #     interval: 30s
@@ -601,7 +605,7 @@ services:
   #     - email_service
   #     - document_storage_service
   #   networks:
-  #     - cloud-storage-network
+  #     - services
   #   healthcheck:
   #     test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
   #     interval: 30s
@@ -639,7 +643,7 @@ services:
       - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
 
     networks:
-      - cloud-storage-network
+      - services
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -663,7 +667,7 @@ services:
       - PORT=8080
       - ENVIRONMENT=local
     networks:
-      - cloud-storage-network
+      - services
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -672,5 +676,7 @@ services:
       start_period: 40s
 
 networks:
-  cloud-storage-network:
+  services:
     driver: bridge
+  databases:
+    external: true
