@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod test;
+
 pub mod upload;
 pub mod upload_filters;
 
@@ -156,25 +157,40 @@ pub async fn insert_attachments(
     Ok(())
 }
 
+/// Fetches attachments for multiple messages and returns a map keyed by message_id
 #[tracing::instrument(skip(pool))]
-pub async fn fetch_db_attachments(
+pub async fn fetch_db_attachments_in_bulk(
     pool: &PgPool,
-    message_db_id: Uuid,
-) -> anyhow::Result<Vec<attachment::Attachment>> {
-    sqlx::query_as!(
+    message_ids: &[Uuid],
+) -> anyhow::Result<HashMap<Uuid, Vec<attachment::Attachment>>> {
+    if message_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let results = sqlx::query_as!(
         db::attachment::Attachment,
         r#"
         SELECT ea.id, ea.message_id, ea.provider_attachment_id, ea.filename, ea.mime_type, ea.size_bytes, ea.content_id, eas.sfs_id as "sfs_id?", ea.created_at
         FROM email_attachments ea
         LEFT JOIN email_attachments_sfs eas ON ea.id = eas.attachment_id
-        WHERE ea.message_id = $1
-        ORDER BY ea.filename NULLS LAST
+        WHERE ea.message_id = ANY($1)
+        ORDER BY ea.message_id, ea.filename NULLS LAST
         "#,
-        message_db_id
+        message_ids
     )
-        .fetch_all(pool)
-        .await
-        .context("Failed to fetch attachments")
+    .fetch_all(pool)
+    .await
+    .context("Failed to fetch attachments in bulk")?;
+
+    let mut attachments_map: HashMap<Uuid, Vec<attachment::Attachment>> = HashMap::new();
+    for attachment in results {
+        attachments_map
+            .entry(attachment.message_id)
+            .or_default()
+            .push(attachment);
+    }
+
+    Ok(attachments_map)
 }
 
 // deletes all attachments of a given message

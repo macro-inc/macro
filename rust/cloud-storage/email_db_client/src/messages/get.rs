@@ -505,72 +505,91 @@ pub async fn get_messages_by_thread_id(
     Ok(db_messages)
 }
 
-/// Converts a list of db messages to service messages by fetching associated data concurrently
-pub async fn convert_db_messages_to_service(
+/// Converts a list of db messages to service messages by fetching ALL associated data
+/// in bulk (one query per data type for all messages), then mapping results back.
+pub async fn convert_db_messages_to_service_concurrent(
     pool: &PgPool,
     db_messages: Vec<db::message::Message>,
 ) -> anyhow::Result<Vec<service::message::Message>> {
+    if db_messages.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // Collect all message IDs
+    let message_ids: Vec<Uuid> = db_messages.iter().map(|m| m.id).collect();
+
+    // Collect message IDs that have attachments
+    let message_ids_with_attachments: Vec<Uuid> = db_messages
+        .iter()
+        .filter(|m| m.has_attachments)
+        .map(|m| m.id)
+        .collect();
+
+    // Collect message IDs that are drafts created in Macro (no provider_id)
+    let draft_message_ids: Vec<Uuid> = db_messages
+        .iter()
+        .filter(|m| m.is_draft && m.provider_id.is_none())
+        .map(|m| m.id)
+        .collect();
+
+    // Fetch all data concurrently using bulk functions
+    let (
+        senders_map,
+        recipients_map,
+        scheduled_map,
+        labels_map,
+        attachments_map,
+        macro_attachments_map,
+        draft_attachments_map,
+    ) = tokio::try_join!(
+        contacts::get::fetch_senders_by_message_ids(pool, &message_ids),
+        contacts::get::fetch_db_recipients_in_bulk(pool, &message_ids),
+        messages::scheduled::get::fetch_scheduled_messages_in_bulk(pool, &message_ids),
+        labels::get::fetch_message_labels_in_bulk(pool, &message_ids),
+        attachments::provider::fetch_db_attachments_in_bulk(pool, &message_ids_with_attachments),
+        attachments::marco::fetch_db_macro_attachments_in_bulk(pool, &message_ids),
+        attachments::draft::fetch_db_draft_attachments_in_bulk(pool, &draft_message_ids),
+    )?;
+
+    // Build service messages concurrently by looking up data from the hashmaps
     let message_processing_futures = db_messages.into_iter().map(|db_message| {
-        let pool_clone = pool.clone();
-        async move { get_service_message_data(&pool_clone, db_message).await }
+        let message_id = db_message.id;
+
+        // Look up data from maps (cloning to move into async block)
+        let sender = senders_map.get(&message_id).cloned();
+        let recipients = recipients_map.get(&message_id).cloned().unwrap_or_default();
+        let scheduled = scheduled_map.get(&message_id).cloned();
+        let labels = labels_map.get(&message_id).cloned().unwrap_or_default();
+        let attachments = attachments_map
+            .get(&message_id)
+            .cloned()
+            .unwrap_or_default();
+        let macro_attachments = macro_attachments_map
+            .get(&message_id)
+            .cloned()
+            .unwrap_or_default();
+        let draft_attachments = draft_attachments_map
+            .get(&message_id)
+            .cloned()
+            .unwrap_or_default();
+
+        async move {
+            // Build the service message without attachments first
+            let service_message = map_attachmentless_db_message_to_service(
+                db_message, sender, recipients, scheduled, labels,
+            );
+
+            // Add attachments
+            db_to_service::map_db_message_attachments_to_service(
+                service_message,
+                attachments,
+                macro_attachments,
+                draft_attachments,
+            )
+        }
     });
 
     try_join_all(message_processing_futures)
         .await
         .context("Failed processing messages concurrently")
-}
-
-/// Fetches associated data for a db message and converts it to a service message
-#[tracing::instrument(skip(pool, db_message), err)]
-pub async fn get_service_message_data(
-    pool: &PgPool,
-    db_message: db::message::Message,
-) -> anyhow::Result<service::message::Message> {
-    // fetch data from each table concurrently
-    let (
-        sender_res,
-        recipients_res,
-        scheduled_res,
-        labels_res,
-        attachments_res,
-        macro_attachments_res,
-        draft_attachments_res,
-    ) = tokio::try_join!(
-        contacts::get::get_sender_by_message_id(pool, db_message.id),
-        contacts::get::fetch_db_recipients(pool, db_message.id),
-        messages::scheduled::get::get_scheduled_message_no_auth(pool, db_message.id),
-        labels::get::fetch_message_labels(pool, db_message.id),
-        async {
-            if db_message.has_attachments {
-                attachments::provider::fetch_db_attachments(pool, db_message.id).await
-            } else {
-                Ok(Vec::new())
-            }
-        },
-        async { attachments::marco::fetch_db_macro_attachments(pool, db_message.id).await },
-        async {
-            // only need to check if the message is a draft created in Macro
-            if db_message.is_draft && db_message.provider_id.is_none() {
-                attachments::draft::fetch_db_draft_attachments(pool, db_message.id).await
-            } else {
-                Ok(Vec::new())
-            }
-        },
-    )?;
-
-    let service_message = map_attachmentless_db_message_to_service(
-        db_message,
-        sender_res,
-        recipients_res,
-        scheduled_res,
-        labels_res,
-    );
-
-    // parse db-layer structs into service-layer message struct
-    db_to_service::map_db_message_attachments_to_service(
-        service_message,
-        attachments_res,
-        macro_attachments_res,
-        draft_attachments_res,
-    )
 }

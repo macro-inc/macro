@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use anyhow::{Context, anyhow};
 use models_email::db;
 use models_email::email::service::label;

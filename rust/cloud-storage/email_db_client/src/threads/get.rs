@@ -1,4 +1,4 @@
-use crate::messages::get::{convert_db_messages_to_service, get_messages_by_thread_id};
+use crate::messages::get::{convert_db_messages_to_service_concurrent, get_messages_by_thread_id};
 use crate::parse::db_to_service;
 use anyhow::{Context, anyhow};
 use models_email::email::db;
@@ -69,7 +69,7 @@ pub async fn fetch_thread_with_messages_paginated(
 
     let db_messages = get_messages_by_thread_id(pool, thread_db_id, offset, limit).await?;
 
-    let processed_messages = convert_db_messages_to_service(pool, db_messages).await?;
+    let processed_messages = convert_db_messages_to_service_concurrent(pool, db_messages).await?;
 
     let full_thread = db_to_service::map_db_thread_to_service(db_thread, processed_messages);
 
