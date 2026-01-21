@@ -14,7 +14,6 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import { useKeyPressed } from '@core/util/useKeyPressed';
 import { Combobox } from '@kobalte/core/combobox';
 import { cn } from '@ui/utils/classname';
 import { format } from 'date-fns';
@@ -61,19 +60,6 @@ export const DateSelector = (props: DateSelectorProps) => {
     () => searchInputRef,
     () => true
   );
-
-  const currentDateDisplay = createMemo(() => {
-    // if (!props.selectedDate) return 'No date set';
-    // try {
-    //   return format(props.selectedDate, "MMMM d, yyyy 'at' h:mm a");
-    // } catch {
-    //   return 'Invalid date';
-    // }
-  });
-
-  const handleCalendarChange = (date: Date) => {
-    // handleSelectDate(date);
-  };
 
   const onInputChange = (value: string) => {
     setSearchQuery(value);
