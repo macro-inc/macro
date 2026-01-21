@@ -6,10 +6,6 @@ import type { FilterResult } from 'fuzzy';
 import fuzzy from 'fuzzy';
 import { fuzzyScoreCommaSpaceSeparated } from './fuzzy';
 
-// we need a max score so that boosts work as fuzzy library defaults to Infinity for exact matches
-// see: https://github.com/mattyork/fuzzy/blob/master/lib/fuzzy.js#L75
-const MAX_FUZZY_SCORE = 1e5;
-
 export interface FreshSortConfig {
   /** Weight for fuzzy match (0-1). Higher values prioritize search relevance. Default: 0.7 */
   fuzzyWeight?: number;
@@ -126,11 +122,13 @@ function calculateTimeScore(
   return Math.exp(-config.timeDecayFactor * normalizedAge);
 }
 
-function normalizeFuzzyScore(
+export function normalizeFuzzyScore(
   fuzzyScore: number,
   maxPossibleScore: number = 1
 ): number {
-  let score = fuzzyScore === Infinity ? MAX_FUZZY_SCORE : fuzzyScore;
+  // We need a valid number score so that boosts work because fuzzy library defaults
+  // to Infinity for exact matches, see: https://github.com/mattyork/fuzzy/blob/master/lib/fuzzy.js#L75
+  let score = fuzzyScore === Infinity ? maxPossibleScore : fuzzyScore;
   return Math.max(0, Math.min(1, score / maxPossibleScore));
 }
 
@@ -154,7 +152,11 @@ export function freshSort<T extends TimestampedItem>(
   const normalizedTimeWeight = finalConfig.timeWeight / totalWeight;
   const normalizedBrevityWeight = finalConfig.brevityWeight / totalWeight;
 
-  const maxFuzzyScore = Math.max(...filterResults.map((r) => r.score));
+  const filterNoInfResults = filterResults.filter((r) => r.score !== Infinity);
+  const maxFuzzyScore =
+    filterNoInfResults.length > 0
+      ? Math.max(...filterNoInfResults.map((r) => r.score))
+      : 1;
 
   const scoredResults: FreshSortResult<T>[] = filterResults.map((result) => {
     const fuzzyScore =
