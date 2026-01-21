@@ -1,7 +1,6 @@
 import { getSelectValues } from '@core/component/Properties/utils';
 import { PropertyValueIcon } from './PropertyValueIcon';
 import { Tooltip } from '@core/component/Tooltip';
-import { usePropertiesContext } from '../../context/PropertiesContext';
 import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
 import type { Property } from '../../types';
@@ -17,6 +16,8 @@ import { cn } from '@ui/utils/classname';
 
 type CondensedPropertyValueProps = {
   property: Property;
+  canEdit: boolean;
+  onEdit?: (property: Property, anchor?: HTMLElement) => void;
 };
 
 /**
@@ -26,16 +27,14 @@ type CondensedPropertyValueProps = {
 export const CondensedPropertyValue: Component<CondensedPropertyValueProps> = (
   props
 ) => {
-  const { canEdit, openPropertyEditor } = usePropertiesContext();
-
   const validValue = () => hasValue(props.property);
 
   const handleClick = (e: MouseEvent) => {
-    if (!canEdit) return;
+    if (!props.canEdit) return;
     e.preventDefault();
     e.stopPropagation();
     const target = e.currentTarget as HTMLElement;
-    openPropertyEditor(props.property, target);
+    props.onEdit?.(props.property, target);
   };
 
   return (
@@ -48,13 +47,14 @@ export const CondensedPropertyValue: Component<CondensedPropertyValueProps> = (
         class={cn(
           'inline-flex items-center text-xs leading-none text-ink-muted shrink-0 py-1.5 h-6.5 transition-colors border border-edge-muted/50 px-1.5',
           {
-            'cursor-pointer hover:border-edge-muted hover:bg-hover/50': canEdit,
+            'cursor-pointer hover:border-edge-muted hover:bg-hover/50':
+              props.canEdit,
             'opacity-50': !validValue(),
           }
         )}
         onClick={handleClick}
-        role={canEdit ? 'button' : undefined}
-        tabIndex={canEdit ? 0 : undefined}
+        role={props.canEdit ? 'button' : undefined}
+        tabIndex={props.canEdit ? 0 : undefined}
       >
         <CondensedIcon property={props.property} />
       </div>

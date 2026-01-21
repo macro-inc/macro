@@ -2,13 +2,22 @@ import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
 import { useInlineEditor } from '../../hooks';
 import { formatPropertyValue } from '../../utils';
-import { EmptyValue, type PropertyValueProps } from './ValueComponents';
+import {
+  EmptyValue,
+  type PropertyValueProps,
+  stubSaveHandler,
+} from './ValueComponents';
 
 /**
  * Display component for string properties with inline editing
  */
 export const TextValue: Component<PropertyValueProps> = (props) => {
-  const editor = useInlineEditor(props.property, props.onRefresh);
+  const saveHandler = () => props.saveHandler ?? stubSaveHandler;
+  const editor = useInlineEditor(
+    props.property,
+    saveHandler(),
+    props.onRefresh
+  );
 
   const supportsInline = () =>
     props.canEdit &&
