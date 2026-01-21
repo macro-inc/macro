@@ -2,7 +2,9 @@ use crate::api::email::attachments::get::GetAttachmentResponse;
 use crate::api::email::attachments::get_document_id::GetAttachmentDocumentIDResponse;
 use crate::api::email::backfill::cancel::CancelBackfillParams;
 use crate::api::email::backfill::get::{GetActiveBackfillJobResponse, GetBackfillJobResponse};
+use crate::api::email::contacts::block_sender::{BlockSenderRequest, BlockSenderResponse};
 use crate::api::email::contacts::list::ListContactsResponse;
+use crate::api::email::contacts::list_blocked::ListBlockedResponse;
 use crate::api::email::drafts::add_attachment::{
     AddDraftAttachmentRequest, AddDraftAttachmentResponse,
 };
@@ -66,6 +68,9 @@ use utoipa::OpenApi;
         email::labels::delete::handler,
         email::labels::list::handler,
         email::contacts::list::list_contacts_handler,
+        email::contacts::block_sender::handler,
+        email::contacts::unblock_sender::handler,
+        email::contacts::list_blocked::handler,
         email::sync::enable::enable_handler,
         email::sync::disable::disable_handler,
         email::settings::patch::patch_settings_handler,
@@ -117,6 +122,9 @@ use utoipa::OpenApi;
             // Contact types
             ListContactsResponse,
             ContactInfoWithInteraction,
+            BlockSenderRequest,
+            BlockSenderResponse,
+            ListBlockedResponse,
             // Sort/filter types
             ApiSortMethod,
             // Legacy service types (keeping for backward compatibility)
