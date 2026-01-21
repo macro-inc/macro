@@ -36,6 +36,7 @@ type DateSelectorProps = {
   onSelectDate?: (date: Date | null) => void;
   placeholder?: string;
   disablePriorToDate?: Date;
+  withTime?: boolean;
   trigger?:
     | JSX.Element
     | ((props: { selectedDate: Date | null }) => JSX.Element);
@@ -266,40 +267,42 @@ export const DateSelector = (props: DateSelectorProps) => {
               </Show>
             </Show>
             <Combobox.Listbox ref={setListboxRef} />
-            <div class="px-2 py-1.5 border-t border-edge-muted">
-              <label class="flex items-center justify-between">
-                Time
-                <input
-                  type="time"
-                  value={
-                    selectedDate()
-                      ? format(selectedDate()!, 'HH:mm')
-                      : undefined
-                  }
-                  onInput={(e) => {
-                    const value = e.currentTarget.value;
+            <Show when={props.withTime}>
+              <div class="px-2 py-1.5 border-t border-edge-muted">
+                <label class="flex items-center justify-between">
+                  Time
+                  <input
+                    type="time"
+                    value={
+                      selectedDate()
+                        ? format(selectedDate()!, 'HH:mm')
+                        : undefined
+                    }
+                    onInput={(e) => {
+                      const value = e.currentTarget.value;
 
-                    if (!value || !value.trim().length) return;
+                      if (!value || !value.trim().length) return;
 
-                    const split = value.split(':');
-                    if (!split.length || split.length !== 2) return;
+                      const split = value.split(':');
+                      if (!split.length || split.length !== 2) return;
 
-                    if (Number.isNaN(split[0]) || Number.isNaN(split[1]))
-                      return;
+                      if (Number.isNaN(split[0]) || Number.isNaN(split[1]))
+                        return;
 
-                    let hours = Number(split[0]);
-                    let mins = Number(split[1]);
+                      let hours = Number(split[0]);
+                      let mins = Number(split[1]);
 
-                    let currentDate = selectedDate() ?? new Date();
+                      let currentDate = selectedDate() ?? new Date();
 
-                    currentDate = setHours(currentDate, Number(hours));
-                    currentDate = setMinutes(currentDate, Number(mins));
+                      currentDate = setHours(currentDate, Number(hours));
+                      currentDate = setMinutes(currentDate, Number(mins));
 
-                    onChange({ type: 'custom', date: currentDate });
-                  }}
-                />
-              </label>
-            </div>
+                      onChange({ type: 'custom', date: currentDate });
+                    }}
+                  />
+                </label>
+              </div>
+            </Show>
             <div class="px-2 py-1.5 border-t border-edge-muted">
               <div class="text-xs text-ink-muted">
                 <span>Use queries like </span>
