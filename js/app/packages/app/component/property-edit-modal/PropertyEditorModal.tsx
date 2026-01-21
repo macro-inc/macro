@@ -29,7 +29,7 @@ import { beveledCorners } from '../../../block-theme/signals/themeSignals';
 import { useAllProperties } from './hooks/useAllProperties';
 import { usePropertySelection } from '@core/component/Properties/hooks';
 import { cn } from '@ui/utils/classname';
-import type { EntityData } from '@macro-entity';
+import { isTaskEntity, type EntityData } from '@macro-entity';
 import { InlineEntity } from '../../../macro-entity/src/components/InlineEntity';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import type {
@@ -52,6 +52,11 @@ import {
   type CombinedEntity,
 } from '@core/component/Properties/component/modal/shared/entityUtils';
 import { usePropertyEntityDisplay } from '@core/component/Properties/hooks/usePropertyEntityDisplay';
+import { useSaveEntityPropertyMutation } from '@queries/properties/entity';
+import type { PropertyApiValues } from '@core/component/Properties/types';
+import { EntityType } from '@service-properties/generated/schemas/entityType';
+import { toast } from '@core/component/Toast/Toast';
+import { match } from 'ts-pattern';
 
 type ListNavActions = {
   next: VoidFunction;
@@ -59,6 +64,9 @@ type ListNavActions = {
   select: VoidFunction;
 };
 
+/**
+ * Styled wrapper for list items in each menu.
+ */
 function ListItem(props: {
   id: string;
   isSelected: boolean;
@@ -117,6 +125,17 @@ function createListKeybindings(elem: Accessor<HTMLElement | undefined>) {
   };
 }
 
+function getEntityTypeFromEntityData(entity: EntityData): EntityType {
+  return match(entity)
+    .when(isTaskEntity, () => EntityType.TASK)
+    .with({ type: 'channel' }, () => EntityType.CHANNEL)
+    .with({ type: 'chat' }, () => EntityType.CHAT)
+    .with({ type: 'project' }, () => EntityType.PROJECT)
+    .with({ type: 'email' }, () => EntityType.THREAD)
+    .with({ type: 'document' }, () => EntityType.DOCUMENT)
+    .exhaustive();
+}
+
 export function PropertyEditorModal() {
   const [dialogRef, setDialogRef] = createSignal<HTMLElement>();
   const [attach, hotkeyScope] = useHotkeyDOMScope('property-editor-modal');
@@ -126,7 +145,9 @@ export function PropertyEditorModal() {
   const defaultPlaceholder = 'Choose a property...';
   const [placeholder, setPlaceholder] = createSignal('');
 
-  const { dispose } = registerHotkey({
+  const savePropertyMutation = useSaveEntityPropertyMutation();
+
+  const { dispose: disposeHotkey } = registerHotkey({
     hotkey: ['escape'],
     description: 'Close property editor',
     keyDownHandler: () => {
@@ -135,7 +156,55 @@ export function PropertyEditorModal() {
     },
     scopeId: hotkeyScope,
   });
-  onCleanup(dispose);
+  onCleanup(disposeHotkey);
+
+  const handlePropertySave = async (apiValues: PropertyApiValues) => {
+    const property = propertyEditorState.targetProperty;
+    const entities = propertyEditorState.selectedEntities;
+
+    if (!property) {
+      console.error('No target property selected');
+      return;
+    }
+
+    if (entities.length === 0) {
+      console.error('No entities selected');
+      return;
+    }
+
+    // Get the property definition ID
+    const propertyDefinitionId =
+      'propertyDefinitionId' in property
+        ? property.propertyDefinitionId
+        : property.id;
+
+    // Save property for each selected entity
+    const promises = entities.map((entity) => {
+      const entityType = getEntityTypeFromEntityData(entity);
+      return savePropertyMutation.mutateAsync({
+        entityId: entity.id,
+        entityType,
+        property: {
+          ...property,
+          propertyDefinitionId,
+          propertyId: propertyDefinitionId,
+        } as Property,
+        apiValues,
+      });
+    });
+
+    try {
+      await Promise.all(promises);
+      const entityLabel = entities.length === 1 ? 'entity' : 'entities';
+      toast.success(
+        `Updated ${property.displayName} for ${entities.length} ${entityLabel}`
+      );
+      closePropertyEditor();
+    } catch (error) {
+      console.error('Failed to save properties', error);
+      // Toast already shown by mutation
+    }
+  };
 
   createEffect(
     on(
@@ -205,6 +274,7 @@ export function PropertyEditorModal() {
                         setSelectedIndexFromMouse={setSelectedIndexFromMouse}
                         setKeybindings={keybindings}
                         setPlaceholder={setPlaceholder}
+                        onSave={handlePropertySave}
                       />
                     </Match>
                   </Switch>
@@ -373,12 +443,62 @@ function PropertyValueEditor(props: {
   setSelectedIndexFromMouse: (index: number) => void;
   setKeybindings: (binding: ListNavActions) => void;
   setPlaceholder: Setter<string>;
+  onSave: (apiValues: PropertyApiValues) => void;
 }) {
   const propertyType = () => props.property?.valueType;
 
   const handleSubmit = (value: any) => {
-    console.log('Submitting property:', props.property, 'with value:', value);
-    closePropertyEditor();
+    const type = propertyType();
+    if (!type) return;
+
+    let apiValues: PropertyApiValues;
+
+    if (type === 'SELECT_STRING') {
+      apiValues = {
+        valueType: 'SELECT_STRING',
+        values: [value],
+      };
+    } else if (type === 'SELECT_NUMBER') {
+      apiValues = {
+        valueType: 'SELECT_NUMBER',
+        values: [value],
+      };
+    } else if (type === 'ENTITY') {
+      apiValues = {
+        valueType: 'ENTITY',
+        refs: [value],
+      };
+    } else if (type === 'STRING') {
+      apiValues = {
+        valueType: 'STRING',
+        value: value,
+      };
+    } else if (type === 'NUMBER') {
+      apiValues = {
+        valueType: 'NUMBER',
+        value: typeof value === 'number' ? value : parseFloat(value),
+      };
+    } else if (type === 'BOOLEAN') {
+      apiValues = {
+        valueType: 'BOOLEAN',
+        value: value === 'true' || value === true,
+      };
+    } else if (type === 'DATE') {
+      apiValues = {
+        valueType: 'DATE',
+        value: value instanceof Date ? value.toISOString() : value,
+      };
+    } else if (type === 'LINK') {
+      apiValues = {
+        valueType: 'LINK',
+        values: [value],
+      };
+    } else {
+      console.error('Unsupported property type:', type);
+      return;
+    }
+
+    props.onSave(apiValues);
   };
 
   return (
@@ -476,7 +596,7 @@ function SelectPropertyEditor(props: {
   props.setKeybindings({
     select: () => {
       const selected = filteredOptions()[props.selectedIndex()];
-      props.onSubmit(selected.value.value.toString());
+      props.onSubmit(selected.id);
     },
     next: () => {
       const len = filteredOptions().length;
