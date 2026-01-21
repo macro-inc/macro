@@ -595,7 +595,8 @@ export function PopupPreview(props: {
                             <EntityIcon
                               size="md"
                               targetType={
-                                accessibleItem().channelType === 'direct_message'
+                                accessibleItem().channelType ===
+                                'direct_message'
                                   ? 'directMessage'
                                   : accessibleItem().channelType ===
                                       'organization'
