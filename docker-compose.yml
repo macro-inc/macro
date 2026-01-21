@@ -55,6 +55,7 @@ services:
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
       - MACRO_API_TOKEN_EXPIRY_SECONDS=${MACRO_API_TOKEN_EXPIRY_SECONDS}
+      - RUST_LOG=${RUST_LOG}
     networks:
       - services
     healthcheck:
@@ -98,6 +99,7 @@ services:
       - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
       - INTERNAL_API_SECRET_KEY=local
       - DOCUMENT_PERMISSION_JWT_SECRET_KEY=${DOCUMENT_PERMISSION_JWT_SECRET_KEY}
+      - RUST_LOG=${RUST_LOG}
     depends_on:
       - authentication_service
       - connection_gateway
@@ -137,6 +139,7 @@ services:
       - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
+      - RUST_LOG=${RUST_LOG}
     depends_on:
       - redis
     networks:
@@ -170,13 +173,13 @@ services:
       - AWS_REGION=us-east-1
       - ENVIRONMENT=local
       - AUDIENCE=${AUDIENCE}
-      - CONNECTION_GATEWAY_TABLE=${CONNECTION_GATEWAY_TABLE}
       - ISSUER=${ISSUER}
       - MACRO_DB_URL=${MACRODB_URL}
       - INTERNAL_API_SECRET_KEY=local
       - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
+      - RUST_LOG=${RUST_LOG}
     networks:
       - services
     healthcheck:
@@ -208,6 +211,7 @@ services:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_REGION=us-east-1
+      - RUST_LOG=${RUST_LOG}
     networks:
       - services
     healthcheck:
@@ -221,44 +225,56 @@ services:
   # document_cognition_service (Port 8085)
   # Document analysis and processing
   # ============================================================================
-  # document_cognition_service:
-  #   build:
-  #     context: ./rust/cloud-storage
-  #     dockerfile: Dockerfile
-  #     args:
-  #       SERVICE_NAME: document_cognition_service
-  #   ports:
-  #     - "8085:8080"
-  #   environment:
-  #     - PORT=8080
-  #     - DATABASE_URL=${MACRODB_URL}
-  #     - DOCUMENT_STORAGE_BUCKET=${DOCUMENT_COGNITION_SERVICE_DOCUMENT_STORAGE_BUCKET}
-  #     - DOCUMENT_TEXT_EXTRACTOR_QUEUE=${DOCUMENT_COGNITION_SERVICE_DOCUMENT_TEXT_EXTRACTOR_QUEUE}
-  #     - CHAT_DELETE_QUEUE=${DOCUMENT_COGNITION_SERVICE_CHAT_DELETE_QUEUE}
-  #     - NOTIFICATION_QUEUE=${DOCUMENT_COGNITION_SERVICE_NOTIFICATION_QUEUE}
-  #     - DOCUMENT_STORAGE_SERVICE_URL=http://document_storage_service:8080
-  #     - COMMS_SERVICE_URL=http://comms_service:8080
-  #     - SEARCH_EVENT_QUEUE=${DOCUMENT_COGNITION_SERVICE_SEARCH_EVENT_QUEUE}
-  #     - SYNC_SERVICE_URL=${DOCUMENT_COGNITION_SERVICE_SYNC_SERVICE_URL}
-  #     - SYNC_SERVICE_AUTH_KEY=${DOCUMENT_COGNITION_SERVICE_SYNC_SERVICE_AUTH_KEY}
-  #     - SEARCH_SERVICE_URL=http://search_service:8080
-  #     - LEXICAL_SERVICE_URL=${DOCUMENT_COGNITION_SERVICE_LEXICAL_SERVICE_URL}
-  #     - EMAIL_SERVICE_URL=http://email_service:8080
-  #     - STATIC_FILE_SERVICE_URL=http://static_file_service:8080
-  #   depends_on:
-  #     - comms_service
-  #     - document_storage_service
-  #     - search_service
-  #     - email_service
-  #     - static_file_service
-  #   networks:
-  #     - services
-  #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
-  #     start_period: 40s
+  document_cognition_service:
+    build:
+      context: ./rust/cloud-storage
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: document_cognition_service
+    ports:
+      - "8085:8080"
+    environment:
+      - PORT=8080
+      - DATABASE_URL=${MACRODB_URL}
+      - DOCUMENT_STORAGE_BUCKET=${DOCUMENT_STORAGE_BUCKET}
+      - DOCUMENT_TEXT_EXTRACTOR_QUEUE=${DOCUMENT_TEXT_EXTRACTOR_QUEUE}
+      - CHAT_DELETE_QUEUE=${CHAT_DELETE_QUEUE}
+      - NOTIFICATION_QUEUE=${NOTIFICATION_QUEUE}
+      - DOCUMENT_STORAGE_SERVICE_URL=http://document_storage_service:8080
+      - COMMS_SERVICE_URL=http://comms_service:8080
+      - SEARCH_EVENT_QUEUE=${SEARCH_EVENT_QUEUE}
+      - SYNC_SERVICE_URL=${SYNC_SERVICE_URL}
+      - SYNC_SERVICE_AUTH_KEY=${SYNC_SERVICE_AUTH_KEY}
+      - SEARCH_SERVICE_URL=http://search_service:8080
+      - LEXICAL_SERVICE_URL=${LEXICAL_SERVICE_URL}
+      - EMAIL_SERVICE_URL=http://email_service:8080
+      - STATIC_FILE_SERVICE_URL=http://static_file_service:8080
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=us-east-1
+      - ENVIRONMENT=local
+      - AUDIENCE=${AUDIENCE}
+      - ISSUER=${ISSUER}
+      - MACRO_DB_URL=${MACRODB_URL}
+      - INTERNAL_API_SECRET_KEY=local
+      - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
+      - RUST_LOG=${RUST_LOG}
+    depends_on:
+      - comms_service
+      - document_storage_service
+      - search_service
+      - email_service
+      - static_file_service
+    networks:
+      - services
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   # ============================================================================
   # document_storage_service (Port 8086)
@@ -308,8 +324,11 @@ services:
       - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
+      - RUST_LOG=${RUST_LOG}
     depends_on:
       - redis
+      - connection_gateway
+      - authentication_service
     networks:
       - services
       - databases
@@ -362,13 +381,13 @@ services:
       - AWS_REGION=us-east-1
       - ENVIRONMENT=local
       - AUDIENCE=${AUDIENCE}
-      - CONNECTION_GATEWAY_TABLE=${CONNECTION_GATEWAY_TABLE}
       - ISSUER=${ISSUER}
       - MACRO_DB_URL=${MACRODB_URL}
       - INTERNAL_API_SECRET_KEY=local
       - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
+      - RUST_LOG=${RUST_LOG}
     depends_on:
       - authentication_service
       - document_storage_service
@@ -405,14 +424,13 @@ services:
       - AWS_REGION=us-east-1
       - ENVIRONMENT=local
       - AUDIENCE=${AUDIENCE}
-      - CONNECTION_GATEWAY_TABLE=${CONNECTION_GATEWAY_TABLE}
       - ISSUER=${ISSUER}
       - MACRO_DB_URL=${MACRODB_URL}
       - INTERNAL_API_SECRET_KEY=local
       - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
-
+      - RUST_LOG=${RUST_LOG}
     networks:
       - services
     healthcheck:
@@ -422,45 +440,62 @@ services:
       retries: 3
       start_period: 40s
 
-  # # ============================================================================
-  # # notification_service (Port 8089)
-  # # User notifications - NotificationDB (note: internal port 8079)
-  # # ============================================================================
-  # notification_service:
-  #   build:
-  #     context: ./rust/cloud-storage
-  #     dockerfile: Dockerfile
-  #     args:
-  #       SERVICE_NAME: notification_service
-  #   ports:
-  #     - "8089:8079"
-  #   environment:
-  #     - PORT=8079
-  #     - BASE_URL=${NOTIFICATION_SERVICE_BASE_URL}
-  #     - DATABASE_URL=${NOTIFICATIONDB_URL}
-  #     - INTERNAL_API_SECRET_KEY=${NOTIFICATION_SERVICE_INTERNAL_API_SECRET_KEY}
-  #     - NOTIFICATION_QUEUE=${NOTIFICATION_SERVICE_NOTIFICATION_QUEUE}
-  #     - DOCUMENT_COGNITION_SERVICE_URL=http://document_cognition_service:8080
-  #     - CONNECTION_GATEWAY_URL=http://connection_gateway:8080
-  #     - SNS_APNS_PLATFORM_ARN=${NOTIFICATION_SERVICE_SNS_APNS_PLATFORM_ARN}
-  #     - SNS_FCM_PLATFORM_ARN=${NOTIFICATION_SERVICE_SNS_FCM_PLATFORM_ARN}
-  #     - SENDER_BASE_ADDRESS=${NOTIFICATION_SERVICE_SENDER_BASE_ADDRESS}
-  #     - APPLE_BUNDLE_ID=${NOTIFICATION_SERVICE_APPLE_BUNDLE_ID}
-  #     - PUSH_NOTIFICATION_EVENT_HANDLER_QUEUE=${NOTIFICATION_SERVICE_PUSH_NOTIFICATION_EVENT_HANDLER_QUEUE}
-  #     - REDIS_URI=${NOTIFICATION_SERVICE_REDIS_URI}
-  #     - AUTHENTICATION_SERVICE_SECRET_KEY=${NOTIFICATION_SERVICE_AUTHENTICATION_SERVICE_SECRET_KEY}
-  #     - AUTHENTICATION_SERVICE_URL=http://authentication_service:8080
-  #   depends_on:
-  #     - authentication_service
-  #     - connection_gateway
-  #   networks:
-  #     - services
-  #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://localhost:8079/health"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
-  #     start_period: 40s
+  # ============================================================================
+  # notification_service (Port 8089)
+  # User notifications - NotificationDB (note: internal port 8079)
+  # ============================================================================
+  notification_service:
+    build:
+      context: ./rust/cloud-storage
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: notification_service
+    ports:
+      - "8089:8079"
+    environment:
+      - PORT=8079
+      - BASE_URL=http://localhost:8080
+      - DATABASE_URL=${NOTIFICATION_DB_URL}
+      - NOTIFICATION_URL=http://localhost:8080
+      - INTERNAL_API_SECRET_KEY=${INTERNAL_API_SECRET_KEY}
+      - NOTIFICATION_QUEUE=${NOTIFICATION_QUEUE}
+      - DOCUMENT_COGNITION_SERVICE_URL=http://document_cognition_service:8080
+      - DOCUMENT_STORAGE_SERVICE_URL=http://document_storage_service:8080
+      - CONNECTION_GATEWAY_URL=http://connection_gateway:8080
+      - SNS_APNS_PLATFORM_ARN=${SNS_APNS_PLATFORM_ARN}
+      - SNS_FCM_PLATFORM_ARN=${SNS_FCM_PLATFORM_ARN}
+      - SENDER_BASE_ADDRESS=${SENDER_BASE_ADDRESS}
+      - APPLE_BUNDLE_ID=${APPLE_BUNDLE_ID}
+      - PUSH_NOTIFICATION_EVENT_HANDLER_QUEUE=${PUSH_NOTIFICATION_EVENT_HANDLER_QUEUE}
+      - REDIS_URI=redis://redis:6379
+      - AUTHENTICATION_SERVICE_SECRET_KEY=local
+      - AUTHENTICATION_SERVICE_URL=http://authentication_service:8080
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=us-east-1
+      - ENVIRONMENT=local
+      - AUDIENCE=${AUDIENCE}
+      - ISSUER=${ISSUER}
+      - MACRO_DB_URL=${MACRODB_URL}
+      - INTERNAL_API_SECRET_KEY=local
+      - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
+      - RUST_LOG=${RUST_LOG}
+    depends_on:
+      - redis
+      - document_cognition_service
+      - authentication_service
+      - connection_gateway
+      - document_storage_service
+    networks:
+      - services
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8079/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   # ============================================================================
   # organization_service (Port 8090)
@@ -478,22 +513,19 @@ services:
       - PORT=8080
       - DATABASE_URL=${MACRODB_URL}
       - REDIS_URI=redis://redis:6379
-      - DSS_URL=http://document_storage_service:8080
       - INVITE_EMAIL=invite-local@macro.com
-      - AUTH_URL=bogus
-      - AUTH_INTERNAL_AUTH_SECRET_KEY=local
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_REGION=us-east-1
       - ENVIRONMENT=local
       - AUDIENCE=${AUDIENCE}
-      - CONNECTION_GATEWAY_TABLE=${CONNECTION_GATEWAY_TABLE}
       - ISSUER=${ISSUER}
       - MACRO_DB_URL=${MACRODB_URL}
       - INTERNAL_API_SECRET_KEY=local
       - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
+      - RUST_LOG=${RUST_LOG}
     depends_on:
       - redis
     networks:
@@ -532,6 +564,7 @@ services:
       - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
+      - RUST_LOG=${RUST_LOG}
     depends_on:
       - comms_service
     networks:
@@ -543,41 +576,47 @@ services:
       retries: 3
       start_period: 40s
 
-  # # ============================================================================
-  # # search_processing_service (Port 8092)
-  # # Search indexing worker
-  # # ============================================================================
-  # search_processing_service:
-  #   build:
-  #     context: ./rust/cloud-storage
-  #     dockerfile: Dockerfile
-  #     args:
-  #       SERVICE_NAME: search_processing_service
-  #   ports:
-  #     - "8092:8080"
-  #   environment:
-  #     - PORT=8080
-  #     - DATABASE_URL=${MACRODB_URL}
-  #     - SEARCH_EVENT_QUEUE=${SEARCH_PROCESSING_SERVICE_SEARCH_EVENT_QUEUE}
-  #     - OPENSEARCH_URL=${SEARCH_PROCESSING_SERVICE_OPENSEARCH_URL}
-  #     - OPENSEARCH_USERNAME=${SEARCH_PROCESSING_SERVICE_OPENSEARCH_USERNAME}
-  #     - OPENSEARCH_PASSWORD=${SEARCH_PROCESSING_SERVICE_OPENSEARCH_PASSWORD}
-  #     - DOCUMENT_STORAGE_BUCKET=${SEARCH_PROCESSING_SERVICE_DOCUMENT_STORAGE_BUCKET}
-  #     - SYNC_SERVICE_AUTH_KEY=${SEARCH_PROCESSING_SERVICE_SYNC_SERVICE_AUTH_KEY}
-  #     - EMAIL_SERVICE_URL=http://email_service:8080
-  #     - COMMS_SERVICE_URL=http://comms_service:8080
-  #     - LEXICAL_SERVICE_URL=${SEARCH_PROCESSING_SERVICE_LEXICAL_SERVICE_URL}
-  #   depends_on:
-  #     - email_service
-  #     - comms_service
-  #   networks:
-  #     - services
-  #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
-  #     start_period: 40s
+  # ============================================================================
+  # search_processing_service (Port 8092)
+  # Search indexing worker
+  # ============================================================================
+  search_processing_service:
+    build:
+      context: ./rust/cloud-storage
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: search_processing_service
+    ports:
+      - "8092:8080"
+    environment:
+      - PORT=8080
+      - DATABASE_URL=${MACRODB_URL}
+      - SEARCH_EVENT_QUEUE=${SEARCH_EVENT_QUEUE}
+      - OPENSEARCH_URL=${OPENSEARCH_URL}
+      - OPENSEARCH_USERNAME=${OPENSEARCH_USERNAME}
+      - OPENSEARCH_PASSWORD=${OPENSEARCH_PASSWORD}
+      - DOCUMENT_STORAGE_BUCKET=${DOCUMENT_STORAGE_BUCKET}
+      - SYNC_SERVICE_AUTH_KEY=${SYNC_SERVICE_AUTH_KEY}
+      - EMAIL_SERVICE_URL=http://email_service:8080
+      - COMMS_SERVICE_URL=http://comms_service:8080
+      - LEXICAL_SERVICE_URL=${LEXICAL_SERVICE_URL}
+      - INTERNAL_API_SECRET_KEY=local
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=us-east-1
+      - ENVIRONMENT=local
+      - RUST_LOG=${RUST_LOG}
+    depends_on:
+      - email_service
+      - comms_service
+    networks:
+      - services
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   # ============================================================================
   # search_service (Port 8093)
@@ -610,7 +649,7 @@ services:
       - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
-      - RUST_LOG=search_service=trace,email_service_client=trace,document_storage_service_client=trace
+      - RUST_LOG=${RUST_LOG}
     depends_on:
       - comms_service
       - email_service
@@ -652,7 +691,7 @@ services:
       - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
-
+      - RUST_LOG=${RUST_LOG}
     networks:
       - services
     healthcheck:
@@ -677,6 +716,7 @@ services:
     environment:
       - PORT=8080
       - ENVIRONMENT=local
+      - RUST_LOG=${RUST_LOG}
     networks:
       - services
     healthcheck:
