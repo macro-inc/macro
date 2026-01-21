@@ -416,14 +416,6 @@ export const ApiPaginatedThreadCursor = z.object({
           type: z.enum(['System', 'User']),
         })
       ),
-      macroAttachments: z.array(
-        z.object({
-          dbId: z.string().uuid(),
-          itemId: z.string().uuid(),
-          itemType: z.string(),
-          messageId: z.string().uuid(),
-        })
-      ),
       metadata: z.object({
         calendar_invite: z.boolean(),
         generic_sender: z.boolean(),
