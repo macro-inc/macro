@@ -5,6 +5,7 @@ import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import {
   createMemo,
   createSignal,
+  type JSX,
   onCleanup,
   onMount,
   Show,
@@ -32,6 +33,9 @@ type DateSelectorProps = {
   selectedDate?: Date | null;
   onSelectDate?: (date: Date | null) => void;
   placeholder?: string;
+  trigger?:
+    | JSX.Element
+    | ((props: { selectedDate: Date | null }) => JSX.Element);
 };
 
 export const DateSelector = (props: DateSelectorProps) => {
@@ -179,6 +183,14 @@ export const DateSelector = (props: DateSelectorProps) => {
       .includes(input.toLocaleLowerCase());
   };
 
+  const selectedDate = () => {
+    const option = selectedOption();
+
+    if (!option || option.type === 'select-custom') return null;
+
+    return option.date;
+  };
+
   return (
     <Combobox<DateSelectorOption>
       open={props.open}
@@ -239,8 +251,12 @@ export const DateSelector = (props: DateSelectorProps) => {
         );
       }}
     >
-      <Combobox.Control>
-        <Combobox.Trigger>Open</Combobox.Trigger>
+      <Combobox.Control<DateSelectorOption>>
+        <Combobox.Trigger as="div">
+          {typeof props.trigger === 'function'
+            ? props.trigger({ selectedDate: selectedDate() })
+            : props.trigger}
+        </Combobox.Trigger>
       </Combobox.Control>
 
       <Combobox.Portal>
