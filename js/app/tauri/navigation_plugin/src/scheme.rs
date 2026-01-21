@@ -36,8 +36,8 @@ impl MacroScheme {
         }
         let query = url.query();
         let inner = match query {
-            Some(q) => format!("macro://{rest}?{q}"),
-            None => format!("macro://{rest}"),
+            Some(q) => format!("macro:///{rest}?{q}"),
+            None => format!("macro:///{rest}"),
         }
         .parse::<Url>()?;
         Ok(MacroScheme(inner))
