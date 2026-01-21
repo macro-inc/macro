@@ -3,13 +3,15 @@
  * @param epochDate - Unix timestamp in seconds. The date to format.
  * @param epochNow - Unix timestamp in seconds. An optional reference date.
  * @param timeZone - IANA timezone string (e.g., 'America/New_York', 'UTC'). Defaults to system timezone.
+ * @param showTime - If true, always include time in the output (e.g., 'Thursday at 4:53 PM' instead of 'Thursday').
  * @returns Formatted date string. Like '4:53 PM' for same local day or, 'Yesterday at 8:10 AM' for
  *     single day offsets, 'Thursday' for a day within the week and '01/23/2025' for dates outside the week.
  */
 export const formatDate = (
   epochDate: number,
   epochNow?: number,
-  timeZone?: string
+  timeZone?: string,
+  showTime?: boolean
 ) => {
   // handle computation in different timezones
   const getDatePartsInTimezone = (date: Date, tz?: string) => {
@@ -75,18 +77,20 @@ export const formatDate = (
   const diffMs = now.getTime() - inputDate.getTime();
   const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
   if (days < 7) {
-    return inputDate.toLocaleDateString(undefined, {
+    const weekday = inputDate.toLocaleDateString(undefined, {
       weekday: 'long',
       timeZone,
     });
+    return showTime ? `${weekday} at ${time}` : weekday;
   }
 
-  return inputDate.toLocaleDateString(undefined, {
+  const date = inputDate.toLocaleDateString(undefined, {
     month: '2-digit',
     day: '2-digit',
     year: '2-digit',
     timeZone,
   });
+  return showTime ? `${date} at ${time}` : date;
 };
 
 /**

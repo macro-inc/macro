@@ -35,6 +35,7 @@ export type MessageRootProps = {
   isFirstMessage: boolean;
   isLastMessage: boolean;
   isConsecutive?: boolean;
+  timestamp?: string;
   hoverActions?: JSX.Element;
   shouldHover?: boolean;
   threadDepth?: number;
@@ -111,40 +112,32 @@ const TopBar: Component<MessageTopBarProps> = (props) => {
     'tagIcon',
   ]);
   return (
-    <>
-      {/* Hover date for consecutive messages */}
-      <Show when={context.isConsecutive && local.timestamp && context.hover()}>
-        <div class="absolute left-0 -translate-x-full pr-2 text-xs text-ink-muted whitespace-nowrap font-mono">
-          {formatDate(new Date(local.timestamp!).getTime() / 1000)}
+    <Show when={!context.isConsecutive}>
+      <div class="font-mono flex flex-row items-center justify-between">
+        {/*  Name */}
+        <div class="shrink-1 min-w-0 text-sm touch:mobile-width:text-base truncate text-ink-muted">
+          {local.name}
         </div>
-      </Show>
-      <Show when={!context.isConsecutive}>
-        <div class="font-mono flex flex-row items-center justify-between">
-          {/*  Name */}
-          <div class="shrink-1 min-w-0 text-sm touch:mobile-width:text-base truncate text-ink-muted">
-            {local.name}
+        {/* Tag */}
+        <Show when={local.tagLabel}>
+          <div class="inline-flex items-center ml-2 px-0.5 text-xs touch:mobile-width:text-sm bg-edge/15 text-ink border-1 border-edge/30 max-w-[240px] min-w-0">
+            <div class="flex-shrink-0 px-0.5">
+              <Show when={local.tagIcon}>
+                <CustomEntityIcon icon={local.tagIcon!} size="xs" />
+              </Show>
+            </div>
+            <span class="truncate">{local.tagLabel}</span>
           </div>
-          {/* Tag */}
-          <Show when={local.tagLabel}>
-            <div class="inline-flex items-center ml-2 px-0.5 text-xs touch:mobile-width:text-sm bg-edge/15 text-ink border-1 border-edge/30 max-w-[240px] min-w-0">
-              <div class="flex-shrink-0 px-0.5">
-                <Show when={local.tagIcon}>
-                  <CustomEntityIcon icon={local.tagIcon!} size="xs" />
-                </Show>
-              </div>
-              <span class="truncate">{local.tagLabel}</span>
-            </div>
-          </Show>
-          {/* Date */}
-          <Show when={local.timestamp}>
-            <div class="text-xs touch:mobile-width:text-sm text-ink-muted">
-              {local.timestamp &&
-                formatDate(new Date(local.timestamp).getTime() / 1000)}
-            </div>
-          </Show>
-        </div>
-      </Show>
-    </>
+        </Show>
+        {/* Date - hidden when hovering since it shows above hover actions */}
+        <Show when={local.timestamp && !context.hover()}>
+          <div class="text-xs touch:mobile-width:text-sm text-ink-muted">
+            {local.timestamp &&
+              formatDate(new Date(local.timestamp).getTime() / 1000)}
+          </div>
+        </Show>
+      </div>
+    </Show>
   );
 };
 
@@ -341,7 +334,7 @@ const Root: Component<MessageRootProps> = (props) => {
         </BozzyBracket>
         <Show when={props.hoverActions && !isTouchDevice()}>
           <div
-            class="absolute right-2 -top-2 border border-edge bg-panel"
+            class="absolute right-0 -top-2 flex flex-col items-end z-tool-tip"
             classList={{
               block: hover() || !!props.shouldHover,
               hidden: !(hover() || !!props.shouldHover),
@@ -349,7 +342,17 @@ const Root: Component<MessageRootProps> = (props) => {
             onMouseEnter={() => setHover(true)}
             onMouseLeave={() => setHover(false)}
           >
-            {props.hoverActions}
+            <Show when={props.timestamp}>
+              <div class="absolute top-0 translate-y-[-100%] bg-panel pl-2 pt-2 text-xs text-ink-muted font-mono mb-0.5 select-text cursor-default">
+                {formatDate(
+                  new Date(props.timestamp!).getTime() / 1000,
+                  undefined,
+                  undefined,
+                  true
+                )}
+              </div>
+            </Show>
+            <div class="border border-edge bg-panel">{props.hoverActions}</div>
           </div>
         </Show>
         <Show when={props.isLastInThread}>
