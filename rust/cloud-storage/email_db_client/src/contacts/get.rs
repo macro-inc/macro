@@ -302,7 +302,7 @@ where
 }
 
 /// Fetches sender contacts for multiple messages and returns a map keyed by message_id
-#[tracing::instrument(skip(executor))]
+#[tracing::instrument(skip(executor), err)]
 pub async fn fetch_senders_by_message_ids<'e, E>(
     executor: E,
     message_ids: &[Uuid],

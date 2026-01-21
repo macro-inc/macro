@@ -158,7 +158,7 @@ pub async fn insert_attachments(
 }
 
 /// Fetches attachments for multiple messages and returns a map keyed by message_id
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(pool), err)]
 pub async fn fetch_db_attachments_in_bulk(
     pool: &PgPool,
     message_ids: &[Uuid],
