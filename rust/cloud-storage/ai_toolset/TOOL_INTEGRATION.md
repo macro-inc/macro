@@ -1,4 +1,3 @@
-
 A tool depends on dependencies that are injected via context. Dependencies
 are usually things like connections to services, and databases. 
 
