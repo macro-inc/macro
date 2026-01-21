@@ -1,3 +1,4 @@
+import { match } from 'ts-pattern';
 import { SUPPORTED_CHAT_ATTACHMENT_BLOCKS } from '@core/component/AI/constant';
 import type { Attachment, Attachments } from '@core/component/AI/types';
 import { asFileType } from '@core/component/AI/util';
@@ -5,6 +6,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { EntityDragEvent } from '@macro-entity';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
+import type { AttachmentType } from '@service-cognition/generated/schemas';
 
 /**
  * Hook to handle entity drag-and-drop for chat attachments.
@@ -45,54 +47,59 @@ export function useEntityDropAttachment(
     }
 
     // Build the attachment based on entity type
-    let attachment: Attachment | undefined;
-    if (entityType === 'document') {
-      const validFileType = asFileType(fileType);
-      if (!validFileType) return;
-      attachment = {
-        id: `${entityId}-document-attachment`,
-        attachmentId: entityId,
-        attachmentType: 'document',
-        metadata: {
-          type: 'document',
-          document_type: validFileType,
-          document_name: entityName,
-        },
-      };
-    } else if (entityType === 'project') {
-      attachment = {
-        id: `${entityId}-project-attachment`,
-        attachmentId: entityId,
-        attachmentType: 'project',
-        metadata: {
-          type: 'project',
-          project_name: entityName,
-        },
-      };
-    } else if (entityType === 'channel') {
-      const channelType =
-        'channelType' in data ? data.channelType : 'organization';
-      attachment = {
-        id: `${entityId}-channel-attachment`,
-        attachmentId: entityId,
-        attachmentType: 'channel',
-        metadata: {
-          type: 'channel',
-          channel_type: channelType,
-          channel_name: entityName,
-        },
-      };
-    } else if (entityType === 'email') {
-      attachment = {
-        id: `${entityId}-email-attachment`,
-        attachmentId: entityId,
-        attachmentType: 'email',
-        metadata: {
-          type: 'email',
-          email_subject: entityName,
-        },
-      };
-    }
+    const attachment = match(entityType)
+      .with('document', () => {
+        const validFileType = asFileType(fileType);
+        if (!validFileType) return;
+        return {
+          id: `${entityId}-document-attachment`,
+          attachmentId: entityId,
+          attachmentType: 'document' satisfies AttachmentType,
+          metadata: {
+            type: 'document',
+            document_type: validFileType,
+            document_name: entityName,
+          },
+        } satisfies Attachment;
+      })
+      .with('project', () => {
+        return {
+          id: `${entityId}-project-attachment`,
+          attachmentId: entityId,
+          attachmentType: 'project' satisfies AttachmentType,
+          metadata: {
+            type: 'project',
+            project_name: entityName,
+          },
+        } satisfies Attachment;
+      })
+      .with('channel', () => {
+        const channelType =
+          'channelType' in data ? data.channelType : 'organization';
+        return {
+          id: `${entityId}-channel-attachment`,
+          attachmentId: entityId,
+          attachmentType: 'channel' satisfies AttachmentType,
+          metadata: {
+            type: 'channel',
+            channel_type: channelType,
+            channel_name: entityName,
+          },
+        } satisfies Attachment;
+      })
+      .with('email', () => {
+        return {
+          id: `${entityId}-email-attachment`,
+          attachmentId: entityId,
+          attachmentType: 'email' satisfies AttachmentType,
+          metadata: {
+            type: 'email',
+            email_subject: entityName,
+          },
+        } satisfies Attachment;
+      })
+      .with('chat', () => undefined)
+      .exhaustive() satisfies Attachment | undefined;
 
     if (attachment) {
       attachments.addAttachment(attachment);
