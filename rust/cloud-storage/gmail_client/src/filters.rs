@@ -181,16 +181,16 @@ pub(crate) async fn find_block_filter_for_sender(
     let filters = list_filters(client, access_token).await?;
 
     let block_filter = filters.into_iter().find(|f| {
-        if let Some(from) = &f.criteria.from {
-            if from.eq_ignore_ascii_case(email_address) {
-                // Check if add_label_ids contains TRASH
-                return f
-                    .action
-                    .add_label_ids
-                    .as_ref()
-                    .map(|labels| labels.contains(&"TRASH".to_string()))
-                    .unwrap_or(false);
-            }
+        if let Some(from) = &f.criteria.from
+            && from.eq_ignore_ascii_case(email_address)
+        {
+            // Check if add_label_ids contains TRASH
+            return f
+                .action
+                .add_label_ids
+                .as_ref()
+                .map(|labels| labels.contains(&"TRASH".to_string()))
+                .unwrap_or(false);
         }
         false
     });
@@ -206,11 +206,11 @@ pub(crate) async fn unblock_sender(
     access_token: &str,
     email_address: &str,
 ) -> Result<bool, GmailError> {
-    if let Some(filter) = find_block_filter_for_sender(client, access_token, email_address).await? {
-        if let Some(filter_id) = filter.id {
-            delete_filter(client, access_token, &filter_id).await?;
-            return Ok(true);
-        }
+    if let Some(filter) = find_block_filter_for_sender(client, access_token, email_address).await?
+        && let Some(filter_id) = filter.id
+    {
+        delete_filter(client, access_token, &filter_id).await?;
+        return Ok(true);
     }
     Ok(false)
 }
