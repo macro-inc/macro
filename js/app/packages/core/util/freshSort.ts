@@ -6,6 +6,10 @@ import type { FilterResult } from 'fuzzy';
 import fuzzy from 'fuzzy';
 import { fuzzyScoreCommaSpaceSeparated } from './fuzzy';
 
+// we need a max score so that boosts work as fuzzy library defaults to Infinity for exact matches
+// see: https://github.com/mattyork/fuzzy/blob/master/lib/fuzzy.js#L75
+const MAX_FUZZY_SCORE = 1e5;
+
 export interface FreshSortConfig {
   /** Weight for fuzzy match (0-1). Higher values prioritize search relevance. Default: 0.7 */
   fuzzyWeight?: number;
@@ -126,7 +130,8 @@ function normalizeFuzzyScore(
   fuzzyScore: number,
   maxPossibleScore: number = 1
 ): number {
-  return Math.max(0, Math.min(1, fuzzyScore / maxPossibleScore));
+  let score = fuzzyScore === Infinity ? MAX_FUZZY_SCORE : fuzzyScore;
+  return Math.max(0, Math.min(1, score / maxPossibleScore));
 }
 
 function calculateBrevityScore(text: string): number {
