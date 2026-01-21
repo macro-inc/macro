@@ -213,11 +213,20 @@ export function EmailCompose(props: EmailComposeProps) {
       return;
     }
 
-    const draftResponse = await saveEmailDraft({
-      ...draftToSave,
-      db_id: currentDraftID(),
-      link_id: linkID,
-    });
+    const existingDraft = currentDraftID() !== undefined;
+
+    // If there's an existing draft, we should send the sendTime so that the send time
+    // stays up to date and is not removed
+    const sendTime = existingDraft ? form.sendTime()?.toISOString() : undefined;
+
+    const draftResponse = await saveEmailDraft(
+      {
+        ...draftToSave,
+        db_id: currentDraftID(),
+        link_id: linkID,
+      },
+      sendTime
+    );
 
     if (draftResponse) {
       // If the email draft saved successfully, we want to upload the
