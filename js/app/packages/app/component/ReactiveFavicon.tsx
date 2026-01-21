@@ -29,11 +29,14 @@ export function ReactiveFavicon() {
     }
   });
 
-  const { l: accentLightness, c: accentChroma, h: accentHue } = themeReactive.a0;
+  const {
+    l: accentLightness,
+    c: accentChroma,
+    h: accentHue,
+  } = themeReactive.a0;
   const { l: badgeLightness, c: badgeChroma, h: badgeHue } = themeReactive.a1;
 
   createEffect(() => {
-    
     const accentColor = `oklch(${accentLightness[0]()} ${accentChroma[0]()} ${accentHue[0]()}deg)`;
     const badgeColor = `oklch(${badgeLightness[0]()} ${badgeChroma[0]()} ${badgeHue[0]()}deg)`;
 

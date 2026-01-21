@@ -17,9 +17,16 @@ export function getFaviconUrl(themeColor: string): string {
 }
 
 /** updates the favicon with the current accent color */
-export function updateFavicon(faviconColor: string, badgeColor?: string, hasBadge?: boolean): void {
+export function updateFavicon(
+  faviconColor: string,
+  badgeColor?: string,
+  hasBadge?: boolean
+): void {
   if (!faviconColor || typeof faviconColor !== 'string') {
-    console.warn('Invalid theme color provided to updateFavicon:', faviconColor);
+    console.warn(
+      'Invalid theme color provided to updateFavicon:',
+      faviconColor
+    );
     return;
   }
 
@@ -42,7 +49,10 @@ export function updateFavicon(faviconColor: string, badgeColor?: string, hasBadg
   let svgString = decodeURIComponent(
     (hasBadge ? FaviconBadgeURL : FaviconURL).replace('data:image/svg+xml,', '')
   );
-  svgString = svgString.replace(/currentColor/g, escapeColorForSvg(faviconColor));
+  svgString = svgString.replace(
+    /currentColor/g,
+    escapeColorForSvg(faviconColor)
+  );
   const processedUrl = `data:image/svg+xml,${encodeURIComponent(svgString)}`;
   img.src = processedUrl;
 
@@ -60,7 +70,7 @@ export function updateFavicon(faviconColor: string, badgeColor?: string, hasBadg
         0,
         2 * Math.PI
       );
-      const {l, c, h} = getOklch(badgeColor || faviconColor)
+      const { l, c, h } = getOklch(badgeColor || faviconColor);
       ctx.fillStyle = `oklch(${l} ${c} ${h})`;
       ctx.fill();
     }
