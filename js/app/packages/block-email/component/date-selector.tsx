@@ -92,14 +92,6 @@ export const DateSelector = (props: DateSelectorProps) => {
     }
   };
 
-  onMount(() => {
-    document.addEventListener('keydown', handleKeyDown);
-  });
-
-  onCleanup(() => {
-    document.removeEventListener('keydown', handleKeyDown);
-  });
-
   useSearchInputFocus(
     () => searchInputRef(),
     () => true
@@ -265,7 +257,10 @@ export const DateSelector = (props: DateSelectorProps) => {
       </Show>
 
       <Combobox.Portal>
-        <Combobox.Content class="w-full max-w-sm bg-dialog text-ink border border-edge-muted">
+        <Combobox.Content
+          class="w-full max-w-sm bg-dialog text-ink border border-edge-muted"
+          on:keydown={handleKeyDown}
+        >
           <WithCustomDateMode
             selectedDate={selectedDate()}
             mode={mode()}
