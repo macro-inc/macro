@@ -61,3 +61,12 @@ export function convertOklchTo(l: number, c: number, h: number, type: string){
     return '#000000';
   }
 }
+
+/* Get CSS color variable as specific format */
+export function getCSSColorAs(cssColor: string, type: string){
+  // Fetch from CSS stylesheet
+  const rootStyles = getComputedStyle(document.documentElement);
+  const color = rootStyles.getPropertyValue(cssColor).trim();
+  const oklch = getOklch(color);
+  return convertOklchTo(oklch.l, oklch.c, oklch.h, type);
+}

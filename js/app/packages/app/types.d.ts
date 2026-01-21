@@ -3,3 +3,8 @@ declare module '*.svg' {
   const c: Component<ComponentProps<'svg'>>;
   export default c;
 }
+
+declare module '*.svg?url' {
+  const content: string;
+  export default content;
+}
