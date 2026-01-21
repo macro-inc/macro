@@ -102,6 +102,7 @@ import {
 import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
 import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
 import { plural } from '@core/util/string';
+import { EmailDateSelector } from '@block-email/component/email-date-selector';
 
 false && fileFolderDrop;
 false && fileSelector;
@@ -1241,6 +1242,10 @@ export function BaseInput(props: {
                 </div>
               </KToggleButton>
             </Tooltip>
+            <EmailDateSelector
+              sendTime={form().sendTime() ?? null}
+              onSendTimeChange={form().setSendTime}
+            />
             <Show when={savedDraftId()}>
               <Button
                 onclick={deleteDraftAndReset}

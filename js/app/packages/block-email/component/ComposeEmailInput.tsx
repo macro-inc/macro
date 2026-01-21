@@ -40,6 +40,7 @@ import { DateSelector } from '@block-email/component/date-selector';
 import { format } from 'date-fns/format';
 import { cn } from '@ui/utils/classname';
 import { Tooltip } from '@core/component/Tooltip';
+import { EmailDateSelector } from '@block-email/component/email-date-selector';
 
 false && fileFolderDrop;
 
@@ -310,34 +311,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
               setShowFormatRibbon(!showFormatRibbon());
             }}
           />
-          <DateSelector
-            onSelectDate={props.onSendTimeChange}
-            trigger={(state) => {
-              const formattedDate = () => {
-                if (!state.selectedDate) return;
-                return format(state.selectedDate, "MMMM d, yyyy 'at' h:mm a");
-              };
-              return (
-                <Tooltip
-                  tooltip={
-                    state.selectedDate
-                      ? `Scheduled for ${formattedDate()}`
-                      : 'Schedule this email'
-                  }
-                >
-                  <div
-                    class={cn(
-                      'aspect-square p-1 hover:bg-surface-4 group-data-[expanded]/date-selector-trigger:bg-surface-4',
-                      state.selectedDate &&
-                        'bg-accent/20 text-accent-ink hover:bg-accent/15 group-data-[expanded]/date-selector-trigger:bg-accent/20'
-                    )}
-                  >
-                    <ClockIcon class="size-5" />
-                  </div>
-                </Tooltip>
-              );
-            }}
-          ></DateSelector>
+          <EmailDateSelector onSendTimeChange={props.onSendTimeChange} />
           <Show when={props.hasDraft}>
             <Button
               onclick={props.onDraftDeletePress}
