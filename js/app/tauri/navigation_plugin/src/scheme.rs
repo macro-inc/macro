@@ -21,7 +21,7 @@ impl MacroScheme {
     }
     /// turn a http(s) url into a macro scheme url
     #[tracing::instrument(err, ret)]
-    pub(crate) fn from_url(url: &Url) -> Result<Self, SchemeError> {
+    pub fn from_url(url: &Url) -> Result<Self, SchemeError> {
         let ("http" | "https" | "tauri") = url.scheme() else {
             return Err(SchemeError::InvalidScheme {
                 expected: "http(s) or tauri".to_string(),
