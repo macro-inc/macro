@@ -23,8 +23,7 @@ const devServerSuffix = import.meta.env.MODE === 'development' ? '-dev' : '';
 const serverHostRemote = {
   'auth-service': `https://auth-service${devServerSuffix}.macro.com`,
   'pdf-service': `https://pdf-service${devServerSuffix}.macro.com`,
-  // 'document-storage-service': `https://cloud-storage${devServerSuffix}.macro.com`,
-  'document-storage-service': `http://localhost:8083`,
+  'document-storage-service': `https://cloud-storage${devServerSuffix}.macro.com`,
   'websocket-service': `wss://services${devServerSuffix}.macro.com`,
   'cognition-service': `https://document-cognition${devServerSuffix}.macro.com`,
   'cognition-websocket-service': `wss://document-cognition${devServerSuffix}.macro.com`,
