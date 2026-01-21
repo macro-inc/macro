@@ -508,7 +508,8 @@ export function EmailCompose(props: EmailComposeProps) {
     const sendTime = form.sendTime()?.toISOString();
 
     if (sendTime) {
-      const draftID = currentDraftID() ?? (await executeSaveDraft());
+      // Just in case, always get a fresh save of the draft so we don't miss any information
+      const draftID = await executeSaveDraft();
 
       if (!draftID) {
         console.error('No draft');
