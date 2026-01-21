@@ -151,6 +151,7 @@ export const emailClient = {
       (result) => result
     );
   },
+
   async scheduleMessage(args: { draftID: string } & UpsertScheduledRequest) {
     const { draftID, ...rest } = args;
     return mapOk(
@@ -159,6 +160,18 @@ export const emailClient = {
         {
           method: 'PUT',
           body: JSON.stringify(rest),
+        }
+      ),
+      (result) => result
+    );
+  },
+
+  async unscheduleMessage(args: { draftID: string }) {
+    return mapOk(
+      await emailFetch<EmptyResponse>(
+        `/email/drafts/scheduled/${args.draftID}`,
+        {
+          method: 'DELETE',
         }
       ),
       (result) => result

@@ -367,3 +367,33 @@ export function useScheduleMessageMutation(
     ),
   }));
 }
+
+type UnscheduleMessageParams = { draftID: string };
+
+/**
+ * Mutation to send an email message.
+ */
+export function useUnscheduleMessageMutation(
+  callbacks?: MutationCallbacks<void, Error, UnscheduleMessageParams>
+) {
+  return useMutation(() => ({
+    mutationFn: async (vars: UnscheduleMessageParams) => {
+      await throwOnErr(
+        async () =>
+          await emailClient.unscheduleMessage({
+            draftID: vars.draftID,
+          })
+      );
+    },
+    ...withCallbacks<void, Error, UnscheduleMessageParams>(
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({
+            queryKey: emailKeys.previews._def,
+          });
+        },
+      },
+      callbacks
+    ),
+  }));
+}
