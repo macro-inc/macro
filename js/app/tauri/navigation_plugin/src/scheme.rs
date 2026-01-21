@@ -30,9 +30,9 @@ impl MacroScheme {
         };
 
         let mut rest = url.fragment().unwrap_or(url.path()).trim_start_matches('/');
-        // Strip the '/app' prefix for mobile Tauri apps since the router uses '/' as base
+        // Mobile router uses '/' as base, so strip the 'app/' prefix from universal links
         if rest.starts_with("app/") {
-            rest = &rest[4..]; // Remove "app/" prefix
+            rest = &rest[4..];
         }
         let query = url.query();
         let inner = match query {
