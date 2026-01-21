@@ -1,4 +1,7 @@
-use crate::{map_soup_type, outbound::pg_soup_repo::type_err};
+use crate::{
+    map_soup_type,
+    outbound::pg_soup_repo::{populate_properties, type_err},
+};
 use document_sub_type::DocumentSubType;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_entity::{Entity, EntityType};
@@ -37,7 +40,7 @@ pub async fn expanded_soup_by_ids<'a>(
     let status_property_id = SystemPropertyKey::STATUS_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
-    let items: Vec<SoupItem> = sqlx::query!(
+    let mut items: Vec<SoupItem> = sqlx::query!(
         r#"
         WITH RECURSIVE ProjectHierarchy AS (
             SELECT p.id, uia.access_level 
@@ -180,6 +183,8 @@ pub async fn expanded_soup_by_ids<'a>(
     .try_map(map_soup_type!())
     .fetch_all(db)
     .await?;
+
+    populate_properties(db, &mut items).await?;
 
     Ok(items)
 }

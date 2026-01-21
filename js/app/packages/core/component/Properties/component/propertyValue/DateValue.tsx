@@ -3,6 +3,7 @@ import { createSignal, Show } from 'solid-js';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import { formatDate } from '../../utils';
 import {
+  EmptyValue,
   PropertyValueDeleteButton,
   type PropertyValueProps,
 } from './ValueComponents';
@@ -57,18 +58,14 @@ export const DateValue: Component<PropertyValueProps> = (props) => {
       <button
         onClick={handleClick}
         class={cn(
-          'inline-flex items-center text-xs leading-none text-ink-muted shrink-0 py-1.5 h-6.5 transition-colors border border-edge-muted/50 px-1.5',
+          'inline-flex items-center leading-none shrink-0 py-1.5 h-6.5 transition-colors border border-edge-muted px-1.5',
           {
             'cursor-pointer hover:border-edge-muted hover:bg-hover/50':
               props.canEdit,
-            'opacity-50': !displayValue,
           }
         )}
       >
-        <Show
-          when={displayValue}
-          fallback={<span class="opacity-20">Due Date</span>}
-        >
+        <Show when={displayValue} fallback={<EmptyValue />}>
           <span class="block truncate max-w-full">{displayValue}</span>
         </Show>
       </button>

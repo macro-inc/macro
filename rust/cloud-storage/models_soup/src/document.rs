@@ -1,7 +1,10 @@
 use chrono::Utc;
 use document_sub_type::DocumentSubType;
 use macro_user_id::user_id::MacroUserIdStr;
+use models_properties::EntityType;
 use uuid::Uuid;
+
+use crate::SoupProperty;
 
 /// Sub type of a document with associated properties encoded in each variant.
 /// This ensures type-safety: task properties only exist when the document is a task.
@@ -38,7 +41,6 @@ impl SoupDocumentSubType {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
-#[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct SoupDocument {
@@ -101,4 +103,20 @@ pub struct SoupDocument {
     /// Task-related properties are encoded within the variant.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sub_type: Option<SoupDocumentSubType>,
+
+    /// Properties
+    pub properties: Vec<SoupProperty>,
+}
+
+impl SoupDocument {
+    /// Returns the entity type for this document.
+    ///
+    /// Documents with a `sub_type` of `Task` return `EntityType::Task`,
+    /// otherwise they return `EntityType::Document`.
+    pub fn entity_type(&self) -> EntityType {
+        match &self.sub_type {
+            Some(SoupDocumentSubType::Task { .. }) => EntityType::Task,
+            None => EntityType::Document,
+        }
+    }
 }

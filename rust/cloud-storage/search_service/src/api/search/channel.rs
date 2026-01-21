@@ -3,7 +3,7 @@ use indexmap::IndexMap;
 use std::collections::HashMap;
 
 use crate::api::ApiContext;
-use model::comms::{ChannelHistoryInfo, GetChannelsHistoryRequest};
+use model::comms::ChannelHistoryInfo;
 use models_search::channel::{
     ChannelSearchResponseItem, ChannelSearchResponseItemWithMetadata, ChannelSearchResult,
 };
@@ -29,19 +29,18 @@ pub(in crate::api::search) async fn enrich_channels(
     // Extract channel IDs from results
     let channel_ids: Vec<Uuid> = results.iter().map(|r| r.entity_id).collect();
 
-    // Fetch channel metadata from comms service
-    let channel_histories = ctx
-        .comms_service_client
-        .get_channels_history(GetChannelsHistoryRequest {
-            user_id: user_id.to_string(),
-            channel_ids,
-        })
-        .await
-        .map_err(|e| SearchError::InternalError(e.into()))?;
+    // Fetch channel metadata directly from DB
+    let channel_histories = comms_db_client::activity::get_activity::get_channel_history_info(
+        &ctx.db,
+        user_id,
+        &channel_ids,
+    )
+    .await
+    .map_err(|e| SearchError::InternalError(e.into()))?;
 
     // Construct enriched results
-    let enriched_results = construct_search_result(results, channel_histories.channels_history)
-        .map_err(SearchError::InternalError)?;
+    let enriched_results =
+        construct_search_result(results, channel_histories).map_err(SearchError::InternalError)?;
 
     Ok(enriched_results)
 }

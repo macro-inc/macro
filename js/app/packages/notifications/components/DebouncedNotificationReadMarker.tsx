@@ -2,32 +2,36 @@ import type { Entity } from '@core/types';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { useMarkThreadAsSeenMutation } from '@queries/email/thread';
-import { onCleanup, onMount } from 'solid-js';
+import { onMount } from 'solid-js';
 import {
   markNotificationForEntityIdAsRead,
   markNotificationsForEntityAsRead,
 } from '../notification-helpers';
 import type { NotificationSource } from '../notification-source';
+import { debounce } from '@solid-primitives/scheduled';
 
 const DEFAULT_DEBOUNCE_TIME = 2_000;
 
-function DebouncedMarker(props: {
+type DebouncedMarkerProps = {
   debouncedFn: () => void;
   debounceTime?: number;
-}) {
+};
+
+export const makeDebouncedMarker = (
+  props: DebouncedMarkerProps
+): VoidFunction => {
   const debounceTime = props.debounceTime ?? DEFAULT_DEBOUNCE_TIME;
-  let timeout: ReturnType<typeof setTimeout> | undefined;
+
+  const trigger = debounce(props.debouncedFn, debounceTime);
+
+  return trigger;
+};
+
+function DebouncedMarker(props: DebouncedMarkerProps) {
+  const triggerDebounce = makeDebouncedMarker(props);
 
   onMount(() => {
-    timeout = setTimeout(() => {
-      props.debouncedFn();
-    }, debounceTime);
-  });
-
-  onCleanup(() => {
-    if (timeout) {
-      clearTimeout(timeout);
-    }
+    triggerDebounce();
   });
 
   return '';
@@ -90,11 +94,29 @@ export function DocumentDebouncedNotificationReadMarker(props: {
   );
 }
 
-export function ChannelDebouncedNotificationReadMarker(props: {
+type ChannelDebouncedNotificationReadMarkerProps = {
   notificationSource: NotificationSource;
   debounceTime?: number;
   channelId: string;
-}) {
+};
+
+export const makeDebouncedChannelNotificationReadMarker = (
+  props: ChannelDebouncedNotificationReadMarkerProps
+) => {
+  return makeDebouncedMarker({
+    debounceTime: props.debounceTime,
+    debouncedFn() {
+      markNotificationsForEntityAsRead(props.notificationSource, {
+        type: 'channel',
+        id: props.channelId,
+      });
+    },
+  });
+};
+
+export function ChannelDebouncedNotificationReadMarker(
+  props: ChannelDebouncedNotificationReadMarkerProps
+) {
   return (
     <DebouncedNotificationReadMarker
       notificationSource={props.notificationSource}

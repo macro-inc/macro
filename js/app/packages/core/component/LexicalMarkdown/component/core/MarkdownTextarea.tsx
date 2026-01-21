@@ -39,6 +39,7 @@ import {
   type SelectionData,
   selectionDataPlugin,
   tabIndentationPlugin,
+  textPastePlugin,
 } from '../../plugins';
 import { checkboxToTaskPlugin } from '../../plugins/checkbox-to-task';
 import { restoreFocusPlugin } from '../../plugins/restore-focus';
@@ -193,6 +194,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
         : selectionDataPlugin(lexicalWrapper)
     )
     .use(tabIndentationPlugin())
+    .use(textPastePlugin())
     .use(
       mentionsPlugin({
         menu: mentionsMenuOperations,

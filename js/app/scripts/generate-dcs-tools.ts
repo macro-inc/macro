@@ -14,6 +14,56 @@ import { jsonSchemaToZod } from "json-schema-to-zod";
 import { z } from "zod";
 import { documentCognitionBase, serviceUrl } from "./services";
 
+/**
+ * Pre-process JSON Schema to convert $ref with sibling properties into allOf.
+ * json-refs doesn't properly merge $ref with sibling keywords (properties, required, etc.),
+ * so we need to restructure the schema to use allOf for proper composition.
+ */
+function preprocessSchemaForRefs(schema: unknown): unknown {
+	if (schema === null || typeof schema !== "object") {
+		return schema;
+	}
+
+	if (Array.isArray(schema)) {
+		return schema.map(preprocessSchemaForRefs);
+	}
+
+	const obj = schema as Record<string, unknown>;
+	const result: Record<string, unknown> = {};
+
+	// Check if this object has $ref along with other schema keywords
+	if ("$ref" in obj) {
+		const siblingKeys = Object.keys(obj).filter(
+			(k) => k !== "$ref" && k !== "$schema" && k !== "description",
+		);
+
+		if (siblingKeys.length > 0) {
+			// Convert to allOf structure: merge $ref schema with sibling properties
+			const refPart = { $ref: obj.$ref };
+			const siblingPart: Record<string, unknown> = {};
+
+			for (const key of siblingKeys) {
+				siblingPart[key] = preprocessSchemaForRefs(obj[key]);
+			}
+
+			// Keep description at top level if present
+			if ("description" in obj) {
+				result.description = obj.description;
+			}
+
+			result.allOf = [refPart, siblingPart];
+			return result;
+		}
+	}
+
+	// Recursively process all properties
+	for (const [key, value] of Object.entries(obj)) {
+		result[key] = preprocessSchemaForRefs(value);
+	}
+
+	return result;
+}
+
 const serviceDir = path.resolve(
 	import.meta.dirname,
 	documentCognitionBase.output,
@@ -65,7 +115,9 @@ async function generateSchemasFile(tools: AiToolsResponse) {
 
 	for (const tool of tools) {
 		// jsonSchemaToZod with name option generates a proper export
-		const { resolved: inputSchema } = await resolveRefs(tool.inputSchema);
+		// Preprocess to handle $ref with sibling properties
+		const preprocessedInput = preprocessSchemaForRefs(tool.inputSchema);
+		const { resolved: inputSchema } = await resolveRefs(preprocessedInput);
 		if (!generatedSchemas.has(inputSchema.title)) {
 			const inputCode = jsonSchemaToZod(inputSchema, {
 				module: "esm",
@@ -77,7 +129,8 @@ async function generateSchemasFile(tools: AiToolsResponse) {
 			generatedSchemas.add(inputSchema.title);
 		}
 
-		const { resolved: outputSchema } = await resolveRefs(tool.outputSchema);
+		const preprocessedOutput = preprocessSchemaForRefs(tool.outputSchema);
+		const { resolved: outputSchema } = await resolveRefs(preprocessedOutput);
 		if (!generatedSchemas.has(outputSchema.title)) {
 			const outputCode = jsonSchemaToZod(outputSchema, {
 				module: "esm",
@@ -99,15 +152,74 @@ ${content.join("\n\n")}
 	await Bun.write(schemasFile, contents);
 }
 
+/**
+ * Remove duplicate type/interface declarations from generated TypeScript code.
+ * json-schema-to-typescript generates nested types inline, which can cause duplicates
+ * when multiple schemas reference the same type.
+ */
+function deduplicateTypes(code: string): string {
+	const seenTypes = new Set<string>();
+	const lines = code.split("\n");
+	const result: string[] = [];
+	let skipUntilNextExport = false;
+	let braceCount = 0;
+
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i];
+
+		// Check if we're starting a new export type or interface
+		const typeMatch = line.match(
+			/^export\s+(type|interface)\s+(\w+)(?:\s*=|\s*\{|\s*$)/,
+		);
+
+		if (typeMatch && !skipUntilNextExport) {
+			const typeName = typeMatch[2];
+
+			if (seenTypes.has(typeName)) {
+				// Skip this duplicate type definition
+				skipUntilNextExport = true;
+				braceCount = 0;
+				// Count opening braces on this line
+				braceCount += (line.match(/\{/g) || []).length;
+				braceCount -= (line.match(/\}/g) || []).length;
+				// If it's a type alias (ends with ;), skip just this line
+				if (line.includes(";") && braceCount === 0) {
+					skipUntilNextExport = false;
+				}
+				continue;
+			}
+			seenTypes.add(typeName);
+		}
+
+		if (skipUntilNextExport) {
+			// Count braces to know when the type/interface ends
+			braceCount += (line.match(/\{/g) || []).length;
+			braceCount -= (line.match(/\}/g) || []).length;
+
+			// For type aliases, check if line ends with semicolon at brace level 0
+			if (braceCount <= 0 && (line.includes(";") || line.trim() === "}")) {
+				skipUntilNextExport = false;
+			}
+			continue;
+		}
+
+		result.push(line);
+	}
+
+	return result.join("\n");
+}
+
 async function generateToolTypesFile(tools: AiToolsResponse) {
 	// Generate all schemas, deduplicating by title
 	const generatedTypes = new Set<string>();
 	const content: Array<string> = [];
 
 	for (const tool of tools) {
+		// Preprocess to handle $ref with sibling properties
+		const preprocessedInput = preprocessSchemaForRefs(tool.inputSchema);
 		if (!generatedTypes.has(tool.inputSchema.title)) {
 			const inputCode = await compile(
-				tool.inputSchema,
+				preprocessedInput,
 				tool.inputSchema.title,
 				{
 					// override top level name for export
@@ -127,9 +239,10 @@ async function generateToolTypesFile(tools: AiToolsResponse) {
 			generatedTypes.add(tool.inputSchema.title);
 		}
 
+		const preprocessedOutput = preprocessSchemaForRefs(tool.outputSchema);
 		if (!generatedTypes.has(tool.outputSchema.title)) {
 			const outputCode = await compile(
-				tool.outputSchema,
+				preprocessedOutput,
 				tool.outputSchema.title,
 				{
 					// override top level name for export
@@ -151,19 +264,23 @@ async function generateToolTypesFile(tools: AiToolsResponse) {
 		}
 	}
 
-	const contents = `${warning}
+	// Deduplicate nested types that may have been generated multiple times
+	const rawContents = `${warning}
 ${content.join("\n\n")}
 `;
+	const deduplicatedContents = deduplicateTypes(rawContents);
 
-	await Bun.write(typesFile, contents);
+	await Bun.write(typesFile, deduplicatedContents);
 }
 
 async function generateToolsFile(tools: AiToolsResponse) {
 	// Resolve schemas to get titles
 	const toolsWithTitles = await Promise.all(
 		tools.map(async (tool) => {
-			const { resolved: inputSchema } = await resolveRefs(tool.inputSchema);
-			const { resolved: outputSchema } = await resolveRefs(tool.outputSchema);
+			const preprocessedInput = preprocessSchemaForRefs(tool.inputSchema);
+			const preprocessedOutput = preprocessSchemaForRefs(tool.outputSchema);
+			const { resolved: inputSchema } = await resolveRefs(preprocessedInput);
+			const { resolved: outputSchema } = await resolveRefs(preprocessedOutput);
 			return {
 				name: tool.name,
 				inputTitle: inputSchema.title,

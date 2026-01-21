@@ -22,7 +22,7 @@ use sqlx::{PgPool, Postgres, QueryBuilder, Row, postgres::PgRow, prelude::FromRo
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
-use crate::outbound::pg_soup_repo::type_err;
+use crate::outbound::pg_soup_repo::{populate_properties, type_err};
 
 static PREFIX: &str = r#"
     WITH RECURSIVE ProjectHierarchy AS (
@@ -428,6 +428,7 @@ impl SoupRow {
                 updated_at,
                 viewed_at,
                 sub_type: SoupDocumentSubType::from_db(sub_type, is_completed),
+                properties: Default::default(),
             }),
             SoupRow::Chat(ChatRow {
                 id,
@@ -453,6 +454,7 @@ impl SoupRow {
                 created_at,
                 updated_at,
                 viewed_at,
+                properties: Default::default(),
             }),
             SoupRow::Project(ProjectRow {
                 id,
@@ -476,6 +478,7 @@ impl SoupRow {
                 created_at,
                 updated_at,
                 viewed_at,
+                properties: Default::default(),
             }),
         })
     }
@@ -512,7 +515,7 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
     let status_property_id = SystemPropertyKey::STATUS_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
-    build_query(cursor.filter(), exclude_frecency)
+    let mut items = build_query(cursor.filter(), exclude_frecency)
         .build()
         .bind(user_id.as_ref())
         .bind(sort_method_str)
@@ -523,5 +526,9 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
         .bind(status_property_id)
         .try_map(|row| SoupRow::from_row(&row)?.into_soup_item())
         .fetch_all(db)
-        .await
+        .await?;
+
+    populate_properties(db, &mut items).await?;
+
+    Ok(items)
 }

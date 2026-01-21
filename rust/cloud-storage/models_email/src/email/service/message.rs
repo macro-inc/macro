@@ -212,6 +212,12 @@ pub fn is_outbound(msg: &Message) -> bool {
     msg.is_sent
 }
 
+/// determine if a message is a draft created in macro
+pub fn is_macro_draft(msg: &Message) -> bool {
+    // we don't send drafts to the provider before sending the message, so it won't have a provider id
+    msg.is_draft && msg.provider_id.is_none()
+}
+
 /// determine if a message is spam/trash for use in latest_non_spam_message_ts
 /// - for thread ordering purposes in the FE. (all mail view)
 pub fn is_spam_or_trash(msg: &Message) -> bool {

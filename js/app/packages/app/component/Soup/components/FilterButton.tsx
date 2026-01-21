@@ -58,7 +58,7 @@ export const FilterButton: Component<FilterButtonProps> = (props) => (
         }}
         onClick={props.onClick}
       >
-        <Dynamic component={props.icon} class="size-4.5" />
+        <Dynamic component={props.icon} class="size-3.5" />
         <span class="leading-none">
           <ShortcutLabel label={props.label} shortcut={props.shortcut} />
         </span>

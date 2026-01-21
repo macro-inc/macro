@@ -50,7 +50,7 @@ struct NoopCommsService;
 impl ChannelsService for NoopCommsService {
     async fn get_channels(
         &self,
-        req: GetChannelsRequest,
+        _req: GetChannelsRequest,
     ) -> Result<Vec<comms::domain::models::channel::ChannelWithLatest>, Report> {
         Ok(Vec::new())
     }
@@ -124,6 +124,7 @@ fn soup_document_with_is_completed(
         updated_at,
         viewed_at: Default::default(),
         sub_type: is_completed.map(|is_completed| SoupDocumentSubType::Task { is_completed }),
+        properties: Default::default(),
     }
 }
 
@@ -157,6 +158,9 @@ async fn it_should_not_query_frecency() {
                     .collect())
             })
         });
+    soup_mock
+        .expect_populate_properties()
+        .returning(|_| Box::pin(async { Ok(()) }));
 
     let res = SoupImpl::new(
         soup_mock,
@@ -696,6 +700,9 @@ async fn cursor_should_return_simple_sort() {
                 .collect();
             Box::pin(async move { Ok(res) })
         });
+    soup_mock
+        .expect_populate_properties()
+        .returning(|_| Box::pin(async { Ok(()) }));
 
     let res = SoupImpl::new(
         soup_mock,
@@ -807,6 +814,9 @@ async fn it_should_return_is_completed_true_for_completed_tasks() {
                 ))])
             })
         });
+    soup_mock
+        .expect_populate_properties()
+        .returning(|_| Box::pin(async { Ok(()) }));
 
     let res = SoupImpl::new(
         soup_mock,
@@ -847,6 +857,9 @@ async fn it_should_return_is_completed_false_for_incomplete_tasks() {
                 ))])
             })
         });
+    soup_mock
+        .expect_populate_properties()
+        .returning(|_| Box::pin(async { Ok(()) }));
 
     let res = SoupImpl::new(
         soup_mock,
@@ -887,6 +900,9 @@ async fn it_should_return_is_completed_none_for_non_tasks() {
                 ))])
             })
         });
+    soup_mock
+        .expect_populate_properties()
+        .returning(|_| Box::pin(async { Ok(()) }));
 
     let res = SoupImpl::new(
         soup_mock,
@@ -939,6 +955,9 @@ async fn it_should_preserve_is_completed_for_mixed_items() {
                 ])
             })
         });
+    soup_mock
+        .expect_populate_properties()
+        .returning(|_| Box::pin(async { Ok(()) }));
 
     let res = SoupImpl::new(
         soup_mock,

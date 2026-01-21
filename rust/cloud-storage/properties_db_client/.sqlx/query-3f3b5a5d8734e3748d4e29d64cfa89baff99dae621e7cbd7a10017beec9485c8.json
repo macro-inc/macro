@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT \n            ep.entity_id,\n            ep.entity_type as \"entity_type: EntityType\",\n            ep.property_definition_id\n        FROM entity_properties ep\n        WHERE ep.id = $1\n        ",
+  "query": "\nSELECT\n    ep.entity_id,\n    ep.entity_type as \"entity_type: EntityType\",\n    ep.property_definition_id\nFROM entity_properties ep\nWHERE ep.id = $1\n        ",
   "describe": {
     "columns": [
       {
@@ -46,5 +46,5 @@
       false
     ]
   },
-  "hash": "d7b0cf2d0add26c4c959e055b70f8ee8faf694757d7187135602b7508f0b0eca"
+  "hash": "3f3b5a5d8734e3748d4e29d64cfa89baff99dae621e7cbd7a10017beec9485c8"
 }

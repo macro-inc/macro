@@ -6,7 +6,6 @@ import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
 import type { Property } from '../../types';
 import {
-  isDateProperty,
   hasValue,
   isSelectProperty,
   isEntityProperty,
@@ -27,8 +26,7 @@ type CondensedPropertyValueProps = {
 export const CondensedPropertyValue: Component<CondensedPropertyValueProps> = (
   props
 ) => {
-  const { canEdit, openPropertyEditor, openDatePicker } =
-    usePropertiesContext();
+  const { canEdit, openPropertyEditor } = usePropertiesContext();
 
   const validValue = () => hasValue(props.property);
 
@@ -37,11 +35,7 @@ export const CondensedPropertyValue: Component<CondensedPropertyValueProps> = (
     e.preventDefault();
     e.stopPropagation();
     const target = e.currentTarget as HTMLElement;
-    if (isDateProperty(props.property)) {
-      openDatePicker(props.property, target);
-    } else {
-      openPropertyEditor(props.property, target);
-    }
+    openPropertyEditor(props.property, target);
   };
 
   return (

@@ -1,5 +1,5 @@
 use crate::map_soup_type;
-use crate::outbound::pg_soup_repo::type_err;
+use crate::outbound::pg_soup_repo::{populate_properties, type_err};
 use document_sub_type::DocumentSubType;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -32,7 +32,7 @@ pub async fn expanded_generic_cursor_soup(
     let status_property_id = SystemPropertyKey::STATUS_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
-    let items: Vec<SoupItem> = sqlx::query!(
+    let mut items: Vec<SoupItem> = sqlx::query!(
 r#"        
         WITH RECURSIVE ProjectHierarchy AS (
             SELECT p.id, uia.access_level 
@@ -220,6 +220,8 @@ r#"
         .fetch_all(db)
         .await?;
 
+    populate_properties(db, &mut items).await?;
+
     Ok(items)
 }
 
@@ -240,7 +242,7 @@ pub async fn no_frecency_expanded_generic_soup(
     let status_property_id = SystemPropertyKey::STATUS_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
-    let items: Vec<SoupItem> = sqlx::query!(
+    let mut items: Vec<SoupItem> = sqlx::query!(
 r#"        
         WITH RECURSIVE ProjectHierarchy AS (
             SELECT p.id, uia.access_level 
@@ -433,6 +435,8 @@ r#"
         .try_map(map_soup_type!())
         .fetch_all(db)
         .await?;
+
+    populate_properties(db, &mut items).await?;
 
     Ok(items)
 }

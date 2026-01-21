@@ -15,14 +15,16 @@ import {
 } from '../../utils/entityConversion';
 import { PropertyEntitySelector } from './shared/PropertyEntitySelector';
 import { PropertyOptionSelector } from './shared/PropertyOptionSelector';
+import { PropertyDateSelector } from './shared/PropertyDateSelector';
 import {
   useAddPropertyOptionMutation,
   usePropertyOptionsQuery,
 } from '@queries/properties/options';
+import type { DateProperty } from '../../types';
 
 // Common CSS classes
 const MODAL_BASE =
-  'absolute z-action-menu bg-menu border border-edge-muted max-h-96 overflow-hidden flex flex-col w-full max-w-md';
+  'absolute z-action-menu bg-menu border border-edge-muted max-h-96 overflow-hidden flex flex-col w-full max-w-sm';
 
 export function EditPropertyValueModal(props: PropertyEditorProps) {
   const propertyOptionsQuery = usePropertyOptionsQuery(
@@ -59,6 +61,12 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
     props.property.valueType === 'ENTITY' && props.property.value != null
       ? props.property.value
       : []
+  );
+
+  const [selectedDate, setSelectedDate] = createSignal<Date | null>(
+    props.property.valueType === 'DATE' && props.property.value != null
+      ? new Date(props.property.value)
+      : null
   );
 
   const {
@@ -99,8 +107,15 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
         };
         break;
       }
+      case 'DATE': {
+        const date = selectedDate();
+        apiValues = {
+          valueType: 'DATE',
+          value: date ? date.toISOString() : null,
+        };
+        break;
+      }
       default:
-        // Should not reach here as modal only handles select and entity types
         console.error(
           'PropertyEditor.saveChanges:',
           new Error(
@@ -140,9 +155,24 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
     );
   };
 
+  const hasDateChanges = () => {
+    if (props.property.valueType !== 'DATE') return false;
+
+    const currentDate = selectedDate();
+    const originalDate = props.property.value
+      ? new Date(props.property.value)
+      : null;
+
+    if (!currentDate && !originalDate) return false;
+
+    if (!currentDate || !originalDate) return true;
+
+    return currentDate.getTime() !== originalDate.getTime();
+  };
+
   const handleClose = async () => {
-    // All properties that reach this modal (select and entity types) should auto-save
-    const hasUnsavedChanges = hasChanges() || hasEntityChanges();
+    const hasUnsavedChanges =
+      hasChanges() || hasEntityChanges() || hasDateChanges();
     if (hasUnsavedChanges) {
       await saveChanges();
     } else {
@@ -180,6 +210,7 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
           class={MODAL_BASE}
           tabIndex={-1}
           use:floatWithElement={{ element: () => props.anchorRef }}
+          // All properties that reach this modal (select, entity, and date types) should auto-save
           onClick={(e) => e.stopPropagation()}
         >
           <Show when={!isLoading()}>
@@ -191,7 +222,19 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
                     props.property.valueType === 'SELECT_NUMBER'
                   }
                   fallback={
-                    <Show when={props.property.valueType === 'ENTITY'}>
+                    <Show
+                      when={props.property.valueType === 'ENTITY'}
+                      fallback={
+                        <Show when={props.property.valueType === 'DATE'}>
+                          <PropertyDateSelector
+                            property={props.property as DateProperty}
+                            selectedDate={selectedDate()}
+                            onSelectDate={(date) => setSelectedDate(date)}
+                            onClose={handleClose}
+                          />
+                        </Show>
+                      }
+                    >
                       <PropertyEntitySelector
                         property={props.property}
                         selectedOptions={() => {

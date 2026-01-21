@@ -16,6 +16,7 @@ const onKeyup = () => {
   setKeypressActive(false);
 };
 let init = false;
+
 export const useIsKeyPressActive = () => {
   if (!init) {
     init = true;

@@ -144,6 +144,9 @@ async function request(simple: SimpleRequest): Promise<CreateAndSend> {
   return {
     type: 'createAndSend',
     request: {},
+    content: simple.userRequest,
+    attachments: simple.attachments,
+    model: simple.model,
     call: async () => {
       const createResponse = await cognitionApiServiceClient.createChat({});
       if (isErr(createResponse)) {

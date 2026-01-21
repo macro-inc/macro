@@ -65,6 +65,9 @@ export function useBuildChatSendRequest() {
       const createAndSend: CreateAndSend = {
         type: 'createAndSend',
         request: {},
+        content: userRequest,
+        attachments: attachments ?? [],
+        model: model ?? DEFAULT_MODEL,
         call: async () => {
           const response = await cognitionApiServiceClient.createChat({
             isPersistent: isPersistent ?? false,

@@ -14,6 +14,29 @@ use sqlx::{PgPool, Pool, Postgres};
 use std::collections::HashSet;
 use uuid::Uuid;
 
+macro_rules! unwrap_enum {
+    // Base case: single variant
+    ($value:expr, $variant:path) => {
+        match $value {
+            $variant(inner) => inner,
+            _ => panic!(
+                "called `unwrap_enum!` on variant that didn't match `{}`",
+                stringify!($variant)
+            ),
+        }
+    };
+
+    // Recursive case: peel off first variant and recurse
+    ($value:expr, $variant:path => $($rest:path)=>+) => {
+        match $value {
+            $variant(inner) => unwrap_enum!(inner, $($rest)=>+),
+            _ => panic!(
+                "called `unwrap_enum!` on nested variant that didn't match `{} => ...`",
+                stringify!($variant)
+            ),
+        }
+    };
+}
 // 2 items have no viewing history, so they should be last in the response when sorting by viewed_at
 #[sqlx::test(
     fixtures(
@@ -2077,6 +2100,86 @@ async fn test_dynamic_query_with_ast_and_frecency_exclusion(
         returned_with_frecency_ids, expected_with_frecency_ids,
         "Should get all documents matching AST filter regardless of frecency"
     );
+
+    Ok(())
+}
+
+/// Test that system properties are populated on SoupItems (Documents and Projects)
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("soup_items_with_properties")
+    )
+)]
+async fn test_expanded_dynamic_cursor_populates_properties(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    let items = expanded_dynamic_cursor_soup(
+        &pool,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 20,
+            cursor: Query::Sort(SimpleSortMethod::UpdatedAt, EntityFilterAst::mock_empty()),
+            exclude_frecency: false,
+        },
+    )
+    .await?;
+
+    // Should get 2 documents and 2 projects (A and B)
+    assert!(!items.is_empty(), "Should return some items");
+
+    // Check that Document in A has properties populated
+    let doc_a_uuid = Uuid::parse_str("11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap();
+    let doc_a = items
+        .iter()
+        .find(|item| item.id() == doc_a_uuid)
+        .expect("doc a shoul exist");
+
+    let doc = unwrap_enum!(doc_a, SoupItem::Document);
+    assert_eq!(
+        doc.properties.len(),
+        2,
+        "Document in A should have 2 properties"
+    );
+
+    // Check that Document in B has properties populated
+    let doc_b_uuid = Uuid::parse_str("11111111-bbbb-bbbb-bbbb-bbbbbbbbbbbb").unwrap();
+    let doc_b = items.iter().find(|item| item.id() == doc_b_uuid);
+    assert!(doc_b.is_some(), "Should find Document in B");
+
+    let doc = unwrap_enum!(doc_b, Some => SoupItem::Document);
+    // Document in B has Priority and Due Date properties
+    assert_eq!(
+        doc.properties.len(),
+        2,
+        "Document in B should have 2 properties"
+    );
+
+    // Check that Project A has properties populated
+    let proj_a_uuid = Uuid::parse_str("aaaaaaaa-ffff-ffff-ffff-ffffffffffff").unwrap();
+    let proj_a = items.iter().find(|item| item.id() == proj_a_uuid);
+    assert!(proj_a.is_some(), "Should find Project A");
+
+    let proj = unwrap_enum!(proj_a, Some => SoupItem::Project);
+    assert!(
+        !proj.properties.is_empty(),
+        "Project A should have properties populated"
+    );
+    // Project A has Priority property
+    assert_eq!(proj.properties.len(), 1, "Project A should have 1 property");
+
+    // Check that Project B has no properties (none were added in fixture)
+    let proj_b_uuid = Uuid::parse_str("bbbbbbbb-ffff-ffff-ffff-ffffffffffff").unwrap();
+    let proj_b = items.iter().find(|item| item.id() == proj_b_uuid);
+    assert!(proj_b.is_some(), "Should find Project B");
+
+    let proj = unwrap_enum!(proj_b, Some => SoupItem::Project);
+    // Project B has no properties in the fixture, so it should be empty or None
+    let props_count = proj.properties.len();
+    assert_eq!(props_count, 0, "Project B should have 0 properties");
 
     Ok(())
 }
