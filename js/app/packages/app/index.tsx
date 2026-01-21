@@ -10,7 +10,6 @@ import { platformFetch } from '@core/util/platformFetch';
 import * as Observability from '@observability';
 import { ErrorBoundary, render } from 'solid-js/web';
 import { FatalError } from './component/FatalError';
-import { ReactiveFavicon } from './component/ReactiveFavicon';
 import { Root } from './component/Root';
 
 // Override global fetch with platformFetch for Tauri compatibility
@@ -76,7 +75,6 @@ const renderApp = () => {
           )}
         >
           <Root />
-          <ReactiveFavicon />
         </ErrorBoundary>
       ),
       root

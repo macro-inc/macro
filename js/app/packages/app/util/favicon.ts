@@ -1,5 +1,6 @@
-import FaviconNotyURL from '@macro-icons/macro-macro-noty.svg?url';
-import { getCSSColorAs } from '../../block-theme/utils/colorUtil';
+import FaviconURL from '@macro-icons/macro-macro.svg?url';
+import FaviconBadgeURL from '@macro-icons/macro-macro-badge.svg?url';
+import { getOklch } from '../../block-theme/utils/colorUtil';
 
 let currentFaviconLink: HTMLLinkElement | null = null;
 
@@ -16,77 +17,53 @@ export function getFaviconUrl(themeColor: string): string {
 }
 
 /** updates the favicon with the current accent color */
-export function updateFavicon(themeColor: string): void {
-  if (!themeColor || typeof themeColor !== 'string') {
-    console.warn('Invalid theme color provided to updateFavicon:', themeColor);
+export function updateFavicon(faviconColor: string, badgeColor?: string, hasBadge?: boolean): void {
+  if (!faviconColor || typeof faviconColor !== 'string') {
+    console.warn('Invalid theme color provided to updateFavicon:', faviconColor);
     return;
   }
 
-  if (currentFaviconLink && currentFaviconLink.parentNode) {
+  if (currentFaviconLink?.parentNode) {
     currentFaviconLink.parentNode.removeChild(currentFaviconLink);
     currentFaviconLink = null;
   }
 
-  const faviconUrl = getFaviconUrl(themeColor);
+  // Draw new favicon
+  const faviconSize = 48;
 
-  const link = document.createElement('link');
-  link.rel = 'icon';
-  link.type = 'image/svg+xml';
-  link.href = faviconUrl;
-
-  document.head.appendChild(link);
-  currentFaviconLink = link;
-
-  const existingShortcutIcon = document.querySelector(
-    'link[rel="shortcut icon"]'
-  ) as HTMLLinkElement;
-  if (existingShortcutIcon) {
-    existingShortcutIcon.href = faviconUrl;
-  }
-}
-
-export function setFaviconNoty(): void {
   const canvas = document.createElement('canvas');
-  canvas.width = 48;
-  canvas.height = 48;
+  canvas.width = faviconSize;
+  canvas.height = faviconSize;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  const faviconColor = getCSSColorAs('--a0', 'oklch');
-  const notyBadgeColor = getCSSColorAs('--a1', 'oklch');
-
   const img = new Image();
 
-  // Decode the SVG and replace currentColor
   let svgString = decodeURIComponent(
-    FaviconNotyURL.replace('data:image/svg+xml,', '')
+    (hasBadge ? FaviconBadgeURL : FaviconURL).replace('data:image/svg+xml,', '')
   );
-  svgString = svgString.replace(/currentColor/g, 'black');
+  svgString = svgString.replace(/currentColor/g, escapeColorForSvg(faviconColor));
   const processedUrl = `data:image/svg+xml,${encodeURIComponent(svgString)}`;
   img.src = processedUrl;
 
   img.onload = () => {
-    // First, draw the image normally
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-    // Then apply color using source-in composite operation
-    ctx.globalCompositeOperation = 'source-in';
-    ctx.fillStyle = faviconColor;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Finally, draw the notification badge in the upper right corner
-    const badgeRadius = 6;
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.beginPath();
-    ctx.arc(
-      canvas.width - badgeRadius,
-      badgeRadius,
-      badgeRadius,
-      0,
-      2 * Math.PI
-    );
-    ctx.fillStyle = notyBadgeColor;
-    ctx.fill();
+    if (hasBadge) {
+      const badgeRadius = 6;
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.beginPath();
+      ctx.arc(
+        canvas.width - badgeRadius,
+        badgeRadius,
+        badgeRadius,
+        0,
+        2 * Math.PI
+      );
+      const {l, c, h} = getOklch(badgeColor || faviconColor)
+      ctx.fillStyle = `oklch(${l} ${c} ${h})`;
+      ctx.fill();
+    }
 
     const faviconUrl = canvas.toDataURL();
 

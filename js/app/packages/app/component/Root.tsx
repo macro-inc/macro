@@ -78,8 +78,7 @@ import { SuspenseContextComp } from './SuspenseContext';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 import Visor from './Visor';
 import { setOpenWhichKey, WhichKey } from './WhichKey';
-import { setFaviconNoty, updateFavicon } from '@app/util/favicon';
-import { getCSSColorAs } from '../../block-theme/utils/colorUtil';
+import { ReactiveFavicon } from './ReactiveFavicon';
 
 const { track, identify, TrackingEvents } = withAnalytics();
 
@@ -278,7 +277,6 @@ export function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   const notifInterface = usePlatformNotificationState();
 
   const onNotification = (notification: UnifiedNotification) => {
-    setFaviconNoty();
     if (notifInterface === 'not-supported') return;
     const layoutManager = globalSplitManager();
     if (!layoutManager) return;
@@ -371,17 +369,17 @@ export function Root() {
     ensureMinimalThemeContrast();
     window.addEventListener('beforeunload', handleBeforeUnload);
 
-    // Reset favicon in case it had a notification badge
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        updateFavicon(getCSSColorAs('--a0', 'oklch'));
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    // // Reset favicon in case it had a notification badge
+    // const handleVisibilityChange = () => {
+    //   if (!document.hidden) {
+    //     updateFavicon(getCSSColorAs('--a0', 'oklch'));
+    //   }
+    // };
+    // document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    onCleanup(() =>
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-    );
+    // onCleanup(() =>
+    //   document.removeEventListener('visibilitychange', handleVisibilityChange)
+    // );
   });
   onCleanup(() =>
     window.removeEventListener('beforeunload', handleBeforeUnload)
@@ -417,6 +415,7 @@ export function Root() {
             <UserInfoSideEffects />
             <ConfiguredGlobalAppStateProvider>
               <ChannelsContextProvider>
+                <ReactiveFavicon />
                 <Title>{tabTitle()}</Title>
                 <MacroJump />
                 <Visor />
