@@ -364,6 +364,7 @@ const DateSelectorItem: Component<
           'border-t border-edge-muted'
       )}
     >
+      <Combobox.ItemIndicator class="size-2 bg-accent aspect-square" />
       <div class="flex items-center gap-2 flex-1 min-w-0">
         <Combobox.ItemLabel class="text-sm font-medium truncate">
           {label()}
