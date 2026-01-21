@@ -251,13 +251,15 @@ export const DateSelector = (props: DateSelectorProps) => {
         );
       }}
     >
-      <Combobox.Control<DateSelectorOption>>
-        <Combobox.Trigger as="div">
-          {typeof props.trigger === 'function'
-            ? props.trigger({ selectedDate: selectedDate() })
-            : props.trigger}
-        </Combobox.Trigger>
-      </Combobox.Control>
+      <Show when={typeof props.trigger !== 'undefined'}>
+        <Combobox.Control<DateSelectorOption>>
+          <Combobox.Trigger as="div">
+            {typeof props.trigger === 'function'
+              ? props.trigger({ selectedDate: selectedDate() })
+              : props.trigger}
+          </Combobox.Trigger>
+        </Combobox.Control>
+      </Show>
 
       <Combobox.Portal>
         <Combobox.Content class="w-full max-w-sm bg-dialog text-ink border border-edge-muted">
