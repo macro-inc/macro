@@ -15,7 +15,7 @@ import {
   type ComboboxRootItemComponentProps,
 } from '@kobalte/core/combobox';
 import { cn } from '@ui/utils/classname';
-import { format } from 'date-fns';
+import { format, setHours, setMinutes } from 'date-fns';
 
 type DateSelectorMode = 'search' | 'calendar';
 
@@ -276,6 +276,27 @@ export const DateSelector = (props: DateSelectorProps) => {
                       ? format(selectedDate()!, 'HH:mm')
                       : undefined
                   }
+                  onInput={(e) => {
+                    const value = e.currentTarget.value;
+
+                    if (!value || !value.trim().length) return;
+
+                    const split = value.split(':');
+                    if (!split.length || split.length !== 2) return;
+
+                    if (Number.isNaN(split[0]) || Number.isNaN(split[1]))
+                      return;
+
+                    let hours = Number(split[0]);
+                    let mins = Number(split[1]);
+
+                    let currentDate = selectedDate() ?? new Date();
+
+                    currentDate = setHours(currentDate, Number(hours));
+                    currentDate = setMinutes(currentDate, Number(mins));
+
+                    onChange({ type: 'custom', date: currentDate });
+                  }}
                 />
               </label>
             </div>
