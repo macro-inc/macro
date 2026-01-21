@@ -10,7 +10,6 @@ pub mod messages;
 pub mod organization;
 pub mod participants;
 pub mod permissions;
-pub mod user_channels;
 
 #[derive(Clone)]
 pub struct CommsServiceClient {
