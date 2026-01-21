@@ -21,6 +21,7 @@ import {
   type PreviewItemNoAccess,
   type PreviewProjectAccess,
 } from '@core/signal/preview';
+import { tryMacroId, useDisplayName } from '@core/user';
 import { matches } from '@core/util/match';
 
 // Icon imports
@@ -41,6 +42,7 @@ import UserIcon from '@icon/regular/user.svg';
 
 // Components
 import { ClippedPanel } from '@core/component/ClippedPanel';
+import { UserIcon as UserIconComponent } from '@core/component/UserIcon';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
@@ -523,6 +525,10 @@ export function PopupPreview(props: {
       ? accessibleItem.messageContext
       : undefined;
 
+    const [senderDisplayName] = messageContext
+      ? useDisplayName(tryMacroId(messageContext.senderId))
+      : [() => ''];
+
     return (
       <>
         <div class="text-sm font-semibold">
@@ -546,10 +552,15 @@ export function PopupPreview(props: {
         <div class="flex justify-between items-center w-full text-sm font-medium">
           <Show when={messageContext}>
             {(context) => (
-              <div class="justify-left mt-2 w-fit max-w-[66%] text-ink-muted overflow-hidden whitespace-nowrap text-ellipsis">
+              <div class="justify-left mt-2 w-fit max-w-[66%] text-ink-muted overflow-hidden whitespace-nowrap text-ellipsis flex items-center gap-1.5">
+                <UserIconComponent
+                  id={context().senderId}
+                  size="xs"
+                  suppressClick
+                  showTooltip={false}
+                />
                 <span class="relative text-[0.8em] text-ink-muted max-w-full">
-                  <UserIcon class="relative top-[-0.125em] size-4 inline-flex items-center mr-1" />
-                  {context().senderName || context().senderId}
+                  {senderDisplayName()}
                 </span>
               </div>
             )}

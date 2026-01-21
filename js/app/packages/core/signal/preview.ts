@@ -64,7 +64,6 @@ export type MessageContext = {
   threadId?: string;
   content: string;
   senderId: string;
-  senderName?: string;
   createdAt: string;
   isThread: boolean;
 };
