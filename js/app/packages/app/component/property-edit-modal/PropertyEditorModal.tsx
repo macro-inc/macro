@@ -57,6 +57,7 @@ import type { PropertyApiValues } from '@core/component/Properties/types';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { toast } from '@core/component/Toast/Toast';
 import { match } from 'ts-pattern';
+import { useSavePropertyForMultiEntitites } from './hooks/useSaveProperties';
 
 type ListNavActions = {
   next: VoidFunction;
@@ -125,17 +126,6 @@ function createListKeybindings(elem: Accessor<HTMLElement | undefined>) {
   };
 }
 
-function getEntityTypeFromEntityData(entity: EntityData): EntityType {
-  return match(entity)
-    .when(isTaskEntity, () => EntityType.TASK)
-    .with({ type: 'channel' }, () => EntityType.CHANNEL)
-    .with({ type: 'chat' }, () => EntityType.CHAT)
-    .with({ type: 'project' }, () => EntityType.PROJECT)
-    .with({ type: 'email' }, () => EntityType.THREAD)
-    .with({ type: 'document' }, () => EntityType.DOCUMENT)
-    .exhaustive();
-}
-
 export function PropertyEditorModal() {
   const [dialogRef, setDialogRef] = createSignal<HTMLElement>();
   const [attach, hotkeyScope] = useHotkeyDOMScope('property-editor-modal');
@@ -145,7 +135,19 @@ export function PropertyEditorModal() {
   const defaultPlaceholder = 'Choose a property...';
   const [placeholder, setPlaceholder] = createSignal('');
 
-  const savePropertyMutation = useSaveEntityPropertyMutation();
+  const saveProperties = useSavePropertyForMultiEntitites();
+  const handlePropertySave = (value: PropertyApiValues) => {
+    const { selectedEntities, targetProperty } = propertyEditorState;
+    if (!selectedEntities.length || !targetProperty) return;
+    saveProperties(selectedEntities, targetProperty, value).then((success) => {
+      if (success) {
+        const count = selectedEntities.length;
+        const message = `Set ${targetProperty.displayName} for ${count === 1 ? selectedEntities[0].name : count + ' entities'}`;
+        toast.success(message);
+      }
+      // failure toast handled by mutation
+    });
+  };
 
   const { dispose: disposeHotkey } = registerHotkey({
     hotkey: ['escape'],
@@ -158,63 +160,12 @@ export function PropertyEditorModal() {
   });
   onCleanup(disposeHotkey);
 
-  const handlePropertySave = async (apiValues: PropertyApiValues) => {
-    const property = propertyEditorState.targetProperty;
-    const entities = propertyEditorState.selectedEntities;
-
-    if (!property) {
-      console.error('No target property selected');
-      return;
-    }
-
-    if (entities.length === 0) {
-      console.error('No entities selected');
-      return;
-    }
-
-    // Get the property definition ID
-    const propertyDefinitionId =
-      'propertyDefinitionId' in property
-        ? property.propertyDefinitionId
-        : property.id;
-
-    // Save property for each selected entity
-    const promises = entities.map((entity) => {
-      const entityType = getEntityTypeFromEntityData(entity);
-      return savePropertyMutation.mutateAsync({
-        entityId: entity.id,
-        entityType,
-        property: {
-          ...property,
-          propertyDefinitionId,
-          propertyId: propertyDefinitionId,
-        } as Property,
-        apiValues,
-      });
-    });
-
-    try {
-      await Promise.all(promises);
-      const entityLabel = entities.length === 1 ? 'entity' : 'entities';
-      toast.success(
-        `Updated ${property.displayName} for ${entities.length} ${entityLabel}`
-      );
-      closePropertyEditor();
-    } catch (error) {
-      console.error('Failed to save properties', error);
-      // Toast already shown by mutation
-    }
-  };
-
   createEffect(
-    on(
-      () => propertyEditorState.mode,
-      () => {
-        setSelectedIndex(0);
-        setSearchValue('');
-        setPlaceholder('');
-      }
-    )
+    on([() => propertyEditorState.mode, propertyEditorOpen], () => {
+      setSelectedIndex(0);
+      setSearchValue('');
+      setPlaceholder('');
+    })
   );
 
   const { isKeypressActive } = useIsKeyPressActive();
@@ -228,10 +179,6 @@ export function PropertyEditorModal() {
   return (
     <Dialog open={propertyEditorOpen()} onOpenChange={togglePropertyEditor}>
       <Dialog.Portal>
-        <Dialog.Overlay
-          class="fixed inset-0"
-          onClick={() => closePropertyEditor()}
-        />
         <DialogWrapper>
           <div ref={mergeRefs(attach, setDialogRef)}>
             <Dialog.Content>

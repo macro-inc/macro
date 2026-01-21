@@ -9,6 +9,7 @@ import type {
   MultiValueProperty,
   NumberProperty,
   Property,
+  PropertyDefinitionDomain,
   SelectNumberProperty,
   SelectProperty,
   SelectStringProperty,
@@ -190,6 +191,12 @@ export function isPropertyDefinition(
   p: PropertyDefinitionResponse
 ): p is PropertyDefinition {
   return !('definition' in p);
+}
+
+export function isInstantiatedProperty(
+  p: Property | PropertyDefinitionDomain
+): p is Property {
+  return 'definitionId' in p;
 }
 
 export const hasValue = (property: Property): boolean => {
