@@ -579,39 +579,50 @@ services:
   #     retries: 3
   #     start_period: 40s
 
-  # # ============================================================================
-  # # search_service (Port 8093)
-  # # Search API
-  # # ============================================================================
-  # search_service:
-  #   build:
-  #     context: ./rust/cloud-storage
-  #     dockerfile: Dockerfile
-  #     args:
-  #       SERVICE_NAME: search_service
-  #   ports:
-  #     - "8093:8080"
-  #   environment:
-  #     - PORT=8080
-  #     - DATABASE_URL=${MACRODB_URL}
-  #     - OPENSEARCH_URL=${SEARCH_SERVICE_OPENSEARCH_URL}
-  #     - OPENSEARCH_USERNAME=${SEARCH_SERVICE_OPENSEARCH_USERNAME}
-  #     - OPENSEARCH_PASSWORD=${SEARCH_SERVICE_OPENSEARCH_PASSWORD}
-  #     - COMMS_SERVICE_URL=http://comms_service:8080
-  #     - EMAIL_SERVICE_URL=http://email_service:8080
-  #     - DOCUMENT_STORAGE_SERVICE_URL=http://document_storage_service:8080
-  #   depends_on:
-  #     - comms_service
-  #     - email_service
-  #     - document_storage_service
-  #   networks:
-  #     - services
-  #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
-  #     start_period: 40s
+  # ============================================================================
+  # search_service (Port 8093)
+  # Search API
+  # ============================================================================
+  search_service:
+    build:
+      context: ./rust/cloud-storage
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: search_service
+    ports:
+      - "8093:8080"
+    environment:
+      - PORT=8080
+      - DATABASE_URL=${MACRODB_URL}
+      - OPENSEARCH_URL=${OPENSEARCH_URL}
+      - OPENSEARCH_USERNAME=${OPENSEARCH_USERNAME}
+      - OPENSEARCH_PASSWORD=${OPENSEARCH_PASSWORD}
+      - COMMS_SERVICE_URL=http://comms_service:8080
+      - EMAIL_SERVICE_URL=http://email_service:8080
+      - DOCUMENT_STORAGE_SERVICE_URL=http://document_storage_service:8080
+      - INTERNAL_API_SECRET_KEY=local
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=us-east-1
+      - ENVIRONMENT=local
+      - AUDIENCE=${AUDIENCE}
+      - ISSUER=${ISSUER}
+      - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
+      - RUST_LOG=search_service=trace,email_service_client=trace,document_storage_service_client=trace
+    depends_on:
+      - comms_service
+      - email_service
+      - document_storage_service
+    networks:
+      - services
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   # ============================================================================
   # static_file_service (Port 8094)
