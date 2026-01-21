@@ -37,6 +37,7 @@ export const DateSelector = (props: DateSelectorProps) => {
     createSignal<DateSelectorOption | null>(null);
 
   const [searchQuery, setSearchQuery] = createSignal('');
+  const [listboxRef, setListboxRef] = createSignal<HTMLElement | undefined>();
   let searchInputRef!: HTMLInputElement;
 
   const dateOptions = useDateSearch({
@@ -71,6 +72,19 @@ export const DateSelector = (props: DateSelectorProps) => {
     // handleSelectDate(date);
   };
 
+  const onInputChange = (value: string) => {
+    setSearchQuery(value);
+
+    // Send the keydown event to the listbox so Kobalte's internal system can update the focus state
+    // This makes it so it behaves the same as if you had manually pressed the down arrow to focus the item
+    queueMicrotask(() => {
+      listboxRef()?.dispatchEvent(
+        // We need to send `bubbles: true` because otherwise Kobalte ignores the event
+        new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' })
+      );
+    });
+  };
+
   const options = createMemo(() => {
     return [
       ...dateOptions().map((o) => ({ custom: false, context: o }) as const),
@@ -89,10 +103,17 @@ export const DateSelector = (props: DateSelectorProps) => {
         o.custom ? 'Custom date' : o.context.displayText
       }
       onChange={setSelectedOption}
-      onInputChange={setSearchQuery}
+      onInputChange={onInputChange}
       allowsEmptyCollection
       placement="bottom-start"
       placeholder="Search dates"
+      defaultFilter={(option, search) =>
+        option.custom
+          ? true
+          : option.context.displayText
+              .toLocaleLowerCase()
+              .includes(search.toLocaleLowerCase())
+      }
       itemComponent={(itemProps) => {
         const label = () => {
           const item = itemProps.item.rawValue;
@@ -146,25 +167,21 @@ export const DateSelector = (props: DateSelectorProps) => {
             <SearchIcon class="h-4 w-4 text-ink-muted" />
             <Combobox.Input />
           </div>
-          <Show
-            when={dateOptions().length > 0}
-            fallback={
-              <Show
-                when={searchQuery().trim()}
-                fallback={
-                  <div class="text-center py-2 text-ink-muted text-sm">
-                    Enter a date or duration
-                  </div>
-                }
-              >
+          <Show when={dateOptions().length === 0}>
+            <Show
+              when={searchQuery().trim()}
+              fallback={
                 <div class="text-center py-2 text-ink-muted text-sm">
-                  No dates match "{searchQuery()}"
+                  Enter a date or duration
                 </div>
-              </Show>
-            }
-          >
-            <Combobox.Listbox />
+              }
+            >
+              <div class="text-center py-2 text-ink-muted text-sm">
+                No dates match "{searchQuery()}"
+              </div>
+            </Show>
           </Show>
+          <Combobox.Listbox ref={setListboxRef} />
 
           <div class="px-2 py-1.5 border-t border-edge-muted">
             <div class="text-xs text-ink-muted">
