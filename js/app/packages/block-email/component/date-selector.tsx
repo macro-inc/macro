@@ -188,6 +188,36 @@ export const DateSelector = (props: DateSelectorProps) => {
     return option.date;
   };
 
+  const onTimeInputChange = (e: Event) => {
+    if (!(e.currentTarget instanceof HTMLInputElement)) return;
+    const value = e.currentTarget.value;
+
+    if (!value || !value.trim().length) {
+      const currentDate = selectedDate() ?? new Date();
+
+      onChange({
+        type: 'custom',
+        date: startOfDay(currentDate),
+      });
+      return;
+    }
+
+    const split = value.split(':');
+    if (!split.length || split.length !== 2) return;
+
+    if (Number.isNaN(split[0]) || Number.isNaN(split[1])) return;
+
+    let hours = Number(split[0]);
+    let mins = Number(split[1]);
+
+    let currentDate = selectedDate() ?? new Date();
+
+    currentDate = setHours(currentDate, Number(hours));
+    currentDate = setMinutes(currentDate, Number(mins));
+
+    onChange({ type: 'custom', date: currentDate });
+  };
+
   return (
     <Combobox<DateSelectorOption>
       open={props.open}
@@ -279,35 +309,7 @@ export const DateSelector = (props: DateSelectorProps) => {
                         ? format(selectedDate()!, 'HH:mm')
                         : undefined
                     }
-                    onInput={(e) => {
-                      const value = e.currentTarget.value;
-
-                      if (!value || !value.trim().length) {
-                        const currentDate = selectedDate() ?? new Date();
-
-                        onChange({
-                          type: 'custom',
-                          date: startOfDay(currentDate),
-                        });
-                        return;
-                      }
-
-                      const split = value.split(':');
-                      if (!split.length || split.length !== 2) return;
-
-                      if (Number.isNaN(split[0]) || Number.isNaN(split[1]))
-                        return;
-
-                      let hours = Number(split[0]);
-                      let mins = Number(split[1]);
-
-                      let currentDate = selectedDate() ?? new Date();
-
-                      currentDate = setHours(currentDate, Number(hours));
-                      currentDate = setMinutes(currentDate, Number(mins));
-
-                      onChange({ type: 'custom', date: currentDate });
-                    }}
+                    onInput={onTimeInputChange}
                   />
                 </label>
               </div>
