@@ -15,7 +15,7 @@ import {
   type ComboboxRootItemComponentProps,
 } from '@kobalte/core/combobox';
 import { cn } from '@ui/utils/classname';
-import { format, setHours, setMinutes } from 'date-fns';
+import { format, setHours, setMinutes, startOfDay } from 'date-fns';
 
 type DateSelectorMode = 'search' | 'calendar';
 
@@ -281,7 +281,15 @@ export const DateSelector = (props: DateSelectorProps) => {
                     onInput={(e) => {
                       const value = e.currentTarget.value;
 
-                      if (!value || !value.trim().length) return;
+                      if (!value || !value.trim().length) {
+                        const currentDate = selectedDate() ?? new Date();
+
+                        onChange({
+                          type: 'custom',
+                          date: startOfDay(currentDate),
+                        });
+                        return;
+                      }
 
                       const split = value.split(':');
                       if (!split.length || split.length !== 2) return;
