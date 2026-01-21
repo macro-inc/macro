@@ -1,5 +1,4 @@
 use crate::api::ApiContext;
-use crate::api::email::sync::enable::EnableSyncError;
 use crate::utils::extract_email_with_response;
 use anyhow::Context;
 use axum::{
