@@ -125,6 +125,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
         {/* Month/Year header */}
         <div class="flex items-center justify-between mb-3">
           <button
+            type="button"
             class="p-1 hover:bg-active transition-colors"
             onClick={handlePrevMonth}
           >
@@ -132,6 +133,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
           </button>
 
           <button
+            type="button"
             class="font-semibold hover:bg-active px-2 py-1 transition-colors"
             onClick={() => setPickerMode('month')}
           >
@@ -139,6 +141,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
           </button>
 
           <button
+            type="button"
             class="p-1 hover:bg-active transition-colors"
             onClick={handleNextMonth}
           >
@@ -161,6 +164,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
             {(day) => (
               <Show when={day !== null} fallback={<div class="h-8" />}>
                 <button
+                  type="button"
                   class="h-8 w-8 hover:bg-active transition-colors"
                   classList={{
                     'bg-accent text-dialog hover:bg-accent-ink': isSelected(
@@ -182,6 +186,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
         {/* Month picker */}
         <div class="mb-3">
           <button
+            type="button"
             class="w-full font-semibold hover:bg-active px-2 py-1 transition-colors text-center"
             onClick={() => setPickerMode('year')}
           >
@@ -193,6 +198,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
           <For each={MONTHS}>
             {(month, index) => (
               <button
+                type="button"
                 class="px-3 py-2 hover:bg-active transition-colors"
                 classList={{
                   'bg-accent text-dialog hover:bg-accent-ink':
@@ -218,6 +224,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
             <For each={yearOptions()}>
               {(year) => (
                 <button
+                  type="button"
                   class="px-3 py-2 hover:bg-active transition-colors"
                   classList={{
                     'bg-accent text-dialog hover:bg-accent-ink':
