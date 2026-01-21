@@ -1,17 +1,11 @@
 use crate::api::context::ApiContext;
 use crate::utils::extract_email_with_response;
 use anyhow::Context;
-use axum::Json;
-use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use email::domain::models::UserProvider;
-use email::domain::ports::EmailRepo;
 use macro_user_id::email::EmailStr;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::response::{EmptyResponse, ErrorResponse};
 use model::user::UserContext;
-use model::user::axum_extractor::MacroUserExtractor;
 use models_email::email::service::link;
 use models_email::email::service::link::Link;
 use strum_macros::AsRefStr;
@@ -19,9 +13,6 @@ use thiserror::Error;
 
 #[derive(Debug, Error, AsRefStr)]
 pub enum EnableSyncError {
-    #[error("Syncing is already enabled")]
-    SyncAlreadyEnabled,
-
     #[error("Failed to register Gmail watch")]
     RegisterWatchError(#[from] anyhow::Error),
 
@@ -38,9 +29,7 @@ pub enum EnableSyncError {
 impl IntoResponse for EnableSyncError {
     fn into_response(self) -> Response {
         let status_code = match &self {
-            EnableSyncError::SyncAlreadyEnabled
-            | EnableSyncError::BadRequest(_)
-            | EnableSyncError::Parse(_) => StatusCode::BAD_REQUEST,
+            EnableSyncError::BadRequest(_) | EnableSyncError::Parse(_) => StatusCode::BAD_REQUEST,
             EnableSyncError::RegisterWatchError(_) | EnableSyncError::QueryError(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
@@ -56,50 +45,6 @@ impl IntoResponse for EnableSyncError {
 
         (status_code, self.to_string()).into_response()
     }
-}
-
-/// Enables inbox syncing for user.
-#[utoipa::path(
-    post,
-    tag = "Sync",
-    path = "/email/sync",
-    operation_id = "enable_sync",
-    responses(
-            (status = 201, body=EmptyResponse),
-            (status = 400, body=ErrorResponse),
-            (status = 401, body=ErrorResponse),
-            (status = 500, body=ErrorResponse),
-    )
-)]
-#[tracing::instrument(skip(ctx, user_context), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id))]
-pub async fn enable_handler(
-    State(ctx): State<ApiContext>,
-    MacroUserExtractor {
-        macro_user_id,
-        user_context,
-        ..
-    }: MacroUserExtractor,
-) -> Result<Response, EnableSyncError> {
-    // if link exists already and syncing is already enabled, return error
-    let pg_repo = email::outbound::EmailPgRepo::new(ctx.db.clone());
-    let existing_link = pg_repo
-        .link_by_fusionauth_and_macro_id(
-            &user_context.fusion_user_id,
-            macro_user_id,
-            UserProvider::Gmail,
-        )
-        .await
-        .context("Failed to fetch link")?;
-
-    if let Some(link) = existing_link
-        && link.is_sync_active
-    {
-        return Err(EnableSyncError::SyncAlreadyEnabled);
-    }
-
-    enable_gmail_sync(&ctx, &user_context, None).await?;
-
-    Ok((StatusCode::CREATED, Json(EmptyResponse::default())).into_response())
 }
 
 /// Enables Gmail sync for a user by A) registering a watch with Gmail API B) updating the link record
