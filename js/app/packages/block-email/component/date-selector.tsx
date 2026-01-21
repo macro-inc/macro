@@ -17,6 +17,7 @@ import {
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import { Combobox } from '@kobalte/core/combobox';
 import { cn } from '@ui/utils/classname';
+import { format } from 'date-fns';
 
 type DateSelectorMode = 'search' | 'calendar';
 
@@ -34,7 +35,9 @@ type DateSelectorProps = {
 
 export const DateSelector = (props: DateSelectorProps) => {
   const [selectedOption, setSelectedOption] =
-    createSignal<DateSelectorOption | null>(null);
+    createSignal<DateSelectorOption | null>(
+      props.selectedDate ? { custom: true, date: props.selectedDate } : null
+    );
 
   const [searchQuery, setSearchQuery] = createSignal('');
   const [listboxRef, setListboxRef] = createSignal<HTMLElement | undefined>();
@@ -112,9 +115,21 @@ export const DateSelector = (props: DateSelectorProps) => {
     ];
   });
 
+  const getOptionLabel = (option: DateSelectorOption) => {
+    try {
+      return format(
+        option.custom ? option.date : option.context.date,
+        "MMMM d, yyyy 'at' h:mm a"
+      );
+    } catch {
+      return 'Invalid date';
+    }
+  };
+
   return (
     <Combobox<DateSelectorOption>
       multiple={false}
+      value={selectedOption()}
       options={options()}
       optionValue={(o) =>
         o.custom ? o.date.toString() : o.context.date.toString()
@@ -122,6 +137,7 @@ export const DateSelector = (props: DateSelectorProps) => {
       optionTextValue={(o) =>
         o.custom ? 'Custom date' : o.context.displayText
       }
+      optionLabel={getOptionLabel}
       onOpenChange={onOpenChange}
       onChange={onChange}
       onInputChange={onInputChange}
@@ -186,7 +202,7 @@ export const DateSelector = (props: DateSelectorProps) => {
         <Combobox.Content class="w-full max-w-sm bg-dialog text-ink border border-edge-muted">
           <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
             <SearchIcon class="h-4 w-4 text-ink-muted" />
-            <Combobox.Input />
+            <Combobox.Input class="w-full caret-accent" />
           </div>
           <Show when={dateOptions().length === 0}>
             <Show
