@@ -5,7 +5,6 @@ use axum::routing::delete;
 use tower::ServiceBuilder;
 
 pub(crate) mod disable;
-pub(crate) mod enable;
 
 pub fn router(state: ApiContext) -> Router<ApiContext> {
     Router::new().route(
