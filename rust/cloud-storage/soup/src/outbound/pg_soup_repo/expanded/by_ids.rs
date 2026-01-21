@@ -1,4 +1,7 @@
-use crate::{map_soup_type, outbound::pg_soup_repo::{populate_properties, type_err}};
+use crate::{
+    map_soup_type,
+    outbound::pg_soup_repo::{populate_properties, type_err},
+};
 use document_sub_type::DocumentSubType;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_entity::{Entity, EntityType};

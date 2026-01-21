@@ -7,7 +7,7 @@ use crate::{
 };
 use either::Either;
 use models_properties::{EntityReference, EntityType};
-use models_soup::{item::SoupItem, SoupProperty};
+use models_soup::{SoupProperty, item::SoupItem};
 use sqlx::PgPool;
 use system_properties::SystemPropertyKey;
 
@@ -163,9 +163,10 @@ pub(crate) async fn populate_properties(
             SoupItem::Project(p) => {
                 Some(EntityReference::new(p.id.to_string(), EntityType::Project))
             }
-            SoupItem::EmailThread(e) => {
-                Some(EntityReference::new(e.thread.id.to_string(), EntityType::Thread))
-            }
+            SoupItem::EmailThread(e) => Some(EntityReference::new(
+                e.thread.id.to_string(),
+                EntityType::Thread,
+            )),
             SoupItem::Chat(c) => Some(EntityReference::new(c.id.to_string(), EntityType::Chat)),
             SoupItem::Channel(_) => None,
         })
