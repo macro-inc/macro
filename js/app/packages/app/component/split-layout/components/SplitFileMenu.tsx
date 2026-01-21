@@ -3,16 +3,13 @@ import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { useItemOperations } from '@core/component/FileList/useItemOperations';
 import { MenuItem } from '@core/component/Menu';
 import { useIsDocumentOwner } from '@core/signal/permissions';
-import Unpin from '@icon/fill/push-pin-slash-fill.svg';
 import ArrowRight from '@icon/regular/arrow-right.svg';
 import Copy from '@icon/regular/copy.svg';
 import ThreeDots from '@icon/regular/list.svg';
 import Rename from '@icon/regular/pencil-line.svg';
-import Pin from '@icon/regular/push-pin.svg';
 import Trash from '@icon/regular/trash-simple.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { blockNameToItemType, type ItemType } from '@service-storage/client';
-import { usePinnedIds } from '@service-storage/pins';
 import {
   type Component,
   createMemo,
@@ -25,12 +22,7 @@ import { SplitPanelContext } from '../context';
 import { useSplitLayout } from '../layout';
 import { useSplitModal } from './SplitModalContext';
 
-export type FileOperationName =
-  | 'pin'
-  | 'delete'
-  | 'rename'
-  | 'copy'
-  | 'moveToProject';
+export type FileOperationName = 'delete' | 'rename' | 'copy' | 'moveToProject';
 
 export type DefaultFileOperation = {
   op: FileOperationName;
@@ -71,9 +63,6 @@ export function SplitFileMenu(props: {
   const [open, setOpen] = createSignal(false);
   const itemOperations = useItemOperations();
 
-  const pinnedIds = usePinnedIds();
-  const isPinned = () => pinnedIds().includes(props.id);
-
   const modal = useSplitModal();
 
   const { replaceOrInsertSplit, resetSplit } = useSplitLayout();
@@ -83,18 +72,6 @@ export function SplitFileMenu(props: {
       .map((op) => {
         if (isDefaultFileOperation(op)) {
           switch (op.op) {
-            case 'pin':
-              return {
-                label: isPinned() ? 'Unpin' : 'Pin',
-                action: () =>
-                  itemOperations.togglePin({
-                    itemType: props.itemType,
-                    id: props.id,
-                  }),
-                icon: isPinned() ? Unpin : Pin,
-                divideAbove: op.divideAbove || false,
-              };
-
             case 'delete':
               if (!isOwner()) return null;
               return {

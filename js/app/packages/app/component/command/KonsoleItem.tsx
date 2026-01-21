@@ -22,7 +22,6 @@ import type { HotkeyCommand } from '@core/hotkey/types';
 import { hasValidHotkey, runCommand } from '@core/hotkey/utils';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { type ChannelWithParticipants, idToDisplayName } from '@core/user';
-import PushPin from '@phosphor-icons/core/regular/push-pin.svg?component-solid';
 import Terminal from '@phosphor-icons/core/regular/terminal.svg?component-solid';
 import type { Channel } from '@service-comms/generated/models/channel';
 import type { Attachment } from '@service-email/generated/schemas';
@@ -742,29 +741,5 @@ export function CommandItemCard(props: CommandItemProps) {
         {/* Other modes can go here in the future */}
       </Switch>
     </CommandItemContainer>
-  );
-}
-
-export function PinnedCommandItem(props: {
-  item: CommandItemCard;
-  itemAction: (item: CommandItemCard, action: ItemAction) => void;
-}) {
-  const type = () => getCommandItemBlockName(props.item, true);
-  const name = () => getCommandItemName(props.item);
-
-  return (
-    <div
-      onMouseDown={() => props.itemAction(props.item, 'open')}
-      class="flex items-center shrink-0 gap-1.5 px-2 py-1.5 rounded-md hover:bg-hover hover-transition-bg cursor-pointer w-[calc(25%-6px)]"
-      title={name()}
-      style={{
-        'padding-top': `${COMMAND_ITEM_PADDING}px`,
-        'padding-bottom': `${COMMAND_ITEM_PADDING}px`,
-      }}
-    >
-      <EntityIcon targetType={type()} size="sm" />
-      <span class="text-xs font-medium text-ink truncate">{name()}</span>
-      <PushPin class="w-3.5 h-3.5 text-ink-extra-muted shrink-0" />
-    </div>
   );
 }

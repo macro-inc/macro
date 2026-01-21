@@ -4,7 +4,7 @@ import { useBlockId } from '@core/block';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
-import { useInstructionsMdIdQuery } from '@service-storage/instructionsMd';
+import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { createEffect, createSignal, onMount, Show, Suspense } from 'solid-js';
 import { mdStore } from '../signal/markdownBlockData';
 import { FindAndReplace } from './FindAndReplace';

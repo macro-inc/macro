@@ -85,6 +85,26 @@ impl ExtendedClient for AnthropicClient {
                     name: "web_fetch".into(),
                 }))
             }
+            AnthropicResponseExtension::BashCodeExecutionToolResponse(response) => {
+                let id = response.tool_use_id.clone();
+                let json = serde_json::to_value(&response).ok()?;
+
+                Some(StreamPart::ToolResponse(ToolResponse::Json {
+                    id,
+                    json,
+                    name: "bash_code_execution".into(),
+                }))
+            }
+            AnthropicResponseExtension::TextEditorCodeExecutionToolResponse(response) => {
+                let id = response.tool_use_id.clone();
+                let json = serde_json::to_value(&response).ok()?;
+
+                Some(StreamPart::ToolResponse(ToolResponse::Json {
+                    id,
+                    json,
+                    name: "text_editor_code_execution".into(),
+                }))
+            }
         }
     }
 }

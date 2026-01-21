@@ -8,7 +8,7 @@ import { useChannelsContext } from '@core/context/channels';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins/mentions';
 import { ENABLE_CHAT_CHANNEL_ATTACHMENT } from '@core/constant/featureFlags';
 import { getItemBlockName } from '@core/util/getItemBlockName';
-import { useHistory } from '@service-storage/history';
+import { useHistoryQuery } from '@queries/history/history';
 import { createMemo, createSignal } from 'solid-js';
 
 export function useAttachments(initial?: Attachment[]): Attachments {
@@ -42,10 +42,10 @@ export function useAttachments(initial?: Attachment[]): Attachments {
 }
 
 export const useChatAttachableHistory = () => {
-  const history = useHistory();
+  const historyQuery = useHistoryQuery();
 
   return createMemo(() => {
-    return history().filter((item) => {
+    return (historyQuery.data ?? []).filter((item) => {
       const blockName = getItemBlockName(item, true);
       return SUPPORTED_CHAT_ATTACHMENT_BLOCKS.includes(blockName);
     });

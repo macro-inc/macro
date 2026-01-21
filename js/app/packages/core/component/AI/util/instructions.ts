@@ -2,7 +2,7 @@ import { toast } from '@core/component/Toast/Toast';
 import {
   useCreateInstructionsMd,
   useInstructionsMdIdQuery,
-} from '@service-storage/instructionsMd';
+} from '@queries/storage/instructions-md';
 import { useSplitLayout } from 'app/component/split-layout/layout';
 
 const showFailToast = () => {

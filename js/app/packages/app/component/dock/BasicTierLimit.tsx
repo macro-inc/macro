@@ -1,5 +1,5 @@
 import { usePaywallState } from '@core/constant/PaywallState';
-import { useUserQuotaQuery } from '@service-auth/userQuota';
+import { useUserQuotaQuery } from '@queries/auth';
 import { createMemo, Suspense } from 'solid-js';
 
 const BasicTierLimitWrapper = () => {

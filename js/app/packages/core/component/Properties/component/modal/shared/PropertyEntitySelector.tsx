@@ -21,7 +21,7 @@ import {
 } from '@macro-entity';
 import { useUserId } from '@core/context/user';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { useHistory } from '@service-storage/history';
+import { useHistoryQuery } from '@queries/history/history';
 import { debounce } from '@solid-primitives/scheduled';
 import {
   createEffect,
@@ -152,7 +152,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const blockId = useMaybeBlockId();
   const { entityType: currentEntityType } = usePropertiesContext();
 
-  const history = useHistory();
+  const historyQuery = useHistoryQuery();
   const contacts = useContacts();
   const channelsContext = useChannelsContext();
   const channels = channelsContext.channels;
@@ -241,7 +241,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     if (!specificEntityType) {
       return [
         ...contactsWithCurrentUser().map(entityMapper('user')),
-        ...history().map(entityMapper('item')),
+        ...(historyQuery.data ?? []).map(entityMapper('item')),
         ...channels().map(entityMapper('channel')),
         ...emails().map(threadMapper),
       ];
@@ -265,7 +265,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     }
 
     if (specificEntityType === 'TASK') {
-      return history()
+      return (historyQuery.data ?? [])
         .filter(
           (item) =>
             item.type === 'document' &&
@@ -278,7 +278,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
     const itemTypes: EntityType[] = ['DOCUMENT', 'PROJECT', 'CHAT'];
     if (itemTypes.includes(specificEntityType)) {
-      return history()
+      return (historyQuery.data ?? [])
         .filter(
           (item) =>
             item.type.toUpperCase() === specificEntityType &&

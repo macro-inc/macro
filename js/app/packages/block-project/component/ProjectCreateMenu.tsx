@@ -12,7 +12,7 @@ import {
   createTask,
 } from '@core/util/create';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { useCreateProject } from '@service-storage/projects';
+import { createProject } from '@queries/storage/projects';
 import { type Component, createSignal, For } from 'solid-js';
 
 type MenuItemProps = {
@@ -201,7 +201,6 @@ function MenuContent(props: { projectId: string }) {
         createBlock({
           blockName: 'project',
           createFn: async () => {
-            const createProject = useCreateProject();
             const result = await createProject({
               name: 'New Project',
               parentId: props.projectId,

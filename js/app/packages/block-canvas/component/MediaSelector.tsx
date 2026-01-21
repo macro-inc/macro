@@ -25,7 +25,7 @@ import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import UploadSimple from '@phosphor-icons/core/bold/upload-simple-bold.svg?component-solid';
 import Image from '@phosphor-icons/core/regular/image.svg?component-solid';
 //import { copiedFile } from "@core/state/clipboard";
-import { useHistory } from '@service-storage/history';
+import { useHistoryQuery } from '@queries/history/history';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { VList } from 'virtua/solid';
 import { Tools } from '../constants';
@@ -82,7 +82,7 @@ export function MediaSelector() {
   const mediaTypes: MediaType[] = ENABLE_CANVAS_VIDEO
     ? ['image', 'video']
     : ['image'];
-  const history = useHistory();
+  const historyQuery = useHistoryQuery();
   //const copiedFileID = copiedFile();
   const { track, TrackingEvents } = withAnalytics();
   const select = useSelect();
@@ -117,7 +117,7 @@ export function MediaSelector() {
 
   const userMediaFiles = createMemo(() => {
     const mediaFiles: MediaItem[] = [];
-    for (const item of history()) {
+    for (const item of historyQuery.data ?? []) {
       for (const mediaType of mediaTypes) {
         if (
           item.type === 'document' &&

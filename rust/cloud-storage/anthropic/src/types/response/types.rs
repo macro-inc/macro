@@ -90,6 +90,16 @@ pub struct Usage {
     pub service_tier: Option<String>,
 }
 
+/// Container information for code execution sessions
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct Container {
+    /// Unique identifier for the container
+    pub id: String,
+    /// When the container expires (ISO 8601 timestamp)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<String>,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct MessageResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -108,6 +118,7 @@ pub struct MessageResponse {
     pub usage: Option<Usage>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context_management: Option<serde_json::Value>,
+    /// Container information for code execution sessions
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub container: Option<serde_json::Value>,
+    pub container: Option<Container>,
 }

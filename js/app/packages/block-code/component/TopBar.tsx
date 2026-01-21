@@ -45,7 +45,6 @@ export const TopBar: Component = () => {
   });
 
   const ops: FileOperation[] = [
-    { op: 'pin' },
     { op: 'rename' },
     { op: 'copy' },
     { op: 'moveToProject' },

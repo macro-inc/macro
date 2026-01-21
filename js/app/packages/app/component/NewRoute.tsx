@@ -5,7 +5,7 @@ import { isPaymentError } from '@core/util/handlePaymentError';
 import { isErr } from '@core/util/maybeResult';
 import { uploadFile } from '@core/util/upload';
 import { cognitionApiServiceClient } from '@service-cognition/client';
-import { postNewHistoryItem } from '@service-storage/history';
+import { postNewHistoryItem } from '@queries/history/history';
 import { newBlankDocument } from '@service-storage/util/newBlankDocument';
 import {
   Navigate,

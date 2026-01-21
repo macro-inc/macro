@@ -3,7 +3,7 @@ import { createBlockSignal, useBlockId } from '@core/block';
 import { ENABLE_PDF_MODIFICATION_DATA_AUTOSAVE } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { storageServiceClient } from '@service-storage/client';
-import { refetchHistory } from '@service-storage/history';
+import { refetchHistory } from '@queries/history/history';
 import { createMemo } from 'solid-js';
 import { highlightStore } from '../store/highlight';
 import { useTableOfContentsValue } from '../store/tableOfContents';

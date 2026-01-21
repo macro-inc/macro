@@ -3,7 +3,7 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { useBigChat } from '@core/signal/layout';
-import { AiInstructionsIcon } from '@service-storage/instructionsMd';
+import { AiInstructionsIcon } from '@queries/storage/instructions-md';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createMemo } from 'solid-js';
 import {

@@ -56,7 +56,6 @@ export function TopBar() {
   const downloadAsMarkdownText = useDownloadDocumentAsMarkdownText();
 
   const ops: FileOperation[] = [
-    { op: 'pin' },
     { op: 'copy' },
     { op: 'rename' },
     { op: 'moveToProject' },

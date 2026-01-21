@@ -12,6 +12,7 @@
 		"build": "cd packages/app && MODE=development NODE_ENV=production bun run --bun build",
 		"test": "bunx vitest run",
 		"gen-api": "bun scripts/generate-api-schema.ts",
+		"gen-tools": "bun scripts/generate-dcs-tools.ts",
 		"check": "tsc --noEmit --skipLibCheck --project packages/app/tsconfig.json",
 		"preview": "cd packages/app && bun run --bun preview:dev",
 		"lint": "bunx --bun biome lint --skip=nursery/noImportCycles",
