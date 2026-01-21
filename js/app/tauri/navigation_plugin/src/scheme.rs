@@ -29,7 +29,11 @@ impl MacroScheme {
             });
         };
 
-        let rest = url.fragment().unwrap_or(url.path()).trim_start_matches('/');
+        let mut rest = url.fragment().unwrap_or(url.path()).trim_start_matches('/');
+        // Strip the '/app' prefix for mobile Tauri apps since the router uses '/' as base
+        if rest.starts_with("app/") {
+            rest = &rest[4..]; // Remove "app/" prefix
+        }
         let query = url.query();
         let inner = match query {
             Some(q) => format!("macro://{rest}?{q}"),
