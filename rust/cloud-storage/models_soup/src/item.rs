@@ -5,6 +5,7 @@ use crate::{chat::SoupChat, comms::SoupChannel};
 use chrono::{DateTime, Utc};
 use model_entity::{Entity, EntityType};
 use models_pagination::{Identify, SimpleSortMethod, SortOn};
+use models_properties::{EntityReference, EntityType as PropertiesEntityType};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -139,6 +140,32 @@ impl SortOn<SimpleSortMethod> for SoupItem {
                 sort_type: sort,
                 last_val,
             }
+        }
+    }
+}
+
+impl SoupItem {
+    /// Converts this item to an [`EntityReference`] for property lookups.
+    ///
+    /// Returns `None` for item types that don't support properties (e.g., channels).
+    pub fn to_entity_reference(&self) -> Option<EntityReference> {
+        match self {
+            SoupItem::Document(doc) => {
+                Some(EntityReference::new(doc.id.to_string(), doc.entity_type()))
+            }
+            SoupItem::Project(p) => Some(EntityReference::new(
+                p.id.to_string(),
+                PropertiesEntityType::Project,
+            )),
+            SoupItem::EmailThread(e) => Some(EntityReference::new(
+                e.thread.id.to_string(),
+                PropertiesEntityType::Thread,
+            )),
+            SoupItem::Chat(c) => Some(EntityReference::new(
+                c.id.to_string(),
+                PropertiesEntityType::Chat,
+            )),
+            SoupItem::Channel(_) => None,
         }
     }
 }

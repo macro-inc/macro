@@ -6,6 +6,7 @@
  */
 import type { SoupChatProjectId } from './soupChatProjectId';
 import type { SoupChatViewedAt } from './soupChatViewedAt';
+import type { SoupProperty } from './soupProperty';
 
 export interface SoupChat {
   /** The time the chat was created */
@@ -20,6 +21,8 @@ export interface SoupChat {
   ownerId: string;
   /** The project id of the chat */
   projectId?: SoupChatProjectId;
+  /** Properties */
+  properties: SoupProperty[];
   /** The time the chat was last updated */
   updatedAt: number;
   /** The time the chat was last viewed */

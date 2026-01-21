@@ -20,41 +20,40 @@ pub(in crate::api::search) async fn filter_projects(
 ) -> Result<FilterProjectResponse, SearchError> {
     let project_ids: Vec<String> = if !filters.project_ids.is_empty() {
         // Item ids are provided, we want to get the list of those that are accessible to the user
-        ctx.dss_client
-            .validate_user_accessible_item_ids(
-                user_id,
-                filters
-                    .project_ids
-                    .iter()
-                    .map(|id| ShareableItem {
-                        item_id: id.to_string(),
-                        item_type: ShareableItemType::Project,
-                    })
-                    .collect(),
-            )
-            .await
-            .map_err(SearchError::InternalError)?
-            .into_iter()
-            .map(|a| a.item_id)
-            .collect()
+        macro_db_client::item_access::validate_user_accessible_items(
+            &ctx.db,
+            user_id,
+            filters
+                .project_ids
+                .iter()
+                .map(|id| ShareableItem {
+                    item_id: id.to_string(),
+                    item_type: ShareableItemType::Project,
+                })
+                .collect(),
+        )
+        .await
+        .map_err(SearchError::InternalError)?
+        .into_iter()
+        .map(|a| a.item_id)
+        .collect()
     } else {
         // If both the project_ids and owners are empty, we want to get the list of everything the has access to but does not own
         // Otherwise, we need a list of all items the user has access to including what they own
         let should_exclude_owner = filters.project_ids.is_empty() && filters.owners.is_empty();
 
         // No filters are provided, we want to get the list of everything the has access to but does not own
-        ctx.dss_client
-            .get_user_accessible_item_ids(
-                user_id,
-                Some("project".to_string()),
-                Some(should_exclude_owner),
-            )
-            .await
-            .map_err(SearchError::InternalError)?
-            .items
-            .into_iter()
-            .map(|a| a.item_id)
-            .collect()
+        macro_db_client::item_access::get_accessible_items::get_user_accessible_items(
+            &ctx.db,
+            user_id,
+            Some("project".to_string()),
+            should_exclude_owner,
+        )
+        .await
+        .map_err(SearchError::InternalError)?
+        .into_iter()
+        .map(|a| a.item_id)
+        .collect()
     };
 
     let ids_only = !filters.project_ids.is_empty() || !filters.owners.is_empty();

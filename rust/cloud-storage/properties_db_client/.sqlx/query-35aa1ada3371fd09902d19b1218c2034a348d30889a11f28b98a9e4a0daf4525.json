@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT \n            ep.id as entity_property_id,\n            ep.entity_id,\n            ep.entity_type as \"entity_type: EntityType\",\n            ep.property_definition_id,\n            ep.values as \"values: sqlx::types::JsonValue\",\n            ep.created_at as entity_property_created_at,\n            ep.updated_at as entity_property_updated_at,\n            pd.organization_id as definition_organization_id,\n            pd.user_id as definition_user_id,\n            pd.display_name,\n            pd.data_type as \"data_type: DataType\",\n            pd.is_multi_select,\n            pd.specific_entity_type as \"specific_entity_type: Option<EntityType>\",\n            pd.created_at as definition_created_at,\n            pd.updated_at as definition_updated_at,\n            pd.is_system as definition_is_system\n        FROM entity_properties ep\n        INNER JOIN property_definitions pd ON ep.property_definition_id = pd.id\n        WHERE (ep.entity_id, ep.entity_type) IN (\n            SELECT * FROM UNNEST($1::TEXT[], $2::property_entity_type[])\n        )\n        AND pd.id = ANY($3::UUID[])\n        ",
+  "query": "\nSELECT\n    ep.id as entity_property_id,\n    ep.entity_id,\n    ep.entity_type as \"entity_type: EntityType\",\n    ep.property_definition_id,\n    ep.values as \"values: sqlx::types::JsonValue\",\n    ep.created_at as entity_property_created_at,\n    ep.updated_at as entity_property_updated_at,\n    pd.organization_id as definition_organization_id,\n    pd.user_id as definition_user_id,\n    pd.display_name,\n    pd.data_type as \"data_type: DataType\",\n    pd.is_multi_select,\n    pd.specific_entity_type as \"specific_entity_type: Option<EntityType>\",\n    pd.created_at as definition_created_at,\n    pd.updated_at as definition_updated_at,\n    pd.is_system as definition_is_system\nFROM entity_properties ep\nINNER JOIN property_definitions pd ON ep.property_definition_id = pd.id\nWHERE ep.entity_id = $1 AND ep.entity_type = $2\n        ",
   "describe": {
     "columns": [
       {
@@ -134,32 +134,24 @@
     ],
     "parameters": {
       "Left": [
-        "TextArray",
+        "Text",
         {
           "Custom": {
-            "name": "property_entity_type[]",
+            "name": "property_entity_type",
             "kind": {
-              "Array": {
-                "Custom": {
-                  "name": "property_entity_type",
-                  "kind": {
-                    "Enum": [
-                      "CHANNEL",
-                      "CHAT",
-                      "DOCUMENT",
-                      "PROJECT",
-                      "THREAD",
-                      "USER",
-                      "COMPANY",
-                      "TASK"
-                    ]
-                  }
-                }
-              }
+              "Enum": [
+                "CHANNEL",
+                "CHAT",
+                "DOCUMENT",
+                "PROJECT",
+                "THREAD",
+                "USER",
+                "COMPANY",
+                "TASK"
+              ]
             }
           }
-        },
-        "UuidArray"
+        }
       ]
     },
     "nullable": [
@@ -181,5 +173,5 @@
       false
     ]
   },
-  "hash": "e004bed4c36a09e5b178eae38953fe204bea43e98071e554aea716d18538dc66"
+  "hash": "35aa1ada3371fd09902d19b1218c2034a348d30889a11f28b98a9e4a0daf4525"
 }

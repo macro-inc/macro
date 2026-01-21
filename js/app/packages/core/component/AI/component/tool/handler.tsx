@@ -10,12 +10,14 @@ import {
 } from '@service-cognition/generated/tools/tool';
 import { createStore } from 'solid-js/store';
 import { Dynamic, Show } from 'solid-js/web';
+import { bashCodeExecutionHandler } from './BashCodeExecution';
 import { listChannelsHandler } from './ListChannels';
 import { listDocumentsHandler } from './ListDocuments';
 import { listEmailsHandler } from './ListEmails';
 import { rewriteHandler } from './MarkdownRewrite';
 import { readHandler } from './Read';
 import { contentSearchHandler, nameSearchHandler } from './Search';
+import { textEditorCodeExecutionHandler } from './TextEditorCodeExecution';
 import type { RenderContext } from './ToolRenderer';
 import { webFetchHandler } from './WebFetch';
 import { webSearchHandler } from './WebSearch';
@@ -25,15 +27,17 @@ const [renderStore, setRenderStore] = createStore<
 >({});
 
 const toolHandlers: ToolHandlerMap<RenderContext> = {
+  bash_code_execution: bashCodeExecutionHandler,
   ContentSearch: contentSearchHandler,
-  NameSearch: nameSearchHandler,
-  web_fetch: webFetchHandler,
-  web_search: webSearchHandler,
-  MarkdownRewrite: rewriteHandler,
-  Read: readHandler,
   ListChannels: listChannelsHandler,
   ListDocuments: listDocumentsHandler,
   ListEmails: listEmailsHandler,
+  MarkdownRewrite: rewriteHandler,
+  NameSearch: nameSearchHandler,
+  Read: readHandler,
+  text_editor_code_execution: textEditorCodeExecutionHandler,
+  web_fetch: webFetchHandler,
+  web_search: webSearchHandler,
 };
 
 type ToolProps = {

@@ -12,6 +12,7 @@ import type { SoupDocumentProjectId } from './soupDocumentProjectId';
 import type { SoupDocumentSha } from './soupDocumentSha';
 import type { SoupDocumentSubTypeProperty } from './soupDocumentSubTypeProperty';
 import type { SoupDocumentViewedAt } from './soupDocumentViewedAt';
+import type { SoupProperty } from './soupProperty';
 
 export interface SoupDocument {
   /** The id of the document this document branched from */
@@ -36,6 +37,8 @@ This could be the document_instance_id or document_bom_id depending on the file 
   ownerId: string;
   /** The id of the project that this document belongs to */
   projectId?: SoupDocumentProjectId;
+  /** Properties */
+  properties: SoupProperty[];
   /** If the document is a PDF, this is the SHA of the pdf
 If the document is a DOCX, this will not be present */
   sha?: SoupDocumentSha;

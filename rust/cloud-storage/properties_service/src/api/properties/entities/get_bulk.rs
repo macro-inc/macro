@@ -71,7 +71,7 @@ async fn get_bulk_entity_properties_impl(
         entity_properties_get::get_bulk_entity_properties_values_filtered(
             &context.db,
             &request.entities,
-            request.property_ids,
+            &request.property_ids,
         )
         .await
     }

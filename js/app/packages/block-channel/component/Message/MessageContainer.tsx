@@ -517,7 +517,7 @@ export function MessageContainer(props: MessageProps) {
             setContextMenuOpen(isOpen);
           }}
         >
-          <ContextMenu.Trigger>
+          <ContextMenu.Trigger disabled={editing()}>
             <MessageComponent
               id={message.id}
               focused={props.isFocused}

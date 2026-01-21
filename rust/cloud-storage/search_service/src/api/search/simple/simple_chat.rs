@@ -1,7 +1,7 @@
 use crate::api::search::simple::SearchError;
 use item_filters::ChatFilters;
 use macro_user_id::user_id::MacroUserId;
-use model::item::{ShareableItem, ShareableItemType};
+use model::item::{ShareableItem, ShareableItemType, UserAccessibleItem};
 use opensearch_client::search::model::{Highlight, SearchHit};
 use sqlx::{Pool, Postgres, types::Uuid};
 
@@ -18,36 +18,35 @@ pub(in crate::api::search) async fn filter_chats(
     user_id: &str,
     filters: &ChatFilters,
 ) -> Result<FilterChatResponse, SearchError> {
-    let chat_ids_response = if !filters.chat_ids.is_empty() {
+    let chat_ids_response: Vec<UserAccessibleItem> = if !filters.chat_ids.is_empty() {
         // Item ids are provided, we want to get the list of those that are accessible to the user
-        ctx.dss_client
-            .validate_user_accessible_item_ids(
-                user_id,
-                filters
-                    .chat_ids
-                    .iter()
-                    .map(|id| ShareableItem {
-                        item_id: id.to_string(),
-                        item_type: ShareableItemType::Chat,
-                    })
-                    .collect(),
-            )
-            .await
-            .map_err(SearchError::InternalError)?
+        macro_db_client::item_access::validate_user_accessible_items(
+            &ctx.db,
+            user_id,
+            filters
+                .chat_ids
+                .iter()
+                .map(|id| ShareableItem {
+                    item_id: id.to_string(),
+                    item_type: ShareableItemType::Chat,
+                })
+                .collect(),
+        )
+        .await
+        .map_err(SearchError::InternalError)?
     } else {
         // If both the project_ids and owners are empty, we want to get the list of everything the has access to but does not own
         // Otherwise, we need a list of all items the user has access to including what they own
         let should_exclude_owner = filters.project_ids.is_empty() && filters.owners.is_empty();
         // No filters are provided, we want to get the list of everything the has access to but does not own
-        ctx.dss_client
-            .get_user_accessible_item_ids(
-                user_id,
-                Some("chat".to_string()),
-                Some(should_exclude_owner),
-            )
-            .await
-            .map_err(SearchError::InternalError)?
-            .items
+        macro_db_client::item_access::get_accessible_items::get_user_accessible_items(
+            &ctx.db,
+            user_id,
+            Some("chat".to_string()),
+            should_exclude_owner,
+        )
+        .await
+        .map_err(SearchError::InternalError)?
     };
 
     let chat_ids: Vec<String> = chat_ids_response

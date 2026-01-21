@@ -1,6 +1,6 @@
 use crate::{
     prelude::{ServerTool, WEB_FETCH_TOOL},
-    types::request::WEB_SEARCH_TOOL,
+    types::request::{CODE_EXECUTION_TOOL, WEB_SEARCH_TOOL},
 };
 
 /// Request extensions are functionality that is supported by the anthropic API but not supported by OpenAI/completions/v1
@@ -12,8 +12,10 @@ use crate::{
 pub enum AnthropicRequestExtension {
     /// <https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool>
     WebSearchTool,
-    // https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-fetch-tool
+    /// <https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-fetch-tool>
     FetchTool,
+    /// <https://platform.claude.com/docs/en/agents-and-tools/tool-use/code-execution-tool>
+    CodeExecutionTool,
 }
 
 #[derive(Clone, Debug)]
@@ -50,6 +52,7 @@ impl AnthropicRequestExtension {
         match self {
             Self::WebSearchTool => add_tool(WEB_SEARCH_TOOL.clone(), request),
             Self::FetchTool => add_tool(WEB_FETCH_TOOL.clone(), request),
+            Self::CodeExecutionTool => add_tool(CODE_EXECUTION_TOOL.clone(), request),
         }
     }
 }

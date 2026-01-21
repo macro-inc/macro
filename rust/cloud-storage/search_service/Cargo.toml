@@ -18,11 +18,10 @@ aws-config = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
-comms_service_client = { path = "../comms_service_client" }
-document_storage_service_client = { path = "../document_storage_service_client" }
+comms_db_client = { path = "../comms_db_client" }
 document_sub_type = { path = "../document_sub_type" }
 email_contact_search = { path = "../email_contact_search" }
-email_service_client = { path = "../email_service_client" }
+email_db_client = { path = "../email_db_client" }
 futures = { workspace = true }
 http-body-util = { workspace = true }
 indexmap = "2"

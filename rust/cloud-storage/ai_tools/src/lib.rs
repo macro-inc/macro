@@ -1,5 +1,6 @@
 use ai_toolset::AsyncToolSet;
 use ai_toolset::schema::{ToolSchemaGenerator, ToolSchemas};
+pub mod code_execution;
 pub mod list;
 pub mod prompts;
 pub mod read;
@@ -7,6 +8,9 @@ pub mod rewrite;
 pub mod search;
 mod tool_context;
 pub mod web_fetch;
+use code_execution::{
+    anthropic_bash_code_execution_tool, anthropic_text_editor_code_execution_tool,
+};
 use search::web::anthropic_web_search::anthropic_web_search_tool;
 use std::sync::Arc;
 use web_fetch::anthropic_web_fetch_tool;
@@ -50,6 +54,8 @@ pub fn all_tool_schemas() -> ToolSchemas {
     all_tools()
         .merge(&*anthropic_web_search_tool)
         .merge(&*anthropic_web_fetch_tool)
+        .merge(&*anthropic_bash_code_execution_tool)
+        .merge(&*anthropic_text_editor_code_execution_tool)
         .generate_schemas()
 }
 

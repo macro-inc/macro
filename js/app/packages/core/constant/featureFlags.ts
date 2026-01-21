@@ -139,3 +139,5 @@ export const ENABLE_TASKS_TABS = true;
 export const ENABLE_EMAIL_SHARING = true;
 
 export const ENABLE_FRECENCY = false;
+
+export const ENABLE_UNIFIED_LIST_AI_INPUT = false;

@@ -14,12 +14,14 @@ pub(in crate::api::search) async fn filter_channels(
     organization_id: Option<i32>,
     filters: &ChannelFilters,
 ) -> Result<FilterChannelResponse, SearchError> {
-    // Get all channel ids for the user
-    let channel_ids = ctx
-        .comms_service_client
-        .get_user_channel_ids(user_id, organization_id)
-        .await
-        .map_err(|e| SearchError::InternalError(e.into()))?;
+    // Get all channel ids for the user directly from DB
+    let channel_ids = comms_db_client::channels::get_channels::get_user_channel_ids(
+        &ctx.db,
+        user_id,
+        organization_id.map(|id| id as i64),
+    )
+    .await
+    .map_err(|e| SearchError::InternalError(e.into()))?;
 
     // If the user has no channels, return an empty response
     if channel_ids.is_empty() {

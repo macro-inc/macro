@@ -1,5 +1,6 @@
 use crate::prelude::ServerToolUse;
 
+use super::code_execution::{BashCodeExecutionResponse, TextEditorCodeExecutionResponse};
 use super::web_fetch::WebFetchResponse;
 use super::web_search::WebSearchResponse;
 
@@ -71,6 +72,8 @@ pub enum ContentDeltaEvent {
     },
     WebSearchToolResult(WebSearchResponse),
     WebFetchToolResult(WebFetchResponse),
+    BashCodeExecutionToolResult(BashCodeExecutionResponse),
+    TextEditorCodeExecutionToolResult(TextEditorCodeExecutionResponse),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

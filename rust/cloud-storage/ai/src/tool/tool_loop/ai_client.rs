@@ -24,6 +24,7 @@ where
         let extensions = AnthropicRequestExtensions(vec![
             AnthropicRequestExtension::WebSearchTool,
             AnthropicRequestExtension::FetchTool,
+            AnthropicRequestExtension::CodeExecutionTool,
         ]);
         let client = AnthropicClient::new(extensions);
         let toolset = Arc::new(toolset);

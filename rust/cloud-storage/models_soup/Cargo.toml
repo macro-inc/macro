@@ -18,6 +18,7 @@ email = { path = "../email" }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
 models_pagination = { path = "../models_pagination" }
+models_properties = { path = "../models_properties/" }
 serde = { workspace = true }
 strum = { workspace = true }
 utoipa = { workspace = true, optional = true }
