@@ -210,11 +210,16 @@ export function EmailCompose(props: EmailComposeProps) {
       return false;
     }
 
-    const draftResponse = await saveEmailDraft({
-      ...draftToSave,
-      db_id: currentDraftID(),
-      link_id: linkID,
-    });
+    const sendTime = form.sendTime()?.toISOString();
+
+    const draftResponse = await saveEmailDraft(
+      {
+        ...draftToSave,
+        db_id: currentDraftID(),
+        link_id: linkID,
+      },
+      sendTime
+    );
 
     if (draftResponse) {
       // If the email draft saved successfully, we want to upload the
@@ -491,6 +496,8 @@ export function EmailCompose(props: EmailComposeProps) {
       return;
     }
 
+    const sendTime = form.sendTime()?.toISOString();
+
     sendMutation.mutate({
       message: {
         link_id: currentLink.id,
@@ -508,6 +515,7 @@ export function EmailCompose(props: EmailComposeProps) {
         body_html: data.html,
         body_macro: data.raw,
         db_id: currentDraftID(),
+        send_time: sendTime,
       },
     });
 
