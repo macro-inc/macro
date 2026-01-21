@@ -1,126 +1,676 @@
-version: '3.8'
+# Cloud Storage Services - Local Development
 services:
-  macrodb:
-    image: postgres:16
-    container_name: macrodb
-    ports:
-      - '5432:5432'
-    expose:
-      - '5432'
-    environment:
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=password
-      - PGPASSWORD=password
-    volumes:
-      - db:/var/lib/postgresql/data
-      - ./database/Initiate.sql:/etc/Initiate.sql
-      - ./database/Clear.sql:/etc/Clear.sql
-    networks:
-      - macro_api_network
-  macrocache:
+  redis:
     image: 'redis/redis-stack:latest'
-    container_name: macrocache
     ports:
       - '6379:6379' # Expose Redis on the default port
       - '8001:8001' # Expose Redis Stack Server UI/tools
     environment:
       - ALLOW_EMPTY_PASSWORD=yes
-    volumes:
-      - cache:/data
     networks:
-      - macro_api_network
-  redis-node-0:
-    image: bitnami/redis-cluster:7.0
-    environment:
-      - REDIS_PORT_NUMBER=6369
-      - REDIS_CLUSTER_PREFERRED_ENDPOINT_TYPE=hostname
-      - REDIS_CLUSTER_ANNOUNCE_HOSTNAME=redis-node-0
-      - ALLOW_EMPTY_PASSWORD=yes
-      - REDIS_CLUSTER_CREATOR=yes
-      - REDIS_NODES=redis-node-0:6369,redis-node-1:6380,redis-node-2:6381, redis-node-3:6382,redis-node-4:6383, redis-node-5:6384
+      - cloud-storage-network
+  # ============================================================================
+  # authentication_service (Port 8080)
+  # Primary auth service - depends on FusionAuth, Redis, MacroDB
+  # ============================================================================
+  authentication_service:
+    build:
+      context: ./rust/cloud-storage
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: authentication_service
     ports:
-      - '6369:6369'
-    depends_on: [redis-node-1, redis-node-2, redis-node-3, redis-node-4]
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - DATABASE_URL=${MACRODB_URL}
+      - REDIS_URI=${REDIS_URI}
+      - BASE_URL=http://authentication_service:8080
+      - FUSIONAUTH_API_KEY_SECRET_KEY=${FUSIONAUTH_API_KEY_SECRET_KEY}
+      - FUSIONAUTH_CLIENT_ID=${FUSIONAUTH_CLIENT_ID}
+      - FUSIONAUTH_CLIENT_SECRET_KEY=${FUSIONAUTH_CLIENT_SECRET_KEY}
+      - FUSIONAUTH_APPLICATION_ID=${FUSIONAUTH_APPLICATION_ID}
+      - FUSIONAUTH_BASE_URL=${FUSIONAUTH_BASE_URL}
+      - FUSIONAUTH_OAUTH_REDIRECT_URI=${FUSIONAUTH_OAUTH_REDIRECT_URI}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET_KEY=${GOOGLE_CLIENT_SECRET_KEY}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET_KEY=${STRIPE_WEBHOOK_SECRET_KEY}
+      - STRIPE_PRICE_ID=${STRIPE_PRICE_ID}
+      - SERVICE_INTERNAL_AUTH_KEY=local
+      - INTERNAL_API_SECRET_KEY=local
+      - COMMS_SERVICE_URL=http://comms_service:8080
+      - DOCUMENT_STORAGE_SERVICE_URL=http://document_storage_service:8080
+      - NOTIFICATION_SERVICE_URL=http://notification_service:8079
+      - NOTIFICATION_QUEUE=${NOTIFICATION_QUEUE}
+      - SEARCH_EVENT_QUEUE=${SEARCH_EVENT_QUEUE}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=us-east-1
+      - ENVIRONMENT=local
+      - MACRO_API_TOKEN_PRIVATE_SECRET_KEY=${MACRO_API_TOKEN_PRIVATE_SECRET_KEY}
+      - AUDIENCE=${AUDIENCE}
+      - ISSUER=${ISSUER}
+      - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
+      - MACRO_API_TOKEN_EXPIRY_SECONDS=${MACRO_API_TOKEN_EXPIRY_SECONDS}
     networks:
-      - macro_api_network
+      - cloud-storage-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
-  redis-node-1:
-    image: bitnami/redis-cluster:7.0
-    environment:
-      - REDIS_PORT_NUMBER=6380
-      - REDIS_CLUSTER_PREFERRED_ENDPOINT_TYPE=hostname
-      - REDIS_CLUSTER_ANNOUNCE_HOSTNAME=redis-node-1
-      - ALLOW_EMPTY_PASSWORD=yes
-      - REDIS_NODES=redis-node-0:6369,redis-node-1:6380,redis-node-2:6381, redis-node-3:6382,redis-node-4:6383, redis-node-5:6384
+  # ============================================================================
+  # comms_service (Port 8081)
+  # Communications/messaging service
+  # ============================================================================
+  comms_service:
+    build:
+      context: ./rust/cloud-storage
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: comms_service
     ports:
-      - '6380:6380'
+      - "8081:8080"
+    environment:
+      - PORT=8080
+      - MACRO_DB_URL=${MACRODB_URL}
+      - DATABASE_URL=${MACRODB_URL}
+      - CONNECTION_GATEWAY_URL=http://connection_gateway:8080
+      - NOTIFICATION_QUEUE=${NOTIFICATION_QUEUE}
+      - DOCUMENT_STORAGE_SERVICE_URL=http://document_storage_service:8080
+      - CONTACTS_QUEUE=${CONTACTS_QUEUE}
+      - AUTHENTICATION_SERVICE_URL=http://authentication_service:8080
+      - AUTHENTICATION_SERVICE_SECRET_KEY=${AUTHENTICATION_SERVICE_SECRET_KEY}
+      - SEARCH_EVENT_QUEUE=${SEARCH_EVENT_QUEUE}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=us-east-1
+      - ENVIRONMENT=local
+      - AUDIENCE=${AUDIENCE}
+      - ISSUER=${ISSUER}
+      - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
+      - INTERNAL_API_SECRET_KEY=local
+      - DOCUMENT_PERMISSION_JWT_SECRET_KEY=${DOCUMENT_PERMISSION_JWT_SECRET_KEY}
+    depends_on:
+      - authentication_service
+      - connection_gateway
     networks:
-      - macro_api_network
+      - cloud-storage-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
-  redis-node-2:
-    image: bitnami/redis-cluster:7.0
-    environment:
-      - REDIS_PORT_NUMBER=6381
-      - REDIS_CLUSTER_PREFERRED_ENDPOINT_TYPE=hostname
-      - REDIS_CLUSTER_ANNOUNCE_HOSTNAME=redis-node-2
-      - ALLOW_EMPTY_PASSWORD=yes
-      - REDIS_NODES=redis-node-0:6369,redis-node-1:6380,redis-node-2:6381, redis-node-3:6382,redis-node-4:6383, redis-node-5:6384
+  # ============================================================================
+  # connection_gateway (Port 8082)
+  # WebSocket gateway - Redis only
+  # ============================================================================
+  connection_gateway:
+    build:
+      context: ./rust/cloud-storage
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: connection_gateway_service
     ports:
-      - '6381:6381'
+      - "8082:8080"
+    environment:
+      - PORT=8080
+      - REDIS_HOST=redis://redis:6379
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=us-east-1
+      - ENVIRONMENT=local
+      - AUDIENCE=${AUDIENCE}
+      - CONNECTION_GATEWAY_TABLE=${CONNECTION_GATEWAY_TABLE}
+      - ISSUER=${ISSUER}
+      - MACRO_DB_URL=${MACRODB_URL}
+      - INTERNAL_API_SECRET_KEY=local
+      - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
+    depends_on:
+      - redis
     networks:
-      - macro_api_network
+      - cloud-storage-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
-  redis-node-3:
-    image: bitnami/redis-cluster:7.0
-    environment:
-      - REDIS_PORT_NUMBER=6382
-      - REDIS_CLUSTER_PREFERRED_ENDPOINT_TYPE=hostname
-      - REDIS_CLUSTER_ANNOUNCE_HOSTNAME=redis-node-3
-      - ALLOW_EMPTY_PASSWORD=yes
-      - REDIS_NODES=redis-node-0:6369,redis-node-1:6380,redis-node-2:6381, redis-node-3:6382,redis-node-4:6383, redis-node-5:6384
+  # ============================================================================
+  # contacts_service (Port 8083)
+  # Contact management - ContactsDB
+  # ============================================================================
+  contacts_service:
+    build:
+      context: ./rust/cloud-storage
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: contacts_service
     ports:
-      - '6382:6382'
+      - "8083:8080"
+    environment:
+      - PORT=8080
+      - DATABASE_URL=${CONTACTS_DB_URL}
+      - CONTACTS_QUEUE=${CONTACTS_QUEUE}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=us-east-1
+      - ENVIRONMENT=local
+      - AUDIENCE=${AUDIENCE}
+      - CONNECTION_GATEWAY_TABLE=${CONNECTION_GATEWAY_TABLE}
+      - ISSUER=${ISSUER}
+      - MACRO_DB_URL=${MACRODB_URL}
+      - INTERNAL_API_SECRET_KEY=local
+      - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
     networks:
-      - macro_api_network
+      - cloud-storage-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
-  redis-node-4:
-    image: bitnami/redis-cluster:7.0
-    environment:
-      - REDIS_PORT_NUMBER=6383
-      - REDIS_CLUSTER_PREFERRED_ENDPOINT_TYPE=hostname
-      - REDIS_CLUSTER_ANNOUNCE_HOSTNAME=redis-node-4
-      - ALLOW_EMPTY_PASSWORD=yes
-      - REDIS_NODES=redis-node-0:6369,redis-node-1:6380,redis-node-2:6381, redis-node-3:6382,redis-node-4:6383, redis-node-5:6384
+  # ============================================================================
+  # convert_service (Port 8084)
+  # Document format conversion - requires LibreOffice
+  # ============================================================================
+  convert_service:
+    build:
+      context: ./rust/cloud-storage
+      dockerfile: Dockerfile.convert_service
     ports:
-      - '6383:6383'
+      - "8084:8080"
+    environment:
+      - PORT=8080
+      - CONVERT_QUEUE=${CONVERT_QUEUE}
+      - LOK_PATH=${LOK_PATH}
+      - DATABASE_URL=${MACRODB_URL}
+      - DOCUMENT_STORAGE_BUCKET=${DOCUMENT_STORAGE_BUCKET}
+      - WEB_SOCKET_RESPONSE_LAMBDA=${WEB_SOCKET_RESPONSE_LAMBDA}
+      - INTERNAL_API_SECRET_KEY=local
+      - ENVIRONMENT=local
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=us-east-1
     networks:
-      - macro_api_network
+      - cloud-storage-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
-  redis-node-5:
-    image: bitnami/redis-cluster:7.0
-    environment:
-      - REDIS_PORT_NUMBER=6384
-      - REDIS_CLUSTER_PREFERRED_ENDPOINT_TYPE=hostname
-      - REDIS_CLUSTER_ANNOUNCE_HOSTNAME=redis-node-5
-      - ALLOW_EMPTY_PASSWORD=yes
-      - REDIS_NODES=redis-node-0:6369,redis-node-1:6380,redis-node-2:6381, redis-node-3:6382,redis-node-4:6383, redis-node-5:6384
+  # ============================================================================
+  # document_cognition_service (Port 8085)
+  # Document analysis and processing
+  # ============================================================================
+  # document_cognition_service:
+  #   build:
+  #     context: ./rust/cloud-storage
+  #     dockerfile: Dockerfile
+  #     args:
+  #       SERVICE_NAME: document_cognition_service
+  #   ports:
+  #     - "8085:8080"
+  #   environment:
+  #     - PORT=8080
+  #     - DATABASE_URL=${MACRODB_URL}
+  #     - DOCUMENT_STORAGE_BUCKET=${DOCUMENT_COGNITION_SERVICE_DOCUMENT_STORAGE_BUCKET}
+  #     - DOCUMENT_TEXT_EXTRACTOR_QUEUE=${DOCUMENT_COGNITION_SERVICE_DOCUMENT_TEXT_EXTRACTOR_QUEUE}
+  #     - CHAT_DELETE_QUEUE=${DOCUMENT_COGNITION_SERVICE_CHAT_DELETE_QUEUE}
+  #     - NOTIFICATION_QUEUE=${DOCUMENT_COGNITION_SERVICE_NOTIFICATION_QUEUE}
+  #     - DOCUMENT_STORAGE_SERVICE_URL=http://document_storage_service:8080
+  #     - COMMS_SERVICE_URL=http://comms_service:8080
+  #     - SEARCH_EVENT_QUEUE=${DOCUMENT_COGNITION_SERVICE_SEARCH_EVENT_QUEUE}
+  #     - SYNC_SERVICE_URL=${DOCUMENT_COGNITION_SERVICE_SYNC_SERVICE_URL}
+  #     - SYNC_SERVICE_AUTH_KEY=${DOCUMENT_COGNITION_SERVICE_SYNC_SERVICE_AUTH_KEY}
+  #     - SEARCH_SERVICE_URL=http://search_service:8080
+  #     - LEXICAL_SERVICE_URL=${DOCUMENT_COGNITION_SERVICE_LEXICAL_SERVICE_URL}
+  #     - EMAIL_SERVICE_URL=http://email_service:8080
+  #     - STATIC_FILE_SERVICE_URL=http://static_file_service:8080
+  #   depends_on:
+  #     - comms_service
+  #     - document_storage_service
+  #     - search_service
+  #     - email_service
+  #     - static_file_service
+  #   networks:
+  #     - cloud-storage-network
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 40s
+
+  # ============================================================================
+  # document_storage_service (Port 8086)
+  # Main document storage API
+  # ============================================================================
+  document_storage_service:
+    build:
+      context: ./rust/cloud-storage
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: document_storage_service
     ports:
-      - '6384:6384'
+      - "8086:8080"
+    environment:
+      - PORT=8080
+      - DATABASE_URL=${MACRODB_URL}
+      - DOCUMENT_STORAGE_BUCKET=${DOCUMENT_STORAGE_BUCKET}
+      - DOCX_DOCUMENT_UPLOAD_BUCKET=${DOCX_DOCUMENT_UPLOAD_BUCKET}
+      - DOCUMENT_DELETE_QUEUE=${DOCUMENT_DELETE_QUEUE}
+      - CLOUDFRONT_DISTRIBUTION_URL=${DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL}
+      - CLOUDFRONT_SIGNER_PUBLIC_KEY_ID=${DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID}
+      - CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME=${DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME}
+      - DOCUMENT_PERMISSION_JWT_SECRET_KEY=${DOCUMENT_PERMISSION_JWT_SECRET_KEY}
+      - REDIS_URI=redis://redis:6379
+      - NOTIFICATION_QUEUE=${NOTIFICATION_QUEUE}
+      - SEARCH_EVENT_QUEUE=${SEARCH_EVENT_QUEUE}
+      - COMMS_SERVICE_URL=http://comms_service:8080
+      - CONNECTION_GATEWAY_URL=http://connection_gateway:8080
+      - BULK_UPLOAD_REQUESTS_TABLE=${BULK_UPLOAD_REQUEST_TABLE}
+      - UPLOAD_STAGING_BUCKET=${UPLOAD_STAGING_BUCKET}
+      - SYNC_SERVICE_URL=${SYNC_SERVICE_URL}
+      - SYNC_SERVICE_AUTH_KEY=${SYNC_SERVICE_AUTH_KEY}
+      - AUTHENTICATION_SERVICE_SECRET_KEY=local
+      - DOCUMENT_STORAGE_SERVICE_AUTH_KEY=local
+      - INTERNAL_API_SECRET_KEY=local
+      - DOCUMENT_LIMIT=${DOCUMENT_LIMIT}
+      - PRESIGNED_URL_EXPIRY_SECONDS=${DOCUMENT_STORAGE_SERVICE_PRESIGNED_URL_EXPIRY_SECONDS}
+      - PRESIGNED_URL_BROWSER_CACHE_EXPIRY_SECONDS=${DOCUMENT_STORAGE_SERVICE_PRESIGNED_URL_BROWSER_CACHE_EXPIRY_SECONDS}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=us-east-1
+      - ENVIRONMENT=local
+      - EMAIL_SERVICE_URL=bogus
+      - AUTHENTICATION_SERVICE_URL=http://authentication_service:8080
+      - AUDIENCE=${AUDIENCE}
+      - ISSUER=${ISSUER}
+      - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
+    depends_on:
+      - redis
     networks:
-      - macro_api_network
+      - cloud-storage-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ============================================================================
+  # email_service (Port 8087)
+  # Email processing and management
+  # ============================================================================
+  email_service:
+    build:
+      context: ./rust/cloud-storage
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: email_service
+    ports:
+      - "8087:8080"
+    environment:
+      - PORT=8080
+      - MACRO_DB_URL=${MACRODB_URL}
+      - REDIS_URI=redis://redis:6379
+      - LINK_MANAGER_QUEUE=${EMAIL_SERVICE_LINK_MANAGER_QUEUE}
+      - EMAIL_SCHEDULED_QUEUE=${EMAIL_SCHEDULED_QUEUE}
+      - GMAIL_INBOX_SYNC_QUEUE=${GMAIL_INBOX_SYNC_QUEUE}
+      - GMAIL_INBOX_SYNC_RETRY_QUEUE=${GMAIL_INBOX_SYNC_RETRY_QUEUE}
+      - SEARCH_EVENT_QUEUE=${SEARCH_EVENT_QUEUE}
+      - GMAIL_GCP_QUEUE=${GMAIL_GCP_QUEUE}
+      - NOTIFICATION_QUEUE=${NOTIFICATION_QUEUE}
+      - BACKFILL_QUEUE=${EMAIL_SERVICE_BACKFILL_QUEUE}
+      - CONTACTS_QUEUE=${CONTACTS_QUEUE}
+      - SFS_UPLOADER_QUEUE=${EMAIL_SERVICE_SFS_UPLOADER_QUEUE}
+      - SFS_DELETE_QUEUE=${EMAIL_SERVICE_SFS_DELETE_QUEUE}
+      - ATTACHMENT_BUCKET=${EMAIL_SERVICE_ATTACHMENT_BUCKET}
+      - NOTIFICATIONS_ENABLED=${EMAIL_SERVICE_NOTIFICATIONS_ENABLED}
+      - AUTHENTICATION_SERVICE_URL=http://authentication_service:8080
+      - AUTHENTICATION_SERVICE_SECRET_KEY=local
+      - STATIC_FILE_SERVICE_URL=http://static_file_service:8080
+      - CONNECTION_GATEWAY_URL=http://connection_gateway:8080
+      - DOCUMENT_STORAGE_SERVICE_URL=http://document_storage_service:8080
+      - CLOUDFRONT_DISTRIBUTION_URL=${EMAIL_SERVICE_CLOUDFRONT_DISTRIBUTION_URL}
+      - CLOUDFRONT_SIGNER_PUBLIC_KEY_ID=${EMAIL_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID}
+      - CLOUDFRONT_SIGNER_PRIVATE_KEY=${EMAIL_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=us-east-1
+      - ENVIRONMENT=local
+      - AUDIENCE=${AUDIENCE}
+      - CONNECTION_GATEWAY_TABLE=${CONNECTION_GATEWAY_TABLE}
+      - ISSUER=${ISSUER}
+      - MACRO_DB_URL=${MACRODB_URL}
+      - INTERNAL_API_SECRET_KEY=local
+      - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
+    depends_on:
+      - authentication_service
+      - document_storage_service
+      - connection_gateway
+      - static_file_service
+      - redis
+    networks:
+      - cloud-storage-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ============================================================================
+  # experiment_service (Port 8088)
+  # Feature flags and experiments
+  # ============================================================================
+  experiment_service:
+    build:
+      context: ./rust/cloud-storage
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: experiment_service
+    ports:
+      - "8088:8080"
+    environment:
+      - PORT=8080
+      - DATABASE_URL=${MACRODB_URL}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=us-east-1
+      - ENVIRONMENT=local
+      - AUDIENCE=${AUDIENCE}
+      - CONNECTION_GATEWAY_TABLE=${CONNECTION_GATEWAY_TABLE}
+      - ISSUER=${ISSUER}
+      - MACRO_DB_URL=${MACRODB_URL}
+      - INTERNAL_API_SECRET_KEY=local
+      - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
+
+    networks:
+      - cloud-storage-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # # ============================================================================
+  # # notification_service (Port 8089)
+  # # User notifications - NotificationDB (note: internal port 8079)
+  # # ============================================================================
+  # notification_service:
+  #   build:
+  #     context: ./rust/cloud-storage
+  #     dockerfile: Dockerfile
+  #     args:
+  #       SERVICE_NAME: notification_service
+  #   ports:
+  #     - "8089:8079"
+  #   environment:
+  #     - PORT=8079
+  #     - BASE_URL=${NOTIFICATION_SERVICE_BASE_URL}
+  #     - DATABASE_URL=${NOTIFICATIONDB_URL}
+  #     - INTERNAL_API_SECRET_KEY=${NOTIFICATION_SERVICE_INTERNAL_API_SECRET_KEY}
+  #     - NOTIFICATION_QUEUE=${NOTIFICATION_SERVICE_NOTIFICATION_QUEUE}
+  #     - DOCUMENT_COGNITION_SERVICE_URL=http://document_cognition_service:8080
+  #     - CONNECTION_GATEWAY_URL=http://connection_gateway:8080
+  #     - SNS_APNS_PLATFORM_ARN=${NOTIFICATION_SERVICE_SNS_APNS_PLATFORM_ARN}
+  #     - SNS_FCM_PLATFORM_ARN=${NOTIFICATION_SERVICE_SNS_FCM_PLATFORM_ARN}
+  #     - SENDER_BASE_ADDRESS=${NOTIFICATION_SERVICE_SENDER_BASE_ADDRESS}
+  #     - APPLE_BUNDLE_ID=${NOTIFICATION_SERVICE_APPLE_BUNDLE_ID}
+  #     - PUSH_NOTIFICATION_EVENT_HANDLER_QUEUE=${NOTIFICATION_SERVICE_PUSH_NOTIFICATION_EVENT_HANDLER_QUEUE}
+  #     - REDIS_URI=${NOTIFICATION_SERVICE_REDIS_URI}
+  #     - AUTHENTICATION_SERVICE_SECRET_KEY=${NOTIFICATION_SERVICE_AUTHENTICATION_SERVICE_SECRET_KEY}
+  #     - AUTHENTICATION_SERVICE_URL=http://authentication_service:8080
+  #   depends_on:
+  #     - authentication_service
+  #     - connection_gateway
+  #   networks:
+  #     - cloud-storage-network
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8079/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 40s
+
+  # ============================================================================
+  # organization_service (Port 8090)
+  # Organization and team management
+  # ============================================================================
+  organization_service:
+    build:
+      context: ./rust/cloud-storage
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: organization_service
+    ports:
+      - "8090:8080"
+    environment:
+      - PORT=8080
+      - DATABASE_URL=${MACRODB_URL}
+      - REDIS_URI=redis://redis:6379
+      - DSS_URL=http://document_storage_service:8080
+      - INVITE_EMAIL=invite-local@macro.com
+      - AUTH_URL=bogus
+      - AUTH_INTERNAL_AUTH_SECRET_KEY=local
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=us-east-1
+      - ENVIRONMENT=local
+      - AUDIENCE=${AUDIENCE}
+      - CONNECTION_GATEWAY_TABLE=${CONNECTION_GATEWAY_TABLE}
+      - ISSUER=${ISSUER}
+      - MACRO_DB_URL=${MACRODB_URL}
+      - INTERNAL_API_SECRET_KEY=local
+      - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
+    depends_on:
+      - redis
+    networks:
+      - cloud-storage-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ============================================================================
+  # properties_service (Port 8091)
+  # User/document properties
+  # ============================================================================
+  properties_service:
+    build:
+      context: ./rust/cloud-storage
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: properties_service
+    ports:
+      - "8091:8080"
+    environment:
+      - PORT=8080
+      - DATABASE_URL=${MACRODB_URL}
+      - COMMS_SERVICE_URL=http://comms_service:8080
+      - INTERNAL_API_SECRET_KEY=local
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=us-east-1
+      - ENVIRONMENT=local
+      - AUDIENCE=${AUDIENCE}
+      - ISSUER=${ISSUER}
+      - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
+    depends_on:
+      - comms_service
+    networks:
+      - cloud-storage-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # # ============================================================================
+  # # search_processing_service (Port 8092)
+  # # Search indexing worker
+  # # ============================================================================
+  # search_processing_service:
+  #   build:
+  #     context: ./rust/cloud-storage
+  #     dockerfile: Dockerfile
+  #     args:
+  #       SERVICE_NAME: search_processing_service
+  #   ports:
+  #     - "8092:8080"
+  #   environment:
+  #     - PORT=8080
+  #     - DATABASE_URL=${MACRODB_URL}
+  #     - SEARCH_EVENT_QUEUE=${SEARCH_PROCESSING_SERVICE_SEARCH_EVENT_QUEUE}
+  #     - OPENSEARCH_URL=${SEARCH_PROCESSING_SERVICE_OPENSEARCH_URL}
+  #     - OPENSEARCH_USERNAME=${SEARCH_PROCESSING_SERVICE_OPENSEARCH_USERNAME}
+  #     - OPENSEARCH_PASSWORD=${SEARCH_PROCESSING_SERVICE_OPENSEARCH_PASSWORD}
+  #     - DOCUMENT_STORAGE_BUCKET=${SEARCH_PROCESSING_SERVICE_DOCUMENT_STORAGE_BUCKET}
+  #     - SYNC_SERVICE_AUTH_KEY=${SEARCH_PROCESSING_SERVICE_SYNC_SERVICE_AUTH_KEY}
+  #     - EMAIL_SERVICE_URL=http://email_service:8080
+  #     - COMMS_SERVICE_URL=http://comms_service:8080
+  #     - LEXICAL_SERVICE_URL=${SEARCH_PROCESSING_SERVICE_LEXICAL_SERVICE_URL}
+  #   depends_on:
+  #     - email_service
+  #     - comms_service
+  #   networks:
+  #     - cloud-storage-network
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 40s
+
+  # # ============================================================================
+  # # search_service (Port 8093)
+  # # Search API
+  # # ============================================================================
+  # search_service:
+  #   build:
+  #     context: ./rust/cloud-storage
+  #     dockerfile: Dockerfile
+  #     args:
+  #       SERVICE_NAME: search_service
+  #   ports:
+  #     - "8093:8080"
+  #   environment:
+  #     - PORT=8080
+  #     - DATABASE_URL=${MACRODB_URL}
+  #     - OPENSEARCH_URL=${SEARCH_SERVICE_OPENSEARCH_URL}
+  #     - OPENSEARCH_USERNAME=${SEARCH_SERVICE_OPENSEARCH_USERNAME}
+  #     - OPENSEARCH_PASSWORD=${SEARCH_SERVICE_OPENSEARCH_PASSWORD}
+  #     - COMMS_SERVICE_URL=http://comms_service:8080
+  #     - EMAIL_SERVICE_URL=http://email_service:8080
+  #     - DOCUMENT_STORAGE_SERVICE_URL=http://document_storage_service:8080
+  #   depends_on:
+  #     - comms_service
+  #     - email_service
+  #     - document_storage_service
+  #   networks:
+  #     - cloud-storage-network
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 40s
+
+  # ============================================================================
+  # static_file_service (Port 8094)
+  # Static file serving - DynamoDB
+  # ============================================================================
+  static_file_service:
+    build:
+      context: ./rust/cloud-storage
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: static_file_service
+    ports:
+      - "8094:8080"
+    environment:
+      - PORT=8080
+      - DYNAMODB_TABLE_NAME=${STATIC_FILE_SERVICE_DYNAMODB_TABLE_NAME}
+      - STATIC_STORAGE_BUCKET=${STATIC_FILE_SERVICE_STATIC_STORAGE_BUCKET}
+      - SERVICE_URL=${STATIC_FILE_SERVICE_SERVICE_URL}
+      - S3_EVENT_QUEUE_URL=${STATIC_FILE_SERVICE_S3_EVENT_QUEUE_URL}
+      - INTERNAL_API_SECRET_KEY=local
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=us-east-1
+      - ENVIRONMENT=local
+      - AUDIENCE=${AUDIENCE}
+      - ISSUER=${ISSUER}
+      - MACRO_API_TOKEN_ISSUER=${MACRO_API_TOKEN_ISSUER}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - MACRO_API_TOKEN_PUBLIC_KEY=${MACRO_API_TOKEN_PUBLIC_KEY}
+
+    networks:
+      - cloud-storage-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ============================================================================
+  # unfurl_service (Port 8095)
+  # URL unfurling - no dependencies
+  # ============================================================================
+  unfurl_service:
+    build:
+      context: ./rust/cloud-storage
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: unfurl_service
+    ports:
+      - "8095:8080"
+    environment:
+      - PORT=8080
+      - ENVIRONMENT=local
+    networks:
+      - cloud-storage-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
 networks:
-  macro_api_network:
-    name: macro_api_network
+  cloud-storage-network:
     driver: bridge
-  macro_fusion_network:
-    # external: true
-volumes:
-  db:
-    name: macro_db_volume
-    external: true
-    # driver: local
-  cache:
-    name: macro_cache_volume
-    # external: true
-    driver: local
