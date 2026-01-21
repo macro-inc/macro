@@ -267,7 +267,7 @@ export const DateSelector = (props: DateSelectorProps) => {
       <Combobox.Portal>
         <Combobox.Content class="w-full max-w-sm bg-dialog text-ink border border-edge-muted">
           <WithCustomDateMode
-            selectedOption={selectedOption()}
+            selectedDate={selectedDate()}
             mode={mode()}
             onSelectDate={(date) => {
               onChange({ type: 'custom', date });
@@ -359,7 +359,7 @@ const CurrentValueDisplay = (props: CurrentValueDisplayProps) => {
 };
 
 interface WithCustomDateModeProps {
-  selectedOption: DateSelectorOption | null;
+  selectedDate: Date | null;
   mode: DateSelectorMode;
   onSelectDate: (date: Date) => void;
 }
@@ -369,11 +369,7 @@ const WithCustomDateMode: FlowComponent<WithCustomDateModeProps> = (props) => {
     <Show when={props.mode === 'calendar'} fallback={props.children}>
       <div class="border-b border-edge-muted text-sm flex justify-center">
         <DatePickerUI
-          value={
-            props.selectedOption?.type === 'custom'
-              ? props.selectedOption.date
-              : new Date()
-          }
+          value={props.selectedDate ?? new Date()}
           onChange={props.onSelectDate}
         />
       </div>
