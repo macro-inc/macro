@@ -8,7 +8,10 @@ use crate::domain::{
 use comms::domain::{models::GetChannelsRequest, ports::ChannelsService};
 use doppleganger::Mirror;
 use either::Either;
-use email::domain::{models::GetEmailsRequest, ports::EmailService};
+use email::domain::{
+    models::{EnrichedEmailThreadPreview, GetEmailsRequest},
+    ports::EmailService,
+};
 use frecency::domain::{
     models::{AggregateId, FrecencyPageRequest, JoinFrecency},
     ports::FrecencyQueryService,
@@ -20,7 +23,12 @@ use models_pagination::{
     Cursor, CursorVal, Frecency, FrecencyValue, PaginateOn, Query, SimpleSortMethod,
 };
 use models_soup::{
-    comms::SoupChannel, email_thread::SoupEnrichedEmailThreadPreview, item::SoupItem,
+    comms::SoupChannel,
+    email_thread::{
+        SoupAttachment, SoupContact, SoupEmailThreadPreview, SoupEmailThreadPreviewMetadata,
+        SoupEnrichedEmailThreadPreview, SoupLabel, SoupMacroAttachment,
+    },
+    item::SoupItem,
 };
 use std::cmp::Ordering;
 use uuid::Uuid;
@@ -249,25 +257,60 @@ where
         &self,
         req: Option<GetEmailsRequest>,
     ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
+        use frecency::domain::models::AggregateFrecency;
+
         let Some(req) = req else {
             return Ok(Either::Left(None.into_iter()));
         };
 
-        let emails = self
-            .email_service
-            .get_email_thread_previews(req)
-            .await?
+        let email_response = self.email_service.get_email_thread_previews(req).await?;
+
+        let mut frecency_scores: Vec<Option<AggregateFrecency>> =
+            Vec::with_capacity(email_response.items.len());
+        let mut items: Vec<SoupItem> = email_response
             .items
             .into_iter()
-            .map(|mut f| {
-                let frecency_score = f.frecency_score.take();
-                let soup_email = SoupEnrichedEmailThreadPreview::mirror(f);
-                FrecencySoupItem {
-                    item: SoupItem::EmailThread(soup_email),
-                    frecency_score,
-                }
-            });
-        Ok(Either::Right(emails))
+            .map(
+                |EnrichedEmailThreadPreview {
+                     thread,
+                     attachments,
+                     attachments_macro,
+                     labels,
+                     metadata,
+                     mut frecency_score,
+                     participants,
+                     ..
+                 }| {
+                    frecency_scores.push(frecency_score.take());
+                    let soup_email = SoupEnrichedEmailThreadPreview {
+                        thread: SoupEmailThreadPreview::mirror(thread),
+                        attachments: Vec::<SoupAttachment>::mirror(attachments),
+                        attachments_macro: Vec::<SoupMacroAttachment>::mirror(attachments_macro),
+                        participants: Vec::<SoupContact>::mirror(participants),
+                        metadata: SoupEmailThreadPreviewMetadata::mirror(metadata),
+                        labels: Vec::<SoupLabel>::mirror(labels),
+                        properties: Default::default(),
+                    };
+                    SoupItem::EmailThread(soup_email)
+                },
+            )
+            .collect();
+
+        self.soup_storage
+            .populate_properties(&mut items)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        let emails_with_props: Vec<FrecencySoupItem> = items
+            .into_iter()
+            .zip(frecency_scores)
+            .map(|(item, frecency_score)| FrecencySoupItem {
+                item,
+                frecency_score,
+            })
+            .collect();
+
+        Ok(Either::Right(emails_with_props.into_iter()))
     }
 
     async fn handle_comms_request(

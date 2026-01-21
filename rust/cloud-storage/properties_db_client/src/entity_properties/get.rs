@@ -228,6 +228,54 @@ async fn attach_property_options(
     Ok(())
 }
 
+/// Fetch and attach property options to properties across multiple entities in ONE query.
+/// Optimized for bulk operations - collects all unique select-type property IDs across all entities,
+/// fetches options once, then distributes to each property.
+async fn attach_property_options_bulk(
+    db: &Pool<Postgres>,
+    entity_properties_map: &mut HashMap<String, Vec<EntityPropertyWithDefinition>>,
+) -> Result<()> {
+    let property_ids_needing_options: HashSet<Uuid> = entity_properties_map
+        .values()
+        .flatten()
+        .filter(|p| {
+            matches!(
+                p.definition.data_type,
+                DataType::SelectString | DataType::SelectNumber
+            )
+        })
+        .map(|p| p.definition.id)
+        .collect();
+
+    let options_map = if !property_ids_needing_options.is_empty() {
+        let property_ids_vec: Vec<Uuid> = property_ids_needing_options.into_iter().collect();
+        crate::property_options::get::get_property_options_batch(db, &property_ids_vec).await?
+    } else {
+        HashMap::new()
+    };
+
+    for properties in entity_properties_map.values_mut() {
+        for property in properties.iter_mut() {
+            let is_select_type = matches!(
+                property.definition.data_type,
+                DataType::SelectString | DataType::SelectNumber
+            );
+            if is_select_type {
+                let options = options_map
+                    .get(&property.definition.id)
+                    .cloned()
+                    .unwrap_or_default();
+                validate_and_clean_select_option_value(property, &options);
+                property.options = Some(options);
+            } else {
+                clear_stale_select_data(property);
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Looks up an entity property by its ID.
 /// Returns entity reference (for permissions) and definition ID (for required property check).
 #[tracing::instrument(skip(db))]
@@ -237,12 +285,12 @@ pub async fn lookup_entity_property(
 ) -> Result<Option<EntityPropertyReference>> {
     let row = sqlx::query!(
         r#"
-        SELECT 
-            ep.entity_id,
-            ep.entity_type as "entity_type: EntityType",
-            ep.property_definition_id
-        FROM entity_properties ep
-        WHERE ep.id = $1
+SELECT
+    ep.entity_id,
+    ep.entity_type as "entity_type: EntityType",
+    ep.property_definition_id
+FROM entity_properties ep
+WHERE ep.id = $1
         "#,
         entity_property_id
     )
@@ -266,26 +314,26 @@ pub async fn get_entity_properties_values(
 ) -> Result<Vec<EntityPropertyWithDefinition>> {
     let rows = sqlx::query!(
         r#"
-        SELECT 
-            ep.id as entity_property_id,
-            ep.entity_id,
-            ep.entity_type as "entity_type: EntityType",
-            ep.property_definition_id,
-            ep.values as "values: sqlx::types::JsonValue",
-            ep.created_at as entity_property_created_at,
-            ep.updated_at as entity_property_updated_at,
-            pd.organization_id as definition_organization_id,
-            pd.user_id as definition_user_id,
-            pd.display_name,
-            pd.data_type as "data_type: DataType",
-            pd.is_multi_select,
-            pd.specific_entity_type as "specific_entity_type: Option<EntityType>",
-            pd.created_at as definition_created_at,
-            pd.updated_at as definition_updated_at,
-            pd.is_system as definition_is_system
-        FROM entity_properties ep
-        INNER JOIN property_definitions pd ON ep.property_definition_id = pd.id
-        WHERE ep.entity_id = $1 AND ep.entity_type = $2
+SELECT
+    ep.id as entity_property_id,
+    ep.entity_id,
+    ep.entity_type as "entity_type: EntityType",
+    ep.property_definition_id,
+    ep.values as "values: sqlx::types::JsonValue",
+    ep.created_at as entity_property_created_at,
+    ep.updated_at as entity_property_updated_at,
+    pd.organization_id as definition_organization_id,
+    pd.user_id as definition_user_id,
+    pd.display_name,
+    pd.data_type as "data_type: DataType",
+    pd.is_multi_select,
+    pd.specific_entity_type as "specific_entity_type: Option<EntityType>",
+    pd.created_at as definition_created_at,
+    pd.updated_at as definition_updated_at,
+    pd.is_system as definition_is_system
+FROM entity_properties ep
+INNER JOIN property_definitions pd ON ep.property_definition_id = pd.id
+WHERE ep.entity_id = $1 AND ep.entity_type = $2
         "#,
         entity_id,
         entity_type as EntityType
@@ -344,29 +392,29 @@ pub async fn get_bulk_entity_properties_values(
 
     let rows = sqlx::query!(
         r#"
-        SELECT 
-            ep.id as entity_property_id,
-            ep.entity_id,
-            ep.entity_type as "entity_type: EntityType",
-            ep.property_definition_id,
-            ep.values as "values: sqlx::types::JsonValue",
-            ep.created_at as entity_property_created_at,
-            ep.updated_at as entity_property_updated_at,
-            pd.organization_id as definition_organization_id,
-            pd.user_id as definition_user_id,
-            pd.display_name,
-            pd.data_type as "data_type: DataType",
-            pd.is_multi_select,
-            pd.specific_entity_type as "specific_entity_type: Option<EntityType>",
-            pd.created_at as definition_created_at,
-            pd.updated_at as definition_updated_at,
-            pd.is_system as definition_is_system
-        FROM entity_properties ep
-        INNER JOIN property_definitions pd ON ep.property_definition_id = pd.id
-        WHERE (ep.entity_id, ep.entity_type) IN (
-            SELECT * FROM UNNEST($1::TEXT[], $2::property_entity_type[])
-        )
-        "#,
+SELECT
+    ep.id as entity_property_id,
+    ep.entity_id,
+    ep.entity_type as "entity_type: EntityType",
+    ep.property_definition_id,
+    ep.values as "values: sqlx::types::JsonValue",
+    ep.created_at as entity_property_created_at,
+    ep.updated_at as entity_property_updated_at,
+    pd.organization_id as definition_organization_id,
+    pd.user_id as definition_user_id,
+    pd.display_name,
+    pd.data_type as "data_type: DataType",
+    pd.is_multi_select,
+    pd.specific_entity_type as "specific_entity_type: Option<EntityType>",
+    pd.created_at as definition_created_at,
+    pd.updated_at as definition_updated_at,
+    pd.is_system as definition_is_system
+FROM entity_properties ep
+INNER JOIN property_definitions pd ON ep.property_definition_id = pd.id
+WHERE (ep.entity_id, ep.entity_type) IN (
+    SELECT * FROM UNNEST($1::TEXT[], $2::property_entity_type[])
+)
+"#,
         &entity_ids,
         &entity_types as &[EntityType]
     )
@@ -409,12 +457,7 @@ pub async fn get_bulk_entity_properties_values(
         sort_properties_by_display_name(properties);
     }
 
-    // Fetch and attach property options for all properties
-    // TODO @danielkweon - optimize by caching property options per property_definition_id
-    // to avoid redundant fetches when multiple entities share the same property definition
-    for properties in entity_properties_map.values_mut() {
-        attach_property_options(db, properties).await?;
-    }
+    attach_property_options_bulk(db, &mut entity_properties_map).await?;
 
     // Ensure all requested entity_ids are present in the result, even if they have no properties
     for entity_ref in entity_refs {
@@ -433,7 +476,7 @@ pub async fn get_bulk_entity_properties_values(
 pub async fn get_bulk_entity_properties_values_filtered(
     db: &Pool<Postgres>,
     entity_refs: &[EntityReference],
-    property_ids: Vec<Uuid>,
+    property_ids: &[Uuid],
 ) -> Result<HashMap<String, Vec<EntityPropertyWithDefinition>>> {
     if entity_refs.is_empty() || property_ids.is_empty() {
         // If no property_ids specified, return empty map for each entity
@@ -449,29 +492,29 @@ pub async fn get_bulk_entity_properties_values_filtered(
 
     let rows = sqlx::query!(
         r#"
-        SELECT 
-            ep.id as entity_property_id,
-            ep.entity_id,
-            ep.entity_type as "entity_type: EntityType",
-            ep.property_definition_id,
-            ep.values as "values: sqlx::types::JsonValue",
-            ep.created_at as entity_property_created_at,
-            ep.updated_at as entity_property_updated_at,
-            pd.organization_id as definition_organization_id,
-            pd.user_id as definition_user_id,
-            pd.display_name,
-            pd.data_type as "data_type: DataType",
-            pd.is_multi_select,
-            pd.specific_entity_type as "specific_entity_type: Option<EntityType>",
-            pd.created_at as definition_created_at,
-            pd.updated_at as definition_updated_at,
-            pd.is_system as definition_is_system
-        FROM entity_properties ep
-        INNER JOIN property_definitions pd ON ep.property_definition_id = pd.id
-        WHERE (ep.entity_id, ep.entity_type) IN (
-            SELECT * FROM UNNEST($1::TEXT[], $2::property_entity_type[])
-        )
-        AND pd.id = ANY($3::UUID[])
+SELECT
+    ep.id as entity_property_id,
+    ep.entity_id,
+    ep.entity_type as "entity_type: EntityType",
+    ep.property_definition_id,
+    ep.values as "values: sqlx::types::JsonValue",
+    ep.created_at as entity_property_created_at,
+    ep.updated_at as entity_property_updated_at,
+    pd.organization_id as definition_organization_id,
+    pd.user_id as definition_user_id,
+    pd.display_name,
+    pd.data_type as "data_type: DataType",
+    pd.is_multi_select,
+    pd.specific_entity_type as "specific_entity_type: Option<EntityType>",
+    pd.created_at as definition_created_at,
+    pd.updated_at as definition_updated_at,
+    pd.is_system as definition_is_system
+FROM entity_properties ep
+INNER JOIN property_definitions pd ON ep.property_definition_id = pd.id
+WHERE (ep.entity_id, ep.entity_type) IN (
+    SELECT * FROM UNNEST($1::TEXT[], $2::property_entity_type[])
+)
+AND pd.id = ANY($3::UUID[])
         "#,
         &entity_ids,
         &entity_types as &[EntityType],
@@ -514,11 +557,8 @@ pub async fn get_bulk_entity_properties_values_filtered(
         sort_properties_by_display_name(properties);
     }
 
-    for properties in entity_properties_map.values_mut() {
-        attach_property_options(db, properties).await?;
-    }
+    attach_property_options_bulk(db, &mut entity_properties_map).await?;
 
-    // Ensure all requested entity_ids are present in the result
     for entity_ref in entity_refs {
         entity_properties_map
             .entry(entity_ref.entity_id.clone())

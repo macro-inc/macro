@@ -17,10 +17,8 @@ import {
 import { BarContext } from '@core/component/TopBar/Bar';
 import { setCachedInputStore } from '@core/store/cacheChatInput';
 import { isErr } from '@core/util/maybeResult';
-import Unpin from '@icon/fill/push-pin-slash-fill.svg';
 import CopySimple from '@icon/regular/copy-simple.svg';
 import PencilSimpleLine from '@icon/regular/pencil-simple-line.svg';
-import Pin from '@icon/regular/push-pin.svg';
 import ShareFat from '@icon/regular/share-fat.svg';
 import TrashSimple from '@icon/regular/trash-simple.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
@@ -29,15 +27,8 @@ import { useEmail } from '@core/context/user';
 import {
   refetchHistory,
   useUpdatedDssItemName,
-} from '@service-storage/history';
-import {
-  pinItem,
-  refetchPins,
-  unpinItem,
-  usePinnedIds,
-} from '@service-storage/pins';
+} from '@queries/history/history';
 import { refetchResources } from '@service-storage/util/refetchResources';
-import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
 import { useSplitPanelOrThrow } from 'app/component/split-layout/layoutUtils';
 import { toast } from 'core/component/Toast/Toast';
@@ -50,22 +41,8 @@ type Props = { data: ChatData };
 export function ChatNameMenu(props: Props) {
   const [chatMenuOpen, setChatMenuOpen] = createSignal(false);
   const isAuthenticated = useIsAuthenticated();
-  const pinnedIds = usePinnedIds();
   const panelContext = useSplitPanelOrThrow();
 
-  const isPinned = createCallback(() => {
-    return pinnedIds().includes(props.data.chat.id);
-  });
-
-  const mutatePin = (
-    ...params: Parameters<typeof pinItem & typeof unpinItem>
-  ) => {
-    if (isPinned()) {
-      return unpinItem(...params);
-    }
-
-    return pinItem(...params);
-  };
   const renameChat = async ({
     chat_id,
     new_name,
@@ -81,8 +58,6 @@ export function ChatNameMenu(props: Props) {
     });
     if (isErr(maybeRenameResult)) return;
 
-    if (isPinned()) refetchPins();
-
     refetchHistory();
   };
   const deleteChat = async (chat_id: string) => {
@@ -91,8 +66,6 @@ export function ChatNameMenu(props: Props) {
       chat_id,
     });
     if (isErr(maybeDeletedChat)) return;
-
-    if (isPinned()) refetchPins();
 
     refetchResources();
     panelContext?.handle.close();
@@ -153,16 +126,6 @@ export function ChatNameMenu(props: Props) {
 
         <DropdownMenu.Portal>
           <DropdownMenuContent>
-            <Show when={isAuthenticated()}>
-              <MenuItem
-                text={isPinned() ? `Unpin` : 'Pin'}
-                icon={isPinned() ? Unpin : Pin}
-                onClick={() => {
-                  mutatePin('chat', props.data.chat.id);
-                  track(TrackingEvents.BLOCKCHAT.CHATMENU.FAVORITE);
-                }}
-              />
-            </Show>
             <MenuItem
               text={'Make a Copy'}
               icon={CopySimple}

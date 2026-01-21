@@ -8,7 +8,7 @@ import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { isErr } from '@core/util/maybeResult';
 import { utf8Encode } from '@core/util/string';
 import { storageServiceClient } from '@service-storage/client';
-import { refetchHistory } from '@service-storage/history';
+import { refetchHistory } from '@queries/history/history';
 import { refetchResources } from '@service-storage/util/refetchResources';
 import { createCallback } from '@solid-primitives/rootless';
 import { createMemo } from 'solid-js';

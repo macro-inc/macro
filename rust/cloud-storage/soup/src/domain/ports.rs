@@ -28,6 +28,12 @@ pub trait SoupRepo: Send + Sync + 'static {
         &self,
         req: AdvancedSortParams<'a>,
     ) -> impl Future<Output = Result<Vec<SoupItem>, Self::Err>> + Send;
+
+    /// Populates properties for a slice of SoupItems.
+    fn populate_properties(
+        &self,
+        items: &mut [SoupItem],
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// type alias which represents the posible outputs of soup

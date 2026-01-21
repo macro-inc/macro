@@ -1,7 +1,7 @@
 import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import { setEditorStateFromMarkdown } from '@core/component/LexicalMarkdown/utils';
 import { storageServiceClient } from '@service-storage/client';
-import { postNewHistoryItem } from '@service-storage/history';
+import { postNewHistoryItem } from '@queries/history/history';
 import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';
 import { contentHash } from './hash';
 import { isErr } from './maybeResult';

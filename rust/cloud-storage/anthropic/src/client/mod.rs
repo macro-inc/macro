@@ -2,7 +2,7 @@ pub mod chat;
 use crate::error::AnthropicError;
 use crate::openai::request::AnthropicRequestExtension;
 use crate::prelude::ApiError;
-use crate::types::request::WEB_FETCH_TOOL_HEADER;
+use crate::types::request::{CODE_EXECUTION_TOOL_HEADER, WEB_FETCH_TOOL_HEADER};
 use crate::{config::Config, openai::request::AnthropicRequestExtensions};
 use futures::stream::{Stream, StreamExt};
 use reqwest::Client as RequestClient;
@@ -19,17 +19,24 @@ pub struct Client {
 impl Client {
     pub fn dangerously_try_from_env(extensions: Option<AnthropicRequestExtensions>) -> Self {
         let mut config = Config::dangrously_try_from_env();
-        if let Some(extensions) = extensions
-            && extensions
+        if let Some(ref extensions) = extensions {
+            if extensions.0.contains(&AnthropicRequestExtension::FetchTool) {
+                tracing::debug!("Adding web_fetch beta header");
+                config.headers.append(
+                    WEB_FETCH_TOOL_HEADER.0.clone(),
+                    WEB_FETCH_TOOL_HEADER.1.clone(),
+                );
+            }
+            if extensions
                 .0
-                .into_iter()
-                .any(|f| f == AnthropicRequestExtension::FetchTool)
-        {
-            tracing::debug!("Adding web_fetch beta header");
-            config.headers.append(
-                WEB_FETCH_TOOL_HEADER.0.clone(),
-                WEB_FETCH_TOOL_HEADER.1.clone(),
-            );
+                .contains(&AnthropicRequestExtension::CodeExecutionTool)
+            {
+                tracing::debug!("Adding code_execution beta header");
+                config.headers.append(
+                    CODE_EXECUTION_TOOL_HEADER.0.clone(),
+                    CODE_EXECUTION_TOOL_HEADER.1.clone(),
+                );
+            }
         }
         tracing::debug!("Anthropic client headers: {:?}", config.headers);
         Self::with_config(config)

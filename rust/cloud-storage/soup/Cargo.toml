@@ -48,6 +48,7 @@ model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
 models_pagination = { path = "../models_pagination" }
+models_properties = { path = "../models_properties" }
 models_soup = { path = "../models_soup" }
 non_empty = { path = "../non_empty" }
 recursion = { workspace = true }
@@ -60,6 +61,7 @@ tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 system_properties = { path = "../system_properties" }
+properties_db_client = { path = "../properties_db_client/" }
 
 [dev-dependencies]
 cool_asserts = "2"

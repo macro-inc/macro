@@ -148,6 +148,8 @@ function BasePathComponent() {
     track(TrackingEvents.SUBSCRIPTION.SUCCESS, {
       type: type ?? undefined,
     });
+    // Invalidate user info to refresh trial status and subscription data
+    invalidateUserInfo();
   }
 
   if (searchParams.upgrade === 'true') {

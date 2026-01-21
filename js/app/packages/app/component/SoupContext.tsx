@@ -555,7 +555,7 @@ export function createNavigationEntityListShortcut({
       return true;
     },
     canExecuteKeyDownHandler: () =>
-      isViewingList() &&
+      canAccessEntityList() &&
       actionRegistry.isActionEnabled('mark_as_done', plainSelectedEntities()),
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],

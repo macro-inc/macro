@@ -4,6 +4,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::SoupProperty;
+
 #[derive(Debug, Doppleganger, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
@@ -144,10 +146,8 @@ pub struct SoupEmailThreadPreview {
     pub viewed_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Doppleganger, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
-#[dg(backward = email::domain::models::EnrichedEmailThreadPreview)]
 #[serde(rename_all = "camelCase")]
 pub struct SoupEnrichedEmailThreadPreview {
     #[serde(flatten)]
@@ -157,4 +157,5 @@ pub struct SoupEnrichedEmailThreadPreview {
     pub participants: Vec<SoupContact>,
     pub metadata: SoupEmailThreadPreviewMetadata,
     pub labels: Vec<SoupLabel>,
+    pub properties: Vec<SoupProperty>,
 }

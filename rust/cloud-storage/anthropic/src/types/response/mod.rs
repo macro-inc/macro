@@ -1,3 +1,4 @@
+pub mod code_execution;
 mod stream_types;
 #[cfg(test)]
 mod test;

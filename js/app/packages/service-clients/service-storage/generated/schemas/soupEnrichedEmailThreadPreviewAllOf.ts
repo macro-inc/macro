@@ -9,6 +9,7 @@ import type { SoupContact } from './soupContact';
 import type { SoupEmailThreadPreviewMetadata } from './soupEmailThreadPreviewMetadata';
 import type { SoupLabel } from './soupLabel';
 import type { SoupMacroAttachment } from './soupMacroAttachment';
+import type { SoupProperty } from './soupProperty';
 
 export type SoupEnrichedEmailThreadPreviewAllOf = {
   attachments: SoupAttachment[];
@@ -16,4 +17,5 @@ export type SoupEnrichedEmailThreadPreviewAllOf = {
   labels: SoupLabel[];
   metadata: SoupEmailThreadPreviewMetadata;
   participants: SoupContact[];
+  properties: SoupProperty[];
 };

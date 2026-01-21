@@ -1,15 +1,13 @@
 use crate::api::ApiContext;
 use crate::api::search::simple::SearchError;
 use indexmap::IndexMap;
-use models_email::service::message::{
-    MessageSenderInfo, MessageSendersRequest, ThreadHistoryInfo, ThreadHistoryRequest,
-};
+use models_email::service::message::{MessageSenderInfo, ThreadHistoryInfo};
 use models_search::email::{
     EmailSearchResponseItem, EmailSearchResponseItemWithMetadata, EmailSearchResult,
 };
 use opensearch_client::search::model::SearchGotoContent;
 use sqlx::types::Uuid;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 /// Enriches email search results with metadata
 #[tracing::instrument(skip(ctx, results), err)]
@@ -27,20 +25,22 @@ pub(in crate::api::search) async fn enrich_emails(
         return Ok(vec![]);
     }
 
+    // Get the email link for this user
+    let link = email_db_client::links::get::fetch_link_by_macro_id(&ctx.db, user_id)
+        .await
+        .map_err(SearchError::InternalError)?
+        .ok_or_else(|| SearchError::InternalError(anyhow::anyhow!("Link not found for user")))?;
+
     // Extract thread IDs from results
     let thread_ids: Vec<Uuid> = results.iter().map(|r| r.entity_id).collect();
 
-    // Fetch email thread metadata from email service
-    let thread_histories = ctx
-        .email_service_client
-        .get_thread_histories(ThreadHistoryRequest {
-            user_id: user_id.to_string(),
-            thread_ids,
-        })
-        .await
-        .map_err(SearchError::InternalError)?;
+    // Fetch email thread metadata directly from DB
+    let thread_histories =
+        email_db_client::user_history::get_thread_summary_info(&ctx.db, link.id, &thread_ids)
+            .await
+            .map_err(SearchError::InternalError)?;
 
-    let message_senders: HashSet<Uuid> = results
+    let message_ids: Vec<Uuid> = results
         .iter()
         .filter_map(|r| {
             if let Some(goto) = &r.goto {
@@ -55,22 +55,17 @@ pub(in crate::api::search) async fn enrich_emails(
         })
         .collect();
 
-    let message_senders_map = ctx
-        .email_service_client
-        .get_message_senders(MessageSendersRequest {
-            user_id: user_id.to_string(),
-            message_ids: message_senders.into_iter().collect(),
-        })
-        .await
-        .map_err(SearchError::InternalError)?;
+    let message_senders_map = email_db_client::messages::get::get_message_sender_and_pretty_sender(
+        &ctx.db,
+        link.id,
+        &message_ids,
+    )
+    .await
+    .map_err(SearchError::InternalError)?;
 
     // Construct enriched results
-    let enriched_results = construct_search_result(
-        results,
-        thread_histories.history_map,
-        message_senders_map.sender_map,
-    )
-    .map_err(SearchError::InternalError)?;
+    let enriched_results = construct_search_result(results, thread_histories, message_senders_map)
+        .map_err(SearchError::InternalError)?;
 
     Ok(enriched_results)
 }

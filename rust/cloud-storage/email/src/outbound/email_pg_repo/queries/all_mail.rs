@@ -22,6 +22,15 @@ pub(crate) async fn all_mail_preview_cursor(
     sqlx::query_as!(
         ThreadPreviewCursorDbRow,
         r#"
+        WITH spam_label AS (
+            SELECT id FROM email_labels WHERE link_id = $1 AND name = 'SPAM'
+        ),
+        trash_label AS (
+            SELECT id FROM email_labels WHERE link_id = $1 AND name = 'TRASH'
+        ),
+        important_label AS (
+            SELECT id FROM email_labels WHERE link_id = $1 AND name = 'IMPORTANT'
+        )
         SELECT
             t.id,
             t.provider_id,
@@ -34,16 +43,12 @@ pub(crate) async fn all_mail_preview_cursor(
             lmp.subject AS "name?",
             lmp.snippet AS "snippet?",
             lmp.is_draft,
-            (
-                SELECT EXISTS (
-                    SELECT 1
-                    FROM email_messages m_imp
-                    JOIN email_message_labels ml ON m_imp.id = ml.message_id
-                    JOIN email_labels l ON ml.label_id = l.id
-                    WHERE m_imp.thread_id = t.id
-                      AND l.name = 'IMPORTANT'
-                      AND l.link_id = t.link_id
-                )
+            EXISTS (
+                SELECT 1
+                FROM email_messages m_imp
+                JOIN email_message_labels ml ON m_imp.id = ml.message_id
+                WHERE m_imp.thread_id = t.id
+                  AND ml.label_id = (SELECT id FROM important_label)
             ) AS "is_important!",
             c.email_address AS "sender_email?",
             COALESCE(lmp.from_name, c.name) AS "sender_name?",
@@ -93,15 +98,16 @@ pub(crate) async fn all_mail_preview_cursor(
                 m.from_name
             FROM email_messages m
             WHERE m.thread_id = t.id
-              AND m.is_draft = FALSE
-            AND NOT EXISTS (
-                SELECT 1
-                FROM email_message_labels ml
-                JOIN email_labels l ON ml.label_id = l.id
-                WHERE ml.message_id = m.id
-                  AND l.link_id = t.link_id
-                  AND l.name IN ('SPAM', 'TRASH')
-            )
+              AND NOT EXISTS (
+                  SELECT 1 FROM email_message_labels ml
+                  WHERE ml.message_id = m.id
+                    AND ml.label_id = (SELECT id FROM spam_label)
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM email_message_labels ml
+                  WHERE ml.message_id = m.id
+                    AND ml.label_id = (SELECT id FROM trash_label)
+              )
             ORDER BY m.internal_date_ts DESC
             LIMIT 1
         ) AS lmp
@@ -110,10 +116,10 @@ pub(crate) async fn all_mail_preview_cursor(
         ORDER BY t.effective_ts DESC, t.updated_at DESC
         "#,
         link_id,            // $1
-        query_limit,              // $2
+        query_limit,        // $2
         cursor_timestamp,   // $3
         cursor_id,          // $4
-        sort_method_str,          // $5
+        sort_method_str,    // $5
     )
         .fetch_all(pool)
         .await

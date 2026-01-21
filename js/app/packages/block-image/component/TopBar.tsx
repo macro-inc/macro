@@ -38,7 +38,6 @@ export function TopBar() {
   });
 
   const ops: FileOperation[] = [
-    { op: 'pin' },
     { op: 'rename' },
     { op: 'copy' },
     { op: 'moveToProject' },

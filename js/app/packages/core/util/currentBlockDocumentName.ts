@@ -6,7 +6,7 @@ import {
 } from '@core/block';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { blockMetadataSignal } from '@core/signal/load';
-import { useUpdatedDssItemName } from '@service-storage/history';
+import { useUpdatedDssItemName } from '@queries/history/history';
 import { formatDocumentName } from '@service-storage/util/filename';
 import { createMemo } from 'solid-js';
 
