@@ -45,6 +45,7 @@ import { useEmailLinksQuery } from '@queries/email/link';
 import {
   useScheduleMessageMutation,
   useSendMessageMutation,
+  useUnscheduleMessageMutation,
 } from '@queries/email/thread';
 import type {
   AttachmentMacro,
@@ -936,6 +937,22 @@ export function BaseInput(props: {
     });
   };
 
+  const unscheduleMessageMutation = useUnscheduleMessageMutation();
+
+  const handleSendTimeChange = (date: Date | null) => {
+    const currentSendTime = form().sendTime();
+    const currentDraft = savedDraftId();
+
+    // If we unset the send time, we need to unschedule the message
+    if (!date && currentSendTime && currentDraft) {
+      unscheduleMessageMutation.mutate({
+        draftID: currentDraft,
+      });
+    }
+
+    form().setSendTime(date);
+  };
+
   return (
     <div
       ref={(el) => {
@@ -1289,7 +1306,7 @@ export function BaseInput(props: {
             </Tooltip>
             <EmailDateSelector
               sendTime={form().sendTime() ?? null}
-              onSendTimeChange={form().setSendTime}
+              onSendTimeChange={handleSendTimeChange}
             />
             <Show when={savedDraftId()}>
               <Button
