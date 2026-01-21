@@ -6,7 +6,6 @@ use crate::{
     outbound::pg_soup_repo::expanded::dynamic::ExpandedDynamicCursorArgs,
 };
 use either::Either;
-use models_properties::{EntityReference, EntityType};
 use models_soup::{SoupProperty, item::SoupItem};
 use sqlx::PgPool;
 use system_properties::SystemPropertyKey;
@@ -149,28 +148,10 @@ pub(crate) async fn populate_properties(
     db: &PgPool,
     items: &mut [SoupItem],
 ) -> Result<(), sqlx::Error> {
-    let entity_refs: Vec<EntityReference> = items
+    let entity_refs = items
         .iter()
-        .filter_map(|item| match item {
-            SoupItem::Document(doc) => {
-                let entity_type = if doc.sub_type.is_some() {
-                    EntityType::Task
-                } else {
-                    EntityType::Document
-                };
-                Some(EntityReference::new(doc.id.to_string(), entity_type))
-            }
-            SoupItem::Project(p) => {
-                Some(EntityReference::new(p.id.to_string(), EntityType::Project))
-            }
-            SoupItem::EmailThread(e) => Some(EntityReference::new(
-                e.thread.id.to_string(),
-                EntityType::Thread,
-            )),
-            SoupItem::Chat(c) => Some(EntityReference::new(c.id.to_string(), EntityType::Chat)),
-            SoupItem::Channel(_) => None,
-        })
-        .collect();
+        .filter_map(|item| item.to_entity_reference())
+        .collect::<Vec<_>>();
 
     if entity_refs.is_empty() {
         return Ok(());

@@ -1,6 +1,7 @@
 use chrono::Utc;
 use document_sub_type::DocumentSubType;
 use macro_user_id::user_id::MacroUserIdStr;
+use models_properties::EntityType;
 use uuid::Uuid;
 
 use crate::SoupProperty;
@@ -105,4 +106,17 @@ pub struct SoupDocument {
 
     /// Properties
     pub properties: Vec<SoupProperty>,
+}
+
+impl SoupDocument {
+    /// Returns the entity type for this document.
+    ///
+    /// Documents with a `sub_type` of `Task` return `EntityType::Task`,
+    /// otherwise they return `EntityType::Document`.
+    pub fn entity_type(&self) -> EntityType {
+        match &self.sub_type {
+            Some(SoupDocumentSubType::Task { .. }) => EntityType::Task,
+            None => EntityType::Document,
+        }
+    }
 }
