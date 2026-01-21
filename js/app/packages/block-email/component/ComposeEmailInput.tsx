@@ -1,4 +1,5 @@
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
+import ClockIcon from '@phosphor-icons/core/assets/regular/clock.svg';
 import Trash from '@icon/regular/trash.svg';
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
 import { MacroSignatureButton } from '@block-email/component/MacroSignatureButton';
@@ -36,6 +37,8 @@ import { plural } from '@core/util/string';
 import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
 import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
 import { DateSelector } from '@block-email/component/date-selector';
+import { format } from 'date-fns/format';
+import { cn } from '@ui/utils/classname';
 
 false && fileFolderDrop;
 
@@ -305,7 +308,29 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
               setShowFormatRibbon(!showFormatRibbon());
             }}
           />
-          <DateSelector />
+          <DateSelector
+            trigger={(state) => {
+              const formattedDate = () => {
+                if (!state.selectedDate) return;
+                return format(state.selectedDate, "MMMM d, yyyy 'at' h:mm a");
+              };
+              return (
+                <Button
+                  class={cn(
+                    state.selectedDate && 'bg-accent/20 text-accent-ink',
+                    'aspect-square p-1'
+                  )}
+                  tooltip={
+                    state.selectedDate
+                      ? `Scheduled for ${formattedDate()}`
+                      : 'Schedule this email'
+                  }
+                >
+                  <ClockIcon class="size-5" />
+                </Button>
+              );
+            }}
+          />
           <Show when={props.hasDraft}>
             <Button
               onclick={props.onDraftDeletePress}
