@@ -236,6 +236,7 @@ export function DocumentMention(props: DocumentMentionDecoratorProps) {
   const [item] = useItemPreview({
     id: props.documentId,
     type: previewType(),
+    params: props.blockParams,
   });
 
   const [popupOpen, setPopupOpen] = createSignal(false);

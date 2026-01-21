@@ -13,6 +13,7 @@ import {
 import { toast } from '@core/component/Toast/Toast';
 import {
   isAccessiblePreviewItem,
+  isChannelPreviewItem,
   type PreviewChannelAccess,
   type PreviewDocumentAccess,
   type PreviewItem,
@@ -517,6 +518,11 @@ export function PopupPreview(props: {
       props.documentInfo.type,
       props.documentInfo.params
     );
+
+    const messageContext = isChannelPreviewItem(accessibleItem)
+      ? accessibleItem.messageContext
+      : undefined;
+
     return (
       <>
         <div class="text-sm font-semibold">
@@ -528,8 +534,27 @@ export function PopupPreview(props: {
             </div>
           )}
         </div>
+
+        <Show when={messageContext}>
+          {(context) => (
+            <div class="mt-2 mb-1 text-sm text-ink-muted border-l-2 border-edge pl-3 py-1">
+              <div class="line-clamp-3 break-words">{context().content}</div>
+            </div>
+          )}
+        </Show>
+
         <div class="flex justify-between items-center w-full text-sm font-medium">
-          <Show when={props.item().owner}>
+          <Show when={messageContext}>
+            {(context) => (
+              <div class="justify-left mt-2 w-fit max-w-[66%] text-ink-muted overflow-hidden whitespace-nowrap text-ellipsis">
+                <span class="relative text-[0.8em] text-ink-muted max-w-full">
+                  <UserIcon class="relative top-[-0.125em] size-4 inline-flex items-center mr-1" />
+                  {context().senderName || context().senderId}
+                </span>
+              </div>
+            )}
+          </Show>
+          <Show when={!messageContext && props.item().owner}>
             {(name) => (
               <div class="justify-left mt-2 w-fit max-w-[66%] text-ink-muted overflow-hidden whitespace-nowrap text-ellipsis">
                 <span class="relative text-[0.8em] text-ink-muted max-w-full">
@@ -539,7 +564,17 @@ export function PopupPreview(props: {
               </div>
             )}
           </Show>
-          <Show when={props.item().updatedAt}>
+          <Show when={messageContext}>
+            {(context) => (
+              <div class="justify-right mt-2">
+                <span class="relative text-[0.8em] text-ink-muted">
+                  <ClockIcon class="relative top-[-0.125em] size-4 inline-flex items-center mr-1" />
+                  {formatDate(new Date(context().createdAt).getTime())}
+                </span>
+              </div>
+            )}
+          </Show>
+          <Show when={!messageContext && props.item().updatedAt}>
             {(time) => (
               <div class="justify-right mt-2">
                 <span class="relative text-[0.8em] text-ink-muted">

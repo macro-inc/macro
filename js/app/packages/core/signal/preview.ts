@@ -1,3 +1,4 @@
+import { URL_PARAMS as URL_PARAMS_CHANNEL } from '@block-channel/constants';
 import { itemToSafeName } from '@core/constant/allBlocks';
 import { debounce } from '@core/util/debounce';
 import { isErr } from '@core/util/maybeResult';
@@ -10,7 +11,7 @@ import { type ItemType, storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { syncServiceClient } from '@service-sync/client';
 import { type Accessor, createEffect, createSignal } from 'solid-js';
-import { createStore, unwrap } from 'solid-js/store';
+import { createStore } from 'solid-js/store';
 
 /** Default cache duration in seconds */
 const DEFAULT_CACHE_TIME_SECONDS = 60 * 10;
@@ -58,6 +59,16 @@ export type PreviewDocumentAccess = {
   channelType?: never;
 } & BasePreviewItem<'document'>;
 
+export type MessageContext = {
+  messageId: string;
+  threadId?: string;
+  content: string;
+  senderId: string;
+  senderName?: string;
+  createdAt: string;
+  isThread: boolean;
+};
+
 export type PreviewChannelAccess = {
   access: Extract<AccessType, 'access'>;
   loading: false;
@@ -65,6 +76,7 @@ export type PreviewChannelAccess = {
   fileType?: never;
   subType?: never;
   channelType?: ChannelType;
+  messageContext?: MessageContext;
 } & BasePreviewItem<Exclude<ItemType, 'project'>>;
 
 export type PreviewItem =
@@ -78,6 +90,7 @@ export type PreviewItem =
 export interface ItemEntity {
   id: string;
   type?: ItemType;
+  params?: Record<string, string>;
 }
 
 export const isAccessiblePreviewItem = (item: PreviewItem) => {
@@ -89,6 +102,12 @@ export const isValidPreviewItem = (item: PreviewItem) => {
 
 export const isDocumentPreviewItem = (item: PreviewItem) => {
   return isAccessiblePreviewItem(item) && item.type === 'document';
+};
+
+export const isChannelPreviewItem = (
+  item: PreviewItem
+): item is PreviewChannelAccess => {
+  return isAccessiblePreviewItem(item) && item.type === 'channel';
 };
 
 export const isLoadingPreviewItem = (item: PreviewItem) => {
@@ -109,6 +128,21 @@ function queueItemsForFetch(items: ItemEntity[]) {
   const validItems = items.filter((i) => !!i.id);
   if (validItems.length === 0) return;
   setPreviewFetchQueue((prev) => [...prev, ...validItems]);
+}
+
+/** Generates cache key for an item, including message params for channels */
+function getCacheKey(entity: ItemEntity): string {
+  if (entity.type === 'channel' && entity.params) {
+    const messageId = entity.params[URL_PARAMS_CHANNEL.message];
+    const threadId = entity.params[URL_PARAMS_CHANNEL.thread];
+    if (messageId) {
+      return `${entity.id}:msg:${messageId}`;
+    }
+    if (threadId) {
+      return `${entity.id}:thread:${threadId}`;
+    }
+  }
+  return entity.id;
 }
 
 function defaultNameTransform(item: PreviewItem): PreviewItem {
@@ -140,9 +174,7 @@ async function batchFetchPreviews(items: ItemEntity[]) {
     .filter((i) => i.type === 'document' || !i.type)
     .map((i) => i.id);
 
-  const channelItems = items
-    .filter((i) => i.type === 'channel' || !i.type)
-    .map((i) => i.id);
+  const channelItems = items.filter((i) => i.type === 'channel' || !i.type);
 
   const projectItems = items
     .filter((i) => i.type === 'project' || !i.type)
@@ -179,17 +211,33 @@ async function batchFetchPreviews(items: ItemEntity[]) {
   [
     ...chatResults,
     ...documentResults,
-    ...channelResults,
     ...projectResults,
     ...emailResults,
   ].forEach((result) => {
     updates[result.id] = result;
   });
 
+  channelResults.forEach((result) => {
+    const channelItems = items.filter(
+      (i) => i.id === result.id && i.type === 'channel'
+    );
+
+    channelItems.forEach((item) => {
+      const cacheKey = getCacheKey(item);
+      updates[cacheKey] = { ...result };
+    });
+
+    updates[result.id] = result;
+  });
+
   setItemPreviewStore(updates);
 }
 
-async function fetchChannelPreviews(ids: string[]): Promise<PreviewItem[]> {
+async function fetchChannelPreviews(
+  items: ItemEntity[]
+): Promise<PreviewItem[]> {
+  const ids = items.map((i) => i.id);
+
   const result = await commsServiceClient.getBatchChannelPreviews({
     channel_ids: ids,
   });
@@ -200,7 +248,8 @@ async function fetchChannelPreviews(ids: string[]): Promise<PreviewItem[]> {
   }
 
   const [, data] = result;
-  return data.previews.map((channel) => {
+
+  const previews = data.previews.map((channel) => {
     const base = {
       _createdAt: new Date(),
       id: channel.channel_id,
@@ -215,16 +264,63 @@ async function fetchChannelPreviews(ids: string[]): Promise<PreviewItem[]> {
           loading: false,
           name: channel.channel_name,
           channelType: channel.channel_type,
-        };
+          messageContext: undefined,
+        } as PreviewChannelAccess;
       case 'no_access':
       case 'does_not_exist':
         return {
           ...base,
           access: channel.type,
           loading: false,
-        };
+        } as PreviewItemNoAccess;
     }
   });
+
+  for (const item of items) {
+    const messageId = item.params?.[URL_PARAMS_CHANNEL.message];
+    const threadId = item.params?.[URL_PARAMS_CHANNEL.thread];
+
+    if (messageId) {
+      commsServiceClient
+        .getMessageWithContext({
+          message_id: messageId,
+          before: 0,
+          after: 0,
+        })
+        .then((msgResult) => {
+          if (!isErr(msgResult)) {
+            const [, msgData] = msgResult;
+            const message = msgData.messages[0];
+            if (message) {
+              const messageContext: MessageContext = {
+                messageId: message.id,
+                threadId: message.thread_id ?? undefined,
+                content: message.content,
+                senderId: message.sender_id,
+                createdAt: message.created_at,
+                isThread: !!threadId || !!message.thread_id,
+              };
+
+              const cacheKey = getCacheKey(item);
+              const cached = itemPreviewStore[cacheKey];
+              if (
+                cached &&
+                !cached.loading &&
+                cached.access === 'access' &&
+                cached.type === 'channel'
+              ) {
+                setItemPreviewStore(cacheKey, {
+                  ...cached,
+                  messageContext,
+                });
+              }
+            }
+          }
+        });
+    }
+  }
+
+  return previews;
 }
 
 async function fetchDocumentPreviews(ids: string[]): Promise<PreviewItem[]> {
@@ -405,7 +501,8 @@ export type ItemPreviewFetcher = [
  * });
  */
 export function useItemPreview(item: ItemEntity): ItemPreviewFetcher {
-  const cached = itemPreviewStore[item.id];
+  const cacheKey = getCacheKey(item);
+  const cached = itemPreviewStore[cacheKey];
   const cacheExpired =
     cached &&
     !cached.loading &&
@@ -413,11 +510,36 @@ export function useItemPreview(item: ItemEntity): ItemPreviewFetcher {
       DEFAULT_CACHE_TIME_SECONDS * 1000;
 
   if (!cached || cacheExpired) {
-    setItemPreviewStore(item.id, {
-      loading: true,
-      _createdAt: new Date(),
-      id: item.id,
-    });
+    if (
+      item.type === 'channel' &&
+      item.params &&
+      (item.params[URL_PARAMS_CHANNEL.message] ||
+        item.params[URL_PARAMS_CHANNEL.thread])
+    ) {
+      const baseChannelPreview = itemPreviewStore[item.id];
+      if (
+        baseChannelPreview &&
+        !baseChannelPreview.loading &&
+        baseChannelPreview.access === 'access'
+      ) {
+        setItemPreviewStore(cacheKey, {
+          ...baseChannelPreview,
+          _createdAt: new Date(),
+        });
+      } else {
+        setItemPreviewStore(cacheKey, {
+          loading: true,
+          _createdAt: new Date(),
+          id: item.id,
+        });
+      }
+    } else {
+      setItemPreviewStore(cacheKey, {
+        loading: true,
+        _createdAt: new Date(),
+        id: item.id,
+      });
+    }
     queueItemsForFetch([item]);
   }
 
@@ -428,15 +550,14 @@ export function useItemPreview(item: ItemEntity): ItemPreviewFetcher {
     }
   });
 
-  // const accessor = () => unwrap(itemPreviewStore[item.id]);
   const accessor = () => {
-    const _item = unwrap(itemPreviewStore[item.id]);
+    const _item = itemPreviewStore[cacheKey];
     return defaultNameTransform(_item);
   };
 
   const controls = {
     refetch: () => {
-      setItemPreviewStore(item.id, {
+      setItemPreviewStore(cacheKey, {
         loading: true,
         _createdAt: new Date(),
         id: item.id,
@@ -444,7 +565,7 @@ export function useItemPreview(item: ItemEntity): ItemPreviewFetcher {
       queueItemsForFetch([item]);
     },
     mutate: (value: PreviewItem) => {
-      setItemPreviewStore(item.id, value);
+      setItemPreviewStore(cacheKey, value);
     },
   };
 
