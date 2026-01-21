@@ -72,6 +72,7 @@ type ListNavActions = {
 function ListItem(props: {
   id: string;
   isSelected: boolean;
+  disabled?: boolean;
   onClick: () => void;
   onMouseEnter: () => void;
   children: any;
@@ -80,10 +81,12 @@ function ListItem(props: {
     <button
       type="button"
       id={props.id}
+      disabled={props.disabled}
       class={cn(
         'flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 scroll-my-1',
         {
-          'bg-hover bracket': props.isSelected,
+          'bg-hover bracket': props.isSelected && !props.disabled,
+          'opacity-50 cursor-not-allowed': props.disabled,
         }
       )}
       onClick={props.onClick}
@@ -128,10 +131,11 @@ function createListKeybindings(elem: Accessor<HTMLElement | undefined>) {
 }
 
 export function PropertyEditorModal() {
-  const [dialogRef, setDialogRef] = createSignal<HTMLElement>();
-  const [attach, hotkeyScope] = useHotkeyDOMScope('property-editor-modal');
+  const [dialogRef, setDialogRef] = createSignal<HTMLElement | undefined>();
+  const [attach, hotkeyScope] = useHotkeyDOMScope('property-editor');
   const [searchValue, setSearchValue] = createSignal('');
   const [selectedIndex, setSelectedIndex] = createSignal(0);
+  const [inputType, setInputType] = createSignal<'text' | 'number'>('text');
 
   const defaultPlaceholder = 'Choose a property...';
   const [placeholder, setPlaceholder] = createSignal('');
@@ -166,6 +170,7 @@ export function PropertyEditorModal() {
       setSelectedIndex(0);
       setSearchValue('');
       setPlaceholder('');
+      setInputType('text');
     })
   );
 
@@ -193,6 +198,7 @@ export function PropertyEditorModal() {
                       setValue={setSearchValue}
                       focusedIndex={selectedIndex}
                       setFocusedIndex={setSelectedIndex}
+                      inputType={inputType()}
                     />
                   </div>
                   <div class="p-2 border-b border-edge-muted">
@@ -222,6 +228,7 @@ export function PropertyEditorModal() {
                         setSelectedIndexFromMouse={setSelectedIndexFromMouse}
                         setKeybindings={keybindings}
                         setPlaceholder={setPlaceholder}
+                        setInputType={setInputType}
                         onSave={handlePropertySave}
                       />
                     </Match>
@@ -243,6 +250,7 @@ function SearchInput(props: {
   focusedIndex: Accessor<number>;
   setFocusedIndex: Setter<number>;
   onKeyDown?: (e: KeyboardEvent) => void;
+  inputType?: 'text' | 'number';
 }) {
   let inputRef: HTMLInputElement | undefined;
 
@@ -253,6 +261,7 @@ function SearchInput(props: {
   return (
     <input
       ref={inputRef}
+      type={props.inputType ?? 'text'}
       class="flex-1 text-base border-0 outline-none! focus:outline-none ring-0! focus:ring-0"
       placeholder={props.placeHolder}
       value={props.value()}
@@ -389,6 +398,7 @@ function PropertyValueEditor(props: {
   setSelectedIndexFromMouse: (index: number) => void;
   setKeybindings: (binding: ListNavActions) => void;
   setPlaceholder: Setter<string>;
+  setInputType: Setter<'text' | 'number'>;
   onSave: (apiValues: PropertyApiValues) => void;
 }) {
   const propertyType = () => props.property?.valueType;
@@ -497,6 +507,7 @@ function PropertyValueEditor(props: {
           onSubmit={handleSubmit}
           setKeybindings={props.setKeybindings}
           setPlaceholder={props.setPlaceholder}
+          setInputType={props.setInputType}
         />
       </Match>
       <Match when={propertyType() === 'LINK'}>
@@ -712,6 +723,7 @@ function DirectEditPropertyEditor(props: {
   onSubmit: (value: string | number | boolean | Date) => void;
   setKeybindings: (binding: ListNavActions) => void;
   setPlaceholder: Setter<string>;
+  setInputType: Setter<'text' | 'number'>;
 }) {
   // Show date picker for DATE type properties
   if (props.property?.valueType === 'DATE') {
@@ -783,6 +795,20 @@ function DirectEditPropertyEditor(props: {
     }
   };
 
+  // Set input type and initial value based on property type
+  createEffect(() => {
+    const type = props.property?.valueType;
+    props.setInputType(type === 'NUMBER' ? 'number' : 'text');
+  });
+
+  // Set initial value to existing value when available
+  createEffect(() => {
+    const existing = existingValue();
+    if (existing !== null && existing !== undefined) {
+      props.setSearchValue(String(existing));
+    }
+  });
+
   createEffect(() => {
     const name = props.property?.displayName || 'value';
     const type = props.property?.valueType;
@@ -790,7 +816,7 @@ function DirectEditPropertyEditor(props: {
 
     let placeholderText: string;
     if (existing !== null && existing !== undefined) {
-      placeholderText = String(existing);
+      placeholderText = `${String(existing)}...`;
     } else if (type === 'BOOLEAN') {
       placeholderText = `Enter true or false for ${name}`;
     } else if (type === 'NUMBER') {
@@ -811,29 +837,40 @@ function DirectEditPropertyEditor(props: {
   });
 
   const displayValue = () => {
-    const value = props.searchValue();
+    const value = props.searchValue().trim();
     return value || null;
   };
 
+  const isValidInput = () => {
+    const value = props.searchValue().trim();
+    if (!value) return false;
+    if (props.property?.valueType === 'NUMBER') {
+      return !isNaN(parseFloat(value));
+    }
+    return true;
+  };
+
   return (
-    <Show when={displayValue()}>
-      <div class="max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden p-1">
-        <ListItem
-          id="property-value-option-0"
-          isSelected={true}
-          onClick={handleSubmit}
-          onMouseEnter={() => {}}
-        >
-          <PropertyDataTypeIcon property={props.property!} class="opacity-50" />
-          <div class="flex-1 text-left">
-            <p class="text-sm font-medium">
-              Set {props.property?.displayName} to{' '}
-              <span class="text-ink-muted">{displayValue()}</span>
-            </p>
-          </div>
-        </ListItem>
-      </div>
-    </Show>
+    <div class="max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden p-1">
+      <ListItem
+        id="property-value-option-0"
+        isSelected={true}
+        disabled={!isValidInput()}
+        onClick={handleSubmit}
+        onMouseEnter={() => {}}
+      >
+        <PropertyDataTypeIcon property={props.property!} class="opacity-50" />
+        <div class="flex-1 text-left">
+          <p class="text-sm font-medium">
+            Set {props.property?.displayName}
+            <Show when={displayValue()}>
+              {' '}
+              to <span class="text-ink-muted">{displayValue()}</span>
+            </Show>
+          </p>
+        </div>
+      </ListItem>
+    </div>
   );
 }
 

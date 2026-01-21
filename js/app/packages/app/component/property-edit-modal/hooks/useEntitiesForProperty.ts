@@ -14,7 +14,7 @@ import {
   type EmailEntity,
 } from '@macro-entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { useHistory } from '@service-storage/history';
+import { useHistoryQuery } from '@queries/history/history';
 import { debounce } from '@solid-primitives/scheduled';
 import {
   createEffect,
@@ -44,7 +44,8 @@ export function useEntitiesForProperty(
   const contacts = useContacts();
   const channelsContext = useChannelsContext();
   const channels = channelsContext.channels;
-  const history = useHistory();
+  const historyQuery = useHistoryQuery();
+  const history = () => historyQuery.data ?? [];
 
   const specificEntityType = () => property()?.specificEntityType;
 
