@@ -204,6 +204,17 @@ export const DateSelector = (props: DateSelectorProps) => {
             <SearchIcon class="h-4 w-4 text-ink-muted" />
             <Combobox.Input class="w-full caret-accent" />
           </div>
+
+          <Show when={selectedOption()}>
+            {(option) => (
+              <CurrentValueDisplay
+                selectedOption={option()}
+                onClear={() => {
+                  onChange(null);
+                }}
+              />
+            )}
+          </Show>
           <Show when={dateOptions().length === 0}>
             <Show
               when={searchQuery().trim()}
@@ -232,5 +243,42 @@ export const DateSelector = (props: DateSelectorProps) => {
         </Combobox.Content>
       </Combobox.Portal>
     </Combobox>
+  );
+};
+
+interface CurrentValueDisplayProps {
+  selectedOption: DateSelectorOption;
+  onClear: VoidFunction;
+}
+
+const CurrentValueDisplay = (props: CurrentValueDisplayProps) => {
+  const currentDateDisplay = createMemo(() => {
+    try {
+      return format(
+        props.selectedOption.custom
+          ? props.selectedOption.date
+          : props.selectedOption.context.date,
+        "MMMM d, yyyy 'at' h:mm a"
+      );
+    } catch {
+      return 'Invalid date';
+    }
+  });
+
+  return (
+    <div class="px-3 py-2 border-b border-edge-muted pattern pattern-edge-muted pattern-dot-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-ink-muted">Current:</span>
+          <span class="text-xs font-medium">{currentDateDisplay()}</span>
+        </div>
+        <button
+          onClick={props.onClear}
+          class="text-xs text-ink-muted hover:text-ink underline"
+        >
+          Clear
+        </button>
+      </div>
+    </div>
   );
 };
