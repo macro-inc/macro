@@ -42,6 +42,8 @@ import UserIcon from '@icon/regular/user.svg';
 
 // Components
 import { ClippedPanel } from '@core/component/ClippedPanel';
+import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { UserIcon as UserIconComponent } from '@core/component/UserIcon';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
 import { createCallback } from '@solid-primitives/rootless';
@@ -544,7 +546,13 @@ export function PopupPreview(props: {
         <Show when={messageContext}>
           {(context) => (
             <div class="mt-2 mb-1 text-sm text-ink-muted border-l-2 border-edge pl-3 py-1">
-              <div class="line-clamp-3 break-words">{context().content}</div>
+              <div class="line-clamp-3 break-words">
+                <StaticMarkdown
+                  markdown={context().content}
+                  theme={channelTheme}
+                  target="internal"
+                />
+              </div>
             </div>
           )}
         </Show>
