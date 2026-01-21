@@ -26,6 +26,7 @@ import { useEmailLinksQuery } from '@queries/email/link';
 import {
   useScheduleMessageMutation,
   useSendMessageMutation,
+  useUnscheduleMessageMutation,
 } from '@queries/email/thread';
 import {
   createMemo,
@@ -560,6 +561,22 @@ export function EmailCompose(props: EmailComposeProps) {
     cleanupWatermark();
   };
 
+  const unscheduleMessageMutation = useUnscheduleMessageMutation();
+
+  const handleSendTimeChange = (date: Date | null) => {
+    const currentSendTime = form.sendTime();
+    const currentDraft = currentDraftID();
+
+    // If we unset the send time, we need to unschedule the message
+    if (!date && currentSendTime && currentDraft) {
+      unscheduleMessageMutation.mutate({
+        draftID: currentDraft,
+      });
+    }
+
+    form.setSendTime(date);
+  };
+
   const resetState = () => {
     clearEmailBody(editor());
     setContent('');
@@ -816,7 +833,7 @@ export function EmailCompose(props: EmailComposeProps) {
                   onRemoveAttachment={handleRemoveAttachment}
                   attachments={form.attachments.list()}
                   sendTime={form.sendTime()}
-                  onSendTimeChange={form.setSendTime}
+                  onSendTimeChange={handleSendTimeChange}
                   onSubmit={() => void onSubmit()}
                   isSubmitting={sendMutation.isPending}
                   hasDraft={currentDraftID() != null}
