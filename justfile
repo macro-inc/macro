@@ -1,10 +1,15 @@
-run_dbs:
-  docker-compose up macrodb redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5 macrocache
-
+# Creates global networks that are shared across docker-compose files
 create_networks:
   docker network create databases 2>/dev/null || true
   echo "docker networks created"
 
+# Creates the docker networks then runs the databases 
+# This is used when initializing your databases
+run_dbs *ARGS:
+  just create_networks
+  docker-compose -f docker-compose-databases.yml up postgres redis {{ ARGS }}
+
+# Spins up main docker-compose
 docker_up *ARGS:
   echo "startup docker compose"
   docker compose up {{ ARGS }}
@@ -15,13 +20,11 @@ run_local *ARGS:
   just create_networks
   just docker_up {{ ARGS }}
 
-
-run_local_build:
-  just docker_up --build
-
-# Run all services in detached mode
-run_local_detached:
-  just docker_up --build -d
+# Builds the main docker images for the services and runs the docker-compose
+# after
+build_run_local *ARGS:
+  just rust/cloud-storage/build_dev_service_images
+  just run_local {{ ARGS }} 
 
 # Stop all local services
 stop-local:
