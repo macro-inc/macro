@@ -1,14 +1,7 @@
-# Cloud Storage Services - Local Development
-services:
-  redis:
-    image: 'redis/redis-stack:latest'
-    ports:
-      - '6379:6379' # Expose Redis on the default port
-      - '8001:8001' # Expose Redis Stack Server UI/tools
-    environment:
-      - ALLOW_EMPTY_PASSWORD=yes
-    networks:
-      - databases
+# Services
+include:
+  - docker-compose-databases.yml
+services: 
   # ============================================================================
   # authentication_service (Port 8080)
   # Primary auth service - depends on FusionAuth, Redis, MacroDB
@@ -16,15 +9,14 @@ services:
   authentication_service:
     build:
       context: ./rust/cloud-storage
-      dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: authentication_service
+      dockerfile: Dockerfile.dev
+      target: authentication_service
     ports:
       - "8080:8080"
     environment:
       - PORT=8080
       - DATABASE_URL=${MACRODB_URL}
-      - REDIS_URI=${REDIS_URI}
+      - REDIS_URI=redis://redis:6379
       - BASE_URL=http://authentication_service:8080
       - FUSIONAUTH_API_KEY_SECRET_KEY=${FUSIONAUTH_API_KEY_SECRET_KEY}
       - FUSIONAUTH_CLIENT_ID=${FUSIONAUTH_CLIENT_ID}
@@ -57,6 +49,7 @@ services:
       - MACRO_API_TOKEN_EXPIRY_SECONDS=${MACRO_API_TOKEN_EXPIRY_SECONDS}
       - RUST_LOG=${RUST_LOG}
     networks:
+      - databases
       - services
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -72,9 +65,8 @@ services:
   comms_service:
     build:
       context: ./rust/cloud-storage
-      dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: comms_service
+      dockerfile: Dockerfile.dev
+      target: comms_service
     ports:
       - "8081:8080"
     environment:
@@ -119,9 +111,8 @@ services:
   connection_gateway:
     build:
       context: ./rust/cloud-storage
-      dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: connection_gateway_service
+      dockerfile: Dockerfile.dev
+      target: connection_gateway_service
     ports:
       - "8082:8080"
     environment:
@@ -159,9 +150,8 @@ services:
   contacts_service:
     build:
       context: ./rust/cloud-storage
-      dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: contacts_service
+      dockerfile: Dockerfile.dev
+      target: contacts_service
     ports:
       - "8083:8080"
     environment:
@@ -196,7 +186,8 @@ services:
   convert_service:
     build:
       context: ./rust/cloud-storage
-      dockerfile: Dockerfile.convert_service
+      dockerfile: Dockerfile.convert_service.dev
+      target: convert_service
     ports:
       - "8084:8080"
     environment:
@@ -228,9 +219,8 @@ services:
   document_cognition_service:
     build:
       context: ./rust/cloud-storage
-      dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: document_cognition_service
+      dockerfile: Dockerfile.dev
+      target: document_cognition_service
     ports:
       - "8085:8080"
     environment:
@@ -283,9 +273,8 @@ services:
   document_storage_service:
     build:
       context: ./rust/cloud-storage
-      dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: document_storage_service
+      dockerfile: Dockerfile.dev
+      target: document_storage_service
     ports:
       - "8086:8080"
     environment:
@@ -346,9 +335,8 @@ services:
   email_service:
     build:
       context: ./rust/cloud-storage
-      dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: email_service
+      dockerfile: Dockerfile.dev
+      target: email_service
     ports:
       - "8087:8080"
     environment:
@@ -411,9 +399,8 @@ services:
   experiment_service:
     build:
       context: ./rust/cloud-storage
-      dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: experiment_service
+      dockerfile: Dockerfile.dev
+      target: experiment_service
     ports:
       - "8088:8080"
     environment:
@@ -447,9 +434,8 @@ services:
   notification_service:
     build:
       context: ./rust/cloud-storage
-      dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: notification_service
+      dockerfile: Dockerfile.dev
+      target: notification_service
     ports:
       - "8089:8079"
     environment:
@@ -504,15 +490,17 @@ services:
   organization_service:
     build:
       context: ./rust/cloud-storage
-      dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: organization_service
+      dockerfile: Dockerfile.dev
+      target: organization_service
     ports:
       - "8090:8080"
     environment:
       - PORT=8080
       - DATABASE_URL=${MACRODB_URL}
       - REDIS_URI=redis://redis:6379
+      - DSS_URL=http://document_storage_service:8080
+      - AUTH_URL=http://authentication_service:8080
+      - AUTH_INTERNAL_AUTH_SECRET_KEY=local
       - INVITE_EMAIL=invite-local@macro.com
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
@@ -528,6 +516,8 @@ services:
       - RUST_LOG=${RUST_LOG}
     depends_on:
       - redis
+      - document_storage_service
+      - authentication_service
     networks:
       - services
       - databases
@@ -545,9 +535,8 @@ services:
   properties_service:
     build:
       context: ./rust/cloud-storage
-      dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: properties_service
+      dockerfile: Dockerfile.dev
+      target: properties_service
     ports:
       - "8091:8080"
     environment:
@@ -583,9 +572,7 @@ services:
   search_processing_service:
     build:
       context: ./rust/cloud-storage
-      dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: search_processing_service
+      dockerfile: Dockerfile.search_processing_service.dev
     ports:
       - "8092:8080"
     environment:
@@ -625,9 +612,8 @@ services:
   search_service:
     build:
       context: ./rust/cloud-storage
-      dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: search_service
+      dockerfile: Dockerfile.dev
+      target: search_service
     ports:
       - "8093:8080"
     environment:
@@ -670,9 +656,8 @@ services:
   static_file_service:
     build:
       context: ./rust/cloud-storage
-      dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: static_file_service
+      dockerfile: Dockerfile.dev
+      target: static_file_service
     ports:
       - "8094:8080"
     environment:
@@ -708,9 +693,8 @@ services:
   unfurl_service:
     build:
       context: ./rust/cloud-storage
-      dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: unfurl_service
+      dockerfile: Dockerfile.dev
+      target: unfurl_service
     ports:
       - "8095:8080"
     environment:
