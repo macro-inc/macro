@@ -429,3 +429,131 @@ describe('boostFn functionality', () => {
     expect(results[0].item.id).toBe('1');
   });
 });
+
+describe('DM activity timestamps for user ranking', () => {
+  interface UserWithInteraction extends MockItem {
+    email: string;
+    lastInteraction?: number;
+  }
+
+  it('ranks users with recent DM activity higher', () => {
+    const now = Date.now();
+    const users: UserWithInteraction[] = [
+      {
+        id: '1',
+        name: 'Alice Johnson',
+        type: 'item',
+        email: 'alice@example.com',
+        lastInteraction: now / 1000 - 86400, // 1 day ago (unix timestamp in seconds)
+      },
+      {
+        id: '2',
+        name: 'Bob Smith',
+        type: 'item',
+        email: 'bob@example.com',
+        lastInteraction: now / 1000 - 3600, // 1 hour ago
+      },
+      {
+        id: '3',
+        name: 'Charlie Brown',
+        type: 'item',
+        email: 'charlie@example.com',
+        // No DM activity
+      },
+    ];
+
+    const search = createFreshSearch<UserWithInteraction>(
+      {
+        fuzzyWeight: 0.6,
+        timeWeight: 0.3,
+        brevityWeight: 0.1,
+      },
+      (item) => item.name
+    );
+
+    const results = search(users, '');
+
+    // Bob should rank highest (most recent interaction)
+    // Then Alice (older interaction)
+    // Then Charlie (no interaction)
+    expect(results[0].item.id).toBe('2');
+    expect(results[1].item.id).toBe('1');
+    expect(results[2].item.id).toBe('3');
+  });
+
+  it('combines DM activity with fuzzy search', () => {
+    const now = Date.now();
+    const users: UserWithInteraction[] = [
+      {
+        id: '1',
+        name: 'Alice Anderson',
+        type: 'item',
+        email: 'alice@example.com',
+        lastInteraction: now / 1000 - 86400, // 1 day ago
+      },
+      {
+        id: '2',
+        name: 'Alicia Martinez',
+        type: 'item',
+        email: 'alicia@example.com',
+        lastInteraction: now / 1000 - 3600, // 1 hour ago
+      },
+      {
+        id: '3',
+        name: 'Bob Wilson',
+        type: 'item',
+        email: 'bob@example.com',
+        lastInteraction: now / 1000 - 60, // 1 minute ago
+      },
+    ];
+
+    const search = createFreshSearch<UserWithInteraction>(
+      {
+        fuzzyWeight: 0.6,
+        timeWeight: 0.3,
+        brevityWeight: 0.1,
+      },
+      (item) => item.name
+    );
+
+    const results = search(users, 'Ali');
+
+    // Both Alice and Alicia match, but Alicia has more recent interaction
+    expect(results).toHaveLength(2);
+    expect(results[0].item.id).toBe('2');
+    expect(results[1].item.id).toBe('1');
+  });
+
+  it('handles users without lastInteraction gracefully', () => {
+    const users: UserWithInteraction[] = [
+      {
+        id: '1',
+        name: 'Alice',
+        type: 'item',
+        email: 'alice@example.com',
+        // No lastInteraction
+      },
+      {
+        id: '2',
+        name: 'Bob',
+        type: 'item',
+        email: 'bob@example.com',
+        // No lastInteraction
+      },
+    ];
+
+    const search = createFreshSearch<UserWithInteraction>(
+      {
+        fuzzyWeight: 0.6,
+        timeWeight: 0.3,
+        brevityWeight: 0.1,
+      },
+      (item) => item.name
+    );
+
+    const results = search(users, '');
+
+    // Should not throw, and should return both users
+    expect(results).toHaveLength(2);
+  });
+});
