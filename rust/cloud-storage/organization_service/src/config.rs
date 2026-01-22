@@ -45,7 +45,7 @@ impl Config {
 
         let redis_uri = std::env::var("REDIS_URI").context("REDIS_URI must be provided")?;
 
-        let document_storage_service_url = std::env::var("DOCUMENT_SERVICE_URL").context("DOCUMENT_SERVICE_URL must be provided")?;
+        let document_storage_service_url = std::env::var("DOCUMENT_STORAGE_SERVICE_URL").context("DOCUMENT_STORAGE_SERVICE_URL must be provided")?;
 
         let invite_email =
             std::env::var("INVITE_EMAIL").context("INVITE_EMAIL must be provided")?;
