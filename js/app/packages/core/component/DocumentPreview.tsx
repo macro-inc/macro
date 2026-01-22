@@ -37,6 +37,7 @@ import SparkleIcon from '@icon/regular/sparkle.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import TrashSimple from '@icon/regular/trash-simple.svg';
 import UserIcon from '@icon/regular/user.svg';
+import MacroEmbed from '@macro-icons/macro-embed.svg';
 
 // Components
 import { ClippedPanel } from '@core/component/ClippedPanel';
@@ -44,7 +45,7 @@ import { beveledCorners } from '../../block-theme/signals/themeSignals';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
 import { globalSplitManager } from 'app/signal/splitLayout';
-import type { Component, ComponentProps, JSX } from 'solid-js';
+import type { Component, JSX } from 'solid-js';
 import { type Accessor, Match, Show, Switch } from 'solid-js';
 import { Dynamic, Portal } from 'solid-js/web';
 import { formatDate } from '../util/date';
@@ -55,48 +56,6 @@ import { floatWithElement } from './LexicalMarkdown/directive/floatWithElement';
 import { Tooltip } from './Tooltip';
 
 false && floatWithElement;
-
-const CustomEmbedIcon: Component<ComponentProps<'svg'>> = (props) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" {...props}>
-    {/* Background (invisible) */}
-    <rect width="256" height="256" fill="none" />
-    {/* Top line */}
-    <line
-      x1="40"
-      y1="60"
-      x2="216"
-      y2="60"
-      fill="none"
-      stroke="currentColor"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      stroke-width="16"
-    />
-    {/* Box */}
-    <rect
-      x="72"
-      y="96"
-      width="112"
-      height="48"
-      rx="8"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="16"
-    />
-    {/* Bottom line */}
-    <line
-      x1="40"
-      y1="176"
-      x2="216"
-      y2="176"
-      fill="none"
-      stroke="currentColor"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      stroke-width="16"
-    />
-  </svg>
-);
 
 /**
  * Container for displaying mentions with optional collapsing
@@ -414,7 +373,7 @@ export function PopupPreview(props: {
                 : 'Convert to Card View'
             }
             onClick={props.previewInfo.handlePreviewToggle}
-            icon={CustomEmbedIcon}
+            icon={MacroEmbed}
           />
         </Show>
       );
@@ -557,7 +516,7 @@ export function PopupPreview(props: {
   return (
     <Portal>
       <div
-        class="absolute select-none overflow-hidden z-toast-region w-80 bg-dialog text-ink"
+        class="absolute select-none overflow-hidden z-toast-region w-80 text-ink"
         use:floatWithElement={{ element: () => props.floatRef }}
         onMouseEnter={props.mouseEnter}
         onMouseLeave={props.mouseLeave}
