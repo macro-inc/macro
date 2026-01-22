@@ -1,21 +1,21 @@
 const serverHostLocal: Servers = {
-  'auth-service': 'http://localhost:8084',
+  'auth-service': 'http://localhost:8080',
   'pdf-service': 'http://localhost:4567',
-  'document-storage-service': 'http://localhost:8083',
-  'organization-service': 'todo',
+  'document-storage-service': 'http://localhost:8086',
+  'organization-service': 'http://localhost:8090',
   // TODO: make these work locally or shim
   'websocket-service': 'wss://services-dev.macro.com',
-  'cognition-service': `http://localhost:8088`,
-  'cognition-websocket-service': `ws://localhost:8088`,
-  'connection-gateway': `ws://localhost:8080`,
-  'comms-service': `wss://comms-service.macro.com`,
-  'notification-service': `https://notifications.macro.com`,
-  'static-file': `https://static-file-service.macro.com`,
-  'unfurl-service': 'http://localhost:8080',
-  contacts: 'http://localhost:8092',
-  'email-service': 'http://localhost:8094',
-  'search-service': 'http://localhost:8091',
-  'properties-service': `http://localhost:8095`,
+  'cognition-service': 'http://localhost:8085',
+  'cognition-websocket-service': 'ws://localhost:8085',
+  'connection-gateway': 'ws://localhost:8082',
+  'comms-service': 'ws://localhost:8081',
+  'notification-service': 'http://localhost:8089',
+  'static-file': 'http://localhost:8094',
+  'unfurl-service': 'http://localhost:8095',
+  contacts: 'http://localhost:8083',
+  'email-service': 'http://localhost:8087',
+  'search-service': 'http://localhost:8093',
+  'properties-service': 'http://localhost:8091',
 } as const;
 
 const devServerSuffix = import.meta.env.MODE === 'development' ? '-dev' : '';
@@ -50,6 +50,11 @@ function selectLocalServers(): Servers {
   const selectedLocalServers: string = import.meta.env.VITE_LOCAL_SERVERS;
   if (!selectedLocalServers || selectedLocalServers.length === 0) {
     return serverHostRemote;
+  }
+
+  // Keyword to make running everything locally easier
+  if (selectedLocalServers === 'ALL') {
+    return serverHostLocal;
   }
 
   const servers = selectedLocalServers
