@@ -17,7 +17,7 @@ mod test;
 /// This queries the `macro_user_info` table joined with the `User` table
 /// to retrieve first and last names for users.
 #[tracing::instrument(skip(db), err)]
-pub async fn get_names_for_ids(
+async fn get_names_for_ids(
     db: &PgPool,
     ids: &[MacroUserIdStr<'_>],
 ) -> Result<Vec<UserName>, Report> {
