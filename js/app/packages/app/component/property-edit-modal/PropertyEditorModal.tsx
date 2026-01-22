@@ -50,6 +50,10 @@ import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 
 import { useEntitiesForProperty } from './hooks/useEntitiesForProperty';
 import {
+  useListKeyBindings,
+  type ListNavActions,
+} from './hooks/useListKeyBindings';
+import {
   getEntityName,
   getEntityType,
   type CombinedEntity,
@@ -59,12 +63,6 @@ import type { PropertyApiValues } from '@core/component/Properties/types';
 import { toast } from '@core/component/Toast/Toast';
 import { useSavePropertyForMultiEntitites } from './hooks/useSaveProperties';
 import { useEntityPropertiesQuery } from '@queries/properties/entity';
-
-type ListNavActions = {
-  next: VoidFunction;
-  previous: VoidFunction;
-  select: VoidFunction;
-};
 
 /**
  * Styled wrapper for list items in each menu.
@@ -97,39 +95,6 @@ function ListItem(props: {
   );
 }
 
-function createListKeybindings(elem: Accessor<HTMLElement | undefined>) {
-  let actions: ListNavActions | undefined;
-  let unbind: VoidFunction | undefined;
-
-  const onKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'ArrowDown' || (e.key === 'j' && e.ctrlKey)) {
-      e.preventDefault();
-      actions?.next();
-    } else if (e.key === 'ArrowUp' || (e.key === 'k' && e.ctrlKey)) {
-      e.preventDefault();
-      actions?.previous();
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      actions?.select();
-    }
-  };
-
-  createEffect(
-    on(elem, (el) => {
-      unbind?.();
-      if (!el) return;
-      el.addEventListener('keydown', onKeyDown);
-      unbind = () => el.removeEventListener('keydown', onKeyDown);
-    })
-  );
-
-  onCleanup(() => unbind?.());
-
-  return (nextActions: ListNavActions | undefined) => {
-    actions = nextActions;
-  };
-}
-
 export function PropertyEditorModal() {
   const [dialogRef, setDialogRef] = createSignal<HTMLElement | undefined>();
   const [attach, hotkeyScope] = useHotkeyDOMScope('property-editor');
@@ -141,6 +106,7 @@ export function PropertyEditorModal() {
   const [placeholder, setPlaceholder] = createSignal('');
 
   const saveProperties = useSavePropertyForMultiEntitites();
+
   const handlePropertySave = (value: PropertyApiValues) => {
     const { selectedEntities, targetProperty } = propertyEditorState;
     if (!selectedEntities.length || !targetProperty) return;
@@ -180,7 +146,7 @@ export function PropertyEditorModal() {
     setSelectedIndex(index);
   };
 
-  const keybindings = createListKeybindings(dialogRef);
+  const keybindings = useListKeyBindings(() => dialogRef());
 
   return (
     <Dialog open={propertyEditorOpen()} onOpenChange={togglePropertyEditor}>
