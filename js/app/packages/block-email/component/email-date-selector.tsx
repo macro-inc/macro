@@ -47,6 +47,9 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
                     role="button"
                     tabIndex={0}
                     class="hover:bg-accent/30"
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                    }}
                     onClick={() => props.onSendTimeChange?.(null)}
                   >
                     <IconX class="size-5" />
