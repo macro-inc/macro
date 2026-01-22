@@ -3,6 +3,9 @@ create_networks:
   docker network create databases 2>/dev/null || true
   echo "docker networks created"
 
+get_environment:
+  doppler secrets download --no-file --format env > .env
+
 # Creates the docker networks then runs the databases 
 # This is used when initializing your databases
 run_dbs *ARGS:

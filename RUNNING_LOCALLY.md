@@ -18,7 +18,7 @@ AWS_ACCESS_KEY_ID
 AWS_SECRET_ACCESS_KEY
 ```
 
-- Next generate your `.env` file via `doppler secrets download --no-file --format env > .env`
+- Next generate your `.env` file via `just get_environment`
 
 ## Running
 
