@@ -4,7 +4,7 @@ use sqlx::{Executor, PgPool, Postgres};
 
 /// Deletes a label from multiple messages at once
 /// Returns the number of message-label associations that were deleted
-#[tracing::instrument(skip(executor), level = "info")]
+#[tracing::instrument(skip(executor), err)]
 pub async fn delete_message_labels_batch<'e, E>(
     executor: E,
     message_ids: &Vec<Uuid>,
@@ -51,7 +51,7 @@ where
 }
 
 // delete all the message labels for a message.
-#[tracing::instrument(skip(executor), level = "info")]
+#[tracing::instrument(skip(executor), err)]
 pub async fn delete_all_message_labels<'e, E>(executor: E, message_id: Uuid) -> anyhow::Result<()>
 where
     E: Executor<'e, Database = Postgres>,
@@ -76,7 +76,7 @@ where
 }
 
 /// delete one or more message labels
-#[tracing::instrument(skip(tx), level = "info")]
+#[tracing::instrument(skip(tx), err)]
 pub async fn delete_db_message_labels(
     tx: &mut sqlx::PgConnection,
     message_id: Uuid,
@@ -112,7 +112,7 @@ pub async fn delete_db_message_labels(
     Ok(())
 }
 
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn delete_labels_by_provider_ids(
     pool: &PgPool,
     link_id: Uuid,
@@ -171,7 +171,7 @@ pub async fn delete_labels_by_provider_ids(
     Ok(rows_affected)
 }
 
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn delete_label_by_id(
     pool: &PgPool,
     label_id: Uuid,

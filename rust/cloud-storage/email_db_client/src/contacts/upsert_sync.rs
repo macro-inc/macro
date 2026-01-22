@@ -7,7 +7,7 @@ use sqlx::types::Uuid;
 
 /// Upsert methods used by contact sync process, triggered by initial backfill and daily cron.
 /// Upserts multiple contacts into the contacts table
-#[tracing::instrument(skip(pool, contacts), level = "info")]
+#[tracing::instrument(skip(pool, contacts), err)]
 pub async fn upsert_contacts(pool: &PgPool, contacts: &[Contact]) -> anyhow::Result<u64> {
     if contacts.is_empty() {
         return Ok(0);

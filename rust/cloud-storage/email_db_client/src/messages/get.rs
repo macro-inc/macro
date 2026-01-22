@@ -117,7 +117,7 @@ pub async fn message_exists_by_provider_id(
 }
 
 /// Fetches the thread's messages without attachments and body attributes.
-#[tracing::instrument(skip(conn), level = "info")]
+#[tracing::instrument(skip(conn), err)]
 pub async fn fetch_messages_metadata(
     conn: &mut sqlx::PgConnection,
     thread_db_id: Uuid,
@@ -203,7 +203,7 @@ pub async fn fetch_messages_metadata(
 }
 
 /// Fetches the thread's messages with labels.
-#[tracing::instrument(skip(conn), level = "info")]
+#[tracing::instrument(skip(conn), err)]
 pub async fn fetch_messages_with_labels(
     conn: &PgPool,
     thread_db_id: Uuid,
@@ -348,7 +348,7 @@ where
 }
 
 /// fetch draft message and sender contact info from database for sending
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_message_to_send(
     pool: &PgPool,
     message_id: Uuid,
@@ -543,7 +543,7 @@ pub async fn convert_db_messages_to_service_concurrent(
     ) = tokio::try_join!(
         contacts::get::fetch_senders_by_message_ids(pool, &message_ids),
         contacts::get::fetch_db_recipients_in_bulk(pool, &message_ids),
-        messages::scheduled::get::get_scheduled_messages_in_bulk(pool, &message_ids),
+        messages::scheduled::get::fetch_scheduled_messages_in_bulk(pool, &message_ids),
         labels::get::fetch_message_labels_in_bulk(pool, &message_ids),
         attachments::provider::fetch_db_attachments_in_bulk(pool, &message_ids_with_attachments),
         attachments::draft::fetch_db_draft_attachments_in_bulk(pool, &draft_message_ids),

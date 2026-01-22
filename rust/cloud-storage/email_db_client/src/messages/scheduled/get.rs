@@ -104,7 +104,7 @@ pub async fn get_scheduled_messages_by_link_id(
 /// Fetches scheduled messages for multiple message IDs, returning a map keyed by message_id.
 /// Only returns scheduled messages that have not been sent yet.
 #[tracing::instrument(skip(db), err)]
-pub async fn get_scheduled_messages_in_bulk(
+pub async fn fetch_scheduled_messages_in_bulk(
     db: &sqlx::PgPool,
     message_ids: &[Uuid],
 ) -> anyhow::Result<std::collections::HashMap<Uuid, db::message::ScheduledMessage>> {

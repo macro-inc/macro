@@ -4,7 +4,7 @@ use models_email::email::service;
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_backfill_job(
     pool: &PgPool,
     job_id: Uuid,
@@ -34,7 +34,7 @@ pub async fn get_backfill_job(
     Ok(record.map(Into::into))
 }
 
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_backfill_job_with_link_id(
     pool: &PgPool,
     job_id: Uuid,
@@ -98,7 +98,7 @@ pub async fn get_active_backfill_job(
 }
 
 /// Retrieves all backfill jobs created in the last 24 hours for a given macro ID
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_recent_jobs_by_fusionauth_user_id(
     pool: &PgPool,
     fusionauth_user_id: &str,

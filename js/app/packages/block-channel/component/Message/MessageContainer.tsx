@@ -525,6 +525,7 @@ export function MessageContainer(props: MessageProps) {
               isFirstMessage={isFirstMessage()}
               isLastMessage={isLastMessage()}
               isConsecutive={isConsecutive()}
+              timestamp={message.created_at}
               shouldHover={contextMenuOpen() || topBarEmojiMenuOpen()}
               hoverActions={
                 <ActionMenu

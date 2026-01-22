@@ -6,7 +6,7 @@ use sqlx::{Executor, Postgres};
 
 /// Deletes message from the database with transaction handling. Returns an optional db thread id
 /// if the thread was deleted
-#[tracing::instrument(skip(tx, message), fields(link_id = %message.link_id), level = "info")]
+#[tracing::instrument(skip(tx, message), fields(link_id = %message.link_id), err)]
 pub async fn delete_message_with_tx(
     tx: &mut sqlx::PgConnection,
     message: &message::SimpleMessage,
@@ -36,7 +36,7 @@ pub async fn delete_message_with_tx(
     }
 }
 
-#[tracing::instrument(skip(executor), level = "info")]
+#[tracing::instrument(skip(executor), err)]
 pub async fn delete_db_message<'e, E>(executor: E, message_id: Uuid) -> anyhow::Result<()>
 where
     E: Executor<'e, Database = Postgres>,

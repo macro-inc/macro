@@ -82,7 +82,7 @@ pub async fn insert_message_with_tx(
 }
 
 /// inserts message object into the database
-#[tracing::instrument(skip(tx, message))]
+#[tracing::instrument(skip(tx, message), err)]
 async fn insert_db_message(
     tx: &mut sqlx::PgConnection,
     message: &mut message::Message,
@@ -167,7 +167,7 @@ async fn insert_db_message(
 }
 
 /// Inserts a single message into the database with transaction handling
-#[tracing::instrument(skip(pool, message), fields(link_id = %message.link_id), level = "info")]
+#[tracing::instrument(skip(pool, message), fields(link_id = %message.link_id), err)]
 pub async fn insert_message(
     pool: &PgPool,
     thread_id: Uuid,
