@@ -1,6 +1,5 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
+import { isMobile } from '@core/mobile/isMobile';
 import CheckIcon from '@icon/bold/check-bold.svg?component-solid';
 import CaretRight from '@icon/regular/caret-right.svg?component-solid';
 import { ContextMenu } from '@kobalte/core/context-menu';
@@ -129,7 +128,7 @@ export type MenuItemProps =
   | CheckboxMenuItemProps
   | RadioMenuItemProps;
 
-export const MENU_ITEM_CLASS = `flex flex-row w-full gap-1.5 tracking-tight ${isMobileWidth() && isTouchDevice() ? 'py-2 px-1 text-base' : 'py-1 pl-2 pr-2 text-sm'} font-medium justify-between items-center focus-bracket`;
+export const MENU_ITEM_CLASS = `flex flex-row w-full gap-1.5 tracking-tight ${isMobile() ? 'py-2 px-1 text-base' : 'py-1 pl-2 pr-2 text-sm'} font-medium justify-between items-center focus-bracket`;
 
 /**
  * A menu item component that can be used interchangeably within either a ContextMenu or DropdownMenu.
@@ -187,7 +186,7 @@ export function MenuItem(props: MenuItemProps) {
     >
       <Show when={props.selectorType === 'checkbox'}>
         <div
-          class={`${isMobileWidth() && isTouchDevice() ? 'w-5 h-5' : 'w-4 h-4'} shrink-0 flex items-center justify-center`}
+          class={`${isMobile() ? 'w-5 h-5' : 'w-4 h-4'} shrink-0 flex items-center justify-center`}
         >
           <CheckIcon
             class={`w-[14px] h-[14px] shrink-0 rounded-sm p-[2px] ${
@@ -200,7 +199,7 @@ export function MenuItem(props: MenuItemProps) {
       </Show>
       <Show when={props.selectorType === 'radio'}>
         <div
-          class={`flex items-center justify-center shrink-0 ${isMobileWidth() && isTouchDevice() ? 'w-5 h-5' : 'w-4 h-4'}`}
+          class={`flex items-center justify-center shrink-0 ${isMobile() ? 'w-5 h-5' : 'w-4 h-4'}`}
         >
           <div
             class={`w-[14px] h-[14px] shrink-0 rounded-full ${
@@ -218,7 +217,7 @@ export function MenuItem(props: MenuItemProps) {
             component={
               props.icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>
             }
-            class={`${isMobileWidth() && isTouchDevice() ? 'w-5 h-5' : 'w-4 h-4'} shrink-0 ${props.iconClass ?? ''}`}
+            class={`${isMobile() ? 'w-5 h-5' : 'w-4 h-4'} shrink-0 ${props.iconClass ?? ''}`}
           />
         </Show>
         <Show when={typeof props.icon === 'object'}>
@@ -256,7 +255,7 @@ export function SubTrigger(props: {
             component={
               props.icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>
             }
-            class={`${isMobileWidth() && isTouchDevice() ? 'w-5 h-5' : 'w-4 h-4'} shrink-0 ${props.iconClass ?? ''}`}
+            class={`${isMobile() ? 'w-5 h-5' : 'w-4 h-4'} shrink-0 ${props.iconClass ?? ''}`}
           />
         </Show>
         <Show when={typeof props.icon === 'object'}>
@@ -316,10 +315,7 @@ function MobileConditionalOverlay(
   props: ParentProps<{ mobileFullScreen?: boolean }>
 ) {
   return (
-    <Show
-      when={props.mobileFullScreen && isTouchDevice() && isMobileWidth()}
-      fallback={props.children}
-    >
+    <Show when={props.mobileFullScreen && isMobile()} fallback={props.children}>
       <div class="z-modal fixed inset-0 flex justify-center items-center bg-modal-overlay backdrop-blur-sm">
         {props.children}
       </div>
@@ -395,7 +391,7 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
     const positioner = contentRef?.closest('[data-popper-positioner]');
     if (!positioner || !(positioner instanceof HTMLElement)) return;
 
-    if (!isTouchDevice() || !isMobileWidth()) {
+    if (!isMobile()) {
       return;
     }
 
@@ -435,7 +431,7 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
             ${props.class} ${props.width ? menuWidths[props.width] : ''}
             ${
               props.mobileFullScreen
-                ? isTouchDevice() && isMobileWidth()
+                ? isMobile()
                   ? 'flex flex-col justify-center px-4 max-h-[80vh] shrink w-[calc(100vw-1rem)]'
                   : ''
                 : ''

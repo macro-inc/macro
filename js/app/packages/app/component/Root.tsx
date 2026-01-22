@@ -78,6 +78,7 @@ import { SuspenseContextComp } from './SuspenseContext';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 import Visor from './Visor';
 import { setOpenWhichKey, WhichKey } from './WhichKey';
+import { ReactiveFavicon } from './ReactiveFavicon';
 
 const { track, identify, TrackingEvents } = withAnalytics();
 
@@ -402,6 +403,7 @@ export function Root() {
             <UserInfoSideEffects />
             <ConfiguredGlobalAppStateProvider>
               <ChannelsContextProvider>
+                <ReactiveFavicon />
                 <Title>{tabTitle()}</Title>
                 <MacroJump />
                 <Visor />

@@ -1,7 +1,7 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import * as stackingContext from '@core/constant/stackingContext';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import ExpandIcon from '@icon/regular/arrows-out-simple.svg';
 import ChevronLeftIcon from '@icon/regular/caret-left.svg';
 import ChevronRightIcon from '@icon/regular/caret-right.svg';
@@ -97,13 +97,13 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
   };
 
   const handleTouchStart = (e: TouchEvent) => {
-    if (!isMobileWidth() || !isTouchDevice()) return;
+    if (!isMobile()) return;
     setTouchStartX(e.touches[0].clientX);
     setIsSwiping(false);
   };
 
   const handleTouchMove = (e: TouchEvent) => {
-    if (!isMobileWidth() || !isTouchDevice()) return;
+    if (!isMobile()) return;
     setTouchEndX(e.touches[0].clientX);
 
     const diffX = Math.abs(touchStartX() - e.touches[0].clientX);
@@ -113,7 +113,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
   };
 
   const handleTouchEnd = () => {
-    if (!isMobileWidth() || !isTouchDevice() || !isSwiping()) return;
+    if (!isMobile() || !isSwiping()) return;
 
     const swipeThreshold = 50;
     const diff = touchStartX() - touchEndX();
@@ -172,7 +172,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
   };
 
   const handleMouseMove = () => {
-    if (isMobileWidth() || isTouchDevice()) return;
+    if (isTouchDevice()) return;
 
     setIsToolbarVisible(true);
 
@@ -358,7 +358,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
 
     window.addEventListener('keydown', handleKeyDown);
 
-    if (!isMobileWidth() && !isTouchDevice()) {
+    if (!isMobile()) {
       setTimeout(() => {
         window.addEventListener('mousemove', handleMouseMove);
       }, 500);
@@ -388,7 +388,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
       }
     };
 
-    if (isMobileWidth() && isTouchDevice()) {
+    if (isMobile()) {
       image.addEventListener('touchstart', handleTouchStartWrapper, {
         passive: true,
       });
@@ -411,7 +411,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
         clearTimeout(hideToolbarTimeout);
       }
 
-      if (isMobileWidth() && isTouchDevice()) {
+      if (isMobile()) {
         image.removeEventListener('touchstart', handleTouchStartWrapper);
         image.removeEventListener('touchmove', handleTouchMoveWrapper);
         image.removeEventListener('touchend', handleTouchEndWrapper);
@@ -525,10 +525,9 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
             <div
               class="absolute top-4 right-4 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-1 flex flex-row items-center gap-1 shadow-md transition-opacity duration-300"
               classList={{
-                'opacity-100':
-                  isMobileWidth() || isTouchDevice() || isToolbarVisible(),
+                'opacity-100': isMobile() || isToolbarVisible(),
                 'opacity-0 pointer-events-none':
-                  !isMobileWidth() && !isTouchDevice() && !isToolbarVisible(),
+                  !isMobile() && !isToolbarVisible(),
               }}
               style={{ 'z-index': stackingContext.zModal + 1 }}
             >
@@ -555,18 +554,15 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
             </div>
 
             {/* Navigation arrows */}
-            <Show when={!isMobileWidth() || !isTouchDevice()}>
+            <Show when={!isMobile()}>
               <Show when={props.images.length > 1}>
                 <button
                   class="absolute left-4 top-1/2 -translate-y-1/2 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-button transition-opacity duration-300"
                   classList={{
                     hidden: !hasPrevious(),
-                    'opacity-100':
-                      isMobileWidth() || isTouchDevice() || isToolbarVisible(),
+                    'opacity-100': isTouchDevice() || isToolbarVisible(),
                     'opacity-0 pointer-events-none':
-                      !isMobileWidth() &&
-                      !isTouchDevice() &&
-                      !isToolbarVisible(),
+                      !isTouchDevice() && !isToolbarVisible(),
                   }}
                   style={{ 'z-index': stackingContext.zModal + 1 }}
                   onClick={navigatePrevious}
@@ -574,19 +570,13 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
                 >
                   <ChevronLeftIcon class="w-5 h-5 text-ink" />
                 </button>
-              </Show>
-
-              <Show when={props.images.length > 1}>
                 <button
                   class="absolute right-4 top-1/2 -translate-y-1/2 bg-dialog backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-button transition-opacity duration-300"
                   classList={{
                     hidden: !hasNext(),
-                    'opacity-100':
-                      isMobileWidth() || isTouchDevice() || isToolbarVisible(),
+                    'opacity-100': isTouchDevice() || isToolbarVisible(),
                     'opacity-0 pointer-events-none':
-                      !isMobileWidth() &&
-                      !isTouchDevice() &&
-                      !isToolbarVisible(),
+                      !isTouchDevice() && !isToolbarVisible(),
                   }}
                   style={{ 'z-index': stackingContext.zModal + 1 }}
                   onClick={navigateNext}
@@ -602,10 +592,9 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
               <div
                 class="absolute top-4 left-4 bg-dialog backdrop-blur-sm rounded-lg border border-edge px-3 py-1.5 shadow-md transition-opacity duration-300"
                 classList={{
-                  'opacity-100':
-                    isMobileWidth() || isTouchDevice() || isToolbarVisible(),
+                  'opacity-100': isTouchDevice() || isToolbarVisible(),
                   'opacity-0 pointer-events-none':
-                    !isMobileWidth() && !isTouchDevice() && !isToolbarVisible(),
+                    !isTouchDevice() && !isToolbarVisible(),
                 }}
                 style={{ 'z-index': stackingContext.zModal + 1 }}
               >

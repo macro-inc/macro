@@ -2,7 +2,7 @@ use anyhow::Context;
 use sqlx::types::Uuid;
 
 /// Deletes a thread if it has no associated messages
-#[tracing::instrument(skip(tx), level = "info")]
+#[tracing::instrument(skip(tx), err)]
 pub async fn delete_thread_if_empty(
     tx: &mut sqlx::PgConnection,
     thread_id: Uuid,

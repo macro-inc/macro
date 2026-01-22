@@ -2,8 +2,7 @@ import { useContext } from 'solid-js';
 import { globalSplitManager } from '../../signal/splitLayout';
 import { SplitPanelContext } from './context';
 import type { ReferredFrom, SplitContent } from './layoutManager';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { isMobile } from '@core/mobile/isMobile';
 
 export function useSplitLayout() {
   const splitPanelContext = useContext(SplitPanelContext);
@@ -79,7 +78,7 @@ export function useSplitLayout() {
     referredFrom: ReferredFrom = null
   ) {
     // On mobile, replace instead of inserting a new split
-    if (isMobileWidth() && isTouchDevice()) {
+    if (isMobile()) {
       return replaceSplit({ content, referredFrom });
     }
 

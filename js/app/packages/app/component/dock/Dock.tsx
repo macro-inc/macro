@@ -8,7 +8,6 @@ import IconPower from '@phosphor-icons/core/regular/power.svg';
 import MacroCreateIcon from '@macro-icons/macro-create-b.svg';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { ClippedPanel } from '@core/component/ClippedPanel';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { PresentModeGlitch } from './PresentModeGlitch';
 import { withAnalytics } from '@coparse/analytics';
 import SplitIcon from '@macro-icons/new-split.svg';
@@ -26,6 +25,7 @@ import { playSound } from '@app/util/sound';
 import { QuickAccess } from './QuickAccess';
 import { Button } from '@ui/components/Button';
 import { LabelAndHotKey } from '@core/component/Tooltip';
+import { isMobile } from '@core/mobile/isMobile';
 
 export function Dock() {
   const activeSplitId = createMemo(() => globalSplitManager()?.activeSplitId());
@@ -225,7 +225,10 @@ export function Dock() {
               </div>
             </div>
 
-            <Show when={!isMobileWidth()}>
+            <Show
+              when={!isMobile()}
+              fallback={<div></div>}
+            >
               <div style={{
                 'border-top': '1px solid var(--edge-muted)',
                 'color': 'var(--ink-extra-muted)',
@@ -248,10 +251,6 @@ export function Dock() {
                   <GlobalNotificationBell notificationSource={notificationSource} />
                 </Show>
               </div>
-            </Show>
-
-            <Show when={isMobileWidth()}>
-              <div></div>
             </Show>
 
             <div style={{

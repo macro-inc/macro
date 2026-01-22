@@ -21,7 +21,6 @@ import { Tooltip } from '@core/component/Tooltip';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { observedSize } from '@core/directive/observedSize';
 import { TOKENS } from '@core/hotkey/tokens';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { trackMention } from '@core/signal/mention';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { handleFileFolderDrop } from '@core/util/upload';
@@ -102,6 +101,7 @@ import {
 import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
 import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
 import { plural } from '@core/util/string';
+import { isMobile } from '@core/mobile/isMobile';
 
 false && fileFolderDrop;
 false && fileSelector;
@@ -824,7 +824,7 @@ export function BaseInput(props: {
   // Focus when external shouldFocus signal is set to true
   createEffect(() => {
     if (form().shouldFocusInput()) {
-      if (!isMobileWidth()) {
+      if (!isMobile()) {
         requestAnimationFrame(() => {
           editor()?.focus();
           form().setShouldFocusInput(false);

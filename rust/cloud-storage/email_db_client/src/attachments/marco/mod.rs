@@ -11,7 +11,7 @@ use sqlx::{PgPool, Pool, Postgres};
 use std::collections::HashMap;
 
 /// inserts the metadata for attachments of an email into the database in a batch
-#[tracing::instrument(skip(tx, attachments, message_id))]
+#[tracing::instrument(skip(tx, attachments, message_id), err)]
 pub async fn insert_macro_attachments(
     tx: &mut sqlx::PgConnection,
     message_id: Uuid,
@@ -139,7 +139,7 @@ pub async fn insert_macro_attachments(
 }
 
 /// Fetches macro attachments for multiple messages and returns a map keyed by message_id
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(pool), err)]
 pub async fn fetch_db_macro_attachments_in_bulk(
     pool: &PgPool,
     message_ids: &[Uuid],

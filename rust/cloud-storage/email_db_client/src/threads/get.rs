@@ -11,7 +11,7 @@ use sqlx::types::Uuid;
 use std::collections::{HashMap, HashSet};
 
 /// gets a list of thread ids with the macro user id for the user
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_paginated_thread_ids_with_macro_user_id(
     pool: &PgPool,
     thread_limit: i64,
@@ -77,7 +77,7 @@ pub async fn fetch_thread_with_messages_paginated(
 }
 
 /// get the ids of the latest-updated threads for the user.
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_latest_thread_ids_paginated(
     pool: &PgPool,
     fusionauth_user_id: &str,
@@ -115,7 +115,7 @@ pub async fn get_latest_thread_ids_paginated(
     Ok(thread_ids)
 }
 
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_threads_by_link_id_and_provider_ids(
     pool: &PgPool,
     link_id: Uuid,
@@ -259,7 +259,7 @@ pub async fn get_outbound_threads_by_thread_ids(
     Ok(result)
 }
 
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_provider_id_by_link_and_thread_id(
     pool: &PgPool,
     link_id: Uuid,
@@ -287,7 +287,7 @@ pub async fn get_provider_id_by_link_and_thread_id(
     Ok(provider_id)
 }
 
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_macro_id_from_thread_id(
     pool: &PgPool,
     thread_id: Uuid,
@@ -309,7 +309,7 @@ pub async fn get_macro_id_from_thread_id(
 }
 
 /// Gets a single thread by ID and link_ID
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_thread_by_id_and_link_id(
     pool: &PgPool,
     thread_id: Uuid,
@@ -348,7 +348,7 @@ pub async fn get_thread_by_id_and_link_id(
 }
 
 /// Returns a paginated list of thread IDs, sorting by ascending so we don't miss new ones
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(db), err)]
 pub async fn get_all_thread_ids_paginated(
     db: &sqlx::Pool<sqlx::Postgres>,
     limit: i64,

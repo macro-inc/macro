@@ -42,7 +42,7 @@ pub async fn get_sender_by_message_id(
     Ok(result)
 }
 
-#[tracing::instrument(skip(executor))]
+#[tracing::instrument(skip(executor), err)]
 pub async fn get_senders_contacts_map<'e, E>(
     executor: E,
     message_ids: &[Uuid],
@@ -74,7 +74,7 @@ struct RecipientQueryResult {
 }
 
 /// fetch recipients (to, cc, bcc) from db
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(pool), err)]
 pub async fn fetch_db_recipients(
     pool: &PgPool,
     message_db_id: Uuid,
@@ -122,7 +122,7 @@ pub async fn fetch_db_recipients(
 }
 
 /// Fetches all recipients for a given list of message IDs in a single query
-#[tracing::instrument(skip(executor), level = "info")]
+#[tracing::instrument(skip(executor), err)]
 pub async fn fetch_db_recipients_in_bulk<'e, E>(
     executor: E,
     message_ids: &[Uuid],
@@ -184,7 +184,7 @@ where
 }
 
 /// Fetch UUID for a given email address
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(pool), err)]
 pub async fn fetch_id_by_email(
     pool: &mut sqlx::PgConnection,
     link_id: Uuid,
@@ -210,7 +210,7 @@ pub async fn fetch_id_by_email(
 }
 
 /// Fetch contact for a given email address
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(pool), err)]
 pub async fn fetch_contact_by_email(
     pool: &PgPool,
     link_id: Uuid,
@@ -238,7 +238,7 @@ pub async fn fetch_contact_by_email(
     Ok(contact.and_then(|c| map_db_contact_to_service(Some(c))))
 }
 
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(pool), err)]
 pub async fn fetch_sender_contact_info(
     pool: &PgPool,
     message_ids: &[Uuid],
@@ -255,7 +255,7 @@ pub async fn fetch_sender_contact_info(
     Ok(result)
 }
 
-#[tracing::instrument(skip(executor))]
+#[tracing::instrument(skip(executor), err)]
 pub async fn fetch_sender_contacts_by_message_ids<'e, E>(
     executor: E,
     message_ids: &[Uuid],
@@ -370,7 +370,7 @@ where
 }
 
 /// returns all email addresses and names the passed link has sent emails to.
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(pool), err)]
 pub async fn fetch_contacts_by_link_id(
     pool: &PgPool,
     link_id: Uuid,
@@ -432,7 +432,7 @@ pub async fn fetch_contacts_by_link_id(
 }
 
 /// returns all non-generic email addresses the passed link has sent emails to.
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(pool), err)]
 pub async fn fetch_contacts_emails_by_link_id(
     pool: &PgPool,
     link_id: Uuid,

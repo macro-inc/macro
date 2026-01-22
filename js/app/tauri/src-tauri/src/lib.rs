@@ -178,7 +178,14 @@ fn attach_deep_link_handler(app: &mut tauri::App) {
             .next()
             .ok_or_else(|| report!("expected at least 1 url"))?;
 
-        let macro_scheme = MacroScheme::new(url)?;
+        // Universal/App links come in as https:// URLs, custom scheme links come in as macro://
+        let macro_scheme = match url.scheme() {
+            "macro" => MacroScheme::new(url)?,
+            "http" | "https" => MacroScheme::from_url(&url)?,
+            scheme => {
+                return Err(report!("unexpected deep link scheme: {}", scheme));
+            }
+        };
 
         #[derive(Clone, Serialize, Debug)]
         struct NavigatePayload<'a> {
