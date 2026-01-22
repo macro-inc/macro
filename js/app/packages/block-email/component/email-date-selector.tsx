@@ -3,7 +3,8 @@ import { DateSelector } from '@block-email/component/date-selector';
 import { Tooltip } from '@core/component/Tooltip';
 import { cn } from '@ui/utils/classname';
 import { format } from 'date-fns/format';
-import type { VoidComponent } from 'solid-js';
+import { Show, type VoidComponent } from 'solid-js';
+import IconX from '@icon/regular/x.svg';
 
 interface EmailDateSelectorProps {
   sendTime?: Date | null;
@@ -21,7 +22,7 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
       trigger={(state) => {
         const formattedDate = () => {
           if (!state.selectedDate) return;
-          return format(state.selectedDate, "MMMM d, yyyy 'at' h:mm a");
+          return format(state.selectedDate, 'MMM d, yyyy  h:mm a');
         };
         return (
           <Tooltip
@@ -33,12 +34,25 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
           >
             <div
               class={cn(
-                'aspect-square p-1 hover:bg-surface-4 group-data-[expanded]/date-selector-trigger:bg-surface-4',
+                'flex items-center p-1 gap-2 hover:bg-surface-4 group-data-[expanded]/date-selector-trigger:bg-surface-4',
                 state.selectedDate &&
                   'bg-accent/20 text-accent-ink hover:bg-accent/15 group-data-[expanded]/date-selector-trigger:bg-accent/20'
               )}
             >
               <ClockIcon class="size-5" />
+              <Show when={formattedDate()}>
+                <span class="text-sm">{formattedDate()}</span>
+                <Tooltip tooltip="Clear">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    class="hover:bg-accent/30"
+                    onClick={() => props.onSendTimeChange?.(null)}
+                  >
+                    <IconX class="size-5" />
+                  </div>
+                </Tooltip>
+              </Show>
             </div>
           </Tooltip>
         );
