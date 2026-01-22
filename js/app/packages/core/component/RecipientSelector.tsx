@@ -26,7 +26,9 @@ import {
 } from '@kobalte/core/combobox';
 import type { Channel } from '@service-comms/generated/models/channel';
 import { useEmail, useUserId } from '@core/context/user';
+import { useChannelsContext } from '@core/context/channels';
 import { debounce } from '@solid-primitives/scheduled';
+import { createFreshSearch } from '@core/util/freshSort';
 import * as EmailValidator from 'email-validator';
 import {
   type Accessor,
@@ -323,9 +325,67 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       (props.triedToSubmit?.() ?? false) && props.selectedOptions.length === 0
   );
 
+  const currentUserEmail = useEmail();
+  const currentUserDomain = createMemo(() => {
+    const email = currentUserEmail();
+    return email ? email.split('@')[1] : undefined;
+  });
+
+  const currentUserId = useUserId();
+  const { channels: rawChannels } = useChannelsContext();
+
+  // Create a map of userId -> DM channel activity timestamp
+  const dmActivityByUserId = createMemo(() => {
+    const currentUser = currentUserId();
+    if (!currentUser) return new Map<string, number>();
+
+    const allChannels = rawChannels();
+    const map = new Map<string, number>();
+
+    for (const channel of allChannels) {
+      if (channel.channel_type !== 'direct_message') continue;
+
+      // Find the other participant in the DM
+      const otherParticipant = channel.participants.find(
+        (p) => p.user_id !== currentUser
+      );
+      if (!otherParticipant) continue;
+
+      // Get the most recent activity timestamp
+      const timestamp = channel.updated_at;
+
+      if (timestamp) {
+        // Convert ISO string to Unix timestamp (seconds)
+        const date = new Date(timestamp);
+        const unixTimestamp = Math.floor(date.getTime() / 1000);
+        map.set(otherParticipant.user_id, unixTimestamp);
+      }
+    }
+
+    return map;
+  });
+
+  // Create search function for recipients
+  const recipientSearch = createFreshSearch<CombinedRecipientItem>(
+    {
+      fuzzyWeight: 0.6,
+      timeWeight: 0.3,
+      brevityWeight: 0.1,
+      boostFn: (item) => {
+        const userDomain = currentUserDomain();
+        if (!userDomain || item.kind !== 'user') return 0;
+        const itemDomain = item.data.email?.split('@')[1];
+        return itemDomain === userDomain ? 0.5 : 0;
+      },
+    },
+    getRecipientOptionTextValue
+  );
+
   const options = createMemo(() => {
     const emailSet = new Set<string>();
+    const dmActivity = dmActivityByUserId();
 
+    // Filter and augment options with DM activity
     const optionsList: CombinedRecipientItem<K>[] = [];
     for (const option of props.options()) {
       const item = option as CombinedRecipientItem;
@@ -343,6 +403,19 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       if (email) {
         emailSet.add(email.toLowerCase());
       }
+
+      // Augment user items with DM activity timestamp
+      if (item.kind === 'user') {
+        const dmTimestamp = dmActivity.get(item.id);
+        if (dmTimestamp) {
+          optionsList.push({
+            ...option,
+            lastInteraction: dmTimestamp,
+          } as CombinedRecipientItem<K>);
+          continue;
+        }
+      }
+
       optionsList.push(option);
     }
 
@@ -352,7 +425,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     const hasExactEmailMatch =
       currentUserInput && emailSet.has(currentUserInput.toLowerCase());
 
-    const allOptions = [...optionsList, ...customUsers()];
+    let allOptions = [...optionsList, ...customUsers()];
 
     // Only add custom input if it doesn't match an existing email
     if (
@@ -368,6 +441,17 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
       const customEntity = recipientEntityMapper('custom')(customUserInput);
       allOptions.push(customEntity);
+    }
+
+    // Apply custom filtering and sorting if there's a search query
+    if (currentUserInput && currentUserInput.trim().length > 0) {
+      const searchResults = recipientSearch(
+        allOptions as CombinedRecipientItem[],
+        currentUserInput
+      );
+      return searchResults.map(
+        (result) => result.item
+      ) as CombinedRecipientItem<K>[];
     }
 
     return allOptions;

@@ -476,10 +476,7 @@ function MentionsMenuInner(props: {
       );
       if (!otherParticipant) continue;
 
-      // Get the most recent activity timestamp
-      // Priority: interacted_at > viewed_at > updated_at
-      const timestamp =
-        channel.interacted_at ?? channel.viewed_at ?? channel.updated_at;
+      const timestamp = channel.updated_at;
 
       if (timestamp) {
         // Convert ISO string to Unix timestamp (seconds)
@@ -500,14 +497,12 @@ function MentionsMenuInner(props: {
       .map(entityMapper('user'))
       .map((entity) => {
         // Augment user entities with DM activity timestamp
+        // Note: lastInteraction must be at entity level (not inside data) for freshSort to find it
         const dmTimestamp = dmActivity.get(entity.id);
         if (dmTimestamp) {
           return {
             ...entity,
-            data: {
-              ...entity.data,
-              lastInteraction: dmTimestamp,
-            },
+            lastInteraction: dmTimestamp,
           };
         }
         return entity;
@@ -711,14 +706,15 @@ function MentionsMenuInner(props: {
 
   const userSearch = createFreshSearch<Entity<'user'>>(
     {
-      fuzzyWeight: 0.6,
-      timeWeight: 0.3,
+      fuzzyWeight: 0.3,
+      timeWeight: 0.6,
       brevityWeight: 0.1,
       boostFn: (item) => {
         const userDomain = currentUserDomain();
         if (!userDomain) return 0;
         const itemDomain = item.data.email?.split('@')[1];
-        return itemDomain === userDomain ? 0.5 : 0; // 50% boost for same domain
+        // 50% boost for same domain
+        return itemDomain === userDomain ? 0.5 : 0;
       },
     },
     getItemSearchText
@@ -1109,7 +1105,7 @@ function MentionsMenuInner(props: {
                 </button>
               </div>
             </div>
-            <div class="max-h-64 overflow-y-auto">
+            <div class="max-h-64 overflow-y-auto scrollbar-hidden bg-[teal]">
               <For each={allItems}>
                 {(item, i) => (
                   <MentionsMenuItem
