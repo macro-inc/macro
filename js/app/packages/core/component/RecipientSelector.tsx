@@ -74,11 +74,11 @@ function getRecipientOptionName(option: CombinedRecipientItem) {
 function getRecipientOptionValue(option: CombinedRecipientItem) {
   switch (option.kind) {
     case 'user':
-      return `user-${option.data.id}`;
+      return option.data.id;
     case 'channel':
-      return `channel-${option.data.id}`;
+      return option.data.id;
     case 'contact':
-      return `contact-${option.data.email}`;
+      return option.data.id;
     case 'custom':
       return `current-user-input-${option.data.email}`;
   }
