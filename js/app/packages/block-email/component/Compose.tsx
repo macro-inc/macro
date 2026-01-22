@@ -450,6 +450,11 @@ export function EmailCompose(props: EmailComposeProps) {
   const scheduleMessageMutation = useScheduleMessageMutation({
     onSuccess: () => {
       toast.success('Email scheduled');
+
+      replaceSplit({
+        content: { type: 'component', id: 'unified-list' },
+        mergeHistory: true,
+      });
     },
     onError: () => {
       toast.failure('Failed to schedule email');
