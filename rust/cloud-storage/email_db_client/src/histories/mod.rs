@@ -6,7 +6,7 @@ use sqlx::types::Uuid;
 
 use crate::links::types::DbUserProvider;
 
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn fetch_history_id_for_link(
     pool: &PgPool,
     email_address: &str,
@@ -43,7 +43,7 @@ pub async fn fetch_history_id_for_link(
     Ok(result.map(|r| r.history_id))
 }
 
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn upsert_gmail_history(
     pool: &PgPool,
     link_id: Uuid,

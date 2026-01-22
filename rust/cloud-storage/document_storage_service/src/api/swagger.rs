@@ -105,7 +105,7 @@ use models_soup::document::SoupDocument;
 use models_soup::email_thread::{
     SoupAttachment, SoupContact, SoupEmailThreadPreview, SoupEmailThreadPreviewMetadata,
     SoupEnrichedEmailThreadPreview, SoupLabel, SoupLabelListVisibility, SoupLabelType,
-    SoupMacroAttachment, SoupMessageListVisibility,
+    SoupMessageListVisibility,
 };
 use models_soup::item::SoupItem;
 use models_soup::project::SoupProject;
@@ -290,7 +290,6 @@ use utoipa::OpenApi;
             SoupEnrichedEmailThreadPreview,
             SoupEmailThreadPreview,
             SoupAttachment,
-            SoupMacroAttachment,
             SoupContact,
             SoupEmailThreadPreviewMetadata,
             SoupLabel,

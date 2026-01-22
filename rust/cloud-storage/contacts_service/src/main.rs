@@ -39,21 +39,19 @@ async fn connect_to_database(config: &Config) -> anyhow::Result<PgPool> {
 
 async fn create_sqs_worker(config: &Config) -> SQSWorker {
     let queue_url = config.queue_url.clone();
-    let aws_config = match config.environment {
-        Environment::Local => {
-            aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .endpoint_url(&queue_url)
-                .load()
-                .await
-        }
-        _ => {
-            aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .load()
-                .await
-        }
+    let aws_config = if queue_url.contains("localhost") {
+        aws_config::defaults(aws_config::BehaviorVersion::latest())
+            .region("us-east-1")
+            .endpoint_url(&queue_url)
+            .load()
+            .await
+    } else {
+        aws_config::defaults(aws_config::BehaviorVersion::latest())
+            .region("us-east-1")
+            .load()
+            .await
     };
+
     let sqs_client = aws_sdk_sqs::Client::new(&aws_config);
     sqs_worker::SQSWorker::new(
         sqs_client,

@@ -1894,7 +1894,6 @@ dependencies = [
  "ai_format",
  "anyhow",
  "async-trait",
- "authentication_service_client",
  "aws-config",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",

@@ -43,7 +43,6 @@ import { logger } from '@observability';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { useSendMessageMutation } from '@queries/email/thread';
 import type {
-  AttachmentMacro,
   MessageToSendDbId,
   MessageWithBodyReplyless,
 } from '@service-email/generated/schemas';
@@ -291,7 +290,6 @@ export function BaseInput(props: {
   draft?: MessageWithBodyReplyless;
   preloadedBody?: string;
   preloadedHtml?: string;
-  preloadedAttachments?: AttachmentMacro[];
   sideEffectOnSend?: (newMessageId: MessageToSendDbId | null) => void;
   onMarkDone?: () => void;
   setShowReply?: Setter<boolean>;

@@ -5,6 +5,7 @@ import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { useBuildChatSendRequest } from '@core/component/AI/component/input/buildRequest';
 import { useChatInput } from '@core/component/AI/component/input/useChatInput';
 import { ChatMessages } from '@core/component/AI/component/message/ChatMessages';
+import { useEntityDropAttachment } from '@core/component/AI/hook/useEntityDropAttachment';
 import { getPendingSend } from '@core/component/AI/signal/pendingSend';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
 import type {
@@ -309,6 +310,13 @@ export function Rightbar(props: {
     uploadQueue,
   } = useChatInput({ initialValue: props.initialState?.text });
 
+  // Entity drag-and-drop support
+  const { droppable, isDraggingOver } = useEntityDropAttachment(
+    'rightbar-chat-input',
+    attachments
+  );
+  false && droppable;
+
   createEffect(() => {
     setChatId(props.chatId);
     if (!props.initialState) return;
@@ -369,8 +377,10 @@ export function Rightbar(props: {
     <DragDropWrapper
       class="relative flex flex-col size-full select-none"
       uploadQueue={uploadQueue}
+      isEntityDraggingOver={isDraggingOver}
     >
-      <div class="overflow-hidden size-full flex flex-col items-center">
+      <div class="overflow-hidden size-full flex flex-col items-center relative">
+        <div class="absolute inset-0 pointer-events-none" use:droppable />
         <TopBar
           chatId={props.chatId}
           setChatId={props.setState.setChatId}

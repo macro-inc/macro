@@ -3139,15 +3139,6 @@ export const getItemsSoupResponse = zod.object({
                     sizeBytes: zod.number().nullish(),
                   })
                 ),
-                attachmentsMacro: zod.array(
-                  zod.object({
-                    dbId: zod.string().uuid(),
-                    itemId: zod.string().uuid(),
-                    itemType: zod.string(),
-                    messageId: zod.string().uuid(),
-                    threadId: zod.string().uuid(),
-                  })
-                ),
                 labels: zod.array(
                   zod.object({
                     createdAt: zod.string().datetime({}),
@@ -4523,15 +4514,6 @@ export const postItemsSoupResponse = zod.object({
                     mimeType: zod.string().nullish(),
                     providerAttachmentId: zod.string().nullish(),
                     sizeBytes: zod.number().nullish(),
-                  })
-                ),
-                attachmentsMacro: zod.array(
-                  zod.object({
-                    dbId: zod.string().uuid(),
-                    itemId: zod.string().uuid(),
-                    itemType: zod.string(),
-                    messageId: zod.string().uuid(),
-                    threadId: zod.string().uuid(),
                   })
                 ),
                 labels: zod.array(

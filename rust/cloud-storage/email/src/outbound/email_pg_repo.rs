@@ -1,8 +1,8 @@
 use crate::domain::models::{IntermediateThreadMetadata, Label};
 use crate::domain::{
     models::{
-        Attachment, AttachmentMacro, Contact, EmailThreadPreview, Link, PreviewCursorQuery,
-        PreviewView, PreviewViewStandardLabel, UserProvider,
+        Attachment, Contact, EmailThreadPreview, Link, PreviewCursorQuery, PreviewView,
+        PreviewViewStandardLabel, UserProvider,
     },
     ports::EmailRepo,
 };
@@ -143,40 +143,6 @@ impl EmailRepo for EmailPgRepo {
         .await?
         .into_iter()
         .map(AttachmentDbRow::mirror)
-        .collect())
-    }
-
-    async fn macro_attachments_by_thread_ids(
-        &self,
-        thread_ids: &[Uuid],
-    ) -> Result<Vec<AttachmentMacro>, Self::Err> {
-        // Query all attachments for email_messages in the provided threads
-        // Include thread_id in the result set
-        Ok(sqlx::query_as!(
-            AttachmentMacroDbRow,
-            r#"
-        SELECT
-            a.id,
-            a.message_id,
-            a.item_id as "item_id!",
-            a.item_type as "item_type!",
-            a.created_at,
-            m.thread_id
-        FROM
-            email_attachments_macro a
-        JOIN
-            email_messages m ON a.message_id = m.id
-        WHERE
-            m.thread_id = ANY($1)
-        ORDER BY
-            a.created_at ASC
-        "#,
-            thread_ids
-        )
-        .fetch_all(&self.pool)
-        .await?
-        .into_iter()
-        .map(AttachmentMacroDbRow::mirror)
         .collect())
     }
 

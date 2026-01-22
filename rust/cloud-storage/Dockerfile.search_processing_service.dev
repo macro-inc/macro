@@ -1,0 +1,30 @@
+FROM rust:latest AS chef
+ENV SQLX_OFFLINE=true
+RUN cargo install cargo-strip
+WORKDIR /app
+
+FROM chef AS builder
+COPY . .
+
+RUN cargo build --release --bin search_processing_service \
+    && cargo strip \
+    && mv /app/target/release/search_processing_service /app/svc
+
+# Runtime image
+FROM debian:trixie-slim AS search_processing_service
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates openssl dumb-init curl \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /app/svc /app/svc
+
+RUN mkdir -p /app/pdfium-lib/linux
+COPY ./search_processing_service/pdfium-lib/linux/libpdfium.so /app/pdfium-lib/linux/libpdfium.so
+
+RUN chmod +x svc
+
+ENV PORT=8080
+EXPOSE 8080
+ENTRYPOINT ["dumb-init", "./svc"]

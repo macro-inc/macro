@@ -1,0 +1,105 @@
+FROM rust:latest AS chef
+ENV SQLX_OFFLINE=true
+RUN cargo install cargo-strip
+WORKDIR /app
+
+FROM chef AS builder
+COPY . .
+
+# Build ALL standard service binaries at once
+RUN cargo build --release \
+    --bin authentication_service \
+    --bin comms_service \
+    --bin connection_gateway_service \
+    --bin contacts_service \
+    --bin document_cognition_service \
+    --bin document_storage_service \
+    --bin email_service \
+    --bin experiment_service \
+    --bin notification_service \
+    --bin organization_service \
+    --bin properties_service \
+    --bin search_service \
+    --bin static_file_service \
+    --bin unfurl_service \
+    && cargo strip
+
+# Base runtime image
+FROM debian:trixie-slim AS base
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates openssl dumb-init curl \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+ENV PORT=8080
+EXPOSE 8080
+
+# Individual service targets
+FROM base AS authentication_service
+COPY --from=builder /app/target/release/authentication_service /app/svc
+RUN chmod +x /app/svc
+ENTRYPOINT ["dumb-init", "./svc"]
+
+FROM base AS comms_service
+COPY --from=builder /app/target/release/comms_service /app/svc
+RUN chmod +x /app/svc
+ENTRYPOINT ["dumb-init", "./svc"]
+
+FROM base AS connection_gateway_service
+COPY --from=builder /app/target/release/connection_gateway_service /app/svc
+RUN chmod +x /app/svc
+ENTRYPOINT ["dumb-init", "./svc"]
+
+FROM base AS contacts_service
+COPY --from=builder /app/target/release/contacts_service /app/svc
+RUN chmod +x /app/svc
+ENTRYPOINT ["dumb-init", "./svc"]
+
+FROM base AS document_cognition_service
+COPY --from=builder /app/target/release/document_cognition_service /app/svc
+RUN chmod +x /app/svc
+ENTRYPOINT ["dumb-init", "./svc"]
+
+FROM base AS document_storage_service
+COPY --from=builder /app/target/release/document_storage_service /app/svc
+RUN chmod +x /app/svc
+ENTRYPOINT ["dumb-init", "./svc"]
+
+FROM base AS email_service
+COPY --from=builder /app/target/release/email_service /app/svc
+RUN chmod +x /app/svc
+ENTRYPOINT ["dumb-init", "./svc"]
+
+FROM base AS experiment_service
+COPY --from=builder /app/target/release/experiment_service /app/svc
+RUN chmod +x /app/svc
+ENTRYPOINT ["dumb-init", "./svc"]
+
+FROM base AS notification_service
+COPY --from=builder /app/target/release/notification_service /app/svc
+RUN chmod +x /app/svc
+ENTRYPOINT ["dumb-init", "./svc"]
+
+FROM base AS organization_service
+COPY --from=builder /app/target/release/organization_service /app/svc
+RUN chmod +x /app/svc
+ENTRYPOINT ["dumb-init", "./svc"]
+
+FROM base AS properties_service
+COPY --from=builder /app/target/release/properties_service /app/svc
+RUN chmod +x /app/svc
+ENTRYPOINT ["dumb-init", "./svc"]
+
+FROM base AS search_service
+COPY --from=builder /app/target/release/search_service /app/svc
+RUN chmod +x /app/svc
+ENTRYPOINT ["dumb-init", "./svc"]
+
+FROM base AS static_file_service
+COPY --from=builder /app/target/release/static_file_service /app/svc
+RUN chmod +x /app/svc
+ENTRYPOINT ["dumb-init", "./svc"]
+
+FROM base AS unfurl_service
+COPY --from=builder /app/target/release/unfurl_service /app/svc
+RUN chmod +x /app/svc
+ENTRYPOINT ["dumb-init", "./svc"]

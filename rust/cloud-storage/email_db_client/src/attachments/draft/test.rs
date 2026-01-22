@@ -1,6 +1,7 @@
 use crate::attachments::draft::{
-    delete_draft_attachment, fetch_db_draft_attachments, fetch_draft_attachments_by_draft_id,
-    get_total_attachments_size_by_draft_id, insert_draft_attachment,
+    delete_draft_attachment, fetch_db_draft_attachments_in_bulk,
+    fetch_draft_attachments_by_draft_id, get_total_attachments_size_by_draft_id,
+    insert_draft_attachment,
 };
 use anyhow::Result;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -235,80 +236,152 @@ async fn insert_draft_attachment_does_nothing_for_wrong_link_id(
     Ok(())
 }
 
+// ============================================================================
+// Tests for fetch_db_draft_attachments_in_bulk
+// ============================================================================
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("fetch_db_draft_attachments"))
+    fixtures(
+        path = "../../../fixtures",
+        scripts("fetch_db_draft_attachments_in_bulk")
+    )
 )]
-async fn fetch_db_draft_attachments_returns_attachments_ordered_by_filename(
+async fn fetch_db_draft_attachments_in_bulk_returns_attachments_grouped_by_draft_id(
     pool: Pool<Postgres>,
 ) -> Result<()> {
-    let draft_id = Uuid::parse_str("00000000-0000-0000-0000-00000000f501")?;
+    let draft_id_1 = Uuid::parse_str("00000000-0000-0000-0000-00000000b501")?;
+    let draft_id_2 = Uuid::parse_str("00000000-0000-0000-0000-00000000b502")?;
 
-    let res = fetch_db_draft_attachments(&pool, draft_id).await?;
+    let result = fetch_db_draft_attachments_in_bulk(&pool, &[draft_id_1, draft_id_2]).await?;
 
-    assert_eq!(res.len(), 3);
+    assert_eq!(result.len(), 2);
 
-    // Verify ordering by file_name ASC
-    assert_eq!(res[0].file_name, "alpha_doc.pdf");
-    assert_eq!(res[1].file_name, "mike_image.png");
-    assert_eq!(res[2].file_name, "zulu_file.txt");
+    // Draft 1 should have 2 attachments
+    let draft_1_attachments = result.get(&draft_id_1).unwrap();
+    assert_eq!(draft_1_attachments.len(), 2);
+
+    // Draft 2 should have 1 attachment
+    let draft_2_attachments = result.get(&draft_id_2).unwrap();
+    assert_eq!(draft_2_attachments.len(), 1);
 
     Ok(())
 }
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("fetch_db_draft_attachments"))
+    fixtures(
+        path = "../../../fixtures",
+        scripts("fetch_db_draft_attachments_in_bulk")
+    )
 )]
-async fn fetch_db_draft_attachments_returns_correct_fields(pool: Pool<Postgres>) -> Result<()> {
-    let draft_id = Uuid::parse_str("00000000-0000-0000-0000-00000000f501")?;
+async fn fetch_db_draft_attachments_in_bulk_orders_by_draft_id_and_filename(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    let draft_id_1 = Uuid::parse_str("00000000-0000-0000-0000-00000000b501")?;
 
-    let res = fetch_db_draft_attachments(&pool, draft_id).await?;
+    let result = fetch_db_draft_attachments_in_bulk(&pool, &[draft_id_1]).await?;
 
-    // Verify first attachment (alpha_doc.pdf) has correct fields
-    let first = &res[0];
+    let draft_1_attachments = result.get(&draft_id_1).unwrap();
+    assert_eq!(draft_1_attachments.len(), 2);
+
+    // Should be ordered by filename ASC
+    assert_eq!(draft_1_attachments[0].file_name, "alpha_file.pdf");
+    assert_eq!(draft_1_attachments[1].file_name, "bravo_image.png");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("fetch_db_draft_attachments_in_bulk")
+    )
+)]
+async fn fetch_db_draft_attachments_in_bulk_returns_correct_fields(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    let draft_id_1 = Uuid::parse_str("00000000-0000-0000-0000-00000000b501")?;
+
+    let result = fetch_db_draft_attachments_in_bulk(&pool, &[draft_id_1]).await?;
+
+    let draft_1_attachments = result.get(&draft_id_1).unwrap();
+    let first = &draft_1_attachments[0];
+
     assert_eq!(
         first.id,
-        Uuid::parse_str("00000000-0000-0000-0000-0000000fa002")?
+        Uuid::parse_str("00000000-0000-0000-0000-0000000ba001")?
     );
-    assert_eq!(first.draft_id, draft_id);
-    assert_eq!(first.file_name, "alpha_doc.pdf");
+    assert_eq!(first.draft_id, draft_id_1);
+    assert_eq!(first.file_name, "alpha_file.pdf");
     assert_eq!(first.content_type, "application/pdf");
-    assert_eq!(first.sha, "sha256_alpha");
-    assert_eq!(first.size, 2500);
-    assert_eq!(first.s3_key, "s3://bucket/draft/f501/fa002");
+    assert_eq!(first.sha, "sha256_alpha_d1");
+    assert_eq!(first.size, 1000);
+    assert_eq!(first.s3_key, "s3://bucket/draft/b501/ba001");
 
     Ok(())
 }
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("fetch_db_draft_attachments"))
+    fixtures(
+        path = "../../../fixtures",
+        scripts("fetch_db_draft_attachments_in_bulk")
+    )
 )]
-async fn fetch_db_draft_attachments_returns_empty_for_draft_without_attachments(
+async fn fetch_db_draft_attachments_in_bulk_excludes_drafts_without_attachments(
     pool: Pool<Postgres>,
 ) -> Result<()> {
-    let draft_id = Uuid::parse_str("00000000-0000-0000-0000-00000000f502")?;
+    let draft_id_with_attachments = Uuid::parse_str("00000000-0000-0000-0000-00000000b501")?;
+    let draft_id_without_attachments = Uuid::parse_str("00000000-0000-0000-0000-00000000b503")?;
 
-    let res = fetch_db_draft_attachments(&pool, draft_id).await?;
+    let result = fetch_db_draft_attachments_in_bulk(
+        &pool,
+        &[draft_id_with_attachments, draft_id_without_attachments],
+    )
+    .await?;
 
-    assert_eq!(res.len(), 0);
+    // Only draft with attachments should be in the map
+    assert_eq!(result.len(), 1);
+    assert!(result.contains_key(&draft_id_with_attachments));
+    assert!(!result.contains_key(&draft_id_without_attachments));
 
     Ok(())
 }
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("fetch_db_draft_attachments"))
+    fixtures(
+        path = "../../../fixtures",
+        scripts("fetch_db_draft_attachments_in_bulk")
+    )
 )]
-async fn fetch_db_draft_attachments_returns_empty_for_nonexistent_draft(
+async fn fetch_db_draft_attachments_in_bulk_returns_empty_for_empty_input(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    let result = fetch_db_draft_attachments_in_bulk(&pool, &[]).await?;
+
+    assert!(result.is_empty());
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("fetch_db_draft_attachments_in_bulk")
+    )
+)]
+async fn fetch_db_draft_attachments_in_bulk_returns_empty_for_nonexistent_drafts(
     pool: Pool<Postgres>,
 ) -> Result<()> {
     let nonexistent_draft_id = Uuid::parse_str("00000000-0000-0000-0000-00000000ffff")?;
 
-    let res = fetch_db_draft_attachments(&pool, nonexistent_draft_id).await?;
+    let result = fetch_db_draft_attachments_in_bulk(&pool, &[nonexistent_draft_id]).await?;
 
-    assert_eq!(res.len(), 0);
+    assert!(result.is_empty());
 
     Ok(())
 }

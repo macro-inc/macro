@@ -1569,66 +1569,6 @@ export const patchSettings = async (
 };
 
 /**
- * @summary Enables inbox syncing for user.
- */
-export type enableSyncResponse201 = {
-  data: EmptyResponse;
-  status: 201;
-};
-
-export type enableSyncResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type enableSyncResponse401 = {
-  data: ErrorResponse;
-  status: 401;
-};
-
-export type enableSyncResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type enableSyncResponseSuccess = enableSyncResponse201 & {
-  headers: Headers;
-};
-export type enableSyncResponseError = (
-  | enableSyncResponse400
-  | enableSyncResponse401
-  | enableSyncResponse500
-) & {
-  headers: Headers;
-};
-
-export type enableSyncResponse =
-  | enableSyncResponseSuccess
-  | enableSyncResponseError;
-
-export const getEnableSyncUrl = () => {
-  return `/email/sync`;
-};
-
-export const enableSync = async (
-  options?: RequestInit
-): Promise<enableSyncResponse> => {
-  const res = await fetch(getEnableSyncUrl(), {
-    ...options,
-    method: 'POST',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: enableSyncResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as enableSyncResponse;
-};
-
-/**
  * @summary Disables inbox syncing for user.
  */
 export type disableSyncResponse204 = {

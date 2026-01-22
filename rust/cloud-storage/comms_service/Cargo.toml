@@ -29,7 +29,6 @@ service = ["comms_db_client"]
 ai_format = { path = "../ai_format" }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-authentication_service_client = { path = "../authentication_service_client/" }
 aws-config = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }

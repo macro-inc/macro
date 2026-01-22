@@ -101,6 +101,13 @@ async fn main() -> anyhow::Result<()> {
     {
         use std::sync::Arc;
 
+        // Ensures that pdfium binary exists so we can kill the container early on failure
+        if !std::fs::exists("./pdfium-lib/linux/libpdfium.so").expect("able to find file") {
+            anyhow::bail!("libpdfium.so is missing");
+        } else {
+            tracing::trace!("libpdfium is present");
+        }
+
         let sync_service_auth_key = match config.environment {
             Environment::Local => config.sync_service_auth_key.clone(),
             _ => secretsmanager_client

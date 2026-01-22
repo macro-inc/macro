@@ -14,6 +14,9 @@ ai_tools/schemas/
 !*/**/.env.sample
 */**/.env
 
+# Root .env file for docker-compose
+/.env
+
 # Jetbrains IDE files
 **/.idea/
 **/.helix/

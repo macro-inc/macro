@@ -277,23 +277,23 @@ const cloudStorageService = new CloudStorageService(
         value: stack === 'prod' ? '5000' : '5000',
       },
       {
-        name: 'PRESIGNED_URL_EXPIRY_SECONDS',
+        name: 'DOCUMENT_STORAGE_SERVICE_PRESIGNED_URL_EXPIRY_SECONDS',
         value: '900',
       },
       {
-        name: 'PRESIGNED_URL_BROWSER_CACHE_EXPIRY_SECONDS',
+        name: 'DOCUMENT_STORAGE_SERVICE_PRESIGNED_URL_BROWSER_CACHE_EXPIRY_SECONDS',
         value: '840',
       },
       {
-        name: 'CLOUDFRONT_DISTRIBUTION_URL',
+        name: 'DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL',
         value: pulumi.interpolate`${cloudfronDistributionUrl}`,
       },
       {
-        name: 'CLOUDFRONT_SIGNER_PUBLIC_KEY_ID',
+        name: 'DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID',
         value: pulumi.interpolate`${cloudfronSignerPublicKeyId}`,
       },
       {
-        name: 'CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME',
+        name: 'DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME',
         value: pulumi.interpolate`${CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME}`,
       },
       { name: 'ISSUER', value: pulumi.interpolate`${FUSIONAUTH_ISSUER}` },

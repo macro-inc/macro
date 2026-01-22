@@ -15,7 +15,7 @@ pub(crate) struct Config {
     pub internal_api_secret_key: InternalApiSecretKey,
 
     /// The DSS URL.
-    pub dss_url: String,
+    pub document_storage_service_url: String,
 
     /// The email used to send user invites to macro
     pub invite_email: String,
@@ -27,25 +27,29 @@ pub(crate) struct Config {
     pub environment: Environment,
 
     /// The Auth service url
-    pub auth_url: String,
+    pub authentication_service_url: String,
     /// The Auth service internal auth secret key
-    pub auth_internal_auth_secret_key: LocalOrRemoteSecret<AuthInternalAuthSecretKey>,
+    pub authentication_service_internal_api_secret_key:
+        LocalOrRemoteSecret<AuthenticationServiceInternalApiSecretKey>,
 }
 
 env_var! {
-    pub(crate) struct AuthInternalAuthSecretKey;
+    pub(crate) struct AuthenticationServiceInternalApiSecretKey;
 }
 
 impl Config {
     pub fn from_env(
-        auth_internal_auth_secret_key: LocalOrRemoteSecret<AuthInternalAuthSecretKey>,
+        authentication_service_internal_api_secret_key: LocalOrRemoteSecret<
+            AuthenticationServiceInternalApiSecretKey,
+        >,
     ) -> anyhow::Result<Self> {
         let database_url =
             std::env::var("DATABASE_URL").context("DATABASE_URL must be provided")?;
 
         let redis_uri = std::env::var("REDIS_URI").context("REDIS_URI must be provided")?;
 
-        let dss_url = std::env::var("DSS_URL").context("DSS_URL must be provided")?;
+        let document_storage_service_url = std::env::var("DOCUMENT_STORAGE_SERVICE_URL")
+            .context("DOCUMENT_STORAGE_SERVICE_URL must be provided")?;
 
         let invite_email =
             std::env::var("INVITE_EMAIL").context("INVITE_EMAIL must be provided")?;
@@ -57,18 +61,19 @@ impl Config {
 
         let environment = Environment::new_or_prod();
 
-        let auth_url = std::env::var("AUTH_URL").context("AUTH_URL must be provided")?;
+        let authentication_service_url = std::env::var("AUTHENTICATION_SERVICE_URL")
+            .context("AUTHENTICATION_SERVICE_URL must be provided")?;
 
         Ok(Config {
             database_url,
             redis_uri,
             internal_api_secret_key: InternalApiSecretKey::new()?,
-            dss_url,
+            document_storage_service_url,
             invite_email,
             port,
             environment,
-            auth_url,
-            auth_internal_auth_secret_key,
+            authentication_service_url,
+            authentication_service_internal_api_secret_key,
         })
     }
 }

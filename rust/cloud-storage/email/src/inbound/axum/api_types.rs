@@ -8,7 +8,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    Attachment, AttachmentMacro, Contact, EmailThreadPreview, EmailThreadPreviewMetadata,
+    Attachment, Contact, EmailThreadPreview, EmailThreadPreviewMetadata,
     EnrichedEmailThreadPreview, Label, LabelListVisibility, LabelType, MessageListVisibility,
 };
 
@@ -45,8 +45,6 @@ struct ApiThreadPreviewCursor {
     #[serde(flatten)]
     thread: ApiThreadPreviewCursorInner,
     attachments: Vec<ApiAttachment>,
-    #[dg(rename = "attachments_macro")]
-    macro_attachments: Vec<ApiAttachmentMacro>,
     #[dg(rename = "participants")]
     contacts: Vec<ApiContact>,
     labels: Vec<ApiLabel>,
@@ -116,17 +114,6 @@ pub struct ApiAttachment {
     #[schema(value_type = i64)]
     #[cfg_attr(feature = "ai_schema", schemars(with = "i64"))]
     created_at: DateTime<Utc>,
-}
-
-#[derive(Debug, ToSchema, Serialize, Deserialize, Doppleganger)]
-#[cfg_attr(feature = "ai_schema", derive(schemars::JsonSchema))]
-#[serde(rename_all = "camelCase")]
-#[dg(backward = AttachmentMacro)]
-pub struct ApiAttachmentMacro {
-    db_id: Uuid,
-    message_id: Uuid,
-    item_id: Uuid,
-    item_type: String,
 }
 
 #[derive(Debug, ToSchema, Serialize, Deserialize, Doppleganger)]

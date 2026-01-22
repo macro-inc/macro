@@ -8604,7 +8604,6 @@
             "type": "object",
             "required": [
               "attachments",
-              "attachmentsMacro",
               "participants",
               "metadata",
               "labels",
@@ -8615,12 +8614,6 @@
                 "type": "array",
                 "items": {
                   "$ref": "#/components/schemas/SoupAttachment"
-                }
-              },
-              "attachmentsMacro": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/SoupMacroAttachment"
                 }
               },
               "labels": {
@@ -8766,31 +8759,6 @@
       "SoupLabelType": {
         "type": "string",
         "enum": ["system", "user"]
-      },
-      "SoupMacroAttachment": {
-        "type": "object",
-        "required": ["threadId", "dbId", "messageId", "itemId", "itemType"],
-        "properties": {
-          "dbId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "itemId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "itemType": {
-            "type": "string"
-          },
-          "messageId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "threadId": {
-            "type": "string",
-            "format": "uuid"
-          }
-        }
       },
       "SoupMessageListVisibility": {
         "type": "string",

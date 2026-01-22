@@ -68,7 +68,10 @@ const containerEnvVars = [
 
   { name: 'ISSUER', value: pulumi.interpolate`${FUSIONAUTH_ISSUER}` },
 
-  { name: 'SERVICE_URL', value: pulumi.interpolate`${SERVICE_URL}` },
+  {
+    name: 'STATIC_FILE_SERVICE_URL',
+    value: pulumi.interpolate`${SERVICE_URL}`,
+  },
   {
     name: 'STATIC_STORAGE_BUCKET',
     value: pulumi.interpolate`${STATIC_FILE_BUCKET}`,

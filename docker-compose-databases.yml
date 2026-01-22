@@ -1,0 +1,35 @@
+services: 
+  postgres:
+    image: postgres:16
+    ports:
+      - '5432:5432'
+    expose:
+      - '5432'
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - PGPASSWORD=password
+    volumes:
+      - db:/var/lib/postgresql/data
+    networks:
+      - databases
+  redis:
+    image: 'redis/redis-stack:latest'
+    ports:
+      - '6379:6379' # Expose Redis on the default port
+      - '8001:8001' # Expose Redis Stack Server UI/tools
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+    volumes:
+      - cache:/data
+    networks:
+      - databases
+
+networks:
+  databases:
+    external: true
+volumes:
+  db:
+    driver: local
+  cache:
+    driver: local
