@@ -2,7 +2,7 @@ use crate::api::context::ApiContext;
 use anyhow::Context;
 use document_storage_service_client::DocumentStorageServiceClient;
 use email::{domain::service::EmailServiceImpl, inbound::EmailPreviewState, outbound::EmailPgRepo};
-use email_service::config::CloudfrontSignerPrivateKey;
+use email_service::config::EmailServiceCloudfrontSignerPrivateKey;
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
@@ -36,7 +36,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let cloudfront_signer_private_key = secretsmanager_client
-        .get_maybe_secret_value(env, CloudfrontSignerPrivateKey::new()?)
+        .get_maybe_secret_value(env, EmailServiceCloudfrontSignerPrivateKey::new()?)
         .await?;
 
     // Parse our configuration from the environment.
