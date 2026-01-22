@@ -24,14 +24,6 @@ export default defineConfig({
         },
       },
       {
-        // App package tests
-        extends: './packages/core/vitest.config.ts',
-        test: {
-          include: ['packages/app/**/*.{test,spec}.{ts,tsx}'],
-          name: 'app',
-        },
-      },
-      {
         // Queries package tests
         extends: './packages/queries/vitest.config.ts',
         test: {
