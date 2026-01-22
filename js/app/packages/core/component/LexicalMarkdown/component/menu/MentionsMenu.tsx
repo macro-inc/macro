@@ -16,6 +16,7 @@ import {
   type IUser,
   useContacts,
 } from '@core/user';
+import { useEmail } from '@core/context/user';
 import { getDateSuggestions } from '@core/util/dateParser';
 import { createFreshSearch } from '@core/util/freshSort';
 import ClockIcon from '@icon/regular/clock.svg';
@@ -196,9 +197,8 @@ function ItemBin(
   return (
     <>
       <div
-        class={`text-xs font-medium p-2 pt-0 flex justify-between items-center ${
-          props.isSelected ? 'text-ink-muted' : 'text-ink-extra-muted'
-        }`}
+        class={`text-xs font-medium p-2 pt-0 flex justify-between items-center ${props.isSelected ? 'text-ink-muted' : 'text-ink-extra-muted'
+          }`}
       >
         <span class="flex items-center gap-1">
           {props.label}
@@ -648,8 +648,23 @@ function MentionsMenuInner(props: {
     return [...tabResults, ...otherResults];
   });
 
+  const currentUserEmail = useEmail();
+  const currentUserDomain = createMemo(() => {
+    const email = currentUserEmail();
+    return email ? email.split('@')[1] : undefined;
+  });
+
   const userSearch = createFreshSearch<Entity<'user'>>(
-    { timeWeight: 0, brevityWeight: 0.3 },
+    {
+      timeWeight: 0,
+      brevityWeight: 0.3,
+      boostFn: (item) => {
+        const userDomain = currentUserDomain();
+        if (!userDomain) return 0;
+        const itemDomain = item.data.email?.split('@')[1];
+        return itemDomain === userDomain ? 0.5 : 0; // 30% boost for same domain
+      },
+    },
     getItemSearchText
   );
 
@@ -1223,18 +1238,18 @@ function MentionsMenuInner(props: {
   const floatWithElementProps = () =>
     props.anchor
       ? {
-          element: () => props.anchor,
-          useBlockBoundary: props.useBlockBoundary,
-        }
+        element: () => props.anchor,
+        useBlockBoundary: props.useBlockBoundary,
+      }
       : undefined;
 
   const floatWithSelectionProps = () =>
     !props.anchor
       ? {
-          selection: untrack(mountSelection),
-          reactiveOnContainer: props.editor.getRootElement(),
-          useBlockBoundary: props.useBlockBoundary,
-        }
+        selection: untrack(mountSelection),
+        reactiveOnContainer: props.editor.getRootElement(),
+        useBlockBoundary: props.useBlockBoundary,
+      }
       : undefined;
 
   return (
