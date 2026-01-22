@@ -2,8 +2,7 @@ import {
   PROPERTY_OPTION_IDS,
   SYSTEM_PROPERTY_IDS,
 } from '@core/component/Properties/constants';
-import type { TaskEntity, TaskEntityWithProperties } from '@macro-entity';
-import type { SoupProperty } from '@service-storage/generated/schemas';
+import type { TaskEntityWithProperties } from '@macro-entity';
 import type { ExpandedEntityType } from '@macro-entity';
 import type { DocumentTypeFilter } from '../../ViewConfig';
 

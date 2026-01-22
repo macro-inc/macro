@@ -129,6 +129,15 @@ export function useSaveEntityPropertyMutation(
             variables.entityType,
             variables.entityId
           );
+
+          // If the status property was changed, also invalidate DSS
+          // so that tasks can reappear in Signal when marked un-done
+          if (
+            variables.property.propertyDefinitionId ===
+            SYSTEM_PROPERTY_IDS.STATUS
+          ) {
+            queryClient.invalidateQueries({ queryKey: queryKeys.all.dss });
+          }
         },
       },
       callbacks
