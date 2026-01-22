@@ -36,10 +36,7 @@ pub enum InitError {
     EnqueueError,
 
     #[error("Database query error")]
-    QueryError(#[from] anyhow::Error),
-
-    #[error("Database query error")]
-    SqlxError(#[from] sqlx::Error),
+    DatabaseError(#[from] anyhow::Error),
 
     #[error("Bad request")]
     BadRequest(String),
@@ -55,7 +52,7 @@ impl IntoResponse for InitError {
                 StatusCode::BAD_REQUEST
             }
             InitError::TooManyJobs => StatusCode::TOO_MANY_REQUESTS,
-            InitError::EnqueueError | InitError::QueryError(_) | InitError::SqlxError(_) => {
+            InitError::EnqueueError | InitError::DatabaseError(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
         };
@@ -193,7 +190,7 @@ pub async fn handler(
 
 /// Enables Gmail sync for a user by A) registering a watch with Gmail API B) updating the link record
 /// to is_sync_active = true and C) updating gmail_histories entry with the current history value.
-#[tracing::instrument(skip(ctx, user_context, gmail_access_token), level = "info")]
+#[tracing::instrument(skip(ctx, user_context, gmail_access_token))]
 pub async fn enable_gmail_sync(
     ctx: &ApiContext,
     user_context: &UserContext,
