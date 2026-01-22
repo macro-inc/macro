@@ -64,9 +64,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { useSavePropertyForMultiEntitites } from './hooks/useSaveProperties';
 import { useEntityPropertiesQuery } from '@queries/properties/entity';
 
-/**
- * Styled wrapper for list items in each menu.
- */
+/* Styled wrapper for list items in each menu. */
 function ListItem(props: {
   id: string;
   isSelected: boolean;
