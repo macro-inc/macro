@@ -45,6 +45,7 @@ services:
       - authentication_service
       - connection_gateway
     networks:
+      - databases
       - services
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -68,8 +69,8 @@ services:
     depends_on:
       - redis
     networks:
-      - services
       - databases
+      - services
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -89,7 +90,10 @@ services:
       target: contacts_service
     ports:
       - "8083:8080"
+    environment:
+      - DATABASE_URL=${CONTACTSDB_URL}
     networks:
+      - databases
       - services
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -111,6 +115,7 @@ services:
     ports:
       - "8084:8080"
     networks:
+      - databases
       - services
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -138,6 +143,7 @@ services:
       - email_service
       - static_file_service
     networks:
+      - databases
       - services
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -163,8 +169,8 @@ services:
       - connection_gateway
       - authentication_service
     networks:
-      - services
       - databases
+      - services
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -191,8 +197,8 @@ services:
       - static_file_service
       - redis
     networks:
-      - services
       - databases
+      - services
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -213,6 +219,7 @@ services:
     ports:
       - "8088:8080"
     networks:
+      - databases
       - services
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -232,7 +239,10 @@ services:
       dockerfile: Dockerfile.dev
       target: notification_service
     ports:
-      - "8089:8079"
+      - "8089:8080"
+    environment:
+      # Explicitly override as this is a unique databas
+      - DATABASE_URL=${NOTIFICATIONDB_URL}
     depends_on:
       - redis
       - document_cognition_service
@@ -240,6 +250,7 @@ services:
       - connection_gateway
       - document_storage_service
     networks:
+      - databases
       - services
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8079/health"]
@@ -265,8 +276,8 @@ services:
       - document_storage_service
       - authentication_service
     networks:
-      - services
       - databases
+      - services
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -289,6 +300,7 @@ services:
     depends_on:
       - comms_service
     networks:
+      - databases
       - services
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -312,6 +324,7 @@ services:
       - email_service
       - comms_service
     networks:
+      - databases
       - services
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -337,6 +350,7 @@ services:
       - email_service
       - document_storage_service
     networks:
+      - databases
       - services
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -358,6 +372,7 @@ services:
     ports:
       - "8094:8080"
     networks:
+      - databases
       - services
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
