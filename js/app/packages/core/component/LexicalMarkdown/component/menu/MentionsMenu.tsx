@@ -466,8 +466,6 @@ function MentionsMenuInner(props: {
     return list
       .map(entityMapper('user'))
       .map((entity) => {
-        // Augment user entities with DM activity timestamp
-        // Note: lastInteraction must be at entity level (not inside data) for freshSort to find it
         const dmTimestamp = dmActivity.get(entity.id);
         if (dmTimestamp) {
           return {

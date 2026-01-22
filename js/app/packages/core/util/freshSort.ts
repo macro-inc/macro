@@ -230,17 +230,6 @@ export function createFreshSearch<T extends TimestampedItem>(
   return (items: T[], query: string): FreshSortResult<T>[] => {
     const finalConfig = { ...DEFAULT_CONFIG, ...config };
 
-    // Handle empty query - return all items sorted by time/boost
-    if (!query || query.trim().length === 0) {
-      const allItemResults: FilterResult<T>[] = items.map((item, index) => ({
-        original: item,
-        string: extractor(item),
-        score: Infinity, // All items are "exact matches" when no query
-        index,
-      }));
-      return freshSort(allItemResults, config);
-    }
-
     const hasComma = query.includes(',');
     const hasSpace = query.includes(' ');
     const useMultiTermChannelMatch =

@@ -385,7 +385,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     const hasExactEmailMatch =
       currentUserInput && emailSet.has(currentUserInput.toLowerCase());
 
-    let allOptions = [...optionsList, ...customUsers()];
+    const allOptions = [...optionsList, ...customUsers()];
 
     // Only add custom input if it doesn't match an existing email
     if (
