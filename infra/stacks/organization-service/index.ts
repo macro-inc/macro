@@ -39,11 +39,11 @@ const jwtSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: JWT_SECRET_KEY })
   .apply((secret) => secret.arn);
 
-const AUTH_INTERNAL_AUTH_SECRET_KEY = config.require(
+const AUTHENTICATION_SERVICE_INTERNAL_API_SECRET_KEY = config.require(
   `authentication_service_internal_api_key`
 );
 const authInternalSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: AUTH_INTERNAL_AUTH_SECRET_KEY })
+  .getSecretVersionOutput({ secretId: AUTHENTICATION_SERVICE_INTERNAL_API_SECRET_KEY })
   .apply((secret) => secret.arn);
 
 const fusionauthClientIdSecretKey = config.require(`fusionauth_client_id`);
@@ -69,21 +69,8 @@ const cloudStorageClusterName: pulumi.Output<string> = cloudStorageStack
   .getOutput('cloudStorageClusterName')
   .apply((arn) => arn as string);
 
-const cloudStorageServiceStack = new pulumi.StackReference(
-  'cloud-storage-service-stack',
-  {
-    name: `macro-inc/cloud-storage-service/${stack}`,
-  }
-);
-
-export const cloudStorageServiceUrl: pulumi.Output<string> =
-  cloudStorageServiceStack
-    .getOutput('cloudStorageServiceUrl')
-    .apply((url) => url as string);
-
-export const INVITE_EMAIL = `invite${
-  stack === 'prod' ? '' : `-${stack}`
-}@macro.com`;
+export const INVITE_EMAIL = `invite${stack === 'prod' ? '' : `-${stack}`
+  }@macro.com`;
 
 const MACRO_API_TOKENS = getMacroApiToken();
 
@@ -122,8 +109,9 @@ const organizationService = new OrganizationService(
         value: pulumi.interpolate`${DOCUMENT_STORAGE_SERVICE_AUTH_KEY}`,
       },
       {
-        name: 'DSS_URL',
-        value: pulumi.interpolate`${cloudStorageServiceUrl}`,
+        name: 'DOCUMENT_STORAGE_SERVICE_URL',
+        value: `https://cloud-storage${stack === 'prod' ? '' : `-${stack}`
+          }.macro.com`,
       },
       {
         name: 'INVITE_EMAIL',
@@ -135,9 +123,8 @@ const organizationService = new OrganizationService(
       },
       {
         name: 'RUST_LOG',
-        value: `organization_service=${
-          stack === 'prod' ? 'debug' : 'trace'
-        },tower_http=debug`,
+        value: `organization_service=${stack === 'prod' ? 'debug' : 'trace'
+          },tower_http=debug`,
       },
       { name: 'ISSUER', value: pulumi.interpolate`${FUSIONAUTH_ISSUER}` },
       {
@@ -149,12 +136,12 @@ const organizationService = new OrganizationService(
         value: pulumi.interpolate`${FUSIONAUTH_CLIENT_ID}`,
       },
       {
-        name: 'AUTH_URL',
+        name: 'AUTHENTICATION_SERVICE_URL',
         value: `https://auth-service${stack === 'prod' ? '' : '-dev'}.macro.com`,
       },
       {
-        name: 'AUTH_INTERNAL_AUTH_SECRET_KEY',
-        value: pulumi.interpolate`${AUTH_INTERNAL_AUTH_SECRET_KEY}`,
+        name: 'AUTHENTICATION_SERVICE_INTERNAL_API_SECRET_KEY',
+        value: pulumi.interpolate`${AUTHENTICATION_SERVICE_INTERNAL_API_SECRET_KEY}`,
       },
       {
         name: 'MACRO_API_TOKEN_ISSUER',
