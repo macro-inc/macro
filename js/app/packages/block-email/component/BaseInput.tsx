@@ -107,6 +107,8 @@ import type { DraftFormAttachment } from '@block-email/component/createEmailForm
 import { plural } from '@core/util/string';
 import { EmailDateSelector } from '@block-email/component/email-date-selector';
 import { isMobile } from '@core/mobile/isMobile';
+import { queryClient } from '@queries/client';
+import { emailKeys } from '@queries/email/keys';
 
 false && fileFolderDrop;
 false && fileSelector;
@@ -612,6 +614,14 @@ export function BaseInput(props: {
   const scheduleMessageMutation = useScheduleMessageMutation({
     onSuccess: () => {
       toast.success('Email scheduled');
+
+      const thread = ctx.thread();
+
+      if (!thread?.db_id) return;
+
+      queryClient.invalidateQueries({
+        queryKey: emailKeys.threadMessages(thread.db_id).queryKey,
+      });
     },
     onError: () => {
       toast.failure('Failed to schedule email');
