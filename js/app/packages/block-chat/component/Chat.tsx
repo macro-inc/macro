@@ -93,7 +93,7 @@ export function Chat(props: { data: ChatData }) {
 
   // Entity drag-and-drop support
   const chatId = useBlockId();
-  const droppable = useEntityDropAttachment(
+  const { droppable, isDraggingOver } = useEntityDropAttachment(
     'chat-input-' + chatId,
     attachments
   );
@@ -202,6 +202,7 @@ export function Chat(props: { data: ChatData }) {
     <DragDropWrapper
       class="size-full bg-panel overscroll-none overflow-hidden flex flex-col"
       uploadQueue={uploadQueue}
+      isEntityDraggingOver={isDraggingOver}
     >
       <TopBar />
       <div class="size-full flex-1 min-h-0 p-2 relative">

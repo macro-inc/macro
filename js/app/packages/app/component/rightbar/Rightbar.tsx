@@ -311,7 +311,10 @@ export function Rightbar(props: {
   } = useChatInput({ initialValue: props.initialState?.text });
 
   // Entity drag-and-drop support
-  const droppable = useEntityDropAttachment('rightbar-chat-input', attachments);
+  const { droppable, isDraggingOver } = useEntityDropAttachment(
+    'rightbar-chat-input',
+    attachments
+  );
   false && droppable;
 
   createEffect(() => {
@@ -374,6 +377,7 @@ export function Rightbar(props: {
     <DragDropWrapper
       class="relative flex flex-col size-full select-none"
       uploadQueue={uploadQueue}
+      isEntityDraggingOver={isDraggingOver}
     >
       <div class="overflow-hidden size-full flex flex-col items-center relative">
         <div class="absolute inset-0 pointer-events-none" use:droppable />

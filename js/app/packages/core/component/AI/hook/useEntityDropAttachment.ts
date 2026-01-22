@@ -4,9 +4,10 @@ import type { Attachment, Attachments } from '@core/component/AI/types';
 import { asFileType } from '@core/component/AI/util';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import type { EntityDragEvent } from '@macro-entity';
+import type { EntityDragData, EntityDragEvent } from '@macro-entity';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import type { AttachmentType } from '@service-cognition/generated/schemas';
+import { type Accessor, createMemo } from 'solid-js';
 
 /**
  * Hook to handle entity drag-and-drop for chat attachments.
@@ -14,18 +15,42 @@ import type { AttachmentType } from '@service-cognition/generated/schemas';
  *
  * @param droppableId - Unique ID for the droppable zone
  * @param attachments - The attachments object from useChatInput
- * @returns The droppable directive to be used with `use:droppable`
+ * @returns Object with droppable directive and isDraggingOver signal
  */
 export function useEntityDropAttachment(
   droppableId: string,
   attachments: Attachments
-): any {
+): {
+  droppable: ReturnType<typeof createDroppable>;
+  isDraggingOver: Accessor<boolean>;
+} {
   const droppable = createDroppable(droppableId);
 
-  const [, { onDragEnd }] = useDragDropContext() ?? [
+  const [state, { onDragEnd }] = useDragDropContext() ?? [
     undefined,
     { onDragEnd: () => {} },
   ];
+
+  const entityDragData = createMemo(() => {
+    const draggable = state?.active.draggable;
+    if (!draggable) return;
+    const dragData = draggable.data;
+    if (!dragData || dragData.dragType !== 'entity') return;
+    return dragData as EntityDragData;
+  });
+
+  const isDraggingOver = createMemo(() => {
+    const dragData = entityDragData();
+    if (!dragData) return false;
+
+    const activeDroppable = state?.active.droppable;
+    if (!activeDroppable || activeDroppable.id !== droppableId) return false;
+
+    // Check if it's a supported attachment type
+    const fileType = 'fileType' in dragData ? dragData.fileType : undefined;
+    const blockName = fileTypeToBlockName(fileType ?? dragData.type, true);
+    return SUPPORTED_CHAT_ATTACHMENT_BLOCKS.includes(blockName);
+  });
 
   onDragEnd((event: EntityDragEvent) => {
     if (!event.droppable) return;
@@ -76,6 +101,7 @@ export function useEntityDropAttachment(
       .with('channel', () => {
         const channelType =
           'channelType' in data ? data.channelType : 'organization';
+
         return {
           id: `${entityId}-channel-attachment`,
           attachmentId: entityId,
@@ -106,5 +132,5 @@ export function useEntityDropAttachment(
     }
   });
 
-  return droppable;
+  return { droppable, isDraggingOver };
 }
