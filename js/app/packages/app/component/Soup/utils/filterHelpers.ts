@@ -120,15 +120,12 @@ export const getTaskStatusOptionId = (
 };
 
 /**
- * Checks if a task is in a "closed" state (completed or canceled).
+ * checks if a task is in a "closed" state (completed or canceled).
  */
 export const isTaskClosed = (entity: TaskEntityWithProperties): boolean => {
-  // First check the is_completed flag from subType (most reliable)
   if (entity.subType?.is_completed === true) {
     return true;
   }
-
-  // Also check status property for CANCELED status
   const statusOptionId = getTaskStatusOptionId(entity);
   if (
     statusOptionId === PROPERTY_OPTION_IDS.STATUS.COMPLETED ||
@@ -136,12 +133,11 @@ export const isTaskClosed = (entity: TaskEntityWithProperties): boolean => {
   ) {
     return true;
   }
-
   return false;
 };
 
 /**
- * Checks if the current user is assigned to the task.
+ * checks if the current user is assigned to the task.
  */
 export const isCurrentUserAssigned = (
   entity: TaskEntityWithProperties,
@@ -149,28 +145,22 @@ export const isCurrentUserAssigned = (
 ): boolean => {
   if (!currentUserId) return false;
   const assigneeIds = getTaskAssigneeIds(entity);
-
-  // If no assignees, consider user assigned (show unassigned tasks)
   if (assigneeIds.length === 0) return true;
-
   return assigneeIds.includes(currentUserId);
 };
 
 /**
- * Determines if a task should appear in the Signal tab.
- * Tasks appear in Signal if:
- * - They are not completed or canceled
- * - The current user is an assignee (or the task has no assignees)
+ * determines if a task should appear in the signal tab.
+ * tasks appear in signal if:
+ * - they are not completed or canceled
+ * - the current user is an assignee (or the task has no assignees)
  */
 export const isSignalTask = (
   entity: TaskEntityWithProperties,
   currentUserId: string | undefined
 ): boolean => {
-  // Exclude closed tasks (completed or canceled)
   if (isTaskClosed(entity)) {
     return false;
   }
-
-  // Include tasks where current user is assigned (or unassigned tasks)
   return isCurrentUserAssigned(entity, currentUserId);
 };
