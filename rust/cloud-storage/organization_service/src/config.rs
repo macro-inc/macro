@@ -29,7 +29,8 @@ pub(crate) struct Config {
     /// The Auth service url
     pub authentication_service_url: String,
     /// The Auth service internal auth secret key
-    pub authentication_service_internal_api_secret_key: LocalOrRemoteSecret<AuthenticationServiceInternalApiSecretKey>,
+    pub authentication_service_internal_api_secret_key:
+        LocalOrRemoteSecret<AuthenticationServiceInternalApiSecretKey>,
 }
 
 env_var! {
@@ -38,14 +39,17 @@ env_var! {
 
 impl Config {
     pub fn from_env(
-        authentication_service_internal_api_secret_key: LocalOrRemoteSecret<AuthenticationServiceInternalApiSecretKey>,
+        authentication_service_internal_api_secret_key: LocalOrRemoteSecret<
+            AuthenticationServiceInternalApiSecretKey,
+        >,
     ) -> anyhow::Result<Self> {
         let database_url =
             std::env::var("DATABASE_URL").context("DATABASE_URL must be provided")?;
 
         let redis_uri = std::env::var("REDIS_URI").context("REDIS_URI must be provided")?;
 
-        let document_storage_service_url = std::env::var("DOCUMENT_STORAGE_SERVICE_URL").context("DOCUMENT_STORAGE_SERVICE_URL must be provided")?;
+        let document_storage_service_url = std::env::var("DOCUMENT_STORAGE_SERVICE_URL")
+            .context("DOCUMENT_STORAGE_SERVICE_URL must be provided")?;
 
         let invite_email =
             std::env::var("INVITE_EMAIL").context("INVITE_EMAIL must be provided")?;
@@ -57,7 +61,8 @@ impl Config {
 
         let environment = Environment::new_or_prod();
 
-        let authentication_service_url = std::env::var("AUTHENTICATION_SERVICE_URL").context("AUTHENTICATION_SERVICE_URL must be provided")?;
+        let authentication_service_url = std::env::var("AUTHENTICATION_SERVICE_URL")
+            .context("AUTHENTICATION_SERVICE_URL must be provided")?;
 
         Ok(Config {
             database_url,

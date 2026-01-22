@@ -32,10 +32,11 @@ impl Config {
         let storage_bucket_name = std::env::var("STATIC_STORAGE_BUCKET")
             .context("STATIC_STORAGE_BUCKET must be provided")?;
 
-        let service_url = std::env::var("STATIC_FILE_SERVICE_URL").context("STATIC_FILE_SERVICE_URL must be provided")?;
+        let service_url = std::env::var("STATIC_FILE_SERVICE_URL")
+            .context("STATIC_FILE_SERVICE_URL must be provided")?;
 
-        let s3_event_queue_url =
-            std::env::var("STATIC_FILE_SERVICE_S3_EVENT_QUEUE_URL").context("S3_EVENT_QUEUE_URL must be provided")?;
+        let s3_event_queue_url = std::env::var("STATIC_FILE_SERVICE_S3_EVENT_QUEUE_URL")
+            .context("S3_EVENT_QUEUE_URL must be provided")?;
 
         let internal_api_secret_key = std::env::var("INTERNAL_API_SECRET_KEY")
             .context("INTERNAL_API_SECRET_KEY must be provided")?;

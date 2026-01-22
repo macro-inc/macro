@@ -25,7 +25,8 @@ pub struct Config {
     pub document_storage_service_presigned_url_expiry_seconds: u64,
     /// The number of seconds a browser cache for a presigned url is valid for
     pub document_storage_service_presigned_url_browser_cache_expiry_seconds: u64,
-    pub document_storage_service_cloudfront_signer_private_key: LocalOrRemoteSecret<DocumentStorageServiceCloudfrontSignerPrivateKeySecretName>,
+    pub document_storage_service_cloudfront_signer_private_key:
+        LocalOrRemoteSecret<DocumentStorageServiceCloudfrontSignerPrivateKeySecretName>,
 
     pub document_permission_jwt: LocalOrRemoteSecret<DocumentPermissionJwtSecretKey>,
 }
@@ -60,7 +61,9 @@ env_var! { pub struct DocumentPermissionJwtSecretKey; }
 
 impl Config {
     pub fn from_env(
-        document_storage_service_cloudfront_signer_private_key: LocalOrRemoteSecret<DocumentStorageServiceCloudfrontSignerPrivateKeySecretName>,
+        document_storage_service_cloudfront_signer_private_key: LocalOrRemoteSecret<
+            DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
+        >,
         document_permission_jwt: LocalOrRemoteSecret<DocumentPermissionJwtSecretKey>,
     ) -> anyhow::Result<Self> {
         let environment = Environment::new_or_prod();
@@ -75,10 +78,11 @@ impl Config {
             .and_then(|v| v.as_ref().parse::<u64>().ok())
             .unwrap_or(20);
 
-        let document_storage_service_presigned_url_expiry_seconds = DocumentStorageServicePresignedUrlExpirySeconds::new()
-            .ok()
-            .and_then(|v| v.as_ref().parse::<u64>().ok())
-            .unwrap_or(DEFAULT_PRESIGNED_URL_EXPIRY_SECONDS);
+        let document_storage_service_presigned_url_expiry_seconds =
+            DocumentStorageServicePresignedUrlExpirySeconds::new()
+                .ok()
+                .and_then(|v| v.as_ref().parse::<u64>().ok())
+                .unwrap_or(DEFAULT_PRESIGNED_URL_EXPIRY_SECONDS);
 
         let document_storage_service_presigned_url_browser_cache_expiry_seconds =
             DocumentStorageServicePresignedUrlBrowserCacheExpirySeconds::new()

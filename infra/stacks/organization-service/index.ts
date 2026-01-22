@@ -43,7 +43,9 @@ const AUTHENTICATION_SERVICE_INTERNAL_API_SECRET_KEY = config.require(
   `authentication_service_internal_api_key`
 );
 const authInternalSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: AUTHENTICATION_SERVICE_INTERNAL_API_SECRET_KEY })
+  .getSecretVersionOutput({
+    secretId: AUTHENTICATION_SERVICE_INTERNAL_API_SECRET_KEY,
+  })
   .apply((secret) => secret.arn);
 
 const fusionauthClientIdSecretKey = config.require(`fusionauth_client_id`);
@@ -69,8 +71,9 @@ const cloudStorageClusterName: pulumi.Output<string> = cloudStorageStack
   .getOutput('cloudStorageClusterName')
   .apply((arn) => arn as string);
 
-export const INVITE_EMAIL = `invite${stack === 'prod' ? '' : `-${stack}`
-  }@macro.com`;
+export const INVITE_EMAIL = `invite${
+  stack === 'prod' ? '' : `-${stack}`
+}@macro.com`;
 
 const MACRO_API_TOKENS = getMacroApiToken();
 
@@ -110,8 +113,9 @@ const organizationService = new OrganizationService(
       },
       {
         name: 'DOCUMENT_STORAGE_SERVICE_URL',
-        value: `https://cloud-storage${stack === 'prod' ? '' : `-${stack}`
-          }.macro.com`,
+        value: `https://cloud-storage${
+          stack === 'prod' ? '' : `-${stack}`
+        }.macro.com`,
       },
       {
         name: 'INVITE_EMAIL',
@@ -123,8 +127,9 @@ const organizationService = new OrganizationService(
       },
       {
         name: 'RUST_LOG',
-        value: `organization_service=${stack === 'prod' ? 'debug' : 'trace'
-          },tower_http=debug`,
+        value: `organization_service=${
+          stack === 'prod' ? 'debug' : 'trace'
+        },tower_http=debug`,
       },
       { name: 'ISSUER', value: pulumi.interpolate`${FUSIONAUTH_ISSUER}` },
       {

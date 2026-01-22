@@ -1,6 +1,6 @@
 use anyhow::Context;
 use document_storage_service_client::DocumentStorageServiceClient;
-use email_service::config::{EmailServiceCloudfrontSignerPrivateKey, Config};
+use email_service::config::{Config, EmailServiceCloudfrontSignerPrivateKey};
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
