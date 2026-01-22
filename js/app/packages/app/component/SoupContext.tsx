@@ -62,7 +62,10 @@ import {
 } from './command/state';
 import { useGlobalNotificationSource } from './GlobalAppState';
 import { openEntityInSplitFromUnifiedList } from './soupContextHelpers';
-import { isCurrentUserAssigned } from './Soup/utils/filterHelpers';
+import {
+  isCurrentUserAssigned,
+  isTaskClosed,
+} from './Soup/utils/filterHelpers';
 import type { SplitHandle } from './split-layout/layoutManager';
 import { globalRemoveFromSplitHistory } from './split-layout/layoutUtils';
 import {
@@ -568,11 +571,19 @@ export function createNavigationEntityListShortcut({
       const taskEntities = entities.filter(isTaskEntity);
 
       // If there are task entities, check if user is assigned to all of them
+      // and that at least one task is not already completed
       if (taskEntities.length > 0) {
         const currentUserId = userId();
-        return taskEntities.every((entity) =>
+        const allAssigned = taskEntities.every((entity) =>
           isCurrentUserAssigned(entity as any, currentUserId)
         );
+        if (!allAssigned) return false;
+
+        // Disable if all tasks are already completed
+        const allCompleted = taskEntities.every((entity) =>
+          isTaskClosed(entity as any)
+        );
+        if (allCompleted) return false;
       }
 
       return true;
