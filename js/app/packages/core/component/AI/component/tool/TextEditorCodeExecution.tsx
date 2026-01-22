@@ -333,7 +333,10 @@ const handler = createToolRenderer({
         renderContext={ctx.renderContext}
         type="response"
       >
-        <TextEditorResult content={ctx.tool.data.content} toolId={ctx.tool.id} />
+        <TextEditorResult
+          content={ctx.tool.data.content}
+          toolId={ctx.tool.id}
+        />
       </BaseTool>
     );
   },
