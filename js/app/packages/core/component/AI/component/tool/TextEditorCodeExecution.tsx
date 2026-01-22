@@ -1,4 +1,5 @@
 import type { CodeFileExtension } from '@block-code/util/languageSupport';
+import { asFileType } from '@core/component/AI/util/attachment';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { TruncatedText } from '@core/component/FileList/TruncatedText';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
@@ -174,7 +175,7 @@ function CreateResult(props: {
             class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-hover transition-colors cursor-pointer"
             onClick={handleClick}
           >
-            <EntityIcon size="xs" targetType={file().extension} />
+            <EntityIcon size="xs" targetType={asFileType(file().extension)} />
             <TruncatedText size="sm">
               <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
                 {file().fileName}
