@@ -210,28 +210,34 @@ export function Channel(props: {
     });
   });
 
-  const focusPrevious = () => {
+  const focusTabbable = (direction: 'previous' | 'next') => {
     const tabbableEls = tabbable(blockRef()!);
-    const fromEl = document.activeElement;
+    const activeEl = document.activeElement;
+    const activeElIndex = tabbableEls.indexOf(activeEl as FocusableElement);
 
-    const fromElIndex = tabbableEls.indexOf(fromEl as FocusableElement);
-    if (fromElIndex !== -1) {
-      const prevIndex = fromElIndex - 1;
-      if (prevIndex < 0) return false;
-      const prevEl = tabbableEls[prevIndex];
-      if (!prevEl) return false;
-      prevEl.focus();
-      return true;
-    } else {
-      tabbableEls.at(-1)?.focus();
+    if (activeElIndex !== -1) {
+      const targetIndex =
+        direction === 'previous' ? activeElIndex - 1 : activeElIndex + 1;
+      if (targetIndex < 0 || targetIndex >= tabbableEls.length) return false;
+      const targetEl = tabbableEls[targetIndex];
+      if (!targetEl) return false;
+      targetEl.focus();
       return true;
     }
+    console.log('no active element found');
+    if (direction === 'previous') {
+      const lastMessageEl = tabbableEls.findLast((el) => el.dataset?.messageId);
+      lastMessageEl?.focus();
+      return true;
+    }
+
+    return false;
   };
 
   const onChannelInputFocusLeaveStart = (e: KeyboardEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    return focusPrevious();
+    return focusTabbable('previous');
   };
 
   registerHotkey({
@@ -254,7 +260,7 @@ export function Channel(props: {
     scopeId: scopeId(),
     description: 'Focus previous',
     keyDownHandler: () => {
-      return focusPrevious();
+      return focusTabbable('previous');
     },
     hotkeyToken: TOKENS.channel.focusPreviousMessage,
     hide: true,
@@ -265,18 +271,7 @@ export function Channel(props: {
     scopeId: scopeId(),
     description: 'Focus next',
     keyDownHandler: () => {
-      const tabbableEls = tabbable(blockRef()!);
-      const activeEl = document.activeElement;
-      const activeElIndex = tabbableEls.indexOf(activeEl as FocusableElement);
-      if (activeElIndex !== -1) {
-        const nextIndex = activeElIndex + 1;
-        if (nextIndex >= tabbableEls.length) return false;
-        const nextEl = tabbableEls[nextIndex];
-        if (!nextEl) return false;
-        nextEl.focus();
-        return true;
-      }
-      return false;
+      return focusTabbable('next');
     },
     hotkeyToken: TOKENS.channel.focusNextMessage,
     hide: true,
