@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \"targetId\" as \"target_id\"\n        FROM \"IdMapping\"\n        WHERE \"sourceId\" = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "target_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4cf8e737d03c1cc90f2c8489db500a3b90cae2c19513b65a4b3f8efefd577af8"
+}
