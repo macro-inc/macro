@@ -2,7 +2,9 @@ import { registerHotkey } from 'core/hotkey/hotkeys';
 import { onCleanup, onMount, type Accessor } from 'solid-js';
 import { openPropertyEditor } from '../state/propertyEditor';
 import type { Property } from '@core/component/Properties/types';
-import type { EntityData } from '@macro-entity';
+import { isTaskEntity, type EntityData } from '@macro-entity';
+import { TOKENS } from '@core/hotkey/tokens';
+import { HotkeyTags } from '@core/hotkey/constants';
 
 interface PropertyEditorHotkeyOptions {
   scopeId: string;
@@ -30,9 +32,7 @@ export function usePropertyEditorHotkeys(options: PropertyEditorHotkeyOptions) {
       console.log('[PropertyEditor] Hotkey disabled');
       return;
     }
-
     const entities = getSelectedEntities();
-    console.log('[PropertyEditor] Selected entities:', entities);
     if (entities && entities.length > 0) {
       openPropertyEditor(entities, mode, property);
     } else {
@@ -41,33 +41,23 @@ export function usePropertyEditorHotkeys(options: PropertyEditorHotkeyOptions) {
   };
 
   onMount(() => {
-    console.log('[PropertyEditor] Registering hotkeys for scope:', scopeId);
     const disposers: Array<{ dispose: () => void }> = [];
-
-    // Register main property selector hotkey
     disposers.push(
       registerHotkey({
         hotkey: ['shift+cmd+o'],
-        description: 'Edit properties',
+        hotkeyToken: TOKENS.entity.action.properties,
+        tags: [HotkeyTags.SelectionModification],
+        displayPriority: 10,
+        description: 'Open property editor',
         keyDownHandler: () => {
+          const entities = getSelectedEntities();
+          if (!entities.every(isTaskEntity)) return true;
           openIfSelected('selector');
           return true;
         },
         scopeId,
       })
     );
-
-    disposers.push(
-      registerHotkey({
-        hotkey: ['opt+s'],
-        description: 'Edit status',
-        keyDownHandler: () => {
-          return true;
-        },
-        scopeId,
-      })
-    );
-    // Cleanup on unmount
     onCleanup(() => {
       disposers.forEach((disposer) => disposer.dispose());
     });

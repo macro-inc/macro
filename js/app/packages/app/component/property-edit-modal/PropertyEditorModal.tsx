@@ -115,6 +115,7 @@ export function PropertyEditorModal() {
         toast.success(message);
       }
       // failure toast handled by mutation
+      closePropertyEditor();
     });
   };
 

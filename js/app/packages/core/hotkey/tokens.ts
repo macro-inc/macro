@@ -46,6 +46,7 @@ export const TOKENS = {
       rename: 'entity.action.rename',
       moveToFolder: 'entity.action.moveToFolder',
       copy: 'entity.action.copy',
+      properties: 'entity.action.properties',
     },
   },
 
