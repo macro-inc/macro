@@ -259,13 +259,10 @@ const hasRecentlyViewed = (entity: EntityData) => {
   return seconds < oneDayOfSeconds;
 };
 
-// Get current user ID at module level for use in filters
-// This is called in a reactive context when filters are applied
 const getCurrentUserId = () => {
   try {
     return useUserId()();
   } catch {
-    // Context may not be available in some cases
     return undefined;
   }
 };
