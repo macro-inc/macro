@@ -153,9 +153,9 @@ describe('Date Utilities (core/utils/date.ts)', () => {
       it('should not include time for date format when showTime is undefined', () => {
         // June 1, 2025 (13 days ago) - should show only date (default behavior)
         const oldDate = epochTime('2025-06-01T16:45:00.000Z');
-        expect(
-          formatDate(oldDate, mockNowEpochSeconds, 'UTC', undefined)
-        ).toBe('06/01/25');
+        expect(formatDate(oldDate, mockNowEpochSeconds, 'UTC', undefined)).toBe(
+          '06/01/25'
+        );
       });
 
       it('should not affect "today" format regardless of showTime (already shows time)', () => {
@@ -191,9 +191,9 @@ describe('Date Utilities (core/utils/date.ts)', () => {
       it('should handle showTime for dates at the 7-day boundary', () => {
         // Exactly 7 days ago - should use date format
         const sevenDaysAgo = epochTime('2025-06-07T14:15:00.000Z');
-        expect(
-          formatDate(sevenDaysAgo, mockNowEpochSeconds, 'UTC', true)
-        ).toBe('06/07/25 at 2:15 PM');
+        expect(formatDate(sevenDaysAgo, mockNowEpochSeconds, 'UTC', true)).toBe(
+          '06/07/25 at 2:15 PM'
+        );
         expect(
           formatDate(sevenDaysAgo, mockNowEpochSeconds, 'UTC', false)
         ).toBe('06/07/25');
