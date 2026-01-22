@@ -344,12 +344,9 @@ const Root: Component<MessageRootProps> = (props) => {
           >
             <Show when={props.timestamp}>
               <div class="absolute top-0 translate-y-[-100%] bg-panel pl-2 pt-2 text-xs text-ink-muted font-mono mb-0.5 select-text cursor-default">
-                {formatDate(
-                  new Date(props.timestamp!).getTime() / 1000,
-                  undefined,
-                  undefined,
-                  true
-                )}
+                {formatDate(new Date(props.timestamp!).getTime() / 1000, {
+                  showTime: true,
+                })}
               </div>
             </Show>
             <div class="border border-edge bg-panel">{props.hoverActions}</div>
