@@ -2,7 +2,7 @@ import {
   PROPERTY_OPTION_IDS,
   SYSTEM_PROPERTY_IDS,
 } from '@core/component/Properties/constants';
-import type { TaskEntity } from '@macro-entity';
+import type { TaskEntity, TaskEntityWithProperties } from '@macro-entity';
 import type { SoupProperty } from '@service-storage/generated/schemas';
 import type { ExpandedEntityType } from '@macro-entity';
 import type { DocumentTypeFilter } from '../../ViewConfig';
@@ -71,28 +71,18 @@ export const isFocusFilterActive = (
 };
 
 /**
- * Task entity with properties from the DSS query (properties are spread from item.data)
- */
-export type TaskEntityWithProperties = TaskEntity & {
-  properties?: SoupProperty[];
-};
-
-/**
- * Extracts assignee user IDs from task properties.
- * Assignees are stored as EntityReference values in the ASSIGNEES property.
+ * extracts assignee user ids from task properties.
  */
 export const getTaskAssigneeIds = (
   entity: TaskEntityWithProperties
 ): string[] => {
   const properties = entity.properties;
   if (!properties) return [];
-
   const assigneesProperty = properties.find(
     (p) => p.definition.id === SYSTEM_PROPERTY_IDS.ASSIGNEES
   );
   if (!assigneesProperty?.value) return [];
 
-  // Assignees use EntityReference type with value as an array of references
   const value = assigneesProperty.value;
   if (value.type === 'EntityReference' && Array.isArray(value.value)) {
     return value.value
@@ -104,8 +94,7 @@ export const getTaskAssigneeIds = (
 };
 
 /**
- * Gets the status option ID from task properties.
- * Status is stored as a SelectOption with value as an array of UUIDs (single-select has 0-1 items).
+ * gets the status option id from task properties.
  */
 export const getTaskStatusOptionId = (
   entity: TaskEntityWithProperties
@@ -118,14 +107,12 @@ export const getTaskStatusOptionId = (
   );
   if (!statusProperty?.value) return undefined;
 
-  // Status uses SelectOption type with value as array of option IDs
   const value = statusProperty.value;
   if (
     value.type === 'SelectOption' &&
     'value' in value &&
     Array.isArray(value.value)
   ) {
-    // Single-select status returns first option ID (if any)
     return value.value[0];
   }
 
@@ -161,7 +148,6 @@ export const isCurrentUserAssigned = (
   currentUserId: string | undefined
 ): boolean => {
   if (!currentUserId) return false;
-
   const assigneeIds = getTaskAssigneeIds(entity);
 
   // If no assignees, consider user assigned (show unassigned tasks)
