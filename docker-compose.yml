@@ -27,7 +27,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 10s
 
   # ============================================================================
   # comms_service (Port 8081)
@@ -52,7 +52,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 10s
 
   # ============================================================================
   # connection_gateway (Port 8082)
@@ -76,7 +76,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 10s
 
   # ============================================================================
   # contacts_service (Port 8083)
@@ -100,7 +100,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 10s
 
   # ============================================================================
   # convert_service (Port 8084)
@@ -122,7 +122,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 10s
 
   # ============================================================================
   # document_cognition_service (Port 8085)
@@ -150,7 +150,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 10s
 
   # ============================================================================
   # document_storage_service (Port 8086)
@@ -176,7 +176,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 10s
 
   # ============================================================================
   # email_service (Port 8087)
@@ -204,7 +204,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 10s
 
   # ============================================================================
   # experiment_service (Port 8088)
@@ -226,11 +226,11 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 10s
 
   # ============================================================================
   # notification_service (Port 8089)
-  # User notifications - NotificationDB (note: internal port 8079)
+  # User notifications - NotificationDB
   # ============================================================================
   notification_service:
     <<: *common-env
@@ -253,11 +253,11 @@ services:
       - databases
       - services
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8079/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 10s
 
   # ============================================================================
   # organization_service (Port 8090)
@@ -283,7 +283,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 10s
 
   # ============================================================================
   # properties_service (Port 8091)
@@ -307,7 +307,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 10s
 
   # ============================================================================
   # search_processing_service (Port 8092)
@@ -331,7 +331,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 10s
 
   # ============================================================================
   # search_service (Port 8093)
@@ -357,7 +357,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 10s
 
   # ============================================================================
   # static_file_service (Port 8094)
@@ -379,7 +379,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 10s
 
   # ============================================================================
   # unfurl_service (Port 8095)
@@ -400,7 +400,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 10s
 
 networks:
   services:
