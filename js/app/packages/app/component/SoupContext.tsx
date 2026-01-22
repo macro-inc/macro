@@ -62,6 +62,7 @@ import {
 } from './command/state';
 import { useGlobalNotificationSource } from './GlobalAppState';
 import { openEntityInSplitFromUnifiedList } from './soupContextHelpers';
+import { isCurrentUserAssigned } from './Soup/utils/filterHelpers';
 import type { SplitHandle } from './split-layout/layoutManager';
 import { globalRemoveFromSplitHistory } from './split-layout/layoutUtils';
 import {
@@ -554,9 +555,28 @@ export function createNavigationEntityListShortcut({
 
       return true;
     },
-    canExecuteKeyDownHandler: () =>
-      canAccessEntityList() &&
-      actionRegistry.isActionEnabled('mark_as_done', plainSelectedEntities()),
+    canExecuteKeyDownHandler: () => {
+      if (!canAccessEntityList()) return false;
+      if (
+        !actionRegistry.isActionEnabled('mark_as_done', plainSelectedEntities())
+      ) {
+        return false;
+      }
+
+      // Check if all task entities have the current user assigned
+      const entities = plainSelectedEntities();
+      const taskEntities = entities.filter(isTaskEntity);
+
+      // If there are task entities, check if user is assigned to all of them
+      if (taskEntities.length > 0) {
+        const currentUserId = userId();
+        return taskEntities.every((entity) =>
+          isCurrentUserAssigned(entity as any, currentUserId)
+        );
+      }
+
+      return true;
+    },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
   });
