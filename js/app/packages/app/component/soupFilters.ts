@@ -1,13 +1,14 @@
 import { useUserId } from '@core/context/user';
-import { type EntityData, isTaskEntity } from '@macro-entity';
+import {
+  type EntityData,
+  isTaskEntity,
+  type TaskEntityWithProperties,
+} from '@macro-entity';
 import type { APIEmailThreadPreviewMetadata } from '@service-email/generated/schemas';
 import type { SoupEmailThreadPreviewMetadata } from '@service-storage/generated/schemas';
 import { makePersisted } from '@solid-primitives/storage';
 import { createMemo, createSignal } from 'solid-js';
-import {
-  isSignalTask,
-  type TaskEntityWithProperties,
-} from './Soup/utils/filterHelpers';
+import { isSignalTask } from './Soup/utils/filterHelpers';
 import type { ClientFilter } from './ViewConfig';
 
 type SignalConfig<T extends string> = {
