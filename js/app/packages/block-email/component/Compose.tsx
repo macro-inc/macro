@@ -566,7 +566,14 @@ export function EmailCompose(props: EmailComposeProps) {
     cleanupWatermark();
   };
 
-  const unscheduleMessageMutation = useUnscheduleMessageMutation();
+  const unscheduleMessageMutation = useUnscheduleMessageMutation({
+    onSuccess: () => {
+      toast.success('Email unscheduled');
+    },
+    onError: () => {
+      toast.failure('Failed to unschedule email');
+    },
+  });
 
   const handleSendTimeChange = (date: Date | null) => {
     const currentSendTime = form.sendTime();

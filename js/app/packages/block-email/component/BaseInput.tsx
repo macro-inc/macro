@@ -948,7 +948,14 @@ export function BaseInput(props: {
     });
   };
 
-  const unscheduleMessageMutation = useUnscheduleMessageMutation();
+  const unscheduleMessageMutation = useUnscheduleMessageMutation({
+    onSuccess: () => {
+      toast.success('Email unscheduled');
+    },
+    onError: () => {
+      toast.failure('Failed to unschedule email');
+    },
+  });
 
   const handleSendTimeChange = (date: Date | null) => {
     const currentSendTime = form().sendTime();
