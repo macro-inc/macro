@@ -18,7 +18,7 @@ import {
 } from '@core/user';
 import { useEmail } from '@core/context/user';
 import { getDateSuggestions } from '@core/util/dateParser';
-import { createFreshSearch } from '@core/util/freshSort';
+import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
 import ClockIcon from '@icon/regular/clock.svg';
 import EmailIcon from '@icon/regular/envelope.svg';
 import UsersIcon from '@icon/regular/users.svg';
@@ -675,18 +675,7 @@ function MentionsMenuInner(props: {
   });
 
   const userSearch = createFreshSearch<Entity<'user'>>(
-    {
-      fuzzyWeight: 0.3,
-      timeWeight: 0.6,
-      brevityWeight: 0.1,
-      boostFn: (item) => {
-        const userDomain = currentUserDomain();
-        if (!userDomain) return 0;
-        const itemDomain = item.data.email?.split('@')[1];
-        // 50% boost for same domain
-        return itemDomain === userDomain ? 0.5 : 0;
-      },
-    },
+    FreshSearchPresets.baseUserSearch(currentUserDomain, (item) => item.data.email),
     getItemSearchText
   );
 
@@ -1075,7 +1064,7 @@ function MentionsMenuInner(props: {
                 </button>
               </div>
             </div>
-            <div class="max-h-64 overflow-y-auto scrollbar-hidden bg-[teal]">
+            <div class="max-h-64 overflow-y-auto scrollbar-hidden">
               <For each={allItems}>
                 {(item, i) => (
                   <MentionsMenuItem
