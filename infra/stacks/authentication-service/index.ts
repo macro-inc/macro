@@ -98,7 +98,7 @@ const googleClientSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
 const STRIPE_PRICE_ID_KEY = config.require(`stripe_price_id`);
 const STRIPE_PREMIUM_PRICE_ID = aws.secretsmanager
   .getSecretVersionOutput({ secretId: STRIPE_PRICE_ID_KEY })
-  .apply((secret) => secret.arn);
+  .apply((secret) => secret.secretString);
 
 const stripePriceIdArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: STRIPE_PRICE_ID_KEY })
