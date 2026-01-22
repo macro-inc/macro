@@ -193,15 +193,6 @@ export const DateSelector = (props: DateSelectorProps) => {
     return option.type === 'option' ? option.displayText : '';
   };
 
-  const defaultFilter = (option: DateSelectorOption, input: string) => {
-    if (option.type === 'select-custom' || option.type === 'custom')
-      return true;
-
-    return option.displayText
-      .toLocaleLowerCase()
-      .includes(input.toLocaleLowerCase());
-  };
-
   const selectedDate = () => {
     const option = selectedOption();
 
@@ -256,7 +247,8 @@ export const DateSelector = (props: DateSelectorProps) => {
       placement="bottom-start"
       placeholder={props.placeholder ?? 'Select date'}
       closeOnSelection={false}
-      defaultFilter={defaultFilter}
+      // Filtering is done by `useDateSearch`
+      defaultFilter={() => true}
       itemComponent={DateSelectorItem}
     >
       <Show when={typeof props.trigger !== 'undefined'}>
