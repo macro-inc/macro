@@ -108,5 +108,96 @@ describe('Date Utilities (core/utils/date.ts)', () => {
       // The exact date format may vary by timezone, but it should be a valid date string
       expect(result).toMatch(/^\d{2}\/\d{2}\/\d{2}$/);
     });
+
+    describe('showTime parameter', () => {
+      it('should include time for weekday format when showTime is true', () => {
+        // June 12 (2 days ago) - should show "Thursday at {time}"
+        const twoDaysAgo = epochTime('2025-06-12T15:30:00.000Z');
+        expect(formatDate(twoDaysAgo, mockNowEpochSeconds, 'UTC', true)).toBe(
+          'Thursday at 3:30 PM'
+        );
+      });
+
+      it('should not include time for weekday format when showTime is false', () => {
+        // June 12 (2 days ago) - should show only "Thursday"
+        const twoDaysAgo = epochTime('2025-06-12T15:30:00.000Z');
+        expect(formatDate(twoDaysAgo, mockNowEpochSeconds, 'UTC', false)).toBe(
+          'Thursday'
+        );
+      });
+
+      it('should not include time for weekday format when showTime is undefined', () => {
+        // June 12 (2 days ago) - should show only "Thursday" (default behavior)
+        const twoDaysAgo = epochTime('2025-06-12T15:30:00.000Z');
+        expect(
+          formatDate(twoDaysAgo, mockNowEpochSeconds, 'UTC', undefined)
+        ).toBe('Thursday');
+      });
+
+      it('should include time for date format when showTime is true', () => {
+        // June 1, 2025 (13 days ago) - should show date with time
+        const oldDate = epochTime('2025-06-01T16:45:00.000Z');
+        expect(formatDate(oldDate, mockNowEpochSeconds, 'UTC', true)).toBe(
+          '06/01/25 at 4:45 PM'
+        );
+      });
+
+      it('should not include time for date format when showTime is false', () => {
+        // June 1, 2025 (13 days ago) - should show only date
+        const oldDate = epochTime('2025-06-01T16:45:00.000Z');
+        expect(formatDate(oldDate, mockNowEpochSeconds, 'UTC', false)).toBe(
+          '06/01/25'
+        );
+      });
+
+      it('should not include time for date format when showTime is undefined', () => {
+        // June 1, 2025 (13 days ago) - should show only date (default behavior)
+        const oldDate = epochTime('2025-06-01T16:45:00.000Z');
+        expect(
+          formatDate(oldDate, mockNowEpochSeconds, 'UTC', undefined)
+        ).toBe('06/01/25');
+      });
+
+      it('should not affect "today" format regardless of showTime (already shows time)', () => {
+        // Today at 8:15 AM UTC
+        const todayMorning = epochTime('2025-06-14T08:15:00.000Z');
+        expect(formatDate(todayMorning, mockNowEpochSeconds, 'UTC', true)).toBe(
+          '8:15 AM'
+        );
+        expect(
+          formatDate(todayMorning, mockNowEpochSeconds, 'UTC', false)
+        ).toBe('8:15 AM');
+      });
+
+      it('should not affect "yesterday" format regardless of showTime (already shows time)', () => {
+        // Yesterday at 11:00 PM UTC (June 13)
+        const yesterdayEvening = epochTime('2025-06-13T23:00:00.000Z');
+        expect(
+          formatDate(yesterdayEvening, mockNowEpochSeconds, 'UTC', true)
+        ).toBe('Yesterday at 11:00 PM');
+        expect(
+          formatDate(yesterdayEvening, mockNowEpochSeconds, 'UTC', false)
+        ).toBe('Yesterday at 11:00 PM');
+      });
+
+      it('should handle showTime with timezone-aware formatting', () => {
+        // June 12, 2025 at 11:30 PM Eastern (3:30 AM UTC June 13)
+        const testDate = epochTime('2025-06-13T03:30:00.000Z');
+        expect(
+          formatDate(testDate, mockNowEpochSeconds, 'America/New_York', true)
+        ).toBe('Thursday at 11:30 PM');
+      });
+
+      it('should handle showTime for dates at the 7-day boundary', () => {
+        // Exactly 7 days ago - should use date format
+        const sevenDaysAgo = epochTime('2025-06-07T14:15:00.000Z');
+        expect(
+          formatDate(sevenDaysAgo, mockNowEpochSeconds, 'UTC', true)
+        ).toBe('06/07/25 at 2:15 PM');
+        expect(
+          formatDate(sevenDaysAgo, mockNowEpochSeconds, 'UTC', false)
+        ).toBe('06/07/25');
+      });
+    });
   });
 });
