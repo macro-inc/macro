@@ -477,7 +477,7 @@ export function BaseInput(props: {
 
     if (!currentThread && !newMessage) {
       logger.error(new Error('Failed to save draft: thread not found'));
-      return false;
+      return;
     }
 
     if (newMessage && currentThread) {
@@ -486,26 +486,26 @@ export function BaseInput(props: {
           'Failed to save draft: new message and current thread cannot be provided together'
         )
       );
-      return false;
+      return;
     }
 
     let linkId: string | undefined = currentThread?.link_id;
     if (newMessage || !linkId) {
       if (emailLinksQuery.isPending) {
-        return false;
+        return;
       }
 
       if (emailLinksQuery.isError) {
         logger.error(
           new Error('Failed to save email draft: could not load email links')
         );
-        return false;
+        return;
       }
 
       const linksData = emailLinksQuery.data;
       if (!linksData || linksData.links.length === 0) {
         logger.error(new Error('Failed to save email draft: no links found'));
-        return false;
+        return;
       }
       linkId = linksData.links[0].id;
     }
@@ -557,6 +557,7 @@ export function BaseInput(props: {
 
       setSavedDraftId(draftResponse);
       refetchThreadMessages();
+      return draftResponse;
     }
   }
 
