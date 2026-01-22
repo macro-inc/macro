@@ -26,7 +26,7 @@ import {
 } from '@kobalte/core/combobox';
 import type { Channel } from '@service-comms/generated/models/channel';
 import { useEmail, useUserId } from '@core/context/user';
-import { useChannelsContext } from '@core/context/channels';
+import { useDmActivityByUserId } from '@core/context/channels';
 import { debounce } from '@solid-primitives/scheduled';
 import { createFreshSearch } from '@core/util/freshSort';
 import * as EmailValidator from 'email-validator';
@@ -331,39 +331,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     return email ? email.split('@')[1] : undefined;
   });
 
-  const currentUserId = useUserId();
-  const { channels: rawChannels } = useChannelsContext();
-
-  // Create a map of userId -> DM channel activity timestamp
-  const dmActivityByUserId = createMemo(() => {
-    const currentUser = currentUserId();
-    if (!currentUser) return new Map<string, number>();
-
-    const allChannels = rawChannels();
-    const map = new Map<string, number>();
-
-    for (const channel of allChannels) {
-      if (channel.channel_type !== 'direct_message') continue;
-
-      // Find the other participant in the DM
-      const otherParticipant = channel.participants.find(
-        (p) => p.user_id !== currentUser
-      );
-      if (!otherParticipant) continue;
-
-      // Get the most recent activity timestamp
-      const timestamp = channel.updated_at;
-
-      if (timestamp) {
-        // Convert ISO string to Unix timestamp (seconds)
-        const date = new Date(timestamp);
-        const unixTimestamp = Math.floor(date.getTime() / 1000);
-        map.set(otherParticipant.user_id, unixTimestamp);
-      }
-    }
-
-    return map;
-  });
+  const dmActivityByUserId = useDmActivityByUserId();
 
   // Create search function for recipients
   const recipientSearch = createFreshSearch<CombinedRecipientItem>(
