@@ -29,6 +29,12 @@ export type EntityActionConfig = {
    */
   canExecute?: (entity: EntityData) => boolean;
   /**
+   * Optional condition to run over all entities to determine if the action can be performed.
+   * This is useful for bulk-level checks that need to consider all entities together.
+   * If provided, this is checked after individual canExecute checks pass.
+   */
+  canExecuteBulk?: (entities: EntityData[]) => boolean;
+  /**
    * Mode for bulk version of action. If 'every' then all entities must pass
    * for the action to register as enabled. If 'some' then the action can be
    * enabled if a single entity passes the test. Only meaningful if canExecute
@@ -109,18 +115,31 @@ export function createEntityActionRegistry(): EntityActionRegistry {
     type: EntityActionType,
     entities: EntityData | EntityData[]
   ): boolean => {
-    const { canExecute, mode } = configs.get(type) ?? {};
-    if (!canExecute) return true;
-    if (Array.isArray(entities)) {
-      if (mode === 'some') {
-        return entities.some(canExecute);
+    const { canExecute, canExecuteBulk, mode } = configs.get(type) ?? {};
+
+    const entitiesArray = Array.isArray(entities) ? entities : [entities];
+
+    // First check individual entity conditions if canExecute is provided
+    if (canExecute) {
+      if (Array.isArray(entities)) {
+        const individualCheck =
+          mode === 'some'
+            ? entities.some(canExecute)
+            : entities.every(canExecute);
+        if (!individualCheck) return false;
+      } else if (isEntityData(entities)) {
+        if (!canExecute(entities)) return false;
       } else {
-        return entities.every(canExecute);
+        return false;
       }
-    } else if (isEntityData(entities)) {
-      return canExecute(entities);
     }
-    return false;
+
+    // Then check bulk conditions if canExecuteBulk is provided
+    if (canExecuteBulk) {
+      if (!canExecuteBulk(entitiesArray)) return false;
+    }
+
+    return true;
   };
 
   const getAvailableActions = (): EntityActionType[] => {

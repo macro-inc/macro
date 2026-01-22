@@ -15,7 +15,12 @@ import { isErr } from '@core/util/maybeResult';
 import { getScrollParent } from '@core/util/scrollParent';
 import { scrollToKeepGap } from '@core/util/scrollToKeepGap';
 import { waitForFrames } from '@core/util/sleep';
-import { type EntityData, isSearchEntity, isTaskEntity } from '@macro-entity';
+import {
+  type EntityData,
+  isSearchEntity,
+  isTaskEntity,
+  type TaskEntityWithProperties,
+} from '@macro-entity';
 import { entityHasUnreadNotifications } from '@notifications';
 import type { PreviewViewStandardLabel } from '@service-email/generated/schemas';
 import type { PropertiesEntityType } from '@service-properties/client';
@@ -529,7 +534,23 @@ export function createNavigationEntityListShortcut({
         if (entity.type === 'email' || entity.type === 'channel') return true;
 
         // property status complete (tasks have type 'document' with subType 'task')
-        if (isTaskEntity(entity)) return true;
+        if (isTaskEntity(entity)) {
+          // Check if current user is assigned to the task
+          const currentUserId = userId();
+          if (
+            !isCurrentUserAssigned(
+              entity as TaskEntityWithProperties,
+              currentUserId
+            )
+          ) {
+            return false;
+          }
+          // Check if task is not already closed
+          if (isTaskClosed(entity as TaskEntityWithProperties)) {
+            return false;
+          }
+          return true;
+        }
         if (['document', 'project'].includes(entity.type)) return true;
 
         if (entityHasUnreadNotifications(notificationSource, entity)) {
@@ -560,33 +581,10 @@ export function createNavigationEntityListShortcut({
     },
     canExecuteKeyDownHandler: () => {
       if (!canAccessEntityList()) return false;
-      if (
-        !actionRegistry.isActionEnabled('mark_as_done', plainSelectedEntities())
-      ) {
-        return false;
-      }
-
-      // Check if all task entities have the current user assigned
-      const entities = plainSelectedEntities();
-      const taskEntities = entities.filter(isTaskEntity);
-
-      // If there are task entities, check if user is assigned to all of them
-      // and that at least one task is not already completed
-      if (taskEntities.length > 0) {
-        const currentUserId = userId();
-        const allAssigned = taskEntities.every((entity) =>
-          isCurrentUserAssigned(entity as any, currentUserId)
-        );
-        if (!allAssigned) return false;
-
-        // Disable if all tasks are already completed
-        const allCompleted = taskEntities.every((entity) =>
-          isTaskClosed(entity as any)
-        );
-        if (allCompleted) return false;
-      }
-
-      return true;
+      return actionRegistry.isActionEnabled(
+        'mark_as_done',
+        plainSelectedEntities()
+      );
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
