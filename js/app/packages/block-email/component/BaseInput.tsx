@@ -112,6 +112,7 @@ import { EmailDateSelector } from '@block-email/component/email-date-selector';
 import { isMobile } from '@core/mobile/isMobile';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
+import { stickyGate } from '@core/util/debounce';
 
 false && fileFolderDrop;
 false && fileSelector;
@@ -978,6 +979,15 @@ export function BaseInput(props: {
     scheduleDraftSave();
   };
 
+  const isDraftSaving = () => saveDraftMutation.isPending;
+
+  // Used to keep displaying draft status for some time
+  const debouncedIsDraftSaving = stickyGate(isDraftSaving, 2000);
+
+  // Used to keep displaying spinner for a short time before switching
+  // to saved state
+  const laggedIsDraftSaving = stickyGate(isDraftSaving, 250);
+
   return (
     <div
       ref={(el) => {
@@ -986,7 +996,7 @@ export function BaseInput(props: {
       class="relative flex flex-col flex-1 bg-input border-t border-x border-edge-muted rounded-t-[5px] -mb-[7px] max-w-full"
     >
       {/* Top Bar */}
-      <div class="flex items-start gap-2 p-2">
+      <div class="relative flex items-start gap-2 p-2">
         <DropdownMenu>
           <DropdownMenu.Trigger>
             <div class="px-1">
@@ -1123,6 +1133,17 @@ export function BaseInput(props: {
                 </Tooltip>
               </Show>
             </div>
+          </div>
+        </Show>
+        <Show when={debouncedIsDraftSaving()}>
+          <div class="absolute right-4 top-4 flex gap-1 items-center text-xs text-ink-muted">
+            <Show
+              when={laggedIsDraftSaving()}
+              fallback={<span>Draft saved</span>}
+            >
+              <Spinner class="size-4 animate-spin" />
+              <span>Saving draft</span>
+            </Show>
           </div>
         </Show>
       </div>
