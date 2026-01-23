@@ -242,10 +242,10 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
   const previewType = () =>
     blockNameToItemType(verifyBlockName(props.blockName));
 
-  const [item] = useItemPreview({
+  const [item] = useItemPreview(() => ({
     id: props.documentId,
     type: previewType(),
-  });
+  }));
 
   const [popupOpen, setPopupOpen] = createSignal(false);
   const debouncedSetPreviewOpen = debounce(setPopupOpen, 100);

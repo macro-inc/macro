@@ -151,10 +151,10 @@ function AttachmentItem(props: AttachmentItemProps) {
   const senderId = () => message()?.sender_id || '';
   const [userName] = useDisplayName(tryMacroId(senderId()));
 
-  const [preview] = useItemPreview({
+  const [preview] = useItemPreview(() => ({
     id: props.attachment.entity_id,
     type: props.attachment.entity_type as ItemType,
-  });
+  }));
 
   const handleClick = () => {
     const item = preview();

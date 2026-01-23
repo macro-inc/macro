@@ -106,10 +106,10 @@ export function File(props: { node: EntityMentionNode; mode: RenderMode }) {
   const [selfMouseDownPosition, setSelfMouseDownPosition] =
     createSignal<Vector2>();
 
-  const [item] = useItemPreview({
+  const [item] = useItemPreview(() => ({
     id: props.node.file,
     type: props.node.entityType,
-  });
+  }));
 
   createEffect(() => {
     const currentItem = item();

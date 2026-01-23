@@ -209,10 +209,10 @@ export function References(props: ReferenceProps) {
             if (isGenericReference(ref)) {
               const userId = ref.user_id!;
               const [userName] = useDisplayName(tryMacroId(userId));
-              const [item] = useItemPreview({
+              const [item] = useItemPreview(() => ({
                 id: ref.source_entity_id,
                 type: ref.source_entity_type as ItemType,
-              });
+              }));
 
               const navHandlers = useSplitNavigationHandler(() =>
                 navigateToGenericReference(item())

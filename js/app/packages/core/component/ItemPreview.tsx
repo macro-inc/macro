@@ -38,10 +38,10 @@ type ItemPreviewProps = {
 };
 
 function useItemPreviewData(props: ItemPreviewProps) {
-  const [item] = useItemPreview({
+  const [item] = useItemPreview(() => ({
     id: props.itemId,
     type: props.itemType,
-  });
+  }));
 
   const { replaceOrInsertSplit, insertSplit } = useSplitLayout();
 

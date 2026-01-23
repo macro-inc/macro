@@ -90,10 +90,10 @@ export function DocumentCard(props: DocumentCardDecoratorProps) {
   const previewType = () =>
     blockNameToItemType(verifyBlockName(props.blockName));
 
-  const [item] = useItemPreview({
+  const [item] = useItemPreview(() => ({
     id: props.documentId,
     type: previewType(),
-  });
+  }));
 
   const [hasLoadedPreview, setHasLoadedPreview] = createSignal(false);
 

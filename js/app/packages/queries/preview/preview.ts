@@ -18,10 +18,8 @@ function previewQueryOptions(item: ItemEntity) {
   };
 }
 
-export function useItemPreview(item: Accessor<ItemEntity> | ItemEntity) {
-  const itemAccessor = typeof item === 'function' ? item : () => item;
-
-  const query = useQuery(() => previewQueryOptions(itemAccessor()));
+export function useItemPreview(item: Accessor<ItemEntity>) {
+  const query = useQuery(() => previewQueryOptions(item()));
 
   const preview = createMemo(() => {
     const data = query.data;
@@ -29,8 +27,8 @@ export function useItemPreview(item: Accessor<ItemEntity> | ItemEntity) {
     if (!data) {
       return {
         loading: true,
-        id: itemAccessor().id,
-        type: itemAccessor().type ?? DEFAULT_ITEM_TYPE,
+        id: item().id,
+        type: item().type ?? DEFAULT_ITEM_TYPE,
       } as PreviewItem;
     }
     return defaultNameTransform(data);

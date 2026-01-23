@@ -30,7 +30,7 @@ export const DefaultUserNameResolver: UserNameResolver = async (id: string) => {
 };
 
 const getPreview = async (id: string, type: EntityType) => {
-  const [preview] = useItemPreview({ id, type: type as ItemType });
+  const [preview] = useItemPreview(() => ({ id, type: type as ItemType }));
   await raceTimeout(
     until(() => preview() && !preview()!.loading),
     RESOLVER_TIMEOUT

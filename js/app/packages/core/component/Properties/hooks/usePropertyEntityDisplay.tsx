@@ -77,10 +77,10 @@ export function usePropertyEntityDisplay(
     const eType = entityType();
     const pType = previewType();
     if (isPreviewable(eType)) {
-      return useItemPreview({
+      return useItemPreview(() => ({
         id: entityId(),
         type: pType,
-      })[0];
+      }))[0];
     }
   };
   const preview = createMemo(() => previewWrapper()?.());
