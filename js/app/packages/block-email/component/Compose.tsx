@@ -66,6 +66,7 @@ import {
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
 import { useMaybeEmailContext } from '@block-email/component/EmailContext';
 import { decodeBase64Utf8 } from '@block-email/util/decodeBase64';
+import { stickyGate } from '@core/util/debounce';
 
 const DRAFT_DEBOUNCE_MS = 1000;
 
@@ -631,6 +632,15 @@ export function EmailCompose(props: EmailComposeProps) {
     return fromDraft ?? destinationOptions();
   };
 
+  const isDraftSaving = () => saveDraftMutation.isPending;
+
+  // Used to keep displaying draft status for some time
+  const debouncedIsDraftSaving = stickyGate(isDraftSaving, 2000);
+
+  // Used to keep displaying spinner for a short time before switching
+  // to saved state
+  const laggedIsDraftSaving = stickyGate(isDraftSaving, 250);
+
   return (
     <>
       <SplitHeaderLeft>
@@ -715,6 +725,17 @@ export function EmailCompose(props: EmailComposeProps) {
                     </Show>
                   </Suspense>
                   <div class="flex gap-2 ml-auto">
+                    <Show when={debouncedIsDraftSaving()}>
+                      <div class="flex gap-1 items-center text-sm text-ink-muted">
+                        <Show
+                          when={laggedIsDraftSaving()}
+                          fallback={<span>Draft saved</span>}
+                        >
+                          <CircleSpinner class="size-4 animate-spin" />
+                          <span>Saving draft</span>
+                        </Show>
+                      </div>
+                    </Show>
                     <Show when={!showCc()}>
                       <button
                         type="button"
