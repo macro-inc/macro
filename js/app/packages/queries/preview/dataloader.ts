@@ -20,6 +20,13 @@ class PreviewDataLoader {
     {
       wait: 30,
       maxSize: 50,
+      asyncRetryerOptions: {
+        maxAttempts: 3,
+        backoff: 'exponential',
+        baseWait: 200,
+        jitter: 0.1,
+        throwOnError: 'last',
+      },
       onSuccess: (results: Map<string, PreviewItem>, batch) => {
         for (const item of batch) {
           const key = this.getCacheKey(item);
