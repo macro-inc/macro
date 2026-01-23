@@ -1,4 +1,4 @@
-//! Database operations for the IdMapping table.
+//! Database operations for the id_mapping table.
 //!
 //! Provides a simple key-value store for mapping source IDs to target IDs.
 //! Used for persisting associations like tool_id -> document_id.
@@ -16,10 +16,10 @@ pub async fn create_id_mapping(
 ) -> Result<()> {
     sqlx::query!(
         r#"
-        INSERT INTO "IdMapping" ("sourceId", "targetId")
+        INSERT INTO id_mapping (source_id, target_id)
         VALUES ($1, $2)
-        ON CONFLICT ("sourceId")
-        DO UPDATE SET "targetId" = EXCLUDED."targetId"
+        ON CONFLICT (source_id)
+        DO UPDATE SET target_id = EXCLUDED.target_id
         "#,
         source_id,
         target_id
@@ -35,9 +35,9 @@ pub async fn create_id_mapping(
 pub async fn get_id_mapping(db: &Pool<Postgres>, source_id: &str) -> Result<Option<String>> {
     let result = sqlx::query!(
         r#"
-        SELECT "targetId" as "target_id"
-        FROM "IdMapping"
-        WHERE "sourceId" = $1
+        SELECT target_id
+        FROM id_mapping
+        WHERE source_id = $1
         "#,
         source_id
     )

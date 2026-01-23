@@ -1,11 +1,11 @@
 //! Handler for retrieving ID mappings.
 
+use crate::service::id_mapping::get_id_mapping;
 use axum::{
     Json,
     extract::{Path, State},
     http::StatusCode,
 };
-use macro_db_client::dcs::id_mapping::get_id_mapping;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 

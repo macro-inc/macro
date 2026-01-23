@@ -1,9 +1,6 @@
 // Document Cognition Service (DCS) database queries
 // These queries were migrated from document_cognition_service/src/service/db/
 
-// ID mapping queries
-pub mod id_mapping;
-
 // Chat queries
 pub mod append_attachment_to_chat;
 pub mod copy_messages;
