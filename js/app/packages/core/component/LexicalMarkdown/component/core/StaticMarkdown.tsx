@@ -15,6 +15,7 @@ import {
   type ContactMentionNode,
   type DateMentionNode,
   DEFAULT_LANGUAGE,
+  type DocumentCardNode,
   type DocumentMentionNode,
   type EquationNode,
   type GroupMentionNode,
@@ -62,6 +63,7 @@ import { forceSingleLine, setEditorStateFromMarkdown } from '../../utils';
 import { StaticCodeBoxAccessory } from '../accessory/CodeBoxAccessory';
 import { ContactMention as ContactMentionDecorator } from '../decorator/ContactMention';
 import { DateMention as DateMentionDecorator } from '../decorator/DateMention';
+import { DocumentCard as DocumentCardDecorator } from '../decorator/DocumentCard';
 import { DocumentMention as DocumentMentionDecorator } from '../decorator/DocumentMention';
 import { GroupMention as GroupMentionDecorator } from '../decorator/GroupMention';
 import { Equation as EquationDecorator } from '../decorator/Equation';
@@ -535,6 +537,17 @@ const Equation: RenderableEntity<EquationNode> = {
   ),
 };
 
+const DocumentCard: RenderableEntity<DocumentCardNode> = {
+  guard: (node: LexicalNode): node is DocumentCardNode =>
+    node.__type === 'document-card',
+  render: (props) =>
+    DocumentCardDecorator({
+      ...props.node.exportComponentProps(),
+      key: props.node.getKey(),
+      theme: props.theme,
+    }),
+};
+
 // Table rendering components for Lexical tables
 const Table: RenderableElement<TableNode> = {
   guard: (node: LexicalNode): node is TableNode => node.__type === 'table',
@@ -610,6 +623,7 @@ const InlineEntities: Array<RenderableEntity> = [
   LineBreak,
   UserMention,
   DocumentMention,
+  DocumentCard,
   ContactMention,
   DateMention,
   GroupMention,

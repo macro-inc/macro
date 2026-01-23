@@ -16,7 +16,12 @@ import { useTaskMode } from '@block-channel/utils/useTaskMode';
 import { isInBlock } from '@core/block';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
-import { setEditorStateFromMarkdown } from '@core/component/LexicalMarkdown/utils';
+import {
+  $isSingleDocumentMention,
+  pendingEditorState,
+  editorStateAsMarkdown,
+  setEditorStateFromMarkdown,
+} from '@core/component/LexicalMarkdown/utils';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -36,6 +41,8 @@ import PlusIcon from '@icon/regular/plus.svg';
 import FormatIcon from '@icon/regular/text-aa.svg';
 import Trash from '@icon/regular/trash.svg';
 import XIcon from '@icon/regular/x.svg';
+import { $convertMentionToCard, $isDocumentMentionNode } from '@lexical-core';
+import { $getRoot, $isParagraphNode } from 'lexical';
 import { logger } from '@observability';
 import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
 import { staticFileClient } from '@service-static-files/client';
@@ -361,7 +368,28 @@ export function BaseInput(props: BaseInputProps) {
   async function handleSend() {
     if (isPendingSend()) return false;
     setIsPendingSend(true);
-    let content = markdownState();
+
+    // Check if the editor contains only a single document mention and convert to card
+    if ($isSingleDocumentMention()) {
+      const root = $getRoot();
+      const rootChildren = root.getChildren();
+      if (rootChildren.length > 0) {
+        const firstChild = rootChildren[0];
+        if ($isParagraphNode(firstChild)) {
+          const paragraphChildren = firstChild.getChildren();
+          if (paragraphChildren.length > 0) {
+            const mention = paragraphChildren[0];
+            console.log({ mention });
+            if ($isDocumentMentionNode(mention)) {
+              $convertMentionToCard(mention);
+            }
+          }
+        }
+      }
+    }
+
+    const state = await pendingEditorState(editor);
+    let content = editorStateAsMarkdown(state);
     const originalContent = content;
 
     if (taskModeEnabled() && potentialTasks().length > 0) {
