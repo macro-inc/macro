@@ -347,11 +347,6 @@ export function getHistoryItems(): HistoryItem[] {
 }
 
 /**
- * Alias for refetchHistory for backward compatibility.
- */
-export const invalidateHistory = refetchHistory;
-
-/**
  * Inserts a project and its nested items into history.
  * Recursively fetches project content and adds all items to history.
  */

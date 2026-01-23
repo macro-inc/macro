@@ -52,7 +52,7 @@ import {
   cognitionWebsocketServiceClient,
 } from '@service-cognition/client';
 import { createCognitionWebsocketEffect } from '@service-cognition/websocket';
-import { invalidateHistory, useHistoryQuery } from '@queries/history/history';
+import { refetchHistory, useHistoryQuery } from '@queries/history/history';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
 import type { LexicalEditor } from 'lexical';
 import {
@@ -553,9 +553,9 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
       // TODO: move this into a separate resource so we don't have to refetch history
       // refetch history immediately to have the new chat id
       // then rename again when the server provides a default name
-      invalidateHistory();
+      refetchHistory();
       waitChatRename(newChatId).then((_name) => {
-        invalidateHistory();
+        refetchHistory();
       });
       return await onSend(response);
     } else if (request.type === 'send') {
