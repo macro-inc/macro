@@ -1,3 +1,4 @@
+import ArrowUp from '@icon/bold/arrow-up-bold.svg';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import Trash from '@icon/regular/trash.svg';
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
@@ -12,7 +13,6 @@ import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { handleFileFolderDrop } from '@core/util/upload';
 import TextAa from '@icon/regular/text-aa.svg';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
-import ArrowFatLineUp from '@phosphor-icons/core/fill/arrow-fat-line-up-fill.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import { useUserId } from '@core/context/user';
 import { defaultSelectionData } from 'core/component/LexicalMarkdown/plugins';
@@ -321,26 +321,23 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
             </Button>
           </Show>
         </div>
-        <button
-          type="button"
+
+        <Button
           disabled={props.isSubmitting || props.disabled}
           onClick={() => {
             handleSend();
           }}
-          class="text-ink-muted focus:scale-110 hover:scale-110 transition ease-in-out delay-150 flex gap-2 justify-center items-center hover:bg-hover py-1 px-2 text-sm"
+          class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent disabled:opacity-30"
         >
           <Show
             when={!props.isSubmitting}
-            fallback={<Spinner class="w-5 h-5 animate-spin cursor-disabled" />}
+            fallback={<Spinner class="size-6 animate-spin cursor-disabled" />}
           >
-            <span class="font-medium font-mono uppercase">Send</span>
-            <ArrowFatLineUp
-              width={20}
-              height={20}
-              class="text-accent-ink fill-accent rotate-90"
-            />
+            <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
+              <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
+            </div>
           </Show>
-        </button>
+        </Button>
       </div>
     </div>
   );
