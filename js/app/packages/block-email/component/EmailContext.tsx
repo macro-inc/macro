@@ -1,6 +1,7 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { URL_PARAMS } from '@block-email/constants';
+import { convertContactInfoToEmailRecipient } from '@block-email/util/recipientConversion';
 import {
   getPermissions,
   hasPermissions,
@@ -276,11 +277,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
       });
 
       for (const value of seen.values()) {
-        const mapped = recipientEntityMapper('contact')({
-          ...value,
-          type: 'extracted',
-          id: value.email,
-        });
+        const mapped = convertContactInfoToEmailRecipient(value);
         optionsMap.set(mapped.data.email, mapped);
       }
     }
