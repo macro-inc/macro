@@ -17,10 +17,7 @@ function extractDomain(url: string) {
 }
 
 const [badLinks, setBadLinks] = createStore<Record<string, true>>({});
-
-export type UnfurlLinkProps = {
-  unfurled: GetUnfurlResponse;
-};
+export type UnfurlLinkProps = { unfurled: GetUnfurlResponse };
 
 export function UnfurlLink(props: UnfurlLinkProps) {
   const domain = extractDomain(props.unfurled.url);
