@@ -21,7 +21,7 @@ import {
   insertProjectIntoHistory,
   postNewHistoryItem,
 } from '@queries/history/history';
-import { Match, Switch } from 'solid-js';
+import { Match, Switch, Suspense } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
 import { DeprecatedTextButton } from './DeprecatedTextButton';
@@ -197,6 +197,14 @@ function InlineLoading() {
 }
 
 export function ItemPreview(props: ItemPreviewProps) {
+  return (
+    <Suspense>
+      <ItemPreviewInner {...props} />
+    </Suspense>
+  );
+}
+
+function ItemPreviewInner(props: ItemPreviewProps) {
   const { item, name, onPreviewClick, className, channelTypeIcon } =
     useItemPreviewData(props);
 

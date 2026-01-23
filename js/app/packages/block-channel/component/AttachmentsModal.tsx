@@ -22,7 +22,7 @@ import { commsServiceClient } from '@service-comms/client';
 import type { MessageMention } from '@service-comms/generated/models';
 import type { Attachment } from '@service-comms/generated/models/attachment';
 import type { ItemType } from '@service-storage/client';
-import { createMemo, createResource, Show } from 'solid-js';
+import { createMemo, createResource, Show, Suspense } from 'solid-js';
 import { VList } from 'virtua/solid';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
 
@@ -105,10 +105,12 @@ export function AttachmentsModal() {
               <div class="flex flex-col h-full">
                 <VList data={attachments()}>
                   {(attachment) => (
-                    <AttachmentItem
-                      attachment={attachment}
-                      onNavigate={navigateToItem}
-                    />
+                    <Suspense>
+                      <AttachmentItem
+                        attachment={attachment}
+                        onNavigate={navigateToItem}
+                      />
+                    </Suspense>
                   )}
                 </VList>
               </div>

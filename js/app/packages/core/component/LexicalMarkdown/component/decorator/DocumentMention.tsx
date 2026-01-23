@@ -52,6 +52,7 @@ import {
   createSignal,
   Match,
   Show,
+  Suspense,
   Switch,
   useContext,
 } from 'solid-js';
@@ -201,6 +202,14 @@ function InlinePreview(props: {
 }
 
 export function DocumentMention(props: DocumentMentionDecoratorProps) {
+  return (
+    <Suspense>
+      <DocumentMentionInner {...props} />
+    </Suspense>
+  );
+}
+
+export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
   const currentBlockId = useMaybeBlockId();
   const currentBlockName = useMaybeBlockName();
 
