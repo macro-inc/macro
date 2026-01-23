@@ -26,27 +26,12 @@ export type ItemPreviewFetcher = [
   },
 ];
 
-export function useItemPreview(
-  item: Accessor<ItemEntity> | ItemEntity,
-  queryClientOverride?: Accessor<QueryClient>
-): ItemPreviewFetcher {
+export function useItemPreview(item: Accessor<ItemEntity> | ItemEntity) {
   const itemAccessor = typeof item === 'function' ? item : () => item;
 
-  const query = createQuery(
-    () => ({
-      ...previewQueryOptions(itemAccessor()),
-      initialData: () => {
-        const cached = queryClient.getQueryData<PreviewItem>(
-          previewKeys.item(itemAccessor().id, itemAccessor().type).queryKey
-        );
-        return cached;
-      },
-      placeholderData: (prev) => prev,
-    }),
-    queryClientOverride
-  );
+  const query = useQuery(() => previewQueryOptions(itemAccessor()));
 
-  const preview = () => {
+  const preview = createMemo(() => {
     const data = query.data;
     if (!data) {
       return {

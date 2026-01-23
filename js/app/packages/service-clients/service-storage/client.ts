@@ -132,6 +132,8 @@ type SuccessResponse = { data: Success };
 
 export type ItemType = CloudStorageItemType | 'channel' | 'email';
 
+export const DEFAULT_ITEM_TYPE: ItemType = 'document';
+
 const itemTypeSet = new Set([
   'document',
   'channel',
@@ -185,7 +187,7 @@ const mapPreviewDocumentName = (preview: DocumentPreview): DocumentPreview => {
 
 export function blockNameToItemType(
   blockName: BlockName | BlockAlias
-): ItemType | undefined {
+): ItemType {
   switch (blockName) {
     case 'chat':
       return 'chat';
@@ -196,7 +198,7 @@ export function blockNameToItemType(
     case 'email':
       return 'email';
     default:
-      return 'document';
+      return DEFAULT_ITEM_TYPE;
   }
 }
 
