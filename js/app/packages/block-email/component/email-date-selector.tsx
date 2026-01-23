@@ -18,7 +18,6 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
       selectedDate={props.sendTime}
       onSelectDate={props.onSendTimeChange}
       disablePriorToDate={new Date()}
-      withTime
       trigger={(state) => {
         const formattedDate = () => {
           if (!state.selectedDate) return;
