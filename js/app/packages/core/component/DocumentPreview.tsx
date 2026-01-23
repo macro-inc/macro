@@ -51,15 +51,12 @@ import { useNavigate } from '@solidjs/router';
 import { globalSplitManager } from 'app/signal/splitLayout';
 import type { Component, ComponentProps, JSX } from 'solid-js';
 import { type Accessor, Match, Show, Switch } from 'solid-js';
-import { Dynamic, Portal } from 'solid-js/web';
+import { Dynamic } from 'solid-js/web';
 import { formatDate } from '../util/date';
 import NotFound from './AccessErrorViews/NotFound';
 import Unauthorized from './AccessErrorViews/Unauthorized';
 import { EntityIcon } from './EntityIcon';
-import { floatWithElement } from './LexicalMarkdown/directive/floatWithElement';
 import { Tooltip } from './Tooltip';
-
-false && floatWithElement;
 
 const CustomEmbedIcon: Component<ComponentProps<'svg'>> = (props) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" {...props}>
@@ -609,95 +606,91 @@ export function PopupPreview(props: {
   };
 
   return (
-    <Portal>
-      <div
-        class="absolute select-none overflow-hidden z-toast-region w-80 bg-dialog text-ink"
-        use:floatWithElement={{ element: () => props.floatRef }}
-        onMouseEnter={props.mouseEnter}
-        onMouseLeave={props.mouseLeave}
-      >
-        <ClippedPanel tl={!beveledCorners()} active>
-          <div class="p-3">
-            <Switch>
-              {/* Loading state */}
-              <Match when={props.item().loading}>
-                <Loading />
-              </Match>
+    <div
+      class="select-none overflow-hidden w-80 bg-dialog text-ink"
+      onMouseEnter={props.mouseEnter}
+      onMouseLeave={props.mouseLeave}
+    >
+      <ClippedPanel tl={!beveledCorners()} active>
+        <div class="p-3">
+          <Switch>
+            {/* Loading state */}
+            <Match when={props.item().loading}>
+              <Loading />
+            </Match>
 
-              {/* Accessible preview */}
-              <Match when={matches(props.item(), isAccessiblePreviewItem)}>
-                {(accessibleItem) => {
-                  const { type, fileType, subType } = accessibleItem();
-                  return (
-                    <div class="w-full h-full flex-col">
-                      {/* Header with icon and actions */}
-                      <div class="flex w-full mb-2">
-                        <div class="w-full size-10">
-                          <Show
-                            when={type === 'channel'}
-                            fallback={
-                              <EntityIcon
-                                targetType={
-                                  type === 'document'
-                                    ? (subType?.type ?? fileType)
-                                    : type
-                                }
-                                size="md"
-                              />
-                            }
-                          >
+            {/* Accessible preview */}
+            <Match when={matches(props.item(), isAccessiblePreviewItem)}>
+              {(accessibleItem) => {
+                const { type, fileType, subType } = accessibleItem();
+                return (
+                  <div class="w-full h-full flex-col">
+                    {/* Header with icon and actions */}
+                    <div class="flex w-full mb-2">
+                      <div class="w-full size-10">
+                        <Show
+                          when={type === 'channel'}
+                          fallback={
                             <EntityIcon
-                              size="md"
                               targetType={
-                                accessibleItem().channelType ===
-                                'direct_message'
-                                  ? 'directMessage'
-                                  : accessibleItem().channelType ===
-                                      'organization'
-                                    ? 'company'
-                                    : 'channel'
+                                type === 'document'
+                                  ? (subType?.type ?? fileType)
+                                  : type
                               }
+                              size="md"
                             />
-                          </Show>
-                        </div>
-                        <div class="flex w-fit h-full justify-right">
-                          {renderActionButtons()}
-                        </div>
+                          }
+                        >
+                          <EntityIcon
+                            size="md"
+                            targetType={
+                              accessibleItem().channelType === 'direct_message'
+                                ? 'directMessage'
+                                : accessibleItem().channelType ===
+                                    'organization'
+                                  ? 'company'
+                                  : 'channel'
+                            }
+                          />
+                        </Show>
                       </div>
-
-                      {/* Document metadata */}
-                      {renderDocumentMetadata(accessibleItem())}
+                      <div class="flex w-fit h-full justify-right">
+                        {renderActionButtons()}
+                      </div>
                     </div>
-                  );
-                }}
-              </Match>
 
-              {/* No access error */}
-              <Match
-                when={
-                  (props.item() as PreviewItemNoAccess).access === 'no_access'
-                }
-              >
-                <div class="text-sm p-4">
-                  <Unauthorized />
-                </div>
-              </Match>
+                    {/* Document metadata */}
+                    {renderDocumentMetadata(accessibleItem())}
+                  </div>
+                );
+              }}
+            </Match>
 
-              {/* Does not exist error */}
-              <Match
-                when={
-                  (props.item() as PreviewItemNoAccess).access ===
-                  'does_not_exist'
-                }
-              >
-                <div class="text-sm p-4">
-                  <NotFound />
-                </div>
-              </Match>
-            </Switch>
-          </div>
-        </ClippedPanel>
-      </div>
-    </Portal>
+            {/* No access error */}
+            <Match
+              when={
+                (props.item() as PreviewItemNoAccess).access === 'no_access'
+              }
+            >
+              <div class="text-sm p-4">
+                <Unauthorized />
+              </div>
+            </Match>
+
+            {/* Does not exist error */}
+            <Match
+              when={
+                (props.item() as PreviewItemNoAccess).access ===
+                'does_not_exist'
+              }
+            >
+              <div class="text-sm p-4">
+                <NotFound />
+              </div>
+            </Match>
+          </Switch>
+        </div>
+      </ClippedPanel>
+    </div>
   );
 }

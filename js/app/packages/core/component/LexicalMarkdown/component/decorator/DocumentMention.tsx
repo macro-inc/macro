@@ -38,7 +38,6 @@ import {
 } from '@lexical-core';
 import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
-import { debounce } from '@solid-primitives/scheduled';
 import {
   $getNodeByKey,
   COMMAND_PRIORITY_NORMAL,
@@ -55,13 +54,11 @@ import {
   Switch,
   useContext,
 } from 'solid-js';
+import { HoverCard } from '@kobalte/core/hover-card';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
-import { floatWithElement } from '../../directive/floatWithElement';
 import { autoRegister, UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';
 import { openDocument } from '../core/BlockLink';
 import { MentionTooltip } from './MentionTooltip';
-
-false && floatWithElement;
 
 function MentionContainer(props: {
   icon: JSX.Element;
@@ -239,9 +236,6 @@ export function DocumentMention(props: DocumentMentionDecoratorProps) {
     params: props.blockParams,
   });
 
-  const [popupOpen, setPopupOpen] = createSignal(false);
-  const debouncedSetPreviewOpen = debounce(setPopupOpen, 100);
-
   const isSelectedAsNode = createMemo(() => {
     const sel = selection();
     if (!sel) return false;
@@ -326,9 +320,10 @@ export function DocumentMention(props: DocumentMentionDecoratorProps) {
   });
 
   return (
-    <>
+    <HoverCard openDelay={100} closeDelay={150} gutter={8}>
       <span class="relative">
-        <span
+        <HoverCard.Trigger
+          as="span"
           class="w-full h-full py-0.5 cursor-default rounded-xs hover:bg-hover focus:bg-active"
           classList={{
             'bg-active text-ink bracket bracket-offset-2': isSelectedAsNode(),
@@ -337,23 +332,12 @@ export function DocumentMention(props: DocumentMentionDecoratorProps) {
             'user-select': 'inherit',
           }}
           ref={inlinePreviewRef}
-          onMouseEnter={() => {
-            if (!isTouchDevice()) {
-              debouncedSetPreviewOpen(true);
-            }
-          }}
-          onMouseLeave={() => {
-            if (!isTouchDevice()) {
-              debouncedSetPreviewOpen.clear();
-              debouncedSetPreviewOpen(false);
-            }
-          }}
-          ontouchstart={(e) => {
+          ontouchstart={(e: TouchEvent) => {
             if (isTouchDevice()) {
               e.preventDefault();
             }
           }}
-          ontouchend={(e) => {
+          ontouchend={(e: TouchEvent) => {
             if (isTouchDevice()) {
               e.preventDefault();
               if (matches(item(), (i) => !i.loading && i.access === 'access')) {
@@ -377,49 +361,46 @@ export function DocumentMention(props: DocumentMentionDecoratorProps) {
               />
             </Match>
           </Switch>
-        </span>
+        </HoverCard.Trigger>
         <MentionTooltip show={isSelectedAsNode()} text="Open" />
       </span>
 
-      <Show when={popupOpen()}>
-        <PopupPreview
-          item={item}
-          floatRef={inlinePreviewRef}
-          mouseEnter={() => {
-            debouncedSetPreviewOpen(true);
-          }}
-          mouseLeave={() => {
-            debouncedSetPreviewOpen.clear();
-            debouncedSetPreviewOpen(false);
-          }}
-          delete={editor?.isEditable() ? deleteMention : undefined}
-          collapseInfo={{
-            isCollapsed: isCollapsed(),
-            isCollapsable: isCollapsable(),
-            handleCollapse: () => {
-              const state = !isCollapsed();
-              setIsCollapsed(state);
-              editor?.update(() => {
-                const node = $getNodeByKey(props.key);
-                if ($isDocumentMentionNode(node)) {
-                  node.setCollapsed(state);
-                }
-              });
-            },
-          }}
-          documentInfo={{
-            id: props.documentId,
-            type: verifyBlockName(props.blockName),
-            params: props.blockParams ?? {},
-            isOpenable: currentBlockId !== props.documentId,
-          }}
-          previewInfo={{
-            isPreviewable: isEmbeddable(),
-            showPreview: showEmbedOption(),
-            handlePreviewToggle: convertToCard,
-          }}
-        />
-      </Show>
-    </>
+      <HoverCard.Portal>
+        <HoverCard.Content class="z-toast-region">
+          <PopupPreview
+            item={item}
+            floatRef={inlinePreviewRef}
+            mouseEnter={() => {}}
+            mouseLeave={() => {}}
+            delete={editor?.isEditable() ? deleteMention : undefined}
+            collapseInfo={{
+              isCollapsed: isCollapsed(),
+              isCollapsable: isCollapsable(),
+              handleCollapse: () => {
+                const state = !isCollapsed();
+                setIsCollapsed(state);
+                editor?.update(() => {
+                  const node = $getNodeByKey(props.key);
+                  if ($isDocumentMentionNode(node)) {
+                    node.setCollapsed(state);
+                  }
+                });
+              },
+            }}
+            documentInfo={{
+              id: props.documentId,
+              type: verifyBlockName(props.blockName),
+              params: props.blockParams ?? {},
+              isOpenable: currentBlockId !== props.documentId,
+            }}
+            previewInfo={{
+              isPreviewable: isEmbeddable(),
+              showPreview: showEmbedOption(),
+              handlePreviewToggle: convertToCard,
+            }}
+          />
+        </HoverCard.Content>
+      </HoverCard.Portal>
+    </HoverCard>
   );
 }
