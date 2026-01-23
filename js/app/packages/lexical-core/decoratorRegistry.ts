@@ -23,6 +23,7 @@ import type {
   EquationDecoratorProps,
   EquationNode,
 } from './nodes/EquationNode';
+import type { FoldDecoratorProps, FoldNode } from './nodes/FoldNode';
 import type {
   GroupMentionDecoratorProps,
   GroupMentionNode,
@@ -86,6 +87,10 @@ export interface NodeDecoratorMap {
   EquationNode: {
     klass: typeof EquationNode;
     props: EquationDecoratorProps;
+  };
+  FoldNode: {
+    klass: typeof FoldNode;
+    props: FoldDecoratorProps;
   };
   ImageNode: {
     klass: typeof ImageNode;
