@@ -84,7 +84,10 @@ import {
   untrack,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { deleteEmailDraft, saveEmailDraft } from '../signal/emailDraft';
+import {
+  useDeleteDraftMutation,
+  useSaveDraftMutation,
+} from '@queries/email/draft';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
 import { getFirstName } from '../util/name';
 import {
@@ -385,6 +388,8 @@ export function BaseInput(props: {
   });
 
   const uploadAttachmentMutation = useUploadDraftAttachmentsMutation();
+  const saveDraftMutation = useSaveDraftMutation();
+  const deleteDraftMutation = useDeleteDraftMutation();
 
   function refetchThreadMessages() {
     ctx.query.refetch();
@@ -468,7 +473,7 @@ export function BaseInput(props: {
     if (!draftToSave) {
       const draftId = savedDraftId();
       if (draftId) {
-        await deleteEmailDraft(draftId);
+        await deleteDraftMutation.mutateAsync({ draftId });
         refetchThreadMessages();
       }
       setSavedDraftId(undefined);
@@ -520,18 +525,19 @@ export function BaseInput(props: {
       ? form().sendTime()?.toISOString()
       : undefined;
 
-    const draftResponse = await saveEmailDraft(
-      {
+    const draftResponse = await saveDraftMutation.mutateAsync({
+      draft: {
         ...draftToSave,
         db_id: savedDraftId(),
         link_id: linkId!,
         provider_thread_id: currentThread?.provider_id,
         thread_db_id: currentThread?.db_id,
       },
-      sendTime
-    );
+      sendTime,
+    });
 
-    if (draftResponse) {
+    const draftId = draftResponse.draft.db_id;
+    if (draftId) {
       // If the email draft saved successfully, we want to upload the
       // attachments as well. We should grab only the attachments that
       // haven't been uploaded yet
@@ -544,7 +550,7 @@ export function BaseInput(props: {
 
       if (attachments.length) {
         const uploaded = await uploadAttachmentMutation.mutateAsync({
-          draftID: draftResponse,
+          draftID: draftId,
           attachments: attachments.map((a) => a.file),
         });
 
@@ -557,9 +563,9 @@ export function BaseInput(props: {
         }
       }
 
-      setSavedDraftId(draftResponse);
+      setSavedDraftId(draftId);
       refetchThreadMessages();
-      return draftResponse;
+      return draftId;
     }
   }
 
@@ -774,7 +780,7 @@ export function BaseInput(props: {
   const deleteDraftAndReset = async () => {
     const draftId = savedDraftId();
     if (draftId) {
-      await deleteEmailDraft(draftId);
+      await deleteDraftMutation.mutateAsync({ draftId });
       refetchThreadMessages();
     }
     resetState();
