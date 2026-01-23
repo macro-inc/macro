@@ -14,5 +14,5 @@ downloads the actual attachment data from Gmail, and uploads it to SFS.
 - `FUSIONAUTH_API_KEY`: The API key for authenticating with FusionAuth.
 - `FUSIONAUTH_BASE_URL`: The base URL for the FusionAuth service.
 - `FUSIONAUTH_IDENTITY_PROVIDER_ID`: The identity provider ID for FusionAuth.
-- `GMAIL_CLIENT_ID`: The client ID for Gmail OAuth.
+- `GMAIL_CLIENT_ID`: The client ID for Gmail OAuth!
 - `GMAIL_CLIENT_SECRET`: The client secret for Gmail OAuth.
