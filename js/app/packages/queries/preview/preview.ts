@@ -1,6 +1,6 @@
 import { DEFAULT_ITEM_TYPE } from '@service-storage/client';
 import { useQuery } from '@tanstack/solid-query';
-import type { Accessor } from 'solid-js';
+import type { Accessor, Setter } from 'solid-js';
 import { createMemo } from 'solid-js';
 import { queryClient } from '../client';
 import { previewDataLoader } from './dataloader';
@@ -41,4 +41,12 @@ export function invalidatePreview(itemId?: string) {
   return queryClient.invalidateQueries({
     queryKey: previewKeys.item(itemId).queryKey,
   });
+}
+
+/** Directly update preview data in the cache without refetching */
+export function setPreviewData(itemId: string, updater: Setter<PreviewItem>) {
+  return queryClient.setQueryData<PreviewItem>(
+    previewKeys.item(itemId).queryKey,
+    updater
+  );
 }
