@@ -1,4 +1,4 @@
-import { DEFAULT_ITEM_TYPE, type ItemType } from '@service-storage/client';
+import { DEFAULT_ITEM_TYPE } from '@service-storage/client';
 import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { createMemo } from 'solid-js';
@@ -12,7 +12,7 @@ const DEFAULT_CACHE_TIME_SECONDS = 60 * 10;
 
 function previewQueryOptions(item: ItemEntity) {
   return {
-    queryKey: previewKeys.item(item.id, item.type).queryKey,
+    queryKey: previewKeys.item(item.id).queryKey,
     queryFn: () => previewDataLoader.load(item),
     staleTime: DEFAULT_CACHE_TIME_SECONDS * 1000,
     gcTime: DEFAULT_CACHE_TIME_SECONDS * 1000 * 2,
@@ -43,7 +43,7 @@ export function useItemPreview(item: Accessor<ItemEntity> | ItemEntity) {
 
   const mutate = (value: PreviewItem) => {
     queryClient.setQueryData(
-      previewKeys.item(itemAccessor().id, itemAccessor().type).queryKey,
+      previewKeys.item(itemAccessor().id).queryKey,
       value
     );
   };
@@ -51,18 +51,14 @@ export function useItemPreview(item: Accessor<ItemEntity> | ItemEntity) {
   return [preview, { refetch, mutate }] as const;
 }
 
-export function invalidatePreview(itemId: string, itemType?: ItemType) {
+export function invalidatePreview(itemId: string) {
   return queryClient.invalidateQueries({
-    queryKey: previewKeys.item(itemId, itemType).queryKey,
+    queryKey: previewKeys.item(itemId).queryKey,
   });
 }
 
-export function setPreviewData(
-  itemId: string,
-  itemType: ItemType | undefined,
-  data: PreviewItem
-) {
-  queryClient.setQueryData(previewKeys.item(itemId, itemType).queryKey, data);
+export function setPreviewData(itemId: string, data: PreviewItem) {
+  queryClient.setQueryData(previewKeys.item(itemId).queryKey, data);
 }
 
 export async function fetchAndCachePreview(
