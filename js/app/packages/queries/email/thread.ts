@@ -317,11 +317,11 @@ export function useSendMessageMutation(
       ),
     ...withCallbacks<SendMessageResponse, Error, SendMessageParams>(
       {
-        onSuccess: (_data, params) => {
-          if (params.message.thread_db_id) {
+        onSuccess: (data) => {
+          const threadID = data.message.thread_db_id;
+          if (threadID) {
             queryClient.invalidateQueries({
-              queryKey: emailKeys.threadMessages(params.message.thread_db_id)
-                .queryKey,
+              queryKey: emailKeys.threadMessages(threadID).queryKey,
             });
           }
           queryClient.invalidateQueries({
