@@ -43,13 +43,11 @@ export function LinkWithPreview(props: LinkWithPreviewProps) {
       <Show when={previewOpen()}>
         <ScopedPortal>
           <div
-            class="absolute top-full bg-ink left-0 z-10 -mt-1 shadow-lg max-w-72"
+            class="absolute bg-panel rounded-xs ring ring-edge-muted border-edge left-0 z-10 shadow-lg max-w-72"
             style={{
-              transform: 'translateY(0)',
-              filter: 'drop-shadow(0 0 0 2px #3b82f6)',
-              'clip-path': cornerClip('0.2rem', 0, 0, 0),
+              transform: 'translateY(0)'
             }}
-            use:floatWithElement={{ element: () => linkRef }}
+            use:floatWithElement={{ element: () => linkRef, spacing: 4 }}
           >
             {(() => {
               const data = unfurlData();
@@ -57,9 +55,6 @@ export function LinkWithPreview(props: LinkWithPreviewProps) {
                 return (
                   <UnfurlLink
                     unfurled={data.data}
-                    titleClass="text-panel"
-                    subtitleClass="text-panel/70"
-                    iconClass="text-panel"
                   />
                 );
               }
@@ -69,9 +64,6 @@ export function LinkWithPreview(props: LinkWithPreviewProps) {
                     url: props.url,
                     title: props.title ?? '',
                   }}
-                  titleClass="text-panel"
-                  subtitleClass="text-panel/70"
-                  iconClass="text-panel"
                 />
               );
             })()}

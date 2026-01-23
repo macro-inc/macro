@@ -20,28 +20,18 @@ const [badLinks, setBadLinks] = createStore<Record<string, true>>({});
 
 export type UnfurlLinkProps = {
   unfurled: GetUnfurlResponse;
-  bgClass?: string;
-  hoverClass?: string;
-  titleClass?: string;
-  subtitleClass?: string;
-  iconClass?: string;
 };
 
 export function UnfurlLink(props: UnfurlLinkProps) {
   const domain = extractDomain(props.unfurled.url);
-  const bgClass = () => props.bgClass ?? '';
-  const hoverClass = () => props.hoverClass ?? 'hover:bg-hover';
-  const titleClass = () => props.titleClass ?? 'text-ink';
-  const subtitleClass = () => props.subtitleClass ?? 'text-ink-muted';
-  const iconClass = () => props.iconClass ?? '';
 
   return (
     <div
-      class={`${bgClass()} ${hoverClass()} p-1 px-1.5 overflow-clip text-xs transition-colors hover:transition-none cursor-pointer`}
+      class={`hover:bg-hover p-1 px-1.5 overflow-clip text-xs transition-colors hover:transition-none cursor-pointer`}
       onClick={() => window.open(props.unfurled.url)}
     >
       <div class="flex flex-row items-center gap-1.5 w-full h-full">
-        <div class={`shrink-0 ${iconClass()}`}>
+        <div class={`shrink-0`}>
           <Show
             when={props.unfurled.favicon_url}
             fallback={<LinkIcon class="w-4 h-4" />}
@@ -65,10 +55,10 @@ export function UnfurlLink(props: UnfurlLinkProps) {
           </Show>
         </div>
         <div class="min-w-0">
-          <h1 class={`font-medium truncate ${titleClass()}`}>
+          <h1 class={`font-medium truncate text-ink`}>
             {props.unfurled.title || domain}
           </h1>
-          <h2 class={`font-medium text-[0.625rem] ${subtitleClass()}`}>
+          <h2 class={`font-medium text-xxs text-ink-muted`}>
             {domain}
           </h2>
         </div>
