@@ -252,7 +252,12 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     const optionsMap = new Map<string, EmailRecipient>();
 
     for (const contact of contacts()) {
-      const mapped = recipientEntityMapper('user')(contact);
+      const mapped = recipientEntityMapper('contact')({
+        type: 'extracted',
+        email: contact.email,
+        id: contact.id,
+        name: contact.name,
+      });
       optionsMap.set(mapped.data.email, mapped);
     }
 
