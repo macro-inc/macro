@@ -5,6 +5,7 @@ import {
 import type { SendMessageArgs } from '@block-channel/signal/channel';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
 import {
+  $convertSingleMentionToCard,
   expandGroupParticipants,
   toSimpleMention,
 } from '@block-channel/utils/mentionExpansion';
@@ -369,24 +370,13 @@ export function BaseInput(props: BaseInputProps) {
     if (isPendingSend()) return false;
     setIsPendingSend(true);
 
-    // Check if the editor contains only a single document mention and convert to card
-    if ($isSingleDocumentMention()) {
-      const root = $getRoot();
-      const rootChildren = root.getChildren();
-      if (rootChildren.length > 0) {
-        const firstChild = rootChildren[0];
-        if ($isParagraphNode(firstChild)) {
-          const paragraphChildren = firstChild.getChildren();
-          if (paragraphChildren.length > 0) {
-            const mention = paragraphChildren[0];
-            console.log({ mention });
-            if ($isDocumentMentionNode(mention)) {
-              $convertMentionToCard(mention);
-            }
-          }
-        }
-      }
-    }
+    editor.update(
+      () => {
+        $getRoot().markDirty();
+        $convertSingleMentionToCard();
+      },
+      { discrete: true }
+    );
 
     const state = await pendingEditorState(editor);
     let content = editorStateAsMarkdown(state);
