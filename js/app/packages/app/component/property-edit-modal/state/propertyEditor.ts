@@ -26,7 +26,7 @@ const [state, setState] = createStore<PropertyEditorState>({
 export function openPropertyEditor(
   entities: EntityData[],
   mode: PropertyEditorMode = 'selector',
-  targetProperty?: Property
+  targetProperty?: Property | PropertyDefinitionDomain
 ) {
   if (!entities || entities.length === 0) {
     console.warn('Cannot open property editor without entities');

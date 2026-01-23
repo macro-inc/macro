@@ -1,10 +1,16 @@
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { onCleanup, onMount, type Accessor } from 'solid-js';
 import { openPropertyEditor } from '../state/propertyEditor';
-import type { Property } from '@core/component/Properties/types';
+import type {
+  Property,
+  PropertyDefinitionDomain,
+} from '@core/component/Properties/types';
 import { isTaskEntity, type EntityData } from '@macro-entity';
 import { TOKENS } from '@core/hotkey/tokens';
 import { HotkeyTags } from '@core/hotkey/constants';
+import { useAllProperties } from './useAllProperties';
+import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
+import { propertyDefinitionDomainToProperty } from '@core/component/Properties/utils';
 
 interface PropertyEditorHotkeyOptions {
   scopeId: string;
@@ -14,19 +20,28 @@ interface PropertyEditorHotkeyOptions {
 
 /**
  * Hook that registers hotkeys for the property editor
- * - `opt-i`: Opens property selector
- * - `opt+s`: Direct edit status property
- * - `opt+a`: Direct edit assignee property (if available)
- * - `opt+d`: Direct edit due date property (if available)
- * - `opt+t`: Direct edit tags property (if available)
+ * - `cmd-shift-o`: Opens property selector
+ * - `cmd-shift-s`: Direct edit status property
+ * - `cmd-shift-p`: Direct edit priority property
+ * - `cmd-shift-a`: Direct edit assigness property
  */
 export function usePropertyEditorHotkeys(options: PropertyEditorHotkeyOptions) {
   const { scopeId, getSelectedEntities, enabled = () => true } = options;
+  const allProperties = useAllProperties();
+
+  const propertyById = (propertyId: string) => {
+    return allProperties().find(({ id }) => {
+      return id === propertyId;
+    });
+  };
+  const status = () => propertyById(SYSTEM_PROPERTY_IDS.STATUS);
+  const priority = () => propertyById(SYSTEM_PROPERTY_IDS.PRIORITY);
+  const assignees = () => propertyById(SYSTEM_PROPERTY_IDS.ASSIGNEES);
 
   // Helper to open property editor if entities are selected
   const openIfSelected = (
     mode: 'selector' | 'direct' = 'selector',
-    property?: Property
+    property?: Property | PropertyDefinitionDomain
   ) => {
     if (!enabled()) {
       console.log('[PropertyEditor] Hotkey disabled');
@@ -55,6 +70,54 @@ export function usePropertyEditorHotkeys(options: PropertyEditorHotkeyOptions) {
           openIfSelected('selector');
           return true;
         },
+        scopeId,
+      }),
+      registerHotkey({
+        hotkey: ['shift+cmd+p'],
+        hotkeyToken: TOKENS.entity.action.priority,
+        tags: [HotkeyTags.SelectionModification],
+        displayPriority: 10,
+        description: 'Set priority',
+        keyDownHandler: () => {
+          const property = priority();
+          const entities = getSelectedEntities();
+          if (!entities.every(isTaskEntity) || !property) return true;
+          openIfSelected('direct', property);
+          return true;
+        },
+        condition: () => Boolean(priority()),
+        scopeId,
+      }),
+      registerHotkey({
+        hotkey: ['shift+cmd+a'],
+        hotkeyToken: TOKENS.entity.action.assignee,
+        tags: [HotkeyTags.SelectionModification],
+        displayPriority: 10,
+        description: 'Set assignee',
+        keyDownHandler: () => {
+          const property = assignees();
+          const entities = getSelectedEntities();
+          if (!entities.every(isTaskEntity) || !property) return true;
+          openIfSelected('direct', property);
+          return true;
+        },
+        condition: () => Boolean(assignees()),
+        scopeId,
+      }),
+      registerHotkey({
+        hotkey: ['shift+cmd+s'],
+        hotkeyToken: TOKENS.entity.action.status,
+        tags: [HotkeyTags.SelectionModification],
+        displayPriority: 10,
+        description: 'Set status',
+        keyDownHandler: () => {
+          const property = status();
+          const entities = getSelectedEntities();
+          if (!entities.every(isTaskEntity) || !property) return true;
+          openIfSelected('direct', property);
+          return true;
+        },
+        condition: () => Boolean(status()),
         scopeId,
       })
     );
