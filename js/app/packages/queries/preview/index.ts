@@ -16,7 +16,6 @@ export type {
 } from './types';
 export {
   isAccessiblePreviewItem,
-  isValidPreviewItem,
   isDocumentPreviewItem,
   isLoadingPreviewItem,
 } from './types';
