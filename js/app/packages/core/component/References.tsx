@@ -212,7 +212,7 @@ export function References(props: ReferenceProps) {
               const [userName] = useDisplayName(tryMacroId(userId));
               const [item] = useItemPreview({
                 id: ref.source_entity_id,
-                type: ref.source_entity_type as any,
+                type: ref.source_entity_type as ItemType,
               });
 
               const navHandlers = useSplitNavigationHandler(() =>

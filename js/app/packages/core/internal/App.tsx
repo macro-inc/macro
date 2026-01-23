@@ -15,6 +15,7 @@ import { DropdownMenuContent, MenuItem } from '../component/Menu';
 import { Permissions } from '../component/SharePermissions';
 import { Bar } from '../component/TopBar/Bar';
 import { Center } from '../component/TopBar/Center';
+import type { ItemType } from '@service-storage/client';
 
 const App: Component = () => {
   const Themes = [
@@ -184,10 +185,7 @@ const App: Component = () => {
         <For each={testIds}>
           {(item) => {
             return (
-              <ItemPreview
-                itemId={item.id}
-                itemType={item.type as 'document' | 'chat' | undefined}
-              />
+              <ItemPreview itemId={item.id} itemType={item.type as ItemType} />
             );
           }}
         </For>

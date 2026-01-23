@@ -1,6 +1,7 @@
-import type { ItemType } from '@service-storage/client';
-import { type QueryClient, createQuery } from '@tanstack/solid-query';
+import { DEFAULT_ITEM_TYPE, type ItemType } from '@service-storage/client';
+import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
+import { createMemo } from 'solid-js';
 import { queryClient } from '../client';
 import { previewBatcher } from './batcher';
 import { defaultNameTransform } from './fetchers';
@@ -25,16 +26,17 @@ export function useItemPreview(item: Accessor<ItemEntity> | ItemEntity) {
 
   const preview = createMemo(() => {
     const data = query.data;
+
     if (!data) {
       return {
         loading: true,
         _createdAt: new Date(),
         id: itemAccessor().id,
-        type: itemAccessor().type ?? ('document' as ItemType),
+        type: itemAccessor().type ?? DEFAULT_ITEM_TYPE,
       } as PreviewItem;
     }
     return defaultNameTransform(data);
-  };
+  });
 
   const refetch = () => {
     query.refetch();
