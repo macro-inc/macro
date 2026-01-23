@@ -9,6 +9,7 @@ import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { emailKeys } from './keys';
+import { queryKeys } from '@macro-entity';
 
 type CreateDraftParams = {
   draft: MessageToSend;
@@ -40,6 +41,9 @@ export function useSaveDraftMutation(
         onSuccess() {
           queryClient.invalidateQueries({
             queryKey: emailKeys.previews._def,
+          });
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.all.dss,
           });
         },
       },
@@ -73,6 +77,9 @@ export function useDeleteDraftMutation(
         onSuccess() {
           queryClient.invalidateQueries({
             queryKey: emailKeys.previews._def,
+          });
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.all.dss,
           });
         },
       },

@@ -67,6 +67,8 @@ import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
 import { useMaybeEmailContext } from '@block-email/component/EmailContext';
 import { decodeBase64Utf8 } from '@block-email/util/decodeBase64';
 import { stickyGate } from '@core/util/debounce';
+import { queryClient } from '@queries/client';
+import { queryKeys } from '@macro-entity';
 
 const DRAFT_DEBOUNCE_MS = 1000;
 
@@ -573,6 +575,9 @@ export function EmailCompose(props: EmailComposeProps) {
   const unscheduleMessageMutation = useUnscheduleMessageMutation({
     onSuccess: () => {
       toast.success('Email unscheduled');
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.all.dss,
+      });
     },
     onError: () => {
       toast.failure('Failed to unschedule email');
