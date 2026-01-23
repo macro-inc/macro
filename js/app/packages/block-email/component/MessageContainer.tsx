@@ -303,7 +303,7 @@ export function MessageContainer(props: MessageContainerProps) {
               </div>
             </Show>
           </Message>
-          <Show when={(showReply() || draftChild()) && !props.isLastMessage}>
+          <Show when={showReply() || draftChild()}>
             <Message
               focused={false}
               unfocusable
