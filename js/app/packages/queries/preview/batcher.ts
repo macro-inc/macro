@@ -1,4 +1,4 @@
-import type { ItemType } from '@service-storage/client';
+import { DEFAULT_ITEM_TYPE } from '@service-storage/client';
 import type { ItemEntity, PreviewItem } from './types';
 import { fetchPreviewBatch } from './fetchers';
 
@@ -50,7 +50,7 @@ class PreviewBatcher {
         } else {
           request.resolve({
             id: request.item.id,
-            type: request.item.type ?? ('document' as ItemType),
+            type: request.item.type ?? DEFAULT_ITEM_TYPE,
             loading: false,
             access: 'does_not_exist',
           });
