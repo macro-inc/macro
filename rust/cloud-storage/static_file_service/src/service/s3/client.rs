@@ -100,36 +100,39 @@ impl S3Client {
                         .await
                     {
                         Ok(output) => {
-                            // Check for errors in the response
+                            // Build a map of error keys to their error messages
                             let errors = output.errors();
-                            if !errors.is_empty() {
-                                for error in errors {
-                                    if let Some(key) = error.key() {
-                                        tracing::warn!(
-                                            key = key,
-                                            error = ?error,
-                                            "failed to delete object from S3"
-                                        );
-                                        all_results.push(Err(anyhow::anyhow!(
-                                            "failed to delete {}: {}",
-                                            key,
-                                            error.message().unwrap_or("unknown error")
-                                        )));
-                                    } else {
-                                        all_results.push(Err(anyhow::anyhow!(
-                                            "failed to delete object: {}",
-                                            error.message().unwrap_or("unknown error")
-                                        )));
-                                    }
+                            let error_map: std::collections::HashMap<&str, String> = errors
+                                .iter()
+                                .filter_map(|e| {
+                                    e.key().map(|key| {
+                                        let msg =
+                                            e.message().unwrap_or("unknown error").to_string();
+                                        (key, msg)
+                                    })
+                                })
+                                .collect();
+
+                            // Log errors
+                            for error in errors {
+                                if let Some(key) = error.key() {
+                                    tracing::warn!(
+                                        key = key,
+                                        error = ?error,
+                                        "failed to delete object from S3"
+                                    );
                                 }
                             }
 
-                            // Add success results for all keys in this chunk that weren't in errors
-                            let error_keys: Vec<_> =
-                                errors.iter().filter_map(|e| e.key()).collect();
-
+                            // Add results in the same order as the input keys
                             for key in chunk {
-                                if !error_keys.contains(&key.as_str()) {
+                                if let Some(error_msg) = error_map.get(key.as_str()) {
+                                    all_results.push(Err(anyhow::anyhow!(
+                                        "failed to delete {}: {}",
+                                        key,
+                                        error_msg
+                                    )));
+                                } else {
                                     all_results.push(Ok(()));
                                 }
                             }

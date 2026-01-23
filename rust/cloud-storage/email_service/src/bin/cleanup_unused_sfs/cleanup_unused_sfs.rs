@@ -255,7 +255,6 @@ async fn process_bulk_batch(
                 .collect();
 
             if !successful_destination_urls.is_empty() {
-                println!("aaa {:?}", successful_destination_urls);
                 match process::bulk_delete_mappings_from_db(db_pool, &successful_destination_urls)
                     .await
                 {

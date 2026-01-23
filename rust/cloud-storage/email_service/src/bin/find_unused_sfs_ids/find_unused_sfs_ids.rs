@@ -164,9 +164,13 @@ fn print_summary(total_mappings: usize, used_count: usize, unused_count: usize, 
     println!("Total mappings: {}", total_mappings);
     println!("Total used UUIDs (from file): {}", used_count);
     println!("Total unused UUIDs: {}", unused_count);
-    println!(
-        "Percentage unused: {:.2}%",
-        (unused_count as f64 / total_mappings as f64) * 100.0
-    );
+    if total_mappings > 0 {
+        println!(
+            "Percentage unused: {:.2}%",
+            (unused_count as f64 / total_mappings as f64) * 100.0
+        );
+    } else {
+        println!("Percentage unused: N/A (no mappings)");
+    }
     println!("\nResults saved to: {}", output_file);
 }
