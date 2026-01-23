@@ -9,11 +9,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import {
-  isAccessiblePreviewItem,
-  isDocumentPreviewItem,
-  useItemPreview,
-} from '@queries/preview';
+import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import BracketLeft from '@macro-icons/macro-group-bracket-left.svg';
@@ -162,7 +158,7 @@ function AttachmentItem(props: AttachmentItemProps) {
 
   const handleClick = () => {
     const item = preview();
-    if (isAccessiblePreviewItem(item) && isDocumentPreviewItem(item)) {
+    if (isAccessiblePreviewItem(item) && item.type === 'document') {
       props.onNavigate(fileTypeToBlockName(item.fileType), item.id);
     } else {
       toast.failure('Failed to open attachment');

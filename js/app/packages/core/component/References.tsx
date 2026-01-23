@@ -5,7 +5,6 @@ import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import {
   isAccessiblePreviewItem,
-  isDocumentPreviewItem,
   type PreviewItem,
   useItemPreview,
 } from '@queries/preview';
@@ -105,7 +104,7 @@ export function References(props: ReferenceProps) {
   };
 
   const navigateToGenericReference = (item: PreviewItem) => {
-    if (isAccessiblePreviewItem(item) && isDocumentPreviewItem(item)) {
+    if (isAccessiblePreviewItem(item) && item.type === 'document') {
       const blockId = item.id;
       const blockType = fileTypeToBlockName(item.fileType);
       navigateToItem(blockType, blockId);

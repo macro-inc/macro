@@ -71,7 +71,3 @@ export interface ItemEntity {
 export const isAccessiblePreviewItem = (item: PreviewItem) => {
   return !item.loading && item.access === 'access';
 };
-
-export const isDocumentPreviewItem = (item: PreviewItem) => {
-  return isAccessiblePreviewItem(item) && item.type === 'document';
-};
