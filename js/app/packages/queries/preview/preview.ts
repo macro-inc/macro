@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { createMemo } from 'solid-js';
 import { queryClient } from '../client';
-import { previewBatcher } from './batcher';
+import { previewDataLoader } from './dataloader';
 import { defaultNameTransform } from './fetchers';
 import { previewKeys } from './keys';
 import type { ItemEntity, PreviewItem } from './types';
@@ -13,7 +13,7 @@ const DEFAULT_CACHE_TIME_SECONDS = 60 * 10;
 function previewQueryOptions(item: ItemEntity) {
   return {
     queryKey: previewKeys.item(item.id, item.type).queryKey,
-    queryFn: () => previewBatcher.add(item),
+    queryFn: () => previewDataLoader.load(item),
     staleTime: DEFAULT_CACHE_TIME_SECONDS * 1000,
     gcTime: DEFAULT_CACHE_TIME_SECONDS * 1000 * 2,
   };
