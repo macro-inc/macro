@@ -50,19 +50,3 @@ export function useItemPreview(item: Accessor<ItemEntity> | ItemEntity) {
 
   return [preview, { refetch, mutate }] as const;
 }
-
-export function invalidatePreview(itemId: string) {
-  return queryClient.invalidateQueries({
-    queryKey: previewKeys.item(itemId).queryKey,
-  });
-}
-
-export function setPreviewData(itemId: string, data: PreviewItem) {
-  queryClient.setQueryData(previewKeys.item(itemId).queryKey, data);
-}
-
-export async function fetchAndCachePreview(
-  item: ItemEntity
-): Promise<PreviewItem> {
-  return queryClient.fetchQuery(previewQueryOptions(item));
-}

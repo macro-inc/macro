@@ -1,10 +1,5 @@
 export { previewKeys } from './keys';
-export {
-  useItemPreview,
-  invalidatePreview,
-  setPreviewData,
-  fetchAndCachePreview,
-} from './preview';
+export { useItemPreview } from './preview';
 export type {
   PreviewItem,
   PreviewItemNoAccess,
