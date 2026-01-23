@@ -34,13 +34,12 @@ export function useItemPreview(item: Accessor<ItemEntity>) {
   return [preview] as const;
 }
 
-export function invalidateAllPreviews() {
-  return queryClient.invalidateQueries({
-    queryKey: previewKeys._def,
-  });
-}
-
-export function invalidatePreview(itemId: string) {
+/** Invalidate preview for the given item id. if no id is provided, invalidates all previews */
+export function invalidatePreview(itemId?: string) {
+  if (!itemId)
+    return queryClient.invalidateQueries({
+      queryKey: previewKeys._def,
+    });
   return queryClient.invalidateQueries({
     queryKey: previewKeys.item(itemId).queryKey,
   });

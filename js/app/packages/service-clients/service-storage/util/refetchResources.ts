@@ -3,25 +3,20 @@ import { invalidateDeletedItems } from '@queries/storage/deleted';
 import { invalidateProjects } from '@queries/storage/projects';
 import { invalidateUserQuota } from '@queries/auth';
 import { refetchHistory } from '@queries/history/history';
-import { invalidateAllPreviews } from '@queries/preview';
+import { invalidatePreview } from '@queries/preview';
 
-type StorageServiceResource = 'documents' | 'history' | 'projects';
 type RefetchResourcesOptions = {
-  [key in StorageServiceResource]: {
-    force?: boolean;
-  };
+  id?: string;
 };
+
 export function refetchResources(options?: RefetchResourcesOptions) {
-  if (!options) {
-    // TODO: fetch documents
-    // refetchDocuments();
-    invalidateUserQuota();
-    refetchHistory();
-    refetchProjectResources();
-    invalidateDeletedItems();
-    invalidateAllPreviews();
-    return;
-  }
+  // TODO: fetch documents
+  // refetchDocuments();
+  invalidateUserQuota();
+  refetchHistory();
+  refetchProjectResources();
+  invalidateDeletedItems();
+  invalidatePreview(options?.id);
 }
 
 export async function refetchProjectResources(_force = false) {

@@ -1,7 +1,6 @@
 export { previewKeys } from './keys';
 export {
   useItemPreview,
-  invalidateAllPreviews,
   invalidatePreview,
 } from './preview';
 export type {
