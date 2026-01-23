@@ -8,14 +8,13 @@ import { previewKeys } from './keys';
 import type { ItemEntity, PreviewItem } from './types';
 import { queryReadyGate } from '@queries/gate';
 
-const DEFAULT_CACHE_TIME_SECONDS = 60 * 10;
-
 export function useItemPreview(item: Accessor<ItemEntity>) {
   const query = useQuery(() => ({
     queryKey: previewKeys.item(item().id).queryKey,
     queryFn: () => previewDataLoader.load(item()),
-    staleTime: DEFAULT_CACHE_TIME_SECONDS * 1000,
-    gcTime: DEFAULT_CACHE_TIME_SECONDS * 1000 * 2,
+    // TODO: we need to invalidate the cache when the item changes
+    // for now let's lower the stale time
+    staleTime: 60 * 1000 * 10, // 10 minutes
   }));
 
   const preview = createMemo(() => {
