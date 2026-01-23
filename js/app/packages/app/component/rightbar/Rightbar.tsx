@@ -70,6 +70,7 @@ import {
 import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
 import { Button } from '@ui/components/Button';
 import { Hotkey } from '@core/component/Hotkey';
+import { setPreviewData } from '@queries/preview';
 
 type ChatData = {
   messages: ChatMessageWithAttachments[];
@@ -554,8 +555,14 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
       // refetch history immediately to have the new chat id
       // then rename again when the server provides a default name
       refetchHistory();
-      waitChatRename(newChatId).then((_name) => {
+      waitChatRename(newChatId).then((name) => {
         refetchHistory();
+        if (name) {
+          setPreviewData(newChatId, (prev) => ({
+            ...prev,
+            name,
+          }));
+        }
       });
       return await onSend(response);
     } else if (request.type === 'send') {
