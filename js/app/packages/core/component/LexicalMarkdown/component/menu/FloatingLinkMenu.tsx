@@ -123,7 +123,14 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
     setTimeout(() => setPreviewHover(true));
   };
 
-  const [unfurlData] = useUnfurl(linkInfo()?.url);
+  const unfurlDataMemo = createMemo(() => {
+    const url = linkInfo()?.url;
+    if (!url) return undefined;
+    const [data] = useUnfurl(url);
+    return data();
+  });
+
+  const unfurlData = () => unfurlDataMemo();
 
   // Passed to link plugin in to be called when the a link is clicked.
   const onClickLink = (link?: ILinkInfo) => {
