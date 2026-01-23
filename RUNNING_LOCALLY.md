@@ -22,6 +22,8 @@ AWS_ACCESS_KEY_ID
 AWS_SECRET_ACCESS_KEY
 ```
 
+`just setup_localstack` to instantiate all the local aws assets
+
 ## Running
 
 You can run the services via `just build_run_local` or `just run_local` if you have already built the docker images.
