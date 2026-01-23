@@ -56,9 +56,9 @@ import {
 } from '@block-email/util/prepareEmailBody';
 import { convertEmailRecipientToContactInfo } from '@block-email/util/recipientConversion';
 import {
-  deleteEmailDraft,
-  saveEmailDraft,
-} from '@block-email/signal/emailDraft';
+  useDeleteDraftMutation,
+  useSaveDraftMutation,
+} from '@queries/email/draft';
 import {
   useRemoveDraftAttachmentMutation,
   useUploadDraftAttachmentsMutation,
@@ -164,6 +164,8 @@ export function EmailCompose(props: EmailComposeProps) {
   );
 
   const uploadAttachmentMutation = useUploadDraftAttachmentsMutation();
+  const saveDraftMutation = useSaveDraftMutation();
+  const deleteDraftMutation = useDeleteDraftMutation();
 
   function collectDraft() {
     $removeAllWatermarkNodes(editor());
@@ -200,7 +202,7 @@ export function EmailCompose(props: EmailComposeProps) {
     if (!draftToSave) {
       const draftID = currentDraftID();
       if (draftID) {
-        await deleteEmailDraft(draftID);
+        await deleteDraftMutation.mutateAsync({ draftId: draftID });
       }
       setCurrentDraftID(undefined);
       return;
@@ -220,16 +222,17 @@ export function EmailCompose(props: EmailComposeProps) {
     // stays up to date and is not removed
     const sendTime = existingDraft ? form.sendTime()?.toISOString() : undefined;
 
-    const draftResponse = await saveEmailDraft(
-      {
+    const draftResponse = await saveDraftMutation.mutateAsync({
+      draft: {
         ...draftToSave,
         db_id: currentDraftID(),
         link_id: linkID,
       },
-      sendTime
-    );
+      sendTime,
+    });
 
-    if (draftResponse) {
+    const draftId = draftResponse.draft.db_id;
+    if (draftId) {
       // If the email draft saved successfully, we want to upload the
       // attachments as well. We should grab only the attachments that
       // haven't been uploaded yet
@@ -242,7 +245,7 @@ export function EmailCompose(props: EmailComposeProps) {
 
       if (attachments.length) {
         const uploaded = await uploadAttachmentMutation.mutateAsync({
-          draftID: draftResponse,
+          draftID: draftId,
           attachments: attachments.map((a) => a.file),
         });
 
@@ -255,9 +258,9 @@ export function EmailCompose(props: EmailComposeProps) {
         }
       }
 
-      setCurrentDraftID(draftResponse);
+      setCurrentDraftID(draftId);
 
-      return draftResponse;
+      return draftId;
     }
   }
 
@@ -600,7 +603,7 @@ export function EmailCompose(props: EmailComposeProps) {
   const deleteDraftAndReset = async () => {
     const draftId = currentDraftID();
     if (draftId) {
-      await deleteEmailDraft(draftId);
+      await deleteDraftMutation.mutateAsync({ draftId });
     }
     resetState();
   };
