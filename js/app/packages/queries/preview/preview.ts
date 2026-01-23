@@ -6,6 +6,7 @@ import { previewDataLoader } from './dataloader';
 import { defaultNameTransform } from './fetchers';
 import { previewKeys } from './keys';
 import type { ItemEntity, PreviewItem } from './types';
+import { queryReadyGate } from '@queries/gate';
 
 const DEFAULT_CACHE_TIME_SECONDS = 60 * 10;
 
@@ -22,7 +23,7 @@ export function useItemPreview(item: Accessor<ItemEntity>) {
   const query = useQuery(() => previewQueryOptions(item()));
 
   const preview = createMemo(() => {
-    const data = query.data;
+    const data = queryReadyGate(query) ? query.data : undefined;
 
     if (!data) {
       return {
