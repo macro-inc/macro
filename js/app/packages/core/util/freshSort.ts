@@ -2,6 +2,7 @@
  * Wrap the fuzzy library in some addition utils for ranking by fuzzy match score
  * alongside freshness.
  */
+import type { Accessor } from 'solid-js';
 import type { FilterResult } from 'fuzzy';
 import fuzzy from 'fuzzy';
 import { fuzzyScoreCommaSpaceSeparated } from './fuzzy';
@@ -25,6 +26,8 @@ export interface FreshSortConfig {
   channelBoost?: number;
   /** Enable comma-separated matching for channel names. When enabled, query "a,b" matches channel name "a,c,b". Default: false */
   commaSeparatedChannelMatch?: boolean;
+  /** Function to calculate per-item boost. Returns a boost multiplier (e.g., 0.2 for +20% boost). Default: undefined */
+  boostFn?: <T extends TimestampedItem>(item: T) => number;
 }
 
 export interface TimestampedItem {
@@ -47,7 +50,7 @@ export interface FreshSortResult<T> {
   fuzzyResult?: FilterResult<T>;
 }
 
-const DEFAULT_CONFIG: Required<FreshSortConfig> = {
+const DEFAULT_CONFIG = {
   fuzzyWeight: 0.7,
   timeWeight: 0.3,
   brevityWeight: 0.0,
@@ -57,6 +60,13 @@ const DEFAULT_CONFIG: Required<FreshSortConfig> = {
   useViewedAt: false,
   channelBoost: 1.0,
   commaSeparatedChannelMatch: false,
+  boostFn: undefined,
+} as const;
+
+type FreshSortConfigWithDefaults = Required<
+  Omit<FreshSortConfig, 'boostFn'>
+> & {
+  boostFn: FreshSortConfig['boostFn'];
 };
 
 function extractTimestamp(
@@ -108,7 +118,7 @@ function isChannelItem(item: TimestampedItem): boolean {
 
 function calculateTimeScore(
   timestamp: number,
-  config: Required<FreshSortConfig>
+  config: FreshSortConfigWithDefaults
 ): number {
   const now = Date.now();
   const itemTime = timestamp * 1000;
@@ -149,7 +159,10 @@ export function freshSort<T extends TimestampedItem>(
   filterResults: FilterResult<T>[],
   config: FreshSortConfig = {}
 ): FreshSortResult<T>[] {
-  const finalConfig = { ...DEFAULT_CONFIG, ...config };
+  const finalConfig = {
+    ...DEFAULT_CONFIG,
+    ...config,
+  } as FreshSortConfigWithDefaults;
   const totalWeight =
     finalConfig.fuzzyWeight +
     finalConfig.timeWeight +
@@ -183,12 +196,18 @@ export function freshSort<T extends TimestampedItem>(
       ? finalConfig.channelBoost
       : 1.0;
 
+    // Apply per-item boost if boostFn is provided
+    const itemBoost = finalConfig.boostFn
+      ? finalConfig.boostFn(result.original)
+      : 0;
+
     const combinedScore =
       (normalizedFuzzyWeight * fuzzyScore +
         normalizedTimeWeight * timeScore +
         normalizedBrevityWeight * brevityScore) *
       fuzzyPenalty *
-      channelMultiplier;
+      channelMultiplier *
+      (1 + itemBoost);
 
     return {
       item: result.original,
@@ -210,6 +229,7 @@ export function createFreshSearch<T extends TimestampedItem>(
 ) {
   return (items: T[], query: string): FreshSortResult<T>[] => {
     const finalConfig = { ...DEFAULT_CONFIG, ...config };
+
     const hasComma = query.includes(',');
     const hasSpace = query.includes(' ');
     const useMultiTermChannelMatch =
@@ -253,3 +273,44 @@ export function createFreshSearch<T extends TimestampedItem>(
     return freshSort(fuzzyResults, config);
   };
 }
+
+/**
+ * Creates a boost function that gives a bonus to items with emails matching the current user's domain.
+ * @param currentUserDomain - Accessor returning the current user's email domain (e.g., "example.com")
+ * @param boost - The boost multiplier to apply (default: 0.5 for +50% boost)
+ * @param getEmail - Function to extract email from item (default: assumes item.data.email)
+ */
+export function createSameDomainBoostFn<T extends TimestampedItem>(
+  currentUserDomain: Accessor<string | undefined>,
+  boost: number = 0.5,
+  getEmail: (item: T) => string | undefined = (item) =>
+    (item as { data?: { email?: string } }).data?.email
+): (item: T) => number {
+  return (item: T) => {
+    const userDomain = currentUserDomain();
+    if (!userDomain) return 0;
+    const email = getEmail(item);
+    const itemDomain = email?.split('@')[1];
+    return itemDomain === userDomain ? boost : 0;
+  };
+}
+
+/**
+ * Preset configurations for common fresh search use cases.
+ */
+export const FreshSearchPresets = {
+  /**
+   * Base user search - balances fuzzy matching with recency, includes same-domain boost.
+   * Good for recipient selectors, user pickers, and @mention menus.
+   */
+  baseUserSearch: <T extends TimestampedItem>(
+    currentUserDomain: Accessor<string | undefined>,
+    getEmail: (item: T) => string | undefined = (item) =>
+      (item as { data?: { email?: string } }).data?.email
+  ): Omit<FreshSortConfig, 'boostFn'> & { boostFn: (item: T) => number } => ({
+    fuzzyWeight: 0.5,
+    timeWeight: 0.4,
+    brevityWeight: 0.1,
+    boostFn: createSameDomainBoostFn(currentUserDomain, 0.5, getEmail),
+  }),
+} as const;

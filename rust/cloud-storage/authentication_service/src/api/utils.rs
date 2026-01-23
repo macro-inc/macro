@@ -67,7 +67,8 @@ pub fn create_access_token_cookie(token: &str) -> Cookie<'static> {
     let domain = domain();
     let access_token_cookie_name = match Environment::new_or_prod() {
         Environment::Production => MACRO_ACCESS_TOKEN_COOKIE.to_string(),
-        Environment::Local | Environment::Develop => format!("dev-{MACRO_ACCESS_TOKEN_COOKIE}"),
+        Environment::Develop => format!("dev-{MACRO_ACCESS_TOKEN_COOKIE}"),
+        Environment::Local => format!("local-{MACRO_ACCESS_TOKEN_COOKIE}"),
     };
 
     let mut cookie = Cookie::new(
@@ -92,7 +93,8 @@ pub fn create_refresh_token_cookie(token: &str) -> Cookie<'static> {
     let domain = domain();
     let refresh_token_cookie_name = match Environment::new_or_prod() {
         Environment::Production => MACRO_REFRESH_TOKEN_COOKIE.to_string(),
-        Environment::Local | Environment::Develop => format!("dev-{MACRO_REFRESH_TOKEN_COOKIE}"),
+        Environment::Develop => format!("dev-{MACRO_REFRESH_TOKEN_COOKIE}"),
+        Environment::Local => format!("local-{MACRO_REFRESH_TOKEN_COOKIE}"),
     };
     let mut cookie = Cookie::new(
         refresh_token_cookie_name,

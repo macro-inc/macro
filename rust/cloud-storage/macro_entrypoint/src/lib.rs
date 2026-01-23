@@ -45,7 +45,9 @@ impl MacroEntrypoint {
             (Environment::Local, LocalOptions { tree_tracing: None }) => {
                 tracing_subscriber::fmt()
                     .with_ansi(true)
-                    .with_env_filter(EnvFilter::from_default_env())
+                    // Leaving this commented out to show we explicitly don't want with_env_filter when
+                    // running locally. RUST_LOG=trace doesn't work if you use this.
+                    // .with_env_filter(EnvFilter::from_default_env())
                     .with_file(true)
                     .with_line_number(true)
                     .pretty()

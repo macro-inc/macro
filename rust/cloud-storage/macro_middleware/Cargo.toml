@@ -25,6 +25,7 @@ http-body-util = { workspace = true }
 macro_auth = { path = "../macro_auth", optional = true }
 macro_db_client = { path = "../macro_db_client", optional = true }
 macro_env_var = { path = "../macro_env_var" }
+macro_env = { path = "../macro_env" }
 macro_share_permissions = { path = "../macro_share_permissions", optional = true }
 macro_user_id = { path = "../macro_user_id", optional = true }
 macro_uuid = { path = "../macro_uuid" }

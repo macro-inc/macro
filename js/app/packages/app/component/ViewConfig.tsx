@@ -209,6 +209,7 @@ const ALL_VIEWCONFIG_DEFAULTS = {
         if (entity.type === 'email') {
           archiveEmail(entity.id, {
             isDone: entity.done,
+            optimisticallyExclude: true,
           });
         }
         if (extra?.notificationSource) {
@@ -237,6 +238,7 @@ const ALL_VIEWCONFIG_DEFAULTS = {
         if (entity.type === 'email') {
           archiveEmail(entity.id, {
             isDone: entity.done,
+            optimisticallyExclude: true,
           });
         }
         if (extra?.notificationSource) {
@@ -317,6 +319,7 @@ const ALL_VIEWCONFIG_DEFAULTS = {
         if (entity.type === 'email') {
           archiveEmail(entity.id, {
             isDone: entity.done,
+            optimisticallyExclude: true,
           });
         }
         if (extra?.notificationSource) {
