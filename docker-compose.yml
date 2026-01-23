@@ -109,6 +109,8 @@ services:
   # Document format conversion - requires LibreOffice
   # ============================================================================
   convert_service:
+    profiles:
+      - heavy
     <<: *common-env
     build:
       context: ./rust/cloud-storage
@@ -316,6 +318,8 @@ services:
   # Search indexing worker
   # ============================================================================
   search_processing_service:
+    profiles:
+      - heavy
     <<: *common-env
     build:
       context: ./rust/cloud-storage
@@ -403,6 +407,19 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+  # ============================================================================
+  # websocket_service (Port 6969)
+  # Simple WebSocket service - responds with "ping" to all messages
+  # ============================================================================
+  websocket_service:
+    build:
+      context: ./js/websocket-service
+      dockerfile: Dockerfile
+    ports:
+      - "6969:6969"
+    networks:
+      - services
 
 networks:
   services:
