@@ -620,6 +620,14 @@ export function EmailCompose(props: EmailComposeProps) {
     return decodedHtml;
   };
 
+  const getRecipientOptions = () => {
+    // If we're being displayed for a draft,
+    // we should get the recipients from the draft
+    const fromDraft = emailContext?.recipientOptions();
+
+    return fromDraft ?? destinationOptions();
+  };
+
   return (
     <>
       <SplitHeaderLeft>
@@ -733,9 +741,9 @@ export function EmailCompose(props: EmailComposeProps) {
                       To
                     </div>
                     <div class="flex-1">
-                      <RecipientSelector<'user' | 'contact'>
+                      <RecipientSelector
                         inputRef={registerRef('directRecipientsSelector')}
-                        options={destinationOptions}
+                        options={getRecipientOptions}
                         selectedOptions={form.recipients().to}
                         setSelectedOptions={(next) =>
                           form.setRecipients('to', next)
@@ -762,9 +770,9 @@ export function EmailCompose(props: EmailComposeProps) {
                         Cc
                       </div>
                       <div class="flex-1">
-                        <RecipientSelector<'user' | 'contact'>
+                        <RecipientSelector
                           inputRef={registerRef('ccRecipientsSelector')}
-                          options={destinationOptions}
+                          options={getRecipientOptions}
                           selectedOptions={form.recipients().cc}
                           setSelectedOptions={(next) =>
                             form.setRecipients('cc', next)
@@ -784,9 +792,9 @@ export function EmailCompose(props: EmailComposeProps) {
                         Bcc
                       </div>
                       <div class="flex-1">
-                        <RecipientSelector<'user' | 'contact'>
+                        <RecipientSelector
                           inputRef={registerRef('bccRecipientsSelector')}
-                          options={destinationOptions}
+                          options={getRecipientOptions}
                           selectedOptions={form.recipients().bcc}
                           setSelectedOptions={(next) =>
                             form.setRecipients('bcc', next)
