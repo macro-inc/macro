@@ -21,8 +21,6 @@ export function LinkWithPreview(props: LinkWithPreviewProps) {
   });
 
   const [unfurlData] = useUnfurl(props.url);
-  // console.log('Getting unfurl data for', props.url);
-  // console.log('Unfurl Data:', unfurlData());
 
   let linkRef: HTMLAnchorElement | undefined;
 

@@ -35,8 +35,6 @@ export function UnfurlLink(props: UnfurlLinkProps) {
   const subtitleClass = () => props.subtitleClass ?? 'text-ink-muted';
   const iconClass = () => props.iconClass ?? '';
 
-  console.log('Rerendering UnfurlLink for', props.unfurled);
-
   return (
     <div
       class={`${bgClass()} ${hoverClass()} p-1 px-1.5 overflow-clip text-xs transition-colors hover:transition-none cursor-pointer`}
