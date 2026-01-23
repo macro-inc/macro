@@ -1,0 +1,11 @@
+[package]
+edition = "2024"
+name = "notification"
+version = "0.1.0"
+
+[dependencies]
+macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity" }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

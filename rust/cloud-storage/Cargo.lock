@@ -5837,6 +5837,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0676bb32a98c1a483ce53e500a81ad9c3d5b3f7c920c28c24e9cb0980d0b5bc8"
 
 [[package]]
+name = "notification"
+version = "0.1.0"
+dependencies = [
+ "macro_user_id",
+ "model-entity",
+ "rootcause",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "notification_db_client"
 version = "0.1.0"
 dependencies = [
