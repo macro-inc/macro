@@ -27,11 +27,11 @@ export function UnfurlLink(props: UnfurlLinkProps) {
 
   return (
     <div
-      class={`hover:bg-hover p-1 px-1.5 overflow-clip text-xs transition-colors hover:transition-none cursor-pointer`}
+      class="hover:bg-hover p-1 px-1.5 overflow-clip text-xs transition-colors hover:transition-none cursor-pointer"
       onClick={() => window.open(props.unfurled.url)}
     >
       <div class="flex flex-row items-center gap-1.5 w-full h-full">
-        <div class={`shrink-0`}>
+        <div class="shrink-0">
           <Show
             when={props.unfurled.favicon_url}
             fallback={<LinkIcon class="w-4 h-4" />}
@@ -58,9 +58,7 @@ export function UnfurlLink(props: UnfurlLinkProps) {
           <h1 class={`font-medium truncate text-ink`}>
             {props.unfurled.title || domain}
           </h1>
-          <h2 class={`font-medium text-xxs text-ink-muted`}>
-            {domain}
-          </h2>
+          <h2 class="font-medium text-xxs text-ink-muted">{domain}</h2>
         </div>
       </div>
     </div>

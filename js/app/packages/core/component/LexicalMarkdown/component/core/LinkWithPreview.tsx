@@ -1,20 +1,19 @@
 import { UnfurlLink } from '@core/component/Link';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { useUnfurl } from '@core/signal/unfurl';
-import { cornerClip } from '@core/util/clipPath';
 import { debounce } from '@solid-primitives/scheduled';
 import { createSignal, type ParentProps, Show } from 'solid-js';
 import { floatWithElement } from '../../directive/floatWithElement';
 
 false && floatWithElement;
 
-type LinkWithPreviewProps = ParentProps<{
+type UnfurlLinkProps = ParentProps<{
   url: string;
   title?: string;
   class?: string;
 }>;
 
-export function LinkWithPreview(props: LinkWithPreviewProps) {
+export function LinkWithPreview(props: UnfurlLinkProps) {
   const [previewOpen, setPreviewOpen] = createSignal(false);
   const debouncedSetPreviewOpen = debounce((val: boolean) => {
     setPreviewOpen(val);
@@ -45,18 +44,14 @@ export function LinkWithPreview(props: LinkWithPreviewProps) {
           <div
             class="absolute bg-panel rounded-xs ring ring-edge-muted border-edge left-0 z-10 shadow-lg max-w-72"
             style={{
-              transform: 'translateY(0)'
+              transform: 'translateY(0)',
             }}
             use:floatWithElement={{ element: () => linkRef, spacing: 4 }}
           >
             {(() => {
               const data = unfurlData();
               if (data?.type === 'success') {
-                return (
-                  <UnfurlLink
-                    unfurled={data.data}
-                  />
-                );
+                return <UnfurlLink unfurled={data.data} />;
               }
               return (
                 <UnfurlLink
