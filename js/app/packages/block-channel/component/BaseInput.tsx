@@ -18,7 +18,6 @@ import { isInBlock } from '@core/block';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import {
-  $isSingleDocumentMention,
   pendingEditorState,
   editorStateAsMarkdown,
   setEditorStateFromMarkdown,
@@ -42,8 +41,7 @@ import PlusIcon from '@icon/regular/plus.svg';
 import FormatIcon from '@icon/regular/text-aa.svg';
 import Trash from '@icon/regular/trash.svg';
 import XIcon from '@icon/regular/x.svg';
-import { $convertMentionToCard, $isDocumentMentionNode } from '@lexical-core';
-import { $getRoot, $isParagraphNode } from 'lexical';
+import { $getRoot } from 'lexical';
 import { logger } from '@observability';
 import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
 import { staticFileClient } from '@service-static-files/client';
