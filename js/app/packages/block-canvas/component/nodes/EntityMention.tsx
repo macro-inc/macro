@@ -5,14 +5,12 @@ import { type BlockName, useBlockId } from '@core/block';
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { PopupPreview } from '@core/component/DocumentPreview';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { floatWithElement } from '@core/component/LexicalMarkdown/directive/floatWithElement';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type PreviewItemNoAccess, useItemPreview } from '@core/signal/preview';
 import { matches } from '@core/util/match';
 import LockKey from '@phosphor-icons/core/regular/lock-key.svg';
 import Question from '@phosphor-icons/core/regular/question.svg';
-import { debounce } from '@solid-primitives/scheduled';
 import {
   createEffect,
   createMemo,
@@ -21,14 +19,13 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { HoverCard } from '@kobalte/core/hover-card';
 import { useSplitLayout } from 'app/component/split-layout/layout';
 import { DRAG_THRESHOLD, type RenderMode, Tools } from '../../constants';
 import type { EntityMentionNode } from '../../model/CanvasModel';
 import { fileWidth } from '../../operation/file';
 import { type Vector2, vec2 } from '../../util/vector2';
 import { BaseCanvasRectangle } from './BaseCanvasRectangle';
-
-false && floatWithElement;
 
 const { track, TrackingEvents } = withAnalytics();
 
@@ -97,9 +94,6 @@ export function File(props: { node: EntityMentionNode; mode: RenderMode }) {
   >('LOADING');
 
   const blockId = useBlockId();
-
-  const [previewOpen, setPreviewOpen] = createSignal(false);
-  const debouncedSetPreviewOpen = debounce(setPreviewOpen, 100);
 
   const { replaceOrInsertSplit } = useSplitLayout();
 
@@ -197,24 +191,14 @@ export function File(props: { node: EntityMentionNode; mode: RenderMode }) {
   });
 
   const { selectedTool, mouseIsDown, activeTool } = useToolManager();
-  return (
+
+  const hoverDisabled = createMemo(
+    () => isTouchDevice() || mouseIsDown() || selectedTool() === Tools.Line
+  );
+
+  const triggerContent = (
     <div
       class="document-mention internal-link"
-      onMouseEnter={() => {
-        if (
-          !isTouchDevice() &&
-          !mouseIsDown() &&
-          selectedTool() !== Tools.Line
-        ) {
-          debouncedSetPreviewOpen(true);
-        }
-      }}
-      onMouseLeave={() => {
-        if (!isTouchDevice()) {
-          debouncedSetPreviewOpen.clear();
-          debouncedSetPreviewOpen(false);
-        }
-      }}
       ontouchstart={(e) => {
         if (isTouchDevice()) {
           e.preventDefault();
@@ -287,30 +271,38 @@ export function File(props: { node: EntityMentionNode; mode: RenderMode }) {
                   </div>
                   {fileName()}
                 </div>
-                <Show when={previewOpen() && blockName()}>
-                  <PopupPreview
-                    item={item}
-                    floatRef={fileRef}
-                    mouseEnter={() => {
-                      debouncedSetPreviewOpen(true);
-                    }}
-                    mouseLeave={() => {
-                      debouncedSetPreviewOpen.clear();
-                      debouncedSetPreviewOpen(false);
-                    }}
-                    documentInfo={{
-                      id: props.node.file,
-                      type: blockName() as BlockName,
-                      params: {},
-                      isOpenable: blockId !== props.node.file,
-                    }}
-                  />
-                </Show>
               </div>
             </div>
           </div>
         </Show>
       </BaseCanvasRectangle>
     </div>
+  );
+
+  return (
+    <Show when={!hoverDisabled()} fallback={triggerContent}>
+      <HoverCard openDelay={100} closeDelay={150} gutter={8}>
+        <HoverCard.Trigger as="div">{triggerContent}</HoverCard.Trigger>
+
+        <Show when={blockName()}>
+          <HoverCard.Portal>
+            <HoverCard.Content class="z-toast-region">
+              <PopupPreview
+                item={item}
+                floatRef={fileRef}
+                mouseEnter={() => {}}
+                mouseLeave={() => {}}
+                documentInfo={{
+                  id: props.node.file,
+                  type: blockName() as BlockName,
+                  params: {},
+                  isOpenable: blockId !== props.node.file,
+                }}
+              />
+            </HoverCard.Content>
+          </HoverCard.Portal>
+        </Show>
+      </HoverCard>
+    </Show>
   );
 }
