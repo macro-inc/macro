@@ -13,9 +13,7 @@ export function useItemPreview(item: Accessor<ItemEntity>) {
   const query = useQuery(() => ({
     queryKey: previewKeys.item(item().id).queryKey,
     queryFn: () => previewDataLoader.load(item()),
-    // TODO: we need to invalidate the cache when the item changes
-    // for now let's lower the stale time
-    staleTime: 60 * 1000 * 10, // 10 minutes
+    staleTime: 60 * 1000 * 60 * 24, // 24 hours
   }));
 
   const preview = createMemo(() => {
