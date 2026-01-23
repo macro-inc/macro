@@ -4,7 +4,6 @@ export {
   invalidatePreview,
   setPreviewData,
   fetchAndCachePreview,
-  type ItemPreviewFetcher,
 } from './preview';
 export type {
   PreviewItem,

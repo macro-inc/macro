@@ -18,14 +18,6 @@ function previewQueryOptions(item: ItemEntity) {
   };
 }
 
-export type ItemPreviewFetcher = [
-  Accessor<PreviewItem>,
-  {
-    refetch: () => void;
-    mutate: (value: PreviewItem) => void;
-  },
-];
-
 export function useItemPreview(item: Accessor<ItemEntity> | ItemEntity) {
   const itemAccessor = typeof item === 'function' ? item : () => item;
 
@@ -55,7 +47,7 @@ export function useItemPreview(item: Accessor<ItemEntity> | ItemEntity) {
     );
   };
 
-  return [preview, { refetch, mutate }];
+  return [preview, { refetch, mutate }] as const;
 }
 
 export function invalidatePreview(itemId: string, itemType?: ItemType) {
