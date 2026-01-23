@@ -42,8 +42,12 @@ export function TopBar() {
   const permissions = useGetPermissions();
   const isOwner = useIsDocumentOwner();
   const canEdit = useCanEdit();
-  const name = () => projectBlockDataSignal()?.projectMetadata.name ?? '';
-  const owner = () => projectBlockDataSignal()?.projectMetadata.userId;
+  const name = createMemo(
+    () => projectBlockDataSignal()?.projectMetadata.name ?? ''
+  );
+  const owner = createMemo(
+    () => projectBlockDataSignal()?.projectMetadata.userId
+  );
 
   function handleCopyLink() {
     navigator.clipboard.writeText(
