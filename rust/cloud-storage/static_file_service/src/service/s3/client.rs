@@ -62,4 +62,101 @@ impl S3Client {
 
         Ok(presigned_url.uri().to_string())
     }
+
+    #[tracing::instrument(skip(self), fields(count = keys.len()))]
+    pub async fn bulk_hard_delete_objects(&self, keys: Vec<String>) -> Vec<Result<()>> {
+        if keys.is_empty() {
+            return Vec::new();
+        }
+
+        // S3 delete_objects has a limit of 1000 keys per request
+        let chunk_size = 1000;
+        let mut all_results = Vec::with_capacity(keys.len());
+
+        for chunk in keys.chunks(chunk_size) {
+            let mut object_identifiers = Vec::new();
+            for key in chunk {
+                object_identifiers.push(
+                    aws_sdk_s3::types::ObjectIdentifier::builder()
+                        .key(key.clone())
+                        .build()
+                        .expect("failed to build ObjectIdentifier"),
+                );
+            }
+
+            let delete_request = aws_sdk_s3::types::Delete::builder()
+                .set_objects(Some(object_identifiers))
+                .build()
+                .context("failed to build Delete request");
+
+            match delete_request {
+                Ok(delete_req) => {
+                    match self
+                        .inner
+                        .delete_objects()
+                        .bucket(self.storage_bucket.clone())
+                        .delete(delete_req)
+                        .send()
+                        .await
+                    {
+                        Ok(output) => {
+                            // Check for errors in the response
+                            let errors = output.errors();
+                            if !errors.is_empty() {
+                                for error in errors {
+                                    if let Some(key) = error.key() {
+                                        tracing::warn!(
+                                            key = key,
+                                            error = ?error,
+                                            "failed to delete object from S3"
+                                        );
+                                        all_results.push(Err(anyhow::anyhow!(
+                                            "failed to delete {}: {}",
+                                            key,
+                                            error.message().unwrap_or("unknown error")
+                                        )));
+                                    } else {
+                                        all_results.push(Err(anyhow::anyhow!(
+                                            "failed to delete object: {}",
+                                            error.message().unwrap_or("unknown error")
+                                        )));
+                                    }
+                                }
+                            }
+
+                            // Add success results for all keys in this chunk that weren't in errors
+                            let error_keys: Vec<_> =
+                                errors.iter().filter_map(|e| e.key()).collect();
+
+                            for key in chunk {
+                                if !error_keys.contains(&key.as_str()) {
+                                    all_results.push(Ok(()));
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!(error = ?e, "failed to delete batch of objects from S3");
+                            // Add error for each key in this chunk
+                            for _ in chunk {
+                                all_results
+                                    .push(Err(anyhow::anyhow!("batch delete failed: {}", e)));
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    let err_msg = e.to_string();
+                    tracing::error!(error = ?e, "failed to build delete request");
+                    for _ in chunk {
+                        all_results.push(Err(anyhow::anyhow!(
+                            "failed to build delete request: {}",
+                            err_msg
+                        )));
+                    }
+                }
+            }
+        }
+
+        all_results
+    }
 }
