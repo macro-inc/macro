@@ -10,17 +10,13 @@ import { queryReadyGate } from '@queries/gate';
 
 const DEFAULT_CACHE_TIME_SECONDS = 60 * 10;
 
-function previewQueryOptions(item: ItemEntity) {
-  return {
-    queryKey: previewKeys.item(item.id).queryKey,
-    queryFn: () => previewDataLoader.load(item),
+export function useItemPreview(item: Accessor<ItemEntity>) {
+  const query = useQuery(() => ({
+    queryKey: previewKeys.item(item().id).queryKey,
+    queryFn: () => previewDataLoader.load(item()),
     staleTime: DEFAULT_CACHE_TIME_SECONDS * 1000,
     gcTime: DEFAULT_CACHE_TIME_SECONDS * 1000 * 2,
-  };
-}
-
-export function useItemPreview(item: Accessor<ItemEntity>) {
-  const query = useQuery(() => previewQueryOptions(item()));
+  }));
 
   const preview = createMemo(() => {
     const data = queryReadyGate(query) ? query.data : undefined;
