@@ -8,7 +8,7 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { floatWithElement } from '@core/component/LexicalMarkdown/directive/floatWithElement';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { type PreviewItemNoAccess, useItemPreview } from '@core/signal/preview';
+import { type PreviewItemNoAccess, useItemPreview } from '@queries/preview';
 import { matches } from '@core/util/match';
 import LockKey from '@phosphor-icons/core/regular/lock-key.svg';
 import Question from '@phosphor-icons/core/regular/question.svg';

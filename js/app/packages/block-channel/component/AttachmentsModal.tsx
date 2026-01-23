@@ -13,7 +13,7 @@ import {
   isAccessiblePreviewItem,
   isDocumentPreviewItem,
   useItemPreview,
-} from '@core/signal/preview';
+} from '@queries/preview';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import BracketLeft from '@macro-icons/macro-group-bracket-left.svg';

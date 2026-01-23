@@ -8,7 +8,7 @@ import {
   isDocumentPreviewItem,
   type PreviewItem,
   useItemPreview,
-} from '@core/signal/preview';
+} from '@queries/preview';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';

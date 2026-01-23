@@ -23,7 +23,7 @@ import {
   type PreviewItemNoAccess,
   type PreviewProjectAccess,
   useItemPreview,
-} from '@core/signal/preview';
+} from '@queries/preview';
 import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';

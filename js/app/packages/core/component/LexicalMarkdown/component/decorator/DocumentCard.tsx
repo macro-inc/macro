@@ -23,7 +23,7 @@ import {
   type PreviewItemAccess,
   type PreviewProjectAccess,
   useItemPreview,
-} from '@core/signal/preview';
+} from '@queries/preview';
 import { matches } from '@core/util/match';
 import TrashSimple from '@icon/duotone/trash-simple-duotone.svg';
 import Minimize from '@icon/regular/arrows-in.svg';
