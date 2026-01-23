@@ -17,7 +17,6 @@ import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
 import { canNestBlock, createBlockInstance } from '@core/orchestrator';
 import {
   isAccessiblePreviewItem,
-  isLoadingPreviewItem,
   type PreviewChannelAccess,
   type PreviewDocumentAccess,
   type PreviewItemAccess,
@@ -163,7 +162,7 @@ export function DocumentCard(props: DocumentCardDecoratorProps) {
     if (!ENABLE_BLOCK_IN_BLOCK) return false;
     const i = item();
     if (!i) return false;
-    if (isLoadingPreviewItem(i)) return false;
+    if (i.loading) return false;
     if (!isAccessiblePreviewItem(i)) return false;
     const blockName = resolveBlockAlias(verifyBlockName(props.blockName));
     return canNestBlock(blockName, currentBlockName);
@@ -438,7 +437,7 @@ export function DocumentCard(props: DocumentCardDecoratorProps) {
       }}
     >
       <Switch>
-        <Match when={matches(item(), isLoadingPreviewItem)}>
+        <Match when={item().loading}>
           <div class="flex items-center justify-center p-4 text-ink-muted">
             <LoadingSpinner class="w-6 h-6 animate-spin" />
           </div>

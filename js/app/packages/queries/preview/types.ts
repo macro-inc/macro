@@ -75,7 +75,3 @@ export const isAccessiblePreviewItem = (item: PreviewItem) => {
 export const isDocumentPreviewItem = (item: PreviewItem) => {
   return isAccessiblePreviewItem(item) && item.type === 'document';
 };
-
-export const isLoadingPreviewItem = (item: PreviewItem) => {
-  return item.loading;
-};

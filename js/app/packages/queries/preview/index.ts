@@ -17,5 +17,4 @@ export type {
 export {
   isAccessiblePreviewItem,
   isDocumentPreviewItem,
-  isLoadingPreviewItem,
 } from './types';
