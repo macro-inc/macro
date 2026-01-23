@@ -2,7 +2,6 @@ import { DEFAULT_ITEM_TYPE } from '@service-storage/client';
 import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { createMemo } from 'solid-js';
-import { queryClient } from '../client';
 import { previewDataLoader } from './dataloader';
 import { defaultNameTransform } from './fetchers';
 import { previewKeys } from './keys';
@@ -37,16 +36,5 @@ export function useItemPreview(item: Accessor<ItemEntity> | ItemEntity) {
     return defaultNameTransform(data);
   });
 
-  const refetch = () => {
-    query.refetch();
-  };
-
-  const mutate = (value: PreviewItem) => {
-    queryClient.setQueryData(
-      previewKeys.item(itemAccessor().id).queryKey,
-      value
-    );
-  };
-
-  return [preview, { refetch, mutate }] as const;
+  return [preview] as const;
 }
