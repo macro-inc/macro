@@ -4,7 +4,7 @@ use models_email::email::service;
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 
-#[tracing::instrument(skip(executor), level = "info")]
+#[tracing::instrument(skip(executor), err)]
 pub async fn update_backfill_job_status<'e, E>(
     executor: E,
     job_id: Uuid,
@@ -34,7 +34,7 @@ where
     Ok(())
 }
 
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn cancel_active_jobs_by_link_id(pool: &PgPool, link_id: Uuid) -> anyhow::Result<usize> {
     let db_status = db::backfill::BackfillJobStatus::Cancelled;
 
@@ -61,7 +61,7 @@ pub async fn cancel_active_jobs_by_link_id(pool: &PgPool, link_id: Uuid) -> anyh
     Ok(rows_affected)
 }
 
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn update_job_total_threads(
     pool: &PgPool,
     job_id: Uuid,
@@ -87,7 +87,7 @@ pub async fn update_job_total_threads(
     Ok(())
 }
 
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn update_job_threads_retrieved_count(
     pool: &PgPool,
     job_id: Uuid,

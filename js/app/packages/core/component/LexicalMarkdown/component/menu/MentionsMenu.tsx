@@ -5,7 +5,10 @@ import {
 } from '@core/block';
 import { SUPPORTED_CHAT_ATTACHMENT_BLOCKS } from '@core/component/AI/constant/fileType';
 import { BozzyBracketInnerSibling } from '@core/component/BozzyBracket';
-import { useChannelsContext } from '@core/context/channels';
+import {
+  useChannelsContext,
+  useDmActivityByUserId,
+} from '@core/context/channels';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import { UserIcon } from '@core/component/UserIcon';
@@ -16,8 +19,9 @@ import {
   type IUser,
   useContacts,
 } from '@core/user';
+import { useEmail } from '@core/context/user';
 import { getDateSuggestions } from '@core/util/dateParser';
-import { createFreshSearch } from '@core/util/freshSort';
+import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
 import ClockIcon from '@icon/regular/clock.svg';
 import EmailIcon from '@icon/regular/envelope.svg';
 import UsersIcon from '@icon/regular/users.svg';
@@ -455,9 +459,25 @@ function MentionsMenuInner(props: {
 
   const contacts = useContacts();
 
+  const dmActivityByUserId = useDmActivityByUserId();
+
   const users = createMemo(() => {
     const list = props.users?.() ?? contacts();
-    return list.map(entityMapper('user')).filter(allItemFilter);
+    const dmActivity = dmActivityByUserId();
+
+    return list
+      .map(entityMapper('user'))
+      .map((entity) => {
+        const dmTimestamp = dmActivity.get(entity.id);
+        if (dmTimestamp) {
+          return {
+            ...entity,
+            lastInteraction: dmTimestamp,
+          };
+        }
+        return entity;
+      })
+      .filter(allItemFilter);
   });
 
   let channels: Accessor<Entity<'channel'>[]>;
@@ -648,8 +668,17 @@ function MentionsMenuInner(props: {
     return [...tabResults, ...otherResults];
   });
 
+  const currentUserEmail = useEmail();
+  const currentUserDomain = createMemo(() => {
+    const email = currentUserEmail();
+    return email ? email.split('@')[1] : undefined;
+  });
+
   const userSearch = createFreshSearch<Entity<'user'>>(
-    { timeWeight: 0, brevityWeight: 0.3 },
+    FreshSearchPresets.baseUserSearch(
+      currentUserDomain,
+      (item) => item.data.email
+    ),
     getItemSearchText
   );
 
@@ -1038,7 +1067,7 @@ function MentionsMenuInner(props: {
                 </button>
               </div>
             </div>
-            <div class="max-h-64 overflow-y-auto">
+            <div class="max-h-64 overflow-y-auto scrollbar-hidden">
               <For each={allItems}>
                 {(item, i) => (
                   <MentionsMenuItem

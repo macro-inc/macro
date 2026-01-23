@@ -109,11 +109,6 @@ async fn main() -> anyhow::Result<()> {
             .to_string(),
     };
 
-    let auth_service_client = authentication_service_client::AuthServiceClient::new(
-        auth_service_secret_key.clone(),
-        config.auth_service_url.to_string(),
-    );
-
     let permissions_token_secret = secretsmanager_client
         .get_maybe_secret_value(config.environment, DocumentPermissionJwtSecretKey::new()?)
         .await?;
@@ -149,7 +144,6 @@ async fn main() -> anyhow::Result<()> {
         sqs_client: Arc::new(sqs_client),
         macro_notify_client: Arc::new(macro_notify_client),
         document_storage_service_client: Arc::new(document_storage_service_client),
-        auth_service_client: Arc::new(auth_service_client),
         connection_gateway_client: Arc::new(connection_gateway_client),
         permissions_token_secret,
         comms_state: CommsRouterState::new(ChannelServiceImpl::new(

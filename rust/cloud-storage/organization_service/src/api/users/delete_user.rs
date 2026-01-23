@@ -88,7 +88,7 @@ async fn delete_user(auth_context: &Config, user_to_delete: &str) -> anyhow::Res
     let res = client
         .delete(format!(
             "{}/internal/users/{url_encoded_user_id}",
-            auth_context.dss_url
+            auth_context.document_storage_service_url
         ))
         .header(
             "x-document-storage-service-auth-key",
@@ -111,13 +111,18 @@ async fn delete_user(auth_context: &Config, user_to_delete: &str) -> anyhow::Res
     let start_time_auth = std::time::Instant::now();
     // Delete user DSS items through DSS API
     let res = client
-        .delete(format!("{}/webhooks/user", auth_context.auth_url))
+        .delete(format!(
+            "{}/webhooks/user",
+            auth_context.authentication_service_url
+        ))
         .body(serde_json::to_string(&DeleteUserRequest {
             user_id: user_to_delete.to_string(),
         })?)
         .header(
             "x-internal-auth-key",
-            auth_context.auth_internal_auth_secret_key.as_ref(),
+            auth_context
+                .authentication_service_internal_api_secret_key
+                .as_ref(),
         )
         .header("User-Agent", "organization-service")
         .header(reqwest::header::CONTENT_TYPE, "application/json")

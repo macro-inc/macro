@@ -66,7 +66,6 @@ use utoipa::OpenApi;
         email::labels::delete::handler,
         email::labels::list::handler,
         email::contacts::list::list_contacts_handler,
-        email::sync::enable::enable_handler,
         email::sync::disable::disable_handler,
         email::settings::patch::patch_settings_handler,
     ),

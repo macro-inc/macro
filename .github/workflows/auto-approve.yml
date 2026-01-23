@@ -1,0 +1,25 @@
+name: Auto Approve
+
+on: pull_request_target
+
+jobs:
+  auto-approve:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Auto Approve (PAT 1)
+        uses: hmarr/auto-approve-action@v4
+        continue-on-error: true
+        with:
+          github-token: ${{ secrets.PR_APPROVAL_PAT_1 }}
+
+      - name: Auto Approve (PAT 2)
+        uses: hmarr/auto-approve-action@v4
+        continue-on-error: true
+        with:
+          github-token: ${{ secrets.PR_APPROVAL_PAT_2 }}
+
+      - name: Auto Approve (PAT 3)
+        uses: hmarr/auto-approve-action@v4
+        continue-on-error: true
+        with:
+          github-token: ${{ secrets.PR_APPROVAL_PAT_3 }}

@@ -1,4 +1,4 @@
-use crate::{api::context::ApiContext, config::AuthInternalAuthSecretKey};
+use crate::{api::context::ApiContext, config::AuthenticationServiceInternalApiSecretKey};
 use anyhow::Context;
 use config::{Config, Environment};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -26,7 +26,7 @@ async fn main() -> anyhow::Result<()> {
         ));
 
     let auth_service_key = secretsmanager_client
-        .get_maybe_secret_value(env, AuthInternalAuthSecretKey::new()?)
+        .get_maybe_secret_value(env, AuthenticationServiceInternalApiSecretKey::new()?)
         .await?;
 
     // Parse our configuration from the environment.

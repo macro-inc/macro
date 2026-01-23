@@ -3,6 +3,7 @@ import SignalIcon from '@macro-icons/wide/signal.svg';
 import WideFolder from '@macro-icons/wide/folder.svg';
 import WidePlus from '@macro-icons/wide/plus.svg';
 import WideTask from '@macro-icons/wide/task.svg';
+import { impactFeedback } from '@tauri-apps/plugin-haptics';
 import { batch, type Component, type JSX } from 'solid-js';
 import { setCreateMenuOpen } from '../Launcher';
 import { useSplitPanelOrThrow } from '../split-layout/layoutUtils';
@@ -24,7 +25,10 @@ type MobileDockButtonProps = {
 function MobileDockButton(props: MobileDockButtonProps) {
   return (
     <button
-      onClick={props.onClick}
+      onClick={() => {
+        impactFeedback('light');
+        props.onClick();
+      }}
       class="flex flex-col items-center justify-center w-[20%] py-4"
       classList={{
         'text-ink-muted': !props.active,

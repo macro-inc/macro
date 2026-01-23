@@ -1,4 +1,4 @@
-use crate::messages::get::convert_db_messages_to_service;
+use crate::messages::get::convert_db_messages_to_service_concurrent;
 use models_email::{db, service};
 use sqlx::PgPool;
 use sqlx::types::Uuid;
@@ -98,7 +98,38 @@ pub async fn get_scheduled_messages_by_link_id(
     }
 
     let db_messages = get_scheduled_db_messages_by_link_id(pool, link_id, offset, limit).await?;
-    convert_db_messages_to_service(pool, db_messages).await
+    convert_db_messages_to_service_concurrent(pool, db_messages).await
+}
+
+/// Fetches scheduled messages for multiple message IDs, returning a map keyed by message_id.
+/// Only returns scheduled messages that have not been sent yet.
+#[tracing::instrument(skip(db), err)]
+pub async fn fetch_scheduled_messages_in_bulk(
+    db: &sqlx::PgPool,
+    message_ids: &[Uuid],
+) -> anyhow::Result<std::collections::HashMap<Uuid, db::message::ScheduledMessage>> {
+    if message_ids.is_empty() {
+        return Ok(std::collections::HashMap::new());
+    }
+
+    let records = sqlx::query_as!(
+        db::message::ScheduledMessage,
+        r#"
+        SELECT link_id, message_id, send_time, sent, processing
+        FROM email_scheduled_messages
+        WHERE message_id = ANY($1) AND sent = false
+        "#,
+        message_ids,
+    )
+    .fetch_all(db)
+    .await?;
+
+    let mut scheduled_map = std::collections::HashMap::new();
+    for record in records {
+        scheduled_map.insert(record.message_id, record);
+    }
+
+    Ok(scheduled_map)
 }
 
 /// Fetches unsent scheduled db messages for a link with pagination

@@ -26,7 +26,9 @@ import {
 } from '@kobalte/core/combobox';
 import type { Channel } from '@service-comms/generated/models/channel';
 import { useEmail, useUserId } from '@core/context/user';
+import { useDmActivityByUserId } from '@core/context/channels';
 import { debounce } from '@solid-primitives/scheduled';
+import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
 import * as EmailValidator from 'email-validator';
 import {
   type Accessor,
@@ -323,9 +325,27 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       (props.triedToSubmit?.() ?? false) && props.selectedOptions.length === 0
   );
 
+  const currentUserEmail = useEmail();
+  const currentUserDomain = createMemo(() => {
+    const email = currentUserEmail();
+    return email ? email.split('@')[1] : undefined;
+  });
+
+  const dmActivityByUserId = useDmActivityByUserId();
+
+  // Create search function for recipients
+  const recipientSearch = createFreshSearch<CombinedRecipientItem>(
+    FreshSearchPresets.baseUserSearch(currentUserDomain, (item) =>
+      item.kind === 'user' ? item.data.email : undefined
+    ),
+    getRecipientOptionTextValue
+  );
+
   const options = createMemo(() => {
     const emailSet = new Set<string>();
+    const dmActivity = dmActivityByUserId();
 
+    // Filter and augment options with DM activity
     const optionsList: CombinedRecipientItem<K>[] = [];
     for (const option of props.options()) {
       const item = option as CombinedRecipientItem;
@@ -343,6 +363,19 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       if (email) {
         emailSet.add(email.toLowerCase());
       }
+
+      // Augment user items with DM activity timestamp
+      if (item.kind === 'user') {
+        const dmTimestamp = dmActivity.get(item.id);
+        if (dmTimestamp) {
+          optionsList.push({
+            ...option,
+            lastInteraction: dmTimestamp,
+          } as CombinedRecipientItem<K>);
+          continue;
+        }
+      }
+
       optionsList.push(option);
     }
 
@@ -370,7 +403,14 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       allOptions.push(customEntity);
     }
 
-    return allOptions;
+    // Always apply freshSort ranking - with search term for filtering, without for time-based ranking
+    const searchResults = recipientSearch(
+      allOptions as CombinedRecipientItem[],
+      currentUserInput ?? ''
+    );
+    return searchResults.map(
+      (result) => result.item
+    ) as CombinedRecipientItem<K>[];
   });
 
   const [scrollToItem, setScrollToItem] = createSignal<(key: string) => void>(

@@ -1,0 +1,55 @@
+# Download LibreOffice/Collabora Online assets
+FROM debian:trixie-slim AS lok
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl tar ca-certificates \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN curl -L -O https://github.com/CollaboraOnline/online/releases/download/for-code-assets/core-co-25.04-assets.tar.gz
+RUN tar -xvf core-co-25.04-assets.tar.gz
+
+# Build stage with clang dependencies for bindgen
+FROM rust:latest AS chef
+ENV SQLX_OFFLINE=true
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    llvm libclang-dev clang \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN cargo install cargo-strip
+WORKDIR /app
+
+FROM chef AS builder
+COPY . .
+
+RUN cargo build --release --bin convert_service \
+    && cargo strip \
+    && mv /app/target/release/convert_service /app/svc
+
+# Runtime image with LibreOffice
+FROM ubuntu:noble AS convert_service
+WORKDIR /app
+
+# Accept Microsoft fonts license
+RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | debconf-set-selections
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libreoffice \
+    libreofficekit-dev \
+    ca-certificates \
+    openssl \
+    dumb-init \
+    libkrb5-3 \
+    ttf-mscorefonts-installer \
+    wget xfonts-utils \
+    cabextract \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Refresh font cache
+RUN fc-cache -f -v
+
+# Copy binary and LOK assets
+COPY --from=builder /app/svc /app/svc
+COPY --from=lok /instdir /app/lok/instdir
+COPY --from=lok /include /app/lok/include
+RUN chmod +x svc
+
+ENV PORT=8080
+EXPOSE 8080
+ENTRYPOINT ["dumb-init", "./svc"]

@@ -231,10 +231,19 @@ pub async fn upload_single_attachment(
 // get a presigned cloudfront url for the attachment
 async fn get_presigned_url(state: &ApiContext, key: &str) -> anyhow::Result<String> {
     let encoded_key = urlencoding::encode(key);
-    let presigned_url_expiry_secs = state.config.presigned_url_ttl_secs;
-    let public_key_id = state.config.cloudfront_signer_public_key_id.clone();
-    let private_key = state.config.cloudfront_signer_private_key.as_ref();
-    let url = state.config.cloudfront_distribution_url.clone();
+    let presigned_url_expiry_secs = state.config.email_service_presigned_url_ttl_secs;
+    let public_key_id = state
+        .config
+        .email_service_cloudfront_signer_public_key_id
+        .clone();
+    let private_key = state
+        .config
+        .email_service_cloudfront_signer_private_key
+        .as_ref();
+    let url = state
+        .config
+        .email_service_cloudfront_distribution_url
+        .clone();
 
     let current_unix_timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)

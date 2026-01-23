@@ -4,7 +4,7 @@ use models_email::email::service;
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn create_backfill_job(
     pool: &PgPool,
     link_id: Uuid,

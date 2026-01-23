@@ -39,6 +39,7 @@ import SparkleIcon from '@icon/regular/sparkle.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import TrashSimple from '@icon/regular/trash-simple.svg';
 import UserIcon from '@icon/regular/user.svg';
+import MacroEmbed from '@macro-icons/macro-embed.svg';
 
 // Components
 import { ClippedPanel } from '@core/component/ClippedPanel';
@@ -416,7 +417,7 @@ export function PopupPreview(props: {
                 : 'Convert to Card View'
             }
             onClick={props.previewInfo.handlePreviewToggle}
-            icon={CustomEmbedIcon}
+            icon={MacroEmbed}
           />
         </Show>
       );

@@ -498,7 +498,6 @@ export * from './soupItemOneOfThreeTag';
 export * from './soupLabel';
 export * from './soupLabelListVisibility';
 export * from './soupLabelType';
-export * from './soupMacroAttachment';
 export * from './soupMessageListVisibility';
 export * from './soupPage';
 export * from './soupPageNextCursor';

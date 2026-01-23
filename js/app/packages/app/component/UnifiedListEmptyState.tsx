@@ -3,8 +3,7 @@ import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
 import { fileSelector } from '@core/directive/fileSelector';
 import { folderSelector } from '@core/directive/folderSelector';
 import { useEmailLinksStatus } from '@core/email-link';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
+import { isMobile } from '@core/mobile/isMobile';
 import type { ViewId } from '@core/types/view';
 import { handleFolderSelect } from '@core/util/upload';
 import { createMemo, Match, Show, Switch } from 'solid-js';
@@ -134,9 +133,7 @@ export function EmptyStateInner(props: EmptyStateInnerProps) {
             </div>
           )}
         </Show>
-        <Show
-          when={props.showDropZone && !(isTouchDevice() && isMobileWidth())}
-        >
+        <Show when={props.showDropZone && !isMobile()}>
           <div class="drop-zone flex flex-col items-center justify-center w-full py-8 border border-dashed border-edge-muted bg-hover">
             <p class="text-ink-muted">Drag & drop files and folders here</p>
             <p class="text-ink-muted">

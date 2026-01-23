@@ -26,21 +26,6 @@ pub struct Attachment {
     pub content_id: Option<String>,
 }
 
-/// Attachments of a message created when sending a message/draft through Macro FE. references
-/// a macro item (document, canvas, etc). These don't actually get sent to the provider when
-/// sending a message, but we store them so we can display the pills for the Macro objects in the FE
-/// when displaying the message.
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, JsonSchema)]
-pub struct AttachmentMacro {
-    #[schemars(with = "Option<String>")]
-    pub db_id: Option<Uuid>,
-    #[schemars(with = "Option<String>")]
-    pub message_id: Option<Uuid>,
-    #[schemars(with = "String")]
-    pub item_id: Uuid,
-    pub item_type: String,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AttachmentSfs {
     pub id: Uuid,

@@ -4,8 +4,8 @@
  * This file is only for legacy support of a few non-standard menus that have not yet been migrated.
  */
 
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import {
   autoUpdate,
   computePosition,
@@ -125,7 +125,7 @@ export function OldMenuItem(props: OldMenuItemProps) {
         ref={setMenuItemRef}
       >
         <div
-          class={`flex flex-row w-full ${isMobileWidth() && isTouchDevice() ? 'py-2 px-1' : 'p-1'} justify-between items-center rounded ${
+          class={`flex flex-row w-full ${isMobile() ? 'py-2 px-1' : 'p-1'} justify-between items-center rounded ${
             props.disabled
               ? 'opacity-50 cursor-not-allowed text-ink'
               : (selected())
@@ -139,13 +139,13 @@ export function OldMenuItem(props: OldMenuItemProps) {
           }}
         >
           <div
-            class={`flex flex-row w-full gap-1.5 justify-start items-center ${props.textSize === 'base' ? 'text-base' : isMobileWidth() && isTouchDevice() ? 'text-base' : 'text-sm'} font-medium ${
+            class={`flex flex-row w-full gap-1.5 justify-start items-center ${props.textSize === 'base' ? 'text-base' : isMobile() ? 'text-base' : 'text-sm'} font-medium ${
               props.secondaryActionHandler ? `max-w-[calc(100%-18px)]` : ''
             }`}
           >
             {props.icon && (
               <div
-                class={`flex ${isMobileWidth() && isTouchDevice() ? 'w-5 h-5' : 'w-4 h-4'} justify-center items-center shrink-0 ${
+                class={`flex ${isMobile() ? 'w-5 h-5' : 'w-4 h-4'} justify-center items-center shrink-0 ${
                   selected() ? 'text-accent-ink' : ''
                 } ${props.iconClass ?? ''}`}
               >

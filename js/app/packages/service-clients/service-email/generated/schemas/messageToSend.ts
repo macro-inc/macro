@@ -5,7 +5,6 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { MessageToSendAttachments } from './messageToSendAttachments';
-import type { MessageToSendAttachmentsMacro } from './messageToSendAttachmentsMacro';
 import type { MessageToSendBcc } from './messageToSendBcc';
 import type { MessageToSendBodyHtml } from './messageToSendBodyHtml';
 import type { MessageToSendBodyMacro } from './messageToSendBodyMacro';
@@ -22,7 +21,6 @@ import type { MessageToSendTo } from './messageToSendTo';
 
 export interface MessageToSend {
   attachments?: MessageToSendAttachments;
-  attachments_macro?: MessageToSendAttachmentsMacro;
   bcc?: MessageToSendBcc;
   body_html?: MessageToSendBodyHtml;
   body_macro?: MessageToSendBodyMacro;

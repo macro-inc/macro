@@ -1,6 +1,6 @@
 use anyhow::Context;
 use document_storage_service_client::DocumentStorageServiceClient;
-use email_service::config::{CloudfrontSignerPrivateKey, Config};
+use email_service::config::{Config, EmailServiceCloudfrontSignerPrivateKey};
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
@@ -29,7 +29,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let cloudfront_signer_private_key = secretsmanager_client
-        .get_maybe_secret_value(env, CloudfrontSignerPrivateKey::new()?)
+        .get_maybe_secret_value(env, EmailServiceCloudfrontSignerPrivateKey::new()?)
         .await?;
 
     // Parse our configuration from the environment.

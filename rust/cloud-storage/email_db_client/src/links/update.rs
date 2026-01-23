@@ -4,7 +4,7 @@ use sqlx::types::Uuid;
 
 /// Updates the sync active status for a link by its ID.
 /// Also updates the updated_at timestamp to the current time.
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn update_link_sync_status(
     pool: &PgPool,
     link_id: Uuid,

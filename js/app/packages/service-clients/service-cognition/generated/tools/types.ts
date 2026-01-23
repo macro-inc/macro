@@ -795,12 +795,6 @@ export interface ApiPaginatedThreadCursor {
       providerLabelId: string;
       type: 'System' | 'User';
     }[];
-    macroAttachments: {
-      dbId: string;
-      itemId: string;
-      itemType: string;
-      messageId: string;
-    }[];
     metadata: {
       /**
        * if any email contains a calendar invite

@@ -1,6 +1,11 @@
 dev-tauri:
     cd packages/app && bun run --bun dev:tauri
 
+# Run the app with all services locally
+# This assumes you have followed the RUNNING_LOCALLLY.md instructions
+local:
+    cd packages/app && VITE_LOCAL_SERVERS='ALL' bun run --bun dev
+
 local-dcs:
     cd packages/app && VITE_LOCAL_SERVERS='cognition-service,cognition-websocket-service' bun run --bun dev
 

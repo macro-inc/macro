@@ -5,8 +5,7 @@ import {
   MenuSeparator,
 } from '@core/component/Menu';
 import clickOutside from '@core/directive/clickOutside';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
+import { isMobile } from '@core/mobile/isMobile';
 import NewTab from '@icon/regular/arrow-square-out.svg';
 import ArrowsOut from '@icon/regular/arrows-out-simple.svg';
 import ThreeDotsIcon from '@icon/regular/dots-three.svg';
@@ -62,7 +61,7 @@ export function MediaButtons(props: MediaButtonsProps) {
           />
         </Dialog.Trigger>
       </Show>
-      <Show when={props.newTab && !isMobileWidth() && !isTouchDevice}>
+      <Show when={props.newTab && !isMobile()}>
         <DeprecatedIconButton
           class="m-0"
           icon={() => <NewTab class="size-5" />}
@@ -127,9 +126,7 @@ export function MediaButtons(props: MediaButtonsProps) {
                     }}
                   />
                 </Show>
-                <Show
-                  when={props.newTab && !isMobileWidth() && !isTouchDevice()}
-                >
+                <Show when={props.newTab && !isMobile()}>
                   <MenuItem
                     text="Open in new tab"
                     icon={NewTab}

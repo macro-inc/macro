@@ -1,4 +1,5 @@
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { isTauri } from './platform';
 import shortuuid from 'short-uuid';
 
 const short = shortuuid(shortuuid.constants.flickrBase58, {
@@ -15,6 +16,15 @@ function unwrapShortId(id: string): string {
 
 export function openExternalUrl(url: string) {
   window.open(url, '_blank', 'noopener,noreferrer')?.focus();
+}
+
+function getWebOrigin(): string {
+  if (isTauri()) {
+    return import.meta.env.MODE === 'development'
+      ? 'https://dev.macro.com'
+      : 'https://macro.com';
+  }
+  return window.location.origin;
 }
 
 export function transformShortIdInUrlPathname(pathname: string) {
@@ -37,7 +47,7 @@ export function buildSimpleEntityUrl(
   entity: { type: string; id: string },
   params: Record<string, any>
 ): string {
-  const urlString = `${window.location.origin}/app/${entity.type}/${entity.id}`;
+  const urlString = `${getWebOrigin()}/app/${entity.type}/${entity.id}`;
   const url = new URL(urlString);
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value);

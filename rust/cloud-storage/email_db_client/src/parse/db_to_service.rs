@@ -82,38 +82,13 @@ pub fn map_db_attachment_to_service(
     }
 }
 
-#[tracing::instrument]
-pub fn map_db_macro_attachments_to_service(
-    db_attachments: Vec<attachment::AttachmentMacro>,
-) -> Vec<service::attachment::AttachmentMacro> {
-    db_attachments
-        .into_iter()
-        .map(map_db_macro_attachment_to_service)
-        .collect()
-}
-
-#[tracing::instrument]
-pub fn map_db_macro_attachment_to_service(
-    db_att: db::attachment::AttachmentMacro,
-) -> service::attachment::AttachmentMacro {
-    service::attachment::AttachmentMacro {
-        db_id: Some(db_att.id),
-        message_id: Some(db_att.message_id),
-        item_type: db_att.item_type,
-        item_id: db_att.item_id,
-    }
-}
-
 #[tracing::instrument(skip_all)]
 pub fn map_db_message_attachments_to_service(
     mut service_message: message::Message,
     attachments_res: Vec<db::attachment::Attachment>,
-    macro_attachments_res: Vec<db::attachment::AttachmentMacro>,
     draft_attachments_res: Vec<db::attachment::AttachmentDraft>,
 ) -> anyhow::Result<message::Message> {
     service_message.attachments = map_db_attachments_to_service(attachments_res);
-
-    service_message.attachments_macro = map_db_macro_attachments_to_service(macro_attachments_res);
 
     service_message.attachments_draft = draft_attachments_res
         .into_iter()
@@ -158,7 +133,6 @@ pub fn map_db_message_to_message_to_send(
         body_macro: db_message.body_macro,
         // we don't currently support sending attachments - they get converted to macro.com links on the FE before sending
         attachments: None,
-        attachments_macro: None,
         headers_json: db_message.headers_jsonb,
         send_time: None,
     }
@@ -208,7 +182,6 @@ pub fn map_attachmentless_db_message_to_service(
         body_html_sanitized: db_message.body_html_sanitized,
         body_macro: db_message.body_macro,
         attachments: Vec::new(),
-        attachments_macro: Vec::new(),
         attachments_draft: Vec::new(),
         headers_json: db_message.headers_jsonb,
         created_at: db_message.created_at,

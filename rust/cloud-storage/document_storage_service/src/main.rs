@@ -1,6 +1,8 @@
 use crate::{
     api::context::{ApiContext, DocumentStorageServiceAuthKey},
-    config::{CloudfrontSignerPrivateKeySecretName, DocumentPermissionJwtSecretKey},
+    config::{
+        DocumentPermissionJwtSecretKey, DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
+    },
     service::s3::S3,
 };
 use anyhow::Context;
@@ -51,7 +53,10 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let cloudfront_signer_private_key = secretsmanager_client
-        .get_maybe_secret_value(env, CloudfrontSignerPrivateKeySecretName::new()?)
+        .get_maybe_secret_value(
+            env,
+            DocumentStorageServiceCloudfrontSignerPrivateKeySecretName::new()?,
+        )
         .await?;
 
     let document_permission_jwt_secret = secretsmanager_client

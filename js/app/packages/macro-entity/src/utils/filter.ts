@@ -3,6 +3,7 @@ import {
   type EntityData,
   type EntityFilter,
   getEntityProjectId,
+  isTaskEntity,
 } from '../types/entity';
 import type { WithNotification } from '../types/notification';
 
@@ -43,6 +44,8 @@ export function importantFilterFn(entity: WithNotification<EntityData>) {
 
 export function notDoneFilterFn(entity: WithNotification<EntityData>) {
   if (entity.type === 'email') return !entity.done;
+  // Tasks are handled by signalFilter based on assignee/status, not notifications
+  if (isTaskEntity(entity)) return true;
   return (
     !!entity.notifications && entity.notifications().some(({ done }) => !done)
   );

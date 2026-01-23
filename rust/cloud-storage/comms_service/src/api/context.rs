@@ -28,7 +28,6 @@ pub struct AppState {
     pub document_storage_service_client:
         Arc<document_storage_service_client::DocumentStorageServiceClient>,
     pub sqs_client: Arc<sqs_client::SQS>,
-    pub auth_service_client: Arc<authentication_service_client::AuthServiceClient>,
     pub permissions_token_secret: LocalOrRemoteSecret<DocumentPermissionJwtSecretKey>,
     pub frecency_storage: FrecencyPgStorage,
     pub comms_state: CommsRouterState<ChannelImpl>,

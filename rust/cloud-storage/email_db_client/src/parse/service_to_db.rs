@@ -152,23 +152,6 @@ pub fn map_service_attachments_to_db(
         .collect()
 }
 
-#[tracing::instrument(skip(service_attachments))]
-pub fn map_service_macro_attachments_to_db(
-    service_attachments: &mut [service::attachment::AttachmentMacro],
-    message_db_id: Uuid,
-) -> Vec<attachment::AttachmentMacro> {
-    service_attachments
-        .iter_mut()
-        .map(|service_attachment| attachment::AttachmentMacro {
-            id: macro_uuid::generate_uuid_v7(),
-            message_id: message_db_id,
-            item_id: service_attachment.item_id,
-            item_type: service_attachment.item_type.clone(),
-            created_at: Utc::now(),
-        })
-        .collect()
-}
-
 pub fn map_new_contact_to_db(service_msg: &Contact, id: Uuid) -> db::contact::Contact {
     db::contact::Contact {
         id,

@@ -1,5 +1,5 @@
 use crate::domain::models::{
-    Attachment, AttachmentMacro, Contact, EmailErr, EmailThreadPreview, EnrichedEmailThreadPreview,
+    Attachment, Contact, EmailErr, EmailThreadPreview, EnrichedEmailThreadPreview,
     GetEmailsRequest, IntermediateThreadMetadata, Label, Link, PreviewCursorQuery, UserProvider,
 };
 use macro_user_id::user_id::MacroUserIdStr;
@@ -18,11 +18,6 @@ pub trait EmailRepo: Send + Sync + 'static {
         &self,
         thread_ids: &[Uuid],
     ) -> impl Future<Output = Result<Vec<Attachment>, Self::Err>> + Send;
-
-    fn macro_attachments_by_thread_ids(
-        &self,
-        thread_ids: &[Uuid],
-    ) -> impl Future<Output = Result<Vec<AttachmentMacro>, Self::Err>> + Send;
 
     fn contacts_by_thread_ids(
         &self,

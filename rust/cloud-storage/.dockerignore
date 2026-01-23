@@ -38,3 +38,6 @@ CLAUDE.md
 *.swp
 *.swo
 *~
+
+.env
+docker-compose.yml

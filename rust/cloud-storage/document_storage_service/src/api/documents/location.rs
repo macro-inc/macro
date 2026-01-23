@@ -118,7 +118,9 @@ pub async fn get_location_handler_v3(
             }
         };
 
-        let max_age = state.config.presigned_url_browser_cache_expiry_seconds;
+        let max_age = state
+            .config
+            .document_storage_service_presigned_url_browser_cache_expiry_seconds;
 
         Response::builder()
             .status(StatusCode::OK)
@@ -233,7 +235,9 @@ pub async fn get_location_handler(
         }
     };
 
-    let max_age = state.config.presigned_url_browser_cache_expiry_seconds;
+    let max_age = state
+        .config
+        .document_storage_service_presigned_url_browser_cache_expiry_seconds;
 
     Response::builder()
         .status(StatusCode::OK)
@@ -289,13 +293,24 @@ async fn get_editable_url(
     }
 
     let signed_options = get_cloudfront_signed_options(
-        &state.config.vars.cloudfront_signer_public_key_id,
-        state.config.cloudfront_signer_private_key.as_ref(),
-        state.config.presigned_url_expiry_seconds,
+        &state
+            .config
+            .vars
+            .document_storage_service_cloudfront_signer_public_key_id,
+        state
+            .config
+            .document_storage_service_cloudfront_signer_private_key
+            .as_ref(),
+        state
+            .config
+            .document_storage_service_presigned_url_expiry_seconds,
     );
 
     let signed_url = get_presigned_url(
-        &state.config.vars.cloudfront_distribution_url,
+        &state
+            .config
+            .vars
+            .document_storage_service_cloudfront_distribution_url,
         &document_key,
         &signed_options,
     )?;
@@ -340,13 +355,24 @@ pub(in crate::api::documents) async fn get_static_url(
     }
 
     let signed_options = get_cloudfront_signed_options(
-        &state.config.vars.cloudfront_signer_public_key_id,
-        state.config.cloudfront_signer_private_key.as_ref(),
-        state.config.presigned_url_expiry_seconds,
+        &state
+            .config
+            .vars
+            .document_storage_service_cloudfront_signer_public_key_id,
+        state
+            .config
+            .document_storage_service_cloudfront_signer_private_key
+            .as_ref(),
+        state
+            .config
+            .document_storage_service_presigned_url_expiry_seconds,
     );
 
     let signed_url = get_presigned_url(
-        &state.config.vars.cloudfront_distribution_url,
+        &state
+            .config
+            .vars
+            .document_storage_service_cloudfront_distribution_url,
         &document_key,
         &signed_options,
     )?;
@@ -382,13 +408,24 @@ async fn get_converted_docx_url(
     }
 
     let signed_options = get_cloudfront_signed_options(
-        &state.config.vars.cloudfront_signer_public_key_id,
-        state.config.cloudfront_signer_private_key.as_ref(),
-        state.config.presigned_url_expiry_seconds,
+        &state
+            .config
+            .vars
+            .document_storage_service_cloudfront_signer_public_key_id,
+        state
+            .config
+            .document_storage_service_cloudfront_signer_private_key
+            .as_ref(),
+        state
+            .config
+            .document_storage_service_presigned_url_expiry_seconds,
     );
 
     let signed_url = get_presigned_url(
-        &state.config.vars.cloudfront_distribution_url,
+        &state
+            .config
+            .vars
+            .document_storage_service_cloudfront_distribution_url,
         &document_key,
         &signed_options,
     )?;
@@ -420,12 +457,24 @@ async fn get_docx_urls(
     tracing::debug!(elapsed = ?start_shas.elapsed(), "got document shas");
 
     let signed_options = get_cloudfront_signed_options(
-        &state.config.vars.cloudfront_signer_public_key_id,
-        state.config.cloudfront_signer_private_key.as_ref(),
-        state.config.presigned_url_expiry_seconds,
+        &state
+            .config
+            .vars
+            .document_storage_service_cloudfront_signer_public_key_id,
+        state
+            .config
+            .document_storage_service_cloudfront_signer_private_key
+            .as_ref(),
+        state
+            .config
+            .document_storage_service_presigned_url_expiry_seconds,
     );
 
-    let cloudfront_distribution_url = state.config.vars.cloudfront_distribution_url.as_ref();
+    let cloudfront_distribution_url = state
+        .config
+        .vars
+        .document_storage_service_cloudfront_distribution_url
+        .as_ref();
 
     let start_presigned_urls = std::time::Instant::now();
     let presigned_urls: Vec<PresignedUrl> = shas

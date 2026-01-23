@@ -1,5 +1,5 @@
 use crate::email::service::message::Message;
-use crate::service::attachment::{Attachment, AttachmentMacro};
+use crate::service::attachment::Attachment;
 use crate::service::contact::Contact;
 use crate::service::message::MessageWithBodyReplyless;
 use chrono::{DateTime, Utc};
@@ -122,7 +122,6 @@ pub struct ThreadPreviewCursor {
     pub sender_name: Option<String>,
     pub sender_photo_url: Option<String>,
     pub attachments: Vec<Attachment>,
-    pub attachments_macro: Vec<AttachmentMacro>,
     pub participants: Vec<Contact>,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     #[schema(value_type = i64)]
@@ -208,7 +207,6 @@ impl ThreadPreviewCursor {
             sender_name: db_preview.sender_name,
             sender_photo_url: db_preview.sender_photo_url,
             attachments: Vec::new(),
-            attachments_macro: Vec::new(),
             participants: Vec::new(),
             viewed_at: db_preview.viewed_at,
             created_at: db_preview.created_at,
