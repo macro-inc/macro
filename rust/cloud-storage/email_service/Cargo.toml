@@ -30,6 +30,18 @@ name = "pubsub_workers"
 path = "src/bin/pubsub_workers/pubsub_workers.rs"
 
 [[bin]]
+name = "find_used_sfs_ids"
+path = "src/bin/find_used_sfs_ids/find_used_sfs_ids.rs"
+
+[[bin]]
+name = "find_unused_sfs_ids"
+path = "src/bin/find_unused_sfs_ids/find_unused_sfs_ids.rs"
+
+[[bin]]
+name = "cleanup_unused_sfs"
+path = "src/bin/cleanup_unused_sfs/cleanup_unused_sfs.rs"
+
+[[bin]]
 name = "email_service_openapi"
 path = "src/openapi.rs"
 
@@ -102,6 +114,7 @@ redis = { workspace = true, features = [
   "cluster-async",
   "tokio-native-tls-comp",
 ] }
+regex = { workspace = true }
 reqwest = { workspace = true, features = ["stream"] }
 s3_client = { path = "../s3_client" }
 schemars = { workspace = true }

@@ -39,6 +39,8 @@ secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }
 serde_dynamo = { workspace = true }
 serde_json = { workspace = true }
+strum_macros = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true, features = ["limit", "timeout"] }
