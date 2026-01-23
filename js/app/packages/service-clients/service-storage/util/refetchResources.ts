@@ -3,6 +3,7 @@ import { invalidateDeletedItems } from '@queries/storage/deleted';
 import { invalidateProjects } from '@queries/storage/projects';
 import { invalidateUserQuota } from '@queries/auth';
 import { refetchHistory } from '@queries/history/history';
+import { invalidateAllPreviews } from '@queries/preview';
 
 type StorageServiceResource = 'documents' | 'history' | 'projects';
 type RefetchResourcesOptions = {
@@ -18,6 +19,7 @@ export function refetchResources(options?: RefetchResourcesOptions) {
     refetchHistory();
     refetchProjectResources();
     invalidateDeletedItems();
+    invalidateAllPreviews();
     return;
   }
 }

@@ -2,6 +2,7 @@ import { DEFAULT_ITEM_TYPE } from '@service-storage/client';
 import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { createMemo } from 'solid-js';
+import { queryClient } from '../client';
 import { previewDataLoader } from './dataloader';
 import { defaultNameTransform } from './fetchers';
 import { previewKeys } from './keys';
@@ -31,4 +32,16 @@ export function useItemPreview(item: Accessor<ItemEntity>) {
   });
 
   return [preview] as const;
+}
+
+export function invalidateAllPreviews() {
+  return queryClient.invalidateQueries({
+    queryKey: previewKeys._def,
+  });
+}
+
+export function invalidatePreview(itemId: string) {
+  return queryClient.invalidateQueries({
+    queryKey: previewKeys.item(itemId).queryKey,
+  });
 }
