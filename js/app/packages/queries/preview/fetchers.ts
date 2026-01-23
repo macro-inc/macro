@@ -21,7 +21,6 @@ async function fetchChannelPreviews(ids: string[]): Promise<PreviewItem[]> {
   const [, data] = result;
   return data.previews.map((channel) => {
     const base = {
-      _createdAt: new Date(),
       id: channel.channel_id,
       type: 'channel',
     } as const;
@@ -59,7 +58,6 @@ async function fetchDocumentPreviews(ids: string[]): Promise<PreviewItem[]> {
   const [, data] = result;
   return data.previews.map((doc) => {
     const base = {
-      _createdAt: new Date(),
       id: doc.document_id,
       type: 'document',
     } as const;
@@ -109,7 +107,6 @@ async function fetchChatPreviews(ids: string[]): Promise<PreviewItem[]> {
   const [, data] = result;
   return data.previews.map((chat) => {
     const base = {
-      _createdAt: new Date(),
       id: chat.chat_id,
       type: 'chat',
     } as const;
@@ -148,7 +145,6 @@ async function fetchProjectPreviews(
   }
 
   return result[1].previews.map((preview) => ({
-    _createdAt: new Date(),
     type: 'project',
     loading: false,
     ...preview,
@@ -165,7 +161,6 @@ async function fetchEmailPreviews(threadIds: string[]): Promise<PreviewItem[]> {
       });
 
       const base = {
-        _createdAt: new Date(),
         id: threadId,
         type: 'email',
       } as const;

@@ -49,7 +49,6 @@ class PreviewBatcher {
           request.resolve(preview);
         } else {
           request.resolve({
-            _createdAt: new Date(),
             id: request.item.id,
             type: request.item.type ?? ('document' as ItemType),
             loading: false,

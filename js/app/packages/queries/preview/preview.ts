@@ -30,7 +30,6 @@ export function useItemPreview(item: Accessor<ItemEntity> | ItemEntity) {
     if (!data) {
       return {
         loading: true,
-        _createdAt: new Date(),
         id: itemAccessor().id,
         type: itemAccessor().type ?? DEFAULT_ITEM_TYPE,
       } as PreviewItem;

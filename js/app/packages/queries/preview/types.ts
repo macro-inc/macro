@@ -13,7 +13,6 @@ export type PreviewItemNoAccess = {
 } & BasePreviewItem;
 
 type BasePreviewItem<T extends ItemType = ItemType> = {
-  _createdAt: Date;
   id: string;
   type: T;
   owner?: string;
