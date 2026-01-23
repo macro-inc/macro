@@ -11,14 +11,16 @@
 
 ## Setup
 
-- Go into doppler and the `local_services` project. Under the `_personal` environment you will need to update the following variables:
+- Export the **SOPS_KMS_ARN** (you can skip if you use nix-shell)
+`export SOPS_KMS_ARN = "arn:aws:kms:us-east-1:569036502058:key/mrk-cab29bf948044eb79005a81f48d40e93,arn:aws:kms:us-west-1:569036502058:key/mrk-cab29bf948044eb79005a81f48d40e93"`
+
+- Next run `just get_environment` to convert the sops into a .env file
+- **NOTE** You'll need to fill in the following variables with your own access key and secret access key
 
 ```
 AWS_ACCESS_KEY_ID
 AWS_SECRET_ACCESS_KEY
 ```
-
-- Next generate your `.env` file via `just get_environment`
 
 ## Running
 

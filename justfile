@@ -4,7 +4,7 @@ create_networks:
   echo "docker networks created"
 
 get_environment:
-  doppler secrets download --no-file --format env > .env
+  sops --input-type dotenv --output-type dotenv -d .env-local-dev.enc > .env
 
 # Creates the docker networks then runs the databases 
 # This is used when initializing your databases
