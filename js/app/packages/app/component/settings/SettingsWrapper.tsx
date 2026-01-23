@@ -1,4 +1,4 @@
-import { Show } from 'solid-js';
+import { Show, Suspense } from 'solid-js';
 import { Resize } from '@core/component/Resize';
 import { isSettingsPanelOpen } from '@core/signal/layout/settings';
 import { useIsAuthenticated } from '@core/auth';
@@ -16,7 +16,9 @@ export const SettingsWrapper = () => {
         hidden={() => !isSettingsPanelOpen()}
         persistent={true}
       >
-        <SettingsPanel hide={!isSettingsPanelOpen()} />
+        <Suspense>
+          <SettingsPanel hide={!isSettingsPanelOpen()} />
+        </Suspense>
       </Resize.Panel>
     </Show>
   );
