@@ -40,7 +40,7 @@ export const RenameView = (props: {
         () => onMutateResult.previousData
       );
     },
-    onSettled(_, __, variables) {
+    onSettled(_, __, _variables) {
       // TODO: fix the backend so that the /channels/{id} endpoint returns the updated name
       // queryClient.invalidateQueries({
       //   queryKey: channelKeys.withID(variables.entity.id).queryKey,
