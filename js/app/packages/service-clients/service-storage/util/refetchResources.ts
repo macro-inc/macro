@@ -17,7 +17,7 @@ export function refetchResources(options?: RefetchResourcesOptions) {
   refetchProjectResources();
   invalidateDeletedItems();
   // TODO: consolidate where we rename items
-  // and optimisitcally set the data using setPreviewData
+  // and optimistically set the data using setPreviewData
   invalidatePreview(options?.id);
 }
 
