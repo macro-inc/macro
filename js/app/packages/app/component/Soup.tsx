@@ -3,13 +3,11 @@ import {
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
-import { playSound } from '@app/util/sound';
 import { useIsAuthenticated } from '@core/context/user';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
-import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { IS_MAC } from '@core/constant/isMac';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
@@ -56,7 +54,6 @@ import {
   Switch,
 } from 'solid-js';
 import { PreviewPanel } from './PreviewPanel';
-import { SoupChatInput } from './SoupChatInput';
 import { SuspenseContextComp } from './SuspenseContext';
 import {
   SplitHeaderLeft,
@@ -399,7 +396,6 @@ function EntityTypeIconFilter() {
               'text-ink-muted hover:text-accent hover:bg-accent/20': !preview(),
             }}
             onClick={() => {
-              playSound('open');
               setPreview((prev) => !prev);
             }}
           >
@@ -650,7 +646,6 @@ export function Soup() {
       description: 'Toggle Preview',
       hotkeyToken: TOKENS.unifiedList.togglePreview,
       keyDownHandler: () => {
-        playSound('open');
         setPreview((prev) => !prev);
         return true;
       },
@@ -770,9 +765,6 @@ export function Soup() {
             />
           </Show>
         </div>
-        <Show when={ENABLE_UNIFIED_LIST_AI_INPUT}>
-          <SoupChatInput />
-        </Show>
       </div>
     </Show>
   );

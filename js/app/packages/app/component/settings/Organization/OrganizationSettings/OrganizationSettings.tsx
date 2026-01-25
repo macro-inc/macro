@@ -1,4 +1,3 @@
-import { ENABLE_ORG_SETTING_DEFAULT_SHARE } from '@core/constant/featureFlags';
 import ArrowDown from '@icon/regular/arrow-down.svg';
 import Close from '@icon/regular/x-circle.svg';
 import { type JSX, Show } from 'solid-js';
@@ -36,7 +35,6 @@ const OrganizationSettings = () => {
   const {
     orgSettings,
     loading,
-    changeSharePermissions,
     // changePublicAccessLevel,
     changeRetentionDays,
     updateRetentionDays,
@@ -54,29 +52,6 @@ const OrganizationSettings = () => {
           </Show>
         }
       />
-      <Show when={ENABLE_ORG_SETTING_DEFAULT_SHARE}>
-        <Row
-          text="Default Share Permissions"
-          subtext="This setting determines the default sharing permissions applied to new documents created within the system."
-          component={
-            <Show when={!loading()}>
-              <div class="flex items-center relative min-w-20 hover:bg-hover hover-transition-bg rounded-lg transition">
-                <select
-                  class="cursor-default min-w-28 w-auto bg-transparent appearance-none text-xs border-none text-ink pl-2 pr-4 py-1"
-                  onChange={changeSharePermissions}
-                  value={orgSettings.default_share_permission.toLowerCase()}
-                >
-                  <option value="public">Public</option>
-                  <option value="private">Private</option>
-                  <option value="organization">Organization</option>
-                </select>
-                <ArrowDown class="w-5 h-5 pr-2 pointer-events-none absolute right-0" />
-              </div>
-            </Show>
-          }
-        />
-      </Show>
-
       <Row
         text="Document Retention"
         subtext="This setting determines the number of days documents are retained in the system."

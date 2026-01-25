@@ -1,8 +1,4 @@
-import {
-  ENABLE_FORM_EDITING,
-  ENABLE_SCRIPTING,
-  ENABLE_THUMBNAIL_VIEWER,
-} from '@core/constant/featureFlags';
+import { ENABLE_SCRIPTING } from '@core/constant/featureFlags';
 import * as stackingContext from '@core/constant/stackingContext';
 import { showMessageBoxSync } from '@core/util/dialog';
 import debounce from 'lodash/debounce';
@@ -204,31 +200,8 @@ export class InternalPDFViewer {
        *      from the {@link AnnotationStorage}-instance; useful e.g. for printing.
        *   The default value is `AnnotationMode.ENABLE`.
        */
-      annotationMode: ENABLE_FORM_EDITING
-        ? AnnotationMode.ENABLE_FORMS
-        : AnnotationMode.ENABLE, // lets us view but not edit forms
+      annotationMode: AnnotationMode.ENABLE,
     });
-
-    if (
-      ENABLE_THUMBNAIL_VIEWER &&
-      popupViewer != null &&
-      this._renderingQueue != null
-    ) {
-      const thumbnailContainer = this.#buildThumbnailViewerContainer();
-      this._thumbnailViewerContainer = thumbnailContainer;
-
-      const thumbnailViewer = new PDFThumbnailViewer({
-        container: thumbnailContainer,
-        eventBus: this._eventBus,
-        renderingQueue: this._renderingQueue,
-        linkService: this._linkService,
-        l10n: this._viewer.l10n,
-        thumbnailWidth: DEFAULT_THUMBNAIL_WIDTH,
-      });
-      this._thumbnailViewer = thumbnailViewer;
-
-      this._renderingQueue.setThumbnailViewer(thumbnailViewer);
-    }
 
     renderingQueue.setViewer(this._viewer);
     linkService.setViewer(this._viewer);

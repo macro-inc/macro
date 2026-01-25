@@ -51,7 +51,6 @@ import {
 import { ENTITY_HEIGHT } from '../../macro-entity/src/components/EntityWithEverything';
 import { useUserId } from '../../macro-entity/src/queries/auth';
 import { createBulkCopyDssEntityMutation } from '../../macro-entity/src/queries/dss';
-import { playSound } from '../util/sound';
 import { openBulkEditModal } from './bulk-edit-entity/BulkEditEntityModal';
 import {
   resetCommandCategoryIndex,
@@ -1203,7 +1202,6 @@ export function createNavigationEntityListShortcut({
   });
 
   function stepDown() {
-    playSound('down');
     navigateThroughList({ axis: 'end', mode: 'step' });
     return true;
   }
@@ -1243,7 +1241,6 @@ export function createNavigationEntityListShortcut({
   });
 
   function stepUp() {
-    playSound('up');
     navigateThroughList({ axis: 'start', mode: 'step' });
     return true;
   }

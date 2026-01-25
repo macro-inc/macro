@@ -30,27 +30,6 @@ const useOrganizationSettings = createSingletonRoot(() => {
     setLoading(false);
   });
 
-  const changeSharePermissions = async (e: Event) => {
-    const target = e.target as HTMLSelectElement;
-    if (!target) return;
-    const share_type = target.value as 'public' | 'private' | 'organization';
-
-    try {
-      const data =
-        await organizationServiceClient.updateSharePermissions(share_type);
-      if (isErr(data)) {
-        throw new Error('Failed to update share permissions');
-      }
-      setStore('default_share_permission', share_type);
-      track(TrackingEvents.ORGANIZATION.SETTINGS.PERMISSIONS, {
-        plubic: target.value === 'public',
-      });
-    } catch (e) {
-      console.error(e);
-      return;
-    }
-  };
-
   // const changePublicAccessLevel = async (e: Event) => {
   //   const target = e.target as HTMLSelectElement;
   //   if (!target) return;
@@ -132,7 +111,6 @@ const useOrganizationSettings = createSingletonRoot(() => {
   return {
     orgSettings: store,
     loading,
-    changeSharePermissions,
     // changePublicAccessLevel,
     changeRetentionDays,
     updateRetentionDays,

@@ -25,7 +25,6 @@ import {
   fileTypeToBlockName,
 } from '@core/constant/allBlocks';
 import {
-  ENABLE_FRECENCY,
   ENABLE_PROPERTY_DISPLAY,
   ENABLE_PROPERTY_FILTER,
   ENABLE_SOUP_FROM_FILTER,
@@ -62,7 +61,6 @@ import {
   type SearchLocation,
   type SortOption,
   sortByCreatedAt,
-  sortByFrecencyScore,
   sortByUpdatedAt,
   sortByViewedAt,
   unreadFilterFn,
@@ -195,15 +193,6 @@ const sortOptions = [
     label: 'Created',
     sortFn: sortByCreatedAt,
   },
-  ...(ENABLE_FRECENCY
-    ? [
-        {
-          value: 'frecency' as const,
-          label: 'Frecency',
-          sortFn: sortByFrecencyScore,
-        },
-      ]
-    : []),
 ] satisfies SortOption<EntityData, SystemSortOption>[];
 
 export type UnifiedListViewProps = {
