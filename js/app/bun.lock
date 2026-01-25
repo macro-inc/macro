@@ -20,6 +20,7 @@
         "@corvu/resizable": "^0.2.5",
         "@corvu/tooltip": "^0.2.2",
         "@floating-ui/dom": "^1.7.4",
+        "@fontsource-variable/inter": "^5.2.8",
         "@inkibra/tauri-plugins": "git+https://github.com/seanaye/tauri-plugins.git#0c932ffd3202145b40645246d87a38deb72ba09c",
         "@kobalte/core": "^0.13.11",
         "@leeoniya/ufuzzy": "^1.0.19",
@@ -664,6 +665,8 @@
     "@floating-ui/dom": ["@floating-ui/dom@1.7.4", "", { "dependencies": { "@floating-ui/core": "^1.7.3", "@floating-ui/utils": "^0.2.10" } }, "sha512-OOchDgh4F2CchOX94cRVqhvy7b3AFb+/rQXyswmzmGakRfkMgoWVjfnLWkRirfLEfuD4ysVW16eXzwt3jHIzKA=="],
 
     "@floating-ui/utils": ["@floating-ui/utils@0.2.10", "", {}, "sha512-aGTxbpbg8/b5JfU1HXSrbH3wXZuLPJcNEcZQFMxLs3oSzgtVu6nFPkbbGGUvBcUjKV2YyB9Wxxabo+HEH9tcRQ=="],
+
+    "@fontsource-variable/inter": ["@fontsource-variable/inter@5.2.8", "", {}, "sha512-kOfP2D+ykbcX/P3IFnokOhVRNoTozo5/JxhAIVYLpea/UBmCQ/YWPBfWIDuBImXX/15KH+eKh4xpEUyS2sQQGQ=="],
 
     "@gerrit0/mini-shiki": ["@gerrit0/mini-shiki@3.13.0", "", { "dependencies": { "@shikijs/engine-oniguruma": "^3.13.0", "@shikijs/langs": "^3.13.0", "@shikijs/themes": "^3.13.0", "@shikijs/types": "^3.13.0", "@shikijs/vscode-textmate": "^10.0.2" } }, "sha512-mCrNvZNYNrwKer5PWLF6cOc0OEe2eKzgy976x+IT2tynwJYl+7UpHTSeXQJGijgTcoOf+f359L946unWlYRnsg=="],
 

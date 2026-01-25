@@ -26,8 +26,20 @@ const SYNC_ORIGIN =
 
 const WAKEUP_TTL = 55 * 1000; // 55 seconds - cloudflare ttl is 60
 
-const pendingWakeups = new Map<string, ReturnType<typeof setTimeout>>();
+const pendingWakeups = new Map<string, number>();
 const recentWakeups = new Map<string, number>();
+
+// Use requestIdleCallback to defer wakeups until browser is idle, avoiding critical path contention
+const scheduleIdleTask =
+  typeof window !== 'undefined' && window.requestIdleCallback
+    ? (cb: () => void) => window.requestIdleCallback(cb)
+    : (cb: () => void) => window.setTimeout(cb, 200) as unknown as number;
+
+const cancelIdleTask =
+  typeof window !== 'undefined' && window.cancelIdleCallback
+    ? (id: number) => window.cancelIdleCallback(id)
+    : (id: number) =>
+        window.clearTimeout(id as unknown as ReturnType<typeof setTimeout>);
 
 export function syncFetch(
   url: string,
@@ -65,19 +77,19 @@ export const syncServiceClient = {
       method: 'GET',
     });
   },
-  async safeWakeup(id: string, delay: number = 200) {
+  safeWakeup(id: string) {
     const lastWakeup = recentWakeups.get(id);
     if (lastWakeup && Date.now() - lastWakeup < WAKEUP_TTL) {
       return;
     }
 
-    const existingTimeout = pendingWakeups.get(id);
-    if (existingTimeout) {
-      // let the first timeout handle it.
+    const existingTask = pendingWakeups.get(id);
+    if (existingTask) {
+      // let the first task handle it.
       return;
     }
 
-    const timeout = setTimeout(async () => {
+    const taskId = scheduleIdleTask(async () => {
       try {
         await syncFetch(`/document/${id}/wakeup`, {
           method: 'GET',
@@ -96,14 +108,14 @@ export const syncServiceClient = {
       } finally {
         pendingWakeups.delete(id);
       }
-    }, delay);
+    });
 
-    pendingWakeups.set(id, timeout);
+    pendingWakeups.set(id, taskId);
   },
   cancelWakeup(id: string) {
-    const timeout = pendingWakeups.get(id);
-    if (timeout) {
-      clearTimeout(timeout);
+    const taskId = pendingWakeups.get(id);
+    if (taskId) {
+      cancelIdleTask(taskId);
       pendingWakeups.delete(id);
     }
   },

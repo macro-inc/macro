@@ -10,17 +10,21 @@ import { Navigate, useLocation, useSearchParams } from '@solidjs/router';
 import {
   createEffect,
   createSignal,
+  lazy,
   Match,
   onCleanup,
   Show,
+  Suspense,
   Switch,
 } from 'solid-js';
 import { updateCookie } from '@core/util/cookies';
 import { EmailForm } from './EmailForm';
 import { LoginOptions } from './LoginOptions';
 import { Input, identifyUser, Stage } from './Shared';
-import ThreeWireframe from './ThreeWireframe';
 import { VerifyForm } from './VerifyForm';
+
+// Lazy load ThreeWireframe to keep three.js out of main bundle
+const ThreeWireframe = lazy(() => import('./ThreeWireframe'));
 
 export function Login() {
   const [stage, setStage] = createSignal(Stage.None);
@@ -100,7 +104,18 @@ export function Login() {
             </div>
           )}
           <div class="border border-dashed border-[var(--color-ink)] box-border w-[350px]">
-            <ThreeWireframe src="m" scale={9.5} clockwise={false} />
+            <Suspense
+              fallback={
+                <div
+                  style={{
+                    width: 'min(350px, 100%)',
+                    'aspect-ratio': '1 / 1',
+                  }}
+                />
+              }
+            >
+              <ThreeWireframe src="m" scale={9.5} clockwise={false} />
+            </Suspense>
           </div>
           <Switch>
             <Match when={stage() === Stage.None}>
