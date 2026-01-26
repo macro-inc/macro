@@ -6,8 +6,8 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 use rootcause::Report;
+use serde::Serialize;
 
-use crate::domain::models::Notification;
 use crate::domain::ports::WebSocketSender;
 
 /// WebSocket gateway implementation of the WebSocket sender port.
@@ -33,10 +33,11 @@ pub trait WebSocketGatewayOps {
     ///
     /// Returns the set of user IDs that were successfully delivered to
     /// (i.e., users who had an active WebSocket connection).
-    fn send_to_users<'a>(
+    fn send_to_users<'a, T: Serialize + Send + Sync>(
         &self,
+        message_type: &str,
         user_ids: &[MacroUserIdStr<'a>],
-        payload: &[u8],
+        payload: &T,
     ) -> impl std::future::Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
 }
 
@@ -86,30 +87,30 @@ impl ConnectionGatewayClient {
 /// Request body for batch sending messages.
 #[derive(serde::Serialize)]
 struct BatchSendMessageBody<'a> {
-    message_type: String,
+    message_type: &'a str,
     message: serde_json::Value,
     entities: Vec<Entity<'a>>,
 }
 
 impl WebSocketGatewayOps for ConnectionGatewayClient {
-    async fn send_to_users<'a>(
+    async fn send_to_users<'a, T: Serialize + Send + Sync>(
         &self,
+        message_type: &str,
         user_ids: &[MacroUserIdStr<'a>],
-        payload: &[u8],
+        payload: &T,
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
         if user_ids.is_empty() {
             return Ok(HashSet::new());
         }
 
-        let message: serde_json::Value = serde_json::from_slice(payload)?;
         let entities: Vec<Entity<'_>> = user_ids
             .iter()
             .map(|id| EntityType::User.with_entity_str(id.as_ref()))
             .collect();
 
         let body = BatchSendMessageBody {
-            message_type: "notification".to_string(),
-            message,
+            message_type,
+            message: serde_json::to_value(payload)?,
             entities,
         };
 
@@ -143,8 +144,9 @@ impl WebSocketGatewayOps for ConnectionGatewayClient {
 }
 
 impl<W: WebSocketGatewayOps + Send + Sync> WebSocketSender for WebSocketGatewayAdapter<W> {
-    async fn send_notifications<'a, T: Notification + Send + Sync>(
+    async fn send_notifications<'a, T: Serialize + Send + Sync>(
         &self,
+        message_type: &str,
         notifications: Vec<(MacroUserIdStr<'a>, &T)>,
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
         // Get the first notification to serialize, return empty if none
@@ -154,9 +156,8 @@ impl<W: WebSocketGatewayOps + Send + Sync> WebSocketSender for WebSocketGatewayA
 
         let user_ids: Vec<_> = notifications.iter().map(|(id, _)| id.clone()).collect();
 
-        // Serialize the notification payload
-        let payload = serde_json::to_vec(notification)?;
-
-        self.gateway.send_to_users(&user_ids, &payload).await
+        self.gateway
+            .send_to_users(message_type, &user_ids, *notification)
+            .await
     }
 }

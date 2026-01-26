@@ -1,8 +1,8 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::domain::models::Notification;
 
-#[derive(Serialize, Debug, Default)]
+#[derive(Serialize, Debug, Default, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Aps {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -39,14 +39,14 @@ pub struct Aps {
     pub interruption_level: Option<InterruptionLevel>,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Deserialize)]
 #[serde(untagged)]
 pub enum Alert {
     Simple(String),
     Dictionary(AlertDictionary),
 }
 
-#[derive(Serialize, Debug, Default)]
+#[derive(Serialize, Debug, Default, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct AlertDictionary {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -77,21 +77,21 @@ pub struct AlertDictionary {
     pub launch_image: Option<String>,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Deserialize)]
 #[serde(untagged)]
 pub enum Sound {
     Default(String), // Usually "default"
     Critical(CriticalSound),
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Deserialize)]
 pub struct CriticalSound {
     pub critical: u8, // 1 for critical
     pub name: String,
     pub volume: f64, // 0.0 to 1.0
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum InterruptionLevel {
     Passive,
@@ -100,7 +100,7 @@ pub enum InterruptionLevel {
     Critical,
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct APNSPushNotification<T> {
     pub aps: Aps,

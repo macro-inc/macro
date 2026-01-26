@@ -106,8 +106,9 @@ pub trait WebSocketSender {
     ///
     /// Returns the set of users who successfully received the notification
     /// (i.e., they were online and the message was delivered).
-    fn send_notifications<'a, T: Notification + Send + Sync>(
+    fn send_notifications<'a, T: Serialize + Send + Sync>(
         &self,
+        message_type: &str,
         notifications: Vec<(MacroUserIdStr<'a>, &T)>,
     ) -> impl Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
 }
@@ -120,4 +121,21 @@ pub trait EmailSender {
         notification: &T,
         recipient: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+use crate::domain::models::queue_message::{QueueMessage, RawQueueMessage};
+
+/// Port for publishing notifications to delivery queue and receiving them.
+pub trait NotificationQueue {
+    /// Publish a notification for async delivery (after DB persistence).
+    fn publish<T: Serialize + Send + Sync>(
+        &self,
+        message: &QueueMessage<'_, T>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Receive messages from the queue (for worker).
+    fn receive_messages(&self) -> impl Future<Output = Result<Vec<RawQueueMessage>, Report>> + Send;
+
+    /// Delete a message from the queue (after successful delivery).
+    fn delete_message(&self, receipt_handle: &str) -> impl Future<Output = Result<(), Report>> + Send;
 }

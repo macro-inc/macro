@@ -4,10 +4,14 @@ use std::collections::HashSet;
 
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
+use rootcause::{Report, report};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::domain::models::Notification;
+use crate::domain::{
+    models::{Notification, RateLimitConfig, RateLimitKey},
+    service::SendNotificationError,
+};
 
 /// Request to send a notification.
 ///
@@ -30,6 +34,21 @@ impl<'a, T: Notification> SendNotificationRequest<'a, T> {
     /// Get the event type name from the notification.
     pub fn event_type(&self) -> &'static str {
         T::TYPE_NAME
+    }
+
+    pub fn get_rate_limit(
+        &self,
+    ) -> Result<Option<(RateLimitKey, RateLimitConfig)>, Report<SendNotificationError>> {
+        let config = T::rate_limit_config();
+        let key = self.notification.rate_limit_key();
+
+        match (config, key) {
+            (Some(config), Some(key)) => Ok(Some((key, config))),
+            (None, None) => Ok(None),
+            (Some(_), None) | (None, Some(_)) => {
+                return Err(report!(SendNotificationError::RateLimitConfigErr));
+            }
+        }
     }
 }
 

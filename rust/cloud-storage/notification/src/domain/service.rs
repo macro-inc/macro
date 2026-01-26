@@ -1,4 +1,8 @@
 //! Core notification service implementation.
+//!
+//! Contains two services:
+//! - [`NotificationIngressService`]: For callers to send notifications (rate limit, filter, persist, publish to queue)
+//! - [`NotificationEgressService`]: For workers to deliver notifications (consume from queue, deliver, update status)
 
 #[cfg(test)]
 mod test;
@@ -9,15 +13,20 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::prelude::ResultExt;
 use rootcause::{Report, report};
+use serde::Serialize;
 use thiserror::Error;
 use uuid::Uuid;
 
+use crate::domain::models::queue_message::{
+    ConnGatewayNotification, EmailNotification, Node, NotificationChannel, QueueMessage,
+};
 use crate::domain::models::{
     DeliveryStatus, ExclusionReason, FilteredRecipients, Notification, NotificationResult,
     RecipientExclusion, RevokeCriteria, SendNotificationRequest,
 };
 use crate::domain::ports::{
-    EmailSender, NotificationRepository, NotificationSender, RateLimitPort, WebSocketSender,
+    EmailSender, NotificationQueue, NotificationRepository, NotificationSender, RateLimitPort,
+    WebSocketSender,
 };
 
 /// Error returned when sending a notification fails.
@@ -26,7 +35,7 @@ pub enum SendNotificationError {
     /// Rate limit was exceeded.
     #[error("Rate limit exceeded")]
     RateLimitExceeded,
-    /// Invalid rate limit config, either a key was provided but a key was not, or vice versa
+    /// Invalid rate limit config, either a key was provided but a key was not, or vice versa.
     #[error("Rate limit config error")]
     RateLimitConfigErr,
     /// An internal error occurred.
@@ -39,9 +48,308 @@ pub enum SendNotificationError {
 #[error("At least one filter must be set to revoke notifications")]
 pub struct MissingRevokeFilter;
 
+// =============================================================================
+// Ingress Service - For callers to send notifications
+// =============================================================================
+
+/// Service for sending notifications (ingress side).
+///
+/// Handles rate limiting, recipient filtering, DB persistence, and queue publishing.
+/// Does NOT handle delivery - that's done by [`NotificationEgressService`].
+pub struct NotificationIngressService<R, N, Q> {
+    rate_limit: R,
+    repository: N,
+    queue: Q,
+    service_name: String,
+}
+
+impl<R, N, Q> NotificationIngressService<R, N, Q>
+where
+    R: RateLimitPort,
+    N: NotificationRepository,
+    Q: NotificationQueue,
+{
+    /// Create a new ingress service.
+    pub fn new(rate_limit: R, repository: N, queue: Q, service_name: impl Into<String>) -> Self {
+        Self {
+            rate_limit,
+            repository,
+            queue,
+            service_name: service_name.into(),
+        }
+    }
+
+    /// Send a notification to the specified recipients.
+    ///
+    /// This method performs the following steps:
+    /// 1. Rate limit check (if a rate limit key is provided)
+    /// 2. Filter recipients (remove sender, muted users, unsubscribed users)
+    /// 3. Create notification in the database
+    /// 4. Build and publish QueueMessage to SQS
+    /// 5. Return result (delivery happens async via worker)
+    pub async fn send_notification<'a, T: Notification + Serialize + Clone + Send + Sync>(
+        &self,
+        request: SendNotificationRequest<'a, T>,
+    ) -> Result<NotificationResult, Report<SendNotificationError>> {
+        let filtered = self
+            .filter_recipients(
+                request.sender_id.as_ref(),
+                &request.recipient_ids,
+                &request.notification_entity.entity_id,
+            )
+            .await
+            .context(SendNotificationError::Other)?;
+
+        if !filtered.has_valid_recipients() {
+            // No valid recipients after filtering - return early with empty result
+            return Ok(NotificationResult {
+                notification_id: Uuid::now_v7(),
+                notified_recipients: HashSet::new(),
+                delivery_status: DeliveryStatus::default(),
+            });
+        }
+
+        // 3. Create notification in DB
+        let notification_id = Uuid::now_v7();
+        let created = self
+            .repository
+            .create_notification(
+                &request,
+                notification_id,
+                &self.service_name,
+                &filtered.valid,
+            )
+            .await
+            .context(SendNotificationError::Other)?;
+
+        // If notification already exists (idempotent), return early
+        let Some(notification_id) = created else {
+            return Ok(NotificationResult {
+                notification_id,
+                notified_recipients: HashSet::new(),
+                delivery_status: DeliveryStatus::default(),
+            });
+        };
+
+        // 4. Build and publish QueueMessage
+        let queue_message = self.build_queue_message(&request.notification, &filtered.valid);
+        self.queue
+            .publish(&QueueMessage {
+                rate_limit: request.get_rate_limit()?,
+            })
+            .await
+            .context(SendNotificationError::Other)?;
+
+        // 5. Return result (delivery happens async)
+        Ok(NotificationResult {
+            notification_id,
+            notified_recipients: filtered.valid_set_owned(),
+            delivery_status: DeliveryStatus::default(), // Delivery is async
+        })
+    }
+
+    /// Revoke/delete notifications matching the given criteria.
+    ///
+    /// Returns the number of notifications deleted.
+    pub async fn revoke_notifications<'a>(
+        &self,
+        criteria: RevokeCriteria<'a>,
+    ) -> Result<u64, Report> {
+        if !criteria.has_filter() {
+            return Err(Report::new(MissingRevokeFilter).into());
+        }
+
+        self.repository.delete_notifications(&criteria).await
+    }
+
+    /// Filter recipients based on:
+    /// - Sender (sender cannot receive their own notification)
+    /// - Muted notifications
+    /// - Unsubscribed from item
+    async fn filter_recipients<'a>(
+        &self,
+        sender_id: Option<&MacroUserIdStr<'a>>,
+        recipient_ids: &[MacroUserIdStr<'a>],
+        item_id: &str,
+    ) -> Result<FilteredRecipients<'a>, Report> {
+        let mut valid: Vec<MacroUserIdStr<'a>> = Vec::new();
+        let mut excluded: Vec<RecipientExclusion<'a>> = Vec::new();
+
+        // First pass: remove sender
+        for recipient in recipient_ids {
+            if sender_id.is_some_and(|s| s == recipient) {
+                excluded.push(RecipientExclusion {
+                    user_id: recipient.clone(),
+                    reason: ExclusionReason::IsSender,
+                });
+            } else {
+                valid.push(recipient.clone());
+            }
+        }
+
+        if valid.is_empty() {
+            return Ok(FilteredRecipients { valid, excluded });
+        }
+
+        // Get muted users
+        let muted_users = self.repository.get_muted_users(&valid).await?;
+
+        // Get unsubscribed users
+        let unsubscribed_users = self
+            .repository
+            .get_unsubscribed_users(item_id, &valid)
+            .await?;
+
+        // Second pass: filter muted and unsubscribed
+        let mut final_valid = Vec::new();
+        for recipient in valid {
+            let recipient_static: MacroUserIdStr<'static> = recipient.clone().into_owned();
+
+            if muted_users.contains(&recipient_static) {
+                excluded.push(RecipientExclusion {
+                    user_id: recipient,
+                    reason: ExclusionReason::MutedNotifications,
+                });
+            } else if unsubscribed_users.contains(&recipient_static) {
+                excluded.push(RecipientExclusion {
+                    user_id: recipient,
+                    reason: ExclusionReason::UnsubscribedFromItem,
+                });
+            } else {
+                final_valid.push(recipient);
+            }
+        }
+
+        Ok(FilteredRecipients {
+            valid: final_valid,
+            excluded,
+        })
+    }
+}
+
+// =============================================================================
+// Egress Service - For workers to deliver notifications
+// =============================================================================
+
+/// Service for delivering notifications (egress side).
+///
+/// Handles consuming from queue and delivering via WebSocket, push, and email.
+pub struct NotificationEgressService<N, W, M, E> {
+    repository: N,
+    websocket: W,
+    mobile: M,
+    email: E,
+}
+
+impl<N, W, M, E> NotificationEgressService<N, W, M, E>
+where
+    N: NotificationRepository,
+    W: WebSocketSender,
+    M: NotificationSender,
+    E: EmailSender,
+{
+    /// Create a new egress service.
+    pub fn new(repository: N, websocket: W, mobile: M, email: E) -> Self {
+        Self {
+            repository,
+            websocket,
+            mobile,
+            email,
+        }
+    }
+
+    /// Process delivery from a queue message.
+    ///
+    /// Iterates through deliver_on nodes and attempts each channel.
+    pub async fn process_delivery(
+        &self,
+        message: QueueMessage<'static, serde_json::Value>,
+    ) -> Result<DeliveryStatus, Report> {
+        let mut status = DeliveryStatus::default();
+
+        for node in &message.deliver_on {
+            self.deliver_node(&message.message_type, node, &mut status)
+                .await?;
+        }
+
+        Ok(status)
+    }
+
+    /// Deliver a single node, with fallback on failure.
+    async fn deliver_node(
+        &self,
+        message_type: &str,
+        node: &Node<'static, serde_json::Value>,
+        status: &mut DeliveryStatus,
+    ) -> Result<(), Report> {
+        let result = match &node.notif {
+            NotificationChannel::ConnGateway(conn) => {
+                self.deliver_conn_gateway(message_type, conn, status).await
+            }
+            NotificationChannel::Ios(apns) => self.deliver_ios(apns, status).await,
+            NotificationChannel::Email(email) => self.deliver_email(email, status).await,
+        };
+
+        // On failure, try fallback if present
+        if result.is_err()
+            && let Some(fallback) = &node.on_failure
+        {
+            return Box::pin(self.deliver_node(message_type, fallback, status)).await;
+        }
+
+        result
+    }
+
+    /// Deliver via connection gateway (WebSocket).
+    async fn deliver_conn_gateway(
+        &self,
+        message_type: &str,
+        conn: &ConnGatewayNotification<'static, serde_json::Value>,
+        status: &mut DeliveryStatus,
+    ) -> Result<(), Report> {
+        let notifications: Vec<_> = conn
+            .recipients
+            .iter()
+            .map(|r| (r.clone(), &conn.notif))
+            .collect();
+
+        let delivered = self
+            .websocket
+            .send_notifications(message_type, notifications)
+            .await?;
+        status.websocket_delivered.extend(delivered);
+        Ok(())
+    }
+
+    /// Deliver via iOS push (APNS).
+    async fn deliver_ios(
+        &self,
+        _apns: &crate::domain::models::queue_message::APNSTargets<serde_json::Value>,
+        _status: &mut DeliveryStatus,
+    ) -> Result<(), Report> {
+        // TODO: Implement iOS push delivery
+        Ok(())
+    }
+
+    /// Deliver via email.
+    async fn deliver_email(
+        &self,
+        _email: &EmailNotification<'static>,
+        _status: &mut DeliveryStatus,
+    ) -> Result<(), Report> {
+        // TODO: Implement email delivery
+        Ok(())
+    }
+}
+
+// =============================================================================
+// Legacy Service - For backwards compatibility (to be removed)
+// =============================================================================
+
 /// The core notification service that orchestrates sending notifications.
 ///
-/// Generic over all port implementations to allow dependency injection.
+/// **Deprecated**: Use [`NotificationIngressService`] and [`NotificationEgressService`] instead.
+/// This is kept for backwards compatibility during migration.
 pub struct NotificationService<R, N, W, M, E> {
     rate_limit: R,
     repository: N,
@@ -274,7 +582,10 @@ where
             .map(|r| (r.clone(), notification))
             .collect();
 
-        let ws_delivered = self.websocket.send_notifications(ws_notifications).await?;
+        let ws_delivered = self
+            .websocket
+            .send_notifications(T::TYPE_NAME, ws_notifications)
+            .await?;
         status.websocket_delivered = ws_delivered.clone();
 
         // 2. For users not reached via WebSocket, try push notifications

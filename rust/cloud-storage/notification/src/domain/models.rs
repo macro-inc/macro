@@ -9,6 +9,7 @@ use crate::domain::models::apple::APNSPushNotification;
 pub(crate) mod android;
 pub(crate) mod apple;
 pub(crate) mod mobile;
+pub(crate) mod queue_message;
 pub mod rate_limit;
 pub mod recipient;
 pub mod request;
@@ -31,7 +32,7 @@ struct NotificationPayload<'a, T> {
 }
 
 /// Trait that all notification types must implement.
-pub trait Notification: Serialize + DeserializeOwned {
+pub trait Notification: Serialize + DeserializeOwned + Send + Sync {
     /// The type name of this notification.
     const TYPE_NAME: &'static str;
 

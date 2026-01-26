@@ -1,12 +1,14 @@
 //! Rate limiting models for the notification service.
 
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 /// Newtype for rate limit keys.
 ///
 /// Callers control what gets rate limited by constructing a key from relevant
 /// data (e.g., event type + sender email). The internal value is a hash.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct RateLimitKey(Vec<u8>);
 
 impl RateLimitKey {
@@ -64,7 +66,7 @@ impl RateLimitResult {
 }
 
 /// Configuration for rate limiting.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RateLimitConfig {
     /// Maximum number of actions allowed in the window.
     pub max_count: u64,

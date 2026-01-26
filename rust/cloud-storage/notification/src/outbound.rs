@@ -5,6 +5,7 @@
 
 pub mod email;
 pub mod mobile;
+pub mod queue;
 pub mod rate_limit;
 pub mod repository;
 pub mod websocket;

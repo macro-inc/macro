@@ -218,8 +218,9 @@ impl MockWebSocketSender {
 }
 
 impl WebSocketSender for MockWebSocketSender {
-    async fn send_notifications<'a, T: Notification + Send + Sync>(
+    async fn send_notifications<'a, T: serde::Serialize + Send + Sync>(
         &self,
+        _message_type: &str,
         notifications: Vec<(MacroUserIdStr<'a>, &T)>,
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
         let delivered: HashSet<_> = notifications
