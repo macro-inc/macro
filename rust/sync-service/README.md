@@ -7,7 +7,6 @@ Service responsible for syncing collaborative documents between multiple users.
 ├── bebop/ # bebop schema and ts generator for tests & qa
 ├── build.rs # build script for worker, to generate bebop rust bindings
 ├── justfile # justfile for running commands
-├── qa-env/ # solid-js qa environment
 ├── src/ # rust worker-rs worker
 ├── tests/ # e2e tests using miniflare and vitest
 └── wrangler.toml # wrangler configuration
@@ -105,12 +104,6 @@ just test
 
 # runs e2e tests with the alarm-keep-alive feature disabled
 just test-no-alarm
-```
-
-#### Running QA environment locally
-The qa environment spins up the worker locally using miniflare. It also spawns a bunnch of instances each with their own websocket connection to the worker.
-```bash
-just debug
 ```
 
 when making a new deploy you need to make a cloudflare KV store
