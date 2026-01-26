@@ -164,7 +164,10 @@ mod tests {
     use models_pagination::{Base64Str, Cursor, CursorVal, PaginateOn, TypeEraseCursor};
     use sqlx::{Pool, Postgres};
 
-    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS", fixtures(path = "../../../fixtures", scripts("user_notifications")))]
+    #[sqlx::test(
+        migrator = "MACRO_DB_MIGRATIONS",
+        fixtures(path = "../../../fixtures", scripts("user_notifications"))
+    )]
     async fn test_get_user_notifications(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let paginated_result =
             get_all_user_notifications(&pool, "macro|user@user.com", 1, Query::Sort(CreatedAt, ()))
@@ -198,7 +201,10 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS", fixtures(path = "../../../fixtures", scripts("user_notifications")))]
+    #[sqlx::test(
+        migrator = "MACRO_DB_MIGRATIONS",
+        fixtures(path = "../../../fixtures", scripts("user_notifications"))
+    )]
     async fn test_get_user_notifications_by_event_item_ids(
         pool: Pool<Postgres>,
     ) -> anyhow::Result<()> {

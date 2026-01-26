@@ -2,7 +2,10 @@ use super::*;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::{Pool, Postgres};
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS", fixtures(path = "../../../fixtures", scripts("user_notifications")))]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("user_notifications"))
+)]
 async fn test_delete_user_notification(pool: Pool<Postgres>) -> anyhow::Result<()> {
     delete_user_notification(
         &pool,
@@ -14,7 +17,10 @@ async fn test_delete_user_notification(pool: Pool<Postgres>) -> anyhow::Result<(
     Ok(())
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS", fixtures(path = "../../../fixtures", scripts("user_notifications")))]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("user_notifications"))
+)]
 async fn test_bulk_delete_user_notification(pool: Pool<Postgres>) -> anyhow::Result<()> {
     bulk_delete_user_notification(
         &pool,

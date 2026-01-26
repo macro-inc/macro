@@ -55,7 +55,10 @@ mod tests {
     use macro_db_migrator::MACRO_DB_MIGRATIONS;
     use sqlx::{Pool, Postgres};
 
-    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS", fixtures(path = "../../../fixtures", scripts("should_email")))]
+    #[sqlx::test(
+        migrator = "MACRO_DB_MIGRATIONS",
+        fixtures(path = "../../../fixtures", scripts("should_email"))
+    )]
     async fn test_should_email_based_on_user_notification_bulk(
         pool: Pool<Postgres>,
     ) -> anyhow::Result<()> {

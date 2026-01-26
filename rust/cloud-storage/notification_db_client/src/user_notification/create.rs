@@ -28,7 +28,10 @@ mod tests {
     use macro_db_migrator::MACRO_DB_MIGRATIONS;
     use sqlx::{Pool, Postgres};
 
-    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS", fixtures(path = "../../fixtures", scripts("user_notifications")))]
+    #[sqlx::test(
+        migrator = "MACRO_DB_MIGRATIONS",
+        fixtures(path = "../../fixtures", scripts("user_notifications"))
+    )]
     async fn test_create_bulk_user_notifications(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let mut transaction = pool.begin().await?;
         create_bulk_user_notifications(
