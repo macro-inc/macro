@@ -6,7 +6,7 @@ import {
 } from '@core/component/EntityIcon';
 import { verifyBlockName } from '@core/constant/allBlocks';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { isAccessiblePreviewItem, useItemPreview } from '@core/signal/preview';
+import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
@@ -66,10 +66,10 @@ export function Snapshot(props: SnapshotDecoratorProps) {
   const previewType = () =>
     blockNameToItemType(verifyBlockName(props.blockName));
 
-  const [item] = useItemPreview({
+  const [item] = useItemPreview(() => ({
     id: props.documentId,
     type: previewType(),
-  });
+  }));
 
   const [popupOpen, setPopupOpen] = createSignal(false);
   const debouncedSetPreviewOpen = debounce(setPopupOpen, 100);

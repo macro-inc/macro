@@ -29,7 +29,6 @@ import {
   GroupMentionNode,
   InlineSearchNode,
   InlineSearchNodesType,
-  SnapshotNode,
   type SnapshotNodeInfo,
   type UserMentionInfo,
   UserMentionNode,

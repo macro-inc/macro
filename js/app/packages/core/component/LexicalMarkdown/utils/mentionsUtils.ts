@@ -16,7 +16,6 @@ import {
   INSERT_DATE_MENTION_COMMAND,
   INSERT_DOCUMENT_MENTION_COMMAND,
   INSERT_GROUP_MENTION_COMMAND,
-  INSERT_SNAPSHOT_NODE_COMMAND,
   INSERT_USER_MENTION_COMMAND,
 } from '../plugins/mentions';
 import { handleSnapshotMention, supportsSnapshotNode } from './snapshotMention';

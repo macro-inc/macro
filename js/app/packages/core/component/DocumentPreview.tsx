@@ -21,7 +21,7 @@ import {
   type PreviewItemAccess,
   type PreviewItemNoAccess,
   type PreviewProjectAccess,
-} from '@core/signal/preview';
+} from '@queries/preview';
 import { matches } from '@core/util/match';
 // Icon imports
 import CollapseInlinePreview from '@icon/regular/arrows-in-line-horizontal.svg';
