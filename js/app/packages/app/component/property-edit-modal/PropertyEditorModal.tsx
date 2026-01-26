@@ -9,7 +9,7 @@ import {
   createSelector,
   createSignal,
   For,
-  JSX,
+  type JSX,
   Match,
   on,
   onCleanup,
