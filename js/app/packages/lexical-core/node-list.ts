@@ -26,7 +26,7 @@ import { DiffNode } from './nodes/DiffNode';
 import { DocumentCardNode } from './nodes/DocumentCardNode';
 import { DocumentMentionNode } from './nodes/DocumentMentionNode';
 import { EquationNode } from './nodes/EquationNode';
-import { FoldNode } from './nodes/FoldNode';
+import { SnapshotNode } from './nodes/SnapshotNode';
 import { HorizontalRuleNode } from './nodes/HorizontalRuleNode';
 import { HtmlRenderNode } from './nodes/HtmlRenderNode';
 import { ImageNode } from './nodes/ImageNode';
@@ -85,7 +85,7 @@ export const SupportedNodeTypes = [
   CommentNode,
   SearchMatchNode,
   EquationNode,
-  FoldNode,
+  SnapshotNode,
   HorizontalRuleNode,
   DiffNode,
   DiffInsertNode,

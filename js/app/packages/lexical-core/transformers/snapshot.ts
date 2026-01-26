@@ -3,16 +3,20 @@ import type {
   TextMatchTransformer,
 } from '@lexical/markdown';
 import type { ElementNode, LexicalNode, TextNode } from 'lexical';
-import { $createFoldNode, $isFoldNode, FoldNode } from '../nodes/FoldNode';
+import {
+  $createSnapshotNode,
+  $isSnapshotNode,
+  SnapshotNode,
+} from '../nodes/SnapshotNode';
 
-// Internal Fold Node - uses XML-based format for serialization
-export const I_FOLD_NODE: TextMatchTransformer = {
-  dependencies: [FoldNode],
+// Internal Snapshot Node - uses XML-based format for serialization
+export const I_SNAPSHOT_NODE: TextMatchTransformer = {
+  dependencies: [SnapshotNode],
   type: 'text-match',
-  regExp: /<m-fold>(.*?)<\/m-fold>/,
-  importRegExp: /<m-fold>(.*?)<\/m-fold>/,
+  regExp: /<m-snapshot>(.*?)<\/m-snapshot>/,
+  importRegExp: /<m-snapshot>(.*?)<\/m-snapshot>/,
   export: (node) => {
-    if (!$isFoldNode(node)) return null;
+    if (!$isSnapshotNode(node)) return null;
 
     const data = JSON.stringify({
       documentId: node.getDocumentId(),
@@ -23,7 +27,7 @@ export const I_FOLD_NODE: TextMatchTransformer = {
       mentionUuid: node.getMentionUuid(),
     });
 
-    return `<m-fold>${data}</m-fold>`;
+    return `<m-snapshot>${data}</m-snapshot>`;
   },
   replace: (node: TextNode, match: RegExpMatchArray) => {
     try {
@@ -37,7 +41,7 @@ export const I_FOLD_NODE: TextMatchTransformer = {
         if (!(field in data)) throw new Error(`Missing field ${field}`);
       }
 
-      const foldNode = $createFoldNode({
+      const snapshotNode = $createSnapshotNode({
         documentId: data.documentId,
         documentName: data.documentName,
         blockName: data.blockName,
@@ -45,20 +49,20 @@ export const I_FOLD_NODE: TextMatchTransformer = {
         snapshotDate: data.snapshotDate || new Date().toISOString(),
         mentionUuid: data.mentionUuid,
       });
-      node.replace(foldNode);
+      node.replace(snapshotNode);
     } catch (e) {
-      console.error('Error in I_FOLD_NODE replace:', e);
+      console.error('Error in I_SNAPSHOT_NODE replace:', e);
     }
   },
 };
 
-// External Fold Node - exports to document link format
-export const E_FOLD_NODE: ElementTransformer = {
-  dependencies: [FoldNode],
+// External Snapshot Node - exports to document link format
+export const E_SNAPSHOT_NODE: ElementTransformer = {
+  dependencies: [SnapshotNode],
   type: 'element',
   regExp: /$^/, // Never matches - no import from external format
   export: (node) => {
-    if (!$isFoldNode(node)) return null;
+    if (!$isSnapshotNode(node)) return null;
 
     const documentName = node.getDocumentName();
     const documentId = node.getDocumentId();

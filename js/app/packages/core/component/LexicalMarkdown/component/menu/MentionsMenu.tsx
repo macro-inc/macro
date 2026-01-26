@@ -77,7 +77,7 @@ import {
   handleUserMention,
   type UserMentionRecord,
 } from '../../utils/mentionsUtils';
-import { handleFoldMention } from '../../utils/foldMention';
+import { handleSnapshotMention } from '../../utils/snapshotMention';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 
 false && clickOutside;
@@ -139,12 +139,12 @@ function allItemFilter(item: CombinedEntity): boolean {
 /**
  * Create the universal item handler.
  * @param dependencies
- * @param useFoldForDocuments Whether to use FoldNode for supported document types
+ * @param useSnapshotForDocuments Whether to use SnapshotNode for supported document types
  * @returns
  */
 function createItemHandler(
   dependencies: HandlerDependencies,
-  useFoldForDocuments?: boolean
+  useSnapshotForDocuments?: boolean
 ) {
   return async (item: CombinedEntity) => {
     if (!item) return;
@@ -158,8 +158,8 @@ function createItemHandler(
       case 'date':
         return await handleDateMention(item.data, dependencies);
       case 'item':
-        if (useFoldForDocuments) {
-          return await handleFoldMention(item.data, dependencies);
+        if (useSnapshotForDocuments) {
+          return await handleSnapshotMention(item.data, dependencies);
         }
         return await handleBasicMention(item.data, dependencies);
       case 'channel':
@@ -439,7 +439,7 @@ function MentionsMenuInner(props: {
   onEmailMention?: (item: EmailEntity) => void;
   disableMentionTracking?: boolean;
   /** Fetch text then past in a fold-node for plain-text mentions (useful for AI)*/
-  useFoldForDocuments?: boolean;
+  useSnapshotForDocuments?: boolean;
 }) {
   const [searchTerm, setSearchTerm] = createSignal<string>(
     props.menu.searchTerm()
@@ -848,7 +848,7 @@ function MentionsMenuInner(props: {
       onEmailMention: props.onEmailMention,
       disableMentionTracking: props.disableMentionTracking,
     },
-    props.useFoldForDocuments
+    props.useSnapshotForDocuments
   );
 
   createEffect(() => {

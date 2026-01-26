@@ -7,7 +7,7 @@ import {
   $createContactMentionNode,
   $createDateMentionNode,
   $createDocumentMentionNode,
-  $createFoldNode,
+  $createSnapshotNode,
   $createGroupMentionNode,
   $createInlineSearchNode,
   $createUserMentionNode,
@@ -25,8 +25,8 @@ import {
   DateMentionNode,
   type DocumentMentionInfo,
   DocumentMentionNode,
-  FoldNode,
-  type FoldNodeInfo,
+  SnapshotNode,
+  type SnapshotNodeInfo,
   type GroupMentionInfo,
   GroupMentionNode,
   InlineSearchNode,
@@ -63,14 +63,14 @@ import {
 import type { Setter } from 'solid-js';
 import type { MenuOperations } from '../../shared/inlineMenu';
 import { $collapseSelection, $traverseNodes, nodeByKey } from '../../utils';
-import { supportsFoldNode } from '../../utils/foldMention';
+import { supportsSnapshotNode } from '../../utils/snapshotMention';
 import { mapRegisterDelete } from '../shared';
 
 export const INSERT_DOCUMENT_MENTION_COMMAND: LexicalCommand<DocumentMentionInfo> =
   createCommand('INSERT_DOCUMENT_MENTION_COMMAND');
 
-export const INSERT_FOLD_NODE_COMMAND: LexicalCommand<FoldNodeInfo> =
-  createCommand('INSERT_FOLD_NODE_COMMAND');
+export const INSERT_SNAPSHOT_NODE_COMMAND: LexicalCommand<SnapshotNodeInfo> =
+  createCommand('INSERT_SNAPSHOT_NODE_COMMAND');
 
 export const INSERT_CONTACT_MENTION_COMMAND: LexicalCommand<ContactMentionInfo> =
   createCommand('INSERT_CONTACT_MENTION_COMMAND');
@@ -358,24 +358,24 @@ function registerMentionsPlugin(
     ),
 
     editor.registerCommand(
-      INSERT_FOLD_NODE_COMMAND,
+      INSERT_SNAPSHOT_NODE_COMMAND,
       (payload) => {
         editor.update(() => {
           const selection = $getSelection();
-          const foldNode = $createFoldNode(payload);
+          const snapshotNode = $createSnapshotNode(payload);
 
-          // Do not paste fold nodes over range-selected text -- append after.
+          // Do not paste snapshot nodes over range-selected text -- append after.
           if ($isRangeSelection(selection) && !selection.isCollapsed()) {
             $collapseSelection(selection);
-            $insertNodes([$createTextNode(' '), foldNode]);
-            foldNode.selectEnd();
+            $insertNodes([$createTextNode(' '), snapshotNode]);
+            snapshotNode.selectEnd();
             return true;
           }
-          $insertNodes([foldNode]);
-          if ($isRootOrShadowRoot(foldNode.getParentOrThrow())) {
-            $wrapNodeInElement(foldNode, $createParagraphNode);
+          $insertNodes([snapshotNode]);
+          if ($isRootOrShadowRoot(snapshotNode.getParentOrThrow())) {
+            $wrapNodeInElement(snapshotNode, $createParagraphNode);
           }
-          foldNode.selectEnd();
+          snapshotNode.selectEnd();
         });
         return true;
       },
@@ -783,12 +783,12 @@ function registerMentionsPlugin(
       }
     ),
 
-    editor.registerMutationListener(FoldNode, (mutatedNodes) => {
+    editor.registerMutationListener(SnapshotNode, (mutatedNodes) => {
       for (const [nodeKey, mutation] of mutatedNodes) {
         const node = nodeByKey(
           editor.getEditorState(),
           nodeKey
-        ) as FoldNode | null;
+        ) as SnapshotNode | null;
 
         if (!node) {
           continue;
@@ -811,7 +811,7 @@ function registerMentionsPlugin(
           if (onCreateMention) {
             const blockName = node.getBlockName();
             let fileType = blockName;
-            if (supportsFoldNode(blockName as any)) {
+            if (supportsSnapshotNode(blockName as any)) {
               return;
             }
             if (blockName === 'write') fileType = 'docx';

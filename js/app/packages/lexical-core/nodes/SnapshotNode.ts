@@ -15,7 +15,7 @@ import { $applyIdFromSerialized } from '../plugins/nodeIdPlugin';
 
 const VERSION = 1;
 
-export type FoldNodeInfo = {
+export type SnapshotNodeInfo = {
   documentId: string;
   documentName: string;
   blockName: string;
@@ -24,15 +24,18 @@ export type FoldNodeInfo = {
   mentionUuid?: string;
 };
 
-export type SerializedFoldNode = Spread<FoldNodeInfo, SerializedLexicalNode>;
+export type SerializedSnapshotNode = Spread<
+  SnapshotNodeInfo,
+  SerializedLexicalNode
+>;
 
-export type FoldDecoratorProps = FoldNodeInfo & {
+export type SnapshotDecoratorProps = SnapshotNodeInfo & {
   key: NodeKey;
   theme: EditorThemeClasses;
 };
 
-export class FoldNode extends DecoratorNode<
-  DecoratorComponent<FoldDecoratorProps> | undefined
+export class SnapshotNode extends DecoratorNode<
+  DecoratorComponent<SnapshotDecoratorProps> | undefined
 > {
   __documentId: string;
   __documentName: string;
@@ -42,7 +45,7 @@ export class FoldNode extends DecoratorNode<
   __mentionUuid: string | undefined;
 
   static getType() {
-    return 'fold';
+    return 'snapshot';
   }
 
   isInline(): boolean {
@@ -53,8 +56,8 @@ export class FoldNode extends DecoratorNode<
     return true;
   }
 
-  static clone(node: FoldNode) {
-    return new FoldNode(
+  static clone(node: SnapshotNode) {
+    return new SnapshotNode(
       node.__documentId,
       node.__documentName,
       node.__blockName,
@@ -83,8 +86,8 @@ export class FoldNode extends DecoratorNode<
     this.__mentionUuid = mentionUuid;
   }
 
-  static importJSON(serializedNode: SerializedFoldNode) {
-    const node = $createFoldNode({
+  static importJSON(serializedNode: SerializedSnapshotNode) {
+    const node = $createSnapshotNode({
       documentId: serializedNode.documentId,
       documentName: serializedNode.documentName,
       blockName: serializedNode.blockName,
@@ -96,7 +99,7 @@ export class FoldNode extends DecoratorNode<
     return node;
   }
 
-  exportJSON(): SerializedFoldNode {
+  exportJSON(): SerializedSnapshotNode {
     return {
       ...super.exportJSON(),
       documentId: this.__documentId,
@@ -105,12 +108,12 @@ export class FoldNode extends DecoratorNode<
       content: this.__content,
       snapshotDate: this.__snapshotDate,
       mentionUuid: this.__mentionUuid,
-      type: FoldNode.getType(),
+      type: SnapshotNode.getType(),
       version: VERSION,
     };
   }
 
-  exportComponentProps(): FoldNodeInfo {
+  exportComponentProps(): SnapshotNodeInfo {
     return {
       documentId: this.__documentId,
       documentName: this.__documentName,
@@ -123,7 +126,7 @@ export class FoldNode extends DecoratorNode<
 
   createDOM(_config: EditorConfig): HTMLElement {
     const span = document.createElement('span');
-    span.setAttribute('data-fold-node', 'true');
+    span.setAttribute('data-snapshot-node', 'true');
     return span;
   }
 
@@ -134,7 +137,7 @@ export class FoldNode extends DecoratorNode<
   static importDOM(): DOMConversionMap<HTMLSpanElement> | null {
     return {
       span: (domNode: HTMLSpanElement) => {
-        if (!domNode.hasAttribute('data-fold-node')) {
+        if (!domNode.hasAttribute('data-snapshot-node')) {
           return null;
         }
         return {
@@ -151,7 +154,7 @@ export class FoldNode extends DecoratorNode<
               domNode.getAttribute('data-mention-uuid') || undefined;
 
             if (documentId) {
-              const node = $createFoldNode({
+              const node = $createSnapshotNode({
                 documentId,
                 documentName,
                 blockName,
@@ -171,7 +174,7 @@ export class FoldNode extends DecoratorNode<
 
   getDataAttrs(): Record<string, string> {
     return {
-      'data-fold-node': 'true',
+      'data-snapshot-node': 'true',
       'data-document-id': this.__documentId,
       'data-document-name': this.__documentName,
       'data-block-name': this.__blockName,
@@ -256,7 +259,7 @@ export class FoldNode extends DecoratorNode<
   }
 
   decorate(_: LexicalEditor, config: EditorConfig) {
-    const decorator = getDecorator<FoldNode>(FoldNode);
+    const decorator = getDecorator<SnapshotNode>(SnapshotNode);
     if (decorator) {
       return () =>
         decorator({
@@ -273,8 +276,8 @@ export class FoldNode extends DecoratorNode<
   }
 }
 
-export function $createFoldNode(params: FoldNodeInfo): FoldNode {
-  const node = new FoldNode(
+export function $createSnapshotNode(params: SnapshotNodeInfo): SnapshotNode {
+  const node = new SnapshotNode(
     params.documentId,
     params.documentName,
     params.blockName,
@@ -285,8 +288,8 @@ export function $createFoldNode(params: FoldNodeInfo): FoldNode {
   return $applyNodeReplacement(node);
 }
 
-export function $isFoldNode(
-  node: FoldNode | LexicalNode | null | undefined
-): node is FoldNode {
-  return node instanceof FoldNode;
+export function $isSnapshotNode(
+  node: SnapshotNode | LexicalNode | null | undefined
+): node is SnapshotNode {
+  return node instanceof SnapshotNode;
 }

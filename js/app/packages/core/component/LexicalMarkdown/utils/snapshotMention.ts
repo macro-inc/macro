@@ -4,7 +4,7 @@ import { isErr } from '@core/util/maybeResult';
 import { fetchDocumentAsMarkdown } from '@queries/storage/markdownText';
 import { storageServiceClient } from '@service-storage/client';
 import type { Item } from '@service-storage/generated/schemas/item';
-import { INSERT_FOLD_NODE_COMMAND } from '../plugins/mentions';
+import { INSERT_SNAPSHOT_NODE_COMMAND } from '../plugins/mentions';
 import {
   entityMapper,
   getCombinedEntityBlockName,
@@ -13,9 +13,9 @@ import {
   handleBasicMention,
 } from './mentionsUtils';
 
-/** Document types that support FoldNode (text-based content) */
+/** Document types that support SnapshotNode (text-based content) */
 // TODO
-const FOLD_SUPPORTED_BLOCK_NAMES: Set<BlockName | BlockAlias> = new Set([
+const SNAPSHOT_SUPPORTED_BLOCK_NAMES: Set<BlockName | BlockAlias> = new Set([
   'task',
   'write',
   'md',
@@ -23,20 +23,22 @@ const FOLD_SUPPORTED_BLOCK_NAMES: Set<BlockName | BlockAlias> = new Set([
 ]);
 
 /**
- * Check if a block name supports FoldNode insertion.
- * FoldNode is used for text-based documents where content can be displayed inline.
+ * Check if a block name supports SnapshotNode insertion.
+ * SnapshotNode is used for text-based documents where content can be displayed inline.
  */
-export function supportsFoldNode(blockName: BlockName | BlockAlias): boolean {
-  return FOLD_SUPPORTED_BLOCK_NAMES.has(blockName);
+export function supportsSnapshotNode(
+  blockName: BlockName | BlockAlias
+): boolean {
+  return SNAPSHOT_SUPPORTED_BLOCK_NAMES.has(blockName);
 }
 
 /**
- * Insert a FoldNode with document content for supported document types.
+ * Insert a SnapshotNode with document content for supported document types.
  * Falls back to handleBasicMention for unsupported types or errors.
  * @param item The document item to mention
  * @param dependencies Handler dependencies
  */
-export async function handleFoldMention(
+export async function handleSnapshotMention(
   item: Item,
   dependencies: HandlerDependencies
 ) {
@@ -52,8 +54,8 @@ export async function handleFoldMention(
   const itemBlock = getCombinedEntityBlockName(itemEntity);
   const itemName = getItemName(itemEntity);
 
-  // Check if this document type supports FoldNode
-  if (!supportsFoldNode(itemBlock)) {
+  // Check if this document type supports SnapshotNode
+  if (!supportsSnapshotNode(itemBlock)) {
     return handleBasicMention(item, dependencies);
   }
 
@@ -74,7 +76,10 @@ export async function handleFoldMention(
 
     if (isErr(result)) {
       // Fall back to regular mention on error
-      console.error('Failed to fetch document content for FoldNode:', result);
+      console.error(
+        'Failed to fetch document content for SnapshotNode:',
+        result
+      );
       return;
     }
     text = result[1].text;
@@ -92,7 +97,7 @@ export async function handleFoldMention(
 
   onDocumentMention?.(item);
 
-  editor.dispatchCommand(INSERT_FOLD_NODE_COMMAND, {
+  editor.dispatchCommand(INSERT_SNAPSHOT_NODE_COMMAND, {
     documentId: item.id,
     documentName: itemName,
     blockName: itemBlock,

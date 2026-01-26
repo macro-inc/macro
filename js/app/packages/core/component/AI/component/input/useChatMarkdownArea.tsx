@@ -457,7 +457,7 @@ function MarkdownArea(
           block={'chat'}
           useBlockBoundary={true}
           portalScope={props.portalScope}
-          useFoldForDocuments={true}
+          useSnapshotForDocuments={true}
         />
         <FloatingMenuGroup>
           <FloatingLinkMenu />

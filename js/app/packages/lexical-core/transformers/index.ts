@@ -1,7 +1,7 @@
 import type { Transformer } from '@lexical/markdown';
 import { I_MACRO_QUOTE } from './classedBlock';
 import { CUSTOM_TRANSFORMERS } from './customTransformers';
-import { E_FOLD_NODE, I_FOLD_NODE } from './fold';
+import { E_SNAPSHOT_NODE, I_SNAPSHOT_NODE } from './snapshot';
 import { I_IMAGE_CONSTRAINED, IMAGE } from './image';
 import {
   E_BLOCK_EQUATION_NODE,
@@ -58,7 +58,7 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_MACRO_QUOTE,
   I_EQUATION_NODE,
   I_WATERMARK,
-  I_FOLD_NODE,
+  I_SNAPSHOT_NODE,
   ...CUSTOM_TRANSFORMERS,
 ];
 
@@ -84,7 +84,7 @@ export const EXTERNAL_TRANSFORMERS: Transformer[] = [
   E_BLOCK_EQUATION_NODE,
   E_INLINE_EQUATION_NODE,
   E_WATERMARK,
-  E_FOLD_NODE,
+  E_SNAPSHOT_NODE,
   ...HTML_ENTITY_TRANSFORMERS,
   ...CUSTOM_TRANSFORMERS,
 ];
@@ -119,8 +119,8 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   I_EQUATION_NODE,
   I_WATERMARK,
   E_WATERMARK,
-  I_FOLD_NODE,
-  E_FOLD_NODE,
+  I_SNAPSHOT_NODE,
+  E_SNAPSHOT_NODE,
   // order matters
   E_MULTILINE_BLOCK_EQUATION_NODE,
   E_BLOCK_EQUATION_NODE,

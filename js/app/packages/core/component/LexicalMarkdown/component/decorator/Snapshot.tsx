@@ -12,9 +12,8 @@ import { openInNewSplitForMention } from "@core/util/openInNewSplit";
 import { useSplitNavigationHandler } from "@core/util/useSplitNavigationHandler";
 import EyeSlashDuo from "@icon/duotone/eye-slash-duotone.svg";
 import TrashSimple from "@icon/duotone/trash-simple-duotone.svg";
-import ClockIcon from "@icon/regular/clock.svg";
 import LoadingSpinner from "@icon/regular/spinner.svg";
-import { $isFoldNode, type FoldDecoratorProps } from "@lexical-core";
+import { $isSnapshotNode, type SnapshotDecoratorProps } from "@lexical-core";
 import { blockNameToItemType } from "@service-storage/client";
 import { createCallback } from "@solid-primitives/rootless";
 import { debounce } from "@solid-primitives/scheduled";
@@ -33,7 +32,6 @@ import { MentionTooltip } from "./MentionTooltip";
 function MentionContainer(props: {
 	icon: JSX.Element;
 	text: JSX.Element;
-	snapshotBadge?: boolean;
 }) {
 	return (
 		<span class="pointer-events-auto">
@@ -56,10 +54,10 @@ function Spinner() {
 }
 
 function Loading() {
-	return <MentionContainer icon={<Spinner />} text="Loading" snapshotBadge />;
+	return <MentionContainer icon={<Spinner />} text="Loading" />;
 }
 
-export function Fold(props: FoldDecoratorProps) {
+export function Snapshot(props: SnapshotDecoratorProps) {
 	const currentBlockId = useMaybeBlockId();
 
 	const lexicalWrapper = useContext(LexicalWrapperContext);
@@ -110,10 +108,10 @@ export function Fold(props: FoldDecoratorProps) {
 		);
 	}
 
-	const deleteFold = () => {
+	const deleteSnapshot = () => {
 		editor?.update(() => {
 			const node = $getNodeByKey(props.key);
-			if (!$isFoldNode(node)) return false;
+			if (!$isSnapshotNode(node)) return false;
 			node.remove();
 			return true;
 		});
@@ -143,7 +141,6 @@ export function Fold(props: FoldDecoratorProps) {
 						/>
 					}
 					text={props.documentName || "Untitled"}
-					snapshotBadge
 				/>
 			);
 		}
@@ -153,14 +150,13 @@ export function Fold(props: FoldDecoratorProps) {
 				<MentionContainer
 					icon={<EyeSlashDuo />}
 					text="No Access"
-					snapshotBadge
 				/>
 			);
 		}
 
 		if (i.access === "does_not_exist") {
 			return (
-				<MentionContainer icon={<TrashSimple />} text="Deleted" snapshotBadge />
+				<MentionContainer icon={<TrashSimple />} text="Deleted" />
 			);
 		}
 
@@ -173,7 +169,6 @@ export function Fold(props: FoldDecoratorProps) {
 					/>
 				}
 				text={props.documentName || "Untitled"}
-				snapshotBadge
 			/>
 		);
 	};
@@ -232,7 +227,7 @@ export function Fold(props: FoldDecoratorProps) {
 						debouncedSetPreviewOpen.clear();
 						debouncedSetPreviewOpen(false);
 					}}
-					delete={editor?.isEditable() ? deleteFold : undefined}
+					delete={editor?.isEditable() ? deleteSnapshot : undefined}
 					documentInfo={{
 						id: props.documentId,
 						type: verifyBlockName(props.blockName),

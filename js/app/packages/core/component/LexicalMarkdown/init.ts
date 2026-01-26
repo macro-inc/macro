@@ -5,7 +5,7 @@ import {
   DocumentCardNode,
   DocumentMentionNode,
   EquationNode,
-  FoldNode,
+  SnapshotNode,
   GroupMentionNode,
   HorizontalRuleNode,
   HtmlRenderNode,
@@ -21,7 +21,7 @@ import { DiffInsert } from './component/decorator/DiffInsert';
 import { DocumentCard } from './component/decorator/DocumentCard';
 import { DocumentMention } from './component/decorator/DocumentMention';
 import { Equation } from './component/decorator/Equation';
-import { Fold } from './component/decorator/Fold';
+import { Snapshot } from './component/decorator/Snapshot';
 import { GroupMention } from './component/decorator/GroupMention';
 import { HorizontalRule } from './component/decorator/HorizontalRule';
 import { HtmlRender } from './component/decorator/HtmlRender';
@@ -47,7 +47,7 @@ export function initializeLexical() {
   setDecorator(ImageNode, MarkdownImage);
   setDecorator(VideoNode, MarkdownVideo);
   setDecorator(EquationNode, Equation);
-  setDecorator(FoldNode, Fold);
+  setDecorator(SnapshotNode, Snapshot);
   setDecorator(HtmlRenderNode, HtmlRender);
   setDecorator(WatermarkNode, Watermark);
   registerDiffNodeFactory();
