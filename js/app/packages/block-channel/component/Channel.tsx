@@ -66,7 +66,6 @@ import {
 } from './MessageList/MessageList';
 import { Top } from './Top';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import { activeElement } from '@app/signal/focus';
 
 false && fileFolderDrop;
 
@@ -156,7 +155,7 @@ export function Channel(props: {
 
   const [selectedMessageId, setSelectedMessageId] = createSignal<
     string | undefined
-    >(undefined);
+  >(undefined);
 
   const [messageListNav, setMessageListNav] =
     createSignal<MessageListNavigation>();
@@ -227,14 +226,16 @@ export function Channel(props: {
 
     const tabbableEls = tabbable(block);
     let activeEl = document.activeElement;
-    
-    const selectedMessageEl = block.querySelector(`[data-message-id="${selectedMessageId()}"]`);
-    
+
+    const selectedMessageEl = block.querySelector(
+      `[data-message-id="${selectedMessageId()}"]`
+    );
+
     if (selectedMessageEl && !selectedMessageEl?.contains(activeEl)) {
       // Selected message gets set on hover without actually becoming focused. If the active element is not inside the selected message, it is probably because the user has hovered over a new message, and so we should proceed as if the selected message were the active element.
       activeEl = selectedMessageEl;
     }
-    
+
     const activeElIndex = tabbableEls.indexOf(activeEl as FocusableElement);
 
     // DOM-based navigation: element is in tabbable list

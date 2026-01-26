@@ -29,7 +29,6 @@ import type { Activity as ChannelActivity } from '@service-comms/generated/model
 import type { Message } from '@service-comms/generated/models/message';
 import { useUserId } from '@core/context/user';
 import { debounce } from '@solid-primitives/scheduled';
-import { activeElement } from 'app/signal/focus';
 import {
   type Accessor,
   createContext,
@@ -441,8 +440,6 @@ function MessageListImpl(props: MessageListProps) {
 
     setMessageListContext(reconcile(context));
   }
-
-
 
   const isFocused = createSelector(props.focusedMessageId);
 
