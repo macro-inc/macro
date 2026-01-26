@@ -1,5 +1,6 @@
+import { type EntityData, isTaskEntity } from '@macro-entity';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { ItemType } from '@service-storage/client';
 import { match } from 'ts-pattern';
 
@@ -57,5 +58,18 @@ export function entityTypeToItemType(type: EntityType): ItemType | undefined {
     .with('COMPANY', () => undefined) // huh
     .with('USER', () => undefined) // huh
     .with('THREAD', () => 'email' as ItemType)
+    .exhaustive();
+}
+
+export function macroEntityToPropertyEntityType(
+  entity: EntityData
+): EntityType {
+  return match(entity)
+    .when(isTaskEntity, () => EntityType.TASK)
+    .with({ type: 'channel' }, () => EntityType.CHANNEL)
+    .with({ type: 'chat' }, () => EntityType.CHAT)
+    .with({ type: 'project' }, () => EntityType.PROJECT)
+    .with({ type: 'email' }, () => EntityType.THREAD)
+    .with({ type: 'document' }, () => EntityType.DOCUMENT)
     .exhaustive();
 }

@@ -54,7 +54,7 @@ build_lambdas:
 
 # Copies over necessary .env files for sqlx tests
 setup_test_envs:
-    echo "DATABASE_URL={{ DATABASE_URL }}/contacts" >> ./contacts_db_client/.env
+    echo "DATABASE_URL={{ MACRODB }}" >> ./contacts_db_client/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./notification_db_client/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./properties_db_client/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./macro_db_client/.env
@@ -86,5 +86,3 @@ setup_macrodb:
     just document_cognition_service/prepare-test
 
 initialize_dbs: setup_macrodb
-    # contactsdb
-    just contacts_db_client/setup
