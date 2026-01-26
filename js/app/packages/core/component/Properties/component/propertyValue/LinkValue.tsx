@@ -4,7 +4,6 @@ import { proxyResource } from '@service-unfurl/client';
 import type { Component } from 'solid-js';
 import { createSignal, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { usePropertiesContext } from '../../context/PropertiesContext';
 import {
   extractDomain,
   getLinkValues,
@@ -15,11 +14,12 @@ import {
   AddPropertyValueButton,
   EmptyValue,
   PropertyValueDeleteButton,
+  stubSaveHandler,
   type PropertyValueProps,
 } from './ValueComponents';
 
 export const LinkValue: Component<PropertyValueProps> = (props) => {
-  const { saveHandler } = usePropertiesContext();
+  const saveHandler = () => props.saveHandler ?? stubSaveHandler;
   const [isAdding, setIsAdding] = createSignal(false);
   const [inputValue, setInputValue] = createSignal('');
   const [error, setError] = createSignal<string | null>(null);
@@ -72,7 +72,7 @@ export const LinkValue: Component<PropertyValueProps> = (props) => {
         newValues = [normalized];
       }
 
-      await saveHandler.saveProperty(props.property, {
+      await saveHandler().saveProperty(props.property, {
         valueType: 'LINK',
         values: newValues,
       });
@@ -93,7 +93,7 @@ export const LinkValue: Component<PropertyValueProps> = (props) => {
     try {
       const newValues = linkValues.filter((link: string) => link !== url);
 
-      await saveHandler.saveProperty(props.property, {
+      await saveHandler().saveProperty(props.property, {
         valueType: 'LINK',
         values: newValues.length > 0 ? newValues : null,
       });

@@ -1,3 +1,4 @@
+import { match } from 'ts-pattern';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { PropertyDefinitionResponse } from '@service-properties/generated/schemas/propertyDefinitionResponse';
@@ -9,6 +10,8 @@ import type {
   MultiValueProperty,
   NumberProperty,
   Property,
+  PropertyApiValues,
+  PropertyDefinitionDomain,
   SelectNumberProperty,
   SelectProperty,
   SelectStringProperty,
@@ -192,6 +195,12 @@ export function isPropertyDefinition(
   return !('definition' in p);
 }
 
+export function isInstantiatedProperty(
+  p: Property | PropertyDefinitionDomain
+): p is Property {
+  return 'propertyDefinitionId' in p;
+}
+
 export const hasValue = (property: Property): boolean => {
   if (property.value === null) {
     return false;
@@ -211,3 +220,130 @@ export const hasSingleValue = (property: MultiValueProperty): boolean => {
 export const hasMultiValue = (property: MultiValueProperty): boolean => {
   return property.value !== null && property.value.length > 1;
 };
+
+/**
+ * Raw input value types that can be converted to PropertyApiValues
+ */
+type RawPropertyValue =
+  | string
+  | number
+  | boolean
+  | Date
+  | string[]
+  | EntityReference
+  | EntityReference[]
+  | null;
+
+/**
+ * Type guard to check if a value is a single EntityReference
+ */
+function isSingleEntityReference(value: unknown): value is EntityReference {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    'entity_id' in value &&
+    'entity_type' in value
+  );
+}
+
+/**
+ * Creates a null-valued PropertyApiValues for the given valueType
+ */
+function createNullApiValue(
+  valueType: Property['valueType']
+): PropertyApiValues {
+  return match(valueType)
+    .with('STRING', () => ({ valueType: 'STRING' as const, value: null }))
+    .with('NUMBER', () => ({ valueType: 'NUMBER' as const, value: null }))
+    .with('BOOLEAN', () => ({ valueType: 'BOOLEAN' as const, value: null }))
+    .with('DATE', () => ({ valueType: 'DATE' as const, value: null }))
+    .with('SELECT_STRING', () => ({
+      valueType: 'SELECT_STRING' as const,
+      values: null,
+    }))
+    .with('SELECT_NUMBER', () => ({
+      valueType: 'SELECT_NUMBER' as const,
+      values: null,
+    }))
+    .with('ENTITY', () => ({ valueType: 'ENTITY' as const, refs: null }))
+    .with('LINK', () => ({ valueType: 'LINK' as const, values: null }))
+    .exhaustive();
+}
+
+/**
+ * Validates and converts a raw value to the appropriate PropertyApiValues format
+ * based on the property's valueType.
+ * @param property - The property definition (used to determine valueType)
+ * @param value - The raw value to convert
+ * @returns A valid PropertyApiValues object, or null if the value type is incompatible
+ */
+export function toPropertyApiValue(
+  property: Pick<Property, 'valueType'>,
+  value: RawPropertyValue
+): PropertyApiValues | null {
+  const { valueType } = property;
+
+  if (value === null) {
+    return createNullApiValue(valueType);
+  }
+
+  return match(valueType)
+    .with('STRING', () =>
+      typeof value === 'string' ? { valueType: 'STRING' as const, value } : null
+    )
+    .with('NUMBER', () =>
+      typeof value === 'number' ? { valueType: 'NUMBER' as const, value } : null
+    )
+    .with('BOOLEAN', () =>
+      typeof value === 'boolean'
+        ? { valueType: 'BOOLEAN' as const, value }
+        : null
+    )
+    .with('DATE', () => {
+      if (typeof value === 'string') {
+        return { valueType: 'DATE' as const, value };
+      }
+      if (value instanceof Date) {
+        return { valueType: 'DATE' as const, value: value.toISOString() };
+      }
+      return null;
+    })
+    .with('SELECT_STRING', () => {
+      if (typeof value === 'string') {
+        return { valueType: 'SELECT_STRING' as const, values: [value] };
+      }
+      if (isStringArray(value)) {
+        return { valueType: 'SELECT_STRING' as const, values: value };
+      }
+      return null;
+    })
+    .with('SELECT_NUMBER', () => {
+      if (typeof value === 'string') {
+        return { valueType: 'SELECT_NUMBER' as const, values: [value] };
+      }
+      if (isStringArray(value)) {
+        return { valueType: 'SELECT_NUMBER' as const, values: value };
+      }
+      return null;
+    })
+    .with('ENTITY', () => {
+      if (isEntityReferenceArray(value)) {
+        return { valueType: 'ENTITY' as const, refs: value };
+      }
+      if (isSingleEntityReference(value)) {
+        return { valueType: 'ENTITY' as const, refs: [value] };
+      }
+      return null;
+    })
+    .with('LINK', () => {
+      if (typeof value === 'string') {
+        return { valueType: 'LINK' as const, values: [value] };
+      }
+      if (isStringArray(value)) {
+        return { valueType: 'LINK' as const, values: value };
+      }
+      return null;
+    })
+    .exhaustive();
+}

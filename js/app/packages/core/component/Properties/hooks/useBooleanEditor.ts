@@ -1,5 +1,5 @@
 import { type Accessor, createMemo, createSignal } from 'solid-js';
-import { usePropertiesContext } from '../context/PropertiesContext';
+import type { PropertySaveHandler } from '../context/PropertiesContext';
 import type { Property } from '../types';
 
 /**
@@ -11,13 +11,13 @@ import type { Property } from '../types';
  */
 export function useBooleanEditor(
   property: Property & { valueType: 'BOOLEAN' },
+  saveHandler: PropertySaveHandler,
   onSaved?: () => void
 ): {
   value: Accessor<boolean | null>;
   isSaving: Accessor<boolean>;
   toggle: () => Promise<void>;
 } {
-  const { saveHandler } = usePropertiesContext();
   const [isSaving, setIsSaving] = createSignal(false);
 
   const currentValue = createMemo(() => {
