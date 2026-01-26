@@ -3,8 +3,8 @@ create_networks:
   docker network create databases 2>/dev/null || true
   echo "docker networks created"
 
-get_environment:
-  sops --input-type dotenv --output-type dotenv -d .env-local.enc > .env
+get_environment *ARGS:
+  sops --input-type dotenv --output-type dotenv -d .env-local{{ ARGS }}.enc > .env
 
 # Creates the docker networks then runs the databases 
 # This is used when initializing your databases
@@ -66,3 +66,14 @@ setup_localstack:
   just start_localstack
   sleep 2
   just create_local_queues
+
+# Initialize local databases (macrodb, contacts, notificationdb)
+# Assumes postgres is running locally via `just run_dbs`
+init_local_dbs:
+  just rust/cloud-storage/macro_db_client/create_db
+  just rust/cloud-storage/macro_db_client/migrate_db
+  just rust/cloud-storage/contacts_db_client/create_db
+  just rust/cloud-storage/contacts_db_client/migrate_db
+  just rust/cloud-storage/notification_db_client/create_db
+  just rust/cloud-storage/notification_db_client/migrate_db
+  echo "Local databases initialized"
