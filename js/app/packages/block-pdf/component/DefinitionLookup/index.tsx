@@ -9,9 +9,6 @@ import {
   offset,
   shift,
 } from '@floating-ui/dom';
-// import TiPin from '@icon/filled/push-pin.svg';
-// import TiPinOutline from '@icon/regular/push-pin.svg';
-import TiDeleteOutline from '@icon/regular/x-circle.svg';
 import { createEffect, createMemo, type JSX, onCleanup, Show } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
 import { styled } from 'solid-styled-components';
@@ -36,12 +33,6 @@ import { parseDefinitionMetadata } from './shared';
 // } from '../../context/WidgetContext';
 // import { ILocation } from '../../models/Location';
 // import SectionPreview from '../SectionPreview';
-
-const iconStyles: JSX.CSSProperties = {
-  'margin-right': '8px',
-  'margin-top': '8px',
-  cursor: 'var(--cursor-pointer)',
-};
 
 const DefinitionLabelWrapper = styled.div`
   margin-right: auto;

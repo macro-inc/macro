@@ -10,7 +10,7 @@ import {
   type PDFPageView,
   PDFRenderingQueue,
   PDFScriptingManager,
-  PDFThumbnailViewer,
+  type PDFThumbnailViewer,
   TextLayerBuilder,
 } from 'pdfjs-dist/web/pdf_viewer';
 import { PageModel } from '../model/Page';
@@ -378,13 +378,6 @@ export class InternalPDFViewer {
       this._thumbnailViewerContainer.style.height = `${invertedPct}vh`;
       this._thumbnailViewerContainer.style.width = `${invertedPct}%`;
     }
-  }
-
-  #buildThumbnailViewerContainer(): HTMLDivElement {
-    const div = document.createElement('div');
-    div.className = 'pdfThumbnailViewerContainer';
-
-    return div;
   }
 
   #buildPopupContainer() {
