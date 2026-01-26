@@ -3,7 +3,7 @@ import type { EmailEntity } from '@macro-entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Item } from '@service-storage/generated/schemas/item';
 import type { Accessor } from 'solid-js';
-import type { FreshSortConfig } from '@core/util/freshSort';
+import type { FreshSortConfig, TimestampedItem } from '@core/util/freshSort';
 
 /** Combined entity type for unified handling across entity selectors */
 export type CombinedEntity =
@@ -92,16 +92,13 @@ export function getEntityType(entity: CombinedEntity): EntityType {
 export function createEntitySearchConfig(
   currentUserDomain: Accessor<string | undefined>
 ): FreshSortConfig {
-  // Create a generic boost function that works with any TimestampedItem
-  // and is reactive to domain changes
-  const boostFn = <T extends { [key: string]: any }>(item: T): number => {
+  const boostFn = <T extends TimestampedItem>(item: T): number => {
     const userDomain = currentUserDomain();
     if (!userDomain) return 0;
 
     // Check if this looks like a CombinedEntity with user data
-    const entity = item as any;
-    if (entity?.kind === 'user' && entity?.data?.email) {
-      const email = entity.data.email as string;
+    if (item?.kind === 'user' && item?.data?.email) {
+      const email = item.data.email as string;
       const itemDomain = email.split('@')[1];
       return itemDomain === userDomain ? 0.5 : 0;
     }

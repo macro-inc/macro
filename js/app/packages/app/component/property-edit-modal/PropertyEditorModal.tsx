@@ -9,6 +9,7 @@ import {
   createSelector,
   createSignal,
   For,
+  JSX,
   Match,
   on,
   onCleanup,
@@ -45,6 +46,7 @@ import { mergeRefs } from '@solid-primitives/refs';
 import {
   macroEntityToPropertyEntityType,
   PropertyDataTypeIcon,
+  toPropertyApiValue,
 } from '@core/component/Properties/utils';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 
@@ -71,7 +73,7 @@ function ListItem(props: {
   disabled?: boolean;
   onClick: () => void;
   onMouseEnter: () => void;
-  children: any;
+  children: JSX.Element;
 }) {
   return (
     <button
@@ -368,57 +370,13 @@ function PropertyValueEditor(props: {
 }) {
   const propertyType = () => props.property?.valueType;
 
-  const handleSubmit = (value: any) => {
+  const handleSubmit = (
+    value: string | number | boolean | Date | EntityReference
+  ) => {
     const type = propertyType();
     if (!type) return;
-
-    let apiValues: PropertyApiValues;
-
-    if (type === 'SELECT_STRING') {
-      apiValues = {
-        valueType: 'SELECT_STRING',
-        values: [value],
-      };
-    } else if (type === 'SELECT_NUMBER') {
-      apiValues = {
-        valueType: 'SELECT_NUMBER',
-        values: [value],
-      };
-    } else if (type === 'ENTITY') {
-      apiValues = {
-        valueType: 'ENTITY',
-        refs: [value],
-      };
-    } else if (type === 'STRING') {
-      apiValues = {
-        valueType: 'STRING',
-        value: value,
-      };
-    } else if (type === 'NUMBER') {
-      apiValues = {
-        valueType: 'NUMBER',
-        value: typeof value === 'number' ? value : parseFloat(value),
-      };
-    } else if (type === 'BOOLEAN') {
-      apiValues = {
-        valueType: 'BOOLEAN',
-        value: value === 'true' || value === true,
-      };
-    } else if (type === 'DATE') {
-      apiValues = {
-        valueType: 'DATE',
-        value: value instanceof Date ? value.toISOString() : value,
-      };
-    } else if (type === 'LINK') {
-      apiValues = {
-        valueType: 'LINK',
-        values: [value],
-      };
-    } else {
-      console.error('Unsupported property type:', type);
-      return;
-    }
-
+    let apiValues = toPropertyApiValue({ valueType: type }, value);
+    if (!apiValues) return;
     props.onSave(apiValues);
   };
 
