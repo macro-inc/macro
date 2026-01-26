@@ -1,6 +1,8 @@
 # Services
 include:
   - docker-compose-databases.yml
+  - infra/stacks/fusionauth-instance/docker-compose.yml
+  - infra/stacks/opensearch/docker-compose-opensearch.yml
 
 x-common-env: &common-env
   env_file:
@@ -20,8 +22,10 @@ services:
     ports:
       - "8080:8080"
     depends_on:
+      - fusionauth
       - redis
     networks:
+      - auth
       - databases
       - services
     healthcheck:
@@ -425,4 +429,6 @@ networks:
   services:
     driver: bridge
   databases:
+    external: true
+  auth:
     external: true

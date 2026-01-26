@@ -1,6 +1,7 @@
 # Creates global networks that are shared across docker-compose files
 create_networks:
-  docker network create databases 2>/dev/null || true
+  docker network create databases 2>/dev/null || true -- db network
+  docker network create auth 2>/dev/null || true -- fusionauth network
   echo "docker networks created"
 
 get_environment *ARGS:
