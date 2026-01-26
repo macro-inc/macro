@@ -63,6 +63,7 @@ import {
 import type { Setter } from 'solid-js';
 import type { MenuOperations } from '../../shared/inlineMenu';
 import { $collapseSelection, $traverseNodes, nodeByKey } from '../../utils';
+import { supportsFoldNode } from '../../utils/foldMention';
 import { mapRegisterDelete } from '../shared';
 
 export const INSERT_DOCUMENT_MENTION_COMMAND: LexicalCommand<DocumentMentionInfo> =
@@ -204,8 +205,8 @@ export function $mentionItemFromNode(node: MentionNode): ItemMention {
 }
 
 // Validators for the position of the @ trigger.
-const beforeRegex = /[(['"\`\s]$/;
-const afterRegex = /^[)\]'"\`\s]/;
+const beforeRegex = /[(['"`\s]$/;
+const afterRegex = /^[)\]'"`\s]/;
 
 /**
  * When mentions nodes are selected by using the arrow keys, we want to be able to delete them.
@@ -784,9 +785,10 @@ function registerMentionsPlugin(
 
     editor.registerMutationListener(FoldNode, (mutatedNodes) => {
       for (const [nodeKey, mutation] of mutatedNodes) {
-        const node = nodeByKey(editor.getEditorState(), nodeKey) as
-          | FoldNode
-          | null;
+        const node = nodeByKey(
+          editor.getEditorState(),
+          nodeKey
+        ) as FoldNode | null;
 
         if (!node) {
           continue;
@@ -809,9 +811,13 @@ function registerMentionsPlugin(
           if (onCreateMention) {
             const blockName = node.getBlockName();
             let fileType = blockName;
+            if (supportsFoldNode(blockName as any)) {
+              return;
+            }
             if (blockName === 'write') fileType = 'docx';
             else if (blockName === 'md') fileType = 'md';
             else if (blockName === 'code') fileType = 'txt';
+            else if (blockName === 'chat') fileType = 'chat';
 
             onCreateMention({
               itemType: 'document',

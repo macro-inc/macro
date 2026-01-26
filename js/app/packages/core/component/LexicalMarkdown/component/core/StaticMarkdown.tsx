@@ -18,6 +18,7 @@ import {
   type DocumentCardNode,
   type DocumentMentionNode,
   type EquationNode,
+  type FoldNode,
   type GroupMentionNode,
   type HorizontalRuleNode,
   type ImageNode,
@@ -68,6 +69,7 @@ import { ContactMention as ContactMentionDecorator } from '../decorator/ContactM
 import { DateMention as DateMentionDecorator } from '../decorator/DateMention';
 import { DocumentCard as DocumentCardDecorator } from '../decorator/DocumentCard';
 import { DocumentMention as DocumentMentionDecorator } from '../decorator/DocumentMention';
+import { Fold as FoldDecorator } from '../decorator/Fold';
 import { GroupMention as GroupMentionDecorator } from '../decorator/GroupMention';
 import { Equation as EquationDecorator } from '../decorator/Equation';
 import { MarkdownImage as ImageDecorator } from '../decorator/MarkdownImage';
@@ -323,6 +325,19 @@ const GroupMention: RenderableEntity<GroupMentionNode> = {
   render: (props) => (
     <span>
       {GroupMentionDecorator({
+        ...props.node.exportComponentProps(),
+        key: props.node.getKey(),
+        theme: props.theme,
+      })}
+    </span>
+  ),
+};
+
+const Fold: RenderableEntity<FoldNode> = {
+  guard: (node: LexicalNode): node is FoldNode => node.__type === 'fold',
+  render: (props) => (
+    <span>
+      {FoldDecorator({
         ...props.node.exportComponentProps(),
         key: props.node.getKey(),
         theme: props.theme,
@@ -643,6 +658,7 @@ const InlineEntities: Array<RenderableEntity> = [
   ContactMention,
   DateMention,
   GroupMention,
+  Fold,
   Image,
   Video,
   HorizontalRule,
