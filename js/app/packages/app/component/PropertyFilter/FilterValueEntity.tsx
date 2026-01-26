@@ -1,7 +1,10 @@
-import { useChannelsContext } from '@core/context/channels';
+import {
+  useChannelsContext,
+  useDmActivityByUserId,
+} from '@core/context/channels';
 import {
   type CombinedEntity,
-  ENTITY_SEARCH_CONFIG,
+  createEntitySearchConfig,
   entityMapper,
   getEntityName,
   getEntitySearchText,
@@ -10,6 +13,7 @@ import {
 } from '@core/component/Properties/component/modal/shared/entityUtils';
 import { usePropertyEntityDisplay } from '@core/component/Properties/hooks/usePropertyEntityDisplay';
 import { useContacts } from '@core/user';
+import { useEmail } from '@core/context/user';
 import { createFreshSearch } from '@core/util/freshSort';
 import {
   createEmailsInfiniteQuery,
@@ -88,6 +92,7 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
   const contacts = useContacts();
   const channelsContext = useChannelsContext();
   const channels = channelsContext.channels;
+  const dmActivityByUserId = useDmActivityByUserId();
   const historyQuery = useHistoryQuery();
 
   // Email queries for THREAD type or generic ENTITY (no specific type)
@@ -125,6 +130,23 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
       .map((entity) => threadMapper(entity as EmailEntity));
   });
 
+  // Helper to augment user entities with DM activity timestamps (same as MentionsMenu)
+  const augmentUsersWithDmActivity = () => {
+    const dmActivity = dmActivityByUserId();
+    return contacts()
+      .map(entityMapper('user'))
+      .map((entity) => {
+        const dmTimestamp = dmActivity.get(entity.id);
+        if (dmTimestamp) {
+          return {
+            ...entity,
+            lastInteraction: dmTimestamp,
+          };
+        }
+        return entity;
+      });
+  };
+
   // Get entities based on specific entity type (same logic as PropertyEntitySelector)
   const entities = createMemo((): CombinedEntity[] => {
     const entityType = props.specificEntityType;
@@ -132,7 +154,7 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
     // Generic entity - include all types
     if (!entityType) {
       return [
-        ...contacts().map(entityMapper('user')),
+        ...augmentUsersWithDmActivity(),
         ...(historyQuery.data ?? []).map(entityMapper('item')),
         ...channels().map(entityMapper('channel')),
         ...emails().map(threadMapper),
@@ -140,7 +162,7 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
     }
 
     if (entityType === 'USER') {
-      return contacts().map(entityMapper('user'));
+      return augmentUsersWithDmActivity();
     }
 
     if (entityType === 'CHANNEL') {
@@ -171,9 +193,16 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
     return [];
   });
 
+  // Get current user domain for same-domain boost
+  const currentUserEmail = useEmail();
+  const currentUserDomain = createMemo(() => {
+    const email = currentUserEmail();
+    return email ? email.split('@')[1] : undefined;
+  });
+
   // Search function for fuzzy matching (same config as PropertyEntitySelector)
   const entitySearch = createFreshSearch<CombinedEntity>(
-    ENTITY_SEARCH_CONFIG,
+    createEntitySearchConfig(currentUserDomain),
     getEntitySearchText
   );
 

@@ -1,13 +1,17 @@
-import { useChannelsContext } from '@core/context/channels';
+import {
+  useChannelsContext,
+  useDmActivityByUserId,
+} from '@core/context/channels';
 import {
   type CombinedEntity,
-  ENTITY_SEARCH_CONFIG,
+  createEntitySearchConfig,
   entityMapper,
   getEntitySearchText,
   threadMapper,
 } from '@core/component/Properties/component/modal/shared/entityUtils';
 import { useContacts } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
+import { useEmail } from '@core/context/user';
 import {
   createEmailsInfiniteQuery,
   createUnifiedSearchInfiniteQuery,
@@ -44,6 +48,7 @@ export function useEntitiesForProperty(
   const contacts = useContacts();
   const channelsContext = useChannelsContext();
   const channels = channelsContext.channels;
+  const dmActivityByUserId = useDmActivityByUserId();
   const historyQuery = useHistoryQuery();
   const history = () => historyQuery.data ?? [];
 
@@ -84,6 +89,23 @@ export function useEntitiesForProperty(
       .map((entity) => threadMapper(entity as EmailEntity));
   });
 
+  // Helper to augment user entities with DM activity timestamps (same as MentionsMenu)
+  const augmentUsersWithDmActivity = () => {
+    const dmActivity = dmActivityByUserId();
+    return contacts()
+      .map(entityMapper('user'))
+      .map((entity) => {
+        const dmTimestamp = dmActivity.get(entity.id);
+        if (dmTimestamp) {
+          return {
+            ...entity,
+            lastInteraction: dmTimestamp,
+          };
+        }
+        return entity;
+      });
+  };
+
   // Get entities based on specific entity type
   const entities = createMemo((): CombinedEntity[] => {
     const entityType = specificEntityType();
@@ -91,7 +113,7 @@ export function useEntitiesForProperty(
     // Generic entity - include all types
     if (!entityType) {
       return [
-        ...contacts().map(entityMapper('user')),
+        ...augmentUsersWithDmActivity(),
         ...history().map(entityMapper('item')),
         ...channels().map(entityMapper('channel')),
         ...emails().map(threadMapper),
@@ -99,7 +121,7 @@ export function useEntitiesForProperty(
     }
 
     if (entityType === 'USER') {
-      return contacts().map(entityMapper('user'));
+      return augmentUsersWithDmActivity();
     }
 
     if (entityType === 'CHANNEL') {
@@ -130,27 +152,29 @@ export function useEntitiesForProperty(
     return [];
   });
 
-  // Search function for fuzzy matching
+  const currentUserEmail = useEmail();
+  const currentUserDomain = createMemo(() => {
+    const email = currentUserEmail();
+    return email ? email.split('@')[1] : undefined;
+  });
+
+  // search function for fuzzy matching
   const entitySearch = createFreshSearch<CombinedEntity>(
-    ENTITY_SEARCH_CONFIG,
+    createEntitySearchConfig(currentUserDomain),
     getEntitySearchText
   );
 
-  // Get filtered entities based on search query
+  // get filtered entities based on search query
   const filteredEntities = createMemo(() => {
     const query = searchTerm();
     const available = entities();
 
     const MAX_RESULTS = 50;
 
-    if (!query) return available.slice(0, MAX_RESULTS);
-
-    // Local search results
     const localResults = entitySearch(available, query)
       .slice(0, MAX_RESULTS)
       .map((result) => result.item);
 
-    // For THREAD or generic entity: merge local + server results (local first, server appended, deduped)
     if (needsEmailSearch() && query) {
       const localIds = new Set(localResults.map((e) => e.id));
       const serverResults = serverEmails().filter((e) => !localIds.has(e.id));
