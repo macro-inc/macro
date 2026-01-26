@@ -80,7 +80,7 @@ pub struct InitResponse {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user_context, gmail_token), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, user_context, gmail_token), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id), err)]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     MacroUserExtractor {
@@ -190,7 +190,7 @@ pub async fn handler(
 
 /// Enables Gmail sync for a user by A) registering a watch with Gmail API B) updating the link record
 /// to is_sync_active = true and C) updating gmail_histories entry with the current history value.
-#[tracing::instrument(skip(ctx, user_context, gmail_access_token))]
+#[tracing::instrument(skip(ctx, user_context, gmail_access_token), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id), err)]
 pub async fn enable_gmail_sync(
     ctx: &ApiContext,
     user_context: &UserContext,
