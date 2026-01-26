@@ -55,7 +55,10 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { replaceCitations } from '../../citationsUtils';
 import '../../styles.css';
-import { ENABLE_SVG_PREVIEW } from '@core/constant/featureFlags';
+import {
+  ENABLE_STATIC_DOCUMENT_CARDS,
+  ENABLE_SVG_PREVIEW,
+} from '@core/constant/featureFlags';
 import type { MarkNode } from '@lexical/mark';
 import type { SearchMatchNode } from '@lexical-core/nodes/SearchMatchNode';
 import { theme as baseTheme, createTheme } from '../../theme';
@@ -540,12 +543,25 @@ const Equation: RenderableEntity<EquationNode> = {
 const DocumentCard: RenderableEntity<DocumentCardNode> = {
   guard: (node: LexicalNode): node is DocumentCardNode =>
     node.__type === 'document-card',
-  render: (props) =>
-    DocumentCardDecorator({
-      ...props.node.exportComponentProps(),
-      key: props.node.getKey(),
-      theme: props.theme,
-    }),
+  render: (props) => {
+    if (ENABLE_STATIC_DOCUMENT_CARDS) {
+      return DocumentCardDecorator({
+        ...props.node.exportComponentProps(),
+        key: props.node.getKey(),
+        theme: props.theme,
+      });
+    }
+    // TODO (seamus) : temp fix to make existing doc cards in dev look right.
+    return (
+      <p class="my-1.5">
+        {DocumentMentionDecorator({
+          ...props.node.exportComponentProps(),
+          key: props.node.getKey(),
+          theme: props.theme,
+        })}
+      </p>
+    );
+  },
 };
 
 // Table rendering components for Lexical tables

@@ -113,3 +113,6 @@ export const ENABLE_CREATE_TASK = true;
 export const ENABLE_TASKS_TABS = true;
 
 export const ENABLE_EMAIL_SHARING = true;
+
+// Auto expand stand-alone mentions to richer previews in channels
+export const ENABLE_STATIC_DOCUMENT_CARDS = false;
