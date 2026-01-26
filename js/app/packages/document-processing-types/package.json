@@ -4,7 +4,16 @@
   "private": true,
   "description": "Stores all document processing job types and job validation",
   "main": "dist/index.js",
+  "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "default": "./dist/index.mjs"
+    }
+  },
   "dependencies": {
     "zod": "^3.23.4"
   }
