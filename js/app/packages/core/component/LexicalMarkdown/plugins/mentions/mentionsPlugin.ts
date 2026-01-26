@@ -99,18 +99,18 @@ export const INSERT_GROUP_MENTION_COMMAND: LexicalCommand<GroupMentionInfo> =
 
 export type ItemMention = {
   itemType:
-    | 'document'
-    | 'chat'
-    | 'user'
-    | 'channel'
-    | 'project'
-    | 'rss'
-    | 'contact'
-    | 'date'
-    | 'email'
-    | 'unknown'
-    | 'color'
-    | 'group';
+  | 'document'
+  | 'chat'
+  | 'user'
+  | 'channel'
+  | 'project'
+  | 'rss'
+  | 'contact'
+  | 'date'
+  | 'email'
+  | 'unknown'
+  | 'color'
+  | 'group';
   itemId: string;
   fileType?: string;
   documentName?: string;
@@ -155,6 +155,9 @@ export function $mentionItemFromNode(node: MentionNode): ItemMention {
     } else if (blockName === 'project') {
       fileType = 'project';
       itemType = 'project';
+    } else if (blockName === 'chat') {
+      fileType = 'chat';
+      itemType = 'chat';
     } else if (blockName === 'rss') {
       fileType = 'rss';
     } else if (blockName === 'email') {
