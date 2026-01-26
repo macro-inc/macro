@@ -368,6 +368,7 @@ export function BaseInput(props: BaseInputProps) {
     if (isPendingSend()) return false;
     setIsPendingSend(true);
 
+    const statePromise = pendingEditorState(editor);
     editor.update(
       () => {
         $getRoot().markDirty();
@@ -376,7 +377,7 @@ export function BaseInput(props: BaseInputProps) {
       { discrete: true }
     );
 
-    const state = await pendingEditorState(editor);
+    const state = await statePromise;
     let content = editorStateAsMarkdown(state);
     const originalContent = content;
 
