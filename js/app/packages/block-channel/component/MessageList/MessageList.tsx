@@ -29,7 +29,6 @@ import type { Activity as ChannelActivity } from '@service-comms/generated/model
 import type { Message } from '@service-comms/generated/models/message';
 import { useUserId } from '@core/context/user';
 import { debounce } from '@solid-primitives/scheduled';
-import { activeElement } from 'app/signal/focus';
 import {
   type Accessor,
   createContext,
@@ -66,6 +65,7 @@ type RowModel = {
 const BASE_ITEM_SIZE = 50;
 
 type MessageListContentContextValues = {
+  setFocusedMessageId: Setter<string | undefined>;
   registerVirtualHandle: (handle: VirtualizerHandle) => void;
   scrollContainerRef: Accessor<HTMLElement | undefined>;
   registerScrollContainer: (el: HTMLElement) => void;
@@ -92,6 +92,15 @@ export const useMessageListContext = () => {
 
 export type TargetMessageInfo = { messageId: string; threadId?: string };
 
+export type MessageListNavigation = {
+  /** Navigate to previous message (up in the list) */
+  navigatePrevious: () => boolean;
+  /** Navigate to next message (down in the list) */
+  navigateNext: () => boolean;
+  /** Navigate to a specific message by ID */
+  navigateToMessage: (messageId: string) => boolean;
+};
+
 export type MessageListProps = {
   channelId: string;
   messages: Message[];
@@ -100,9 +109,10 @@ export type MessageListProps = {
   targetMessage: Accessor<TargetMessageInfo | undefined>;
   focusedMessageId: Accessor<string | undefined>;
   setFocusedMessageId: Setter<string | undefined>;
+  /** Callback to expose navigation methods to parent */
+  onNavigationReady?: (nav: MessageListNavigation) => void;
   orderedMessages: Accessor<Message[]>;
   setOrderedMessages: Setter<Message[]>;
-  setLastMessageRef?: Setter<HTMLDivElement | undefined>;
 };
 
 function EmptyMessageList() {
@@ -132,6 +142,7 @@ export function MessageList(props: MessageListProps) {
   };
 
   const context: MessageListContentContextValues = {
+    setFocusedMessageId: props.setFocusedMessageId,
     registerVirtualHandle: setVirtualHandle,
     scrollContainerRef,
     registerScrollContainer: setScrollContainerRef,
@@ -248,6 +259,64 @@ function MessageListImpl(props: MessageListProps) {
 
     return length - 1 - index;
   };
+
+  // Navigation methods for keyboard navigation
+  const navigateToMessage = (messageId: string): boolean => {
+    const messages = props.orderedMessages();
+    const index = messages.findIndex((m) => m.id === messageId);
+    if (index === -1) return false;
+
+    const handle = virtualHandle();
+    if (!handle) return false;
+
+    // Scroll to the message
+    handle.scrollToIndex(normalizeIndex(index), { align: 'nearest' });
+
+    // Focus after scroll completes
+    requestAnimationFrame(() => {
+      const targetEl = containerRef()?.querySelector<HTMLElement>(
+        `[data-message-body-id="${messageId}"]`
+      );
+      targetEl?.focus();
+    });
+
+    return true;
+  };
+
+  const navigateByOffset = (
+    direction: -1 | 1,
+    fallbackToLast: boolean
+  ): boolean => {
+    const messages = props.orderedMessages();
+    const currentId = props.focusedMessageId();
+    const currentIndex = currentId
+      ? messages.findIndex((m) => m.id === currentId)
+      : -1;
+
+    if (currentIndex === -1) {
+      if (fallbackToLast && messages.length > 0) {
+        return navigateToMessage(messages[messages.length - 1].id);
+      }
+      return false;
+    }
+
+    const nextIndex = currentIndex + direction;
+    if (nextIndex < 0 || nextIndex >= messages.length) return false;
+
+    return navigateToMessage(messages[nextIndex].id);
+  };
+
+  const navigatePrevious = (): boolean => navigateByOffset(-1, true);
+  const navigateNext = (): boolean => navigateByOffset(1, false);
+
+  // Expose navigation methods to parent
+  onMount(() => {
+    props.onNavigationReady?.({
+      navigatePrevious,
+      navigateNext,
+      navigateToMessage,
+    });
+  });
 
   const lastViewed = createMemo(() => {
     return props?.latestActivity?.viewed_at;
@@ -371,15 +440,6 @@ function MessageListImpl(props: MessageListProps) {
 
     setMessageListContext(reconcile(context));
   }
-
-  createEffect(() => {
-    const activeElement_ = activeElement();
-    const activeMessageId = activeElement_?.getAttribute(
-      'data-message-body-id'
-    );
-
-    props.setFocusedMessageId(activeMessageId ?? undefined);
-  });
 
   const isFocused = createSelector(props.focusedMessageId);
 
@@ -807,7 +867,6 @@ function MessageListImpl(props: MessageListProps) {
                       virtualHandle={virtualHandle()!}
                       container={containerRef()}
                       listContext={messageListContext[row.id]}
-                      setLastMessageRef={props.setLastMessageRef}
                       isTarget={isActiveTargetMessage(row.message.id)}
                     />
                   </Show>

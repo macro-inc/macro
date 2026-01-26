@@ -91,13 +91,6 @@ export function BlockContainer(props: BlockContainerProps) {
     resolved_.id = getBlockElementId(blockId);
     resolved_.dataset.blockType = blockName;
     setElement(resolved_);
-  });
-
-  onMount(() => {
-    const resolved_ = resolved();
-    if (!(resolved_ instanceof HTMLElement)) {
-      return;
-    }
     attachHotkeys(resolved_);
   });
 
