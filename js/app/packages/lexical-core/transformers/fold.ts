@@ -19,6 +19,7 @@ export const I_FOLD_NODE: TextMatchTransformer = {
       documentName: node.getDocumentName(),
       blockName: node.getBlockName(),
       content: node.getContent(),
+      snapshotDate: node.getSnapshotDate(),
       mentionUuid: node.getMentionUuid(),
     });
 
@@ -41,6 +42,7 @@ export const I_FOLD_NODE: TextMatchTransformer = {
         documentName: data.documentName,
         blockName: data.blockName,
         content: data.content,
+        snapshotDate: data.snapshotDate || new Date().toISOString(),
         mentionUuid: data.mentionUuid,
       });
       node.replace(foldNode);

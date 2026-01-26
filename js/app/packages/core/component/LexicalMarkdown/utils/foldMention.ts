@@ -97,6 +97,7 @@ export async function handleFoldMention(
     documentName: itemName,
     blockName: itemBlock,
     content: text,
+    snapshotDate: new Date().toISOString(),
     mentionUuid: mentionId,
   });
 }

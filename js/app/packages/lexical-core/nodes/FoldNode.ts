@@ -20,6 +20,7 @@ export type FoldNodeInfo = {
   documentName: string;
   blockName: string;
   content: string;
+  snapshotDate?: string;
   mentionUuid?: string;
 };
 
@@ -37,6 +38,7 @@ export class FoldNode extends DecoratorNode<
   __documentName: string;
   __blockName: string;
   __content: string;
+  __snapshotDate: string;
   __mentionUuid: string | undefined;
 
   static getType() {
@@ -57,6 +59,7 @@ export class FoldNode extends DecoratorNode<
       node.__documentName,
       node.__blockName,
       node.__content,
+      node.__snapshotDate,
       node.__mentionUuid,
       node.__key
     );
@@ -67,6 +70,7 @@ export class FoldNode extends DecoratorNode<
     documentName: string,
     blockName: string,
     content: string,
+    snapshotDate?: string,
     mentionUuid?: string,
     key?: NodeKey
   ) {
@@ -75,6 +79,7 @@ export class FoldNode extends DecoratorNode<
     this.__documentName = documentName;
     this.__blockName = blockName;
     this.__content = content;
+    this.__snapshotDate = snapshotDate || new Date().toISOString();
     this.__mentionUuid = mentionUuid;
   }
 
@@ -84,6 +89,7 @@ export class FoldNode extends DecoratorNode<
       documentName: serializedNode.documentName,
       blockName: serializedNode.blockName,
       content: serializedNode.content,
+      snapshotDate: serializedNode.snapshotDate,
       mentionUuid: serializedNode.mentionUuid,
     });
     $applyIdFromSerialized(node, serializedNode);
@@ -97,6 +103,7 @@ export class FoldNode extends DecoratorNode<
       documentName: this.__documentName,
       blockName: this.__blockName,
       content: this.__content,
+      snapshotDate: this.__snapshotDate,
       mentionUuid: this.__mentionUuid,
       type: FoldNode.getType(),
       version: VERSION,
@@ -109,6 +116,7 @@ export class FoldNode extends DecoratorNode<
       documentName: this.__documentName,
       blockName: this.__blockName,
       content: this.__content,
+      snapshotDate: this.__snapshotDate,
       mentionUuid: this.__mentionUuid,
     };
   }
@@ -136,6 +144,9 @@ export class FoldNode extends DecoratorNode<
               domNode.getAttribute('data-document-name') || '';
             const blockName = domNode.getAttribute('data-block-name') || '';
             const content = domNode.getAttribute('data-content') || '';
+            const snapshotDate =
+              domNode.getAttribute('data-snapshot-date') ||
+              new Date().toISOString();
             const mentionUuid =
               domNode.getAttribute('data-mention-uuid') || undefined;
 
@@ -145,6 +156,7 @@ export class FoldNode extends DecoratorNode<
                 documentName,
                 blockName,
                 content,
+                snapshotDate,
                 mentionUuid,
               });
               return { node };
@@ -164,6 +176,7 @@ export class FoldNode extends DecoratorNode<
       'data-document-name': this.__documentName,
       'data-block-name': this.__blockName,
       'data-content': this.__content,
+      'data-snapshot-date': this.__snapshotDate,
       'data-mention-uuid': this.__mentionUuid || '',
     };
   }
@@ -202,6 +215,10 @@ export class FoldNode extends DecoratorNode<
 
   getContent(): string {
     return this.__content;
+  }
+
+  getSnapshotDate(): string {
+    return this.__snapshotDate;
   }
 
   getMentionUuid(): string | undefined {
@@ -247,6 +264,7 @@ export class FoldNode extends DecoratorNode<
           documentName: this.__documentName,
           blockName: this.__blockName,
           content: this.__content,
+          snapshotDate: this.__snapshotDate,
           mentionUuid: this.__mentionUuid,
           key: this.getKey(),
           theme: config.theme,
@@ -261,6 +279,7 @@ export function $createFoldNode(params: FoldNodeInfo): FoldNode {
     params.documentName,
     params.blockName,
     params.content,
+    params.snapshotDate,
     params.mentionUuid
   );
   return $applyNodeReplacement(node);
