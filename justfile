@@ -11,7 +11,7 @@ get_environment *ARGS:
 # This is used when initializing your databases
 run_dbs *ARGS:
   just create_networks
-  docker-compose -f docker-compose-databases.yml up postgres redis {{ ARGS }}
+  docker-compose -f docker-compose-databases.yml up postgres redis --wait {{ ARGS }}
 
 # Spins up main docker-compose
 docker_up *ARGS:
@@ -68,9 +68,22 @@ setup_localstack:
   sleep 2
   just create_local_queues
 
-# Initialize local database
+# Sets up local database
 # Assumes postgres is running locally via `just run_dbs`
-init_local_dbs:
+setup_local_dbs:
+  # run dbs detached
+  just run_dbs -d
   just rust/cloud-storage/macro_db_client/create_db
   just rust/cloud-storage/macro_db_client/migrate_db
-  echo "Local databases initialized"
+  @echo "Local databases initialized"
+  docker-compose -f docker-compose-databases.yml stop
+
+# Setup FusionAuth: start containers, wait for healthy, run Pulumi config
+# stop container
+setup_fusionauth:
+  just create_networks
+  just infra/stacks/fusionauth-instance/setup_fusionauth
+
+# Stop FusionAuth containers
+stop_fusionauth:
+  docker compose -f infra/stacks/fusionauth-instance/docker-compose.yml down
