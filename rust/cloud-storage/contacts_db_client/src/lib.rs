@@ -78,10 +78,11 @@ pub async fn get_contacts(db: &Pool<Postgres>, user: &str) -> Result<Vec<String>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use macro_db_migrator::MACRO_DB_MIGRATIONS;
     use sqlx::PgPool;
     use std::collections::HashSet;
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
     async fn test_storage_basic(pool: PgPool) -> sqlx::Result<()> {
         let user1 = "05E6766A-7972-4116-8BAD-2038E57D5ADF";
         let user2 = "CD7230E3-7718-4692-9C32-7C76BD70C076";
@@ -104,7 +105,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
     async fn test_storage_ordering(pool: PgPool) -> sqlx::Result<()> {
         let user1 = "05E6766A-7972-4116-8BAD-2038E57D5ADF".to_string();
         let user2 = "CD7230E3-7718-4692-9C32-7C76BD70C076".to_string();
@@ -126,7 +127,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures("user_list"))]
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS", fixtures("user_list"))]
     async fn test_get_contacts(pool: PgPool) -> sqlx::Result<()> {
         let user = "51028BDA-67F0-44DF-AA21-5853963524F1".to_string();
 
@@ -146,7 +147,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
     async fn test_create_connections(pool: PgPool) -> sqlx::Result<()> {
         let connections: Vec<(String, String)> = [
             (
