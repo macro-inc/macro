@@ -53,14 +53,17 @@ import {
   createRenderEffect,
   createSignal,
   on,
-  onCleanup,
   onMount,
   Suspense,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { type FocusableElement, tabbable } from 'tabbable';
 import { ChannelInput } from './ChannelInput';
-import { MessageList, type TargetMessageInfo } from './MessageList/MessageList';
+import {
+  MessageList,
+  type MessageListNavigation,
+  type TargetMessageInfo,
+} from './MessageList/MessageList';
 import { Top } from './Top';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 
@@ -150,9 +153,12 @@ export function Channel(props: {
     },
   });
 
-  const [focusedMessageId, setFocusedMessageId] = createSignal<
+  const [selectedMessageId, setSelectedMessageId] = createSignal<
     string | undefined
   >(undefined);
+
+  const [messageListNav, setMessageListNav] =
+    createSignal<MessageListNavigation>();
 
   onMount(() => {
     updateActivityOnOpen();
@@ -210,28 +216,54 @@ export function Channel(props: {
     });
   });
 
-  const focusPrevious = () => {
-    const tabbableEls = tabbable(blockRef()!);
-    const fromEl = document.activeElement;
+  /**
+   * Hybrid navigation: tries DOM-based tabbable navigation first,
+   * falls back to message ID navigation if element was unmounted (which can happen if you're moving rapidly with virtualization)
+   */
+  const navigateChannel = (direction: 'previous' | 'next') => {
+    const block = blockRef();
+    if (!block) return false;
 
-    const fromElIndex = tabbableEls.indexOf(fromEl as FocusableElement);
-    if (fromElIndex !== -1) {
-      const prevIndex = fromElIndex - 1;
-      if (prevIndex < 0) return false;
-      const prevEl = tabbableEls[prevIndex];
-      if (!prevEl) return false;
-      prevEl.focus();
-      return true;
-    } else {
-      tabbableEls.at(-1)?.focus();
-      return true;
+    const tabbableEls = tabbable(block);
+    let activeEl = document.activeElement;
+
+    const selectedMessageEl = block.querySelector(
+      `[data-message-id="${selectedMessageId()}"]`
+    );
+
+    if (selectedMessageEl && !selectedMessageEl?.contains(activeEl)) {
+      // Selected message gets set on hover without actually becoming focused. If the active element is not inside the selected message, it is probably because the user has hovered over a new message, and so we should proceed as if the selected message were the active element.
+      activeEl = selectedMessageEl;
+    }
+
+    const activeElIndex = tabbableEls.indexOf(activeEl as FocusableElement);
+
+    // DOM-based navigation: element is in tabbable list
+    if (activeElIndex !== -1) {
+      const targetIndex =
+        direction === 'previous' ? activeElIndex - 1 : activeElIndex + 1;
+
+      if (targetIndex >= 0 && targetIndex < tabbableEls.length) {
+        const targetEl = tabbableEls[targetIndex];
+        targetEl?.focus();
+        return;
+      }
+    }
+
+    // Fallback: element not in tabbable list (this can happen if moving too quickly thru the virtualized list)
+    // Use message ID-based navigation
+    const nav = messageListNav();
+    if (nav) {
+      return direction === 'previous'
+        ? nav.navigatePrevious()
+        : nav.navigateNext();
     }
   };
 
   const onChannelInputFocusLeaveStart = (e: KeyboardEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    return focusPrevious();
+    return navigateChannel('previous');
   };
 
   registerHotkey({
@@ -254,7 +286,8 @@ export function Channel(props: {
     scopeId: scopeId(),
     description: 'Focus previous',
     keyDownHandler: () => {
-      return focusPrevious();
+      navigateChannel('previous');
+      return true;
     },
     hotkeyToken: TOKENS.channel.focusPreviousMessage,
     hide: true,
@@ -265,26 +298,13 @@ export function Channel(props: {
     scopeId: scopeId(),
     description: 'Focus next',
     keyDownHandler: () => {
-      const tabbableEls = tabbable(blockRef()!);
-      const activeEl = document.activeElement;
-      const activeElIndex = tabbableEls.indexOf(activeEl as FocusableElement);
-      if (activeElIndex !== -1) {
-        const nextIndex = activeElIndex + 1;
-        if (nextIndex >= tabbableEls.length) return false;
-        const nextEl = tabbableEls[nextIndex];
-        if (!nextEl) return false;
-        nextEl.focus();
-        return true;
-      }
-      return false;
+      navigateChannel('next');
+      return true;
     },
     hotkeyToken: TOKENS.channel.focusNextMessage,
     hide: true,
   });
   const [channelInputRef, setChannelInputRef] = createSignal<
-    HTMLDivElement | undefined
-  >();
-  const [lastMessageRef, setLastMessageRef] = createSignal<
     HTMLDivElement | undefined
   >();
   const [autoFocusOnMount, setAutoFocusOnMount] = createSignal(true);
@@ -296,32 +316,6 @@ export function Channel(props: {
       setAutoFocusOnMount(false);
     }
   });
-
-  let initialFocusSet = false;
-  createEffect(
-    on(lastMessageRef, () => {
-      if (autoFocusOnMount()) return;
-      if (!navigatedFromJK()) return;
-      if (initialFocusSet) return;
-
-      const lastMessage = lastMessageRef();
-      if (!lastMessage) return;
-      // Using Resize Observer here so that we only focus when the lastMessageRef
-      // is actually connected to DOM
-      const resizeObserver = new ResizeObserver(() => {
-        const lastMessageId = lastMessage?.getAttribute('data-message-body-id');
-        if (!lastMessageId) return;
-        setTimeout(() => lastMessage.focus(), 0);
-        setFocusedMessageId(lastMessageId);
-        initialFocusSet = true;
-      });
-      resizeObserver.observe(lastMessage);
-
-      onCleanup(() => {
-        resizeObserver.disconnect();
-      });
-    })
-  );
 
   const debouncedMarkAsRead = makeDebouncedChannelNotificationReadMarker({
     notificationSource: notificationSource,
@@ -410,13 +404,13 @@ export function Channel(props: {
           <MessageList
             channelId={channelId}
             messages={channelStoreData.messages}
-            focusedMessageId={focusedMessageId}
-            setFocusedMessageId={setFocusedMessageId}
+            focusedMessageId={selectedMessageId}
+            setFocusedMessageId={setSelectedMessageId}
             targetMessage={targetMessage}
             latestActivity={latestActivity()}
             orderedMessages={orderedMessages}
             setOrderedMessages={setOrderedMessages}
-            setLastMessageRef={setLastMessageRef}
+            onNavigationReady={setMessageListNav}
           />
           <div class="shrink-0 w-full px-4 pb-2">
             {/* seamus: note this element is below the scroll so we translate it back to account for the scroll above */}

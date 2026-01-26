@@ -16,6 +16,13 @@ export interface WebsocketHeartbeatOptions {
 
   /** The maximum number of missed heartbeats before the connection is considered dead. */
   readonly maxMissedHeartbeats?: number;
+
+  /**
+   * Whether to automatically start the heartbeat when the websocket opens.
+   * If false, you must call `startHeartbeat()` manually.
+   * Defaults to true.
+   */
+  readonly autoStart?: boolean;
 }
 
 /**

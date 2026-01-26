@@ -5076,6 +5076,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "model",
+ "model_user",
  "models_permissions",
  "permission",
  "remote_env_var",
