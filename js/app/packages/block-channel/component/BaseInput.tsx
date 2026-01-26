@@ -648,7 +648,8 @@ export function BaseInput(props: BaseInputProps) {
         </div>
         <Button
           disabled={hasPendingAttachments()}
-          onClick={() => {
+          onPointerDown={(e) => {
+            e.preventDefault();
             handleSend();
           }}
           class="group transition ease-in-out hover:bg-transparent"
