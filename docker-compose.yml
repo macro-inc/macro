@@ -110,7 +110,7 @@ services:
   # ============================================================================
   convert_service:
     profiles:
-      - heavy
+      - processors 
     <<: *common-env
     build:
       context: ./rust/cloud-storage
@@ -319,7 +319,7 @@ services:
   # ============================================================================
   search_processing_service:
     profiles:
-      - heavy
+      - processors
     <<: *common-env
     build:
       context: ./rust/cloud-storage
