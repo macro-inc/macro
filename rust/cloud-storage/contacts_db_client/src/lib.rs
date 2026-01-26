@@ -44,9 +44,12 @@ pub async fn create_connections(
 /// Retreives a connection from a row id
 #[cfg(test)]
 async fn get_connection(db: &Pool<Postgres>, id: i32) -> Result<(String, String)> {
-    let result = sqlx::query!("SELECT user1, user2 FROM contacts_connections WHERE id = $1", id)
-        .fetch_one(db)
-        .await?;
+    let result = sqlx::query!(
+        "SELECT user1, user2 FROM contacts_connections WHERE id = $1",
+        id
+    )
+    .fetch_one(db)
+    .await?;
 
     let user1 = result.user1.to_string();
     let user2 = result.user2.to_string();
