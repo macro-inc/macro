@@ -2071,6 +2071,7 @@ name = "contacts_db_client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "macro_db_migrator",
  "serde",
  "sqlx",
  "tracing",
