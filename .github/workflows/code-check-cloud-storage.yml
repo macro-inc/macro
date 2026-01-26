@@ -74,8 +74,8 @@ jobs:
             ${{ runner.os }}-cargo-
       - name: install dependencies
         run: |
-          command -v just || cargo install just
-          command -v sqlx || cargo install sqlx-cli
+          command -v just || cargo install just --locked
+          command -v sqlx || cargo install sqlx-cli --locked
           command -v cargo-nextest || cargo install cargo-nextest --locked
       - name: prepare tests
         run: |
