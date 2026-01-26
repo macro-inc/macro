@@ -1,18 +1,16 @@
 import {
   $applyNodeReplacement,
+  DecoratorNode,
   type DOMConversionMap,
   type EditorConfig,
   type EditorThemeClasses,
   type LexicalEditor,
   type LexicalNode,
   type NodeKey,
+  type SerializedLexicalNode,
   type Spread,
 } from 'lexical';
 import { type DecoratorComponent, getDecorator } from '../decoratorRegistry';
-import {
-  DecoratorBlockNode,
-  type SerializedDecoratorBlockNode,
-} from './DecoratorBlockNode';
 import { $applyIdFromSerialized } from '../plugins/nodeIdPlugin';
 
 const VERSION = 1;
@@ -22,36 +20,31 @@ export type FoldNodeInfo = {
   documentName: string;
   blockName: string;
   content: string;
-  collapsed?: boolean;
   mentionUuid?: string;
 };
 
-export type SerializedFoldNode = Spread<
-  FoldNodeInfo,
-  SerializedDecoratorBlockNode
->;
+export type SerializedFoldNode = Spread<FoldNodeInfo, SerializedLexicalNode>;
 
 export type FoldDecoratorProps = FoldNodeInfo & {
   key: NodeKey;
   theme: EditorThemeClasses;
 };
 
-export class FoldNode extends DecoratorBlockNode<
+export class FoldNode extends DecoratorNode<
   DecoratorComponent<FoldDecoratorProps> | undefined
 > {
   __documentId: string;
   __documentName: string;
   __blockName: string;
   __content: string;
-  __collapsed: boolean;
   __mentionUuid: string | undefined;
 
   static getType() {
     return 'fold';
   }
 
-  isInline(): false {
-    return false;
+  isInline(): boolean {
+    return true;
   }
 
   isKeyboardSelectable(): boolean {
@@ -64,9 +57,7 @@ export class FoldNode extends DecoratorBlockNode<
       node.__documentName,
       node.__blockName,
       node.__content,
-      node.__collapsed,
       node.__mentionUuid,
-      node.__format,
       node.__key
     );
   }
@@ -76,17 +67,14 @@ export class FoldNode extends DecoratorBlockNode<
     documentName: string,
     blockName: string,
     content: string,
-    collapsed?: boolean,
     mentionUuid?: string,
-    format?: string,
     key?: NodeKey
   ) {
-    super(format as any, key);
+    super(key);
     this.__documentId = documentId;
     this.__documentName = documentName;
     this.__blockName = blockName;
     this.__content = content;
-    this.__collapsed = collapsed ?? true;
     this.__mentionUuid = mentionUuid;
   }
 
@@ -96,7 +84,6 @@ export class FoldNode extends DecoratorBlockNode<
       documentName: serializedNode.documentName,
       blockName: serializedNode.blockName,
       content: serializedNode.content,
-      collapsed: serializedNode.collapsed ?? true,
       mentionUuid: serializedNode.mentionUuid,
     });
     $applyIdFromSerialized(node, serializedNode);
@@ -106,12 +93,10 @@ export class FoldNode extends DecoratorBlockNode<
   exportJSON(): SerializedFoldNode {
     return {
       ...super.exportJSON(),
-      format: this.__format,
       documentId: this.__documentId,
       documentName: this.__documentName,
       blockName: this.__blockName,
       content: this.__content,
-      collapsed: this.__collapsed,
       mentionUuid: this.__mentionUuid,
       type: FoldNode.getType(),
       version: VERSION,
@@ -124,24 +109,23 @@ export class FoldNode extends DecoratorBlockNode<
       documentName: this.__documentName,
       blockName: this.__blockName,
       content: this.__content,
-      collapsed: this.__collapsed,
       mentionUuid: this.__mentionUuid,
     };
   }
 
   createDOM(_config: EditorConfig): HTMLElement {
-    const div = document.createElement('div');
-    div.setAttribute('data-fold-node', 'true');
-    return div;
+    const span = document.createElement('span');
+    span.setAttribute('data-fold-node', 'true');
+    return span;
   }
 
   updateDOM(): boolean {
     return false;
   }
 
-  static importDOM(): DOMConversionMap<HTMLElement> | null {
+  static importDOM(): DOMConversionMap<HTMLSpanElement> | null {
     return {
-      div: (domNode: HTMLElement) => {
+      span: (domNode: HTMLSpanElement) => {
         if (!domNode.hasAttribute('data-fold-node')) {
           return null;
         }
@@ -152,8 +136,6 @@ export class FoldNode extends DecoratorBlockNode<
               domNode.getAttribute('data-document-name') || '';
             const blockName = domNode.getAttribute('data-block-name') || '';
             const content = domNode.getAttribute('data-content') || '';
-            const collapsed =
-              domNode.getAttribute('data-collapsed') !== 'false';
             const mentionUuid =
               domNode.getAttribute('data-mention-uuid') || undefined;
 
@@ -163,7 +145,6 @@ export class FoldNode extends DecoratorBlockNode<
                 documentName,
                 blockName,
                 content,
-                collapsed,
                 mentionUuid,
               });
               return { node };
@@ -183,29 +164,28 @@ export class FoldNode extends DecoratorBlockNode<
       'data-document-name': this.__documentName,
       'data-block-name': this.__blockName,
       'data-content': this.__content,
-      'data-collapsed': this.__collapsed.toString(),
       'data-mention-uuid': this.__mentionUuid || '',
     };
   }
 
   exportDOM() {
-    const element = document.createElement('div');
+    const element = document.createElement('span');
     const attrs = this.getDataAttrs();
     for (const [k, v] of Object.entries(attrs)) {
       if (v) {
         element.setAttribute(k, v);
       }
     }
-    element.textContent = this.__content;
+    element.textContent = this.__documentName;
     return { element };
   }
 
   getTextContent(): string {
-    return this.__content;
+    return this.__documentName;
   }
 
   getSearchText(): string {
-    return this.__content;
+    return this.__documentName;
   }
 
   getDocumentId(): string {
@@ -226,10 +206,6 @@ export class FoldNode extends DecoratorBlockNode<
 
   getMentionUuid(): string | undefined {
     return this.__mentionUuid;
-  }
-
-  getCollapsed(): boolean {
-    return this.__collapsed;
   }
 
   setDocumentId(documentId: string) {
@@ -262,12 +238,6 @@ export class FoldNode extends DecoratorBlockNode<
     return writable;
   }
 
-  setCollapsed(collapsed: boolean) {
-    const writable = this.getWritable();
-    writable.__collapsed = collapsed;
-    return writable;
-  }
-
   decorate(_: LexicalEditor, config: EditorConfig) {
     const decorator = getDecorator<FoldNode>(FoldNode);
     if (decorator) {
@@ -277,7 +247,6 @@ export class FoldNode extends DecoratorBlockNode<
           documentName: this.__documentName,
           blockName: this.__blockName,
           content: this.__content,
-          collapsed: this.__collapsed,
           mentionUuid: this.__mentionUuid,
           key: this.getKey(),
           theme: config.theme,
@@ -292,7 +261,6 @@ export function $createFoldNode(params: FoldNodeInfo): FoldNode {
     params.documentName,
     params.blockName,
     params.content,
-    params.collapsed,
     params.mentionUuid
   );
   return $applyNodeReplacement(node);

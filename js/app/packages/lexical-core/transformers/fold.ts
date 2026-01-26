@@ -1,12 +1,16 @@
-import type { ElementTransformer } from '@lexical/markdown';
-import type { ElementNode, LexicalNode } from 'lexical';
+import type {
+  ElementTransformer,
+  TextMatchTransformer,
+} from '@lexical/markdown';
+import type { ElementNode, LexicalNode, TextNode } from 'lexical';
 import { $createFoldNode, $isFoldNode, FoldNode } from '../nodes/FoldNode';
 
 // Internal Fold Node - uses XML-based format for serialization
-export const I_FOLD_NODE: ElementTransformer = {
+export const I_FOLD_NODE: TextMatchTransformer = {
   dependencies: [FoldNode],
-  type: 'element',
+  type: 'text-match',
   regExp: /<m-fold>(.*?)<\/m-fold>/,
+  importRegExp: /<m-fold>(.*?)<\/m-fold>/,
   export: (node) => {
     if (!$isFoldNode(node)) return null;
 
@@ -15,13 +19,12 @@ export const I_FOLD_NODE: ElementTransformer = {
       documentName: node.getDocumentName(),
       blockName: node.getBlockName(),
       content: node.getContent(),
-      collapsed: node.getCollapsed(),
       mentionUuid: node.getMentionUuid(),
     });
 
     return `<m-fold>${data}</m-fold>`;
   },
-  replace: (parent: ElementNode, _, match: RegExpMatchArray) => {
+  replace: (node: TextNode, match: RegExpMatchArray) => {
     try {
       const data = JSON.parse(match[1]);
       for (const field of [
@@ -38,17 +41,16 @@ export const I_FOLD_NODE: ElementTransformer = {
         documentName: data.documentName,
         blockName: data.blockName,
         content: data.content,
-        collapsed: data.collapsed ?? true,
         mentionUuid: data.mentionUuid,
       });
-      parent.append(foldNode);
+      node.replace(foldNode);
     } catch (e) {
       console.error('Error in I_FOLD_NODE replace:', e);
     }
   },
 };
 
-// External Fold Node - exports to HTML <details> format for GFM compatibility
+// External Fold Node - exports to document link format
 export const E_FOLD_NODE: ElementTransformer = {
   dependencies: [FoldNode],
   type: 'element',
@@ -57,19 +59,20 @@ export const E_FOLD_NODE: ElementTransformer = {
     if (!$isFoldNode(node)) return null;
 
     const documentName = node.getDocumentName();
-    const content = node.getContent();
+    const documentId = node.getDocumentId();
+    const blockName = node.getBlockName();
 
-    if (!documentName || !content) {
+    if (!documentName || !documentId || !blockName) {
       return null;
     }
 
-    // Export as HTML <details> element (GFM compatible)
-    return `<details>
-<summary>\ud83d\udcc4 ${documentName}</summary>
-
-${content}
-
-</details>`;
+    // Export as a document link similar to DocumentMention
+    const hostname =
+      window.location.hostname === 'localhost'
+        ? 'dev.macro.com'
+        : window.location.hostname.replace('www.', '').toLowerCase();
+    const documentUrl = `https://${hostname}/app/${blockName}/${documentId}`;
+    return `[${documentName}](${documentUrl})`;
   },
   replace: (
     _parentNode: ElementNode,
