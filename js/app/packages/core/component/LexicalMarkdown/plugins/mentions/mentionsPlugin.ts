@@ -7,6 +7,7 @@ import {
   $createContactMentionNode,
   $createDateMentionNode,
   $createDocumentMentionNode,
+  $createFoldNode,
   $createGroupMentionNode,
   $createInlineSearchNode,
   $createUserMentionNode,
@@ -24,6 +25,8 @@ import {
   DateMentionNode,
   type DocumentMentionInfo,
   DocumentMentionNode,
+  FoldNode,
+  type FoldNodeInfo,
   type GroupMentionInfo,
   GroupMentionNode,
   InlineSearchNode,
@@ -64,6 +67,9 @@ import { mapRegisterDelete } from '../shared';
 
 export const INSERT_DOCUMENT_MENTION_COMMAND: LexicalCommand<DocumentMentionInfo> =
   createCommand('INSERT_DOCUMENT_MENTION_COMMAND');
+
+export const INSERT_FOLD_NODE_COMMAND: LexicalCommand<FoldNodeInfo> =
+  createCommand('INSERT_FOLD_NODE_COMMAND');
 
 export const INSERT_CONTACT_MENTION_COMMAND: LexicalCommand<ContactMentionInfo> =
   createCommand('INSERT_CONTACT_MENTION_COMMAND');
@@ -344,6 +350,31 @@ function registerMentionsPlugin(
             $wrapNodeInElement(mentionNode, $createParagraphNode);
           }
           mentionNode.selectEnd();
+        });
+        return true;
+      },
+      COMMAND_PRIORITY_NORMAL
+    ),
+
+    editor.registerCommand(
+      INSERT_FOLD_NODE_COMMAND,
+      (payload) => {
+        editor.update(() => {
+          const selection = $getSelection();
+          const foldNode = $createFoldNode(payload);
+
+          // Do not paste fold nodes over range-selected text -- append after.
+          if ($isRangeSelection(selection) && !selection.isCollapsed()) {
+            $collapseSelection(selection);
+            $insertNodes([$createTextNode(' '), foldNode]);
+            foldNode.selectEnd();
+            return true;
+          }
+          $insertNodes([foldNode]);
+          if ($isRootOrShadowRoot(foldNode.getParentOrThrow())) {
+            $wrapNodeInElement(foldNode, $createParagraphNode);
+          }
+          foldNode.selectEnd();
         });
         return true;
       },
@@ -749,7 +780,50 @@ function registerMentionsPlugin(
         }
         updateMentionsSignal();
       }
-    )
+    ),
+
+    editor.registerMutationListener(FoldNode, (mutatedNodes) => {
+      for (const [nodeKey, mutation] of mutatedNodes) {
+        const node = nodeByKey(editor.getEditorState(), nodeKey) as
+          | FoldNode
+          | null;
+
+        if (!node) {
+          continue;
+        }
+
+        if (mutation === 'destroyed') {
+          const mentionUuid = node.getMentionUuid();
+          if (mentionUuid && sourceDocumentId) {
+            untrackMention(sourceDocumentId, mentionUuid);
+          }
+          if (onRemoveMention) {
+            onRemoveMention({
+              itemType: 'document',
+              itemId: node.getDocumentId(),
+              fileType: node.getBlockName(),
+              documentName: node.getDocumentName(),
+            });
+          }
+        } else if (mutation === 'created') {
+          if (onCreateMention) {
+            const blockName = node.getBlockName();
+            let fileType = blockName;
+            if (blockName === 'write') fileType = 'docx';
+            else if (blockName === 'md') fileType = 'md';
+            else if (blockName === 'code') fileType = 'txt';
+
+            onCreateMention({
+              itemType: 'document',
+              itemId: node.getDocumentId(),
+              fileType,
+              documentName: node.getDocumentName(),
+            });
+          }
+        }
+      }
+      updateMentionsSignal();
+    })
   );
 }
 

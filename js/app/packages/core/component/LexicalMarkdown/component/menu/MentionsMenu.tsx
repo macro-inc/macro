@@ -77,6 +77,7 @@ import {
   handleUserMention,
   type UserMentionRecord,
 } from '../../utils/mentionsUtils';
+import { handleFoldMention } from '../../utils/foldMention';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 
 false && clickOutside;
@@ -138,9 +139,13 @@ function allItemFilter(item: CombinedEntity): boolean {
 /**
  * Create the universal item handler.
  * @param dependencies
+ * @param useFoldForDocuments Whether to use FoldNode for supported document types
  * @returns
  */
-function createItemHandler(dependencies: HandlerDependencies) {
+function createItemHandler(
+  dependencies: HandlerDependencies,
+  useFoldForDocuments?: boolean
+) {
   return async (item: CombinedEntity) => {
     if (!item) return;
     dependencies.editor.dispatchCommand(
@@ -153,6 +158,9 @@ function createItemHandler(dependencies: HandlerDependencies) {
       case 'date':
         return await handleDateMention(item.data, dependencies);
       case 'item':
+        if (useFoldForDocuments) {
+          return await handleFoldMention(item.data, dependencies);
+        }
         return await handleBasicMention(item.data, dependencies);
       case 'channel':
         return await handleChannelMention(item.data, dependencies);
@@ -430,6 +438,8 @@ function MentionsMenuInner(props: {
   onDocumentMention?: (item: Item | ChannelWithParticipants) => void;
   onEmailMention?: (item: EmailEntity) => void;
   disableMentionTracking?: boolean;
+  /** Fetch text then past in a fold-node for plain-text mentions (useful for AI)*/
+  useFoldForDocuments?: boolean;
 }) {
   const [searchTerm, setSearchTerm] = createSignal<string>(
     props.menu.searchTerm()
@@ -828,15 +838,18 @@ function MentionsMenuInner(props: {
     return null;
   });
 
-  const itemAction = createItemHandler({
-    editor: props.editor,
-    blockName: useMaybeBlockName(),
-    blockId: useMaybeBlockId(),
-    onUserMention: props.onUserMention,
-    onDocumentMention: props.onDocumentMention,
-    onEmailMention: props.onEmailMention,
-    disableMentionTracking: props.disableMentionTracking,
-  });
+  const itemAction = createItemHandler(
+    {
+      editor: props.editor,
+      blockName: useMaybeBlockName(),
+      blockId: useMaybeBlockId(),
+      onUserMention: props.onUserMention,
+      onDocumentMention: props.onDocumentMention,
+      onEmailMention: props.onEmailMention,
+      disableMentionTracking: props.disableMentionTracking,
+    },
+    props.useFoldForDocuments
+  );
 
   createEffect(() => {
     if (props.anchor) return;
