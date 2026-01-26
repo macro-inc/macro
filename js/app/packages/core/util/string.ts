@@ -42,3 +42,35 @@ export function plural(singular: string, length: number, suffix = 's') {
 
   return `${singular}${suffix}`;
 }
+
+/**
+ * Regex pattern to match emoji-only strings.
+ * Uses alternation to match:
+ * - Extended pictographic characters (most emojis)
+ * - Emoji presentation characters
+ * - Variation selectors (\uFE0F)
+ * - Zero-width joiners (\u200D) for composite emojis (e.g., family emoji)
+ * - Whitespace
+ */
+const EMOJI_ONLY_REGEX =
+  /^(?:\p{Extended_Pictographic}|\p{Emoji_Presentation}|\uFE0F|\u200D|\s)+$/u;
+
+/**
+ * Checks if a string contains only emoji characters (and whitespace).
+ * Returns true for messages like "🎉", "👍👍👍", "🎊 🎉", etc.
+ * Returns false for messages with any text, links, or other content.
+ *
+ * @param text - the string to check
+ * @returns true if the string contains only emojis (and whitespace)
+ *
+ * @example
+ * isEmojiOnly('🎉'); // true
+ * isEmojiOnly('👨‍👩‍👧‍👦'); // true (family emoji)
+ * isEmojiOnly('Hello 👋'); // false
+ * isEmojiOnly(''); // false
+ */
+export function isEmojiOnly(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return false;
+  return EMOJI_ONLY_REGEX.test(trimmed);
+}
