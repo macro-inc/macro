@@ -1,10 +1,16 @@
 import { createSignal } from 'solid-js';
-import * as THREE from 'three';
 import { themeReactive } from '../../../block-theme/signals/themeReactive';
 
-export const [colorContrast, setColorContrast] = createSignal<THREE.Color>();
-export const [colorAccent, setColorAccent] = createSignal<THREE.Color>();
-export const [colorBase, setColorBase] = createSignal<THREE.Color>();
+// RGB values as tuples - THREE.Color creation moved to ThreeWireframe for lazy loading
+export const [colorContrastRgb, setColorContrastRgb] = createSignal<
+  [number, number, number] | undefined
+>();
+export const [colorAccentRgb, setColorAccentRgb] = createSignal<
+  [number, number, number] | undefined
+>();
+export const [colorBaseRgb, setColorBaseRgb] = createSignal<
+  [number, number, number] | undefined
+>();
 export const rafSpeed = navigator.vendor?.includes('Apple') ? 2 : 1;
 export const [currentTheme, setCurrentTheme] = createSignal();
 export const [pixelation, setPixelation] = createSignal(1);
@@ -30,30 +36,9 @@ export interface ThemeValues {
 
 export function setColor() {
   const currentTheme = getCurrentTheme();
-  setColorContrast(
-    new THREE.Color().setRGB(
-      currentTheme.contrast[0],
-      currentTheme.contrast[1],
-      currentTheme.contrast[2],
-      THREE.SRGBColorSpace
-    )
-  );
-  setColorBase(
-    new THREE.Color().setRGB(
-      currentTheme.surface[0],
-      currentTheme.surface[1],
-      currentTheme.surface[2],
-      THREE.SRGBColorSpace
-    )
-  );
-  setColorAccent(
-    new THREE.Color().setRGB(
-      currentTheme.accent[0],
-      currentTheme.accent[1],
-      currentTheme.accent[2],
-      THREE.SRGBColorSpace
-    )
-  );
+  setColorContrastRgb(currentTheme.contrast);
+  setColorBaseRgb(currentTheme.surface);
+  setColorAccentRgb(currentTheme.accent);
 }
 
 export function oklchToRgb(

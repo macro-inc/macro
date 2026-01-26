@@ -1,6 +1,6 @@
 import type { BlockName } from '@core/block';
 import { itemToResolvedBlockName } from '@core/constant/allBlocks';
-import { isAccessiblePreviewItem, useItemPreview } from '@core/signal/preview';
+import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import type { EntityType } from '@core/types';
 import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
 import type { ItemType } from '@service-storage/client';
@@ -30,7 +30,7 @@ export const DefaultUserNameResolver: UserNameResolver = async (id: string) => {
 };
 
 const getPreview = async (id: string, type: EntityType) => {
-  const [preview] = useItemPreview({ id, type: type as ItemType });
+  const [preview] = useItemPreview(() => ({ id, type: type as ItemType }));
   await raceTimeout(
     until(() => preview() && !preview()!.loading),
     RESOLVER_TIMEOUT

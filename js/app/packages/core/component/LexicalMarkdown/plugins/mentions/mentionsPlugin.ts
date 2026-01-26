@@ -155,6 +155,9 @@ export function $mentionItemFromNode(node: MentionNode): ItemMention {
     } else if (blockName === 'project') {
       fileType = 'project';
       itemType = 'project';
+    } else if (blockName === 'chat') {
+      fileType = 'chat';
+      itemType = 'chat';
     } else if (blockName === 'rss') {
       fileType = 'rss';
     } else if (blockName === 'email') {

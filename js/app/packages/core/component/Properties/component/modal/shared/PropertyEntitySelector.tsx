@@ -1,5 +1,8 @@
 import { useMaybeBlockId } from '@core/block';
-import { useChannelsContext } from '@core/context/channels';
+import {
+  useChannelsContext,
+  useDmActivityByUserId,
+} from '@core/context/channels';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
@@ -19,7 +22,7 @@ import {
   createUnifiedSearchInfiniteQuery,
   type EmailEntity,
 } from '@macro-entity';
-import { useUserId } from '@core/context/user';
+import { useEmail, useUserId } from '@core/context/user';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { useHistoryQuery } from '@queries/history/history';
 import { debounce } from '@solid-primitives/scheduled';
@@ -38,7 +41,7 @@ import type { Property } from '../../../types';
 import { useSearchInputFocus } from '../../../utils';
 import {
   type CombinedEntity,
-  ENTITY_SEARCH_CONFIG,
+  createEntitySearchConfig,
   entityMapper,
   getEntityName,
   getEntitySearchText,
@@ -156,6 +159,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const contacts = useContacts();
   const channelsContext = useChannelsContext();
   const channels = channelsContext.channels;
+  const dmActivityByUserId = useDmActivityByUserId();
 
   // Get current user info for injection into contacts
   const currentUserId = useUserId();
@@ -234,13 +238,28 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     return false;
   });
 
+  // Helper to augment user entities with DM activity timestamps (same as MentionsMenu)
+  const augmentUsersWithDmActivity = (users: IUser[]) => {
+    const dmActivity = dmActivityByUserId();
+    return users.map(entityMapper('user')).map((entity) => {
+      const dmTimestamp = dmActivity.get(entity.id);
+      if (dmTimestamp) {
+        return {
+          ...entity,
+          lastInteraction: dmTimestamp,
+        };
+      }
+      return entity;
+    });
+  };
+
   // Local entities (always available, used for instant results)
   const entities = createMemo(() => {
     const { specificEntityType } = props.property;
 
     if (!specificEntityType) {
       return [
-        ...contactsWithCurrentUser().map(entityMapper('user')),
+        ...augmentUsersWithDmActivity(contactsWithCurrentUser()),
         ...(historyQuery.data ?? []).map(entityMapper('item')),
         ...channels().map(entityMapper('channel')),
         ...emails().map(threadMapper),
@@ -248,7 +267,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     }
 
     if (specificEntityType === 'USER') {
-      return contactsWithCurrentUser().map(entityMapper('user'));
+      return augmentUsersWithDmActivity(contactsWithCurrentUser());
     }
 
     if (specificEntityType === 'CHANNEL') {
@@ -295,8 +314,15 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     return [];
   });
 
+  // Get current user domain for same-domain boost
+  const currentUserEmail = useEmail();
+  const currentUserDomain = createMemo(() => {
+    const email = currentUserEmail();
+    return email ? email.split('@')[1] : undefined;
+  });
+
   const entitySearch = createFreshSearch<CombinedEntity>(
-    ENTITY_SEARCH_CONFIG,
+    createEntitySearchConfig(currentUserDomain),
     getEntitySearchText
   );
 

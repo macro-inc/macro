@@ -9,11 +9,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import {
-  isAccessiblePreviewItem,
-  isDocumentPreviewItem,
-  useItemPreview,
-} from '@core/signal/preview';
+import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import BracketLeft from '@macro-icons/macro-group-bracket-left.svg';
@@ -22,7 +18,7 @@ import { commsServiceClient } from '@service-comms/client';
 import type { MessageMention } from '@service-comms/generated/models';
 import type { Attachment } from '@service-comms/generated/models/attachment';
 import type { ItemType } from '@service-storage/client';
-import { createMemo, createResource, Show } from 'solid-js';
+import { createMemo, createResource, Show, Suspense } from 'solid-js';
 import { VList } from 'virtua/solid';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
 
@@ -105,10 +101,12 @@ export function AttachmentsModal() {
               <div class="flex flex-col h-full">
                 <VList data={attachments()}>
                   {(attachment) => (
-                    <AttachmentItem
-                      attachment={attachment}
-                      onNavigate={navigateToItem}
-                    />
+                    <Suspense>
+                      <AttachmentItem
+                        attachment={attachment}
+                        onNavigate={navigateToItem}
+                      />
+                    </Suspense>
                   )}
                 </VList>
               </div>
@@ -153,14 +151,14 @@ function AttachmentItem(props: AttachmentItemProps) {
   const senderId = () => message()?.sender_id || '';
   const [userName] = useDisplayName(tryMacroId(senderId()));
 
-  const [preview] = useItemPreview({
+  const [preview] = useItemPreview(() => ({
     id: props.attachment.entity_id,
     type: props.attachment.entity_type as ItemType,
-  });
+  }));
 
   const handleClick = () => {
     const item = preview();
-    if (isAccessiblePreviewItem(item) && isDocumentPreviewItem(item)) {
+    if (isAccessiblePreviewItem(item) && item.type === 'document') {
       props.onNavigate(fileTypeToBlockName(item.fileType), item.id);
     } else {
       toast.failure('Failed to open attachment');

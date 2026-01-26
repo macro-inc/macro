@@ -109,7 +109,7 @@ export async function renameItem(args: {
   }
 
   if (!skipRefetch) {
-    refetchResources();
+    refetchResources({ id });
   }
   return true;
 }

@@ -1,7 +1,11 @@
 use super::*;
+use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::{Pool, Postgres};
 
-#[sqlx::test(fixtures(path = "../../../../fixtures", scripts("user_notifications")))]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("user_notifications"))
+)]
 async fn test_bulk_patch_undone(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let user_id = "macro|user@user.com";
     let notification_ids = vec![
@@ -38,7 +42,10 @@ async fn test_bulk_patch_undone(pool: Pool<Postgres>) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[sqlx::test(fixtures(path = "../../../../fixtures", scripts("user_notifications")))]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("user_notifications"))
+)]
 async fn test_patch_done(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let notification_id = "0193b1ea-a542-7589-893b-2b4a509c1e76";
     let user_id = "macro|user@user.com";
@@ -61,7 +68,10 @@ async fn test_patch_done(pool: Pool<Postgres>) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[sqlx::test(fixtures(path = "../../../../fixtures", scripts("user_notifications")))]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("user_notifications"))
+)]
 async fn test_bulk_patch_done(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let user_id = "macro|user@user.com";
     let notification_ids = vec![
@@ -109,7 +119,10 @@ async fn test_bulk_patch_done(pool: Pool<Postgres>) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[sqlx::test(fixtures(path = "../../../../fixtures", scripts("user_notifications")))]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("user_notifications"))
+)]
 async fn test_bulk_patch_done_by_event(pool: Pool<Postgres>) -> anyhow::Result<()> {
     bulk_patch_done_by_event(&pool, "macro|user@user.com", "test").await?;
 

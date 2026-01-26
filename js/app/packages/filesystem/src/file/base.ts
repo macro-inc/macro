@@ -1,5 +1,5 @@
 import { blockAcceptedMimetypeToFileExtension } from '@core/constant/allBlocks';
-import type { DocumentMetadata } from '@macro-inc/document-processing-job-types';
+import type { DocumentMetadata } from '@coparse/document-processing-types';
 import { fileExtension } from '@service-storage/util/filename';
 import { contentHash } from '../../../core/util/hash';
 

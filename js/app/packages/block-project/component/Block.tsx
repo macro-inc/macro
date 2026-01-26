@@ -4,7 +4,6 @@ import { SplitPanelContext } from '@app/component/split-layout/context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { UnifiedListView } from '@app/component/UnifiedListView';
 import { PROJECT_VIEWCONFIG_BASE } from '@app/component/ViewConfig';
-import { playSound } from '@app/util/sound';
 import { getIsSpecialProject } from '@block-project/isSpecial';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
@@ -111,7 +110,6 @@ const Block: Component = () => {
       description: 'Toggle Preview',
       hotkeyToken: TOKENS.unifiedList.togglePreview,
       keyDownHandler: () => {
-        playSound('open');
         setPreview((prev) => !prev);
         return true;
       },

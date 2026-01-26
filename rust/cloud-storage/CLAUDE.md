@@ -41,8 +41,7 @@ from the cloud-storage folder.
 The system uses multiple databases:
 
 - **MacroDB**: Main PostgreSQL database for documents, users, projects, Communication data (messages, channels,
-  participants), Email threads, messages, and metadata
-- **NotificationDB**: Notification preferences and history
+  participants), Email threads, messages, metadata, and notification preferences/history
 - **ContactsDB**: User connections and contacts
 
 External storage includes S3 for document files, Redis for caching, OpenSearch for search indexing, and DynamoDB for
@@ -102,7 +101,6 @@ just clippy                 # extra lints / best practices
 ```bash
 just setup_macrodb           # Setup main database
 just setup_commsdb           # Setup communications database
-just setup_notificationdb   # Setup notifications database
 just setup_emaildb           # Setup email database
 just setup_contactsdb        # Setup contacts database
 ```

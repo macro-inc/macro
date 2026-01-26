@@ -17,7 +17,7 @@ export function makeEmailAuthComponents(params: EmailAuthParams) {
   return {
     EmailCallback: () => (
       <Suspense>
-        <EmailCallback successPath={params.successPath} />
+        <EmailSignupCallback successPath={params.successPath} />
       </Suspense>
     ),
     EmailSignUp: () => (
@@ -32,7 +32,13 @@ export function makeEmailAuthComponents(params: EmailAuthParams) {
   };
 }
 
-function EmailCallback(props: Pick<EmailAuthParams, 'successPath'>) {
+/**
+ * Handles the OAuth callback after a user signs up.
+ *
+ * Always navigates to the success path,
+ * showing a toast on failure to prevent users from getting stuck if email link init fails.
+ */
+function EmailSignupCallback(props: Pick<EmailAuthParams, 'successPath'>) {
   const navigate = useNavigate();
   const { query, initEmailLink } = useEmailLinks();
 
@@ -43,14 +49,16 @@ function EmailCallback(props: Pick<EmailAuthParams, 'successPath'>) {
     channel.postMessage({ type: 'login-success' });
   };
 
+  const navigateToSuccess = () => {
+    navigate(props.successPath, { replace: true });
+  };
+
   whenSettled(
     query,
     async () => {
       const onSuccess = () => {
         onSuccessfulAuth();
-        navigate(props.successPath, {
-          replace: true,
-        });
+        navigateToSuccess();
       };
 
       await initEmailLink().match(onSuccess, (err) => {
@@ -62,10 +70,12 @@ function EmailCallback(props: Pick<EmailAuthParams, 'successPath'>) {
           'Failed to connect email',
           'Please email contact@macro.com'
         );
+        navigateToSuccess();
       });
     },
     (error) => {
       toast.failure(error.message);
+      navigateToSuccess();
     }
   );
 

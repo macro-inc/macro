@@ -14,3 +14,4 @@ config:
   notification-service:fcm_secret_key: fcm-credential-prod
   notification-service:macro_cache_secret_key: macro-cache-prod
   notification-service:authentication_service_internal_api_key: authentication-service-internal-api-key-prod
+  notification-service:macro_db_secret_key: macro-db-prod

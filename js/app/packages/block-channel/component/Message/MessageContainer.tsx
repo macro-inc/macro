@@ -21,6 +21,7 @@ import {
   STATIC_VIDEO,
 } from '@core/store/cacheChannelInput';
 import { tryMacroId, useDisplayName } from '@core/user';
+import { isEmojiOnly } from '@core/util/string';
 import { formatRelativeDate, isSameDay } from '@core/util/time';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { usePatchMessageMutation } from '@queries/channel/message';
@@ -463,6 +464,10 @@ export function MessageContainer(props: MessageProps) {
     return message.content.trim() === '';
   });
 
+  const isEmojiOnlyMessage = createMemo(() => {
+    return isEmojiOnly(message.content ?? '');
+  });
+
   const handleThreadToggle = () => {
     if (!message.thread_id) return;
     const threadState_ = threadState();
@@ -570,11 +575,13 @@ export function MessageContainer(props: MessageProps) {
               >
                 <MessageComponent.Body isDeleted={!!message.deleted_at}>
                   <Show when={!isEmptyMessage()}>
-                    <StaticMarkdown
-                      markdown={message.content ?? ''}
-                      theme={channelTheme}
-                      target="internal"
-                    />
+                    <div classList={{ 'text-3xl': isEmojiOnlyMessage() }}>
+                      <StaticMarkdown
+                        markdown={message.content ?? ''}
+                        theme={channelTheme}
+                        target="internal"
+                      />
+                    </div>
                   </Show>
                 </MessageComponent.Body>
               </Show>

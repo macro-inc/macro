@@ -23,6 +23,7 @@ import { createCognitionWebsocketEffect } from '@service-cognition/websocket';
 import { refetchHistory } from '@queries/history/history';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
 import { onCleanup, onMount } from 'solid-js';
+import { setPreviewData } from '@queries/preview';
 
 export function TopBar() {
   const blockId = useBlockId();
@@ -35,6 +36,10 @@ export function TopBar() {
       const dispose = createCognitionWebsocketEffect('chat_renamed', (data) => {
         if (data.chat_id === blockId) {
           refetchHistory();
+          setPreviewData(data.chat_id, (prev) => ({
+            ...prev,
+            name: data.name,
+          }));
           dispose();
         }
       });

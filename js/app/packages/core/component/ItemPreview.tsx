@@ -1,6 +1,6 @@
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { isAccessiblePreviewItem, useItemPreview } from '@core/signal/preview';
+import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { truncateString } from '@core/util/string';
@@ -21,7 +21,7 @@ import {
   insertProjectIntoHistory,
   postNewHistoryItem,
 } from '@queries/history/history';
-import { Match, Switch } from 'solid-js';
+import { Match, Switch, Suspense } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
 import { DeprecatedTextButton } from './DeprecatedTextButton';
@@ -38,10 +38,10 @@ type ItemPreviewProps = {
 };
 
 function useItemPreviewData(props: ItemPreviewProps) {
-  const [item] = useItemPreview({
+  const [item] = useItemPreview(() => ({
     id: props.itemId,
     type: props.itemType,
-  });
+  }));
 
   const { replaceOrInsertSplit, insertSplit } = useSplitLayout();
 
@@ -197,6 +197,14 @@ function InlineLoading() {
 }
 
 export function ItemPreview(props: ItemPreviewProps) {
+  return (
+    <Suspense>
+      <ItemPreviewInner {...props} />
+    </Suspense>
+  );
+}
+
+function ItemPreviewInner(props: ItemPreviewProps) {
   const { item, name, onPreviewClick, className, channelTypeIcon } =
     useItemPreviewData(props);
 

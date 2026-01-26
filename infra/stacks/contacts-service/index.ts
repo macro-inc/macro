@@ -40,11 +40,11 @@ const contactsDb = new Database('contacts-db', {
 
 export const contactsDatabaseEndpoint = contactsDb.endpoint;
 
-const DATABASE_URL = pulumi.all([contactsDatabaseEndpoint, password]).apply(
-  // eslint-disable-next-line @typescript-eslint/no-shadow
-  ([endpoint, password]) =>
-    `postgresql://macrouser:${password}@${endpoint}/contacts`
-);
+const DATABASE_URL = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require(`macro_db_secret_key`),
+  })
+  .apply((secret) => secret.secretString);
 
 const JWT_SECRET_KEY = config.require(`jwt_secret_key`);
 const jwtSecretKeyArn: pulumi.Output<string> = aws.secretsmanager

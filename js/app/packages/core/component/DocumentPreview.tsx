@@ -19,7 +19,7 @@ import {
   type PreviewItemAccess,
   type PreviewItemNoAccess,
   type PreviewProjectAccess,
-} from '@core/signal/preview';
+} from '@queries/preview';
 import { matches } from '@core/util/match';
 
 // Icon imports

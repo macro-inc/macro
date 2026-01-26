@@ -41,7 +41,8 @@ export const RenameView = (props: {
       );
     },
     onSettled(_, __, variables) {
-      queryClient.invalidateQueries({
+      // TODO: fix the backend so that the /channels/{id} endpoint returns the updated name
+      queryClient.prefetchQuery({
         queryKey: channelKeys.withID(variables.entity.id).queryKey,
       });
     },

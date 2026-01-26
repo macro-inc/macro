@@ -441,3 +441,73 @@ export function useSetPropertyStatusCompleteMutation(
       : {}),
   }));
 }
+
+export type BulkSaveEntityPropertiesParams = {
+  properties: Array<{
+    entityId: string;
+    entityType: EntityType;
+    property: { id: string; isMultiSelect: boolean };
+    apiValues: PropertyApiValues;
+  }>;
+};
+
+/** Saves multiple entity properties in bulk using parallel requests */
+export function useBulkSaveEntityPropertiesMutation(
+  callbacks?: MutationCallbacks<void, Error, BulkSaveEntityPropertiesParams>
+) {
+  return useMutation(() => ({
+    mutationFn: async (vars: BulkSaveEntityPropertiesParams) => {
+      await Promise.all(
+        vars.properties.map((item) => {
+          const propertyValue = propertyValueToApi(
+            item.apiValues,
+            item.property.isMultiSelect
+          );
+
+          return throwOnErr(
+            async () =>
+              await propertiesServiceClient.setEntityProperty({
+                entity_type: item.entityType,
+                entity_id: item.entityId,
+                property_id: item.property.id,
+                body: {
+                  value: propertyValue,
+                },
+              })
+          );
+        })
+      );
+    },
+    ...withCallbacks<void, Error, BulkSaveEntityPropertiesParams>(
+      {
+        onError(error) {
+          console.error('Failed to bulk save properties', error);
+          toast.failure('Failed to save properties');
+        },
+        onSettled: (_data, error, variables) => {
+          if (error) {
+            console.error('Failed bulk save properties', variables, error);
+            toast.failure('Failed to save properties');
+          }
+
+          // Invalidate queries for all affected entities
+          const entityGroups = new Map<EntityType, Set<string>>();
+
+          variables.properties.forEach((p) => {
+            if (!entityGroups.has(p.entityType)) {
+              entityGroups.set(p.entityType, new Set());
+            }
+            entityGroups.get(p.entityType)!.add(p.entityId);
+          });
+
+          entityGroups.forEach((entityIds, entityType) => {
+            entityIds.forEach((entityId) => {
+              invalidatePropertiesForEntity(entityType, entityId);
+            });
+          });
+        },
+      },
+      callbacks
+    ),
+  }));
+}

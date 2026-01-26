@@ -558,7 +558,7 @@ const isEntityRenameSupported = (entity: EntityData) => {
 };
 
 /**
- * Mutation to mark a thread as seen.
+ * Mutation to rename a DSS entity.
  */
 export function createRenameDssEntityMutation(
   callbacks?: MutationCallbacks<

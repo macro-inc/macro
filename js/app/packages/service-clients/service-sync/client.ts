@@ -24,10 +24,25 @@ const SYNC_ORIGIN =
     ? 'https://dev.macro.com'
     : 'https://macro.com';
 
-const WAKEUP_TTL = 55 * 1000; // 55 seconds - cloudflare ttl is 60
+const WAKEUP_TTL = 55 * 1000;
+const WAKEUP_DEBOUNCE_MS = 200;
 
-const pendingWakeups = new Map<string, ReturnType<typeof setTimeout>>();
+const pendingWakeups = new Map<
+  string,
+  { debounceTimer: ReturnType<typeof setTimeout>; idleTaskId?: number }
+>();
 const recentWakeups = new Map<string, number>();
+
+const scheduleIdleTask =
+  typeof window !== 'undefined' && window.requestIdleCallback
+    ? (cb: () => void) => window.requestIdleCallback(cb)
+    : (cb: () => void) => window.setTimeout(cb, 0) as unknown as number;
+
+const cancelIdleTask =
+  typeof window !== 'undefined' && window.cancelIdleCallback
+    ? (id: number) => window.cancelIdleCallback(id)
+    : (id: number) =>
+        window.clearTimeout(id as unknown as ReturnType<typeof setTimeout>);
 
 export function syncFetch(
   url: string,
@@ -65,45 +80,53 @@ export const syncServiceClient = {
       method: 'GET',
     });
   },
-  async safeWakeup(id: string, delay: number = 200) {
+  safeWakeup(id: string) {
     const lastWakeup = recentWakeups.get(id);
     if (lastWakeup && Date.now() - lastWakeup < WAKEUP_TTL) {
       return;
     }
 
-    const existingTimeout = pendingWakeups.get(id);
-    if (existingTimeout) {
-      // let the first timeout handle it.
+    const existing = pendingWakeups.get(id);
+    if (existing) {
       return;
     }
 
-    const timeout = setTimeout(async () => {
-      try {
-        await syncFetch(`/document/${id}/wakeup`, {
-          method: 'GET',
-        });
-        recentWakeups.set(id, Date.now());
+    const debounceTimer = setTimeout(() => {
+      const pending = pendingWakeups.get(id);
+      if (!pending) return;
 
-        // prune
-        const now = Date.now();
-        for (const [key, timestamp] of recentWakeups.entries()) {
-          if (now - timestamp >= WAKEUP_TTL) {
-            recentWakeups.delete(key);
+      const idleTaskId = scheduleIdleTask(async () => {
+        try {
+          await syncFetch(`/document/${id}/wakeup`, {
+            method: 'GET',
+          });
+          recentWakeups.set(id, Date.now());
+
+          const now = Date.now();
+          for (const [key, timestamp] of recentWakeups.entries()) {
+            if (now - timestamp >= WAKEUP_TTL) {
+              recentWakeups.delete(key);
+            }
           }
+        } catch (error) {
+          console.error(`Failed to wakeup document ${id}:`, error);
+        } finally {
+          pendingWakeups.delete(id);
         }
-      } catch (error) {
-        console.error(`Failed to wakeup document ${id}:`, error);
-      } finally {
-        pendingWakeups.delete(id);
-      }
-    }, delay);
+      });
 
-    pendingWakeups.set(id, timeout);
+      pendingWakeups.set(id, { debounceTimer, idleTaskId });
+    }, WAKEUP_DEBOUNCE_MS);
+
+    pendingWakeups.set(id, { debounceTimer });
   },
   cancelWakeup(id: string) {
-    const timeout = pendingWakeups.get(id);
-    if (timeout) {
-      clearTimeout(timeout);
+    const pending = pendingWakeups.get(id);
+    if (pending) {
+      clearTimeout(pending.debounceTimer);
+      if (pending.idleTaskId !== undefined) {
+        cancelIdleTask(pending.idleTaskId);
+      }
       pendingWakeups.delete(id);
     }
   },
