@@ -99,18 +99,18 @@ export const INSERT_GROUP_MENTION_COMMAND: LexicalCommand<GroupMentionInfo> =
 
 export type ItemMention = {
   itemType:
-  | 'document'
-  | 'chat'
-  | 'user'
-  | 'channel'
-  | 'project'
-  | 'rss'
-  | 'contact'
-  | 'date'
-  | 'email'
-  | 'unknown'
-  | 'color'
-  | 'group';
+    | 'document'
+    | 'chat'
+    | 'user'
+    | 'channel'
+    | 'project'
+    | 'rss'
+    | 'contact'
+    | 'date'
+    | 'email'
+    | 'unknown'
+    | 'color'
+    | 'group';
   itemId: string;
   fileType?: string;
   documentName?: string;
