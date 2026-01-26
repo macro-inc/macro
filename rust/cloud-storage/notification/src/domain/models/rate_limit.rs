@@ -38,7 +38,10 @@ impl RateLimitKey {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RateLimitResult {
     /// The action is allowed. Contains the current count after increment.
-    Allowed { current_count: u64 },
+    Allowed {
+        /// The current count after increment.
+        current_count: u64,
+    },
     /// The rate limit has been exceeded.
     Exceeded {
         /// The current count.

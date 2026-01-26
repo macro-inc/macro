@@ -96,11 +96,11 @@ pub enum PushType {
     Alert,
 }
 
-impl PushType {
-    fn as_static_str(&self) -> &'static str {
-        match self {
-            PushType::Background => "background",
-            PushType::Alert => "alert",
-        }
-    }
+/// A device endpoint for push notifications.
+#[derive(Debug, Clone)]
+pub enum DeviceEndpoint {
+    /// Android device endpoint (FCM).
+    Android(String),
+    /// iOS device endpoint (APNS).
+    Ios(String),
 }
