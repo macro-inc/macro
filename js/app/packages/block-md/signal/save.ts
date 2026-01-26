@@ -47,7 +47,6 @@ export function useRenameMarkdownDocument() {
   const documentId = useBlockId();
 
   return createCallback(async (documentName: string) => {
-    console.log('### 1 rename');
     await renameItem({
       itemType: 'document',
       id: documentId,
