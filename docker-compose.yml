@@ -248,9 +248,6 @@ services:
       target: notification_service
     ports:
       - "8089:8080"
-    environment:
-      # Explicitly override as this is a unique databas
-      - DATABASE_URL=${NOTIFICATIONDB_URL}
     depends_on:
       - redis
       - document_cognition_service
