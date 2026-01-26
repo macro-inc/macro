@@ -530,7 +530,10 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
           this.backoff.reset();
         }
 
-        if (this._options.heartbeat && this._options.heartbeat.autoStart !== false) {
+        if (
+          this._options.heartbeat &&
+          this._options.heartbeat.autoStart !== false
+        ) {
           this.startHeartbeat();
         }
 
