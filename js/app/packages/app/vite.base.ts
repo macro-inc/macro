@@ -121,7 +121,6 @@ export const createAppViteConfig = ({
           'vscode-oniguruma',
           // 'solid-devtools/setup',
           'libheif-js/wasm-bundle',
-          '@coparse/document-processing-types',
         ],
         esbuildOptions: {
           target: 'esnext',
