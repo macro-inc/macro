@@ -96,8 +96,6 @@ services:
       target: contacts_service
     ports:
       - "8083:8080"
-    environment:
-      - DATABASE_URL=${CONTACTSDB_URL}
     networks:
       - databases
       - services
