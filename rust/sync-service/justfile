@@ -35,5 +35,9 @@ clean:
 deploy-dev:
   npx wrangler deploy --env dev
 
+  
+deploy-dev-dry:
+  npx wrangler deploy --env dev --dry-run
+
 deploy-prod:
   npx wrangler deploy --env prod

@@ -14,7 +14,7 @@ use worker::{
     wasm_bindgen::JsCast,
 };
 
-use crate::{durable_object::NO_SUCH_VALUE_ERR_STR, error::ResultExt, state::DocumentState};
+use crate::{error::ResultExt, state::DocumentState};
 
 /// When saving snapshot, we also write the version vector to durable object KV
 /// When we read a snapshot from Worker KV, we check it's version vector is >= version vector in LAST_VERSION_VECTOR.
@@ -41,18 +41,8 @@ fn all_op_key(id: &str) -> String {
     format!("{ALL_OP_PREFIX}{id}")
 }
 
-fn do_kv_result_to_result_opt<T>(res: Result<T>) -> Result<Option<T>> {
-    match res {
-        Ok(x) => Ok(Some(x)),
-        Err(worker::Error::JsError(s)) => {
-            if s.contains(NO_SUCH_VALUE_ERR_STR) {
-                Ok(None)
-            } else {
-                Err(worker::Error::JsError(s))
-            }
-        }
-        Err(e) => Err(e),
-    }
+fn do_kv_result_to_result_opt<T>(res: Result<Option<T>>) -> Result<Option<T>> {
+    res
 }
 
 impl DurableKVStorage {
