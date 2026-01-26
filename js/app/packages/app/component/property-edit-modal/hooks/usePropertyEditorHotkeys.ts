@@ -10,7 +10,6 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { useAllProperties } from './useAllProperties';
 import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
-import { propertyDefinitionDomainToProperty } from '@core/component/Properties/utils';
 
 interface PropertyEditorHotkeyOptions {
   scopeId: string;
