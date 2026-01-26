@@ -3,7 +3,7 @@ import { type EphemeralFile, makeFile } from '@filesystem/file';
 import type {
   Export,
   ExportResponseData,
-} from '@macro-inc/document-processing-job-types';
+} from '@coparse/document-processing-types';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { createWebSocketJob } from '@service-storage/websocket';
 
