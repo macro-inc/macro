@@ -11,7 +11,7 @@ pub async fn create_connections(
     transaction: &mut Transaction<'_, Postgres>,
     connections: Vec<(String, String)>,
 ) -> Result<(), sqlx::Error> {
-    let mut query = "INSERT INTO connections(user1, user2) VALUES ".to_string();
+    let mut query = "INSERT INTO contacts_connections(user1, user2) VALUES ".to_string();
     let mut values: Vec<String> = Vec::new();
     let mut parameters: Vec<String> = Vec::new();
 
@@ -44,7 +44,7 @@ pub async fn create_connections(
 /// Retreives a connection from a row id
 #[cfg(test)]
 async fn get_connection(db: &Pool<Postgres>, id: i32) -> Result<(String, String)> {
-    let result = sqlx::query!("SELECT user1, user2 FROM connections WHERE id = $1", id)
+    let result = sqlx::query!("SELECT user1, user2 FROM contacts_connections WHERE id = $1", id)
         .fetch_one(db)
         .await?;
 
@@ -58,9 +58,9 @@ async fn get_connection(db: &Pool<Postgres>, id: i32) -> Result<(String, String)
 pub async fn get_contacts(db: &Pool<Postgres>, user: &str) -> Result<Vec<String>> {
     let result = sqlx::query!(
         "
-        SELECT user1 AS contact FROM connections WHERE user2 = $1
+        SELECT user1 AS contact FROM contacts_connections WHERE user2 = $1
         UNION
-        SELECT user2 AS contact from connections WHERE user1 = $1
+        SELECT user2 AS contact from contacts_connections WHERE user1 = $1
     ",
         &user
     )
@@ -95,7 +95,7 @@ mod tests {
         create_connections(&mut transaction, connections).await?;
         transaction.commit().await?;
 
-        let pair = sqlx::query!("SELECT user1, user2 FROM connections LIMIT 1")
+        let pair = sqlx::query!("SELECT user1, user2 FROM contacts_connections LIMIT 1")
             .fetch_one(&pool)
             .await?;
 
@@ -117,7 +117,7 @@ mod tests {
         create_connections(&mut transaction, connections).await?;
         transaction.commit().await?;
 
-        let pair = sqlx::query!("SELECT user1, user2 FROM connections LIMIT 1")
+        let pair = sqlx::query!("SELECT user1, user2 FROM contacts_connections LIMIT 1")
             .fetch_one(&pool)
             .await?;
 
@@ -191,7 +191,7 @@ mod tests {
         create_connections(&mut transaction, connections).await?;
         transaction.commit().await?;
 
-        let result = sqlx::query!("SELECT count(*) as count FROM connections; ")
+        let result = sqlx::query!("SELECT count(*) as count FROM contacts_connections; ")
             .fetch_one(&pool)
             .await?;
 
