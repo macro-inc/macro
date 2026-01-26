@@ -46,8 +46,9 @@ pub async fn get_email_by_code(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
     async fn test_upsert_notification_email_unsubscribe_code(
         pool: sqlx::Pool<sqlx::Postgres>,
     ) -> anyhow::Result<()> {
@@ -75,7 +76,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
     async fn test_get_email_by_code(pool: sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<()> {
         let code = macro_uuid::generate_uuid_v7();
 

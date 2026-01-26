@@ -158,9 +158,10 @@ pub async fn delete_user_device_by_endpoint(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use macro_db_migrator::MACRO_DB_MIGRATIONS;
     use sqlx::{Pool, Postgres};
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
     async fn test_upsert_new_user_device(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let user_id = "macro|tester@macro-test.com";
         let device_token = "test_token_47295";
@@ -187,7 +188,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_devices")))]
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS", fixtures(path = "../../fixtures", scripts("user_devices")))]
     async fn test_upsert_existing_user_device(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let new_token = "new_token_123";
         let result = sqlx::query!(
@@ -230,7 +231,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_devices")))]
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS", fixtures(path = "../../fixtures", scripts("user_devices")))]
     async fn test_delete_user_device(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let result = sqlx::query!(
             r#"
