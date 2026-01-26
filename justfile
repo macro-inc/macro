@@ -68,13 +68,9 @@ setup_localstack:
   sleep 2
   just create_local_queues
 
-# Initialize local databases (macrodb, contacts, notificationdb)
+# Initialize local database
 # Assumes postgres is running locally via `just run_dbs`
 init_local_dbs:
   just rust/cloud-storage/macro_db_client/create_db
   just rust/cloud-storage/macro_db_client/migrate_db
-  just rust/cloud-storage/contacts_db_client/create_db
-  just rust/cloud-storage/contacts_db_client/migrate_db
-  just rust/cloud-storage/notification_db_client/create_db
-  just rust/cloud-storage/notification_db_client/migrate_db
   echo "Local databases initialized"
