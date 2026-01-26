@@ -5875,6 +5875,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
  "model",

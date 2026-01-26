@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        DELETE FROM user_device_registration\n        WHERE device_token = $1 AND device_type = $2\n        RETURNING device_endpoint\n        ",
+  "query": "\n        DELETE FROM notification_user_device_registration\n        WHERE device_token = $1 AND device_type = $2\n        RETURNING device_endpoint\n        ",
   "describe": {
     "columns": [
       {
@@ -14,7 +14,7 @@
         "Text",
         {
           "Custom": {
-            "name": "device_type_option",
+            "name": "notification_device_type_option",
             "kind": {
               "Enum": [
                 "ios",
@@ -29,5 +29,5 @@
       false
     ]
   },
-  "hash": "7d1fdc289bf4530e6232497d1a324732546a62dbf7df1e1d5265f9f6bc5ed7ca"
+  "hash": "19c878ce5817c5643e48a6159fce81a2f964defcb7b190460f2b16ac67078766"
 }

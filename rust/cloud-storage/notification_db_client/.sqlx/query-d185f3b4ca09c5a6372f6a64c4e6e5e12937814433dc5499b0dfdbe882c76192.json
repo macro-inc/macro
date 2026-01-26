@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT d.device_endpoint,\n        d.user_id,\n        d.device_type as \"device_type: DeviceType\"\n        FROM user_device_registration d\n        WHERE d.user_id = ANY($1)\n        ",
+  "query": "\n        SELECT d.device_endpoint,\n        d.user_id,\n        d.device_type as \"device_type: DeviceType\"\n        FROM notification_user_device_registration d\n        WHERE d.user_id = ANY($1)\n        ",
   "describe": {
     "columns": [
       {
@@ -18,7 +18,7 @@
         "name": "device_type: DeviceType",
         "type_info": {
           "Custom": {
-            "name": "device_type_option",
+            "name": "notification_device_type_option",
             "kind": {
               "Enum": [
                 "ios",
@@ -40,5 +40,5 @@
       false
     ]
   },
-  "hash": "0182200e099205f7ee44e0f386afdd1dcc859021fbcda234ddab7b89f304f4ab"
+  "hash": "d185f3b4ca09c5a6372f6a64c4e6e5e12937814433dc5499b0dfdbe882c76192"
 }

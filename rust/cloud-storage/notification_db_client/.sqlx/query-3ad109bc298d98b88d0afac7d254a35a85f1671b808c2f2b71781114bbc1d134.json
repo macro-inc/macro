@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT d.device_endpoint\n        FROM user_device_registration d\n        WHERE d.device_token = $1\n        LIMIT 1\n        ",
+  "query": "\n        SELECT d.device_endpoint\n        FROM notification_user_device_registration d\n        WHERE d.device_token = $1\n        LIMIT 1\n        ",
   "describe": {
     "columns": [
       {
@@ -18,5 +18,5 @@
       false
     ]
   },
-  "hash": "2e2d524ba1930300b5c02fdba18fa4a3e72e7b493a259fe5d18b513d5c8addbd"
+  "hash": "3ad109bc298d98b88d0afac7d254a35a85f1671b808c2f2b71781114bbc1d134"
 }
