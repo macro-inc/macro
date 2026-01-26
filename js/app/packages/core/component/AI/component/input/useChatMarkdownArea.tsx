@@ -44,6 +44,7 @@ import {
 import type { PortalScope } from '@core/component/ScopedPortal';
 import { shortcutBadgeStyles } from '@core/component/Themes';
 import { toast } from '@core/component/Toast/Toast';
+import { ENABLE_SNAPSHOT_NODE } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { getPrettyHotkeyStringByToken } from '@core/hotkey/utils';
 import { isMobile } from '@core/mobile/isMobile';
@@ -457,7 +458,7 @@ function MarkdownArea(
           block={'chat'}
           useBlockBoundary={true}
           portalScope={props.portalScope}
-          useSnapshotForDocuments={true}
+          useSnapshotForDocuments={ENABLE_SNAPSHOT_NODE}
         />
         <FloatingMenuGroup>
           <FloatingLinkMenu />

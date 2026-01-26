@@ -7,9 +7,9 @@ import {
   $createContactMentionNode,
   $createDateMentionNode,
   $createDocumentMentionNode,
-  $createSnapshotNode,
   $createGroupMentionNode,
   $createInlineSearchNode,
+  $createSnapshotNode,
   $createUserMentionNode,
   $handleInlineSearchNodeMutation,
   $handleInlineSearchNodeTransform,
@@ -25,12 +25,12 @@ import {
   DateMentionNode,
   type DocumentMentionInfo,
   DocumentMentionNode,
-  SnapshotNode,
-  type SnapshotNodeInfo,
   type GroupMentionInfo,
   GroupMentionNode,
   InlineSearchNode,
   InlineSearchNodesType,
+  SnapshotNode,
+  type SnapshotNodeInfo,
   type UserMentionInfo,
   UserMentionNode,
   validTriggerPosition,
@@ -63,7 +63,6 @@ import {
 import type { Setter } from 'solid-js';
 import type { MenuOperations } from '../../shared/inlineMenu';
 import { $collapseSelection, $traverseNodes, nodeByKey } from '../../utils';
-import { supportsSnapshotNode } from '../../utils/snapshotMention';
 import { mapRegisterDelete } from '../shared';
 
 export const INSERT_DOCUMENT_MENTION_COMMAND: LexicalCommand<DocumentMentionInfo> =
@@ -781,55 +780,7 @@ function registerMentionsPlugin(
         }
         updateMentionsSignal();
       }
-    ),
-
-    editor.registerMutationListener(SnapshotNode, (mutatedNodes) => {
-      for (const [nodeKey, mutation] of mutatedNodes) {
-        const node = nodeByKey(
-          editor.getEditorState(),
-          nodeKey
-        ) as SnapshotNode | null;
-
-        if (!node) {
-          continue;
-        }
-
-        if (mutation === 'destroyed') {
-          const mentionUuid = node.getMentionUuid();
-          if (mentionUuid && sourceDocumentId) {
-            untrackMention(sourceDocumentId, mentionUuid);
-          }
-          if (onRemoveMention) {
-            onRemoveMention({
-              itemType: 'document',
-              itemId: node.getDocumentId(),
-              fileType: node.getBlockName(),
-              documentName: node.getDocumentName(),
-            });
-          }
-        } else if (mutation === 'created') {
-          if (onCreateMention) {
-            const blockName = node.getBlockName();
-            let fileType = blockName;
-            if (supportsSnapshotNode(blockName as any)) {
-              return;
-            }
-            if (blockName === 'write') fileType = 'docx';
-            else if (blockName === 'md') fileType = 'md';
-            else if (blockName === 'code') fileType = 'txt';
-            else if (blockName === 'chat') fileType = 'chat';
-
-            onCreateMention({
-              itemType: 'document',
-              itemId: node.getDocumentId(),
-              fileType,
-              documentName: node.getDocumentName(),
-            });
-          }
-        }
-      }
-      updateMentionsSignal();
-    })
+    )
   );
 }
 
