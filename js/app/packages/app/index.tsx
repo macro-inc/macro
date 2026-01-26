@@ -28,8 +28,6 @@ if (isTauri()) {
   });
 }
 
-import './component/custom-cursor/custom-cursor';
-
 initializeLexical();
 
 const renderApp = () => {

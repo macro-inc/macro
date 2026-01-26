@@ -1,10 +1,24 @@
+import type { CodeFileExtension } from '@block-code/util/languageSupport';
+import { asFileType } from '@core/component/AI/util/attachment';
+import { EntityIcon } from '@core/component/EntityIcon';
+import { TruncatedText } from '@core/component/FileList/TruncatedText';
+import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { createCodeFileFromText } from '@core/util/create';
+import {
+  allSupportedExtensionSet,
+  isCodeEditorExtensionSupported,
+} from '@core/util/languageQuery';
+import { isOk } from '@core/util/maybeResult';
 import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
 import CaretRight from '@phosphor-icons/core/regular/caret-right.svg';
 import File from '@phosphor-icons/core/regular/file.svg';
+import { cognitionApiServiceClient } from '@service-cognition/client';
 import type {
   TextEditorCodeExecutionContent,
   TextEditorCodeExecutionResult,
 } from '@service-cognition/generated/tools/types';
+import { useSplitLayout } from 'app/component/split-layout/layout';
+import { createSignal, Match, onMount, Show, Switch } from 'solid-js';
 
 // Type aliases for backwards compatibility with discriminated union variants
 type TextEditorCodeExecutionViewResult = TextEditorCodeExecutionResult & {
@@ -16,9 +30,34 @@ type TextEditorCodeExecutionCreateResult = TextEditorCodeExecutionResult & {
 type TextEditorCodeExecutionStrReplaceResult = TextEditorCodeExecutionResult & {
   type: 'text_editor_code_execution_str_replace_result';
 };
-import { createSignal, Match, Show, Switch } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
+
+// Store file creation data from tool calls to use when handling responses
+type FileCreationData = {
+  path: string;
+  fileText: string;
+};
+
+type CreatedFileInfo = {
+  documentId: string;
+  fileName: string;
+  extension: string;
+};
+
+const toolFileDataMap: Record<string, FileCreationData> = {};
+const createdFilesMap: Record<string, CreatedFileInfo> = {};
+
+function getExtensionFromPath(path: string): string | null {
+  const fileName = path.split('/').pop() ?? '';
+  const parts = fileName.split('.');
+  if (parts.length < 2) return null;
+  return parts.pop()?.toLowerCase() ?? null;
+}
+
+function getFileNameFromPath(path: string): string {
+  return path.split('/').pop() ?? 'file';
+}
 
 const MAX_OUTPUT_LINES = 5;
 
@@ -88,11 +127,64 @@ function ViewResult(props: { result: TextEditorCodeExecutionViewResult }) {
   );
 }
 
-function CreateResult(props: { result: TextEditorCodeExecutionCreateResult }) {
+function CreateResult(props: {
+  result: TextEditorCodeExecutionCreateResult;
+  toolId: string;
+}) {
+  const { replaceOrInsertSplit } = useSplitLayout();
+  const [createdFile, setCreatedFile] = createSignal<CreatedFileInfo | null>(
+    createdFilesMap[props.toolId] ?? null
+  );
+
+  // Fetch the mapping from backend if not in memory (e.g., after page refresh)
+  onMount(async () => {
+    if (createdFile()) return;
+
+    const result = await cognitionApiServiceClient.getIdMapping({
+      source_id: props.toolId,
+    });
+
+    if (isOk(result) && result[1]) {
+      try {
+        const fileInfo = JSON.parse(result[1]) as CreatedFileInfo;
+        createdFilesMap[props.toolId] = fileInfo;
+        setCreatedFile(fileInfo);
+      } catch {
+        // Invalid JSON, ignore
+      }
+    }
+  });
+
+  const handleClick = () => {
+    const file = createdFile();
+    if (file) {
+      const blockName = fileTypeToBlockName(file.extension);
+      replaceOrInsertSplit({ type: blockName, id: file.documentId });
+    }
+  };
+
   return (
-    <span class="text-ink-muted">
-      {props.result.is_file_update ? 'File updated' : 'File created'}
-    </span>
+    <div class="flex items-center gap-2">
+      <span class="text-ink-muted">
+        {props.result.is_file_update ? 'File updated' : 'File created'}
+      </span>
+      <Show when={createdFile()}>
+        {(file) => (
+          <button
+            type="button"
+            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-hover transition-colors cursor-pointer"
+            onClick={handleClick}
+          >
+            <EntityIcon size="xs" targetType={asFileType(file().extension)} />
+            <TruncatedText size="sm">
+              <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
+                {file().fileName}
+              </span>
+            </TruncatedText>
+          </button>
+        )}
+      </Show>
+    </div>
   );
 }
 
@@ -112,7 +204,10 @@ function StrReplaceResult(props: {
   );
 }
 
-function TextEditorResult(props: { content: TextEditorCodeExecutionContent }) {
+function TextEditorResult(props: {
+  content: TextEditorCodeExecutionContent;
+  toolId: string;
+}) {
   return (
     <Switch>
       <Match
@@ -134,6 +229,7 @@ function TextEditorResult(props: { content: TextEditorCodeExecutionContent }) {
         {(result) => (
           <CreateResult
             result={result() as TextEditorCodeExecutionCreateResult}
+            toolId={props.toolId}
           />
         )}
       </Match>
@@ -162,6 +258,64 @@ function TextEditorResult(props: { content: TextEditorCodeExecutionContent }) {
 
 const handler = createToolRenderer({
   name: 'text_editor_code_execution',
+  handleCall: async (ctx) => {
+    // Store file creation data for use in handleResponse
+    if (ctx.tool.data.command === 'create' && ctx.tool.data.file_text) {
+      toolFileDataMap[ctx.tool.id] = {
+        path: ctx.tool.data.path,
+        fileText: ctx.tool.data.file_text,
+      };
+    }
+  },
+  handleResponse: async (ctx) => {
+    const { content } = ctx.tool.data;
+
+    // Only create macro files for successful file creations
+    if (content.type !== 'text_editor_code_execution_create_result') {
+      return;
+    }
+
+    const fileData = toolFileDataMap[ctx.tool.id];
+    if (!fileData) {
+      return;
+    }
+
+    // Clean up stored data
+    delete toolFileDataMap[ctx.tool.id];
+
+    const extension = getExtensionFromPath(fileData.path);
+    if (!extension || !allSupportedExtensionSet.has(extension)) {
+      return;
+    }
+
+    // Only create macro files for supported code file extensions
+    if (!isCodeEditorExtensionSupported(extension)) {
+      return;
+    }
+
+    const fileName = getFileNameFromPath(fileData.path);
+
+    const result = await createCodeFileFromText({
+      code: fileData.fileText,
+      extension: extension as CodeFileExtension,
+      title: fileName,
+    });
+
+    if (isOk(result)) {
+      const documentId = result[1].documentId;
+      createdFilesMap[ctx.tool.id] = {
+        documentId,
+        fileName,
+        extension,
+      };
+
+      // Persist the mapping to the backend for retrieval on chat refresh
+      await cognitionApiServiceClient.createIdMapping({
+        source_id: ctx.tool.id,
+        target_id: JSON.stringify({ documentId, fileName, extension }),
+      });
+    }
+  },
   renderCall: (ctx) => (
     <BaseTool
       icon={File}
@@ -180,7 +334,10 @@ const handler = createToolRenderer({
         renderContext={ctx.renderContext}
         type="response"
       >
-        <TextEditorResult content={ctx.tool.data.content} />
+        <TextEditorResult
+          content={ctx.tool.data.content}
+          toolId={ctx.tool.id}
+        />
       </BaseTool>
     );
   },

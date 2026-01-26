@@ -1,9 +1,5 @@
-import {
-  ENABLE_FRECENCY,
-  ENABLE_PROPERTY_SORT,
-} from '@core/constant/featureFlags';
+import { ENABLE_PROPERTY_SORT } from '@core/constant/featureFlags';
 import ClockIcon from '@phosphor-icons/core/assets/regular/clock.svg';
-import LightningIcon from '@phosphor-icons/core/assets/regular/lightning.svg';
 import MagnifyingGlassIcon from '@phosphor-icons/core/assets/regular/magnifying-glass.svg';
 import SortAscendingIcon from '@phosphor-icons/core/assets/regular/sort-ascending.svg';
 import SortDescendingIcon from '@phosphor-icons/core/assets/regular/sort-descending.svg';
@@ -232,15 +228,6 @@ export const defaultSortOptions: SortOption<WithNotification<EntityData>>[] = [
   { value: 'important', label: 'Important', sortFn: notifiedSortFn },
   { value: 'updatedAt', label: 'Updated', sortFn: sortByUpdatedAt },
   { value: 'viewedAt', label: 'Viewed', sortFn: sortByViewedAt },
-  ...(ENABLE_FRECENCY
-    ? [
-        {
-          value: 'frecency' as const,
-          label: 'Frecency',
-          sortFn: sortByFrecencyScore,
-        },
-      ]
-    : []),
 ];
 
 type InferSortFn<Options extends SortOption<any, string>[]> =
@@ -450,22 +437,6 @@ export function createSort<
           <ClockIcon class="size-3.5" />
           Created
         </button>
-        <Show when={ENABLE_FRECENCY}>
-          <button
-            type="button"
-            onClick={() => props.onSelect('frecency')}
-            disabled={props.disabled?.()}
-            class={pillClass}
-            classList={{
-              'bg-ink text-panel border-ink': isSelected('frecency'),
-              'bg-transparent text-ink border-edge hover:bg-hover':
-                !isSelected('frecency'),
-            }}
-          >
-            <LightningIcon class="size-3.5" />
-            Frecency
-          </button>
-        </Show>
       </div>
     );
   };

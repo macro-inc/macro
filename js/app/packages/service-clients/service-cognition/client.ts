@@ -77,7 +77,32 @@ export function dcsFetch<T extends ObjectLike = never>(
 }
 export type Success = { success: boolean };
 
+type IdMappingResponse = { target_id: string | null };
+
 export const cognitionApiServiceClient = {
+  /** Creates a mapping from source_id to target_id */
+  async createIdMapping(args: { source_id: string; target_id: string }) {
+    const { source_id, target_id } = args;
+    return mapOk(
+      await dcsFetch<{ success: boolean }>(`/id_mapping/${source_id}`, {
+        method: 'POST',
+        body: JSON.stringify({ target_id }),
+      }),
+      (result) => result
+    );
+  },
+
+  /** Gets the target_id for a given source_id */
+  async getIdMapping(args: { source_id: string }) {
+    const { source_id } = args;
+    return mapOk(
+      await dcsFetch<IdMappingResponse>(`/id_mapping/${source_id}`, {
+        method: 'GET',
+      }),
+      (result) => result.target_id
+    );
+  },
+
   getChat: cache(
     async function getChat(args: WithChatId) {
       const { chat_id } = args;

@@ -16,6 +16,7 @@ mod completions;
 pub mod context;
 mod document_text;
 mod health;
+mod id_mapping;
 mod internal;
 mod models;
 mod preview;
@@ -82,6 +83,7 @@ fn api_router(api_context: ApiContext) -> Router {
         .nest("/attachments", attachments::router())
         .nest("/citations", citations::router())
         .nest("/preview", preview::router())
+        .nest("/id_mapping", id_mapping::router())
         .with_state(api_context.clone())
         .nest("/completions", completions::router())
         .nest("/models", models::router())

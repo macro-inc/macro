@@ -1,4 +1,3 @@
-import { playSound } from '@app/util/sound';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ViewId } from '@core/types/view';
 import { Tabs } from '@kobalte/core';
@@ -93,16 +92,6 @@ export function SplitTabs(props: {
   createEffect(() => {
     panelWidth();
     updateClipIndicators();
-  });
-
-  // Play sound when tab changes
-  let previousActive: ViewId | undefined;
-  createEffect(() => {
-    const currentActive = props.active();
-    if (previousActive !== undefined && previousActive !== currentActive) {
-      playSound('open');
-    }
-    previousActive = currentActive;
   });
 
   return (

@@ -21,6 +21,7 @@ import {
   mergeRegister,
 } from '@lexical/utils';
 import {
+  $isDocumentMentionNode,
   $isWatermarkNode,
   ALL_TRANSFORMERS,
   EXTERNAL_TRANSFORMERS,
@@ -1265,4 +1266,48 @@ export function forceSingleLine(editor: LexicalEditor) {
     },
     { discrete: true, tag: 'force-single-line' }
   );
+}
+
+/**
+ * Check if the editor content is only a single document mention and nothing else.
+ * This is used to determine if a document mention should be converted to a card
+ * before sending in channels.
+ */
+export function $isSingleDocumentMention(): boolean {
+  const root = $getRoot();
+  const rootChildren = root.getChildren();
+
+  // Must have exactly one child
+  if (rootChildren.length !== 1) return false;
+
+  const firstChild = rootChildren[0];
+
+  // The child must be a paragraph
+  if (!$isParagraphNode(firstChild)) return false;
+
+  const paragraphChildren = firstChild.getChildren();
+
+  // The paragraph must have exactly one child
+  if (paragraphChildren.length !== 1) return false;
+
+  const onlyChild = paragraphChildren[0];
+
+  // That child must be a DocumentMentionNode
+  return $isDocumentMentionNode(onlyChild);
+}
+
+/**
+ * Resolves with the *next committed* EditorState, then unregisters itself.
+ * Useful when you're already inside an implicit update (e.g. command handler)
+ * and need the post-commit state.
+ */
+export function pendingEditorState(
+  editor: LexicalEditor
+): Promise<EditorState> {
+  return new Promise<EditorState>((resolve) => {
+    const unregister = editor.registerUpdateListener(({ editorState }) => {
+      unregister();
+      resolve(editorState);
+    });
+  });
 }

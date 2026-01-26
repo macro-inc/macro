@@ -1,5 +1,5 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
-import { setHotkeyRoot, useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
+import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { withAnalytics } from '@coparse/analytics';
 import { ChannelsContextProvider } from '@core/context/channels';
@@ -10,7 +10,6 @@ import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { WebsocketDebugger } from '@core/component/WebsocketDebugger';
 import {
   ENABLE_WEBSOCKET_DEBUGGER,
-  ENABLE_WHICHKEY_OVERLAY,
   PROD_MODE_ENV,
 } from '@core/constant/featureFlags';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
@@ -65,7 +64,6 @@ import {
   systemThemeEffect,
 } from '../../block-theme/utils/themeUtils';
 import { TauriRouteListener } from '../../tauri/src/TauriProvider';
-import { useSoundHover } from '../util/soundHover';
 import { getLoginCookieOptions, updateCookie } from '@core/util/cookies';
 import { Login } from './auth/Login';
 import { setCookie } from './auth/Shared';
@@ -77,7 +75,6 @@ import Onboarding from './Onboarding';
 import { SuspenseContextComp } from './SuspenseContext';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 import Visor from './Visor';
-import { setOpenWhichKey, WhichKey } from './WhichKey';
 import { ReactiveFavicon } from './ReactiveFavicon';
 
 const { track, identify, TrackingEvents } = withAnalytics();
@@ -344,14 +341,6 @@ const clearBodyInlineStyleColor = () => {
 export function Root() {
   setHotkeyRoot(useHotKeyRoot());
 
-  useSubscribeToKeypress((context) => {
-    if (ENABLE_WHICHKEY_OVERLAY && context.commandScopeActivated) {
-      setOpenWhichKey(true);
-    }
-  });
-
-  useSoundHover();
-
   clearBodyInlineStyleColor();
 
   createEffect(() => {
@@ -407,9 +396,6 @@ export function Root() {
                 <Title>{tabTitle()}</Title>
                 <MacroJump />
                 <Visor />
-                <Show when={ENABLE_WHICHKEY_OVERLAY}>
-                  <WhichKey />
-                </Show>
                 <SuspenseContextComp fallback={<RootSuspenseFallback />}>
                   <IsomorphicRouter
                     transformUrl={transformShortIdInUrlPathname}

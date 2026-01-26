@@ -306,12 +306,8 @@ export function onErr<
   return false;
 }
 
-export type ResultType<T extends MaybeResult<any, any>> = T extends MaybeResult<
-  any,
-  infer R
->
-  ? NonNullable<R>
-  : never;
+export type ResultType<T extends MaybeResult<any, any>> =
+  T extends MaybeResult<any, infer R> ? NonNullable<R> : never;
 
 /**
  * Error class that preserves MaybeResult errors when thrown.
