@@ -1,3 +1,5 @@
+//! Domain models for the notification service.
+
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
@@ -7,6 +9,13 @@ use crate::domain::models::apple::APNSPushNotification;
 pub(crate) mod android;
 pub(crate) mod apple;
 pub(crate) mod mobile;
+pub mod rate_limit;
+pub mod recipient;
+pub mod request;
+
+pub use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitResult};
+pub use recipient::{ExclusionReason, FilteredRecipients, RecipientExclusion};
+pub use request::{DeliveryStatus, NotificationResult, RevokeCriteria, SendNotificationRequest};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct NotificationPayload<'a, T> {
@@ -31,6 +40,7 @@ pub trait BuildApnsNotification<T>: Notification {
     fn build_apns(&self) -> APNSPushNotification<T>;
 }
 
+/// A device endpoint for push notifications.
 #[derive(Debug, Clone)]
 pub enum DeviceEndpoint {
     Android(String),
