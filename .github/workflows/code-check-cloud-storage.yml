@@ -76,7 +76,7 @@ jobs:
         run: |
           command -v just || cargo install just
           command -v sqlx || cargo install sqlx-cli
-          command -v cargo-nextest || cargo install --locked cargo-nextest
+          command -v cargo-nextest || cargo install cargo-nextest --locked
       - name: prepare tests
         run: |
           just rust/cloud-storage/setup_test_envs
