@@ -8,6 +8,7 @@ import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { AskAi } from '@core/component/GeneralizedPopup/AskAI';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
 import { LocationHighlight } from '@core/component/LexicalMarkdown/component/core/Highlights';
+import { ENABLE_MARKDOWN_AI_GENERATE } from '@core/constant/featureFlags';
 import {
   createMenuOpenSignal,
   MenuPriority,
@@ -424,6 +425,7 @@ export function MarkdownPopup(props: {
         >
           <Show
             when={
+              ENABLE_MARKDOWN_AI_GENERATE &&
               isAuthenticated() &&
               !!selectedText() &&
               selectionType() === 'range' &&

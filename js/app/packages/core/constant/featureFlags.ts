@@ -113,3 +113,5 @@ export const ENABLE_CREATE_TASK = true;
 export const ENABLE_TASKS_TABS = true;
 
 export const ENABLE_EMAIL_SHARING = true;
+
+export const ENABLE_MARKDOWN_AI_GENERATE = false;
