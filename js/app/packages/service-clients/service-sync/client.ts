@@ -24,16 +24,19 @@ const SYNC_ORIGIN =
     ? 'https://dev.macro.com'
     : 'https://macro.com';
 
-const WAKEUP_TTL = 55 * 1000; // 55 seconds - cloudflare ttl is 60
+const WAKEUP_TTL = 55 * 1000;
+const WAKEUP_DEBOUNCE_MS = 200;
 
-const pendingWakeups = new Map<string, number>();
+const pendingWakeups = new Map<
+  string,
+  { debounceTimer: ReturnType<typeof setTimeout>; idleTaskId?: number }
+>();
 const recentWakeups = new Map<string, number>();
 
-// Use requestIdleCallback to defer wakeups until browser is idle, avoiding critical path contention
 const scheduleIdleTask =
   typeof window !== 'undefined' && window.requestIdleCallback
     ? (cb: () => void) => window.requestIdleCallback(cb)
-    : (cb: () => void) => window.setTimeout(cb, 200) as unknown as number;
+    : (cb: () => void) => window.setTimeout(cb, 0) as unknown as number;
 
 const cancelIdleTask =
   typeof window !== 'undefined' && window.cancelIdleCallback
@@ -83,39 +86,47 @@ export const syncServiceClient = {
       return;
     }
 
-    const existingTask = pendingWakeups.get(id);
-    if (existingTask) {
-      // let the first task handle it.
+    const existing = pendingWakeups.get(id);
+    if (existing) {
       return;
     }
 
-    const taskId = scheduleIdleTask(async () => {
-      try {
-        await syncFetch(`/document/${id}/wakeup`, {
-          method: 'GET',
-        });
-        recentWakeups.set(id, Date.now());
+    const debounceTimer = setTimeout(() => {
+      const pending = pendingWakeups.get(id);
+      if (!pending) return;
 
-        // prune
-        const now = Date.now();
-        for (const [key, timestamp] of recentWakeups.entries()) {
-          if (now - timestamp >= WAKEUP_TTL) {
-            recentWakeups.delete(key);
+      const idleTaskId = scheduleIdleTask(async () => {
+        try {
+          await syncFetch(`/document/${id}/wakeup`, {
+            method: 'GET',
+          });
+          recentWakeups.set(id, Date.now());
+
+          const now = Date.now();
+          for (const [key, timestamp] of recentWakeups.entries()) {
+            if (now - timestamp >= WAKEUP_TTL) {
+              recentWakeups.delete(key);
+            }
           }
+        } catch (error) {
+          console.error(`Failed to wakeup document ${id}:`, error);
+        } finally {
+          pendingWakeups.delete(id);
         }
-      } catch (error) {
-        console.error(`Failed to wakeup document ${id}:`, error);
-      } finally {
-        pendingWakeups.delete(id);
-      }
-    });
+      });
 
-    pendingWakeups.set(id, taskId);
+      pendingWakeups.set(id, { debounceTimer, idleTaskId });
+    }, WAKEUP_DEBOUNCE_MS);
+
+    pendingWakeups.set(id, { debounceTimer });
   },
   cancelWakeup(id: string) {
-    const taskId = pendingWakeups.get(id);
-    if (taskId) {
-      cancelIdleTask(taskId);
+    const pending = pendingWakeups.get(id);
+    if (pending) {
+      clearTimeout(pending.debounceTimer);
+      if (pending.idleTaskId !== undefined) {
+        cancelIdleTask(pending.idleTaskId);
+      }
       pendingWakeups.delete(id);
     }
   },
