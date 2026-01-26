@@ -166,6 +166,7 @@ export function useChatMarkdownArea(
 
   const { getAttachmentFromMention } = useGetChatAttachmentInfo();
   const addAttachmentFromMention = (mention: ItemMention) => {
+    console.log('CREATE MENTION');
     track(TrackingEvents.CHAT.MENTION.SELECT);
     const attachment = getAttachmentFromMention(mention);
     if (attachment) args.addAttachment(attachment);
@@ -235,32 +236,9 @@ function MarkdownArea(
 ) {
   const { editor, plugins, cleanup } = props.lexicalWrapper;
 
-  // TODO: ask peter what do
-  // const hotkeyScope = blockHotkeyScopeSignal.get;
   const isActiveElementInBlock = () => {
     return false;
-    // const blockElement = blockElementSignal.get();
-    // const currentActiveElement = activeElement();
-
-    // if (!blockElement || !currentActiveElement) {
-    //   return false;
-    // }
-
-    // return blockElement.contains(currentActiveElement);
   };
-
-  // onMount(() => {
-  //   registerHotkey({
-  //     hotkeyToken: 'chat-input-focus',
-  //     scopeId: 'TODO-chatimus', // TODO
-  //     description: 'Focus chat input',
-  //     hotkey: 't',
-  //     keyDownHandler: () => {
-  //       editor.focus();
-  //       return true;
-  //     },
-  //   });
-  // });
 
   const focusShortcut = getPrettyHotkeyStringByToken(TOKENS.chat.input.focus);
 

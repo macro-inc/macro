@@ -4,9 +4,9 @@ import {
 } from '@core/component/AI/constant';
 import type { Attachment, Attachments } from '@core/component/AI/types';
 import { asFileType } from '@core/component/AI/util';
-import { useChannelsContext } from '@core/context/channels';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins/mentions';
 import { ENABLE_CHAT_CHANNEL_ATTACHMENT } from '@core/constant/featureFlags';
+import { useChannelsContext } from '@core/context/channels';
 import { getItemBlockName } from '@core/util/getItemBlockName';
 import { useHistoryQuery } from '@queries/history/history';
 import { createMemo, createSignal } from 'solid-js';
@@ -57,6 +57,7 @@ export const useGetChatAttachmentInfo = () => {
   const { channels } = useChannelsContext();
 
   const getDocumentAttachment = (id: string): Attachment | undefined => {
+    console.log('GET ATTACHMETN INFO');
     const item = history().find((item) => item.id === id);
     if (!item) return;
     if (item.type !== 'document') return;

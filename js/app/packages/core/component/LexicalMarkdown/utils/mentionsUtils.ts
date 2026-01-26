@@ -16,8 +16,10 @@ import {
   INSERT_DATE_MENTION_COMMAND,
   INSERT_DOCUMENT_MENTION_COMMAND,
   INSERT_GROUP_MENTION_COMMAND,
+  INSERT_SNAPSHOT_NODE_COMMAND,
   INSERT_USER_MENTION_COMMAND,
 } from '../plugins/mentions';
+import { handleSnapshotMention, supportsSnapshotNode } from './snapshotMention';
 
 export type GroupItem = {
   id: string;
@@ -139,6 +141,7 @@ export type HandlerDependencies = {
   onDocumentMention?: (item: Item | ChannelWithParticipants) => void;
   disableMentionTracking?: boolean;
   onEmailMention?: (item: EmailEntity) => void;
+  useSnapshotNode?: boolean;
 };
 
 /**
@@ -299,15 +302,18 @@ export async function handleBasicMention(
   const itemEntity = entityMapper('item')(item);
   const itemBlock = getCombinedEntityBlockName(itemEntity);
   const itemName = getItemName(itemEntity);
-
+  console.log('ON DOCUMENT MENTION ITEM', item);
   onDocumentMention?.(item);
-
-  editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
-    documentId: item.id,
-    documentName: itemName,
-    blockName: itemBlock,
-    mentionUuid: mentionId,
-  });
+  if (dependencies.useSnapshotNode && supportsSnapshotNode(itemBlock)) {
+    handleSnapshotMention(item, dependencies);
+  } else {
+    editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
+      documentId: item.id,
+      documentName: itemName,
+      blockName: itemBlock,
+      mentionUuid: mentionId,
+    });
+  }
 }
 
 /**
