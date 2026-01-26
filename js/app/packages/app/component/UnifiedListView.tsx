@@ -1031,12 +1031,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       limit: props.defaultDisplayOptions?.limit ?? 100,
       emailView: importantFilter()
         ? 'important'
-        : focusFilters()?.includes('signal') ||
-            entityTypeFilter().includes('email')
-          ? 'all'
-          : view().id === VIEWCONFIG_DEFAULTS_IDS_ENUM.email
-            ? emailView()
-            : undefined,
+        : view().id === VIEWCONFIG_DEFAULTS_IDS_ENUM.email
+          ? emailView()
+          : 'all',
 
       sort_method: sortType(),
     })
