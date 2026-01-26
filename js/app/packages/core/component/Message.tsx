@@ -243,7 +243,7 @@ const Root: Component<MessageRootProps> = (props) => {
               ? `${replyHeight()}px`
               : '0px',
           }}
-          hover={props.shouldHover || hover()}
+          hover={props.shouldHover}
         >
           {/* Message Wrapper w/ Main Connector Line */}
           <div
@@ -335,11 +335,12 @@ const Root: Component<MessageRootProps> = (props) => {
           <div
             class="absolute right-2 -top-2 border border-edge bg-panel"
             classList={{
-              block: hover() || !!props.shouldHover,
-              hidden: !(hover() || !!props.shouldHover),
+              block: props.focused || !!props.shouldHover,
+              hidden: !(props.focused || !!props.shouldHover),
             }}
             onMouseEnter={() => setHover(true)}
             onMouseLeave={() => setHover(false)}
+            data-message-id={props.id}
           >
             {props.hoverActions}
           </div>
