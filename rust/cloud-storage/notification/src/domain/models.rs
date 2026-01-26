@@ -30,10 +30,17 @@ struct NotificationPayload<'a, T> {
 }
 
 pub trait Notification: Serialize + DeserializeOwned {
+    /// the type name of this notification
     const TYPE_NAME: &'static str;
 
+    /// the user visible title of the notification
     fn title(&self) -> String;
+    /// the user visible body of the notification
     fn body(&self) -> String;
+    /// The configuration for how often the notification can be triggered on a certain key
+    fn rate_limit_config() -> Option<RateLimitConfig>;
+    /// The actual key for the rate limit bucket
+    fn rate_limit_key(&self) -> Option<RateLimitKey>;
 }
 
 pub trait BuildApnsNotification<T>: Notification {

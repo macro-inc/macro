@@ -8,6 +8,7 @@ use std::future::Future;
 
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
+use serde::Serialize;
 use uuid::Uuid;
 
 use crate::domain::models::{
@@ -21,15 +22,17 @@ use crate::domain::models::{
 /// Port for sending mobile push notifications (iOS/Android via SNS).
 pub trait NotificationSender {
     /// Send an iOS push notification via APNS.
-    fn send_ios_push_notification<T: Send>(
+    fn send_ios_push_notification<T: Serialize + Send + Sync>(
         &self,
+        endpoint_arn: &str,
         notification: APNSPushNotification<T>,
         attributes: MessageAttributes,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
     /// Send an Android push notification via FCM.
-    fn send_android_push_notification<T: Send>(
+    fn send_android_push_notification<T: Serialize + Send + Sync>(
         &self,
+        endpoint_arn: &str,
         notification: FCMMessage<T>,
         attributes: MessageAttributes,
     ) -> impl Future<Output = Result<(), Report>> + Send;

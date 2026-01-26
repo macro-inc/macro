@@ -61,6 +61,7 @@ impl<T> SnsTarget<T> {
             SnsTarget::Android(fcmmessage) => fcmmessage.android.notification.clone(),
         }
     }
+
     fn as_payload(&self) -> SnsPayload<'_, T> {
         match self {
             SnsTarget::Ios(apnspush_notification) => SnsPayload::Ios {
@@ -73,6 +74,13 @@ impl<T> SnsTarget<T> {
                 gcm: fcmmessage,
             },
         }
+    }
+}
+
+impl<T: Serialize> SnsTarget<T> {
+    /// Serialize the target to JSON for SNS.
+    pub fn as_json(&self) -> Result<String, serde_json::Error> {
+        self.as_payload().as_json()
     }
 }
 

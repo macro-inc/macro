@@ -22,7 +22,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use uuid::Uuid;
 
-/// A test notification type.
+/// A test notification type (no rate limiting).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct TestNotification {
     message: String,
@@ -37,6 +37,43 @@ impl Notification for TestNotification {
 
     fn body(&self) -> String {
         self.message.clone()
+    }
+
+    fn rate_limit_config() -> Option<RateLimitConfig> {
+        None
+    }
+
+    fn rate_limit_key(&self) -> Option<RateLimitKey> {
+        None
+    }
+}
+
+/// A test notification type with rate limiting.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct RateLimitedTestNotification {
+    message: String,
+}
+
+impl Notification for RateLimitedTestNotification {
+    const TYPE_NAME: &'static str = "rate_limited_test_notification";
+
+    fn title(&self) -> String {
+        "Test".to_string()
+    }
+
+    fn body(&self) -> String {
+        self.message.clone()
+    }
+
+    fn rate_limit_config() -> Option<RateLimitConfig> {
+        Some(RateLimitConfig {
+            max_count: 10,
+            window: Duration::from_secs(60),
+        })
+    }
+
+    fn rate_limit_key(&self) -> Option<RateLimitKey> {
+        Some(RateLimitKey::new(vec![1, 2, 3]))
     }
 }
 
@@ -204,16 +241,18 @@ impl WebSocketSender for MockWebSocketSender {
 struct MockMobileSender;
 
 impl NotificationSender for MockMobileSender {
-    async fn send_ios_push_notification<T: Send>(
+    async fn send_ios_push_notification<T: serde::Serialize + Send + Sync>(
         &self,
+        _endpoint_arn: &str,
         _notification: APNSPushNotification<T>,
         _attributes: MessageAttributes,
     ) -> Result<(), Report> {
         Ok(())
     }
 
-    async fn send_android_push_notification<T: Send>(
+    async fn send_android_push_notification<T: serde::Serialize + Send + Sync>(
         &self,
+        _endpoint_arn: &str,
         _notification: FCMMessage<T>,
         _attributes: MessageAttributes,
     ) -> Result<(), Report> {
@@ -272,7 +311,7 @@ async fn test_send_notification_success() {
         recipient_ids: vec![recipient.clone()],
     };
 
-    let result = service.send_notification(request, None).await.unwrap();
+    let result = service.send_notification(request).await.unwrap();
 
     assert!(result.notified_recipients.contains(&recipient));
 }
@@ -288,22 +327,14 @@ async fn test_send_notification_rate_limited() {
     let recipient = test_user_id("user@example.com");
     let request = SendNotificationRequest {
         notification_entity: EntityType::Document.with_entity_str("entity_1"),
-        notification: TestNotification {
+        notification: RateLimitedTestNotification {
             message: "Hello".to_string(),
         },
         sender_id: None,
         recipient_ids: vec![recipient],
     };
 
-    let rate_limit_key = RateLimitKey::new(vec![1, 2, 3]);
-    let rate_limit_config = RateLimitConfig {
-        max_count: 10,
-        window: Duration::from_secs(60),
-    };
-
-    let result = service
-        .send_notification(request, Some((rate_limit_key, rate_limit_config)))
-        .await;
+    let result = service.send_notification(request).await;
 
     assert!(result.is_err());
     let err = result.unwrap_err();
@@ -331,7 +362,7 @@ async fn test_sender_excluded_from_recipients() {
         recipient_ids: vec![sender.clone()],
     };
 
-    let result = service.send_notification(request, None).await.unwrap();
+    let result = service.send_notification(request).await.unwrap();
 
     // Sender should be excluded
     assert!(result.notified_recipients.is_empty());
@@ -355,7 +386,7 @@ async fn test_muted_user_excluded() {
         recipient_ids: vec![muted_user],
     };
 
-    let result = service.send_notification(request, None).await.unwrap();
+    let result = service.send_notification(request).await.unwrap();
 
     assert!(result.notified_recipients.is_empty());
 }
@@ -380,7 +411,7 @@ async fn test_websocket_delivery_tracked() {
         recipient_ids: vec![online_user.clone(), offline_user.clone()],
     };
 
-    let result = service.send_notification(request, None).await.unwrap();
+    let result = service.send_notification(request).await.unwrap();
 
     assert!(
         result

@@ -1,5 +1,6 @@
 //! Redis-based rate limit adapter.
 
+use redis::AsyncCommands;
 use rootcause::Report;
 
 use crate::domain::models::{RateLimitConfig, RateLimitKey, RateLimitResult};
@@ -37,6 +38,29 @@ pub trait RedisRateLimitOps {
         key: &str,
         expiry_seconds: u64,
     ) -> impl std::future::Future<Output = Result<u64, Report>> + Send;
+}
+
+impl RedisRateLimitOps for redis::Client {
+    async fn get_count(&self, key: &str) -> Result<Option<u64>, Report> {
+        let mut conn = self.get_multiplexed_async_connection().await?;
+        let count: Option<u64> = conn.get(key).await?;
+        Ok(count)
+    }
+
+    async fn increment_with_expiry(&self, key: &str, expiry_seconds: u64) -> Result<u64, Report> {
+        let mut conn = self.get_multiplexed_async_connection().await?;
+
+        // Use atomic pipeline: INCR + EXPIRE
+        let (new_count,): (u64,) = redis::pipe()
+            .atomic()
+            .incr(key, 1u64)
+            .expire(key, expiry_seconds as i64)
+            .ignore()
+            .query_async(&mut conn)
+            .await?;
+
+        Ok(new_count)
+    }
 }
 
 impl<R: RedisRateLimitOps + Send + Sync> RateLimitPort for RedisRateLimitAdapter<R> {

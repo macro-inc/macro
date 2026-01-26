@@ -2,7 +2,9 @@
 
 use std::collections::HashSet;
 
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::{Entity, EntityType};
 use rootcause::Report;
 
 use crate::domain::models::Notification;
@@ -38,6 +40,108 @@ pub trait WebSocketGatewayOps {
     ) -> impl std::future::Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
 }
 
+/// Receipt from the connection gateway indicating delivery status.
+#[derive(serde::Deserialize, Debug)]
+pub struct MessageReceipt {
+    /// The user id of the user who received the message.
+    pub user_id: String,
+    /// The number of times the message was delivered to the user.
+    pub delivery_count: u64,
+}
+
+/// Response from the connection gateway batch send endpoint.
+#[derive(serde::Deserialize, Debug)]
+struct GatewayResponse {
+    receipts: Vec<MessageReceipt>,
+}
+
+/// Connection gateway client for sending WebSocket messages.
+#[derive(Clone, Debug)]
+pub struct ConnectionGatewayClient {
+    connection_gateway_url: String,
+    client: reqwest::Client,
+}
+
+impl ConnectionGatewayClient {
+    /// Create a new connection gateway client.
+    pub fn new(internal_auth_key: String, connection_gateway_url: String) -> Self {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(
+            "x-internal-auth-key",
+            internal_auth_key.parse().expect("valid header value"),
+        );
+
+        let client = reqwest::Client::builder()
+            .default_headers(headers)
+            .build()
+            .expect("client build should succeed");
+
+        Self {
+            connection_gateway_url,
+            client,
+        }
+    }
+}
+
+/// Request body for batch sending messages.
+#[derive(serde::Serialize)]
+struct BatchSendMessageBody<'a> {
+    message_type: String,
+    message: serde_json::Value,
+    entities: Vec<Entity<'a>>,
+}
+
+impl WebSocketGatewayOps for ConnectionGatewayClient {
+    async fn send_to_users<'a>(
+        &self,
+        user_ids: &[MacroUserIdStr<'a>],
+        payload: &[u8],
+    ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
+        if user_ids.is_empty() {
+            return Ok(HashSet::new());
+        }
+
+        let message: serde_json::Value = serde_json::from_slice(payload)?;
+        let entities: Vec<Entity<'_>> = user_ids
+            .iter()
+            .map(|id| EntityType::User.with_entity_str(id.as_ref()))
+            .collect();
+
+        let body = BatchSendMessageBody {
+            message_type: "notification".to_string(),
+            message,
+            entities,
+        };
+
+        let res = self
+            .client
+            .post(format!(
+                "{}/message/batch_send",
+                self.connection_gateway_url
+            ))
+            .json(&body)
+            .send()
+            .await?;
+
+        let json = res.json().await?;
+        let response: GatewayResponse = serde_json::from_value(json)?;
+
+        // Convert receipts to user IDs that were delivered
+        let delivered = response
+            .receipts
+            .into_iter()
+            .filter(|r| r.delivery_count > 0)
+            .filter_map(|r| {
+                MacroUserIdStr::parse_from_str(&r.user_id)
+                    .map(CowLike::into_owned)
+                    .ok()
+            })
+            .collect();
+
+        Ok(delivered)
+    }
+}
+
 impl<W: WebSocketGatewayOps + Send + Sync> WebSocketSender for WebSocketGatewayAdapter<W> {
     async fn send_notifications<'a, T: Notification + Send + Sync>(
         &self,
@@ -51,7 +155,7 @@ impl<W: WebSocketGatewayOps + Send + Sync> WebSocketSender for WebSocketGatewayA
         let user_ids: Vec<_> = notifications.iter().map(|(id, _)| id.clone()).collect();
 
         // Serialize the notification payload
-        let payload = serde_json::to_vec(notification).map_err(Report::new)?;
+        let payload = serde_json::to_vec(notification)?;
 
         self.gateway.send_to_users(&user_ids, &payload).await
     }

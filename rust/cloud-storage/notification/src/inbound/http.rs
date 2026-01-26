@@ -8,8 +8,7 @@ use std::sync::Arc;
 use rootcause::Report;
 
 use crate::domain::models::{
-    Notification, NotificationResult, RateLimitConfig, RateLimitKey, RevokeCriteria,
-    SendNotificationRequest,
+    Notification, NotificationResult, RevokeCriteria, SendNotificationRequest,
 };
 use crate::domain::ports::{
     EmailSender, NotificationRepository, NotificationSender, RateLimitPort, WebSocketSender,
@@ -52,11 +51,12 @@ where
     /// This method performs all pre-queue checks (rate limiting, recipient filtering)
     /// before persisting the notification and delivering it via appropriate channels.
     ///
+    /// Rate limiting is configured by the notification type via the `Notification` trait's
+    /// `rate_limit_config()` and `rate_limit_key()` methods.
+    ///
     /// # Arguments
     ///
     /// * `request` - The notification request containing recipients and content
-    /// * `rate_limit_key` - Optional rate limit key and config. If provided, the
-    ///   notification will be rate limited using this key.
     ///
     /// # Returns
     ///
@@ -65,9 +65,8 @@ where
     pub async fn send<'a, T: Notification + Send + Sync>(
         &self,
         request: SendNotificationRequest<'a, T>,
-        rate_limit_key: Option<(RateLimitKey, RateLimitConfig)>,
     ) -> Result<NotificationResult, Report<SendNotificationError>> {
-        self.service.send_notification(request, rate_limit_key).await
+        self.service.send_notification(request).await
     }
 
     /// Revoke/delete notifications matching the given criteria.

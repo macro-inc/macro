@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use crate::domain::models::{
     DeliveryStatus, ExclusionReason, FilteredRecipients, Notification, NotificationResult,
-    RateLimitConfig, RateLimitKey, RecipientExclusion, RevokeCriteria, SendNotificationRequest,
+    RecipientExclusion, RevokeCriteria, SendNotificationRequest,
 };
 use crate::domain::ports::{
     EmailSender, NotificationRepository, NotificationSender, RateLimitPort, WebSocketSender,
@@ -26,6 +26,9 @@ pub enum SendNotificationError {
     /// Rate limit was exceeded.
     #[error("Rate limit exceeded")]
     RateLimitExceeded,
+    /// Invalid rate limit config, either a key was provided but a key was not, or vice versa
+    #[error("Rate limit config error")]
+    RateLimitConfigErr,
     /// An internal error occurred.
     #[error("Internal error")]
     Other,
@@ -86,10 +89,20 @@ where
     pub async fn send_notification<'a, T: Notification + Send + Sync>(
         &self,
         request: SendNotificationRequest<'a, T>,
-        rate_limit_key: Option<(RateLimitKey, RateLimitConfig)>,
     ) -> Result<NotificationResult, Report<SendNotificationError>> {
+        let config = T::rate_limit_config();
+        let key = request.notification.rate_limit_key();
+
+        let rate_limit_key = match (config, key) {
+            (Some(config), Some(key)) => Some((config, key)),
+            (None, None) => None,
+            (Some(_), None) | (None, Some(_)) => {
+                return Err(report!(SendNotificationError::RateLimitConfigErr));
+            }
+        };
+
         // 1. Rate limit check (BEFORE any persistence)
-        if let Some((key, config)) = rate_limit_key {
+        if let Some((config, key)) = rate_limit_key {
             let result = self
                 .rate_limit
                 .check_and_increment(key, config)

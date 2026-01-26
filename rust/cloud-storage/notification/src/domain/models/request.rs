@@ -15,7 +15,7 @@ use crate::domain::models::Notification;
 /// the `Notification` trait. The event type is derived from `T::TYPE_NAME`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "T: Notification")]
-pub struct SendNotificationRequest<'a, T: Notification> {
+pub struct SendNotificationRequest<'a, T> {
     /// The entity associated with this notification (e.g., Channel, Team, Document).
     pub notification_entity: Entity<'a>,
     /// The notification payload (implements `Notification` trait).
