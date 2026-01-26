@@ -334,7 +334,8 @@ const GroupMention: RenderableEntity<GroupMentionNode> = {
 };
 
 const Snapshot: RenderableEntity<SnapshotNode> = {
-  guard: (node: LexicalNode): node is SnapshotNode => node.__type === 'snapshot',
+  guard: (node: LexicalNode): node is SnapshotNode =>
+    node.__type === 'snapshot',
   render: (props) => (
     <span>
       {SnapshotDecorator({
