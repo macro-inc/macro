@@ -172,6 +172,15 @@ function ChatInput(props: ChatInputInternalProps) {
   const canSendMessage = () =>
     !isEmptyInput() && !generating() && !hasUploadingAttachments();
 
+  const LINE_HEIGHT_THRESHOLD = 32;
+  const isMultiline = () => {
+    // Access markdownText to create reactive dependency
+    props.markdown.markdownText();
+    const ref = props.markdown.ref();
+    if (!ref) return false;
+    return ref.scrollHeight > LINE_HEIGHT_THRESHOLD;
+  };
+
   const buildChatSendRequest = useBuildChatSendRequest();
 
   const sendMessage = createCallback(async (modelOverride?: Model) => {
@@ -209,31 +218,97 @@ function ChatInput(props: ChatInputInternalProps) {
 
   const availableAttachments = useChatAttachableHistory();
 
+  const hasAttachments = () =>
+    props.attachments.attached().length > 0 ||
+    props.uploadQueue.uploading().length > 0;
+
+  const LeftButton = () => (
+    <div ref={setAttachMenuAnchorRef} class="shrink-0">
+      <DeprecatedIconButton
+        icon={showAttachMenu() ? XIcon : PlusIcon}
+        theme="base"
+        onClick={() => setShowAttachMenu((prev) => !prev)}
+      />
+    </div>
+  );
+
+  const RightControls = () => (
+    <Switch>
+      <Match when={!isTouchDevice()}>
+        <div class="flex flex-row items-center gap-3 text-xs text-ink-disabled opacity-70 shrink-0">
+          <Show when={generating()}>
+            <Tooltip tooltip="ctrl+c to stop" placement="top">
+              <div
+                class="flex items-center gap-1"
+                classList={{
+                  'text-accent': pressedKeys().has('ctrl'),
+                }}
+              >
+                <span>Stop</span>
+                <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1 py-0.5">
+                  <Hotkey shortcut="ctrl+c" />
+                </div>
+              </div>
+            </Tooltip>
+          </Show>
+          <Tooltip tooltip="Enter to send with Haiku" placement="top">
+            <div class="flex items-center gap-1">
+              <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1 py-0.5">
+                <Hotkey shortcut="Enter" />
+              </div>
+              <span>Haiku</span>
+            </div>
+          </Tooltip>
+          <Tooltip
+            tooltip={`${modifierMap.cmd} + Enter to send with Opus`}
+            placement="top"
+          >
+            <div
+              class="flex items-center gap-1"
+              classList={{
+                'text-accent': pressedKeys().has('cmd'),
+              }}
+            >
+              <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1 py-0.5">
+                <Hotkey shortcut={'meta+Enter'} />
+              </div>
+              <span>Opus</span>
+            </div>
+          </Tooltip>
+        </div>
+      </Match>
+      <Match when={isTouchDevice()}>
+        <div class="flex flex-row gap-1 items-center shrink-0">
+          <Show when={!generating()}>
+            <Button onClick={() => sendMessage('claude-opus-4-5')}>
+              <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center">
+                <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
+              </div>
+            </Button>
+          </Show>
+          <Show when={generating()}>
+            <Button
+              onClick={() => (props.onStop ? props.onStop() : [])}
+              class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent"
+            >
+              <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
+                <Stop class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
+              </div>
+            </Button>
+          </Show>
+        </div>
+      </Match>
+    </Switch>
+  );
+
   return (
     <div
       id="chat-input"
       ref={containerRef}
-      class="relative flex flex-col flex-1 items-center justify-between bg-input border-t border-x border-edge-muted rounded-t-[5px] -mb-[7px]"
+      class="relative flex flex-col bg-input border border-edge-muted rounded-md transition-all duration-150"
     >
-      <div class="relative w-full z-0 px-3 pt-2 sm:pb-4 flex-1 overflow-hidden placeholder:text-ink-placeholder placeholder:opacity-50">
-        <div
-          id="chat-input-text-area"
-          class="rounded-md w-full h-full text-base sm:text-sm text-ink"
-        >
-          <props.markdown.MarkdownArea
-            onEnter={handleEnter}
-            placeholder="Ask AI -  @mention anything"
-            history={availableAttachments}
-            dontFocusOnMount={
-              isTouchDevice() || props.autoFocusOnMount === false
-            }
-            onPasteFile={props.uploadQueue.upload}
-            captureEditor={props.captureEditor}
-          />
-        </div>
-      </div>
-      <div class="w-full">
-        <div class="px-2 w-full min-h-0">
+      <Show when={hasAttachments()}>
+        <div class="px-2 pt-2 w-full">
           <AttachmentList
             attached={props.attachments.attached}
             removeAttachment={(id) => {
@@ -247,100 +322,61 @@ function ChatInput(props: ChatInputInternalProps) {
             }
           />
         </div>
-        <div class="flex flex-row w-full h-8 justify-between items-center p-2 mb-2 space-x-2 allow-css-brackets">
-          <Show when={showAttachMenu()}>
-            <ChatAttachMenu
-              anchorRef={attachMenuAnchorRef()!}
-              close={() => setShowAttachMenu(false)}
-              containerRef={containerRef}
-              open={showAttachMenu()}
-              onAttach={(attachment) => {
-                track(TrackingEvents.CHAT.ATTACHMENT.ADD);
-                props.attachments.addAttachment(attachment);
-              }}
-              uploadQueue={props.uploadQueue}
-            />
-          </Show>
-          <div class="flex flex-row items-center gap-2">
-            <DeprecatedIconButton
-              icon={showAttachMenu() ? XIcon : PlusIcon}
-              theme="base"
-              ref={setAttachMenuAnchorRef}
-              onClick={() => setShowAttachMenu((prev) => !prev)}
-            />
-          </div>
+      </Show>
 
-          <div class="flex flex-col items-end text-xs leading-tight text-ink-disabled">
-            <Switch>
-              <Match when={!isTouchDevice()}>
-                <div class="text-xs flex flex-col gap-1 opacity-70 items-end absolute bottom-1">
-                  <Show when={generating()}>
-                    <Tooltip tooltip="ctrl+c to stop" placement="top">
-                      <div
-                        class="flex items-center gap-1.5"
-                        classList={{
-                          'text-accent': pressedKeys().has('ctrl'),
-                        }}
-                      >
-                        <span class="">Stop</span>
-                        <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25 font-normal">
-                          <Hotkey shortcut="ctrl+c" />
-                        </div>
-                      </div>
-                    </Tooltip>
-                  </Show>
-                  <Tooltip tooltip="Enter to send with Haiku" placement="top">
-                    <div class="flex items-center gap-1.5">
-                      <span class="">Haiku</span>
-                      <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25 font-normal">
-                        <Hotkey shortcut="Enter" />
-                      </div>
-                    </div>
-                  </Tooltip>
-                  <Tooltip
-                    tooltip={`${modifierMap.cmd} + Enter to send with Opus`}
-                    placement="top"
-                  >
-                    <div
-                      class="flex items-center gap-1.5"
-                      classList={{
-                        'text-accent': pressedKeys().has('cmd'),
-                      }}
-                    >
-                      <span>Opus</span>
-                      <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25 font-normal">
-                        <Hotkey shortcut={'meta+Enter'} />
-                      </div>
-                    </div>
-                  </Tooltip>
-                </div>
-              </Match>
-              <Match when={isTouchDevice()}>
-                <div class="flex flex-row gap-1 items-center">
-                  <Show when={!generating()}>
-                    <Button
-                      onClick={() => sendMessage('claude-opus-4-5')}
-                      class=""
-                    >
-                      <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center">
-                        <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
-                      </div>
-                    </Button>
-                  </Show>
-                  <Show when={generating()}>
-                    <Button
-                      onClick={() => (props.onStop ? props.onStop() : [])}
-                      class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent"
-                    >
-                      <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
-                        <Stop class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
-                      </div>
-                    </Button>
-                  </Show>
-                </div>
-              </Match>
-            </Switch>
-          </div>
+      <Show when={showAttachMenu()}>
+        <ChatAttachMenu
+          anchorRef={attachMenuAnchorRef()!}
+          close={() => setShowAttachMenu(false)}
+          containerRef={containerRef}
+          open={showAttachMenu()}
+          onAttach={(attachment) => {
+            track(TrackingEvents.CHAT.ATTACHMENT.ADD);
+            props.attachments.addAttachment(attachment);
+          }}
+          uploadQueue={props.uploadQueue}
+        />
+      </Show>
+
+      <div class="relative px-2 py-1.5">
+        <div
+          id="chat-input-text-area"
+          class="text-base sm:text-sm text-ink transition-all duration-150 ease-out"
+          classList={{
+            'pl-8 pr-[180px]': !isMultiline(),
+            'pl-0 pr-0 pb-8': isMultiline(),
+          }}
+        >
+          <props.markdown.MarkdownArea
+            onEnter={handleEnter}
+            placeholder="Ask AI - @mention anything"
+            history={availableAttachments}
+            dontFocusOnMount={
+              isTouchDevice() || props.autoFocusOnMount === false
+            }
+            onPasteFile={props.uploadQueue.upload}
+            captureEditor={props.captureEditor}
+          />
+        </div>
+
+        <div
+          class="absolute left-2 transition-all duration-150 ease-out"
+          classList={{
+            'top-1/2 -translate-y-1/2': !isMultiline(),
+            'bottom-1.5 top-auto translate-y-0': isMultiline(),
+          }}
+        >
+          <LeftButton />
+        </div>
+
+        <div
+          class="absolute right-2 transition-all duration-150 ease-out"
+          classList={{
+            'top-1/2 -translate-y-1/2': !isMultiline(),
+            'bottom-1.5 top-auto translate-y-0': isMultiline(),
+          }}
+        >
+          <RightControls />
         </div>
       </div>
     </div>

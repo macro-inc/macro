@@ -8,6 +8,7 @@ import { getIconConfig } from '@core/component/EntityIcon';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { IS_MAC } from '@core/constant/isMac';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
@@ -55,6 +56,7 @@ import {
   Switch,
 } from 'solid-js';
 import { PreviewPanel } from './PreviewPanel';
+import { SoupChatInput } from './SoupChatInput';
 import { SuspenseContextComp } from './SuspenseContext';
 import {
   SplitHeaderLeft,
@@ -776,6 +778,9 @@ export function Soup() {
             />
           </Show>
         </div>
+        <Show when={ENABLE_UNIFIED_LIST_AI_INPUT}>
+          <SoupChatInput />
+        </Show>
       </div>
     </Show>
   );

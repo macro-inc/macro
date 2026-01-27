@@ -52,6 +52,7 @@ export const definition = defineBlock({
           owner: chat.chat.userId,
           createdAt: chat.chat.createdAt,
           updatedAt: chat.chat.updatedAt,
+          deletedAt: null,
           fileType: 'chat' as any,
         } satisfies DocumentMetadata,
       });

@@ -420,6 +420,33 @@ services:
     networks:
       - services
 
+  # ============================================================================
+  # lexical_service (Port 8096)
+  # Lexical document conversion service - converts Lexical JSON to various formats
+  # ============================================================================
+  lexical_service:
+    <<: *common-env
+    build:
+      context: ./js/lexical-service
+      dockerfile: Dockerfile
+      args:
+        GITHUB_PACKAGES_TOKEN: ${GITHUB_PACKAGES_TOKEN}
+    ports:
+      - "8096:8096"
+    environment:
+      - PORT=8096
+      - INTERNAL_AUTH_KEY=${INTERNAL_API_SECRET_KEY}
+      - SYNC_SERVICE_AUTH_KEY=${SYNC_SERVICE_AUTH_KEY}
+      - SYNC_SERVICE_URL=${SYNC_SERVICE_URL}
+    networks:
+      - services
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:8096/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
 networks:
   services:
     driver: bridge
