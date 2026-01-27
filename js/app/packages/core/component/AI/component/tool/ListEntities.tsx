@@ -1,52 +1,98 @@
 import { EntityIcon } from '@core/component/EntityIcon';
 import { TruncatedText } from '@core/component/FileList/TruncatedText';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import ChevronDown from '@icon/regular/caret-down.svg?component-solid';
 import ChevronUp from '@icon/regular/caret-up.svg?component-solid';
 import List from '@phosphor-icons/core/regular/list.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
-import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { useSplitLayout } from 'app/component/split-layout/layout';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { VList } from 'virtua/solid';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
 
-type ListDocumentsResult = NamedTool<
-  'ListDocuments',
+type ListEntitiesItem = NamedTool<
+  'ListEntities',
   'response'
->['data']['results'][number];
+>['data']['items'][number];
 
-const ListDocumentsToolResponse = (props: {
-  results: ListDocumentsResult[];
+const ListEntitiesToolResponse = (props: {
+  items: ListEntitiesItem[];
+  summary: string;
 }) => {
   const [isExpanded, setIsExpanded] = createSignal(false);
 
   const results = createMemo(() => {
-    // results should be unique but this is an extra safety check
     const seen = new Set<string>();
-    return props.results.filter((result) => {
-      let key = result.document_id;
-      if (seen.has(key)) return false;
-      seen.add(key);
+    return props.items.filter((item) => {
+      if (seen.has(item.id)) return false;
+      seen.add(item.id);
       return true;
     });
   });
 
-  const getResultTitle = (result: ListDocumentsResult): string => {
-    return result.document_name || 'Document';
+  const getItemTitle = (item: ListEntitiesItem): string => {
+    switch (item.type) {
+      case 'document':
+        return item.name || 'Document';
+      case 'aiChat':
+        return item.name || 'Chat';
+      case 'project':
+        return item.name || 'Project';
+      case 'email':
+        return item.subject || 'Email';
+      case 'channel':
+        return item.name || 'Channel';
+      default:
+        return 'Item';
+    }
+  };
+
+  const getIconType = (item: ListEntitiesItem) => {
+    switch (item.type) {
+      case 'document':
+        return 'default';
+      case 'aiChat':
+        return 'chat';
+      case 'project':
+        return 'project';
+      case 'email':
+        return 'email';
+      case 'channel':
+        return 'channel';
+      default:
+        return 'default';
+    }
   };
 
   const { replaceOrInsertSplit } = useSplitLayout();
 
-  const getClickHandler = (result: ListDocumentsResult) => {
-    return () => {
-      const blockName = fileTypeToBlockName(result.file_type);
-      replaceOrInsertSplit({ type: blockName, id: result.document_id });
-    };
+  const getClickHandler = (item: ListEntitiesItem) => {
+    switch (item.type) {
+      case 'document':
+        return () => {
+          replaceOrInsertSplit({ type: 'unknown', id: item.id });
+        };
+      case 'aiChat':
+        return () => {
+          replaceOrInsertSplit({ type: 'chat', id: item.id });
+        };
+      case 'project':
+        return () => {
+          replaceOrInsertSplit({ type: 'project', id: item.id });
+        };
+      case 'email':
+        return () => {
+          replaceOrInsertSplit({ type: 'email', id: item.id });
+        };
+      case 'channel':
+        return () => {
+          replaceOrInsertSplit({ type: 'channel', id: item.id });
+        };
+      default:
+        return undefined;
+    }
   };
 
-  // TODO: share code with unified search results display
   return (
     <Show when={results().length > 0}>
       <div class="border border-edge rounded w-full">
@@ -60,7 +106,7 @@ const ListDocumentsToolResponse = (props: {
             <div class="text-sm font-medium text-ink">
               Found
               <span class="text-accent pr-1"> {results().length}</span>
-              Documents
+              Items
             </div>
           </div>
           <div class="flex items-center gap-1 text-ink-muted">
@@ -84,8 +130,8 @@ const ListDocumentsToolResponse = (props: {
                 contain: 'content',
               }}
             >
-              {(result) => {
-                const clickHandler = getClickHandler(result);
+              {(item) => {
+                const clickHandler = getClickHandler(item);
 
                 return (
                   <div
@@ -95,12 +141,12 @@ const ListDocumentsToolResponse = (props: {
                     <div class="flex items-center flex-1 min-w-0 gap-2">
                       <EntityIcon
                         size="sm"
-                        targetType={result.file_type as FileType | undefined}
+                        targetType={getIconType(item)}
                         shared={false}
                       />
                       <div class="flex-1 min-w-0">
                         <TruncatedText size="sm">
-                          <span>{getResultTitle(result)}</span>
+                          <span>{getItemTitle(item)}</span>
                         </TruncatedText>
                       </div>
                     </div>
@@ -116,11 +162,11 @@ const ListDocumentsToolResponse = (props: {
 };
 
 const handler = createToolRenderer({
-  name: 'ListDocuments',
+  name: 'ListEntities',
   renderCall: (ctx) => (
     <BaseTool
       icon={List}
-      text="Listing documents..."
+      text="Browsing workspace..."
       renderContext={ctx.renderContext}
       type="call"
     />
@@ -128,13 +174,16 @@ const handler = createToolRenderer({
   renderResponse: (ctx) => (
     <BaseTool
       icon={List}
-      text="Listed"
+      text="Found items"
       renderContext={ctx.renderContext}
       type="response"
     >
-      <ListDocumentsToolResponse results={ctx.tool.data.results} />
+      <ListEntitiesToolResponse
+        items={ctx.tool.data.items}
+        summary={ctx.tool.data.summary}
+      />
     </BaseTool>
   ),
 });
 
-export const listDocumentsHandler = handler;
+export const listEntitiesHandler = handler;
