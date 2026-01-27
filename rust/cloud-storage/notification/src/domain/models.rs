@@ -17,7 +17,10 @@ pub mod request;
 pub use mobile::DeviceEndpoint;
 pub use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitResult};
 pub use recipient::{ExclusionReason, FilteredRecipients, RecipientExclusion};
-pub use request::{DeliveryStatus, NotificationResult, RevokeCriteria, SendNotificationRequest};
+pub use request::{
+    DeliveryStatus, NotificationResult, RevokeCriteria, SendNotificationRequest,
+    SendNotificationRequestBuilder,
+};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct NotificationPayload<'a, T> {

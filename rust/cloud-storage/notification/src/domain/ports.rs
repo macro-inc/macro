@@ -13,9 +13,7 @@ use uuid::Uuid;
 
 use crate::domain::models::{
     DeviceEndpoint, Notification, RateLimitConfig, RateLimitKey, RateLimitResult, RevokeCriteria,
-    SendNotificationRequest,
-    android::FCMMessage,
-    apple::APNSPushNotification,
+    SendNotificationRequestBuilder, android::FCMMessage, apple::APNSPushNotification,
     mobile::MessageAttributes,
 };
 
@@ -72,7 +70,7 @@ pub trait NotificationRepository {
     /// (idempotent operation).
     fn create_notification<'a, T: Notification + Send + Sync>(
         &self,
-        request: &SendNotificationRequest<'a, T>,
+        request: &SendNotificationRequestBuilder<'a, T>,
         notification_id: Uuid,
         service_sender: &str,
         recipient_ids: &[MacroUserIdStr<'a>],
@@ -134,8 +132,12 @@ pub trait NotificationQueue {
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
     /// Receive messages from the queue (for worker).
-    fn receive_messages(&self) -> impl Future<Output = Result<Vec<RawQueueMessage>, Report>> + Send;
+    fn receive_messages(&self)
+    -> impl Future<Output = Result<Vec<RawQueueMessage>, Report>> + Send;
 
     /// Delete a message from the queue (after successful delivery).
-    fn delete_message(&self, receipt_handle: &str) -> impl Future<Output = Result<(), Report>> + Send;
+    fn delete_message(
+        &self,
+        receipt_handle: &str,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }

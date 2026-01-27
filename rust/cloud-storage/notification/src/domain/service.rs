@@ -22,7 +22,7 @@ use crate::domain::models::queue_message::{
 };
 use crate::domain::models::{
     DeliveryStatus, ExclusionReason, FilteredRecipients, Notification, NotificationResult,
-    RecipientExclusion, RevokeCriteria, SendNotificationRequest,
+    RecipientExclusion, RevokeCriteria, SendNotificationRequest, SendNotificationRequestBuilder,
 };
 use crate::domain::ports::{
     EmailSender, NotificationQueue, NotificationRepository, NotificationSender, RateLimitPort,
@@ -93,9 +93,9 @@ where
     ) -> Result<NotificationResult, Report<SendNotificationError>> {
         let filtered = self
             .filter_recipients(
-                request.sender_id.as_ref(),
-                &request.recipient_ids,
-                &request.notification_entity.entity_id,
+                request.req.sender_id.as_ref(),
+                &request.req.recipient_ids,
+                &request.req.notification_entity.entity_id,
             )
             .await
             .context(SendNotificationError::Other)?;
@@ -114,7 +114,7 @@ where
         let created = self
             .repository
             .create_notification(
-                &request,
+                &request.req,
                 notification_id,
                 &self.service_name,
                 &filtered.valid,
@@ -132,11 +132,10 @@ where
         };
 
         // 4. Build and publish QueueMessage
-        let queue_message = self.build_queue_message(&request.notification, &filtered.valid);
+        let queue_message = self.build_queue_message(&request.req, &filtered.valid)?;
+
         self.queue
-            .publish(&QueueMessage {
-                rate_limit: request.get_rate_limit()?,
-            })
+            .publish(&queue_message)
             .await
             .context(SendNotificationError::Other)?;
 
@@ -223,6 +222,31 @@ where
         Ok(FilteredRecipients {
             valid: final_valid,
             excluded,
+        })
+    }
+
+    /// Build a QueueMessage with delivery nodes for the notification.
+    fn build_queue_message<'a, T: Notification + Serialize + Clone>(
+        &self,
+        notification: &SendNotificationRequestBuilder<T>,
+        recipients: &[MacroUserIdStr<'a>],
+    ) -> Result<QueueMessage<'a, T>, Report<SendNotificationError>> {
+        let rate_limit = notification.get_rate_limit()?;
+
+        // Build delivery nodes - for now just ConnGateway
+        // TODO: Add Ios and Email nodes based on notification type config
+        let deliver_on = vec![Node {
+            notif: NotificationChannel::ConnGateway(ConnGatewayNotification {
+                notif: notification.notification.clone(),
+                recipients: recipients.to_vec(),
+            }),
+            on_failure: None,
+        }];
+
+        Ok(QueueMessage {
+            message_type: T::TYPE_NAME.to_string(),
+            rate_limit,
+            deliver_on,
         })
     }
 }
@@ -399,7 +423,7 @@ where
         request: SendNotificationRequest<'a, T>,
     ) -> Result<NotificationResult, Report<SendNotificationError>> {
         let config = T::rate_limit_config();
-        let key = request.notification.rate_limit_key();
+        let key = request.req.notification.rate_limit_key();
 
         let rate_limit_key = match (config, key) {
             (Some(config), Some(key)) => Some((config, key)),
@@ -424,9 +448,9 @@ where
         // 2. Filter recipients
         let filtered = self
             .filter_recipients(
-                request.sender_id.as_ref(),
-                &request.recipient_ids,
-                &request.notification_entity.entity_id,
+                request.req.sender_id.as_ref(),
+                &request.req.recipient_ids,
+                &request.req.notification_entity.entity_id,
             )
             .await
             .context(SendNotificationError::Other)?;
@@ -445,7 +469,7 @@ where
         let created = self
             .repository
             .create_notification(
-                &request,
+                &request.req,
                 notification_id,
                 &self.service_name,
                 &filtered.valid,
@@ -464,7 +488,7 @@ where
 
         // 4. Deliver: WebSocket -> Push -> Email
         let delivery_status = self
-            .deliver_notification(&request.notification, &filtered.valid)
+            .deliver_notification(&request.req.notification, &filtered.valid)
             .await
             .context(SendNotificationError::Other)?;
 

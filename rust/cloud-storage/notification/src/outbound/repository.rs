@@ -9,7 +9,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    DeviceEndpoint, Notification, RevokeCriteria, SendNotificationRequest,
+    DeviceEndpoint, Notification, RevokeCriteria, SendNotificationRequestBuilder,
 };
 use crate::domain::ports::NotificationRepository;
 
@@ -58,7 +58,7 @@ pub trait NotificationDbOps {
     /// Returns `Some(notification_id)` if created, `None` if it already exists (idempotent).
     fn create_notification<'a, T: Notification + Send + Sync>(
         &self,
-        request: &SendNotificationRequest<'a, T>,
+        request: &SendNotificationRequestBuilder<'a, T>,
         notification_id: Uuid,
         service_name: &str,
         recipient_ids: &[MacroUserIdStr<'a>],
@@ -182,7 +182,7 @@ impl NotificationDbOps for PgPool {
 
     async fn create_notification<'a, T: Notification + Send + Sync>(
         &self,
-        request: &SendNotificationRequest<'a, T>,
+        request: &SendNotificationRequestBuilder<'a, T>,
         notification_id: Uuid,
         service_name: &str,
         recipient_ids: &[MacroUserIdStr<'a>],
@@ -336,7 +336,7 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
 
     async fn create_notification<'a, T: Notification + Send + Sync>(
         &self,
-        request: &SendNotificationRequest<'a, T>,
+        request: &SendNotificationRequestBuilder<'a, T>,
         notification_id: Uuid,
         service_name: &str,
         recipient_ids: &[MacroUserIdStr<'a>],

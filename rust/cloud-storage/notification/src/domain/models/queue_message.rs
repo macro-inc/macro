@@ -14,13 +14,17 @@ pub struct APNSTargets<T> {
 
 /// Email notification payload.
 #[derive(Debug, Serialize, Deserialize)]
+pub struct EmailContent {
+    subject: String,
+    body: String,
+}
+
+/// Email notification payload.
+#[derive(Debug, Serialize, Deserialize)]
 pub struct EmailNotification<'a> {
     /// The recipient email/user ID.
     pub to: MacroUserIdStr<'a>,
-    /// The email subject.
-    pub subject: String,
-    /// The email body.
-    pub body: String,
+    pub content: EmailContent,
 }
 
 /// Connection gateway (WebSocket) notification payload.

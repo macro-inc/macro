@@ -5,7 +5,7 @@ use crate::domain::models::apple::APNSPushNotification;
 use crate::domain::models::mobile::MessageAttributes;
 use crate::domain::models::{
     DeviceEndpoint, Notification, RateLimitConfig, RateLimitKey, RateLimitResult, RevokeCriteria,
-    SendNotificationRequest,
+    SendNotificationRequestBuilder,
 };
 use crate::domain::ports::{
     EmailSender, NotificationRepository, NotificationSender, RateLimitPort, WebSocketSender,
@@ -17,8 +17,8 @@ use model_entity::EntityType;
 use rootcause::Report;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Mutex;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -164,7 +164,7 @@ impl NotificationRepository for MockRepository {
 
     async fn create_notification<'a, T: Notification + Send + Sync>(
         &self,
-        _request: &SendNotificationRequest<'a, T>,
+        _request: &SendNotificationRequestBuilder<'a, T>,
         notification_id: Uuid,
         _service_sender: &str,
         _recipient_ids: &[MacroUserIdStr<'a>],
@@ -303,14 +303,15 @@ async fn test_send_notification_success() {
     );
 
     let recipient = test_user_id("user@example.com");
-    let request = SendNotificationRequest {
+    let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("entity_1"),
         notification: TestNotification {
             message: "Hello".to_string(),
         },
         sender_id: None,
         recipient_ids: vec![recipient.clone()],
-    };
+    }
+    .into_request();
 
     let result = service.send_notification(request).await.unwrap();
 
@@ -326,14 +327,15 @@ async fn test_send_notification_rate_limited() {
     );
 
     let recipient = test_user_id("user@example.com");
-    let request = SendNotificationRequest {
+    let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("entity_1"),
         notification: RateLimitedTestNotification {
             message: "Hello".to_string(),
         },
         sender_id: None,
         recipient_ids: vec![recipient],
-    };
+    }
+    .into_request();
 
     let result = service.send_notification(request).await;
 
@@ -354,14 +356,15 @@ async fn test_sender_excluded_from_recipients() {
     );
 
     let sender = test_user_id("sender@example.com");
-    let request = SendNotificationRequest {
+    let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("entity_1"),
         notification: TestNotification {
             message: "Hello".to_string(),
         },
         sender_id: Some(sender.clone()),
         recipient_ids: vec![sender.clone()],
-    };
+    }
+    .into_request();
 
     let result = service.send_notification(request).await.unwrap();
 
@@ -378,14 +381,15 @@ async fn test_muted_user_excluded() {
         MockWebSocketSender::new(),
     );
 
-    let request = SendNotificationRequest {
+    let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("entity_1"),
         notification: TestNotification {
             message: "Hello".to_string(),
         },
         sender_id: None,
         recipient_ids: vec![muted_user],
-    };
+    }
+    .into_request();
 
     let result = service.send_notification(request).await.unwrap();
 
@@ -403,27 +407,24 @@ async fn test_websocket_delivery_tracked() {
         MockWebSocketSender::new().with_online_user(online_user.clone()),
     );
 
-    let request = SendNotificationRequest {
+    let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("entity_1"),
         notification: TestNotification {
             message: "Hello".to_string(),
         },
         sender_id: None,
         recipient_ids: vec![online_user.clone(), offline_user.clone()],
-    };
+    }
+    .into_request();
 
     let result = service.send_notification(request).await.unwrap();
 
-    assert!(
-        result
-            .delivery_status
-            .websocket_delivered
-            .contains(&online_user)
-    );
-    assert!(
-        !result
-            .delivery_status
-            .websocket_delivered
-            .contains(&offline_user)
-    );
+    assert!(result
+        .delivery_status
+        .websocket_delivered
+        .contains(&online_user));
+    assert!(!result
+        .delivery_status
+        .websocket_delivered
+        .contains(&offline_user));
 }
