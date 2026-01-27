@@ -26,7 +26,12 @@ import { getIconConfig } from 'core/component/EntityIcon';
 import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import { UserIcon } from 'core/component/UserIcon';
-import { emailToMacroId, tryMacroId, useDisplayName, useDisplayNameParts } from 'core/user';
+import {
+  emailToMacroId,
+  tryMacroId,
+  useDisplayName,
+  useDisplayNameParts,
+} from 'core/user';
 import type { JSX, ParentProps, Ref } from 'solid-js';
 import {
   createDeferred,
@@ -527,11 +532,10 @@ function StackedRepliesRow(props: {
 }) {
   const count = () => props.group.notifications.length;
 
-  const threadParentSenderId = () => props.group.mostRecent.notificationMetadata.threadParentSenderId ?? "";
+  const threadParentSenderId = () =>
+    props.group.mostRecent.notificationMetadata.threadParentSenderId ?? '';
 
-  const { firstName } = useDisplayNameParts(
-    tryMacroId(threadParentSenderId())
-  );
+  const { firstName } = useDisplayNameParts(tryMacroId(threadParentSenderId()));
 
   const title = () => (
     <>
