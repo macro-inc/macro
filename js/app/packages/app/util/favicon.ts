@@ -2,8 +2,42 @@ import FaviconSvg from '@macro-icons/macro-macro.svg?raw';
 import FaviconBadgeSvg from '@macro-icons/macro-macro-badge.svg?raw';
 
 const FAVICON_SIZE = 48;
+const FAVICON_CHANNEL_NAME = 'macro-favicon-sync';
 
 let currentFaviconLink: HTMLLinkElement | null = null;
+let faviconBroadcastChannel: BroadcastChannel | null = null;
+
+type FaviconMessage = {
+  faviconColor: string;
+  badgeColor?: string;
+  hasBadge?: boolean;
+};
+
+function getBroadcastChannel(): BroadcastChannel | null {
+  if (typeof BroadcastChannel === 'undefined') return null;
+  if (!faviconBroadcastChannel) {
+    faviconBroadcastChannel = new BroadcastChannel(FAVICON_CHANNEL_NAME);
+  }
+  return faviconBroadcastChannel;
+}
+
+/**
+ * Subscribe to favicon updates from other tabs.
+ * Returns an unsubscribe function.
+ */
+export function subscribeFaviconUpdates(
+  callback: (message: FaviconMessage) => void
+): () => void {
+  const channel = getBroadcastChannel();
+  if (!channel) return () => {};
+
+  const handler = (event: MessageEvent<FaviconMessage>) => {
+    callback(event.data);
+  };
+
+  channel.addEventListener('message', handler);
+  return () => channel.removeEventListener('message', handler);
+}
 
 /** escapes a color value for use in SVG */
 function escapeColorForSvg(color: string): string {
@@ -26,11 +60,39 @@ export function getFaviconUrl(color: string) {
 
 /**
  * Update the site's live favicon with a new color, and optionally a notification
- * badge with its own color.
- * @param color
- * @returns
+ * badge with its own color. Broadcasts the change to other tabs.
  */
 export function updateFavicon(
+  faviconColor: string,
+  badgeColor?: string,
+  hasBadge?: boolean
+): void {
+  updateFaviconInternal(faviconColor, badgeColor, hasBadge);
+
+  // Broadcast to other tabs
+  const channel = getBroadcastChannel();
+  if (channel) {
+    channel.postMessage({
+      faviconColor,
+      badgeColor,
+      hasBadge,
+    } as FaviconMessage);
+  }
+}
+
+/**
+ * Internal function to update favicon without broadcasting.
+ * Used when receiving updates from other tabs.
+ */
+export function updateFaviconFromBroadcast(
+  faviconColor: string,
+  badgeColor?: string,
+  hasBadge?: boolean
+): void {
+  updateFaviconInternal(faviconColor, badgeColor, hasBadge);
+}
+
+function updateFaviconInternal(
   faviconColor: string,
   badgeColor?: string,
   hasBadge?: boolean

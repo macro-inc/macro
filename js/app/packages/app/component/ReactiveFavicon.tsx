@@ -1,4 +1,8 @@
-import { updateFavicon } from '@app/util/favicon';
+import {
+  subscribeFaviconUpdates,
+  updateFavicon,
+  updateFaviconFromBroadcast,
+} from '@app/util/favicon';
 import { createEffect, createSignal, onCleanup, onMount } from 'solid-js';
 import { useReactiveColorString } from '../../block-theme/signals/themeReactive';
 import { useGlobalNotificationSource } from './GlobalAppState';
@@ -20,15 +24,25 @@ export function ReactiveFavicon() {
   onMount(() => {
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    const unsubscribe = globalNotifications.subscribe(() => {
+    const unsubscribeNotifications = globalNotifications.subscribe(() => {
       if (!isAppFocused()) {
         setShowNotificationBadge(true);
       }
     });
 
+    // Listen for favicon updates from other tabs
+    const unsubscribeFavicon = subscribeFaviconUpdates((message) => {
+      updateFaviconFromBroadcast(
+        message.faviconColor,
+        message.badgeColor,
+        message.hasBadge
+      );
+    });
+
     onCleanup(() => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      unsubscribe();
+      unsubscribeNotifications();
+      unsubscribeFavicon();
     });
   });
 
