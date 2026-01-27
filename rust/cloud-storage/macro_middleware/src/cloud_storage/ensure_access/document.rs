@@ -48,12 +48,13 @@ where
 
         // Check ownership only if authenticated
         if let Some(ref user_id) = macro_user_id
-            && document_context.owner == *user_id {
-                return Ok(Self {
-                    access_level: AccessLevel::Owner,
-                    desired: PhantomData,
-                });
-            }
+            && document_context.owner == *user_id
+        {
+            return Ok(Self {
+                access_level: AccessLevel::Owner,
+                desired: PhantomData,
+            });
+        }
 
         // If the document was deleted and you are not the owner, you can't access it
         if document_context.deleted_at.is_some() {
