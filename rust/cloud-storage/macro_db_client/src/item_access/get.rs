@@ -3,7 +3,7 @@ use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::user_item_access::UserItemAccess;
 
 /// Gets the items owner and whether it's deleted
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(db), err)]
 pub async fn get_owner_and_deleted(
     db: &sqlx::Pool<sqlx::Postgres>,
     entity_id: &str,
