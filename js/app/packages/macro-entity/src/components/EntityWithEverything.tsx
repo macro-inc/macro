@@ -35,7 +35,6 @@ import {
 import type { JSX, ParentProps, Ref } from 'solid-js';
 import {
   createDeferred,
-  createEffect,
   createMemo,
   createSignal,
   createUniqueId,
