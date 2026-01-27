@@ -104,6 +104,11 @@ pub struct SoupDocument {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sub_type: Option<SoupDocumentSubType>,
 
+    /// The time the document was deleted
+    #[serde(with = "chrono::serde::ts_milliseconds_option")]
+    #[cfg_attr(feature = "schema", schema(value_type = i64, nullable = true))]
+    pub deleted_at: Option<chrono::DateTime<Utc>>,
+
     /// Properties
     pub properties: Vec<SoupProperty>,
 }

@@ -99,42 +99,43 @@ r#"
                     WHEN 'created_at' THEN d."createdAt"
                     ELSE d."updatedAt"
                 END::timestamptz as "sort_ts!",
-                CASE 
-                    WHEN dt.sub_type = 'task' 
+                CASE
+                    WHEN dt.sub_type = 'task'
                         AND ep_status.values->'value' ? $6
-                    THEN true 
+                    THEN true
                     WHEN dt.sub_type = 'task'
                     THEN false
-                    ELSE NULL 
-                END as "is_completed"
+                    ELSE NULL
+                END as "is_completed",
+                d."deletedAt"::timestamptz as "deleted_at"
             FROM "Document" d
             LEFT JOIN document_sub_type dt ON dt.document_id = d.id
-            LEFT JOIN entity_properties ep_status 
+            LEFT JOIN entity_properties ep_status
                 ON dt.sub_type = 'task'
-                AND ep_status.entity_id = d.id 
+                AND ep_status.entity_id = d.id
                 AND ep_status.entity_type = 'TASK'
                 AND ep_status.property_definition_id = $7
             INNER JOIN UserAccessibleItems uai ON uai.item_id = d.id AND uai.item_type = 'document'
             -- This MUST be a LEFT JOIN to support all three sort methods
             LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
             LEFT JOIN LATERAL (
-                SELECT b.id 
-                FROM "DocumentBom" b 
-                WHERE b."documentId" = d.id 
-                ORDER BY b."createdAt" DESC 
+                SELECT b.id
+                FROM "DocumentBom" b
+                WHERE b."documentId" = d.id
+                ORDER BY b."createdAt" DESC
                 LIMIT 1
             ) db ON true
             LEFT JOIN LATERAL (
-                SELECT i.id, i.sha 
-                FROM "DocumentInstance" i 
-                WHERE i."documentId" = d.id 
-                ORDER BY i."updatedAt" DESC 
+                SELECT i.id, i.sha
+                FROM "DocumentInstance" i
+                WHERE i."documentId" = d.id
+                ORDER BY i."updatedAt" DESC
                 LIMIT 1
             ) di ON true
             WHERE d."deletedAt" IS NULL
 
             UNION ALL
-        
+
             SELECT
                 'chat' as "item_type!",
                 c.id as "id!",
@@ -158,7 +159,8 @@ r#"
                     WHEN 'created_at' THEN c."createdAt"
                     ELSE c."updatedAt"
                 END::timestamptz as "sort_ts!",
-                NULL as "is_completed"
+                NULL as "is_completed",
+                c."deletedAt"::timestamptz as "deleted_at"
             FROM "Chat" c
             INNER JOIN UserAccessibleItems uai ON uai.item_id = c.id AND uai.item_type = 'chat'
             LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1
@@ -189,7 +191,8 @@ r#"
                     WHEN 'created_at'  THEN p."createdAt"
                     ELSE p."updatedAt"
                 END::timestamptz as "sort_ts!",
-                NULL as "is_completed"
+                NULL as "is_completed",
+                p."deletedAt"::timestamptz as "deleted_at"
             FROM "Project" p
             INNER JOIN UserAccessibleItems uai
                 ON uai.item_id = p.id
@@ -309,42 +312,43 @@ r#"
                     WHEN 'created_at' THEN d."createdAt"
                     ELSE d."updatedAt"
                 END::timestamptz as "sort_ts!",
-                CASE 
-                    WHEN dt.sub_type = 'task' 
+                CASE
+                    WHEN dt.sub_type = 'task'
                         AND ep_status.values->'value' ? $6
-                    THEN true 
+                    THEN true
                     WHEN dt.sub_type = 'task'
                     THEN false
-                    ELSE NULL 
-                END as "is_completed"
+                    ELSE NULL
+                END as "is_completed",
+                d."deletedAt"::timestamptz as "deleted_at"
             FROM "Document" d
             LEFT JOIN document_sub_type dt ON dt.document_id = d.id
-            LEFT JOIN entity_properties ep_status 
+            LEFT JOIN entity_properties ep_status
                 ON dt.sub_type = 'task'
-                AND ep_status.entity_id = d.id 
+                AND ep_status.entity_id = d.id
                 AND ep_status.entity_type = 'TASK'
                 AND ep_status.property_definition_id = $7
             INNER JOIN UserAccessibleItems uai ON uai.item_id = d.id AND uai.item_type = 'document'
             -- This MUST be a LEFT JOIN to support all three sort methods
             LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
             LEFT JOIN LATERAL (
-                SELECT b.id 
-                FROM "DocumentBom" b 
-                WHERE b."documentId" = d.id 
-                ORDER BY b."createdAt" DESC 
+                SELECT b.id
+                FROM "DocumentBom" b
+                WHERE b."documentId" = d.id
+                ORDER BY b."createdAt" DESC
                 LIMIT 1
             ) db ON true
             LEFT JOIN LATERAL (
-                SELECT i.id, i.sha 
-                FROM "DocumentInstance" i 
-                WHERE i."documentId" = d.id 
-                ORDER BY i."updatedAt" DESC 
+                SELECT i.id, i.sha
+                FROM "DocumentInstance" i
+                WHERE i."documentId" = d.id
+                ORDER BY i."updatedAt" DESC
                 LIMIT 1
             ) di ON true
             WHERE d."deletedAt" IS NULL
 
             UNION ALL
-        
+
             SELECT
                 'chat' as "item_type!",
                 c.id as "id!",
@@ -368,7 +372,8 @@ r#"
                     WHEN 'created_at' THEN c."createdAt"
                     ELSE c."updatedAt"
                 END::timestamptz as "sort_ts!",
-                NULL as "is_completed"
+                NULL as "is_completed",
+                c."deletedAt"::timestamptz as "deleted_at"
             FROM "Chat" c
             INNER JOIN UserAccessibleItems uai ON uai.item_id = c.id AND uai.item_type = 'chat'
             LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1
@@ -399,7 +404,8 @@ r#"
                     WHEN 'created_at'  THEN p."createdAt"
                     ELSE p."updatedAt"
                 END::timestamptz as "sort_ts!",
-                NULL as "is_completed"
+                NULL as "is_completed",
+                p."deletedAt"::timestamptz as "deleted_at"
             FROM "Project" p
             INNER JOIN UserAccessibleItems uai
                 ON uai.item_id = p.id
