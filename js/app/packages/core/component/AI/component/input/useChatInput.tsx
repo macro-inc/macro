@@ -173,12 +173,13 @@ function ChatInput(props: ChatInputInternalProps) {
     !isEmptyInput() && !generating() && !hasUploadingAttachments();
 
   const LINE_HEIGHT_THRESHOLD = 32;
+  let mdRef: undefined | HTMLDivElement;
   const isMultiline = () => {
     // Access markdownText to create reactive dependency
-    props.markdown.markdownText();
-    const ref = props.markdown.ref();
-    if (!ref) return false;
-    return ref.scrollHeight > LINE_HEIGHT_THRESHOLD;
+    const text = props.markdown.markdownText();
+    if (text.trim().length === 0) return false;
+    if (!mdRef) return false;
+    return mdRef.scrollHeight > LINE_HEIGHT_THRESHOLD;
   };
 
   const buildChatSendRequest = useBuildChatSendRequest();
@@ -346,6 +347,7 @@ function ChatInput(props: ChatInputInternalProps) {
             'pl-8 pr-[180px]': !isMultiline(),
             'pl-0 pr-0 pb-8': isMultiline(),
           }}
+          ref={mdRef}
         >
           <props.markdown.MarkdownArea
             onEnter={handleEnter}
