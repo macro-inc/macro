@@ -7,6 +7,7 @@ pub mod thread;
 
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+pub use model_entity::EntityType;
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 use models_permissions::share_permission::access_level::{
     AccessLevel, CommentAccessLevel, EditAccessLevel, OwnerAccessLevel,
@@ -134,31 +135,31 @@ pub async fn get_users_access_level_v2(
 pub async fn get_public_access_level(
     db: &Pool<Postgres>,
     entity_id: &str,
-    entity_type: &str,
+    entity_type: EntityType,
 ) -> Result<Option<AccessLevel>, (StatusCode, String)> {
     let result = match entity_type {
-        "document" => {
+        EntityType::Document => {
             macro_db_client::share_permission::access_level::document::get_public_access_level_for_document(
                 db,
                 entity_id,
             )
             .await
         }
-        "chat" => {
+        EntityType::Chat => {
             macro_db_client::share_permission::access_level::chat::get_public_access_level_for_chat(
                 db,
                 entity_id,
             )
             .await
         }
-        "project" => {
+        EntityType::Project => {
             macro_db_client::share_permission::access_level::project::get_public_access_level_for_project(
                 db,
                 entity_id,
             )
             .await
         }
-        "thread" => {
+        EntityType::EmailThread => {
             macro_db_client::share_permission::access_level::thread::get_public_access_level_for_thread(
                 db,
                 entity_id,

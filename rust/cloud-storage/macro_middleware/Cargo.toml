@@ -31,6 +31,7 @@ macro_share_permissions = { path = "../macro_share_permissions", optional = true
 macro_user_id = { path = "../macro_user_id", optional = true }
 macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }
+model-entity = { path = "../model-entity" }
 model_user = { path = "../model_user", features = ["axum"], optional = true }
 models_permissions = { path = "../models_permissions" }
 permission = { path = "../permission", optional = true }

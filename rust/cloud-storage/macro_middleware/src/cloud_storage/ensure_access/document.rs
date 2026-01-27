@@ -7,7 +7,7 @@ use axum::{
 };
 use sqlx::PgPool;
 
-use super::{get_public_access_level, get_users_access_level_v2};
+use super::{get_public_access_level, get_users_access_level_v2, EntityType};
 use crate::cloud_storage::ensure_access::{AccessLevelErr, BuildAccessLevel};
 use model::document::DocumentBasic;
 use model_user::axum_extractor::OptionalMacroUserExtractor;
@@ -78,7 +78,7 @@ where
             }
             None => {
                 // Unauthenticated user: check public access only
-                get_public_access_level(&db, &document_context.document_id, "document")
+                get_public_access_level(&db, &document_context.document_id, EntityType::Document)
                     .await
                     .map_err(AccessLevelErr::DbErr)?
             }
