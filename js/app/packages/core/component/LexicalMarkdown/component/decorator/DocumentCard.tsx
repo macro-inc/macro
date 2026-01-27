@@ -332,7 +332,7 @@ export function DocumentCard(props: DocumentCardDecoratorProps) {
   }) => {
     return (
       <div class="p-2">
-        <div class="flex center gap-2 items-center">
+        <div class="flex center gap-2 items-center h-4">
           <div class="flex-shrink-0">
             <Show
               when={props.item.type === 'channel'}
@@ -405,7 +405,7 @@ export function DocumentCard(props: DocumentCardDecoratorProps) {
           </Show>
           <Show when={props.item.updatedAt}>
             {(updatedAt) => (
-              <div class="flex items-center text-xs text-ink-muted">
+              <div class="flex items-center text-xs text-ink-muted/60 mr-2">
                 <ClockIcon class="w-3 h-3 mr-1" />
                 <span>{formatDate(updatedAt())}</span>
               </div>
@@ -423,7 +423,7 @@ export function DocumentCard(props: DocumentCardDecoratorProps) {
         setPreviewBoxRef(el);
       }}
       contentEditable={false}
-      class="relative my-2 rounded-lg border border-edge no-select-children select-none overflow-hidden flex flex-col"
+      class="relative my-2 rounded border border-edge-muted no-select-children select-none overflow-hidden flex flex-col"
       classList={{
         'bg-active outline-edge outline-4': isSelectedAsNode(),
         'resize-y shrink-0 min-h-[100px]': isPreviewable(),
