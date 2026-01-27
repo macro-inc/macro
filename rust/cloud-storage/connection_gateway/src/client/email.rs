@@ -20,10 +20,7 @@ impl ConnectionGatewayClient {
 
     /// Notify the frontend that contacts have been updated and should be refreshed
     #[tracing::instrument(skip(self))]
-    pub async fn invalidate_contacts(
-        &self,
-        user_id: &str,
-    ) -> anyhow::Result<Vec<MessageReceipt>> {
+    pub async fn invalidate_contacts(&self, user_id: &str) -> anyhow::Result<Vec<MessageReceipt>> {
         self.send_message(
             "user",
             user_id,
