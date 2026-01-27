@@ -15,7 +15,6 @@ pub static INTERNAL_AUTH_HEADER_KEY: &str = "x-internal-auth-key";
 
 impl UserRepoImpl {
     pub fn new(internal_auth_key: String, url: Url) -> Self {
-        println!("internal_auth {}\nurl {}", internal_auth_key, url);
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert(INTERNAL_AUTH_HEADER_KEY, internal_auth_key.parse().unwrap());
 
@@ -51,13 +50,9 @@ impl UserRepo for UserRepoImpl {
         let mut url = self.url.as_ref().clone();
         url.set_path("/internal/get_names");
 
-        let res = self
-            .client
-            .post(url)
-            .json(&body)
-            .send()
-            .await
-            .inspect_err(|e| eprintln!("err {:#?}", e))?;
+        let res = self.client.post(url).json(&body).send().await.inspect_err(
+            |e| tracing::error!(error=?e, "failed to get names from authentication service"),
+        )?;
 
         match res.status() {
             reqwest::StatusCode::OK => {
