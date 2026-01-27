@@ -200,6 +200,15 @@ function EmailMessageContentHit(props: {
   );
 }
 
+function ThreadBorder() {
+  return (
+    <div
+      class="absolute left-[calc(0.5rem+1px)] w-[1px] border-l border-edge-muted -top-0.75"
+      style={{ height: '6px' }}
+    />
+  );
+}
+
 function CollapsibleListRow(
   props: ParentProps<{
     onClick?: (e: EntityClickEvent) => void;
@@ -227,6 +236,9 @@ function CollapsibleListRow(
       }}
       data-blocks-navigation={props.blockNavigation}
     >
+      <Show when={props.showThreadBorder}>
+        <ThreadBorder />
+      </Show>
       {props.children}
     </div>
   );
@@ -258,6 +270,9 @@ function CollapsibleList<T>(props: {
       </For>
       <Show when={hasMore()}>
         <div class="h-5">
+          <Show when={props.threadBorder}>
+            <ThreadBorder />
+          </Show>
           <button
             class="block w-fit px-2 py-0.5 text-xxs border border-edge uppercase font-mono hover:font-medium"
             onClick={(e) => {
@@ -566,9 +581,7 @@ function StackedNotificationRenderer(props: {
       <Match when={props.group.type === 'new_messages' && props.group}>
         {(group) => (
           <StackedNewMessagesRow
-            group={
-              group() as StackedNotificationGroup & { type: 'new_messages' }
-            }
+            group={group()}
             onClick={props.onClickStacked}
             entity={props.entity}
           />
@@ -577,7 +590,7 @@ function StackedNotificationRenderer(props: {
       <Match when={props.group.type === 'replies' && props.group}>
         {(group) => (
           <StackedRepliesRow
-            group={group() as StackedNotificationGroup & { type: 'replies' }}
+            group={group()}
             onClick={props.onClickStacked}
             entity={props.entity}
           />
@@ -585,9 +598,7 @@ function StackedNotificationRenderer(props: {
       </Match>
       <Match when={props.group.type === 'mention' && props.group}>
         {(group) => {
-          const mentionGroup = group() as StackedNotificationGroup & {
-            type: 'mention';
-          };
+          const mentionGroup = group();
           return (
             <NotificationRow
               notification={mentionGroup.notification}
@@ -600,9 +611,7 @@ function StackedNotificationRenderer(props: {
       </Match>
       <Match when={props.group.type === 'other' && props.group}>
         {(group) => {
-          const otherGroup = group() as StackedNotificationGroup & {
-            type: 'other';
-          };
+          const otherGroup = group();
           return (
             <NotificationRow
               notification={otherGroup.notification}
