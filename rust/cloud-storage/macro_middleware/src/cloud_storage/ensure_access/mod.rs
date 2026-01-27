@@ -129,18 +129,51 @@ pub async fn get_users_access_level_v2(
     }
 }
 
-/// Gets public access level for a document (no user required).
+/// Gets public access level for an entity (no user required).
 #[tracing::instrument(skip(db))]
 pub async fn get_public_access_level(
     db: &Pool<Postgres>,
-    document_id: &str,
+    entity_id: &str,
+    entity_type: &str,
 ) -> Result<Option<AccessLevel>, (StatusCode, String)> {
-    macro_db_client::share_permission::access_level::document::get_public_access_level_for_document(
-        db,
-        document_id,
-    )
-    .await
-    .map_err(|e| {
+    let result = match entity_type {
+        "document" => {
+            macro_db_client::share_permission::access_level::document::get_public_access_level_for_document(
+                db,
+                entity_id,
+            )
+            .await
+        }
+        "chat" => {
+            macro_db_client::share_permission::access_level::chat::get_public_access_level_for_chat(
+                db,
+                entity_id,
+            )
+            .await
+        }
+        "project" => {
+            macro_db_client::share_permission::access_level::project::get_public_access_level_for_project(
+                db,
+                entity_id,
+            )
+            .await
+        }
+        "thread" => {
+            macro_db_client::share_permission::access_level::thread::get_public_access_level_for_thread(
+                db,
+                entity_id,
+            )
+            .await
+        }
+        _ => {
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("unsupported entity type {entity_type}"),
+            ));
+        }
+    };
+
+    result.map_err(|e| {
         tracing::error!(error=?e, "failed to get public access level");
         (
             StatusCode::INTERNAL_SERVER_ERROR,

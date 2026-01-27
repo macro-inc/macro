@@ -18,7 +18,7 @@ use std::str::FromStr;
 /// - `Ok(Some(AccessLevel))` if there is public access.
 /// - `Ok(None)` if there is no public access.
 /// - `Err(_)` if a database error occurs.
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(db), err)]
 pub async fn get_public_access_level_for_document(
     db: &sqlx::Pool<sqlx::Postgres>,
     document_id: &str,

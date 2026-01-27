@@ -1,6 +1,65 @@
 use models_permissions::share_permission::access_level::AccessLevel;
 use std::str::FromStr;
 
+/// Gets the public access level for a thread (no user required).
+///
+/// This function checks only public `SharePermission` records (where `isPublic=true`),
+/// applied either directly to the thread or inherited from its project hierarchy.
+/// It does NOT check user-specific `UserItemAccess` records.
+///
+/// Use this for unauthenticated access to publicly shared threads.
+///
+/// # Arguments
+/// * `db` - A reference to the `sqlx` database connection pool.
+/// * `thread_id` - The ID of the thread to check.
+///
+/// # Returns
+/// A `Result` containing an `Option<AccessLevel>`:
+/// - `Ok(Some(AccessLevel))` if there is public access.
+/// - `Ok(None)` if there is no public access.
+/// - `Err(_)` if a database error occurs.
+#[tracing::instrument(skip(db), err)]
+pub async fn get_public_access_level_for_thread(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    thread_id: &str,
+) -> anyhow::Result<Option<AccessLevel>> {
+    let public_levels: Vec<Option<String>> = sqlx::query_scalar!(
+        r#"
+        WITH RECURSIVE project_hierarchy AS (
+            SELECT p.id as project_id
+            FROM "EmailThreadPermission" etp
+            JOIN "Project" p ON etp."projectId" = p.id AND p."deletedAt" IS NULL
+            WHERE etp."threadId" = $1
+            UNION ALL
+            SELECT parent.id as project_id
+            FROM project_hierarchy ph
+            JOIN "Project" parent ON parent.id = (
+                SELECT "parentId" FROM "Project" WHERE id = ph.project_id
+                AND "parentId" IS NOT NULL AND "deletedAt" IS NULL
+            )
+        )
+        SELECT "publicAccessLevel" as access_level
+        FROM "SharePermission"
+        WHERE "isPublic" = true AND "publicAccessLevel" IS NOT NULL AND id IN (
+            SELECT "sharePermissionId" FROM "EmailThreadPermission" WHERE "threadId" = $1
+            UNION
+            SELECT "sharePermissionId" FROM "ProjectPermission"
+            WHERE "projectId" IN (SELECT project_id FROM project_hierarchy)
+        )
+        "#,
+        thread_id
+    )
+    .fetch_all(db)
+    .await?;
+
+    let highest_level = public_levels
+        .iter()
+        .filter_map(|opt| opt.as_ref().and_then(|s| AccessLevel::from_str(s).ok()))
+        .max();
+
+    Ok(highest_level)
+}
+
 /// Calculates the highest effective access level a user has for a thread.
 ///
 /// This function determines the best possible permission by considering two sources:

@@ -78,7 +78,7 @@ where
             }
             None => {
                 // Unauthenticated user: check public access only
-                get_public_access_level(&db, &document_context.document_id)
+                get_public_access_level(&db, &document_context.document_id, "document")
                     .await
                     .map_err(AccessLevelErr::DbErr)?
             }
