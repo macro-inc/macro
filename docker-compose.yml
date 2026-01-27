@@ -421,6 +421,28 @@ services:
       - services
 
   # ============================================================================
+  # sync_service (Port 8787)
+  # Document sync service using Cloudflare Workers/Durable Objects (via miniflare)
+  # ============================================================================
+  sync_service:
+    <<: *common-env
+    build:
+      context: ./rust/sync-service
+      dockerfile: Dockerfile
+    ports:
+      - "8787:8787"
+    environment:
+      - INTERNAL_API_SECRET_KEY=${INTERNAL_API_SECRET_KEY}
+    networks:
+      - services
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8787/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ============================================================================
   # lexical_service (Port 8096)
   # Lexical document conversion service - converts Lexical JSON to various formats
   # ============================================================================
@@ -433,11 +455,13 @@ services:
         GITHUB_PACKAGES_TOKEN: ${GITHUB_PACKAGES_TOKEN}
     ports:
       - "8096:8096"
+    depends_on:
+      - sync_service
     environment:
       - PORT=8096
       - INTERNAL_AUTH_KEY=${INTERNAL_API_SECRET_KEY}
-      - SYNC_SERVICE_AUTH_KEY=${SYNC_SERVICE_AUTH_KEY}
-      - SYNC_SERVICE_URL=${SYNC_SERVICE_URL}
+      - SYNC_SERVICE_AUTH_KEY=${INTERNAL_API_SECRET_KEY}
+      - SYNC_SERVICE_URL=http://sync_service:8787
     networks:
       - services
     healthcheck:
