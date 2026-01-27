@@ -7,7 +7,6 @@ import { EmailMessageBody } from '@block-email/component/EmailMessageBody';
 import { EmailMessageTopBar } from '@block-email/component/EmailMessageTopBar';
 import { isMessageFromCurrentUser } from '@block-email/util/emailUser';
 import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
-import { ImagePreview } from '@core/component/ImagePreview';
 import { Message } from '@core/component/Message';
 import { toast } from '@core/component/Toast/Toast';
 import { VideoPreview } from '@core/component/VideoPreview';
@@ -24,7 +23,7 @@ import type {
 import { useEmail, useUserId } from '@core/context/user';
 import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
-import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 
 interface MessageContainerProps {
