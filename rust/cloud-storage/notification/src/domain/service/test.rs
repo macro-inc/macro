@@ -1,28 +1,21 @@
-//! Unit tests for the NotificationService.
+//! Unit tests for the NotificationIngressService.
 
-use crate::domain::models::android::FCMMessage;
-use crate::domain::models::apple::APNSPushNotification;
-use crate::domain::models::mobile::MessageAttributes;
+use crate::domain::models::queue_message::{QueueMessage, RawQueueMessage};
 use crate::domain::models::{
-    DeviceEndpoint, Notification, RateLimitConfig, RateLimitKey, RateLimitResult, RevokeCriteria,
+    DeviceEndpoint, Notification, RateLimitConfig, RateLimitKey, RevokeCriteria,
     SendNotificationRequestBuilder,
 };
-use crate::domain::ports::{
-    EmailSender, NotificationRepository, NotificationSender, RateLimitPort, WebSocketSender,
-};
-use crate::domain::service::{NotificationService, SendNotificationError};
-use macro_user_id::cowlike::CowLike;
+use crate::domain::ports::{NotificationQueue, NotificationRepository};
+use crate::domain::service::NotificationIngressService;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use rootcause::Report;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
-use std::time::Duration;
 use uuid::Uuid;
 
-/// A test notification type (no rate limiting).
+/// A test notification type.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct TestNotification {
     message: String,
@@ -48,80 +41,9 @@ impl Notification for TestNotification {
     }
 }
 
-/// A test notification type with rate limiting.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct RateLimitedTestNotification {
-    message: String,
-}
-
-impl Notification for RateLimitedTestNotification {
-    const TYPE_NAME: &'static str = "rate_limited_test_notification";
-
-    fn title(&self) -> String {
-        "Test".to_string()
-    }
-
-    fn body(&self) -> String {
-        self.message.clone()
-    }
-
-    fn rate_limit_config() -> Option<RateLimitConfig> {
-        Some(RateLimitConfig {
-            max_count: 10,
-            window: Duration::from_secs(60),
-        })
-    }
-
-    fn rate_limit_key(&self) -> Option<RateLimitKey> {
-        Some(RateLimitKey::new(vec![1, 2, 3]))
-    }
-}
-
 /// Helper to create a test user ID.
 fn test_user_id(email: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email(email).unwrap()
-}
-
-/// Mock rate limiter that allows configuration of behavior.
-struct MockRateLimiter {
-    allow: bool,
-    current_count: AtomicU64,
-}
-
-impl MockRateLimiter {
-    fn new_allowing() -> Self {
-        Self {
-            allow: true,
-            current_count: AtomicU64::new(0),
-        }
-    }
-
-    fn new_exceeded() -> Self {
-        Self {
-            allow: false,
-            current_count: AtomicU64::new(100),
-        }
-    }
-}
-
-impl RateLimitPort for MockRateLimiter {
-    async fn check_and_increment(
-        &self,
-        _key: RateLimitKey,
-        config: RateLimitConfig,
-    ) -> Result<RateLimitResult, Report> {
-        if self.allow {
-            let count = self.current_count.fetch_add(1, Ordering::SeqCst) + 1;
-            Ok(RateLimitResult::Allowed {
-                current_count: count,
-            })
-        } else {
-            Ok(RateLimitResult::Exceeded {
-                current_count: self.current_count.load(Ordering::SeqCst),
-                max_count: config.max_count,
-            })
-        }
-    }
 }
 
 /// Mock repository that tracks calls.
@@ -199,108 +121,51 @@ impl NotificationRepository for MockRepository {
     }
 }
 
-/// Mock WebSocket sender that tracks which users were "delivered" to.
-struct MockWebSocketSender {
-    online_users: HashSet<MacroUserIdStr<'static>>,
+/// Mock queue that tracks published messages.
+struct MockQueue {
+    published: Mutex<Vec<String>>,
 }
 
-impl MockWebSocketSender {
+impl MockQueue {
     fn new() -> Self {
         Self {
-            online_users: HashSet::new(),
+            published: Mutex::new(Vec::new()),
         }
     }
-
-    fn with_online_user(mut self, user_id: MacroUserIdStr<'static>) -> Self {
-        self.online_users.insert(user_id);
-        self
-    }
 }
 
-impl WebSocketSender for MockWebSocketSender {
-    async fn send_notifications<'a, T: serde::Serialize + Send + Sync>(
+impl NotificationQueue for MockQueue {
+    async fn publish<T: serde::Serialize + Send + Sync>(
         &self,
-        _message_type: &str,
-        notifications: Vec<(MacroUserIdStr<'a>, &T)>,
-    ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
-        let delivered: HashSet<_> = notifications
-            .into_iter()
-            .filter_map(|(user_id, _)| {
-                let static_id: MacroUserIdStr<'static> = user_id.into_owned();
-                if self.online_users.contains(&static_id) {
-                    Some(static_id)
-                } else {
-                    None
-                }
-            })
-            .collect();
-        Ok(delivered)
-    }
-}
-
-/// Mock mobile push sender.
-struct MockMobileSender;
-
-impl NotificationSender for MockMobileSender {
-    async fn send_ios_push_notification<T: serde::Serialize + Send + Sync>(
-        &self,
-        _endpoint_arn: &str,
-        _notification: APNSPushNotification<T>,
-        _attributes: MessageAttributes,
+        message: &QueueMessage<'_, T>,
     ) -> Result<(), Report> {
+        self.published
+            .lock()
+            .unwrap()
+            .push(message.message_type.clone());
         Ok(())
     }
 
-    async fn send_android_push_notification<T: serde::Serialize + Send + Sync>(
-        &self,
-        _endpoint_arn: &str,
-        _notification: FCMMessage<T>,
-        _attributes: MessageAttributes,
-    ) -> Result<(), Report> {
+    async fn receive_messages(&self) -> Result<Vec<RawQueueMessage>, Report> {
+        Ok(Vec::new())
+    }
+
+    async fn delete_message(&self, _receipt_handle: &str) -> Result<(), Report> {
         Ok(())
     }
 }
 
-/// Mock email sender.
-struct MockEmailSender;
-
-impl EmailSender for MockEmailSender {
-    async fn send_email<T: Notification + Send + Sync>(
-        &self,
-        _notification: &T,
-        _recipient: MacroUserIdStr<'_>,
-    ) -> Result<(), Report> {
-        Ok(())
-    }
-}
-
-fn create_service<R, N, W>(
-    rate_limiter: R,
-    repository: N,
-    websocket: W,
-) -> NotificationService<R, N, W, MockMobileSender, MockEmailSender>
+fn create_service<N, Q>(repository: N, queue: Q) -> NotificationIngressService<N, Q>
 where
-    R: RateLimitPort,
     N: NotificationRepository,
-    W: WebSocketSender,
+    Q: NotificationQueue,
 {
-    NotificationService::new(
-        rate_limiter,
-        repository,
-        websocket,
-        MockMobileSender,
-        MockEmailSender,
-        "test_service",
-    )
+    NotificationIngressService::new(repository, queue, "test_service")
 }
 
 #[tokio::test]
 async fn test_send_notification_success() {
-    let service = create_service(
-        MockRateLimiter::new_allowing(),
-        MockRepository::new(),
-        MockWebSocketSender::new(),
-    );
+    let service = create_service(MockRepository::new(), MockQueue::new());
 
     let recipient = test_user_id("user@example.com");
     let request = SendNotificationRequestBuilder {
@@ -319,41 +184,8 @@ async fn test_send_notification_success() {
 }
 
 #[tokio::test]
-async fn test_send_notification_rate_limited() {
-    let service = create_service(
-        MockRateLimiter::new_exceeded(),
-        MockRepository::new(),
-        MockWebSocketSender::new(),
-    );
-
-    let recipient = test_user_id("user@example.com");
-    let request = SendNotificationRequestBuilder {
-        notification_entity: EntityType::Document.with_entity_str("entity_1"),
-        notification: RateLimitedTestNotification {
-            message: "Hello".to_string(),
-        },
-        sender_id: None,
-        recipient_ids: vec![recipient],
-    }
-    .into_request();
-
-    let result = service.send_notification(request).await;
-
-    assert!(result.is_err());
-    let err = result.unwrap_err();
-    assert!(matches!(
-        err.current_context(),
-        SendNotificationError::RateLimitExceeded
-    ));
-}
-
-#[tokio::test]
 async fn test_sender_excluded_from_recipients() {
-    let service = create_service(
-        MockRateLimiter::new_allowing(),
-        MockRepository::new(),
-        MockWebSocketSender::new(),
-    );
+    let service = create_service(MockRepository::new(), MockQueue::new());
 
     let sender = test_user_id("sender@example.com");
     let request = SendNotificationRequestBuilder {
@@ -376,9 +208,8 @@ async fn test_sender_excluded_from_recipients() {
 async fn test_muted_user_excluded() {
     let muted_user = test_user_id("muted@example.com");
     let service = create_service(
-        MockRateLimiter::new_allowing(),
         MockRepository::new().with_muted_user(muted_user.clone()),
-        MockWebSocketSender::new(),
+        MockQueue::new(),
     );
 
     let request = SendNotificationRequestBuilder {
@@ -394,37 +225,4 @@ async fn test_muted_user_excluded() {
     let result = service.send_notification(request).await.unwrap();
 
     assert!(result.notified_recipients.is_empty());
-}
-
-#[tokio::test]
-async fn test_websocket_delivery_tracked() {
-    let online_user = test_user_id("online@example.com");
-    let offline_user = test_user_id("offline@example.com");
-
-    let service = create_service(
-        MockRateLimiter::new_allowing(),
-        MockRepository::new(),
-        MockWebSocketSender::new().with_online_user(online_user.clone()),
-    );
-
-    let request = SendNotificationRequestBuilder {
-        notification_entity: EntityType::Document.with_entity_str("entity_1"),
-        notification: TestNotification {
-            message: "Hello".to_string(),
-        },
-        sender_id: None,
-        recipient_ids: vec![online_user.clone(), offline_user.clone()],
-    }
-    .into_request();
-
-    let result = service.send_notification(request).await.unwrap();
-
-    assert!(result
-        .delivery_status
-        .websocket_delivered
-        .contains(&online_user));
-    assert!(!result
-        .delivery_status
-        .websocket_delivered
-        .contains(&offline_user));
 }

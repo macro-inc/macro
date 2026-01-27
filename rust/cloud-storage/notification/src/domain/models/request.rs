@@ -97,19 +97,6 @@ pub struct NotificationResult {
     pub notification_id: Uuid,
     /// The users who were actually notified (after filtering).
     pub notified_recipients: HashSet<MacroUserIdStr<'static>>,
-    /// Delivery status across channels.
-    pub delivery_status: DeliveryStatus,
-}
-
-/// Tracks delivery status across different channels.
-#[derive(Debug, Clone, Default)]
-pub struct DeliveryStatus {
-    /// Users who received the notification via WebSocket.
-    pub websocket_delivered: HashSet<MacroUserIdStr<'static>>,
-    /// Users who received the notification via push notification.
-    pub push_delivered: HashSet<MacroUserIdStr<'static>>,
-    /// Users for whom email was queued.
-    pub email_queued: HashSet<MacroUserIdStr<'static>>,
 }
 
 /// Criteria for revoking/deleting notifications.

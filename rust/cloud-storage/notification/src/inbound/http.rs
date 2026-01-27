@@ -6,24 +6,23 @@
 use std::sync::Arc;
 
 use rootcause::Report;
+use serde::Serialize;
 
 use crate::domain::models::{
     Notification, NotificationResult, RevokeCriteria, SendNotificationRequest,
 };
-use crate::domain::ports::{
-    EmailSender, NotificationRepository, NotificationSender, RateLimitPort, WebSocketSender,
-};
-use crate::domain::service::{NotificationService, SendNotificationError};
+use crate::domain::ports::{NotificationQueue, NotificationRepository};
+use crate::domain::service::{NotificationIngressService, SendNotificationError};
 
 /// Client for sending notifications.
 ///
 /// This is the main entry point for other services to send notifications.
-/// It wraps the `NotificationService` and provides a convenient API.
-pub struct NotificationClient<R, N, W, M, E> {
-    service: Arc<NotificationService<R, N, W, M, E>>,
+/// It wraps the `NotificationIngressService` and provides a convenient API.
+pub struct NotificationClient<N, Q> {
+    service: Arc<NotificationIngressService<N, Q>>,
 }
 
-impl<R, N, W, M, E> Clone for NotificationClient<R, N, W, M, E> {
+impl<N, Q> Clone for NotificationClient<N, Q> {
     fn clone(&self) -> Self {
         Self {
             service: Arc::clone(&self.service),
@@ -31,16 +30,13 @@ impl<R, N, W, M, E> Clone for NotificationClient<R, N, W, M, E> {
     }
 }
 
-impl<R, N, W, M, E> NotificationClient<R, N, W, M, E>
+impl<N, Q> NotificationClient<N, Q>
 where
-    R: RateLimitPort + Send + Sync,
     N: NotificationRepository + Send + Sync,
-    W: WebSocketSender + Send + Sync,
-    M: NotificationSender + Send + Sync,
-    E: EmailSender + Send + Sync,
+    Q: NotificationQueue + Send + Sync,
 {
     /// Create a new notification client.
-    pub fn new(service: NotificationService<R, N, W, M, E>) -> Self {
+    pub fn new(service: NotificationIngressService<N, Q>) -> Self {
         Self {
             service: Arc::new(service),
         }
@@ -48,11 +44,8 @@ where
 
     /// Send a notification to the specified recipients.
     ///
-    /// This method performs all pre-queue checks (rate limiting, recipient filtering)
-    /// before persisting the notification and delivering it via appropriate channels.
-    ///
-    /// Rate limiting is configured by the notification type via the `Notification` trait's
-    /// `rate_limit_config()` and `rate_limit_key()` methods.
+    /// This method performs recipient filtering before persisting the notification
+    /// and publishing it to the queue for async delivery.
     ///
     /// # Arguments
     ///
@@ -60,9 +53,9 @@ where
     ///
     /// # Returns
     ///
-    /// Returns the notification result including the ID and delivery status,
-    /// or an error if rate limited or if delivery fails.
-    pub async fn send<'a, T: Notification + Send + Sync>(
+    /// Returns the notification result including the ID and notified recipients,
+    /// or an error if delivery fails.
+    pub async fn send<'a, T: Notification + Serialize + Clone + Send + Sync>(
         &self,
         request: SendNotificationRequest<'a, T>,
     ) -> Result<NotificationResult, Report<SendNotificationError>> {

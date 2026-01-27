@@ -67,7 +67,7 @@ pub struct QueueMessage<'a, T> {
     pub rate_limit: Option<(RateLimitKey, RateLimitConfig)>,
     /// The methods on which we will attempt to deliver.
     /// This is an ALL relationship.
-    pub deliver_on: Vec<Node<'a, T>>,
+    pub content: Node<'a, T>,
 }
 
 /// Raw message received from SQS.
@@ -77,4 +77,10 @@ pub struct RawQueueMessage {
     pub body: QueueMessage<'static, serde_json::Value>,
     /// The receipt handle for deleting the message after processing.
     pub receipt_handle: String,
+}
+
+pub enum DeliverySuccess {
+    Ios,
+    ConnGateway,
+    Email,
 }
