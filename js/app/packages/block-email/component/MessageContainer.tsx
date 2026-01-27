@@ -254,9 +254,7 @@ export function MessageContainer(props: MessageContainerProps) {
                     id: a.sfs_id!,
                   }))}
                   variant="small"
-                  attachmentIds={imageAttachmentsWithSfs().map(
-                    (a) => a.db_id!
-                  )}
+                  attachmentIds={imageAttachmentsWithSfs().map((a) => a.db_id!)}
                 />
               </div>
             </Show>
