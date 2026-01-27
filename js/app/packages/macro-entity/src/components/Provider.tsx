@@ -59,9 +59,7 @@ export function Provider(props: ParentProps) {
 
   return (
     <QueryClientProvider client={queryClient}>
-    <QuerySyncProvider>
-      {props.children}
-      </QuerySyncProvider >
+      <QuerySyncProvider>{props.children}</QuerySyncProvider>
     </QueryClientProvider>
   );
 }
