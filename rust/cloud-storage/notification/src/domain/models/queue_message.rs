@@ -84,9 +84,14 @@ pub struct RawQueueMessage {
     pub receipt_handle: String,
 }
 
+/// Successful delivery result.
+#[derive(Debug)]
 pub enum DeliverySuccess {
+    /// Delivered via iOS push.
     Ios,
+    /// Delivered via connection gateway (WebSocket).
     ConnGateway,
+    /// Delivered via email.
     Email,
 }
 
