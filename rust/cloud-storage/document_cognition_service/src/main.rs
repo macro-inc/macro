@@ -1,16 +1,25 @@
 use crate::api::context::ApiContext;
 use anyhow::Context;
+use comms::domain::service::ChannelServiceImpl;
+use comms::outbound::http::user_repo::UserRepoImpl;
+use comms::outbound::postgres::comms_repo::PgCommsRepo;
 use comms_service_client::CommsServiceClient;
 use config::{Config, Environment};
 use document_cognition_service_client::DocumentCognitionServiceClient;
 use document_storage_service_client::DocumentStorageServiceClient;
+use email::domain::service::EmailServiceImpl;
+use email::outbound::EmailPgRepo;
 use email_service_client::{EmailServiceClient, EmailServiceClientExternal};
+use frecency::domain::services::FrecencyQueryServiceImpl;
+use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use scribe::{ScribeClient, document::DocumentClient};
 use search_service_client::SearchServiceClient;
 use secretsmanager_client::SecretManager;
+use soup::domain::service::SoupImpl;
+use soup::outbound::pg_soup_repo::PgSoupRepo;
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
@@ -153,6 +162,42 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized static file service client");
 
+    // Get auth service secret key for soup service
+    let auth_service_secret_key = match config.environment {
+        Environment::Local => config.authentication_service_secret_key.clone(),
+        _ => secretsmanager_client
+            .get_secret_value(&config.authentication_service_secret_key)
+            .await
+            .context("failed to get auth service secret key from secrets manager")?
+            .to_string(),
+    };
+
+    // Build soup service
+    let frecency_storage = FrecencyPgStorage::new(db.clone());
+    let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
+    let email_service =
+        EmailServiceImpl::new(EmailPgRepo::new(db.clone()), frecency_service.clone());
+    let user_repo = UserRepoImpl::new(
+        auth_service_secret_key,
+        config
+            .authentication_service_url
+            .parse()
+            .context("AUTHENTICATION_SERVICE_URL must be a valid url")?,
+    );
+    let channels_service = ChannelServiceImpl::new(
+        PgCommsRepo { pool: db.clone() },
+        user_repo,
+        frecency_storage,
+    );
+    let soup_service = Arc::new(SoupImpl::new(
+        PgSoupRepo::new(db.clone()),
+        frecency_service,
+        email_service,
+        channels_service,
+    ));
+
+    tracing::info!("initialized soup service");
+
     api::setup_and_serve(ApiContext {
         db: db.clone(),
         email_service_client_external: Arc::new(EmailServiceClientExternal::new(
@@ -181,6 +226,7 @@ async fn main() -> anyhow::Result<()> {
         jwt_args,
         config: Arc::new(config),
         internal_auth_key,
+        soup_service,
     })
     .await
     .context("failed to setup and serve api")?;

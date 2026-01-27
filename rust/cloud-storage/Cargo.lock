@@ -95,10 +95,12 @@ dependencies = [
  "async-trait",
  "axum",
  "chrono",
+ "comms",
  "comms_service_client",
  "cool_asserts",
  "email",
  "email_service_client",
+ "frecency",
  "lazy_static",
  "macro_db_client",
  "model",
@@ -113,6 +115,8 @@ dependencies = [
  "search_service_client",
  "serde",
  "serde_json",
+ "soup",
+ "sqlx",
  "strum",
  "tokio",
  "tracing",
@@ -2638,6 +2642,7 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "chrono",
+ "comms",
  "comms_service_client",
  "connection_gateway",
  "cookie",
@@ -2645,7 +2650,9 @@ dependencies = [
  "document_cognition_service_client",
  "document_storage_service_client",
  "doppleganger",
+ "email",
  "email_service_client",
+ "frecency",
  "futures",
  "http-body-util",
  "lazy_static",
@@ -2674,6 +2681,7 @@ dependencies = [
  "secretsmanager_client",
  "serde",
  "serde_json",
+ "soup",
  "sqlx",
  "sqs_client",
  "static_file_service_client",
@@ -2921,12 +2929,6 @@ dependencies = [
  "quote",
  "unsynn",
 ]
-
-[[package]]
-name = "dotenv"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77c90badedccf4105eca100756a0b1289e191f6fcbdadd3cee1d2f614f97da8f"
 
 [[package]]
 name = "dotenvy"
@@ -5032,7 +5034,7 @@ dependencies = [
 name = "macro_entrypoint"
 version = "0.1.0"
 dependencies = [
- "dotenv",
+ "dotenvy",
  "macro_env",
  "tracing",
  "tracing-panic",
