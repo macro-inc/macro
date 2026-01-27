@@ -323,7 +323,7 @@ export function useUpdatedDssItemName(itemId: string | Accessor<string>) {
   const historyQuery = useHistoryQuery();
 
   return () => {
-    if (historyQuery.isLoading) return;
+    if (historyQuery.isLoading) return undefined;
     const history = historyQuery.data;
     if (!history) return undefined;
 
