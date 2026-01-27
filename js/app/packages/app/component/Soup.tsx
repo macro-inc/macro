@@ -613,8 +613,7 @@ const ViewWithSearch: Component<{
 export function Soup() {
   const isAuthenticated = useIsAuthenticated();
 
-  // Check if any split contains document content (non-component blocks like 'md', 'pdf', etc.)
-  // This allows unauthenticated access when viewing potentially public documents
+  // NOTE: if trying to access a split in which we are looking at a document, we shouldn't redirect away.
   const hasDocumentSplit = createMemo(() => {
     const manager = globalSplitManager();
     if (!manager) return false;

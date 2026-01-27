@@ -130,8 +130,6 @@ pub async fn get_users_access_level_v2(
 }
 
 /// Gets public access level for a document (no user required).
-///
-/// Use this for unauthenticated access to publicly shared documents.
 #[tracing::instrument(skip(db))]
 pub async fn get_public_access_level(
     db: &Pool<Postgres>,

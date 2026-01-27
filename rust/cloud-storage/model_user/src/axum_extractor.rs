@@ -78,7 +78,6 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let ext: Extension<UserContext> = parts.extract_with_state(state).await?;
 
-        // Empty user_id indicates unauthenticated access (e.g., permissions token)
         if ext.0.user_id.is_empty() {
             return Ok(OptionalMacroUserExtractor {
                 macro_user_id: None,
