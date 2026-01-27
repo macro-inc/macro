@@ -10,6 +10,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - auth-internal
     volumes:
       - db_data:/var/lib/postgresql/data
 
@@ -39,6 +41,9 @@ services:
       retries: 5
     ports:
       - 9011:9011
+    networks:
+      - auth-internal
+      - auth
     volumes:
       - fusionauth_config:/usr/local/fusionauth/config
       - ${FUSIONAUTH_LOCAL_KICKSTART_DIRECTORY}:/usr/local/fusionauth/kickstart
@@ -67,6 +72,8 @@ services:
     ports:
       - 9200:9200 # REST API
       - 9600:9600 # Performance Analyzer
+    networks:
+      - auth-internal
     volumes:
       - search_data:/usr/share/opensearch/data
 
@@ -74,3 +81,9 @@ volumes:
   db_data:
   fusionauth_config:
   search_data:
+
+networks:
+  auth-internal:
+    driver: bridge
+  auth:
+    external: true

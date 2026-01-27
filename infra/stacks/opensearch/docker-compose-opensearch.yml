@@ -25,6 +25,7 @@ services:
       - 9600:9600 # Performance Analyzer
     networks:
       - opensearch-net # All of the containers will join the same Docker bridge network
+      - databases
   opensearch-node2:
     image: opensearchproject/opensearch:latest # This should be the same image used for opensearch-node1 to avoid issues
     container_name: opensearch-node2
@@ -73,3 +74,5 @@ networks:
   opensearch-net:
     name: opensearch-net
     driver: bridge
+  databases:
+    external: true

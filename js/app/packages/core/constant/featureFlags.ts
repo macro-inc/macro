@@ -113,3 +113,13 @@ export const ENABLE_CREATE_TASK = true;
 export const ENABLE_TASKS_TABS = true;
 
 export const ENABLE_EMAIL_SHARING = true;
+
+// Auto expand stand-alone mentions to richer previews in channels
+export const ENABLE_STATIC_DOCUMENT_CARDS = false;
+
+export const ENABLE_MARKDOWN_AI_GENERATE = false;
+
+export const ENABLE_UNIFIED_LIST_AI_INPUT = false;
+
+// snapshot mention content inline for AI chat
+export const ENABLE_SNAPSHOT_NODE = DEV_MODE_ENV;

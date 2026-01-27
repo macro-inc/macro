@@ -511,6 +511,11 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
         this.scheduleConnectionRetryIfNeeded();
       })
       .with({ type: WebsocketEvent.Open }, () => {
+        // Set connection state to Open first, before any other actions that depend on it.
+        // This ensures startHeartbeat() can check state correctly.
+        this.connectionState = WebsocketConnectionState.Open;
+
+        // Check if this is a reconnection (we had connected before)
         if (this.backoff !== undefined && this._lastConnection !== undefined) {
           const detail: ReconnectEventDetail = {
             retries: this.backoff.retries,
@@ -525,11 +530,14 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
           this.backoff.reset();
         }
 
-        if (this._options.heartbeat) {
+        if (
+          this._options.heartbeat &&
+          this._options.heartbeat.autoStart !== false
+        ) {
           this.startHeartbeat();
         }
 
-        this.connectionState = WebsocketConnectionState.Open;
+        // Update lastConnection AFTER reconnect check, so we can detect first connect vs reconnect
         this._lastConnection = new Date();
         this.dispatchEvent(type, event);
         this.sendBufferedData();
@@ -739,11 +747,21 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
 
   /**
    * Starts a new heartbeat interval.
+   * Call this manually if you set `autoStart: false` in heartbeat options.
+   *
+   * Safe to call multiple times - will stop any existing heartbeat first.
+   * Safe to call on closed connections - will no-op if connection isn't open.
    */
-  private startHeartbeat() {
+  public startHeartbeat() {
     this.stopHeartbeat();
     this.missedHeartbeats = 0;
+
     if (!isRequiredHeartbeatOptions(this._options?.heartbeat)) {
+      return;
+    }
+
+    // Don't start heartbeat if connection isn't open - avoids orphan timers
+    if (this.connectionState !== WebsocketConnectionState.Open) {
       return;
     }
 

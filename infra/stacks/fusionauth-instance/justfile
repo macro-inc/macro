@@ -1,4 +1,4 @@
-setup_fusionauth_env:
+get_fusionauth_env:
     curl -o .env https://raw.githubusercontent.com/FusionAuth/fusionauth-containers/452efcac5c60f6a3a734947b1a8eefaae6f811fa/docker/fusionauth/.env
 
 start_fusionauth:
@@ -7,5 +7,14 @@ start_fusionauth:
 destroy_fusionauth:
     docker-compose down -v
 
-instantiate_fusionauth:
-    pulumi up --stack local
+setup_fusionauth:
+  docker-compose up -d
+  @echo "Waiting for FusionAuth to be healthy..."
+  @until curl -s http://localhost:9011/api/status | grep -q '"health":"Healthy"'; do \
+    echo "FusionAuth not ready, waiting..."; \
+    sleep 3; \
+  done
+  @echo "FusionAuth is healthy, running Pulumi..."
+  cd pulumi up --stack local --yes
+  @echo "FusionAuth setup complete!
+  docker-compose stop

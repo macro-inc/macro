@@ -72,6 +72,7 @@ import { useChannelMarkdownArea } from './MarkdownArea';
 import { TaskPreviewPanel } from './TaskPreviewPanel';
 import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
+import { ENABLE_STATIC_DOCUMENT_CARDS } from '@core/constant/featureFlags';
 
 false && fileFolderDrop;
 
@@ -372,7 +373,9 @@ export function BaseInput(props: BaseInputProps) {
     editor.update(
       () => {
         $getRoot().markDirty();
-        $convertSingleMentionToCard();
+        if (ENABLE_STATIC_DOCUMENT_CARDS) {
+          $convertSingleMentionToCard();
+        }
       },
       { discrete: true }
     );
@@ -648,7 +651,8 @@ export function BaseInput(props: BaseInputProps) {
         </div>
         <Button
           disabled={hasPendingAttachments()}
-          onClick={() => {
+          onPointerDown={(e) => {
+            e.preventDefault();
             handleSend();
           }}
           class="group transition ease-in-out hover:bg-transparent"

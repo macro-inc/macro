@@ -33,7 +33,7 @@ export function ActionMenu(props: {
           <DeprecatedIconButton
             onMouseDown={() => react(emoji)}
             icon={() => <span>{emoji}</span>}
-            tabIndex={0}
+            tabIndex={-1}
           />
         )}
       </For>
@@ -54,7 +54,7 @@ export function ActionMenu(props: {
             onMouseDown={a.onClick}
             icon={a.icon}
             tooltip={{ label: a.text, delayOverride: 0 }}
-            tabIndex={0}
+            tabIndex={-1}
           />
         )}
       </For>
