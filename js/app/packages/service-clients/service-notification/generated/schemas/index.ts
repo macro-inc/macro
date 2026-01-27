@@ -17,6 +17,7 @@ export * from './channelMessageSendMetadata';
 export * from './channelMessageSendMetadataAllOf';
 export * from './channelReplyMetadata';
 export * from './channelReplyMetadataAllOf';
+export * from './channelReplyMetadataAllOfThreadParentSenderId';
 export * from './channelType';
 export * from './commonChannelMetadata';
 export * from './createNotification';
