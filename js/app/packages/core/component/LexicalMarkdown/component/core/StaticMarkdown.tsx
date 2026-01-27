@@ -583,9 +583,7 @@ const DocumentCard: RenderableEntity<DocumentCardNode> = {
 const Table: RenderableElement<TableNode> = {
   guard: (node: LexicalNode): node is TableNode => node.__type === 'table',
   render: (props) => (
-    <div
-      class={`${props.theme?.static?.['table-container'] || ''}`}
-    >
+    <div class={`${props.theme?.static?.['table-container'] || ''}`}>
       <table
         class={`${props.theme.table} min-w-full table-auto`}
         style="width: max-content;"
@@ -711,10 +709,7 @@ function MapRender(props: {
   theme: EditorThemeClasses;
 }) {
   return props.children.map((child) => (
-    <Render
-      node={child}
-      theme={props.theme}
-    />
+    <Render node={child} theme={props.theme} />
   ));
 }
 
@@ -729,10 +724,7 @@ function Document(props: {
       class={`markdown-content ${props.theme.root ?? ''} break-words max-w-full`}
       ref={props.rootRef}
     >
-      <MapRender
-        children={props.rootNode.getChildren()}
-        theme={props.theme}
-      />
+      <MapRender children={props.rootNode.getChildren()} theme={props.theme} />
     </div>
   );
 }
@@ -796,16 +788,16 @@ export function StaticMarkdown(props: {
 
   // TODO: Move citations to bulk query when built in backend
   createEffect(() => {
-      const editor = currentEditor();
+    const editor = currentEditor();
 
-      // Handle citations without affecting mentions
-      replaceCitations(content()).then((content: string) => {
-        setEditorStateFromMarkdown(editor, content, props.target);
-        if (props.singleLine) {
-          forceSingleLine(editor);
-        }
-        setEditorState(editor.getEditorState());
-      });
+    // Handle citations without affecting mentions
+    replaceCitations(content()).then((content: string) => {
+      setEditorStateFromMarkdown(editor, content, props.target);
+      if (props.singleLine) {
+        forceSingleLine(editor);
+      }
+      setEditorState(editor.getEditorState());
+    });
   });
 
   const domTree = createMemo(() => {
