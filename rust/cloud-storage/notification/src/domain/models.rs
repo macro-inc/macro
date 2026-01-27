@@ -15,8 +15,8 @@ pub mod recipient;
 pub mod request;
 
 pub use mobile::DeviceEndpoint;
-pub use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitResult};
-pub use recipient::{ExclusionReason, FilteredRecipients, RecipientExclusion};
+pub use rate_limit::{RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimitResult};
+pub use recipient::{ExclusionReason, FilteredRecipient, RecipientExclusion};
 pub use request::{
     NotificationResult, RevokeCriteria, SendNotificationRequest, SendNotificationRequestBuilder,
 };

@@ -3,19 +3,22 @@
 //! This service handles the caller-facing side of notifications:
 //! filtering recipients, persisting to DB, and publishing to the queue.
 
-use std::collections::HashSet;
-
+use itertools::Itertools;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use rootcause::prelude::ResultExt;
 use serde::Serialize;
+use std::collections::HashSet;
 use uuid::Uuid;
 
-use crate::domain::models::queue_message::{ConnGatewayNotification, Node, NotificationChannel, QueueMessage};
+use crate::domain::models::queue_message::{
+    ConnGatewayNotification, Node, NotificationChannel, QueueMessage,
+};
+use crate::domain::models::recipient::FilteredRecipient;
 use crate::domain::models::{
-    ExclusionReason, FilteredRecipients, Notification, NotificationResult, RecipientExclusion,
-    RevokeCriteria, SendNotificationRequest, SendNotificationRequestBuilder,
+    ExclusionReason, Notification, NotificationResult, RecipientExclusion, RevokeCriteria,
+    SendNotificationRequest, SendNotificationRequestBuilder,
 };
 use crate::domain::ports::{NotificationQueue, NotificationRepository};
 use crate::domain::service::{MissingRevokeFilter, SendNotificationError};
@@ -54,47 +57,47 @@ where
     pub async fn send_notification<'a, T: Notification + Serialize + Clone + Send + Sync>(
         &self,
         request: SendNotificationRequest<'a, T>,
-    ) -> Result<NotificationResult, Report<SendNotificationError>> {
-        let filtered = self
+    ) -> Result<Option<NotificationResult<'a>>, Report<SendNotificationError>> {
+        let (allowed, excluded): (Vec<_>, Vec<_>) = self
             .filter_recipients(
                 request.req.sender_id.as_ref(),
                 &request.req.recipient_ids,
                 &request.req.notification_entity.entity_id,
             )
             .await
-            .context(SendNotificationError::Other)?;
-
-        if !filtered.has_valid_recipients() {
-            // No valid recipients after filtering - return early with empty result
-            return Ok(NotificationResult {
-                notification_id: Uuid::now_v7(),
-                notified_recipients: HashSet::new(),
+            .context(SendNotificationError::Other)?
+            .into_iter()
+            .partition_map(|r| match r {
+                FilteredRecipient::Allowed(macro_user_id_str) => {
+                    itertools::Either::Left(macro_user_id_str)
+                }
+                FilteredRecipient::Excluded(recipient_exclusion) => {
+                    itertools::Either::Right(recipient_exclusion)
+                }
             });
+
+        if allowed.is_empty() {
+            return Ok(None);
         }
 
         // Create notification in DB
         let notification_id = Uuid::now_v7();
         let created = self
             .repository
-            .create_notification(
-                &request.req,
-                notification_id,
-                &self.service_name,
-                &filtered.valid,
-            )
+            .create_notification(&request.req, notification_id, &self.service_name, &allowed)
             .await
             .context(SendNotificationError::Other)?;
 
         // If notification already exists (idempotent), return early
         let Some(notification_id) = created else {
-            return Ok(NotificationResult {
+            return Ok(Some(NotificationResult {
                 notification_id,
                 notified_recipients: HashSet::new(),
-            });
+            }));
         };
 
         // Build and publish QueueMessage
-        let queue_message = self.build_queue_message(&request.req, &filtered.valid)?;
+        let queue_message = self.build_queue_message(&request, &allowed)?;
 
         self.queue
             .publish(&queue_message)
@@ -102,10 +105,10 @@ where
             .context(SendNotificationError::Other)?;
 
         // Return result (delivery happens async)
-        Ok(NotificationResult {
+        Ok(Some(NotificationResult {
             notification_id,
-            notified_recipients: filtered.valid_set_owned(),
-        })
+            notified_recipients: allowed.into_iter().map(CowLike::into_owned).collect(),
+        }))
     }
 
     /// Revoke/delete notifications matching the given criteria.
@@ -129,81 +132,84 @@ where
     async fn filter_recipients<'a>(
         &self,
         sender_id: Option<&MacroUserIdStr<'a>>,
-        recipient_ids: &[MacroUserIdStr<'a>],
+        recipient_ids: &'a [MacroUserIdStr<'a>],
         item_id: &str,
-    ) -> Result<FilteredRecipients<'a>, Report> {
-        let mut valid: Vec<MacroUserIdStr<'a>> = Vec::new();
-        let mut excluded: Vec<RecipientExclusion<'a>> = Vec::new();
+    ) -> Result<Vec<FilteredRecipient<'a>>, Report> {
+        // Fetch all filter data upfront
+        let (muted_users, unsubscribed_users) = tokio::try_join!(
+            self.repository.get_muted_users(recipient_ids),
+            self.repository
+                .get_unsubscribed_users(item_id, recipient_ids),
+        )?;
 
-        // First pass: remove sender
-        for recipient in recipient_ids {
-            if sender_id.is_some_and(|s| s == recipient) {
-                excluded.push(RecipientExclusion {
-                    user_id: recipient.clone(),
+        let recipient_is_sender = |id: FilteredRecipient<'a>| match (id, sender_id) {
+            (FilteredRecipient::Allowed(macro_user_id_str), Some(sender))
+                if sender == &macro_user_id_str =>
+            {
+                FilteredRecipient::Excluded(RecipientExclusion {
+                    user_id: macro_user_id_str,
                     reason: ExclusionReason::IsSender,
-                });
-            } else {
-                valid.push(recipient.clone());
+                })
             }
-        }
+            (x, _) => x,
+        };
 
-        if valid.is_empty() {
-            return Ok(FilteredRecipients { valid, excluded });
-        }
-
-        // Get muted users
-        let muted_users = self.repository.get_muted_users(&valid).await?;
-
-        // Get unsubscribed users
-        let unsubscribed_users = self
-            .repository
-            .get_unsubscribed_users(item_id, &valid)
-            .await?;
-
-        // Second pass: filter muted and unsubscribed
-        let mut final_valid = Vec::new();
-        for recipient in valid {
-            let recipient_static: MacroUserIdStr<'static> = recipient.clone().into_owned();
-
-            if muted_users.contains(&recipient_static) {
-                excluded.push(RecipientExclusion {
-                    user_id: recipient,
+        let user_muted_notifs = |id: FilteredRecipient<'a>| match id {
+            FilteredRecipient::Allowed(macro_user_id_str)
+                if muted_users.contains(&macro_user_id_str) =>
+            {
+                FilteredRecipient::Excluded(RecipientExclusion {
+                    user_id: macro_user_id_str,
                     reason: ExclusionReason::MutedNotifications,
-                });
-            } else if unsubscribed_users.contains(&recipient_static) {
-                excluded.push(RecipientExclusion {
-                    user_id: recipient,
-                    reason: ExclusionReason::UnsubscribedFromItem,
-                });
-            } else {
-                final_valid.push(recipient);
+                })
             }
-        }
+            x => x,
+        };
 
-        Ok(FilteredRecipients {
-            valid: final_valid,
-            excluded,
-        })
+        let notif_type_is_ignored = |id: FilteredRecipient<'a>| match id {
+            FilteredRecipient::Allowed(macro_user_id_str)
+                if unsubscribed_users.contains(&macro_user_id_str) =>
+            {
+                FilteredRecipient::Excluded(RecipientExclusion {
+                    user_id: macro_user_id_str,
+                    reason: ExclusionReason::UnsubscribedFromItem,
+                })
+            }
+            x => x,
+        };
+
+        // Build exclusion reasons for excluded recipients
+        Ok(recipient_ids
+            .into_iter()
+            .map(CowLike::copied)
+            .map(FilteredRecipient::Allowed)
+            .map(recipient_is_sender)
+            .map(user_muted_notifs)
+            .map(notif_type_is_ignored)
+            .collect())
     }
 
     /// Build a QueueMessage with delivery nodes for the notification.
     fn build_queue_message<'a, T: Notification + Serialize + Clone>(
         &self,
-        notification: &SendNotificationRequestBuilder<T>,
+        notification: &SendNotificationRequest<T>,
         recipients: &[MacroUserIdStr<'a>],
-    ) -> Result<QueueMessage<'a, T>, Report<SendNotificationError>> {
-        let rate_limit = notification.get_rate_limit()?;
+    ) -> Result<Vec<QueueMessage<'a, T>>, Report<SendNotificationError>> {
+        let rate_limit = notification.req.get_rate_limit()?;
 
-        Ok(QueueMessage {
+        // TODO: we need to read the fields for build_apns, build_email and send_conn_gateway to determine the queuemessages to return.
+        // Note that conn_gateway messages are 1:M users while the others are 1:1
+
+        Ok(vec![QueueMessage {
             message_type: T::TYPE_NAME.to_string(),
             rate_limit,
             content: Node {
                 notif: NotificationChannel::ConnGateway(ConnGatewayNotification {
-                    notif: notification.notification.clone(),
+                    notif: notification.req.notification.clone(),
                     recipients: recipients.to_vec(),
                 }),
                 on_failure: None,
             },
-        })
+        }])
     }
 }

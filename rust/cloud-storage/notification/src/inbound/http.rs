@@ -54,11 +54,11 @@ where
     /// # Returns
     ///
     /// Returns the notification result including the ID and notified recipients,
-    /// or an error if delivery fails.
+    /// or `None` if no valid recipients remain after filtering.
     pub async fn send<'a, T: Notification + Serialize + Clone + Send + Sync>(
         &self,
         request: SendNotificationRequest<'a, T>,
-    ) -> Result<NotificationResult, Report<SendNotificationError>> {
+    ) -> Result<Option<NotificationResult<'a>>, Report<SendNotificationError>> {
         self.service.send_notification(request).await
     }
 

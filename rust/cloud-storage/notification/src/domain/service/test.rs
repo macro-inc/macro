@@ -178,7 +178,7 @@ async fn test_send_notification_success() {
     }
     .into_request();
 
-    let result = service.send_notification(request).await.unwrap();
+    let result = service.send_notification(request).await.unwrap().unwrap();
 
     assert!(result.notified_recipients.contains(&recipient));
 }
@@ -200,8 +200,8 @@ async fn test_sender_excluded_from_recipients() {
 
     let result = service.send_notification(request).await.unwrap();
 
-    // Sender should be excluded
-    assert!(result.notified_recipients.is_empty());
+    // Sender should be excluded, no valid recipients remain
+    assert!(result.is_none());
 }
 
 #[tokio::test]
@@ -224,5 +224,6 @@ async fn test_muted_user_excluded() {
 
     let result = service.send_notification(request).await.unwrap();
 
-    assert!(result.notified_recipients.is_empty());
+    // Muted user should be excluded, no valid recipients remain
+    assert!(result.is_none());
 }

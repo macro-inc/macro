@@ -38,6 +38,7 @@ impl<'a, T> SendNotificationRequestBuilder<'a, T> {
             req: self,
             build_apns: None,
             build_email: None,
+            send_conn_gateway: false,
         }
     }
 }
@@ -48,20 +49,30 @@ impl<'a, T> SendNotificationRequestBuilder<'a, T> {
 /// customized with APNS and email builders.
 pub struct SendNotificationRequest<'a, T> {
     pub(crate) req: SendNotificationRequestBuilder<'a, T>,
+    /// define how to turn t into an APNSPushNotitication T to be sent to ios
     pub(crate) build_apns: Option<Box<dyn FnMut(T) -> APNSPushNotification<T>>>,
+    /// define how to turn T into an email content to be sent as an email
     pub(crate) build_email: Option<Box<dyn FnMut(T) -> EmailContent>>,
+    /// connection gateway accepts arbitrary json so we just ask if its enabled or not
+    pub(crate) send_conn_gateway: bool,
 }
 
 impl<'a, T> SendNotificationRequest<'a, T> {
     /// Add a custom APNS notification builder.
-    pub fn with_apns_builder(mut self, cb: Box<dyn FnMut(T) -> APNSPushNotification<T>>) -> Self {
+    pub fn with_apns(mut self, cb: Box<dyn FnMut(T) -> APNSPushNotification<T>>) -> Self {
         self.build_apns.replace(cb);
         self
     }
 
     /// Add a custom email content builder.
-    pub fn with_email_builder(mut self, cb: Box<dyn FnMut(T) -> EmailContent>) -> Self {
+    pub fn with_email(mut self, cb: Box<dyn FnMut(T) -> EmailContent>) -> Self {
         self.build_email.replace(cb);
+        self
+    }
+
+    /// Enable delivery via connection gateway (WebSocket).
+    pub fn with_conn_gateway(mut self) -> Self {
+        self.send_conn_gateway = true;
         self
     }
 }
@@ -92,11 +103,11 @@ impl<'a, T: Notification> SendNotificationRequestBuilder<'a, T> {
 
 /// Result of sending a notification.
 #[derive(Debug, Clone)]
-pub struct NotificationResult {
+pub struct NotificationResult<'a> {
     /// The unique ID of the created notification.
     pub notification_id: Uuid,
     /// The users who were actually notified (after filtering).
-    pub notified_recipients: HashSet<MacroUserIdStr<'static>>,
+    pub notified_recipients: HashSet<MacroUserIdStr<'a>>,
 }
 
 /// Criteria for revoking/deleting notifications.

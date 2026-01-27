@@ -1,37 +1,13 @@
 //! Recipient filtering models for the notification service.
 
-use std::collections::HashSet;
-
-use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 
-/// Result of filtering recipients.
-#[derive(Debug, Clone)]
-pub struct FilteredRecipients<'a> {
-    /// Recipients who passed all filters and should receive the notification.
-    pub valid: Vec<MacroUserIdStr<'a>>,
-    /// Recipients who were excluded with their reasons.
-    pub excluded: Vec<RecipientExclusion<'a>>,
-}
-
-impl<'a> FilteredRecipients<'a> {
-    /// Create a new FilteredRecipients with no exclusions.
-    pub fn new(valid: Vec<MacroUserIdStr<'a>>) -> Self {
-        Self {
-            valid,
-            excluded: Vec::new(),
-        }
-    }
-
-    /// Returns true if there are any valid recipients.
-    pub fn has_valid_recipients(&self) -> bool {
-        !self.valid.is_empty()
-    }
-
-    /// Get the set of valid recipient IDs as owned ('static) values.
-    pub fn valid_set_owned(&self) -> HashSet<MacroUserIdStr<'static>> {
-        self.valid.iter().cloned().map(|id| id.into_owned()).collect()
-    }
+/// Result of filtering a recipient.
+pub enum FilteredRecipient<'a> {
+    /// Recipient is allowed to receive the notification.
+    Allowed(MacroUserIdStr<'a>),
+    /// Recipient was excluded from receiving the notification.
+    Excluded(RecipientExclusion<'a>),
 }
 
 /// A recipient that was excluded from receiving a notification.
@@ -52,8 +28,6 @@ pub enum ExclusionReason {
     MutedNotifications,
     /// The recipient has unsubscribed from notifications for this item.
     UnsubscribedFromItem,
-    /// The recipient has unsubscribed from all notifications.
-    UnsubscribedFromAll,
 }
 
 impl ExclusionReason {
@@ -63,7 +37,6 @@ impl ExclusionReason {
             ExclusionReason::IsSender => "User is the sender",
             ExclusionReason::MutedNotifications => "User has muted notifications",
             ExclusionReason::UnsubscribedFromItem => "User has unsubscribed from this item",
-            ExclusionReason::UnsubscribedFromAll => "User has unsubscribed from all notifications",
         }
     }
 }

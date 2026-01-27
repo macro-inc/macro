@@ -3,7 +3,7 @@
 use redis::AsyncCommands;
 use rootcause::Report;
 
-use crate::domain::models::{RateLimitConfig, RateLimitKey, RateLimitResult};
+use crate::domain::models::{RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimitResult};
 use crate::domain::ports::RateLimitPort;
 
 /// Redis-based implementation of the rate limit port.
@@ -77,10 +77,11 @@ impl<R: RedisRateLimitOps + Send + Sync> RateLimitPort for RedisRateLimitAdapter
 
         // Check if already exceeded
         if current_count >= config.max_count {
-            return Ok(RateLimitResult::Exceeded {
+            return Ok(RateLimitResult::Exceeded(RateLimitExceeded {
+                key: key_str,
                 current_count,
                 max_count: config.max_count,
-            });
+            }));
         }
 
         // Increment and set expiry
@@ -91,10 +92,11 @@ impl<R: RedisRateLimitOps + Send + Sync> RateLimitPort for RedisRateLimitAdapter
 
         // Check again after increment (in case of race condition)
         if new_count > config.max_count {
-            Ok(RateLimitResult::Exceeded {
+            Ok(RateLimitResult::Exceeded(RateLimitExceeded {
+                key: key_str,
                 current_count: new_count,
                 max_count: config.max_count,
-            })
+            }))
         } else {
             Ok(RateLimitResult::Allowed {
                 current_count: new_count,

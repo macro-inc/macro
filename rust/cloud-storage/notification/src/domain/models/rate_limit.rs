@@ -49,17 +49,18 @@ pub enum RateLimitResult {
     Exceeded(RateLimitExceeded),
 }
 
+/// Error returned when a rate limit is exceeded.
 #[derive(Debug, Error)]
 #[error(
     "Rate limit key: {key} was exceeded. Current count is {current_count} but max count is {max_count}"
 )]
 pub struct RateLimitExceeded {
-    /// The key that is exceeded
-    key: String,
+    /// The key that is exceeded.
+    pub key: String,
     /// The current count.
-    current_count: u64,
+    pub current_count: u64,
     /// The maximum allowed count.
-    max_count: u64,
+    pub max_count: u64,
 }
 
 /// Configuration for rate limiting.
