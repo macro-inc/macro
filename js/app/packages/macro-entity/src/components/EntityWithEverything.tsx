@@ -14,8 +14,10 @@ import CheckIcon from '@icon/regular/check.svg';
 import {
   getAllNotificationsFromGroup,
   getMostRecentNotification,
-  type StackedNotificationGroup,
+  isChannelMessageReply,
+  type NotificationStack,
   stackNotifications,
+  type TypedNotification,
   tryToTypedNotification,
 } from '@notifications';
 import { formatDocumentName } from '@service-storage/util/filename';
@@ -407,20 +409,13 @@ function NotificationRow(props: {
  * Shared row component for stacked notifications (new messages and replies)
  */
 function StackedNotificationRow(props: {
-  notifications: {
-    senderId?: string | null;
-    createdAt: number;
-    notificationMetadata?: { messageContent?: string };
-  }[];
-  mostRecent: {
-    senderId?: string | null;
-    createdAt: number;
-    notificationMetadata?: { messageContent?: string };
-  };
+  notifications: TypedNotification[];
   title: JSX.Element;
   icon: (props: { class?: string }) => JSX.Element;
   onClick?: (e: EntityClickEvent) => void;
 }) {
+  const mostRecent = () => props.notifications[0];
+
   // Get up to 3 unique sender IDs for avatar display
   const senderIds = createMemo(() => {
     const ids = new Set<string>();
@@ -434,14 +429,17 @@ function StackedNotificationRow(props: {
   });
 
   // Get the sender of the most recent message
-  const mostRecentSenderId = () => props.mostRecent.senderId ?? '';
+  const mostRecentSenderId = () => mostRecent()?.senderId ?? '';
   const [mostRecentSenderName] = useDisplayName(
     tryMacroId(mostRecentSenderId())
   );
 
   const messageContent = createMemo(() => {
-    const metadata = props.mostRecent.notificationMetadata;
-    return metadata?.messageContent?.trim() ?? '';
+    const metadata = mostRecent()?.notificationMetadata;
+    if (metadata && 'messageContent' in metadata) {
+      return metadata.messageContent?.trim() ?? '';
+    }
+    return '';
   });
 
   return (
@@ -485,7 +483,7 @@ function StackedNotificationRow(props: {
         </Show>
       </div>
       <div class="shrink-0 font-mono text-xs touch:mobile-width:text-sm uppercase text-ink-extra-muted ml-2">
-        {createFormattedDate(props.mostRecent.createdAt)}
+        {createFormattedDate(mostRecent().createdAt)}
       </div>
     </CollapsibleListRow>
   );
@@ -495,7 +493,7 @@ function StackedNotificationRow(props: {
  * Row component for stacked new messages
  */
 function StackedNewMessagesRow(props: {
-  group: StackedNotificationGroup & { type: 'new_messages' };
+  group: NotificationStack & { type: 'channel_message_send' };
   onClick?: StackedNotificationClickHandler;
   entity: EntityData;
 }) {
@@ -504,7 +502,6 @@ function StackedNewMessagesRow(props: {
   return (
     <StackedNotificationRow
       notifications={props.group.notifications}
-      mostRecent={props.group.mostRecent}
       title={<>{count()} New Messages</>}
       icon={ChatIcon}
       onClick={
@@ -525,14 +522,21 @@ function StackedNewMessagesRow(props: {
  * Row component for stacked replies to a thread
  */
 function StackedRepliesRow(props: {
-  group: StackedNotificationGroup & { type: 'replies' };
+  group: NotificationStack & { type: 'channel_message_reply' };
   onClick?: StackedNotificationClickHandler;
   entity: EntityData;
 }) {
   const count = () => props.group.notifications.length;
 
-  const threadParentSenderId = () =>
-    props.group.mostRecent.notificationMetadata.threadParentSenderId ?? '';
+  // Derive from notifications[0] (mostRecent)
+  const threadParentSenderId = () => {
+    const notification = props.group.notifications[0];
+    if (!notification) return '';
+    const typed = tryToTypedNotification(notification);
+    if (!typed || !isChannelMessageReply(typed) || !typed.notificationMetadata)
+      return '';
+    return typed.notificationMetadata.threadParentSenderId ?? '';
+  };
 
   const { firstName } = useDisplayNameParts(tryMacroId(threadParentSenderId()));
 
@@ -546,7 +550,6 @@ function StackedRepliesRow(props: {
   return (
     <StackedNotificationRow
       notifications={props.group.notifications}
-      mostRecent={props.group.mostRecent}
       title={title()}
       icon={ArrowBendUpLeftIcon}
       onClick={
@@ -565,7 +568,7 @@ function StackedRepliesRow(props: {
 
 type StackedNotificationClickHandler<T extends EntityData = EntityData> =
   (args: {
-    group: StackedNotificationGroup;
+    group: NotificationStack;
     entity: T;
     event: EntityClickEvent;
   }) => void;
@@ -574,55 +577,60 @@ type StackedNotificationClickHandler<T extends EntityData = EntityData> =
  * Renderer component that switches between different stacked notification types
  */
 function StackedNotificationRenderer(props: {
-  group: StackedNotificationGroup;
+  group: NotificationStack;
   onClick?: NotificationClickHandler;
   onClickStacked?: StackedNotificationClickHandler;
   entity: EntityData;
 }) {
   return (
     <Switch>
-      <Match when={props.group.type === 'new_messages' && props.group}>
+      <Match when={props.group.type === 'channel_message_send' && props.group}>
         {(group) => (
           <StackedNewMessagesRow
-            group={group()}
+            group={
+              group() as NotificationStack & { type: 'channel_message_send' }
+            }
             onClick={props.onClickStacked}
             entity={props.entity}
           />
         )}
       </Match>
-      <Match when={props.group.type === 'replies' && props.group}>
+      <Match when={props.group.type === 'channel_message_reply' && props.group}>
         {(group) => (
           <StackedRepliesRow
-            group={group()}
+            group={
+              group() as NotificationStack & { type: 'channel_message_reply' }
+            }
             onClick={props.onClickStacked}
             entity={props.entity}
           />
         )}
       </Match>
-      <Match when={props.group.type === 'mention' && props.group}>
-        {(group) => {
-          const mentionGroup = group();
-          return (
-            <NotificationRow
-              notification={mentionGroup.notification}
-              onClick={props.onClick}
-              entity={props.entity}
-              icon={AtIcon}
-            />
-          );
-        }}
+      <Match when={props.group.type === 'channel_mention' && props.group}>
+        {(group) => (
+          <NotificationRow
+            notification={group().notifications[0]}
+            onClick={props.onClick}
+            entity={props.entity}
+            icon={AtIcon}
+          />
+        )}
       </Match>
-      <Match when={props.group.type === 'other' && props.group}>
-        {(group) => {
-          const otherGroup = group();
-          return (
-            <NotificationRow
-              notification={otherGroup.notification}
-              onClick={props.onClick}
-              entity={props.entity}
-            />
-          );
-        }}
+      <Match
+        when={
+          props.group.type !== 'channel_message_send' &&
+          props.group.type !== 'channel_message_reply' &&
+          props.group.type !== 'channel_mention' &&
+          props.group
+        }
+      >
+        {(group) => (
+          <NotificationRow
+            notification={group().notifications[0]}
+            onClick={props.onClick}
+            entity={props.entity}
+          />
+        )}
       </Match>
     </Switch>
   );

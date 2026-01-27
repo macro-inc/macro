@@ -83,16 +83,11 @@ export type {
 export { useNotificationSettings } from './notification-settings';
 export type { NotificationSource } from './notification-source';
 export { createNotificationSource } from './notification-source';
-export type {
-  NewMessagesStack,
-  RepliesStack,
-  SingleMention,
-  SingleOther,
-  StackedNotificationGroup,
-} from './notification-stacking';
+export type { NotificationStack } from './notification-stacking';
 export {
   getAllNotificationsFromGroup,
   getMostRecentNotification,
+  getThreadId,
   stackNotifications,
 } from './notification-stacking';
 export { fetchNotificationsForEntities } from './queries/entities-notifications-query';

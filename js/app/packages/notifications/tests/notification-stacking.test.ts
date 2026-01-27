@@ -1,11 +1,12 @@
-import { describe, expect, it } from 'vitest';
 import type { NotificationEventType } from '@service-notification/generated/schemas';
-import type { UnifiedNotification } from '../types';
+import { describe, expect, it } from 'vitest';
 import {
   getAllNotificationsFromGroup,
   getMostRecentNotification,
+  getThreadId,
   stackNotifications,
 } from '../notification-stacking';
+import type { UnifiedNotification } from '../types';
 
 // Helper to create a base notification
 function createNotification(
@@ -84,10 +85,10 @@ describe('stackNotifications', () => {
       const result = stackNotifications(notifications);
 
       expect(result).toHaveLength(1);
-      expect(result[0].type).toBe('new_messages');
-      if (result[0].type === 'new_messages') {
+      expect(result[0].type).toBe('channel_message_send');
+      if (result[0].type === 'channel_message_send') {
         expect(result[0].notifications).toHaveLength(3);
-        expect(result[0].mostRecent.id).toBe('n3'); // Most recent
+        expect(result[0].notifications[0].id).toBe('n3'); // Most recent
       }
     });
 
@@ -103,23 +104,25 @@ describe('stackNotifications', () => {
       expect(result).toHaveLength(2);
 
       const threadAStack = result.find(
-        (g) => g.type === 'replies' && g.threadId === 'thread-A'
+        (g) =>
+          g.type === 'channel_message_reply' && getThreadId(g) === 'thread-A'
       );
       const threadBStack = result.find(
-        (g) => g.type === 'replies' && g.threadId === 'thread-B'
+        (g) =>
+          g.type === 'channel_message_reply' && getThreadId(g) === 'thread-B'
       );
 
       expect(threadAStack).toBeDefined();
       expect(threadBStack).toBeDefined();
 
-      if (threadAStack?.type === 'replies') {
+      if (threadAStack?.type === 'channel_message_reply') {
         expect(threadAStack.notifications).toHaveLength(2);
-        expect(threadAStack.mostRecent.id).toBe('r2'); // Most recent in thread A
+        expect(getMostRecentNotification(threadAStack).id).toBe('r2'); // Most recent in thread A
       }
 
-      if (threadBStack?.type === 'replies') {
+      if (threadBStack?.type === 'channel_message_reply') {
         expect(threadBStack.notifications).toHaveLength(1);
-        expect(threadBStack.mostRecent.id).toBe('r3');
+        expect(getMostRecentNotification(threadBStack).id).toBe('r3');
       }
     });
 
@@ -132,7 +135,7 @@ describe('stackNotifications', () => {
       const result = stackNotifications(notifications);
 
       expect(result).toHaveLength(2);
-      expect(result.every((g) => g.type === 'mention')).toBe(true);
+      expect(result.every((g) => g.type === 'channel_mention')).toBe(true);
     });
   });
 
@@ -146,7 +149,7 @@ describe('stackNotifications', () => {
       const result = stackNotifications(notifications);
 
       expect(result).toHaveLength(1);
-      expect(result[0].type).toBe('mention');
+      expect(result[0].type).toBe('channel_mention');
     });
 
     it('shadows reply notification when mention exists for same messageId', () => {
@@ -158,7 +161,7 @@ describe('stackNotifications', () => {
       const result = stackNotifications(notifications);
 
       expect(result).toHaveLength(1);
-      expect(result[0].type).toBe('mention');
+      expect(result[0].type).toBe('channel_mention');
     });
 
     it('keeps non-shadowed notifications alongside mentions', () => {
@@ -172,13 +175,15 @@ describe('stackNotifications', () => {
 
       expect(result).toHaveLength(2); // One mention + one new_messages stack
 
-      const mentionGroup = result.find((g) => g.type === 'mention');
-      const newMessagesGroup = result.find((g) => g.type === 'new_messages');
+      const mentionGroup = result.find((g) => g.type === 'channel_mention');
+      const newMessagesGroup = result.find(
+        (g) => g.type === 'channel_message_send'
+      );
 
       expect(mentionGroup).toBeDefined();
       expect(newMessagesGroup).toBeDefined();
 
-      if (newMessagesGroup?.type === 'new_messages') {
+      if (newMessagesGroup?.type === 'channel_message_send') {
         expect(newMessagesGroup.notifications).toHaveLength(1);
         expect(newMessagesGroup.notifications[0].id).toBe('n2'); // n1 was shadowed
       }
@@ -195,8 +200,8 @@ describe('stackNotifications', () => {
       const result = stackNotifications(notifications);
 
       expect(result).toHaveLength(2);
-      expect(result[0].type).toBe('mention'); // Mention first despite being older
-      expect(result[1].type).toBe('new_messages');
+      expect(result[0].type).toBe('channel_mention'); // Mention first despite being older
+      expect(result[1].type).toBe('channel_message_send');
     });
 
     it('sorts non-mention groups by timestamp descending', () => {
@@ -208,8 +213,8 @@ describe('stackNotifications', () => {
       const result = stackNotifications(notifications);
 
       expect(result).toHaveLength(2);
-      expect(result[0].type).toBe('replies'); // More recent
-      expect(result[1].type).toBe('new_messages');
+      expect(result[0].type).toBe('channel_message_reply'); // More recent
+      expect(result[1].type).toBe('channel_message_send');
     });
   });
 
@@ -230,20 +235,22 @@ describe('stackNotifications', () => {
       // Should have: 2 mentions, 1 new_messages stack (only n1), 2 replies stacks
       expect(result).toHaveLength(5);
 
-      const mentions = result.filter((g) => g.type === 'mention');
-      const newMessages = result.filter((g) => g.type === 'new_messages');
-      const replies = result.filter((g) => g.type === 'replies');
+      const mentions = result.filter((g) => g.type === 'channel_mention');
+      const newMessages = result.filter(
+        (g) => g.type === 'channel_message_send'
+      );
+      const replies = result.filter((g) => g.type === 'channel_message_reply');
 
       expect(mentions).toHaveLength(2);
       expect(newMessages).toHaveLength(1);
       expect(replies).toHaveLength(2);
 
       // Check mentions come first
-      expect(result[0].type).toBe('mention');
-      expect(result[1].type).toBe('mention');
+      expect(result[0].type).toBe('channel_mention');
+      expect(result[1].type).toBe('channel_mention');
 
       // Check new messages stack only has n1 (n2 was shadowed)
-      if (newMessages[0].type === 'new_messages') {
+      if (newMessages[0].type === 'channel_message_send') {
         expect(newMessages[0].notifications).toHaveLength(1);
         expect(newMessages[0].notifications[0].id).toBe('n1');
       }

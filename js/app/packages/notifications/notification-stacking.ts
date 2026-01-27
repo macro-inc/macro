@@ -1,96 +1,44 @@
-import { match } from 'ts-pattern';
 import {
   isChannelMention,
   isChannelMessageReply,
   isChannelMessageSend,
   type TypedNotification,
+  tryToTypedNotification,
 } from './notification-metadata';
 import type { UnifiedNotification } from './types';
 
-/**
- * Represents a stack of new message notifications (channel_message_send)
- * All new messages for a channel are grouped into a single stack
- */
-export interface NewMessagesStack {
-  type: 'new_messages';
-  notifications: TypedNotification<'channel_message_send'>[];
-  /** The most recent notification in the stack */
-  mostRecent: TypedNotification<'channel_message_send'>;
+export interface NotificationStack {
+  type: TypedNotification['notificationEventType'];
+  notifications: TypedNotification[];
 }
 
 /**
- * Represents a stack of reply notifications (channel_message_reply)
- * Replies to the same thread are grouped together
- */
-export interface RepliesStack {
-  type: 'replies';
-  threadId: string;
-  notifications: TypedNotification<'channel_message_reply'>[];
-  /** The most recent notification in the stack */
-  mostRecent: TypedNotification<'channel_message_reply'>;
-}
-
-/**
- * Represents a single mention notification
- * Mentions are not stacked and take priority over other notifications
- */
-export interface SingleMention {
-  type: 'mention';
-  notification: TypedNotification<'channel_mention'>;
-}
-
-/**
- * Represents any other notification type that is not stacked
- */
-export interface SingleOther {
-  type: 'other';
-  notification: UnifiedNotification;
-}
-
-export type StackedNotificationGroup =
-  | NewMessagesStack
-  | RepliesStack
-  | SingleMention
-  | SingleOther;
-
-/**
- * Helper to get the timestamp for sorting
- */
-function getTimestamp(group: StackedNotificationGroup): number {
-  return match(group)
-    .with({ type: 'new_messages' }, (g) => g.mostRecent.createdAt)
-    .with({ type: 'replies' }, (g) => g.mostRecent.createdAt)
-    .with({ type: 'mention' }, (g) => g.notification.createdAt)
-    .with({ type: 'other' }, (g) => g.notification.createdAt)
-    .exhaustive();
-}
-
-/**
- * Gets the most recent notification from a group (for navigation purposes)
+ * Gets the most recent notification from a group (first item, sorted by recency)
  */
 export function getMostRecentNotification(
-  group: StackedNotificationGroup
+  group: NotificationStack
 ): UnifiedNotification {
-  return match(group)
-    .with({ type: 'new_messages' }, (g) => g.mostRecent)
-    .with({ type: 'replies' }, (g) => g.mostRecent)
-    .with({ type: 'mention' }, (g) => g.notification)
-    .with({ type: 'other' }, (g) => g.notification)
-    .exhaustive();
+  return group.notifications[0];
 }
 
 /**
- * Gets all notifications from a group (for bulk mark as done)
+ * Gets all notifications from a group
  */
 export function getAllNotificationsFromGroup(
-  group: StackedNotificationGroup
+  group: NotificationStack
 ): UnifiedNotification[] {
-  return match(group)
-    .with({ type: 'new_messages' }, (g) => g.notifications)
-    .with({ type: 'replies' }, (g) => g.notifications)
-    .with({ type: 'mention' }, (g) => [g.notification])
-    .with({ type: 'other' }, (g) => [g.notification])
-    .exhaustive();
+  return group.notifications;
+}
+
+/**
+ * Gets the threadId from a replies stack
+ */
+export function getThreadId(group: NotificationStack): string {
+  const notification = group.notifications[0];
+  if (notification.notificationEventType === 'channel_message_reply') {
+    return notification.notificationMetadata?.threadId ?? '';
+  }
+  return '';
 }
 
 /**
@@ -98,7 +46,7 @@ export function getAllNotificationsFromGroup(
  */
 export function stackNotifications(
   notifications: UnifiedNotification[]
-): StackedNotificationGroup[] {
+): NotificationStack[] {
   // Collect mention messageIds for shadowing
   const mentionedMsgIds = new Set(
     notifications
@@ -127,48 +75,49 @@ export function stackNotifications(
   );
 
   // Build groups
-  const groups: StackedNotificationGroup[] = [
-    ...mentions.map((n) => ({ type: 'mention' as const, notification: n })),
-    ...makeNewMessagesStack(newMsgs),
+  const groups: NotificationStack[] = [
+    ...mentions.flatMap((n) => makeStack('channel_mention', [n])),
+    ...makeStack('channel_message_send', newMsgs),
     ...makeReplyStacks(replies),
-    ...others.map((n) => ({ type: 'other' as const, notification: n })),
+    ...others.flatMap((n) => {
+      const typed = tryToTypedNotification(n);
+      if (!typed) return [];
+      return makeStack(typed.notificationEventType, [typed]);
+    }),
   ];
 
   // Sort: mentions first, then by recency
   return groups.sort((a, b) => {
-    if ((a.type === 'mention') !== (b.type === 'mention')) {
-      return a.type === 'mention' ? -1 : 1;
+    if ((a.type === 'channel_mention') !== (b.type === 'channel_mention')) {
+      return a.type === 'channel_mention' ? -1 : 1;
     }
-    return getTimestamp(b) - getTimestamp(a);
+    return b.notifications[0].createdAt - a.notifications[0].createdAt;
   });
 }
 
-function makeNewMessagesStack(
-  msgs: TypedNotification<'channel_message_send'>[]
-): NewMessagesStack[] {
-  if (msgs.length === 0) return [];
-  const sorted = [...msgs].sort((a, b) => b.createdAt - a.createdAt);
-  return [
-    { type: 'new_messages', notifications: sorted, mostRecent: sorted[0] },
-  ];
+function sortByRecency<T extends { createdAt: number }>(items: T[]): T[] {
+  return [...items].sort((a, b) => b.createdAt - a.createdAt);
+}
+
+function makeStack(
+  type: TypedNotification['notificationEventType'],
+  notifications: TypedNotification[]
+): NotificationStack[] {
+  if (notifications.length === 0) return [];
+  return [{ type, notifications: sortByRecency(notifications) }];
 }
 
 function makeReplyStacks(
   replies: TypedNotification<'channel_message_reply'>[]
-): RepliesStack[] {
+): NotificationStack[] {
   const byThread = Map.groupBy(
     replies,
     (r) => r.notificationMetadata?.threadId ?? ''
   );
   return [...byThread.entries()]
     .filter(([threadId]) => threadId !== '')
-    .map(([threadId, group]) => {
-      const sorted = [...group].sort((a, b) => b.createdAt - a.createdAt);
-      return {
-        type: 'replies',
-        threadId,
-        notifications: sorted,
-        mostRecent: sorted[0],
-      };
-    });
+    .map(([, group]) => ({
+      type: 'channel_message_reply',
+      notifications: sortByRecency(group),
+    }));
 }
