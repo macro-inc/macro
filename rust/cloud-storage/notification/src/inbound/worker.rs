@@ -8,26 +8,28 @@ use rootcause::Report;
 use tracing::instrument;
 
 use crate::domain::ports::{
-    EmailSender, NotificationQueue, NotificationRepository, NotificationSender, WebSocketSender,
+    EmailSender, NotificationQueue, NotificationRepository, NotificationSender, RateLimitPort,
+    WebSocketSender,
 };
 use crate::domain::service::NotificationEgressService;
 
 /// Worker that processes notifications from the queue and delivers them.
-pub struct NotificationWorker<Q, N, W, M, E> {
+pub struct NotificationWorker<Q, N, W, M, E, R> {
     queue: Q,
-    egress: NotificationEgressService<N, W, M, E>,
+    egress: NotificationEgressService<N, W, M, E, R>,
 }
 
-impl<Q, N, W, M, E> NotificationWorker<Q, N, W, M, E>
+impl<Q, N, W, M, E, R> NotificationWorker<Q, N, W, M, E, R>
 where
     Q: NotificationQueue,
     N: NotificationRepository,
     W: WebSocketSender,
     M: NotificationSender,
     E: EmailSender,
+    R: RateLimitPort,
 {
     /// Create a new notification worker.
-    pub fn new(queue: Q, egress: NotificationEgressService<N, W, M, E>) -> Self {
+    pub fn new(queue: Q, egress: NotificationEgressService<N, W, M, E, R>) -> Self {
         Self { queue, egress }
     }
 

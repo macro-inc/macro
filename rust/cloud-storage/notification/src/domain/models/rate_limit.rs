@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
+use thiserror::Error;
 
 /// Newtype for rate limit keys.
 ///
@@ -37,7 +38,7 @@ impl RateLimitKey {
 }
 
 /// Result of a rate limit check.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum RateLimitResult {
     /// The action is allowed. Contains the current count after increment.
     Allowed {
@@ -45,24 +46,20 @@ pub enum RateLimitResult {
         current_count: u64,
     },
     /// The rate limit has been exceeded.
-    Exceeded {
-        /// The current count.
-        current_count: u64,
-        /// The maximum allowed count.
-        max_count: u64,
-    },
+    Exceeded(RateLimitExceeded),
 }
 
-impl RateLimitResult {
-    /// Returns true if the action is allowed.
-    pub fn is_allowed(&self) -> bool {
-        matches!(self, RateLimitResult::Allowed { .. })
-    }
-
-    /// Returns true if the rate limit was exceeded.
-    pub fn is_exceeded(&self) -> bool {
-        matches!(self, RateLimitResult::Exceeded { .. })
-    }
+#[derive(Debug, Error)]
+#[error(
+    "Rate limit key: {key} was exceeded. Current count is {current_count} but max count is {max_count}"
+)]
+pub struct RateLimitExceeded {
+    /// The key that is exceeded
+    key: String,
+    /// The current count.
+    current_count: u64,
+    /// The maximum allowed count.
+    max_count: u64,
 }
 
 /// Configuration for rate limiting.

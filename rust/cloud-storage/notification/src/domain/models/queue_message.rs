@@ -3,6 +3,7 @@ use crate::domain::models::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 /// APNS push notification targets.
 #[derive(Debug, Serialize, Deserialize)]
@@ -87,4 +88,12 @@ pub enum DeliverySuccess {
     Ios,
     ConnGateway,
     Email,
+}
+
+#[derive(Debug, Error)]
+pub enum DeliveryFailure {
+    #[error("The rate limit was exceeded")]
+    RateLimit,
+    #[error("A delivery error occured")]
+    Other,
 }
