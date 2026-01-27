@@ -31,7 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await
         .context("could not connect to db")?;
 
-    let mut worker = MessageQueue::new(sqs, db);
+    let mut worker = MessageQueue::new(sqs, db, None);
     worker.poll().await;
     Ok(())
 }

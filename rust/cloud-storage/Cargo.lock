@@ -2087,6 +2087,7 @@ dependencies = [
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
+ "connection_gateway",
  "contacts_db_client",
  "http-body-util",
  "macro_auth",

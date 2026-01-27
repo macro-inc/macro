@@ -66,6 +66,17 @@ const internalApiKeyArn: pulumi.Output<string> = aws.secretsmanager
 
 let MACRO_API_TOKENS = getMacroApiToken();
 
+const connectionGatewayStack = new pulumi.StackReference(
+  'connection-gateway-stack',
+  {
+    name: `macro-inc/connection-gateway/${stack}`,
+  }
+);
+
+const connectionGatewayUrl: pulumi.Output<string> = connectionGatewayStack
+  .getOutput('connectionGatewayUrl')
+  .apply((url) => url as string);
+
 const secretKeyArns = [
   pulumi.interpolate`${jwtSecretKeyArn}`,
   pulumi.interpolate`${internalApiKeyArn}`,
@@ -112,6 +123,10 @@ let containerEnvVars = [
   {
     name: 'MACRO_API_TOKEN_PUBLIC_KEY',
     value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenPublicKey}`,
+  },
+  {
+    name: 'CONNECTION_GATEWAY_URL',
+    value: pulumi.interpolate`${connectionGatewayUrl}`,
   },
 ];
 
