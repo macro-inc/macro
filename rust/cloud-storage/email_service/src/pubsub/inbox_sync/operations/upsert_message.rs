@@ -325,7 +325,11 @@ async fn handle_contacts_sync(
 
     // Build users list: current user at index 0, connection targets after
     let mut users = vec![link.macro_id.to_string()];
-    users.extend(connection_emails.iter().map(|email| format!("macro|{email}")));
+    users.extend(
+        connection_emails
+            .iter()
+            .map(|email| format!("macro|{email}")),
+    );
 
     // Create connections from current user (index 0) to each other user
     let connections = (1..users.len()).map(|i| (0, i)).collect();
