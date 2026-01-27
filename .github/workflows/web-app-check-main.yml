@@ -33,7 +33,8 @@ jobs:
 
   typescript:
     needs: path-check
-    if: needs.path-check.outputs.should_run == 'true'
+    # Run the type check if rust code or frontend code has changed.
+    if: needs.path-check.outputs.should_run == 'true' || needs.path-check.outputs.api_changed == 'true'
     name: Typecheck
     runs-on: linux-latest-beefy
     steps:

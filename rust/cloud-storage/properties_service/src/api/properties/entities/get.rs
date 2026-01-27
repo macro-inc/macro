@@ -82,6 +82,8 @@ pub async fn get_entity_properties(
     );
 
     let entity_ref = models_properties::EntityReference::new(entity_id.clone(), entity_type);
+
+    // Note: This can fail if the entity is marked with "deletedAt"
     crate::api::permissions::check_entity_view_permission(
         &context,
         &user_context.user_id,

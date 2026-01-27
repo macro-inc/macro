@@ -2,6 +2,45 @@ use chrono::{DateTime, Utc};
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::user_item_access::UserItemAccess;
 
+/// Gets the items owner and whether it's deleted
+#[tracing::instrument(skip(db), err)]
+pub async fn get_owner_and_deleted(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    entity_id: &str,
+    item_type: &str,
+) -> anyhow::Result<(String, bool)> {
+    let result = match item_type {
+        "document" => {
+            sqlx::query!(
+                r#"SELECT owner, "deletedAt" as deleted_at FROM "Document" WHERE id=$1"#,
+                entity_id
+            )
+            .map(|r| (r.owner, r.deleted_at.is_some()))
+            .fetch_one(db)
+            .await?
+        }
+        "chat" => {
+            sqlx::query!(
+                r#"SELECT "userId" as user_id, "deletedAt" as deleted_at FROM "Chat" WHERE id=$1"#,
+                entity_id
+            )
+            .map(|r| (r.user_id, r.deleted_at.is_some()))
+            .fetch_one(db)
+            .await?
+        }
+        "project" => sqlx::query!(
+            r#"SELECT "userId" as user_id, "deletedAt" as deleted_at FROM "Project" WHERE id=$1"#,
+            entity_id
+        )
+        .map(|r| (r.user_id, r.deleted_at.is_some()))
+        .fetch_one(db)
+        .await?,
+        _ => anyhow::bail!("unsupported item type"),
+    };
+
+    Ok(result)
+}
+
 /// Finds all explicit access permissions for a given user on a project and its entire parent hierarchy.
 #[tracing::instrument(skip(db))]
 pub async fn get_user_item_access_for_project(

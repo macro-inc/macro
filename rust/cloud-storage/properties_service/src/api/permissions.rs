@@ -1,6 +1,7 @@
 use axum::http::StatusCode;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_properties::{EntityReference, EntityType};
+use properties::PropertiesService;
 use thiserror::Error;
 
 use crate::api::context::ApiContext;
@@ -36,6 +37,29 @@ pub async fn check_entity_view_permission(
     user_id: &str,
     entity_ref: &EntityReference,
 ) -> Result<(), PermissionError> {
+    // Check if entity is deleted
+    match entity_ref.entity_type {
+        EntityType::Channel | EntityType::Company | EntityType::User | EntityType::Thread => (),
+        _ => {
+            let (owner, deleted) = context
+                .properties_service
+                .get_owner_and_deleted(&entity_ref.entity_id, entity_ref.entity_type)
+                .await
+                .map_err(|e| PermissionError::InternalError(e.to_string()))?;
+
+            // If you are the owner fast return
+            if owner.eq(user_id) {
+                return Ok(());
+            }
+
+            // If the item is deleted and you aren't the owner you are unauthorized
+            if deleted {
+                return Err(PermissionError::Unauthorized);
+            }
+        }
+    }
+
+    // If entity is deleted, if user is not owner return 401.
     let access_level = get_access_level(context, user_id, entity_ref).await?;
 
     match access_level {
