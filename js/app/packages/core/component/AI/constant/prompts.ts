@@ -1,6 +1,5 @@
 import { useUserContext } from '@core/context/user';
 import { useInstructionsMdTextQuery } from '@queries/storage/instructions-md';
-import { createMemo } from 'solid-js';
 
 const ABOUT_MACRO = `
 Macro is an AI workspace with all the latest models and built-in editors for pdfs, docs, notes, images, diagrams, chats and more. Macro is like ChatGPT but you can do all your work inside it+
