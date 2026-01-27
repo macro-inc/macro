@@ -333,20 +333,20 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
   const dmActivityByUserId = useDmActivityByUserId();
 
-  // Create search function for recipients
-  const recipientSearch = createFreshSearch<CombinedRecipientItem>(
+  // Create search function for recipients - only used for initial sorting with no query
+  const recipientSearch = createFreshSearch<CombinedRecipientItem<K>>(
     FreshSearchPresets.baseUserSearch(currentUserDomain, (item) =>
       item.kind === 'user' ? item.data.email : undefined
     ),
-    getRecipientOptionTextValue
+    getRecipientOptionTextValue as (item: CombinedRecipientItem<K>) => string
   );
 
-  const options = createMemo(() => {
-    const emailSet = new Set<string>();
+  const recipients = createMemo(() => {
+    const options: CombinedRecipientItem<K>[] = [];
+    const emails = new Set<string>();
+
     const dmActivity = dmActivityByUserId();
 
-    // Filter and augment options with DM activity
-    const optionsList: CombinedRecipientItem<K>[] = [];
     for (const option of props.options()) {
       const item = option as CombinedRecipientItem;
       const email = getRecipientOptionEmail(item);
@@ -361,14 +361,14 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       }
 
       if (email) {
-        emailSet.add(email.toLowerCase());
+        emails.add(email.toLowerCase());
       }
 
       // Augment user items with DM activity timestamp
       if (item.kind === 'user') {
         const dmTimestamp = dmActivity.get(item.id);
         if (dmTimestamp) {
-          optionsList.push({
+          options.push({
             ...option,
             lastInteraction: dmTimestamp,
           } as CombinedRecipientItem<K>);
@@ -376,16 +376,29 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         }
       }
 
-      optionsList.push(option);
+      options.push(option);
     }
 
+    const sorted = recipientSearch(options, '').map((item) => {
+      return item.item;
+    });
+
+    return {
+      raw: options,
+      emails,
+      sorted,
+    };
+  });
+
+  const options = createMemo(() => {
+    const { emails, sorted } = recipients();
     const currentUserInput = inputValue();
 
     // Check if currentUserInput matches any existing email
     const hasExactEmailMatch =
-      currentUserInput && emailSet.has(currentUserInput.toLowerCase());
+      currentUserInput && emails.has(currentUserInput.toLowerCase());
 
-    const allOptions = [...optionsList, ...customUsers()];
+    const allOptions = [...sorted, ...customUsers()];
 
     // Only add custom input if it doesn't match an existing email
     if (
@@ -403,14 +416,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       allOptions.push(customEntity);
     }
 
-    // Always apply freshSort ranking - with search term for filtering, without for time-based ranking
-    const searchResults = recipientSearch(
-      allOptions as CombinedRecipientItem[],
-      currentUserInput ?? ''
-    );
-    return searchResults.map(
-      (result) => result.item
-    ) as CombinedRecipientItem<K>[];
+    return allOptions as CombinedRecipientItem<K>[];
   });
 
   const [scrollToItem, setScrollToItem] = createSignal<(key: string) => void>(
