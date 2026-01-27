@@ -84,7 +84,6 @@ async fn main() -> anyhow::Result<()> {
         .get_maybe_secret_value(config.environment, InternalApiSecretKey::new()?)
         .await?;
 
-    // Create connection gateway client if URL is configured
     let connection_gateway_client = config.connection_gateway_url.as_ref().map(|url| {
         ConnectionGatewayClient::new(internal_api_secret.as_ref().to_string(), url.clone())
     });

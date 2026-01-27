@@ -68,7 +68,6 @@ pub async fn upsert_message(
 
     let is_sent = message.is_sent;
 
-    // extract sender email for contact sync (needed for incoming messages)
     let sender_email = message
         .from
         .as_ref()
@@ -313,37 +312,26 @@ async fn handle_contacts_sync(
         return Ok(());
     }
 
-    let connections_message = if is_sent {
-        // User sent the message: create connections from sender (current user) to recipients
-        if recipient_emails.is_empty() {
-            return Ok(());
-        }
-
-        let mut users = vec![link.macro_id.to_string()];
-        users.extend(
-            recipient_emails
-                .iter()
-                .map(|email| format!("macro|{}", email)),
-        );
-
-        // Create connections from sender (index 0) to each recipient
-        let connections = (1..users.len()).map(|i| (0, i)).collect::<Vec<_>>();
-
-        ConnectionsMessage { users, connections }
+    // Determine which emails to create connections to based on message direction
+    let connection_emails: Vec<&str> = if is_sent {
+        recipient_emails.iter().map(String::as_str).collect()
     } else {
-        // User received the message: create connection from current user to sender
-        let Some(sender) = sender_email else {
-            return Ok(());
-        };
-
-        let users = vec![link.macro_id.to_string(), format!("macro|{}", sender)];
-        let connections = vec![(0, 1)];
-
-        ConnectionsMessage { users, connections }
+        sender_email.into_iter().collect()
     };
 
+    if connection_emails.is_empty() {
+        return Ok(());
+    }
+
+    // Build users list: current user at index 0, connection targets after
+    let mut users = vec![link.macro_id.to_string()];
+    users.extend(connection_emails.iter().map(|email| format!("macro|{email}")));
+
+    // Create connections from current user (index 0) to each other user
+    let connections = (1..users.len()).map(|i| (0, i)).collect();
+
     ctx.sqs_client
-        .enqueue_contacts_add_connection(connections_message)
+        .enqueue_contacts_add_connection(ConnectionsMessage { users, connections })
         .await
         .map_err(|e| {
             ProcessingError::NonRetryable(DetailedError {

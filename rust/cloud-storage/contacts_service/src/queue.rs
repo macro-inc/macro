@@ -61,14 +61,12 @@ async fn invalidate_contacts_for_users(
         return;
     };
 
-    // Collect all unique user IDs from connection pairs
     let mut user_ids: HashSet<&str> = HashSet::new();
     for (user1, user2) in connection_pairs {
         user_ids.insert(user1);
         user_ids.insert(user2);
     }
 
-    // Notify each user
     for user_id in user_ids {
         if let Err(e) = client.invalidate_contacts(user_id).await {
             tracing::error!(user_id = %user_id, error = ?e, "Failed to invalidate contacts");
@@ -96,7 +94,6 @@ async fn connections_message_handler(conmsg: &ConnectionsMessage, queue: &Messag
         tracing::error!("transaction error: {:?}", e);
     });
 
-    // Notify affected users
     invalidate_contacts_for_users(&queue.connection_gateway_client, &connection_pairs).await;
 }
 
