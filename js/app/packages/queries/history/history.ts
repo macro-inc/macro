@@ -8,7 +8,7 @@ import {
   useMutation,
   useQuery,
 } from '@tanstack/solid-query';
-import { type Accessor, createMemo } from 'solid-js';
+import { type Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { historyKeys } from './keys';
 import {
