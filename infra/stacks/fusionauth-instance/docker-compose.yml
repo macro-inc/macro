@@ -28,7 +28,7 @@ services:
       DATABASE_ROOT_PASSWORD: ${POSTGRES_PASSWORD}
       DATABASE_USERNAME: ${DATABASE_USER}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
-      FUSIONAUTH_APP_KICKSTART_FILE: ${FUSIONAUTH_APP_KICKSTART_FILE}
+      FUSIONAUTH_APP_KICKSTART_FILE: ./kickstart/kickstart.json
       FUSIONAUTH_APP_MEMORY: ${FUSIONAUTH_APP_MEMORY}
       FUSIONAUTH_APP_RUNTIME_MODE: ${FUSIONAUTH_APP_RUNTIME_MODE}
       FUSIONAUTH_APP_URL: http://fusionauth:9011
@@ -46,8 +46,7 @@ services:
       - auth
     volumes:
       - fusionauth_config:/usr/local/fusionauth/config
-      - ${FUSIONAUTH_LOCAL_KICKSTART_DIRECTORY}:/usr/local/fusionauth/kickstart
-      - ${FUSIONAUTH_LOCAL_PLUGIN_DIRECTORY}:/usr/local/fusionauth/plugins
+      - ./kickstart:/usr/local/fusionauth/kickstart
 
   search:
     image: opensearchproject/opensearch:2.11.0
