@@ -322,7 +322,8 @@ export async function removeHistoryItem(
 export function useUpdatedDssItemName(itemId: string | Accessor<string>) {
   const historyQuery = useHistoryQuery();
 
-  return createMemo(() => {
+  return () => {
+    if (historyQuery.isLoading) return;
     const history = historyQuery.data;
     if (!history) return undefined;
 
@@ -331,7 +332,7 @@ export function useUpdatedDssItemName(itemId: string | Accessor<string>) {
 
     const item = history.find((item) => item.id === itemIdValue);
     return item?.name;
-  });
+  };
 }
 
 /**
