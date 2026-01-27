@@ -24,7 +24,9 @@ impl IntoResponse for SetEntityPropertyErr {
             SetEntityPropertyErr::Properties(e) => match e {
                 PropertiesErr::Validation(_) => StatusCode::BAD_REQUEST,
                 PropertiesErr::PermissionDenied => StatusCode::FORBIDDEN,
-                PropertiesErr::Repo(_) => StatusCode::INTERNAL_SERVER_ERROR,
+                PropertiesErr::Repo(_) | PropertiesErr::PermissionServiceNotConfigured => {
+                    StatusCode::INTERNAL_SERVER_ERROR
+                }
             },
         };
 

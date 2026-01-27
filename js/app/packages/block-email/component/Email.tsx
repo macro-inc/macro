@@ -16,6 +16,7 @@ import {
   type Accessor,
   createEffect,
   createMemo,
+  createSignal,
   Match,
   onMount,
   Show,
@@ -55,6 +56,12 @@ function EmailContent(props: EmailViewProps) {
   const blockElement = blockElementSignal.get;
 
   const context = useEmailContext();
+
+  const [isScrolled, setIsScrolled] = createSignal(false);
+
+  const handleScrollPositionChange = (scrollFromTop: number) => {
+    setIsScrolled(scrollFromTop > 1);
+  };
 
   /**
    * Waits for the query to finish fetching
@@ -458,9 +465,22 @@ function EmailContent(props: EmailViewProps) {
               class="w-full flex-1 flex flex-col items-center overflow-hidden"
               ref={context.registerMessagesContainer}
             >
+              <div class="shrink-0 w-full flex justify-center">
+                <div
+                  class="macro-message-width w-full border-b"
+                  classList={{
+                    'border-edge-muted/50': isScrolled(),
+                    'border-transparent': !isScrolled(),
+                  }}
+                >
+                  <h1 class="text-3xl font-semibold text-ink pt-8 pb-4">
+                    {props.title}
+                  </h1>
+                </div>
+              </div>
               <MessageList
                 initialLoadComplete={context.initialLoadComplete()}
-                title={props.title}
+                onScrollPositionChange={handleScrollPositionChange}
               />
               <CustomScrollbar
                 reverse

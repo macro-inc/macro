@@ -288,7 +288,8 @@ pub async fn get_document(
             d."projectId" as "project_id",
             p.name as "project_name?",
             di.sha as "sha?",
-            dt.sub_type as "sub_type?: DocumentSubType"
+            dt.sub_type as "sub_type?: DocumentSubType",
+            d."deletedAt"::timestamptz as "deleted_at"
         FROM
             "Document" d
         LEFT JOIN document_sub_type dt ON dt.document_id = d.id
@@ -371,6 +372,7 @@ pub async fn get_document(
             created_at: row.created_at,
             updated_at: row.updated_at,
             sub_type: row.sub_type,
+            deleted_at: row.deleted_at,
         })
     })
     .fetch_one(db)
@@ -403,7 +405,8 @@ pub async fn get_document_version(
             d."projectId" as "project_id?",
             p.name as "project_name?",
             di.sha as "sha?",
-            dt.sub_type as "sub_type?: DocumentSubType"
+            dt.sub_type as "sub_type?: DocumentSubType",
+            d."deletedAt"::timestamptz as deleted_at
         FROM
             "Document" d
         LEFT JOIN document_sub_type dt ON dt.document_id = d.id
@@ -485,6 +488,7 @@ pub async fn get_document_version(
             created_at: row.created_at,
             updated_at: row.updated_at,
             sub_type: row.sub_type,
+            deleted_at: row.deleted_at,
         })
     })
     .fetch_one(db)

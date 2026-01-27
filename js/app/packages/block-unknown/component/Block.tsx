@@ -1,4 +1,4 @@
-import { useBlockId } from '@core/block';
+import { useBlockAliasedName, useBlockId } from '@core/block';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { getPermissions, Permissions } from '@core/component/SharePermissions';
@@ -35,6 +35,7 @@ const Unknown = () => {
   const documentId = useBlockId();
   const fileName = useBlockDocumentName();
   const downloadName = useBlockDocumentDownloadName();
+  const blockAlias = useBlockAliasedName();
   const [isSharePermOpen, setIsSharePermOpen] = createSignal(false);
   const getBlob = useGetFileBlob();
 
@@ -85,6 +86,7 @@ const Unknown = () => {
         userPermissions={userPermissions()}
         itemType="document"
         isSharePermOpen={isSharePermOpen()}
+        blockAlias={blockAlias}
         setIsSharePermOpen={setIsSharePermOpen}
       />
     </div>

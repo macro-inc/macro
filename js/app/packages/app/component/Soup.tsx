@@ -8,6 +8,7 @@ import { getIconConfig } from '@core/component/EntityIcon';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { IS_MAC } from '@core/constant/isMac';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
@@ -36,6 +37,7 @@ import { invalidateEntityNotifications } from '@queries/notification/user-notifi
 import { storageServiceClient } from '@service-storage/client';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Navigate } from '@solidjs/router';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { useMutation, useQueryClient } from '@tanstack/solid-query';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import {
@@ -54,6 +56,7 @@ import {
   Switch,
 } from 'solid-js';
 import { PreviewPanel } from './PreviewPanel';
+import { SoupChatInput } from './SoupChatInput';
 import { SuspenseContextComp } from './SuspenseContext';
 import {
   SplitHeaderLeft,
@@ -612,6 +615,13 @@ const ViewWithSearch: Component<{
 export function Soup() {
   const isAuthenticated = useIsAuthenticated();
 
+  // NOTE: if trying to access a split in which we are looking at a document, we shouldn't redirect away.
+  const hasDocumentSplit = createMemo(() => {
+    const manager = globalSplitManager();
+    if (!manager) return false;
+    return manager.splits().some((split) => split.content.type !== 'component');
+  });
+
   const splitPanelContext = useSplitPanelOrThrow();
   const {
     handle,
@@ -702,7 +712,10 @@ export function Soup() {
   });
 
   return (
-    <Show when={isAuthenticated() !== false} fallback={<Navigate href="/" />}>
+    <Show
+      when={isAuthenticated() !== false || hasDocumentSplit()}
+      fallback={<Navigate href="/" />}
+    >
       <div
         class="relative flex flex-col bg-panel size-full"
         use:fileFolderDrop={{
@@ -765,6 +778,9 @@ export function Soup() {
             />
           </Show>
         </div>
+        <Show when={ENABLE_UNIFIED_LIST_AI_INPUT}>
+          <SoupChatInput />
+        </Show>
       </div>
     </Show>
   );

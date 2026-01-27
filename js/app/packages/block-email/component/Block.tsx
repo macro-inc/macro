@@ -23,7 +23,8 @@ export default function BlockEmail() {
     const data = threadQuery.data;
     if (!data || !data.thread || data.thread.messages.length === 0) return '';
     if (data.thread.messages[0].subject?.length === 0) return '[No subject]';
-    return data.thread.messages[0].subject!;
+    // remove "re:" prefix(es)
+    return data.thread.messages[0].subject!.replace(/^(re:\s*)+/i, '');
   };
 
   onMount(() => {
