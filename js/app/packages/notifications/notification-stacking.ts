@@ -5,6 +5,7 @@ import {
   isChannelMessageSend,
   type TypedNotification,
 } from './notification-metadata';
+import { match } from 'ts-pattern';
 
 /**
  * Represents a stack of new message notifications (channel_message_send)
@@ -56,16 +57,12 @@ export type StackedNotificationGroup =
  * Helper to get the timestamp for sorting
  */
 function getTimestamp(group: StackedNotificationGroup): number {
-  switch (group.type) {
-    case 'new_messages':
-      return group.mostRecent.createdAt;
-    case 'replies':
-      return group.mostRecent.createdAt;
-    case 'mention':
-      return group.notification.createdAt;
-    case 'other':
-      return group.notification.createdAt;
-  }
+  return match(group)
+    .with({ type: 'new_messages' }, (g) => g.mostRecent.createdAt)
+    .with({ type: 'replies' }, (g) => g.mostRecent.createdAt)
+    .with({ type: 'mention' }, (g) => g.notification.createdAt)
+    .with({ type: 'other' }, (g) => g.notification.createdAt)
+    .exhaustive();
 }
 
 /**
@@ -74,16 +71,12 @@ function getTimestamp(group: StackedNotificationGroup): number {
 export function getMostRecentNotification(
   group: StackedNotificationGroup
 ): UnifiedNotification {
-  switch (group.type) {
-    case 'new_messages':
-      return group.mostRecent;
-    case 'replies':
-      return group.mostRecent;
-    case 'mention':
-      return group.notification;
-    case 'other':
-      return group.notification;
-  }
+  return match(group)
+    .with({ type: 'new_messages' }, (g) => g.mostRecent)
+    .with({ type: 'replies' }, (g) => g.mostRecent)
+    .with({ type: 'mention' }, (g) => g.notification)
+    .with({ type: 'other' }, (g) => g.notification)
+    .exhaustive();
 }
 
 /**
@@ -92,16 +85,12 @@ export function getMostRecentNotification(
 export function getAllNotificationsFromGroup(
   group: StackedNotificationGroup
 ): UnifiedNotification[] {
-  switch (group.type) {
-    case 'new_messages':
-      return group.notifications;
-    case 'replies':
-      return group.notifications;
-    case 'mention':
-      return [group.notification];
-    case 'other':
-      return [group.notification];
-  }
+  return match(group)
+    .with({ type: 'new_messages' }, (g) => g.notifications)
+    .with({ type: 'replies' }, (g) => g.notifications)
+    .with({ type: 'mention' }, (g) => [g.notification])
+    .with({ type: 'other' }, (g) => [g.notification])
+    .exhaustive();
 }
 
 /**
