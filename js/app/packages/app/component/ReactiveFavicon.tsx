@@ -1,7 +1,7 @@
 import {
-  subscribeFaviconUpdates,
+  broadcastBadge,
+  subscribeBadgeUpdates,
   updateFavicon,
-  updateFaviconFromBroadcast,
 } from '@app/util/favicon';
 import { createEffect, createSignal, onCleanup, onMount } from 'solid-js';
 import { useReactiveColorString } from '../../block-theme/signals/themeReactive';
@@ -13,11 +13,15 @@ export function ReactiveFavicon() {
 
   const globalNotifications = useGlobalNotificationSource();
 
+  const accentColor = useReactiveColorString('a0');
+  const badgeColor = useReactiveColorString('a1');
+
   // Remove notification badge when app is focused
   const handleVisibilityChange = () => {
     setIsAppFocused(!document.hidden);
     if (!document.hidden) {
       setShowNotificationBadge(false);
+      broadcastBadge(false);
     }
   };
 
@@ -27,27 +31,21 @@ export function ReactiveFavicon() {
     const unsubscribeNotifications = globalNotifications.subscribe(() => {
       if (!isAppFocused()) {
         setShowNotificationBadge(true);
+        broadcastBadge(true);
       }
     });
 
-    // Listen for favicon updates from other tabs
-    const unsubscribeFavicon = subscribeFaviconUpdates((message) => {
-      updateFaviconFromBroadcast(
-        message.faviconColor,
-        message.badgeColor,
-        message.hasBadge
-      );
+    // Listen for badge updates from other tabs
+    const unsubscribeBadge = subscribeBadgeUpdates((hasBadge) => {
+      setShowNotificationBadge(hasBadge);
     });
 
     onCleanup(() => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       unsubscribeNotifications();
-      unsubscribeFavicon();
+      unsubscribeBadge();
     });
   });
-
-  const accentColor = useReactiveColorString('a0');
-  const badgeColor = useReactiveColorString('a1');
 
   createEffect(() => {
     updateFavicon(accentColor(), badgeColor(), showNotificationBadge());

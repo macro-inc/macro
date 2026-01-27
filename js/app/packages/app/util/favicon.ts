@@ -2,41 +2,49 @@ import FaviconSvg from '@macro-icons/macro-macro.svg?raw';
 import FaviconBadgeSvg from '@macro-icons/macro-macro-badge.svg?raw';
 
 const FAVICON_SIZE = 48;
-const FAVICON_CHANNEL_NAME = 'macro-favicon-sync';
+const FAVICON_BADGE_CHANNEL = 'macro-favicon-badge';
 
 let currentFaviconLink: HTMLLinkElement | null = null;
-let faviconBroadcastChannel: BroadcastChannel | null = null;
+let badgeBroadcastChannel: BroadcastChannel | null = null;
 
-type FaviconMessage = {
-  faviconColor: string;
-  badgeColor?: string;
-  hasBadge?: boolean;
+type BadgeMessage = {
+  hasBadge: boolean;
 };
 
-function getBroadcastChannel(): BroadcastChannel | null {
+function getBadgeChannel(): BroadcastChannel | null {
   if (typeof BroadcastChannel === 'undefined') return null;
-  if (!faviconBroadcastChannel) {
-    faviconBroadcastChannel = new BroadcastChannel(FAVICON_CHANNEL_NAME);
+  if (!badgeBroadcastChannel) {
+    badgeBroadcastChannel = new BroadcastChannel(FAVICON_BADGE_CHANNEL);
   }
-  return faviconBroadcastChannel;
+  return badgeBroadcastChannel;
 }
 
 /**
- * Subscribe to favicon updates from other tabs.
+ * Subscribe to badge updates from other tabs.
  * Returns an unsubscribe function.
  */
-export function subscribeFaviconUpdates(
-  callback: (message: FaviconMessage) => void
+export function subscribeBadgeUpdates(
+  callback: (hasBadge: boolean) => void
 ): () => void {
-  const channel = getBroadcastChannel();
+  const channel = getBadgeChannel();
   if (!channel) return () => {};
 
-  const handler = (event: MessageEvent<FaviconMessage>) => {
-    callback(event.data);
+  const handler = (event: MessageEvent<BadgeMessage>) => {
+    callback(event.data.hasBadge);
   };
 
   channel.addEventListener('message', handler);
   return () => channel.removeEventListener('message', handler);
+}
+
+/**
+ * Broadcast badge state to other tabs.
+ */
+export function broadcastBadge(hasBadge: boolean): void {
+  const channel = getBadgeChannel();
+  if (channel) {
+    channel.postMessage({ hasBadge } as BadgeMessage);
+  }
 }
 
 /** escapes a color value for use in SVG */
@@ -51,8 +59,6 @@ function processSvg(svg: string, color: string) {
 
 /**
  * Return a data url for the macro logo svg filled with the given color.
- * @param color
- * @returns
  */
 export function getFaviconUrl(color: string) {
   return processSvg(FaviconSvg, color);
@@ -60,39 +66,9 @@ export function getFaviconUrl(color: string) {
 
 /**
  * Update the site's live favicon with a new color, and optionally a notification
- * badge with its own color. Broadcasts the change to other tabs.
+ * badge with its own color.
  */
 export function updateFavicon(
-  faviconColor: string,
-  badgeColor?: string,
-  hasBadge?: boolean
-): void {
-  updateFaviconInternal(faviconColor, badgeColor, hasBadge);
-
-  // Broadcast to other tabs
-  const channel = getBroadcastChannel();
-  if (channel) {
-    channel.postMessage({
-      faviconColor,
-      badgeColor,
-      hasBadge,
-    } as FaviconMessage);
-  }
-}
-
-/**
- * Internal function to update favicon without broadcasting.
- * Used when receiving updates from other tabs.
- */
-export function updateFaviconFromBroadcast(
-  faviconColor: string,
-  badgeColor?: string,
-  hasBadge?: boolean
-): void {
-  updateFaviconInternal(faviconColor, badgeColor, hasBadge);
-}
-
-function updateFaviconInternal(
   faviconColor: string,
   badgeColor?: string,
   hasBadge?: boolean
