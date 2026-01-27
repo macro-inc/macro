@@ -21,30 +21,28 @@ export type UnfurlLinkProps = { unfurled: GetUnfurlResponse };
 
 export function UnfurlLink(props: UnfurlLinkProps) {
   const domain = extractDomain(props.unfurled.url);
-  let icoRef: HTMLImageElement | undefined;
 
   return (
     <div
-      class="hover:bg-hover p-1 px-2 overflow-clip text-sm transition-colors hover:transition-none"
+      class="hover:bg-hover p-1 px-1.5 overflow-clip text-xs transition-colors hover:transition-none cursor-pointer"
       onClick={() => window.open(props.unfurled.url)}
     >
-      <div class="flex flex-row items-center gap-2 w-full h-full">
+      <div class="flex flex-row items-center gap-1.5 w-full h-full">
         <div class="shrink-0">
           <Show
             when={props.unfurled.favicon_url}
-            fallback={<LinkIcon class="w-6 h-6" />}
+            fallback={<LinkIcon class="w-4 h-4" />}
           >
             {(icon) => (
               <Show
                 when={!badLinks[icon()]}
-                fallback={<LinkIcon class="w-6 h-6" />}
+                fallback={<LinkIcon class="w-4 h-4" />}
               >
                 <img
                   src={proxyResource(icon())}
-                  class="content-center rounded-sm w-6 h-6 object-cover"
+                  class="content-center rounded-sm w-4 h-4 object-cover"
                   crossorigin="anonymous"
                   alt="ico"
-                  ref={icoRef}
                   on:error={() => {
                     setBadLinks(icon(), true);
                   }}
@@ -53,9 +51,11 @@ export function UnfurlLink(props: UnfurlLinkProps) {
             )}
           </Show>
         </div>
-        <div>
-          <h1 class="font-medium text-ink truncate">{props.unfurled.title}</h1>
-          <h2 class="font-medium text-ink-muted text-xs">{domain}</h2>
+        <div class="min-w-0">
+          <h1 class={`font-medium truncate text-ink`}>
+            {props.unfurled.title || domain}
+          </h1>
+          <h2 class="font-medium text-xxs text-ink-muted">{domain}</h2>
         </div>
       </div>
     </div>
