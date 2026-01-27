@@ -7,7 +7,7 @@ use axum::{
 };
 use sqlx::PgPool;
 
-use super::{get_public_access_level, get_users_access_level_v2, EntityType};
+use super::{EntityType, get_public_access_level, get_users_access_level_v2};
 use crate::cloud_storage::ensure_access::{AccessLevelErr, BuildAccessLevel};
 use model::document::DocumentBasic;
 use model_user::axum_extractor::OptionalMacroUserExtractor;
