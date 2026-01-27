@@ -1,7 +1,6 @@
 use ai_toolset::AsyncToolSet;
 use ai_toolset::schema::{ToolSchemaGenerator, ToolSchemas};
 pub mod code_execution;
-pub mod list;
 pub mod prompts;
 pub mod read;
 #[allow(dead_code)]

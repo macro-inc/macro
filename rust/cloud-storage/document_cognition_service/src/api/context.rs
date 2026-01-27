@@ -1,5 +1,5 @@
-use ai_tools::ToolSoupService;
 use crate::config::Config;
+use ai_tools::ToolSoupService;
 use axum::extract::FromRef;
 use document_storage_service_client::DocumentStorageServiceClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -119,11 +119,9 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     // Build soup service dependencies
     let frecency_storage = FrecencyPgStorage::new(pool.clone());
     let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
-    let email_service = EmailServiceImpl::new(EmailPgRepo::new(pool.clone()), frecency_service.clone());
-    let user_repo = UserRepoImpl::new(
-        "dummy_auth_key".into(),
-        "http://localhost".parse().unwrap(),
-    );
+    let email_service =
+        EmailServiceImpl::new(EmailPgRepo::new(pool.clone()), frecency_service.clone());
+    let user_repo = UserRepoImpl::new("dummy_auth_key".into(), "http://localhost".parse().unwrap());
     let channels_service = ChannelServiceImpl::new(
         PgCommsRepo { pool: pool.clone() },
         user_repo,

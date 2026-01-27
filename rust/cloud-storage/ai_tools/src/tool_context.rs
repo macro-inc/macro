@@ -10,8 +10,7 @@ use scribe::{
     email::EmailClient, static_file::StaticFileClient,
 };
 use soup::{
-    domain::service::SoupImpl,
-    inbound::toolset::SoupToolContext,
+    domain::service::SoupImpl, inbound::toolset::SoupToolContext,
     outbound::pg_soup_repo::PgSoupRepo,
 };
 use std::sync::Arc;
@@ -31,7 +30,8 @@ pub type ToolEmailService = EmailServiceImpl<EmailPgRepo, ToolFrecencyService>;
 pub type ToolCommsService = ChannelServiceImpl<PgCommsRepo, UserRepoImpl, FrecencyPgStorage>;
 
 /// Type alias for the soup service implementation
-pub type ToolSoupService = SoupImpl<PgSoupRepo, ToolFrecencyService, ToolEmailService, ToolCommsService>;
+pub type ToolSoupService =
+    SoupImpl<PgSoupRepo, ToolFrecencyService, ToolEmailService, ToolCommsService>;
 
 /// The full service context containing all API clients.
 /// Individual tools should extract only the clients they need via `FromRef`.
