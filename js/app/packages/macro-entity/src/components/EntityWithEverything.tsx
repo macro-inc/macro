@@ -2,6 +2,8 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import type { Property } from '@core/component/Properties/types';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import '@core/directive/dnd';
+import { useDragOperation } from '@app/component/ItemDragAndDrop';
+import { useEmail, useUserId } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { matches } from '@core/util/match';
@@ -12,24 +14,23 @@ import CheckIcon from '@icon/regular/check.svg';
 import {
   getAllNotificationsFromGroup,
   getMostRecentNotification,
+  type StackedNotificationGroup,
   stackNotifications,
   tryToTypedNotification,
-  type StackedNotificationGroup,
 } from '@notifications';
-import { useEmail, useUserId } from '@core/context/user';
 import { formatDocumentName } from '@service-storage/util/filename';
 import { syncServiceClient } from '@service-sync/client';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable } from '@thisbeyond/solid-dnd';
-import { useDragOperation } from '@app/component/ItemDragAndDrop';
 import { getIconConfig } from 'core/component/EntityIcon';
 import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import { UserIcon } from 'core/component/UserIcon';
-import { emailToMacroId, tryMacroId, useDisplayName } from 'core/user';
+import { emailToMacroId, tryMacroId, useDisplayName, useDisplayNameParts } from 'core/user';
 import type { JSX, ParentProps, Ref } from 'solid-js';
 import {
   createDeferred,
+  createEffect,
   createMemo,
   createSignal,
   createUniqueId,
@@ -48,6 +49,7 @@ import {
   type ProjectContainedEntity,
 } from '../queries/project';
 import { isSearchEntity } from '../queries/search';
+import type { EntityDragData } from '../types/drag';
 import {
   type EntityData,
   isTaskEntity,
@@ -65,7 +67,6 @@ import type {
   SearchLocation,
   WithSearch,
 } from '../types/search';
-import type { EntityDragData } from '../types/drag';
 import { KeyPropertiesGrid } from './EntityPropertyValues';
 
 export type EntityClickEvent = Parameters<
@@ -196,15 +197,6 @@ function EmailMessageContentHit(props: {
         </div>
       </div>
     </div>
-  );
-}
-
-function ThreadBorder() {
-  return (
-    <div
-      class="absolute left-[calc(0.5rem+1px)] w-[1px] border-l border-edge-muted -top-0.75"
-      style={{ height: '6px' }}
-    />
   );
 }
 
@@ -409,7 +401,6 @@ function StackedNotificationRow(props: {
   title: JSX.Element;
   icon: (props: { class?: string }) => JSX.Element;
   onClick?: (e: EntityClickEvent) => void;
-  debugLabel?: string;
 }) {
   // Get up to 3 unique sender IDs for avatar display
   const senderIds = createMemo(() => {
@@ -431,14 +422,6 @@ function StackedNotificationRow(props: {
 
   const messageContent = createMemo(() => {
     const metadata = props.mostRecent.notificationMetadata;
-    if (props.debugLabel) {
-      console.log(`[${props.debugLabel}] mostRecent:`, props.mostRecent);
-      console.log(`[${props.debugLabel}] metadata:`, metadata);
-      console.log(
-        `[${props.debugLabel}] messageContent:`,
-        metadata?.messageContent
-      );
-    }
     return metadata?.messageContent?.trim() ?? '';
   });
 
@@ -450,7 +433,7 @@ function StackedNotificationRow(props: {
       <div class="flex gap-1 w-full overflow-hidden items-baseline">
         {/* Count + Stacked avatars */}
         <div class="min-w-[20cqw] shrink-0 flex items-center gap-1">
-          <span class="font-medium">{props.title}</span>
+          <span>{props.title}</span>
           <div class="flex shrink-0 items-center">
             <For each={senderIds()}>
               {(id, index) => (
@@ -467,9 +450,6 @@ function StackedNotificationRow(props: {
         {/* Sender avatar + name + message content */}
         <Show when={mostRecentSenderId()}>
           <div class="flex items-center gap-1 flex-1 min-w-0">
-            <div class="flex size-5 shrink-0 items-center justify-center">
-              <UserIcon id={mostRecentSenderId()} size="xs" />
-            </div>
             <span class="shrink-0 font-medium">{mostRecentSenderName()}</span>
             <Show when={messageContent()}>
               {(content) => (
@@ -518,7 +498,6 @@ function StackedNewMessagesRow(props: {
               })
           : undefined
       }
-      debugLabel="StackedNewMessagesRow"
     />
   );
 }
@@ -533,17 +512,16 @@ function StackedRepliesRow(props: {
 }) {
   const count = () => props.group.notifications.length;
 
-  // TODO: Need to get thread starter's name. This fakes it.
-  const threadStarterName = createMemo(() => {
-    const names = ['Teo', 'Hutchington', 'Bingo Podnar'];
-    const random = Math.floor(Math.random() * names.length);
-    return names[random];
-  });
+  const threadParentSenderId = () => props.group.mostRecent.notificationMetadata.threadParentSenderId ?? "";
+
+  const { firstName } = useDisplayNameParts(
+    tryMacroId(threadParentSenderId())
+  );
 
   const title = () => (
     <>
       {count()} {count() === 1 ? 'Reply' : 'Replies'}
-      <Show when={threadStarterName()}>{(name) => <> to {name()}</>}</Show>
+      <Show when={firstName()}>{(name) => <> to {name}</>}</Show>
     </>
   );
 
@@ -563,7 +541,6 @@ function StackedRepliesRow(props: {
               })
           : undefined
       }
-      debugLabel="StackedRepliesRow"
     />
   );
 }
