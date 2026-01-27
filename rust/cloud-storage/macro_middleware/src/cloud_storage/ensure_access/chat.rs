@@ -7,7 +7,8 @@ use axum::{
     extract::{FromRef, FromRequestParts},
     http::request::Parts,
 };
-use model::{chat::ChatBasic, user::axum_extractor::MacroUserExtractor};
+use model::chat::ChatBasic;
+use model_user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::access_level::AccessLevel;
 use sqlx::PgPool;
 

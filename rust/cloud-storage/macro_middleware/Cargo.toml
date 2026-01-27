@@ -9,6 +9,7 @@ all = ["auth", "cloud_storage", "tracking", "user_permissions"]
 auth = ["dep:macro_auth", "dep:url"]
 cloud_storage = [
   "dep:macro_share_permissions",
+  "dep:model_user",
   "dep:permission",
   "macro_db_client",
 ]
@@ -30,6 +31,7 @@ macro_share_permissions = { path = "../macro_share_permissions", optional = true
 macro_user_id = { path = "../macro_user_id", optional = true }
 macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }
+model_user = { path = "../model_user", features = ["axum"], optional = true }
 models_permissions = { path = "../models_permissions" }
 permission = { path = "../permission", optional = true }
 remote_env_var = { path = "../remote_env_var" }

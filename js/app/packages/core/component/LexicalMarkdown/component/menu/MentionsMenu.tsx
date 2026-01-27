@@ -5,23 +5,24 @@ import {
 } from '@core/block';
 import { SUPPORTED_CHAT_ATTACHMENT_BLOCKS } from '@core/component/AI/constant/fileType';
 import { BozzyBracketInnerSibling } from '@core/component/BozzyBracket';
-import {
-  useChannelsContext,
-  useDmActivityByUserId,
-} from '@core/context/channels';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import { UserIcon } from '@core/component/UserIcon';
 import { ENABLE_CHAT_CHANNEL_ATTACHMENT } from '@core/constant/featureFlags';
+import {
+  useChannelsContext,
+  useDmActivityByUserId,
+} from '@core/context/channels';
+import { useEmail } from '@core/context/user';
 import clickOutside from '@core/directive/clickOutside';
 import {
   type ChannelWithParticipants,
   type IUser,
   useContacts,
 } from '@core/user';
-import { useEmail } from '@core/context/user';
 import { getDateSuggestions } from '@core/util/dateParser';
 import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
+import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import ClockIcon from '@icon/regular/clock.svg';
 import EmailIcon from '@icon/regular/envelope.svg';
 import UsersIcon from '@icon/regular/users.svg';
@@ -77,7 +78,6 @@ import {
   handleUserMention,
   type UserMentionRecord,
 } from '../../utils/mentionsUtils';
-import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 
 false && clickOutside;
 false && floatWithSelection;
@@ -138,6 +138,7 @@ function allItemFilter(item: CombinedEntity): boolean {
 /**
  * Create the universal item handler.
  * @param dependencies
+ * @param useSnapshotForDocuments Whether to use SnapshotNode for supported document types
  * @returns
  */
 function createItemHandler(dependencies: HandlerDependencies) {
@@ -430,6 +431,8 @@ function MentionsMenuInner(props: {
   onDocumentMention?: (item: Item | ChannelWithParticipants) => void;
   onEmailMention?: (item: EmailEntity) => void;
   disableMentionTracking?: boolean;
+  /** Fetch text then past in a fold-node for plain-text mentions (useful for AI)*/
+  useSnapshotForDocuments?: boolean;
 }) {
   const [searchTerm, setSearchTerm] = createSignal<string>(
     props.menu.searchTerm()
@@ -724,7 +727,7 @@ function MentionsMenuInner(props: {
       local: Entity<T>[],
       unifiedSearch: Entity<T>[]
     ): Entity<T>[] {
-      let ids = new Set(local.map((e) => e.id));
+      const ids = new Set(local.map((e) => e.id));
       return [...local, ...unifiedSearch.filter((e) => !ids.has(e.id))];
     }
 
@@ -836,6 +839,7 @@ function MentionsMenuInner(props: {
     onDocumentMention: props.onDocumentMention,
     onEmailMention: props.onEmailMention,
     disableMentionTracking: props.disableMentionTracking,
+    useSnapshotNode: props.useSnapshotForDocuments,
   });
 
   createEffect(() => {

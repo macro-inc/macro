@@ -9,7 +9,8 @@ use sqlx::PgPool;
 
 use super::{get_public_access_level, get_users_access_level_v2};
 use crate::cloud_storage::ensure_access::{AccessLevelErr, BuildAccessLevel};
-use model::{document::DocumentBasic, user::axum_extractor::OptionalMacroUserExtractor};
+use model::document::DocumentBasic;
+use model_user::axum_extractor::OptionalMacroUserExtractor;
 use models_permissions::share_permission::access_level::AccessLevel;
 
 #[derive(Debug)]
