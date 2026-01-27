@@ -174,7 +174,7 @@ async fn test_send_notification_success() {
             message: "Hello".to_string(),
         },
         sender_id: None,
-        recipient_ids: vec![recipient.clone()],
+        recipient_ids: HashSet::from([recipient.clone()]),
     }
     .into_request();
 
@@ -194,7 +194,7 @@ async fn test_sender_excluded_from_recipients() {
             message: "Hello".to_string(),
         },
         sender_id: Some(sender.clone()),
-        recipient_ids: vec![sender.clone()],
+        recipient_ids: HashSet::from([sender.clone()]),
     }
     .into_request();
 
@@ -218,7 +218,7 @@ async fn test_muted_user_excluded() {
             message: "Hello".to_string(),
         },
         sender_id: None,
-        recipient_ids: vec![muted_user],
+        recipient_ids: HashSet::from([muted_user]),
     }
     .into_request();
 

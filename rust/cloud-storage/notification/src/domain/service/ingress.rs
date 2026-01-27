@@ -3,15 +3,14 @@
 //! This service handles the caller-facing side of notifications:
 //! filtering recipients, persisting to DB, and publishing to the queue.
 
-use crate::domain::models::mobile::{MessageAttributes, PushType};
 use crate::domain::models::queue_message::{
     APNSTargets, ConnGatewayNotification, EmailNotification, Node, NotificationChannel,
     QueueMessage,
 };
 use crate::domain::models::recipient::FilteredRecipient;
 use crate::domain::models::{
-    ExclusionReason, Notification, NotificationResult, RecipientExclusion, RevokeCriteria,
-    SendNotificationRequest,
+    DeviceEndpoint, ExclusionReason, Notification, NotificationResult, RecipientExclusion,
+    RevokeCriteria, SendNotificationRequest,
 };
 use crate::domain::ports::{NotificationQueue, NotificationRepository};
 use crate::domain::service::{MissingRevokeFilter, SendNotificationError};
@@ -102,7 +101,7 @@ where
             request.update_recipients(allowed.into_iter().map(CowLike::into_owned).collect());
 
         // Build and publish QueueMessage
-        let queue_messages = self.build_queue_message(&mut req)?;
+        let queue_messages = self.build_queue_message(&mut req).await?;
 
         self.queue
             .publish(&queue_messages)
@@ -197,9 +196,9 @@ where
     /// Build queue messages for each delivery channel.
     ///
     /// - `send_conn_gateway`: Creates a single message for all recipients (1:M)
-    /// - `build_apns`: Creates one message per recipient (1:1)
+    /// - `build_apns`: Creates one message per recipient with their device endpoints (1:1)
     /// - `build_email`: Creates one message per recipient (1:1)
-    fn build_queue_message<'a, T: Notification + Serialize + Clone>(
+    async fn build_queue_message<'a, T: Notification + Serialize + Clone>(
         &self,
         notification: &mut SendNotificationRequest<'a, T>,
     ) -> Result<Vec<QueueMessage<'a, T>>, Report<SendNotificationError>> {
@@ -222,21 +221,34 @@ where
             });
         }
 
-        // APNS (iOS push): 1:1 (one message per recipient)
+        // APNS (iOS push): 1:M (single message for all recipients' device endpoints)
         if let Some(ref mut build_apns) = notification.build_apns {
-            for recipient in &notification.req.recipient_ids {
-                let apns_notif = build_apns(notification.req.notification.clone());
+            let recipients_vec: Vec<_> = notification.req.recipient_ids.iter().cloned().collect();
+            let device_endpoints = self
+                .repository
+                .get_device_endpoints(&recipients_vec)
+                .await
+                .context(SendNotificationError::Other)?;
+
+            let ios_endpoints: Vec<String> = device_endpoints
+                .values()
+                .flatten()
+                .filter_map(|e| match e {
+                    DeviceEndpoint::Ios(arn) => Some(arn.clone()),
+                    DeviceEndpoint::Android(_) => None,
+                })
+                .collect();
+
+            if !ios_endpoints.is_empty() {
+                let (apns_notif, attributes) = build_apns(notification.req.notification.clone());
                 messages.push(QueueMessage {
                     message_type: message_type.clone(),
                     rate_limit: rate_limit.clone(),
                     content: Node {
                         notif: NotificationChannel::Ios(Box::new(APNSTargets {
                             notif: apns_notif,
-                            attributes: MessageAttributes {
-                                push_type: PushType::Alert,
-                                collapse_key: format!("{}:{}", T::TYPE_NAME, recipient),
-                            },
-                            ios_device_endpoints: vec![], // Filled by egress service
+                            attributes,
+                            ios_device_endpoints: ios_endpoints,
                         })),
                         on_failure: None,
                     },

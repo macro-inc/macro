@@ -3,7 +3,7 @@
 use crate::domain::{
     models::{
         Notification, RateLimitConfig, RateLimitKey, apple::APNSPushNotification,
-        queue_message::EmailContent,
+        mobile::MessageAttributes, queue_message::EmailContent,
     },
     service::SendNotificationError,
 };
@@ -50,7 +50,8 @@ impl<'a, T> SendNotificationRequestBuilder<'a, T> {
 pub struct SendNotificationRequest<'a, T> {
     pub(crate) req: SendNotificationRequestBuilder<'a, T>,
     /// define how to turn t into an APNSPushNotitication T to be sent to ios
-    pub(crate) build_apns: Option<Box<dyn FnMut(T) -> APNSPushNotification<T>>>,
+    pub(crate) build_apns:
+        Option<Box<dyn FnMut(T) -> (APNSPushNotification<T>, MessageAttributes)>>,
     /// define how to turn T into an email content to be sent as an email
     pub(crate) build_email: Option<Box<dyn FnMut(T) -> EmailContent>>,
     /// connection gateway accepts arbitrary json so we just ask if its enabled or not
@@ -59,7 +60,10 @@ pub struct SendNotificationRequest<'a, T> {
 
 impl<'a, T> SendNotificationRequest<'a, T> {
     /// Add a custom APNS notification builder.
-    pub fn with_apns(mut self, cb: Box<dyn FnMut(T) -> APNSPushNotification<T>>) -> Self {
+    pub fn with_apns(
+        mut self,
+        cb: Box<dyn FnMut(T) -> (APNSPushNotification<T>, MessageAttributes)>,
+    ) -> Self {
         self.build_apns.replace(cb);
         self
     }

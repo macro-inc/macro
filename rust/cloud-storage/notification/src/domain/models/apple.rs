@@ -111,20 +111,6 @@ pub struct APNSPushNotification<T> {
     pub push_notification_data: T,
 }
 
-pub struct AppleNotification<T> {
-    pub(crate) notif: APNSPushNotification<T>,
-    pub(crate) device_endpoint: String,
-}
-
-impl<T> AppleNotification<T> {
-    pub(crate) fn new_from_notif(notif: APNSPushNotification<T>, device_endpoint: String) -> Self {
-        AppleNotification {
-            notif,
-            device_endpoint,
-        }
-    }
-}
-
 impl APNSPushNotification<()> {
     /// construct a simple apple notification using the input notifications title and body
     pub fn default_new<T: Notification>(notif: &T) -> Self {
