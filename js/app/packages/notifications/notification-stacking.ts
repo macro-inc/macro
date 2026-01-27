@@ -99,6 +99,22 @@ function sortByRecency<T extends { createdAt: number }>(items: T[]): T[] {
   return [...items].sort((a, b) => b.createdAt - a.createdAt);
 }
 
+const groupBy: <T, K>(items: T[], keyFn: (item: T) => K) => Map<K, T[]> =
+  Map.groupBy ??
+  ((items, keyFn) => {
+    const map = new Map();
+    for (const item of items) {
+      const key = keyFn(item);
+      const group = map.get(key);
+      if (group) {
+        group.push(item);
+      } else {
+        map.set(key, [item]);
+      }
+    }
+    return map;
+  });
+
 function makeStack(
   type: TypedNotification['notificationEventType'],
   notifications: TypedNotification[]
@@ -110,7 +126,7 @@ function makeStack(
 function makeReplyStacks(
   replies: TypedNotification<'channel_message_reply'>[]
 ): NotificationStack[] {
-  const byThread = Map.groupBy(
+  const byThread = groupBy(
     replies,
     (r) => r.notificationMetadata?.threadId ?? ''
   );
