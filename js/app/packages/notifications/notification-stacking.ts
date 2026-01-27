@@ -1,11 +1,11 @@
-import type { UnifiedNotification } from './types';
+import { match } from 'ts-pattern';
 import {
   isChannelMention,
   isChannelMessageReply,
   isChannelMessageSend,
   type TypedNotification,
 } from './notification-metadata';
-import { match } from 'ts-pattern';
+import type { UnifiedNotification } from './types';
 
 /**
  * Represents a stack of new message notifications (channel_message_send)
@@ -95,131 +95,80 @@ export function getAllNotificationsFromGroup(
 
 /**
  * Stacks notifications by type for unrolled notification display.
- *
- * Algorithm:
- * 1. Collect all messageIds from mentions (for shadowing)
- * 2. Filter out channel_message_send and channel_message_reply notifications
- *    whose messageId matches a mention (they are "shadowed" by the mention)
- * 3. Stack remaining channel_message_send into one NewMessagesStack
- * 4. Group remaining channel_message_reply by threadId into RepliesStack groups
- * 5. Keep mentions and other types as individual items
- * 6. Sort: mentions first, then stacks by most recent timestamp
  */
 export function stackNotifications(
   notifications: UnifiedNotification[]
 ): StackedNotificationGroup[] {
-  // Step 1: Collect messageIds from mentions for shadowing
-  const mentionMessageIds = new Set<string>();
-  const mentions: TypedNotification<'channel_mention'>[] = [];
+  // Collect mention messageIds for shadowing
+  const mentionedMsgIds = new Set(
+    notifications
+      .filter(isChannelMention)
+      .map((n) => n.notificationMetadata?.messageId)
+      .filter(Boolean)
+  );
 
-  for (const n of notifications) {
-    if (isChannelMention(n)) {
-      mentions.push(n);
-      const metadata = n.notificationMetadata;
-      if (metadata?.messageId) {
-        mentionMessageIds.add(metadata.messageId);
-      }
-    }
-  }
+  const isShadowed = (n: { notificationMetadata?: { messageId?: string } }) =>
+    n.notificationMetadata?.messageId &&
+    mentionedMsgIds.has(n.notificationMetadata.messageId);
 
-  // Step 2 & 3: Collect new messages (excluding shadowed ones)
-  const newMessages: TypedNotification<'channel_message_send'>[] = [];
-  for (const n of notifications) {
-    if (isChannelMessageSend(n)) {
-      const messageId = n.notificationMetadata?.messageId;
-      // Skip if this message is shadowed by a mention
-      if (messageId && mentionMessageIds.has(messageId)) {
-        continue;
-      }
-      newMessages.push(n);
-    }
-  }
-
-  // Step 4: Group replies by threadId (excluding shadowed ones)
-  const repliesByThread = new Map<
-    string,
-    TypedNotification<'channel_message_reply'>[]
-  >();
-  for (const n of notifications) {
-    if (isChannelMessageReply(n)) {
-      const metadata = n.notificationMetadata;
-      const messageId = metadata?.messageId;
-      // Skip if this message is shadowed by a mention
-      if (messageId && mentionMessageIds.has(messageId)) {
-        continue;
-      }
-      const threadId = metadata?.threadId;
-      if (threadId) {
-        const existing = repliesByThread.get(threadId) ?? [];
-        existing.push(n);
-        repliesByThread.set(threadId, existing);
-      }
-    }
-  }
-
-  // Step 5: Collect other notification types
-  const others: UnifiedNotification[] = [];
-  for (const n of notifications) {
-    if (
+  // Partition by type
+  const mentions = notifications.filter(isChannelMention);
+  const newMsgs = notifications
+    .filter(isChannelMessageSend)
+    .filter((n) => !isShadowed(n));
+  const replies = notifications
+    .filter(isChannelMessageReply)
+    .filter((n) => !isShadowed(n));
+  const others = notifications.filter(
+    (n) =>
       !isChannelMention(n) &&
       !isChannelMessageSend(n) &&
       !isChannelMessageReply(n)
-    ) {
-      others.push(n);
+  );
+
+  // Build groups
+  const groups: StackedNotificationGroup[] = [
+    ...mentions.map((n) => ({ type: 'mention' as const, notification: n })),
+    ...makeNewMessagesStack(newMsgs),
+    ...makeReplyStacks(replies),
+    ...others.map((n) => ({ type: 'other' as const, notification: n })),
+  ];
+
+  // Sort: mentions first, then by recency
+  return groups.sort((a, b) => {
+    if ((a.type === 'mention') !== (b.type === 'mention')) {
+      return a.type === 'mention' ? -1 : 1;
     }
-  }
-
-  // Build result groups
-  const result: StackedNotificationGroup[] = [];
-
-  // Add mentions as individual items
-  for (const mention of mentions) {
-    result.push({
-      type: 'mention',
-      notification: mention,
-    });
-  }
-
-  // Add stacked new messages (if any)
-  if (newMessages.length > 0) {
-    // Sort by timestamp descending to get most recent first
-    const sorted = [...newMessages].sort((a, b) => b.createdAt - a.createdAt);
-    result.push({
-      type: 'new_messages',
-      notifications: sorted,
-      mostRecent: sorted[0],
-    });
-  }
-
-  // Add stacked replies (grouped by threadId)
-  for (const [threadId, replies] of repliesByThread) {
-    // Sort by timestamp descending to get most recent first
-    const sorted = [...replies].sort((a, b) => b.createdAt - a.createdAt);
-    result.push({
-      type: 'replies',
-      threadId,
-      notifications: sorted,
-      mostRecent: sorted[0],
-    });
-  }
-
-  // Add other notification types as individual items
-  for (const other of others) {
-    result.push({
-      type: 'other',
-      notification: other,
-    });
-  }
-
-  // Step 6: Sort - mentions first, then by most recent timestamp
-  result.sort((a, b) => {
-    // Mentions always come first
-    if (a.type === 'mention' && b.type !== 'mention') return -1;
-    if (a.type !== 'mention' && b.type === 'mention') return 1;
-
-    // Otherwise sort by timestamp descending (most recent first)
     return getTimestamp(b) - getTimestamp(a);
   });
+}
 
-  return result;
+function makeNewMessagesStack(
+  msgs: TypedNotification<'channel_message_send'>[]
+): NewMessagesStack[] {
+  if (msgs.length === 0) return [];
+  const sorted = [...msgs].sort((a, b) => b.createdAt - a.createdAt);
+  return [
+    { type: 'new_messages', notifications: sorted, mostRecent: sorted[0] },
+  ];
+}
+
+function makeReplyStacks(
+  replies: TypedNotification<'channel_message_reply'>[]
+): RepliesStack[] {
+  const byThread = Map.groupBy(
+    replies,
+    (r) => r.notificationMetadata?.threadId ?? ''
+  );
+  return [...byThread.entries()]
+    .filter(([threadId]) => threadId !== '')
+    .map(([threadId, group]) => {
+      const sorted = [...group].sort((a, b) => b.createdAt - a.createdAt);
+      return {
+        type: 'replies',
+        threadId,
+        notifications: sorted,
+        mostRecent: sorted[0],
+      };
+    });
 }
