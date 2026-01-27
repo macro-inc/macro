@@ -80,7 +80,9 @@ const syncServiceHostRemote = {
   ws: `wss://sync-service${syncServiceSuffix}.macroverse.workers.dev`,
 } as const;
 
-function selectSyncServiceHost(): typeof syncServiceHostRemote {
+function selectSyncServiceHost():
+  | typeof syncServiceHostRemote
+  | typeof syncServiceHostLocal {
   if (import.meta.env.MODE !== 'development') {
     return syncServiceHostRemote;
   }
