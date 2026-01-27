@@ -1,3 +1,4 @@
+use crate::convert::{map_message_resource_to_service, map_thread_resources_to_service};
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::inbox_sync::operations::shared::notify_search;
 use crate::pubsub::inbox_sync::process;
@@ -42,9 +43,9 @@ pub async fn upsert_message(
     )
     .await?;
 
-    let message = match ctx
+    let message_resource = match ctx
         .gmail_client
-        .get_message(&gmail_access_token, &payload.provider_message_id, link.id)
+        .get_message(&gmail_access_token, &payload.provider_message_id)
         .await
         .map_err(|e| {
             // retryable because we don't return an error if message doesn't exist, so this means
@@ -61,6 +62,14 @@ pub async fn upsert_message(
             return Ok(());
         }
     };
+
+    // Map Gmail resource to service model (IDs are generated in the parse function)
+    let message = map_message_resource_to_service(message_resource, link.id).map_err(|e| {
+        ProcessingError::NonRetryable(DetailedError {
+            reason: FailureReason::GmailApiFailed,
+            source: e.context("Failed to map message resource to service".to_string()),
+        })
+    })?;
     let message_attachment_count = message.attachments.len();
 
     // will always exist because we just fetched it
@@ -355,18 +364,24 @@ async fn fetch_and_insert_thread(
     .await
     .map_err(anyhow::Error::from)?;
 
-    let mut threads = ctx
+    let thread_resources = ctx
         .gmail_client
-        .get_threads(
-            link_id,
-            gmail_access_token,
-            &vec![provider_thread_id.to_string()],
-        )
+        .get_threads(gmail_access_token, &vec![provider_thread_id.to_string()])
         .await
         .map_err(|e| {
             ProcessingError::NonRetryable(DetailedError {
                 reason: FailureReason::GmailApiFailed,
                 source: e.context("Failed to get threads from gmail api".to_string()),
+            })
+        })?;
+
+    // Map Gmail resources to service models (IDs are generated in the parse functions)
+    let mut threads = map_thread_resources_to_service(thread_resources, link_id)
+        .await
+        .map_err(|e| {
+            ProcessingError::NonRetryable(DetailedError {
+                reason: FailureReason::GmailApiFailed,
+                source: anyhow::anyhow!("Failed to map thread resources: {}", e),
             })
         })?;
 

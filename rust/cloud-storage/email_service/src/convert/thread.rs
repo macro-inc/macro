@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
 use futures::future::try_join_all;
+use macro_uuid::generate_uuid_v7;
 use models_email::email::service;
 use models_email::email::service::message::{is_inbound, is_outbound, is_spam_or_trash};
 use models_email::gmail::ThreadResource;
@@ -86,8 +87,14 @@ pub async fn map_thread_resource_to_service(
         .map(|msg| msg.internal_date_ts)
         .unwrap_or_else(|| None);
 
+    // Generate the thread ID and update all messages to reference it
+    let thread_db_id = generate_uuid_v7();
+    for msg in service_messages.iter_mut() {
+        msg.thread_db_id = thread_db_id;
+    }
+
     Ok(service::thread::Thread {
-        db_id: None,
+        db_id: thread_db_id,
         provider_id: Some(thread_resource.id),
         link_id, // From argument
         inbox_visible,

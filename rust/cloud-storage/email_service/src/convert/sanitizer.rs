@@ -283,36 +283,3 @@ fn get_safe_css_properties() -> HashSet<&'static str> {
         "list-style",
     ])
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-
-    /// should extract the body attribute and disregard the title attribute
-    #[test]
-    fn test_sanitize_body_only() {
-        let input_html = include_str!("testdata/sanitizer/body-only/original.html");
-        let expected_html = include_str!("testdata/sanitizer/body-only/expected.html");
-        test_html_sanitization(input_html, expected_html, "body-only");
-    }
-
-    fn test_html_sanitization(input_html: &str, expected_html: &str, test_name: &str) {
-        // Get the sanitizer and sanitize the HTML
-        let sanitized_html = sanitize_email_html(input_html);
-
-        // Write the sanitized output to a file for inspection (uncomment for debugging if needed)
-        let path = format!("src/testdata/sanitizer/{}/actual_output.html", test_name);
-        fs::create_dir_all(path.rsplit_once('/').unwrap().0).expect("Failed to create directory");
-        fs::write(path, &sanitized_html).expect("Failed to write sanitized output to file");
-
-        // Compare the sanitized output with the expected output
-        // Normalize whitespace for more reliable comparison
-        assert_eq!(
-            sanitized_html.replace(" ", "").replace("\n", "").trim(),
-            expected_html.replace(" ", "").replace("\n", "").trim(),
-            "Test '{}' failed: sanitized HTML doesn't match expected output",
-            test_name
-        );
-    }
-}

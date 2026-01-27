@@ -4,9 +4,9 @@ use chrono::{DateTime, TimeZone, Utc};
 use models_email::email::service;
 use models_email::gmail::{Header, MessagePart};
 
-use crate::parse::message::find_header;
-use crate::parse::message::parse_address_header;
-use crate::sanitizer::sanitize_email_html;
+use crate::convert::message::find_header;
+use crate::convert::message::parse_address_header;
+use crate::convert::sanitizer::sanitize_email_html;
 
 #[derive(Debug, Default)]
 pub struct ParsedGmailPayload {

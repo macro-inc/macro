@@ -1,3 +1,4 @@
+use macro_uuid::generate_uuid_v7;
 use models_email::gmail::contacts::PersonResource;
 use models_email::service::contact::Contact;
 use uuid::Uuid;
@@ -23,7 +24,7 @@ pub fn map_person_to_contact(link_id: Uuid, person: PersonResource) -> Contact {
         .and_then(|p| p.url);
 
     Contact {
-        id: None,
+        id: generate_uuid_v7(),
         link_id,
         name: display_name,
         email_address,

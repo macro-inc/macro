@@ -176,7 +176,7 @@ async fn get_thread_handler_inner<U: EmailService>(
 
         let access_level = ctx
             .dss_client
-            .get_thread_access_level(macro_id, &thread.db_id.unwrap().to_string())
+            .get_thread_access_level(macro_id, &thread.db_id.to_string())
             .await
             .map_err(|e| {
                 tracing::error!(error=?e, "unable to get access level for thread for user");

@@ -3150,6 +3150,7 @@ dependencies = [
 name = "email_service"
 version = "0.1.0"
 dependencies = [
+ "ammonia",
  "anyhow",
  "authentication_service_client",
  "aws-config",
@@ -3185,6 +3186,7 @@ dependencies = [
  "macro_notify",
  "macro_user_id",
  "macro_uuid",
+ "mailparse",
  "mime_guess",
  "model",
  "model-entity",
@@ -3195,6 +3197,7 @@ dependencies = [
  "models_pagination",
  "models_permissions",
  "models_properties",
+ "once_cell",
  "redis",
  "regex",
  "reqwest",
@@ -3858,19 +3861,15 @@ checksum = "a8d1add55171497b4705a648c6b583acafb01d58050a51727785f0b2c8e0a2b2"
 name = "gmail_client"
 version = "0.1.0"
 dependencies = [
- "ammonia",
  "anyhow",
  "base64 0.22.1",
  "chrono",
  "futures",
  "jsonwebtoken",
  "mail-builder",
- "mailparse",
  "mockall",
  "models_email",
- "once_cell",
  "reqwest",
- "scraper",
  "serde_json",
  "tokio",
  "tracing",

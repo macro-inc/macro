@@ -1,6 +1,7 @@
 use super::payload::parse_gmail_payload;
 use anyhow::{Context, Result};
 use chrono::{TimeZone, Utc};
+use macro_uuid::generate_uuid_v7;
 use mailparse::{MailAddr, MailAddrList, addrparse};
 use models_email::email::service;
 use models_email::gmail::labels::SystemLabelID;
@@ -56,24 +57,22 @@ pub fn map_message_resource_to_service(
     let attachments = parsed_payload
         .attachments_metadata
         .into_iter()
-        .map(|meta| {
-            service::attachment::Attachment {
-                db_id: None, // gets populated later
-                provider_id: meta.provider_attachment_id,
-                data_url: None,
-                filename: meta.filename,
-                mime_type: meta.mime_type,
-                size_bytes: meta.size_bytes,
-                content_id: meta.content_id,
-                sfs_id: None,
-            }
+        .map(|meta| service::attachment::Attachment {
+            db_id: generate_uuid_v7(),
+            provider_id: meta.provider_attachment_id,
+            data_url: None,
+            filename: meta.filename,
+            mime_type: meta.mime_type,
+            size_bytes: meta.size_bytes,
+            content_id: meta.content_id,
+            sfs_id: None,
         })
         .collect();
 
     Ok(service::message::Message {
-        db_id: None, // Omitted - needs to be associated later
+        db_id: generate_uuid_v7(),
         provider_id: Some(message.id),
-        thread_db_id: None, // Omitted - needs to be associated later
+        thread_db_id: generate_uuid_v7(),
         provider_thread_id: Some(message.thread_id),
         replying_to_id: None, // gets generated later, once message has been inserted
         global_id: Some(parsed_payload.global_id),
