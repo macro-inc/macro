@@ -24,7 +24,7 @@ const serverHostRemote = {
   'pdf-service': `https://pdf-service${devServerSuffix}.macro.com`,
   // 'document-storage-service': `https://cloud-storage${devServerSuffix}.macro.com`,
 
-  'document-storage-service': 'http://localhost:8086',
+  'document-storage-service': 'http://localhost:8083',
   'websocket-service': `wss://services${devServerSuffix}.macro.com`,
   'cognition-service': `https://document-cognition${devServerSuffix}.macro.com`,
   'cognition-websocket-service': `wss://document-cognition${devServerSuffix}.macro.com`,
