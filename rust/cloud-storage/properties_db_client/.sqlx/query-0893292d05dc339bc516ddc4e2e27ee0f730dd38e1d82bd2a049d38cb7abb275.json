@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            d.id,\n            d.name,\n            d.owner,\n            d.\"fileType\" as \"file_type\",\n            d.\"projectId\" as \"project_id\",\n            d.\"createdAt\"::timestamptz as \"created_at!\",\n            d.\"updatedAt\"::timestamptz as \"updated_at!\"\n        FROM\n            \"Document\" d\n        WHERE\n            d.id = $1 AND d.\"deletedAt\" IS NULL\n        ",
+  "query": "\n        SELECT\n            d.id,\n            d.name,\n            d.owner,\n            d.\"fileType\" as \"file_type\",\n            d.\"projectId\" as \"project_id\",\n            d.\"createdAt\"::timestamptz as \"created_at!\",\n            d.\"updatedAt\"::timestamptz as \"updated_at!\"\n        FROM\n            \"Document\" d\n        WHERE\n            d.id = $1\n        ",
   "describe": {
     "columns": [
       {
@@ -54,5 +54,5 @@
       null
     ]
   },
-  "hash": "8deba8192e4d2c9e483de10142ec78795082cc722c3f8791b993ecc396ad5fbf"
+  "hash": "0893292d05dc339bc516ddc4e2e27ee0f730dd38e1d82bd2a049d38cb7abb275"
 }

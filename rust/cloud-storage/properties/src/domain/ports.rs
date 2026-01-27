@@ -105,6 +105,13 @@ pub trait PropertiesRepo: Send + Sync + 'static {
 pub trait PermissionService: Send + Sync + 'static {
     type Err;
 
+    /// Gets the owner of the entity and whether it's deleted
+    fn get_owner_and_deleted(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<(String, bool), Self::Err>> + Send;
+
     /// Check if a user has edit access to an entity.
     /// Returns an error if the user does not have edit or owner access.
     fn check_entity_edit_permission(
