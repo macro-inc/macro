@@ -252,13 +252,16 @@ pub async fn dispatch_notifications_for_message(
         .map(|response| response.documents)
         .unwrap_or_default();
 
-    let (thread_participants, thread_parent_sender_id) = if let Some(thread_id) = message.thread_id {
+    let (thread_participants, thread_parent_sender_id) = if let Some(thread_id) = message.thread_id
+    {
         let participants = get_channel_participants_for_thread_id(&api_context.db, &thread_id)
             .await
             .unwrap_or_default();
         // Get the thread parent sender (author of the root message)
         let sender_id = match get_message_owner(&api_context.db, &thread_id).await {
-            Ok(id) => MacroUserIdStr::parse_from_str(&id).ok().map(|id| id.into_owned()),
+            Ok(id) => MacroUserIdStr::parse_from_str(&id)
+                .ok()
+                .map(|id| id.into_owned()),
             Err(_) => None,
         };
         (participants, sender_id)
