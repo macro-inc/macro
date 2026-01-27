@@ -129,6 +129,28 @@ pub async fn get_users_access_level_v2(
     }
 }
 
+/// Gets public access level for a document (no user required).
+///
+/// Use this for unauthenticated access to publicly shared documents.
+#[tracing::instrument(skip(db))]
+pub async fn get_public_access_level(
+    db: &Pool<Postgres>,
+    document_id: &str,
+) -> Result<Option<AccessLevel>, (StatusCode, String)> {
+    macro_db_client::share_permission::access_level::document::get_public_access_level_for_document(
+        db,
+        document_id,
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!(error=?e, "failed to get public access level");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "failed to get public access level".to_string(),
+        )
+    })
+}
+
 /// Gets the users AccessLevel for a given item using UserItemAccess and SharePermissions
 #[tracing::instrument(skip(db))]
 pub async fn get_highest_access_level(
