@@ -97,10 +97,10 @@ where
         };
 
         // Build and publish QueueMessage
-        let queue_message = self.build_queue_message(&request, &allowed)?;
+        let queue_messages = self.build_queue_message(&request, &allowed)?;
 
         self.queue
-            .publish(&queue_message)
+            .publish(&queue_messages)
             .await
             .context(SendNotificationError::Other)?;
 

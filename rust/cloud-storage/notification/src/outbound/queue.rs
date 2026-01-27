@@ -23,15 +23,17 @@ impl SqsNotificationQueue {
 impl NotificationQueue for SqsNotificationQueue {
     async fn publish<T: Serialize + Send + Sync>(
         &self,
-        message: &QueueMessage<'_, T>,
+        messages: &[QueueMessage<'_, T>],
     ) -> Result<(), Report> {
-        let body = serde_json::to_string(message)?;
-        self.client
-            .send_message()
-            .queue_url(&self.queue_url)
-            .message_body(body)
-            .send()
-            .await?;
+        for message in messages {
+            let body = serde_json::to_string(message)?;
+            self.client
+                .send_message()
+                .queue_url(&self.queue_url)
+                .message_body(body)
+                .send()
+                .await?;
+        }
         Ok(())
     }
 

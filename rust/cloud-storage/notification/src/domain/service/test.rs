@@ -137,12 +137,12 @@ impl MockQueue {
 impl NotificationQueue for MockQueue {
     async fn publish<T: serde::Serialize + Send + Sync>(
         &self,
-        message: &QueueMessage<'_, T>,
+        messages: &[QueueMessage<'_, T>],
     ) -> Result<(), Report> {
-        self.published
-            .lock()
-            .unwrap()
-            .push(message.message_type.clone());
+        let mut published = self.published.lock().unwrap();
+        for message in messages {
+            published.push(message.message_type.clone());
+        }
         Ok(())
     }
 

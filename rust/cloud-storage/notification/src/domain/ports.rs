@@ -127,10 +127,10 @@ use crate::domain::models::queue_message::{QueueMessage, RawQueueMessage};
 
 /// Port for publishing notifications to delivery queue and receiving them.
 pub trait NotificationQueue {
-    /// Publish a notification for async delivery (after DB persistence).
+    /// Publish notifications for async delivery (after DB persistence).
     fn publish<T: Serialize + Send + Sync>(
         &self,
-        message: &QueueMessage<'_, T>,
+        messages: &[QueueMessage<'_, T>],
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
     /// Receive messages from the queue (for worker).
