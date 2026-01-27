@@ -166,7 +166,6 @@ export function useChatMarkdownArea(
 
   const { getAttachmentFromMention } = useGetChatAttachmentInfo();
   const addAttachmentFromMention = (mention: ItemMention) => {
-    console.log('CREATE MENTION');
     track(TrackingEvents.CHAT.MENTION.SELECT);
     const attachment = getAttachmentFromMention(mention);
     if (attachment) args.addAttachment(attachment);

@@ -57,7 +57,6 @@ export const useGetChatAttachmentInfo = () => {
   const { channels } = useChannelsContext();
 
   const getDocumentAttachment = (id: string): Attachment | undefined => {
-    console.log('GET ATTACHMETN INFO');
     const item = history().find((item) => item.id === id);
     if (!item) return;
     if (item.type !== 'document') return;

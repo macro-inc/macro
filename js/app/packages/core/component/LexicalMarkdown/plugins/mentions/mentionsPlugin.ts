@@ -203,8 +203,8 @@ export function $mentionItemFromNode(node: MentionNode): ItemMention {
 }
 
 // Validators for the position of the @ trigger.
-const beforeRegex = /[(['"`\s]$/;
-const afterRegex = /^[)\]'"`\s]/;
+const beforeRegex = /[(['\"\`\s]$/;
+const afterRegex = /^[)\]'\"\`\s]/;
 
 /**
  * When mentions nodes are selected by using the arrow keys, we want to be able to delete them.

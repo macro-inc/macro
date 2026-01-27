@@ -301,7 +301,6 @@ export async function handleBasicMention(
   const itemEntity = entityMapper('item')(item);
   const itemBlock = getCombinedEntityBlockName(itemEntity);
   const itemName = getItemName(itemEntity);
-  console.log('ON DOCUMENT MENTION ITEM', item);
   onDocumentMention?.(item);
   if (dependencies.useSnapshotNode && supportsSnapshotNode(itemBlock)) {
     handleSnapshotMention(item, dependencies);
