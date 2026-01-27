@@ -857,7 +857,7 @@ export interface NameSearch {
 
 /**
  * Read content by ID(s). Supports reading documents, channels, chats, and emails by their respective IDs. Use this tool when you need to retrieve the full content of a specific item(s).
- *     Channel transcripts only include 300 messages. Use 'messages_since' to see messages in a different time window.
+ *     Channel transcripts only include the latest 150 messages. Use 'messages_since' to see messages in a different time window.
  */
 export interface Read {
   /**
