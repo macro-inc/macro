@@ -28,7 +28,7 @@ pub struct SendNotificationRequestBuilder<'a, T> {
     /// The user who triggered this notification (optional).
     pub sender_id: Option<MacroUserIdStr<'a>>,
     /// The users who should receive this notification.
-    pub recipient_ids: Vec<MacroUserIdStr<'a>>,
+    pub recipient_ids: HashSet<MacroUserIdStr<'a>>,
 }
 
 impl<'a, T> SendNotificationRequestBuilder<'a, T> {
@@ -73,6 +73,11 @@ impl<'a, T> SendNotificationRequest<'a, T> {
     /// Enable delivery via connection gateway (WebSocket).
     pub fn with_conn_gateway(mut self) -> Self {
         self.send_conn_gateway = true;
+        self
+    }
+
+    pub(crate) fn update_recipients(mut self, recipients: HashSet<MacroUserIdStr<'a>>) -> Self {
+        self.req.recipient_ids = recipients;
         self
     }
 }

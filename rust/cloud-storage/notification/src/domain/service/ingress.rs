@@ -3,6 +3,18 @@
 //! This service handles the caller-facing side of notifications:
 //! filtering recipients, persisting to DB, and publishing to the queue.
 
+use crate::domain::models::mobile::{MessageAttributes, PushType};
+use crate::domain::models::queue_message::{
+    APNSTargets, ConnGatewayNotification, EmailNotification, Node, NotificationChannel,
+    QueueMessage,
+};
+use crate::domain::models::recipient::FilteredRecipient;
+use crate::domain::models::{
+    ExclusionReason, Notification, NotificationResult, RecipientExclusion, RevokeCriteria,
+    SendNotificationRequest,
+};
+use crate::domain::ports::{NotificationQueue, NotificationRepository};
+use crate::domain::service::{MissingRevokeFilter, SendNotificationError};
 use itertools::Itertools;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -11,17 +23,6 @@ use rootcause::prelude::ResultExt;
 use serde::Serialize;
 use std::collections::HashSet;
 use uuid::Uuid;
-
-use crate::domain::models::queue_message::{
-    ConnGatewayNotification, Node, NotificationChannel, QueueMessage,
-};
-use crate::domain::models::recipient::FilteredRecipient;
-use crate::domain::models::{
-    ExclusionReason, Notification, NotificationResult, RecipientExclusion, RevokeCriteria,
-    SendNotificationRequest, SendNotificationRequestBuilder,
-};
-use crate::domain::ports::{NotificationQueue, NotificationRepository};
-use crate::domain::service::{MissingRevokeFilter, SendNotificationError};
 
 /// Service for sending notifications (ingress side).
 ///
@@ -58,10 +59,11 @@ where
         &self,
         request: SendNotificationRequest<'a, T>,
     ) -> Result<Option<NotificationResult<'a>>, Report<SendNotificationError>> {
+        let recipients: Vec<_> = request.req.recipient_ids.iter().cloned().collect();
         let (allowed, excluded): (Vec<_>, Vec<_>) = self
             .filter_recipients(
                 request.req.sender_id.as_ref(),
-                &request.req.recipient_ids,
+                &recipients,
                 &request.req.notification_entity.entity_id,
             )
             .await
@@ -96,8 +98,11 @@ where
             }));
         };
 
+        let mut req =
+            request.update_recipients(allowed.into_iter().map(CowLike::into_owned).collect());
+
         // Build and publish QueueMessage
-        let queue_messages = self.build_queue_message(&request, &allowed)?;
+        let queue_messages = self.build_queue_message(&mut req)?;
 
         self.queue
             .publish(&queue_messages)
@@ -107,7 +112,7 @@ where
         // Return result (delivery happens async)
         Ok(Some(NotificationResult {
             notification_id,
-            notified_recipients: allowed.into_iter().map(CowLike::into_owned).collect(),
+            notified_recipients: req.req.recipient_ids,
         }))
     }
 
@@ -180,7 +185,7 @@ where
 
         // Build exclusion reasons for excluded recipients
         Ok(recipient_ids
-            .into_iter()
+            .iter()
             .map(CowLike::copied)
             .map(FilteredRecipient::Allowed)
             .map(recipient_is_sender)
@@ -189,27 +194,74 @@ where
             .collect())
     }
 
-    /// Build a QueueMessage with delivery nodes for the notification.
+    /// Build queue messages for each delivery channel.
+    ///
+    /// - `send_conn_gateway`: Creates a single message for all recipients (1:M)
+    /// - `build_apns`: Creates one message per recipient (1:1)
+    /// - `build_email`: Creates one message per recipient (1:1)
     fn build_queue_message<'a, T: Notification + Serialize + Clone>(
         &self,
-        notification: &SendNotificationRequest<T>,
-        recipients: &[MacroUserIdStr<'a>],
+        notification: &mut SendNotificationRequest<'a, T>,
     ) -> Result<Vec<QueueMessage<'a, T>>, Report<SendNotificationError>> {
         let rate_limit = notification.req.get_rate_limit()?;
+        let message_type = T::TYPE_NAME.to_string();
+        let mut messages = Vec::new();
 
-        // TODO: we need to read the fields for build_apns, build_email and send_conn_gateway to determine the queuemessages to return.
-        // Note that conn_gateway messages are 1:M users while the others are 1:1
+        // Connection gateway: 1:M (single message for all recipients)
+        if notification.send_conn_gateway {
+            messages.push(QueueMessage {
+                message_type: message_type.clone(),
+                rate_limit: rate_limit.clone(),
+                content: Node {
+                    notif: NotificationChannel::ConnGateway(ConnGatewayNotification {
+                        notif: notification.req.notification.clone(),
+                        recipients: notification.req.recipient_ids.iter().cloned().collect(),
+                    }),
+                    on_failure: None,
+                },
+            });
+        }
 
-        Ok(vec![QueueMessage {
-            message_type: T::TYPE_NAME.to_string(),
-            rate_limit,
-            content: Node {
-                notif: NotificationChannel::ConnGateway(ConnGatewayNotification {
-                    notif: notification.req.notification.clone(),
-                    recipients: recipients.to_vec(),
-                }),
-                on_failure: None,
-            },
-        }])
+        // APNS (iOS push): 1:1 (one message per recipient)
+        if let Some(ref mut build_apns) = notification.build_apns {
+            for recipient in &notification.req.recipient_ids {
+                let apns_notif = build_apns(notification.req.notification.clone());
+                messages.push(QueueMessage {
+                    message_type: message_type.clone(),
+                    rate_limit: rate_limit.clone(),
+                    content: Node {
+                        notif: NotificationChannel::Ios(Box::new(APNSTargets {
+                            notif: apns_notif,
+                            attributes: MessageAttributes {
+                                push_type: PushType::Alert,
+                                collapse_key: format!("{}:{}", T::TYPE_NAME, recipient),
+                            },
+                            ios_device_endpoints: vec![], // Filled by egress service
+                        })),
+                        on_failure: None,
+                    },
+                });
+            }
+        }
+
+        // Email: 1:1 (one message per recipient)
+        if let Some(ref mut build_email) = notification.build_email {
+            for recipient in &notification.req.recipient_ids {
+                let email_content = build_email(notification.req.notification.clone());
+                messages.push(QueueMessage {
+                    message_type: message_type.clone(),
+                    rate_limit: rate_limit.clone(),
+                    content: Node {
+                        notif: NotificationChannel::Email(EmailNotification {
+                            to: recipient.clone(),
+                            content: email_content,
+                        }),
+                        on_failure: None,
+                    },
+                });
+            }
+        }
+
+        Ok(messages)
     }
 }
