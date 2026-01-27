@@ -70,10 +70,31 @@ function selectLocalServers(): Servers {
 const syncServiceSuffix =
   import.meta.env.MODE === 'development' ? '-dev3' : '-prod2';
 
-export const SYNC_SERVICE_HOSTS = {
+const syncServiceHostLocal = {
+  worker: 'http://localhost:8787',
+  ws: 'ws://localhost:8787',
+} as const;
+
+const syncServiceHostRemote = {
   worker: `https://sync-service${syncServiceSuffix}.macroverse.workers.dev`,
   ws: `wss://sync-service${syncServiceSuffix}.macroverse.workers.dev`,
 } as const;
+
+function selectSyncServiceHost(): typeof syncServiceHostRemote {
+  if (import.meta.env.MODE !== 'development') {
+    return syncServiceHostRemote;
+  }
+  const selectedLocalServers: string = import.meta.env.VITE_LOCAL_SERVERS;
+  if (
+    selectedLocalServers === 'ALL' ||
+    selectedLocalServers?.includes('sync-service')
+  ) {
+    return syncServiceHostLocal;
+  }
+  return syncServiceHostRemote;
+}
+
+export const SYNC_SERVICE_HOSTS = selectSyncServiceHost();
 
 /** Creates endpoint URL for accessing a static file by its ID */
 export function staticFileIdEndpoint(id: string): string {
