@@ -248,31 +248,17 @@ export function MessageContainer(props: MessageContainerProps) {
             </Message.Body>
             {/* Image attachments */}
             <Show when={imageAttachmentsWithSfs().length > 0}>
-              <Switch>
-                <Match when={imageAttachmentsWithSfs().length === 1}>
-                  <div class="max-w-[400px] w-fit mt-2">
-                    <ImagePreview
-                      image={{
-                        id: imageAttachmentsWithSfs()[0].sfs_id!,
-                      }}
-                      variant="dynamic"
-                    />
-                  </div>
-                </Match>
-                <Match when={imageAttachmentsWithSfs().length > 1}>
-                  <div class="flex flex-wrap gap-2 mt-2">
-                    <ImageGalleryPreview
-                      images={imageAttachmentsWithSfs().map((a) => ({
-                        id: a.sfs_id!,
-                      }))}
-                      variant="dynamic"
-                      attachmentIds={imageAttachmentsWithSfs().map(
-                        (a) => a.db_id!
-                      )}
-                    />
-                  </div>
-                </Match>
-              </Switch>
+              <div class="flex flex-wrap gap-2 mt-2">
+                <ImageGalleryPreview
+                  images={imageAttachmentsWithSfs().map((a) => ({
+                    id: a.sfs_id!,
+                  }))}
+                  variant="small"
+                  attachmentIds={imageAttachmentsWithSfs().map(
+                    (a) => a.db_id!
+                  )}
+                />
+              </div>
             </Show>
 
             {/* Video attachments */}

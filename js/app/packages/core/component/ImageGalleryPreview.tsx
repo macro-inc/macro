@@ -45,7 +45,7 @@ export type ImageGalleryPreviewProps = {
 
 const THEMES = {
   small:
-    'size-15 object-cover rounded-2xl border border-edge hover:opacity-80 select-none',
+    'size-23 object-cover rounded-2xl border border-edge hover:opacity-80 select-none',
   dynamic:
     'min-w-[100px] max-h-[200px] object-contain w-full rounded-2xl select-none border border-edge hover:border-accent hover-transition-border',
   expanded:
