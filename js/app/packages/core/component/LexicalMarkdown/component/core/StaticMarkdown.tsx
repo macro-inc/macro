@@ -216,7 +216,6 @@ function getTextClassName(
 type NodeComponent<T extends LexicalNode = LexicalNode> = {
   node: T;
   theme: EditorThemeClasses;
-  isGenerating: Accessor<boolean>;
 };
 
 type ElementNodeComponent<T extends ElementNode = ElementNode> = ParentProps &
@@ -586,9 +585,6 @@ const Table: RenderableElement<TableNode> = {
   render: (props) => (
     <div
       class={`${props.theme?.static?.['table-container'] || ''}`}
-      classList={{
-        hidden: props.isGenerating(),
-      }}
     >
       <table
         class={`${props.theme.table} min-w-full table-auto`}
@@ -689,7 +685,6 @@ function Render(props: NodeComponent | ElementNodeComponent) {
     return entity.render({
       ...props,
       theme: props.theme,
-      isGenerating: props.isGenerating,
     });
   }
 
@@ -702,10 +697,8 @@ function Render(props: NodeComponent | ElementNodeComponent) {
       children: MapRender({
         children: elemNode.getChildren(),
         theme: props.theme,
-        isGenerating: props.isGenerating,
       }),
       theme: props.theme,
-      isGenerating: props.isGenerating,
     });
   }
 
@@ -716,13 +709,11 @@ function Render(props: NodeComponent | ElementNodeComponent) {
 function MapRender(props: {
   children: LexicalNode[];
   theme: EditorThemeClasses;
-  isGenerating: Accessor<boolean>;
 }) {
   return props.children.map((child) => (
     <Render
       node={child}
       theme={props.theme}
-      isGenerating={props.isGenerating}
     />
   ));
 }
@@ -731,7 +722,6 @@ function Document(props: {
   rootNode: RootNode;
   theme: EditorThemeClasses;
   rootRef?: (ref: HTMLDivElement) => void;
-  isGenerating: Accessor<boolean>;
   singleLine?: boolean;
 }): JSX.Element {
   return (
@@ -742,7 +732,6 @@ function Document(props: {
       <MapRender
         children={props.rootNode.getChildren()}
         theme={props.theme}
-        isGenerating={props.isGenerating}
       />
     </div>
   );
@@ -760,12 +749,10 @@ export function StaticMarkdown(props: {
   setEditorRef?: (editor: LexicalEditor) => void;
   rootRef?: (ref: HTMLDivElement) => void;
   target?: 'internal' | 'external' | 'both';
-  isGenerating?: Accessor<boolean>;
   singleLine?: boolean;
 }) {
   let { editor: contextEditor, theme: parentTheme } = useContext(context);
   let [editorState, setEditorState] = createSignal<EditorState | null>(null);
-  const [isGenerating, setIsGenerating] = createSignal<boolean>(false);
 
   if (contextEditor === null) {
     console.warn(
@@ -809,8 +796,6 @@ export function StaticMarkdown(props: {
 
   // TODO: Move citations to bulk query when built in backend
   createEffect(() => {
-    const isGenerating = props.isGenerating?.() ?? false;
-    if (!isGenerating) {
       const editor = currentEditor();
 
       // Handle citations without affecting mentions
@@ -821,8 +806,6 @@ export function StaticMarkdown(props: {
         }
         setEditorState(editor.getEditorState());
       });
-    }
-    setIsGenerating(isGenerating);
   });
 
   const domTree = createMemo(() => {
@@ -830,7 +813,6 @@ export function StaticMarkdown(props: {
       return Document({
         rootNode: $getRoot(),
         theme: mergedTheme(),
-        isGenerating,
       });
     });
   });
