@@ -1,11 +1,11 @@
 //! Email notification adapter.
 
-use aws_sdk_sesv2::types::{Body, Content, Destination, EmailContent, Message};
+use aws_sdk_sesv2::types::{Body, Content, Destination, EmailContent as SesEmailContent, Message};
 use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 
-use crate::domain::models::Notification;
+use crate::domain::models::queue_message::EmailContent;
 use crate::domain::ports::EmailSender;
 
 /// Email notification adapter.
@@ -69,7 +69,7 @@ impl EmailServiceOps for aws_sdk_sesv2::Client {
             .body(body)
             .build();
 
-        let email_content = EmailContent::builder().simple(msg).build();
+        let email_content = SesEmailContent::builder().simple(msg).build();
 
         self.send_email()
             .from_email_address(from_email)
@@ -83,18 +83,16 @@ impl EmailServiceOps for aws_sdk_sesv2::Client {
 }
 
 impl<E: EmailServiceOps + Send + Sync> EmailSender for EmailAdapter<E> {
-    async fn send_email<T: Notification + Send + Sync>(
+    async fn send_email(
         &self,
-        notification: &T,
         recipient: MacroUserIdStr<'_>,
+        content: &EmailContent,
     ) -> Result<(), Report> {
         let email_part = recipient.email_part();
         let to_email = email_part.email_str();
-        let subject = notification.title();
-        let body = notification.body();
 
         self.email_service
-            .send_email(&self.from_email, to_email, &subject, &body)
+            .send_email(&self.from_email, to_email, &content.subject, &content.body)
             .await
     }
 }

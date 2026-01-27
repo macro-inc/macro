@@ -46,16 +46,22 @@ where
             let receipt_handle = message.receipt_handle.clone();
 
             // Process the message through egress service
-            match self.egress.process_delivery(message.body).await {
-                Ok(_status) => {
-                    // Successfully delivered, delete from queue
-                    if let Err(e) = self.queue.delete_message(&receipt_handle).await {
-                        tracing::error!(error = ?e, "failed to delete message from queue");
+            let results = self.egress.deliver_notification(message.body).await;
+
+            // Check if any delivery failed
+            let has_failure = results.iter().any(|r| r.is_err());
+
+            if has_failure {
+                // Log failures - message will be retried via visibility timeout
+                for result in &results {
+                    if let Err(e) = result {
+                        tracing::error!(error = ?e, "failed to deliver notification");
                     }
                 }
-                Err(e) => {
-                    // Delivery failed - message will be retried via visibility timeout
-                    tracing::error!(error = ?e, "failed to deliver notification");
+            } else {
+                // All deliveries succeeded, delete from queue
+                if let Err(e) = self.queue.delete_message(&receipt_handle).await {
+                    tracing::error!(error = ?e, "failed to delete message from queue");
                 }
             }
         }

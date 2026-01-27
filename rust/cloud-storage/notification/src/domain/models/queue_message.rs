@@ -1,13 +1,15 @@
+use crate::domain::models::{
+    RateLimitConfig, RateLimitKey, apple::APNSPushNotification, mobile::MessageAttributes,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
-
-use crate::domain::models::{RateLimitConfig, RateLimitKey, apple::APNSPushNotification};
 
 /// APNS push notification targets.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct APNSTargets<T> {
     /// The APNS notification payload.
     pub notif: APNSPushNotification<T>,
+    pub attributes: MessageAttributes,
     /// The iOS device endpoints to deliver to.
     pub ios_device_endpoints: Vec<String>,
 }
@@ -15,8 +17,10 @@ pub struct APNSTargets<T> {
 /// Email notification payload.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EmailContent {
-    subject: String,
-    body: String,
+    /// The email subject line.
+    pub subject: String,
+    /// The email body content.
+    pub body: String,
 }
 
 /// Email notification payload.

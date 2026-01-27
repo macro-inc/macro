@@ -22,8 +22,8 @@ use crate::domain::models::queue_message::{
     QueueMessage,
 };
 use crate::domain::models::{
-    DeliveryStatus, ExclusionReason, FilteredRecipients, Notification, NotificationResult,
-    RecipientExclusion, RevokeCriteria, SendNotificationRequest, SendNotificationRequestBuilder,
+    ExclusionReason, FilteredRecipients, Notification, NotificationResult, RecipientExclusion,
+    RevokeCriteria, SendNotificationRequest, SendNotificationRequestBuilder,
 };
 use crate::domain::ports::{
     EmailSender, NotificationQueue, NotificationRepository, NotificationSender, WebSocketSender,
@@ -272,6 +272,10 @@ where
         }
     }
 
+    /// Deliver a notification from a queue message.
+    ///
+    /// Processes the delivery chain, attempting each channel and falling back
+    /// on failure. Returns a list of results for each delivery attempt.
     pub async fn deliver_notification(
         &self,
         message: QueueMessage<'static, serde_json::Value>,
@@ -287,32 +291,29 @@ where
         &self,
         message_type: &str,
         node: Node<'static, serde_json::Value>,
-        mut recusion_tail: Vec<Result<DeliverySuccess, Report>>,
+        mut recursion_tail: Vec<Result<DeliverySuccess, Report>>,
     ) -> Vec<Result<DeliverySuccess, Report>> {
-        let mut status = DeliveryStatus::default();
-
         let result = match &node.notif {
             NotificationChannel::ConnGateway(conn) => {
-                self.deliver_conn_gateway(&message_type, conn, &mut status)
-                    .await
+                self.deliver_conn_gateway(message_type, conn).await
             }
             NotificationChannel::Ios(apns) => self.deliver_ios(apns).await,
             NotificationChannel::Email(email) => self.deliver_email(email).await,
         };
-        recusion_tail.push(result);
-        let res = recusion_tail
+        recursion_tail.push(result);
+        let res = recursion_tail
             .last()
             .expect("we just pushed, this cannot fail");
 
         match (res, node.on_failure) {
-            (Ok(_), _) | (Err(_), None) => recusion_tail,
+            (Ok(_), _) | (Err(_), None) => recursion_tail,
             (Err(_), Some(fallback)) => {
-                return Box::pin(self.deliver_notification_inner(
+                Box::pin(self.deliver_notification_inner(
                     message_type,
                     *fallback,
-                    recusion_tail,
+                    recursion_tail,
                 ))
-                .await;
+                .await
             }
         }
     }
@@ -322,7 +323,6 @@ where
         &self,
         message_type: &str,
         conn: &ConnGatewayNotification<'static, serde_json::Value>,
-        status: &mut DeliveryStatus,
     ) -> Result<DeliverySuccess, Report> {
         let notifications: Vec<_> = conn
             .recipients
@@ -330,29 +330,33 @@ where
             .map(|r| (r.clone(), &conn.notif))
             .collect();
 
-        let delivered = self
-            .websocket
+        self.websocket
             .send_notifications(message_type, notifications)
             .await?;
-        status.websocket_delivered.extend(delivered);
         Ok(DeliverySuccess::ConnGateway)
     }
 
     /// Deliver via iOS push (APNS).
     async fn deliver_ios(
         &self,
-        _apns: &crate::domain::models::queue_message::APNSTargets<serde_json::Value>,
+        apns: &crate::domain::models::queue_message::APNSTargets<serde_json::Value>,
     ) -> Result<DeliverySuccess, Report> {
-        // TODO: Implement iOS push delivery
+        for endpoint in &apns.ios_device_endpoints {
+            self.mobile
+                .send_ios_push_notification(endpoint, &apns.notif, &apns.attributes)
+                .await?;
+        }
         Ok(DeliverySuccess::Ios)
     }
 
     /// Deliver via email.
     async fn deliver_email(
         &self,
-        _email: &EmailNotification<'static>,
+        email: &EmailNotification<'static>,
     ) -> Result<DeliverySuccess, Report> {
-        // TODO: Implement email delivery
+        self.email
+            .send_email(email.to.clone(), &email.content)
+            .await?;
         Ok(DeliverySuccess::Email)
     }
 }

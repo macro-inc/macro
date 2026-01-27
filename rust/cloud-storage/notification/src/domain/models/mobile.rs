@@ -1,4 +1,4 @@
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer};
 
 use crate::domain::models::{
     android::FCMMessage,
@@ -6,9 +6,9 @@ use crate::domain::models::{
 };
 
 #[derive(Debug)]
-pub enum SnsTarget<T> {
-    Ios(Box<APNSPushNotification<T>>),
-    Android(FCMMessage<T>),
+pub enum SnsTarget<'a, T> {
+    Ios(&'a APNSPushNotification<T>),
+    Android(&'a FCMMessage<T>),
 }
 
 #[derive(Debug, Serialize)]
@@ -46,7 +46,7 @@ where
     }
 }
 
-impl<T> SnsTarget<T> {
+impl<T> SnsTarget<'_, T> {
     fn default_string(&self) -> String {
         match self {
             SnsTarget::Ios(apnspush_notification) => apnspush_notification
@@ -77,20 +77,20 @@ impl<T> SnsTarget<T> {
     }
 }
 
-impl<T: Serialize> SnsTarget<T> {
+impl<T: Serialize> SnsTarget<'_, T> {
     /// Serialize the target to JSON for SNS.
     pub fn as_json(&self) -> Result<String, serde_json::Error> {
         self.as_payload().as_json()
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MessageAttributes {
     pub push_type: PushType,
     pub collapse_key: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PushType {
     Background,
     Alert,

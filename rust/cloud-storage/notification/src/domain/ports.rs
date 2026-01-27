@@ -23,16 +23,16 @@ pub trait NotificationSender {
     fn send_ios_push_notification<T: Serialize + Send + Sync>(
         &self,
         endpoint_arn: &str,
-        notification: APNSPushNotification<T>,
-        attributes: MessageAttributes,
+        notification: &APNSPushNotification<T>,
+        attributes: &MessageAttributes,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
     /// Send an Android push notification via FCM.
     fn send_android_push_notification<T: Serialize + Send + Sync>(
         &self,
         endpoint_arn: &str,
-        notification: FCMMessage<T>,
-        attributes: MessageAttributes,
+        notification: &FCMMessage<T>,
+        attributes: &MessageAttributes,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
@@ -111,13 +111,15 @@ pub trait WebSocketSender {
     ) -> impl Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
 }
 
+use crate::domain::models::queue_message::EmailContent;
+
 /// Port for email delivery.
 pub trait EmailSender {
-    /// Send an email notification to a user.
-    fn send_email<T: Notification + Send + Sync>(
+    /// Send an email with pre-built content to a user.
+    fn send_email(
         &self,
-        notification: &T,
         recipient: MacroUserIdStr<'_>,
+        content: &EmailContent,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 

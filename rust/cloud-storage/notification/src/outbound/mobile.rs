@@ -37,7 +37,7 @@ pub trait MobilePushOps {
     fn push_notification<T: Serialize + Send + Sync>(
         &self,
         endpoint_arn: &str,
-        message: &SnsTarget<T>,
+        message: &SnsTarget<'_, T>,
         attributes: HashMap<String, MessageAttributeValue>,
     ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
 }
@@ -46,7 +46,7 @@ impl MobilePushOps for aws_sdk_sns::Client {
     async fn push_notification<T: Serialize + Send + Sync>(
         &self,
         endpoint_arn: &str,
-        message: &SnsTarget<T>,
+        message: &SnsTarget<'_, T>,
         attributes: HashMap<String, MessageAttributeValue>,
     ) -> Result<(), Report> {
         let payload = message.as_json()?;
@@ -67,11 +67,11 @@ impl<P: MobilePushOps + Send + Sync> NotificationSender for MobilePushAdapter<P>
     async fn send_ios_push_notification<T: Serialize + Send + Sync>(
         &self,
         endpoint_arn: &str,
-        notification: APNSPushNotification<T>,
-        attributes: MessageAttributes,
+        notification: &APNSPushNotification<T>,
+        attributes: &MessageAttributes,
     ) -> Result<(), Report> {
-        let target = SnsTarget::Ios(Box::new(notification));
-        let sns_attributes = build_sns_attributes(self.apns_bundle_id, &attributes);
+        let target = SnsTarget::Ios(notification);
+        let sns_attributes = build_sns_attributes(self.apns_bundle_id, attributes);
         self.push_service
             .push_notification(endpoint_arn, &target, sns_attributes)
             .await
@@ -80,11 +80,11 @@ impl<P: MobilePushOps + Send + Sync> NotificationSender for MobilePushAdapter<P>
     async fn send_android_push_notification<T: Serialize + Send + Sync>(
         &self,
         endpoint_arn: &str,
-        notification: FCMMessage<T>,
-        attributes: MessageAttributes,
+        notification: &FCMMessage<T>,
+        attributes: &MessageAttributes,
     ) -> Result<(), Report> {
         let target = SnsTarget::Android(notification);
-        let sns_attributes = build_sns_attributes(self.apns_bundle_id, &attributes);
+        let sns_attributes = build_sns_attributes(self.apns_bundle_id, attributes);
         self.push_service
             .push_notification(endpoint_arn, &target, sns_attributes)
             .await
