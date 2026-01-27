@@ -65,6 +65,7 @@ import {
   onCleanup,
   type Setter,
   Show,
+  Suspense,
   untrack,
 } from 'solid-js';
 import { SplitlikeContainer } from '../split-layout/components/SplitContainer';

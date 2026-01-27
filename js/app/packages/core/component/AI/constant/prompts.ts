@@ -28,20 +28,21 @@ Internal terminology and knowledge
 export function useAdditionalInstructions() {
   const userInstructionsQuery = useInstructionsMdTextQuery();
   const { userInfo } = useUserContext();
-  return createMemo(() => {
+  return () => {
     let prompt = ABOUT_MACRO;
     const name = userInfo()?.name;
     if (name) {
       prompt += `\nYou are talking to ${name}.`;
     }
-    const userInstructions = userInstructionsQuery.data;
+    const userInstructions =
+      userInstructionsQuery.isSuccess && userInstructionsQuery.data;
     if (userInstructions) {
       prompt +=
         '\nThese are system instructions provided by the user. Follow them\n';
       prompt += userInstructions;
     }
     return appendDate(prompt);
-  });
+  };
 }
 
 function appendDate(prompt: string) {
