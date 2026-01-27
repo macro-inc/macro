@@ -41,7 +41,7 @@ export function SoupChatInput() {
   return (
     <Show when={!preview()}>
       <div
-        class="absolute z-10 bottom-0 pb-2 flex justify-center w-full pointer-events-none "
+        class="absolute z-10 bottom-0 pb-2 px-2 flex justify-center w-full pointer-events-none "
         style={{
           'background-image': `linear-gradient(transparent, var(--color-panel) 85%)`,
         }}

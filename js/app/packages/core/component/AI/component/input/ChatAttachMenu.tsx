@@ -70,16 +70,14 @@ export function ChatAttachMenu(props: ChatAttachMenuProps) {
     const popupRef_ = popupRef();
     if (!popupRef_) return;
     const { x, y } = await computePosition(props.anchorRef, popupRef_, {
-      placement: 'bottom-start',
+      placement: 'top-start',
       middleware: [
         offset(8),
         flip({
           fallbackStrategy: 'bestFit',
-          boundary: props.containerRef,
         }),
         shift({
           padding: 8,
-          boundary: props.containerRef,
           limiter: limitShift(),
         }),
       ],
