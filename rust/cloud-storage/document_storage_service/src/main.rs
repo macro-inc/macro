@@ -20,6 +20,8 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use macro_sha_count_client::Redis;
+use notification::domain::service::NotificationIngressService;
+use notification::outbound::{queue::SqsNotificationQueue, repository::DbNotificationRepository};
 use opensearch_client::OpensearchClient;
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
@@ -205,8 +207,24 @@ async fn main() -> anyhow::Result<()> {
         EmailServiceImpl::new(EmailPgRepo::new(db.clone()), frecency_service.clone());
     let system_properties_service =
         SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(db.clone()));
+    let make_notification_ingress = || {
+        let notification_repository = DbNotificationRepository::new(db.clone());
+        let notification_queue = SqsNotificationQueue::new(
+            aws_sdk_sqs::Client::new(&aws_config),
+            config.vars.notification_queue.as_ref().to_string(),
+        );
+        NotificationIngressService::new(
+            notification_repository,
+            notification_queue,
+            "document_storage_service",
+        )
+    };
+    let notification_ingress_service = Arc::new(make_notification_ingress());
+    tracing::trace!("initialized notification ingress service");
+
     let permission_checker = PermissionServiceImpl::new(db.clone());
-    let notification_service = NotificationServiceImpl::new(Arc::new(macro_notify_client.clone()));
+    let notification_service =
+        NotificationServiceImpl::new(make_notification_ingress());
     let properties_service = PropertiesServiceImpl::new(
         PropertiesPgRepo::new(db.clone()),
         Some(permission_checker),
@@ -256,6 +274,7 @@ async fn main() -> anyhow::Result<()> {
         dynamo_db,
         sqs_client: Arc::new(sqs_client),
         macro_notify_client: Arc::new(macro_notify_client),
+        notification_ingress_service,
         conn_gateway_client: Arc::new(conn_gateway_client),
         sync_service_client: Arc::new(sync_service_client),
         system_properties_service: Arc::new(system_properties_service),

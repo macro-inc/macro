@@ -2741,6 +2741,7 @@ dependencies = [
  "models_permissions",
  "models_properties",
  "models_soup",
+ "notification",
  "opensearch_client",
  "ordered-float",
  "properties",

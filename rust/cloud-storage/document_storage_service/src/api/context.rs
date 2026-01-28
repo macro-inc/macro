@@ -13,6 +13,8 @@ use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::F
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_env_var::env_var;
 use macro_sha_count_client::Redis;
+use notification::domain::service::NotificationIngressService;
+use notification::outbound::{queue::SqsNotificationQueue, repository::DbNotificationRepository};
 use opensearch_client::OpensearchClient;
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
@@ -45,8 +47,13 @@ type DssSoupState = SoupRouterState<
 >;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
-type PropertiesService =
-    PropertiesServiceImpl<PropertiesPgRepo, PermissionServiceImpl, NotificationServiceImpl>;
+type NotificationIngressType =
+    NotificationIngressService<DbNotificationRepository<PgPool>, SqsNotificationQueue>;
+type PropertiesService = PropertiesServiceImpl<
+    PropertiesPgRepo,
+    PermissionServiceImpl,
+    NotificationServiceImpl<NotificationIngressType>,
+>;
 
 /// Type alias for the ChannelServiceImpl used by comms
 pub(crate) type CommsChannelService =
@@ -65,6 +72,7 @@ pub(crate) struct ApiContext {
     pub soup_router_state: DssSoupState,
     pub sqs_client: Arc<sqs_client::SQS>,
     pub macro_notify_client: Arc<macro_notify::MacroNotify>,
+    pub notification_ingress_service: Arc<NotificationIngressType>,
     pub conn_gateway_client: Arc<ConnectionGatewayClient>,
     pub sync_service_client: Arc<SyncServiceClient>,
     pub system_properties_service: Arc<SystemPropertiesService>,
