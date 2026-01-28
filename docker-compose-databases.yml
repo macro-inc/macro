@@ -35,6 +35,8 @@ networks:
     external: true
 volumes:
   db:
+    name: macro_postgres_data
     driver: local
   cache:
+    name: macro_redis_data
     driver: local

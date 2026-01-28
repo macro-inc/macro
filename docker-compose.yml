@@ -2,7 +2,7 @@
 include:
   - docker-compose-databases.yml
   - infra/stacks/fusionauth-instance/docker-compose.yml
-  - infra/stacks/opensearch/docker-compose-opensearch.yml
+  # - infra/stacks/opensearch/docker-compose-opensearch.yml
 
 x-common-env: &common-env
   env_file:
