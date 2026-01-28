@@ -2,6 +2,7 @@
 
 //! This crate creates a standard way to make AWS configs.
 
+pub use aws_config::SdkConfig;
 use macro_env_var::maybe_env_var;
 
 maybe_env_var! {

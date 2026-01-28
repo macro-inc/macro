@@ -44,13 +44,11 @@ async fn main() -> Result<()> {
     // Parse our configuration from the environment.
     let config = Arc::new(Config::from_env(EnvVars::unwrap_new()));
 
-    let secretsmanager_client =
-        secretsmanager_client::SecretsManager::new(aws_sdk_secretsmanager::Client::new(
-            &aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .load()
-                .await,
-        ));
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
+
+    let secretsmanager_client = secretsmanager_client::SecretsManager::new(
+        aws_sdk_secretsmanager::Client::new(&aws_config),
+    );
     let jwt_args =
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
@@ -69,8 +67,7 @@ async fn main() -> Result<()> {
         ])
         .allow_origin(ORIGINS);
 
-    let builder = aws_config::defaults(aws_config::BehaviorVersion::latest()).region("us-east-1");
-    let dynamodb_client = aws_sdk_dynamodb::Client::new(&builder.load().await);
+    let dynamodb_client = aws_sdk_dynamodb::Client::new(&aws_config);
 
     let redis_client = Arc::new(
         redis::Client::open(config.redis_host.as_ref())

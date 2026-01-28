@@ -49,13 +49,11 @@ pub async fn main() -> anyhow::Result<()> {
         "initialized db connection"
     );
 
-    let secretsmanager_client =
-        secretsmanager_client::SecretsManager::new(aws_sdk_secretsmanager::Client::new(
-            &aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .load()
-                .await,
-        ));
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
+
+    let secretsmanager_client = secretsmanager_client::SecretsManager::new(
+        aws_sdk_secretsmanager::Client::new(&aws_config),
+    );
 
     let internal_secret_key = secretsmanager_client
         .get_maybe_secret_value(config.environment, InternalApiSecretKey::new()?)
@@ -71,47 +69,15 @@ pub async fn main() -> anyhow::Result<()> {
         config.connection_gateway_url.clone(),
     );
 
-    let notification_queue_aws_config = if cfg!(feature = "local_queue") {
-        aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .region("us-east-1")
-            .endpoint_url(&config.notification_queue)
-            .load()
-            .await
-    } else {
-        aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .region("us-east-1")
-            .load()
-            .await
-    };
-
-    let push_delivery_queue_aws_config = if cfg!(feature = "local_queue") {
-        aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .region("us-east-1")
-            .endpoint_url(&config.push_notification_event_handler_queue)
-            .load()
-            .await
-    } else {
-        aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .region("us-east-1")
-            .load()
-            .await
-    };
-
-    // Normal config for non-local stack items
-    let aws_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-        .region("us-east-1")
-        .load()
-        .await;
-
     let notification_worker = sqs_worker::SQSWorker::new(
-        aws_sdk_sqs::Client::new(&notification_queue_aws_config),
+        aws_sdk_sqs::Client::new(&aws_config),
         config.notification_queue.clone(),
         config.notification_queue_max_messages,
         config.notification_queue_wait_time_seconds,
     );
 
     let push_notification_event_handler_worker = sqs_worker::SQSWorker::new(
-        aws_sdk_sqs::Client::new(&push_delivery_queue_aws_config),
+        aws_sdk_sqs::Client::new(&aws_config),
         config.push_notification_event_handler_queue.clone(),
         config.notification_queue_max_messages,
         config.notification_queue_wait_time_seconds,

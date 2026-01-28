@@ -60,35 +60,17 @@ async fn main() -> anyhow::Result<()> {
         "initialized db connection"
     );
 
-    let queue_aws_client = if cfg!(feature = "local_queue") {
-        aws_sdk_sqs::Client::new(
-            &aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .endpoint_url("http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/")
-                .load()
-                .await,
-        )
-    } else {
-        aws_sdk_sqs::Client::new(
-            &aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .load()
-                .await,
-        )
-    };
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
+    let queue_aws_client = aws_sdk_sqs::Client::new(&aws_config);
 
     let sqs_client = sqs_client::SQS::new(queue_aws_client)
         .document_text_extractor_queue(&config.document_text_extractor_queue)
         .chat_delete_queue(&config.chat_delete_queue)
         .search_event_queue(&config.search_event_queue);
 
-    let secretsmanager_client =
-        secretsmanager_client::SecretsManager::new(aws_sdk_secretsmanager::Client::new(
-            &aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .load()
-                .await,
-        ));
+    let secretsmanager_client = secretsmanager_client::SecretsManager::new(
+        aws_sdk_secretsmanager::Client::new(&aws_config),
+    );
 
     let internal_auth_key = secretsmanager_client::LocalOrRemoteSecret::Local(
         InternalApiSecretKey::new().context("failed to create internal auth key")?,

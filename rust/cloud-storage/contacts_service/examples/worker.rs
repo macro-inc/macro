@@ -9,11 +9,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let notification_queue: &'static str = "http://localhost:4566/000000000000/my-test-queue";
     let notification_queue_max_messages = 10;
     let notification_queue_wait_time_seconds = 3;
-    let aws_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-        .region("us-east-1")
-        .endpoint_url(notification_queue)
-        .load()
-        .await;
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
     let sqs_client = aws_sdk_sqs::Client::new(&aws_config);
     let sqs = sqs_worker::SQSWorker::new(
         sqs_client,

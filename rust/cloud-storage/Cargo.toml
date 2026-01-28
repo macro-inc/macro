@@ -44,6 +44,7 @@ members = [
   "integration_tests/*",
   "lambda_client",
   "lexical_client",
+  "local_stream_processor",
   "macro_auth",
   "macro_aws_config",
   "macro_cache_client",

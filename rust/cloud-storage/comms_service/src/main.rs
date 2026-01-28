@@ -56,13 +56,11 @@ async fn main() -> anyhow::Result<()> {
         "initialized db connection"
     );
 
-    let secretsmanager_client =
-        secretsmanager_client::SecretsManager::new(aws_sdk_secretsmanager::Client::new(
-            &aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .load()
-                .await,
-        ));
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
+
+    let secretsmanager_client = secretsmanager_client::SecretsManager::new(
+        aws_sdk_secretsmanager::Client::new(&aws_config),
+    );
     tracing::trace!("initialized secretsmanager client");
 
     let macro_notify_client = macro_notify::MacroNotify::new(
@@ -78,14 +76,9 @@ async fn main() -> anyhow::Result<()> {
             config.document_storage_service_url.clone(),
         );
 
-    let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(
-        &aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .region("us-east-1")
-            .load()
-            .await,
-    ))
-    .contacts_queue(&config.contacts_queue)
-    .search_event_queue(&config.search_event_queue);
+    let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
+        .contacts_queue(&config.contacts_queue)
+        .search_event_queue(&config.search_event_queue);
 
     let macro_db = PgPoolOptions::new()
         .min_connections(1)

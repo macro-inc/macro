@@ -515,7 +515,6 @@ dependencies = [
  "anyhow",
  "async-stripe",
  "async-stripe-webhook",
- "aws-config",
  "aws-sdk-secretsmanager",
  "aws-sdk-sesv2",
  "aws-sdk-sqs",
@@ -532,6 +531,7 @@ dependencies = [
  "http-body-util",
  "jsonwebtoken",
  "macro_auth",
+ "macro_aws_config",
  "macro_cache_client",
  "macro_cors",
  "macro_db_client",
@@ -738,6 +738,28 @@ name = "aws-sdk-dynamodb"
 version = "1.101.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6f98cd9e5f2fc790aff1f393bc3c8680deea31c05d3c6f23b625cdc50b1b6b4"
+dependencies = [
+ "aws-credential-types",
+ "aws-runtime",
+ "aws-smithy-async",
+ "aws-smithy-http 0.62.6",
+ "aws-smithy-json",
+ "aws-smithy-runtime",
+ "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "aws-types",
+ "bytes",
+ "fastrand 2.3.0",
+ "http 0.2.12",
+ "regex-lite",
+ "tracing",
+]
+
+[[package]]
+name = "aws-sdk-dynamodbstreams"
+version = "1.92.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f1738cf234a9ae199475a533e9be05945e3e0b44d91ae1017c64e8197acdfff"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -1898,7 +1920,6 @@ dependencies = [
  "ai_format",
  "anyhow",
  "async-trait",
- "aws-config",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
@@ -1915,6 +1936,7 @@ dependencies = [
  "http-body-util",
  "jsonwebtoken",
  "macro_auth",
+ "macro_aws_config",
  "macro_axum_utils",
  "macro_cors",
  "macro_entrypoint",
@@ -1977,7 +1999,6 @@ name = "connection_gateway"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-config",
  "aws-sdk-dynamodb",
  "aws-sdk-secretsmanager",
  "axum",
@@ -1990,6 +2011,7 @@ dependencies = [
  "http-body-util",
  "itertools 0.14.0",
  "macro_auth",
+ "macro_aws_config",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
@@ -2087,7 +2109,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "aws-config",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
@@ -2095,6 +2116,7 @@ dependencies = [
  "contacts_db_client",
  "http-body-util",
  "macro_auth",
+ "macro_aws_config",
  "macro_cors",
  "macro_entrypoint",
  "macro_env",
@@ -2117,7 +2139,6 @@ name = "convert_service"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-config",
  "aws-sdk-lambda",
  "aws-sdk-s3",
  "aws-sdk-secretsmanager",
@@ -2126,6 +2147,7 @@ dependencies = [
  "futures",
  "http-body-util",
  "lambda_client",
+ "macro_aws_config",
  "macro_cors",
  "macro_db_client",
  "macro_entrypoint",
@@ -2427,11 +2449,11 @@ name = "dataloss_prevention_handler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-config",
  "aws-sdk-s3",
  "aws-sdk-sns",
  "aws_lambda_events",
  "lambda_runtime",
+ "macro_aws_config",
  "macro_entrypoint",
  "s3_client",
  "sns_client",
@@ -2464,7 +2486,6 @@ name = "delete_document_worker"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-config",
  "aws-sdk-s3",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
@@ -2472,6 +2493,7 @@ dependencies = [
  "chrono",
  "comms_service_client",
  "futures",
+ "macro_aws_config",
  "macro_cors",
  "macro_db_client",
  "macro_entrypoint",
@@ -2498,13 +2520,13 @@ name = "deleted_item_poller"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-config",
  "aws-sdk-sqs",
  "aws-smithy-types",
  "aws_lambda_events",
  "chrono",
  "futures",
  "lambda_runtime",
+ "macro_aws_config",
  "macro_db_client",
  "macro_entrypoint",
  "macro_env",
@@ -2637,7 +2659,6 @@ dependencies = [
  "ai_tools",
  "anyhow",
  "async-openai",
- "aws-config",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
@@ -2660,6 +2681,7 @@ dependencies = [
  "lexical_client",
  "log",
  "macro_auth",
+ "macro_aws_config",
  "macro_cors",
  "macro_db_client",
  "macro_entrypoint",
@@ -2748,6 +2770,7 @@ dependencies = [
  "jsonwebtoken",
  "lazy_static",
  "macro_auth",
+ "macro_aws_config",
  "macro_axum_utils",
  "macro_cors",
  "macro_db_client",
@@ -2833,11 +2856,11 @@ version = "0.1.0"
 dependencies = [
  "ai",
  "anyhow",
- "aws-config",
  "aws-sdk-s3",
  "aws_lambda_events",
  "chrono",
  "lambda_runtime",
+ "macro_aws_config",
  "macro_entrypoint",
  "macro_env_var",
  "mockall",
@@ -2858,7 +2881,6 @@ name = "docx_unzip_handler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-config",
  "aws-sdk-lambda",
  "aws-sdk-s3",
  "aws-sdk-sqs",
@@ -2868,6 +2890,7 @@ dependencies = [
  "futures",
  "lambda_client",
  "lambda_runtime",
+ "macro_aws_config",
  "macro_db_client",
  "macro_entrypoint",
  "macro_env",
@@ -2975,9 +2998,9 @@ name = "dynamodb_client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-config",
  "aws-sdk-dynamodb",
  "chrono",
+ "macro_aws_config",
  "model",
  "models_bulk_upload",
  "strum",
@@ -3112,11 +3135,11 @@ name = "email_refresh_handler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-config",
  "aws-sdk-sqs",
  "aws_lambda_events",
  "chrono",
  "lambda_runtime",
+ "macro_aws_config",
  "macro_db_migrator",
  "macro_entrypoint",
  "macro_env",
@@ -3134,11 +3157,11 @@ name = "email_scheduled_handler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-config",
  "aws-sdk-sqs",
  "aws_lambda_events",
  "chrono",
  "lambda_runtime",
+ "macro_aws_config",
  "macro_db_migrator",
  "macro_entrypoint",
  "macro_env",
@@ -3156,7 +3179,6 @@ dependencies = [
  "ammonia",
  "anyhow",
  "authentication_service_client",
- "aws-config",
  "aws-sdk-s3",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
@@ -3181,6 +3203,7 @@ dependencies = [
  "infer 0.19.0",
  "lol_html",
  "macro_auth",
+ "macro_aws_config",
  "macro_cors",
  "macro_entrypoint",
  "macro_env",
@@ -3250,10 +3273,10 @@ name = "email_sfs_delete_handler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-config",
  "aws-sdk-sqs",
  "aws_lambda_events",
  "lambda_runtime",
+ "macro_aws_config",
  "macro_entrypoint",
  "macro_env",
  "sqlx",
@@ -4774,7 +4797,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -4814,6 +4837,22 @@ name = "litemap"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ee93343901ab17bd981295f2cf0026d4ad018c7c31ba84549a4ddbb47a45104"
+
+[[package]]
+name = "local_stream_processor"
+version = "0.1.0"
+dependencies = [
+ "aws-sdk-dynamodb",
+ "aws-sdk-dynamodbstreams",
+ "chrono",
+ "macro_aws_config",
+ "macro_env_var",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
 
 [[package]]
 name = "lock_api"
@@ -5076,8 +5115,8 @@ name = "macro_notify"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-config",
  "aws-sdk-sqs",
+ "macro_aws_config",
  "macro_uuid",
  "model",
  "model_notifications",
@@ -5899,7 +5938,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "authentication_service_client",
- "aws-config",
  "aws-sdk-secretsmanager",
  "aws-sdk-sesv2",
  "aws-sdk-sns",
@@ -5913,6 +5951,7 @@ dependencies = [
  "futures",
  "http-body-util",
  "macro_auth",
+ "macro_aws_config",
  "macro_cache_client",
  "macro_cors",
  "macro_entrypoint",
@@ -6178,10 +6217,10 @@ name = "organization_retention_handler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-config",
  "aws-sdk-sqs",
  "aws_lambda_events",
  "lambda_runtime",
+ "macro_aws_config",
  "macro_entrypoint",
  "openssl",
  "sqlx",
@@ -6195,10 +6234,10 @@ name = "organization_retention_trigger"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-config",
  "aws-sdk-sqs",
  "aws_lambda_events",
  "lambda_runtime",
+ "macro_aws_config",
  "macro_entrypoint",
  "openssl",
  "serde_json",
@@ -6664,7 +6703,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "aws-config",
  "aws-sdk-secretsmanager",
  "axum",
  "chrono",
@@ -6672,6 +6710,7 @@ dependencies = [
  "email_db_client",
  "http-body-util",
  "macro_auth",
+ "macro_aws_config",
  "macro_cors",
  "macro_entrypoint",
  "macro_env",
@@ -7557,7 +7596,6 @@ name = "search_processing_service"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-config",
  "aws-sdk-s3",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
@@ -7570,6 +7608,7 @@ dependencies = [
  "futures",
  "http-body-util",
  "lexical_client",
+ "macro_aws_config",
  "macro_cors",
  "macro_db_client",
  "macro_entrypoint",
@@ -7608,7 +7647,6 @@ name = "search_service"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-config",
  "aws-sdk-secretsmanager",
  "axum",
  "chrono",
@@ -7621,6 +7659,7 @@ dependencies = [
  "indexmap 2.12.1",
  "item_filters",
  "macro_auth",
+ "macro_aws_config",
  "macro_cors",
  "macro_db_client",
  "macro_entrypoint",
@@ -7663,10 +7702,10 @@ name = "search_upload_handler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-config",
  "aws-sdk-sqs",
  "aws_lambda_events",
  "lambda_runtime",
+ "macro_aws_config",
  "macro_entrypoint",
  "model_file_type",
  "openssl",
@@ -8018,9 +8057,9 @@ name = "sha_cleanup_worker"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-config",
  "aws-sdk-s3",
  "futures",
+ "macro_aws_config",
  "macro_entrypoint",
  "macro_env",
  "mockall",
@@ -8528,6 +8567,7 @@ dependencies = [
  "axum",
  "chrono",
  "macro_auth",
+ "macro_aws_config",
  "macro_cors",
  "macro_entrypoint",
  "macro_env",
@@ -9369,7 +9409,6 @@ name = "upload_extractor_lambda_handler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-config",
  "aws-sdk-s3",
  "aws-sdk-sqs",
  "aws_lambda_events",
@@ -9379,6 +9418,7 @@ dependencies = [
  "dynamodb_client",
  "futures",
  "lambda_runtime",
+ "macro_aws_config",
  "macro_entrypoint",
  "model",
  "model-entity",
@@ -9402,11 +9442,11 @@ name = "upload_extractor_lambda_trigger"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-config",
  "aws-sdk-sqs",
  "aws_lambda_events",
  "dynamodb_client",
  "lambda_runtime",
+ "macro_aws_config",
  "macro_entrypoint",
  "models_bulk_upload",
  "openssl",
@@ -9819,7 +9859,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -10117,10 +10157,10 @@ name = "worker_trigger"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-config",
  "aws-sdk-ecs",
  "aws_lambda_events",
  "lambda_runtime",
+ "macro_aws_config",
  "macro_entrypoint",
  "macro_env",
  "mockall",

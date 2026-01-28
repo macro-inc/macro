@@ -32,10 +32,7 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::from_env().context("expected to be able to generate config")?;
     tracing::trace!("initialized config");
 
-    let aws_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-        .region("us-east-1")
-        .load()
-        .await;
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
 
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
         .search_event_queue(&config.search_event_queue);

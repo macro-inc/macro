@@ -40,13 +40,9 @@ async fn main() -> anyhow::Result<()> {
         "initialized macrodb connection"
     );
 
-    let secretsmanager_client =
-        secretsmanager_client::SecretsManager::new(aws_sdk_secretsmanager::Client::new(
-            &aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .load()
-                .await,
-        ));
+    let secretsmanager_client = secretsmanager_client::SecretsManager::new(
+        aws_sdk_secretsmanager::Client::new(&macro_aws_config::get_macro_aws_config().await),
+    );
     tracing::info!("initialized secretsmanager client");
 
     let jwt_args =

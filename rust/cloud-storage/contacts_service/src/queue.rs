@@ -273,10 +273,7 @@ mod tests {
     use std::collections::HashSet;
 
     async fn sqs_dummy() -> SQSWorker {
-        let config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .region("us-east-1")
-            .load()
-            .await;
+        let config = macro_aws_config::get_macro_aws_config().await;
         let client = aws_sdk_sqs::Client::new(&config);
         SQSWorker::new(client, "nothing".to_string(), 1, 1)
     }

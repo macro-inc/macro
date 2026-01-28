@@ -21,8 +21,8 @@ tree_trace = []
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-aws-config = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
+macro_aws_config = { path = "../macro_aws_config" }
 axum = { workspace = true, features = ["tower-log", "ws"] }
 chrono = { workspace = true }
 comms_service_client = { path = "../comms_service_client" }

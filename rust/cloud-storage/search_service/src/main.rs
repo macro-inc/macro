@@ -20,10 +20,7 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::from_env().context("expected to be able to generate config")?;
     tracing::trace!("initialized config");
 
-    let aws_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-        .region("us-east-1")
-        .load()
-        .await;
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
 
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
         aws_sdk_secretsmanager::Client::new(&aws_config),

@@ -34,8 +34,8 @@ async-stripe = { workspace = true, default-features = false, features = [
   "runtime-tokio-hyper",
 ] }
 async-stripe-webhook = { version = "1.0.0-alpha.4", default-features = false }
-aws-config = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
+macro_aws_config = { path = "../macro_aws_config" }
 aws-sdk-sesv2 = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, features = ["macros"] }

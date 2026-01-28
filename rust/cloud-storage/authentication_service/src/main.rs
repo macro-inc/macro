@@ -38,13 +38,9 @@ async fn main() -> anyhow::Result<()> {
     MacroEntrypoint::default().init();
     let env = Environment::new_or_prod();
 
-    let secretsmanager_client =
-        secretsmanager_client::SecretsManager::new(aws_sdk_secretsmanager::Client::new(
-            &aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .load()
-                .await,
-        ));
+    let secretsmanager_client = secretsmanager_client::SecretsManager::new(
+        aws_sdk_secretsmanager::Client::new(&macro_aws_config::get_macro_aws_config().await),
+    );
 
     let internal_api_key = secretsmanager_client
         .get_maybe_secret_value(env, InternalApiSecretKey::new()?)
@@ -165,12 +161,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::trace!("initialized stripe client");
 
     let ses_client = ses_client::Ses::new(
-        aws_sdk_sesv2::Client::new(
-            &aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .load()
-                .await,
-        ),
+        aws_sdk_sesv2::Client::new(&macro_aws_config::get_macro_aws_config().await),
         &config.environment.to_string(),
     );
 
@@ -186,10 +177,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::trace!("initialized macro_notify client");
 
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(
-        &aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .region("us-east-1")
-            .load()
-            .await,
+        &macro_aws_config::get_macro_aws_config().await,
     ))
     .search_event_queue(&config.search_event_queue);
     tracing::trace!("initialized sqs client");

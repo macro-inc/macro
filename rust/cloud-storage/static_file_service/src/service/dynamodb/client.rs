@@ -5,7 +5,6 @@ use super::model::DeleteError;
 use super::model::MetadataObject;
 use super::put_item;
 use anyhow::{Context, Result, format_err};
-use aws_config::Region;
 use aws_sdk_dynamodb::Client;
 use aws_sdk_dynamodb::types::AttributeValue;
 use serde_dynamo::{Item, from_item, to_item};
@@ -18,13 +17,9 @@ pub struct DynamodbClient {
 }
 
 impl DynamodbClient {
-    pub async fn new(region: Region, table: String) -> Self {
-        let client = Client::new(
-            &aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region(region)
-                .load()
-                .await,
-        );
+    /// Create a new DynamodbClient with the given AWS config and table name.
+    pub fn new(aws_config: &aws_config::SdkConfig, table: String) -> Self {
+        let client = Client::new(aws_config);
         DynamodbClient { client, table }
     }
 

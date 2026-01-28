@@ -16,8 +16,8 @@ path = "src/openapi.rs"
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-aws-config = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
+macro_aws_config = { path = "../macro_aws_config" }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
 connection_gateway = { path = "../connection_gateway" }

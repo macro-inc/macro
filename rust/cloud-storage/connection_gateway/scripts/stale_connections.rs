@@ -108,9 +108,7 @@ impl ConnectionInfo {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize AWS config
-    let config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-        .load()
-        .await;
+    let config = macro_aws_config::get_macro_aws_config().await;
     let client = aws_sdk_dynamodb::Client::new(&config);
 
     // Get table name from environment variable or command line argument

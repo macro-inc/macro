@@ -40,10 +40,7 @@ async fn main() -> Result<(), Error> {
 
     tracing::trace!("initialized db connection");
 
-    let aws_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-        .region("us-east-1")
-        .load()
-        .await;
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
 
     let s3_client = s3_client::S3::new(aws_sdk_s3::Client::new(&aws_config));
     tracing::trace!("initialized s3 client");

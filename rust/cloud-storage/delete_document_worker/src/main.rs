@@ -40,29 +40,12 @@ pub async fn main() -> anyhow::Result<()> {
         "initialized db connection"
     );
 
-    let queue_aws_config = if cfg!(feature = "local_queue") {
-        aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .region("us-east-1")
-            .endpoint_url(&config.delete_document_queue)
-            .load()
-            .await
-    } else {
-        aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .region("us-east-1")
-            .load()
-            .await
-    };
-
-    // Normal config for non-local stack items
-    let aws_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-        .region("us-east-1")
-        .load()
-        .await;
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
 
     let s3_client = s3_client::S3::new(aws_sdk_s3::Client::new(&aws_config));
 
     let delete_document_worker = sqs_worker::SQSWorker::new(
-        aws_sdk_sqs::Client::new(&queue_aws_config),
+        aws_sdk_sqs::Client::new(&aws_config),
         config.delete_document_queue.clone(),
         config.queue_max_messages,
         config.queue_wait_time_seconds,

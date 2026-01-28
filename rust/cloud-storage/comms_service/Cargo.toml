@@ -29,7 +29,6 @@ service = ["comms_db_client"]
 ai_format = { path = "../ai_format" }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-aws-config = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, features = ["tower-log", "ws"] }
@@ -46,6 +45,7 @@ futures = { workspace = true }
 http-body-util = { workspace = true }
 jsonwebtoken.workspace = true
 macro_auth = { path = "../macro_auth" }
+macro_aws_config = { path = "../macro_aws_config" }
 macro_axum_utils = { path = "../macro_axum_utils" }
 macro_cors = { path = "../macro_cors" }
 macro_entrypoint = { path = "../macro_entrypoint" }
