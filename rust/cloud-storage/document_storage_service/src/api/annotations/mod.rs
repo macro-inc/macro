@@ -181,14 +181,6 @@ pub struct DocumentMentionNotification {
 impl Notification for DocumentMentionNotification {
     const TYPE_NAME: &'static str = "document_mention";
 
-    fn title(&self) -> String {
-        "Document Mention".to_string()
-    }
-
-    fn body(&self) -> String {
-        format!("You were mentioned in {}", self.document_name)
-    }
-
     fn rate_limit_config() -> Option<RateLimitConfig> {
         None
     }

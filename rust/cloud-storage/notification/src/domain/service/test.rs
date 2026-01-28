@@ -35,14 +35,6 @@ struct TestNotification {
 impl Notification for TestNotification {
     const TYPE_NAME: &'static str = "test_notification";
 
-    fn title(&self) -> String {
-        "Test".to_string()
-    }
-
-    fn body(&self) -> String {
-        self.message.clone()
-    }
-
     fn rate_limit_config() -> Option<RateLimitConfig> {
         None
     }
@@ -446,19 +438,27 @@ async fn test_apns_enqueues_correct_data_for_multiple_users() {
     let repo = MockRepository::new()
         .with_device_endpoint(
             user1.clone(),
-            DeviceEndpoint::Ios("arn:aws:sns:us-east-1:111:endpoint/APNS/app/alice-device".to_string()),
+            DeviceEndpoint::Ios(
+                "arn:aws:sns:us-east-1:111:endpoint/APNS/app/alice-device".to_string(),
+            ),
         )
         .with_device_endpoint(
             user2.clone(),
-            DeviceEndpoint::Ios("arn:aws:sns:us-east-1:111:endpoint/APNS/app/bob-device".to_string()),
+            DeviceEndpoint::Ios(
+                "arn:aws:sns:us-east-1:111:endpoint/APNS/app/bob-device".to_string(),
+            ),
         )
         .with_device_endpoint(
             user2.clone(),
-            DeviceEndpoint::Ios("arn:aws:sns:us-east-1:111:endpoint/APNS/app/bob-device-2".to_string()),
+            DeviceEndpoint::Ios(
+                "arn:aws:sns:us-east-1:111:endpoint/APNS/app/bob-device-2".to_string(),
+            ),
         )
         .with_device_endpoint(
             user3.clone(),
-            DeviceEndpoint::Ios("arn:aws:sns:us-east-1:111:endpoint/APNS/app/charlie-device".to_string()),
+            DeviceEndpoint::Ios(
+                "arn:aws:sns:us-east-1:111:endpoint/APNS/app/charlie-device".to_string(),
+            ),
         );
 
     let service = NotificationIngressService::new(repo, queue.clone(), "test_service");
@@ -477,7 +477,11 @@ async fn test_apns_enqueues_correct_data_for_multiple_users() {
     service.send_notification(request).await.unwrap();
 
     let published = queue.get_published();
-    assert_eq!(published.len(), 1, "APNS produces a single queue message for all recipients");
+    assert_eq!(
+        published.len(),
+        1,
+        "APNS produces a single queue message for all recipients"
+    );
 
     let msg = &published[0];
     assert_eq!(msg["message_type"], "test_notification");
@@ -507,7 +511,11 @@ async fn test_apns_enqueues_correct_data_for_multiple_users() {
         .map(|v| v.as_str().unwrap())
         .collect();
 
-    assert_eq!(endpoints.len(), 4, "Should include all 4 device endpoints across 3 users");
+    assert_eq!(
+        endpoints.len(),
+        4,
+        "Should include all 4 device endpoints across 3 users"
+    );
     assert!(
         endpoints.contains(&"arn:aws:sns:us-east-1:111:endpoint/APNS/app/alice-device"),
         "Should include alice's device"

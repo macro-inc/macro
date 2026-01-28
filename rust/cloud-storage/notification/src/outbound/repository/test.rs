@@ -13,14 +13,6 @@ struct TestNotification {
 impl Notification for TestNotification {
     const TYPE_NAME: &'static str = "test_notification";
 
-    fn title(&self) -> String {
-        "Test".to_string()
-    }
-
-    fn body(&self) -> String {
-        self.message.clone()
-    }
-
     fn rate_limit_config() -> Option<crate::domain::models::RateLimitConfig> {
         None
     }

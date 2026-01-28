@@ -21,14 +21,6 @@ pub struct InviteToTeamNotification {
 impl Notification for InviteToTeamNotification {
     const TYPE_NAME: &'static str = "invite_to_team";
 
-    fn title(&self) -> String {
-        "Team Invitation".to_string()
-    }
-
-    fn body(&self) -> String {
-        format!("You've been invited to join {}", self.team_name)
-    }
-
     fn rate_limit_config() -> Option<RateLimitConfig> {
         None
     }

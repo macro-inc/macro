@@ -110,20 +110,3 @@ pub struct APNSPushNotification<T> {
     #[serde(flatten)]
     pub push_notification_data: T,
 }
-
-impl APNSPushNotification<()> {
-    /// construct a simple apple notification using the input notifications title and body
-    pub fn default_new<T: Notification>(notif: &T) -> Self {
-        APNSPushNotification {
-            aps: Aps {
-                alert: Some(Alert::Dictionary(AlertDictionary {
-                    title: Some(notif.title()),
-                    body: Some(notif.body()),
-                    ..Default::default()
-                })),
-                ..Default::default()
-            },
-            push_notification_data: (),
-        }
-    }
-}

@@ -24,10 +24,6 @@ pub trait Notification: Serialize + DeserializeOwned + Send + Sync {
     /// The type name of this notification.
     const TYPE_NAME: &'static str;
 
-    /// The user visible title of the notification.
-    fn title(&self) -> String;
-    /// The user visible body of the notification.
-    fn body(&self) -> String;
     /// The configuration for how often the notification can be triggered on a certain key.
     fn rate_limit_config() -> Option<RateLimitConfig>;
     /// The actual key for the rate limit bucket.

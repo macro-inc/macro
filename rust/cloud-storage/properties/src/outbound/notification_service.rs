@@ -27,17 +27,6 @@ pub struct TaskAssignedNotification {
 impl Notification for TaskAssignedNotification {
     const TYPE_NAME: &'static str = "task_assigned";
 
-    fn title(&self) -> String {
-        "Task Assigned".to_string()
-    }
-
-    fn body(&self) -> String {
-        match &self.task_name {
-            Some(name) => format!("You've been assigned to task: {}", name),
-            None => "You've been assigned to a task".to_string(),
-        }
-    }
-
     fn rate_limit_config() -> Option<RateLimitConfig> {
         None
     }

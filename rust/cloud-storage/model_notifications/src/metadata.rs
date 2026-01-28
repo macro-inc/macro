@@ -219,20 +219,6 @@ pub struct NewEmailMetadata {
 impl notification::domain::models::Notification for NewEmailMetadata {
     const TYPE_NAME: &'static str = "new_email";
 
-    fn title(&self) -> String {
-        self.sender
-            .clone()
-            .unwrap_or_else(|| "New Email".to_string())
-    }
-
-    fn body(&self) -> String {
-        if self.subject.is_empty() {
-            self.snippet.clone()
-        } else {
-            self.subject.clone()
-        }
-    }
-
     fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
         None
     }
@@ -244,17 +230,6 @@ impl notification::domain::models::Notification for NewEmailMetadata {
 
 impl notification::domain::models::Notification for ChannelInviteMetadata {
     const TYPE_NAME: &'static str = "channel_invite";
-
-    fn title(&self) -> String {
-        format!("{} Invite", self.common.channel_name)
-    }
-
-    fn body(&self) -> String {
-        format!(
-            "{} invited you to join the channel",
-            self.invited_by.as_ref()
-        )
-    }
 
     fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
         None
@@ -268,17 +243,6 @@ impl notification::domain::models::Notification for ChannelInviteMetadata {
 impl notification::domain::models::Notification for ChannelMessageSendMetadata {
     const TYPE_NAME: &'static str = "channel_message_send";
 
-    fn title(&self) -> String {
-        match self.common.channel_type {
-            ChannelType::DirectMessage => self.sender.as_ref().to_string(),
-            _ => format!("{} <{}>", self.sender.as_ref(), self.common.channel_name),
-        }
-    }
-
-    fn body(&self) -> String {
-        self.message_content.clone()
-    }
-
     fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
         None
     }
@@ -290,17 +254,6 @@ impl notification::domain::models::Notification for ChannelMessageSendMetadata {
 
 impl notification::domain::models::Notification for ChannelMentionMetadata {
     const TYPE_NAME: &'static str = "channel_mention";
-
-    fn title(&self) -> String {
-        match self.common.channel_type {
-            ChannelType::DirectMessage => "You were mentioned".to_string(),
-            _ => format!("Mentioned in #{}", self.common.channel_name),
-        }
-    }
-
-    fn body(&self) -> String {
-        self.message_content.clone()
-    }
 
     fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
         None
@@ -314,14 +267,6 @@ impl notification::domain::models::Notification for ChannelMentionMetadata {
 impl notification::domain::models::Notification for ChannelReplyMetadata {
     const TYPE_NAME: &'static str = "channel_message_reply";
 
-    fn title(&self) -> String {
-        format!("{} Replied", self.user_id.as_ref())
-    }
-
-    fn body(&self) -> String {
-        self.message_content.clone()
-    }
-
     fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
         None
     }
@@ -333,21 +278,6 @@ impl notification::domain::models::Notification for ChannelReplyMetadata {
 
 impl notification::domain::models::Notification for DocumentMentionMetadata {
     const TYPE_NAME: &'static str = "document_mention";
-
-    fn title(&self) -> String {
-        self.owner.as_ref().to_string()
-    }
-
-    fn body(&self) -> String {
-        format!(
-            "You were mentioned in {}{}",
-            self.document_name,
-            self.file_type
-                .as_ref()
-                .map(|ft| format!(".{ft}"))
-                .unwrap_or_default()
-        )
-    }
 
     fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
         None
