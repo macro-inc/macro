@@ -10,6 +10,7 @@ chrono = { workspace = true }
 doppleganger = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
+notification = { path = "../notification" }
 models_comms = { path = "../models_comms" }
 models_pagination = { path = "../models_pagination" }
 serde = { workspace = true }

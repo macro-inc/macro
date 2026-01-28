@@ -216,6 +216,32 @@ pub struct NewEmailMetadata {
     pub snippet: String,
 }
 
+impl notification::domain::models::Notification for NewEmailMetadata {
+    const TYPE_NAME: &'static str = "new_email";
+
+    fn title(&self) -> String {
+        self.sender
+            .clone()
+            .unwrap_or_else(|| "New Email".to_string())
+    }
+
+    fn body(&self) -> String {
+        if self.subject.is_empty() {
+            self.snippet.clone()
+        } else {
+            self.subject.clone()
+        }
+    }
+
+    fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
+        None
+    }
+
+    fn rate_limit_key(&self) -> Option<notification::domain::models::RateLimitKey> {
+        None
+    }
+}
+
 /// Metadata for when a user is assigned to a task
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
