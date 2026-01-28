@@ -231,7 +231,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
 
   return (
     <div
-      class="pr-2 font-mono"
+      class="pr-2 font-mono tracking-tight"
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
       onClick={handleClick}

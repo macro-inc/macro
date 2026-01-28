@@ -957,7 +957,7 @@ export function BaseInput(props: {
         >
           <div ref={setExpandedRecipientsRef} class="w-full">
             {/* Expanded FROM */}
-            <div class="flex flex-row items-baseline font-mono">
+            <div class="flex flex-row items-baseline font-mono tracking-tight">
               <span class="text-sm text-ink-muted min-w-8">
                 from <span>{userName()} </span>
                 <span>&lt;{userEmail()}&gt;</span>
