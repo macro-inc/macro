@@ -25,6 +25,10 @@ import WideDiagram from '@macro-icons/wide/diagram.svg';
 import WideEmail from '@macro-icons/wide/email.svg';
 import WideFileCode from '@macro-icons/wide/file-code.svg';
 import WideFileMd from '@macro-icons/wide/file-md.svg';
+import { ChatIcon } from '@macro-icons/wide/animating/chat';
+import { FileMdIcon } from '@macro-icons/wide/animating/fileMd';
+import { StarIcon } from '@macro-icons/wide/animating/star';
+import { TaskIcon } from '@macro-icons/wide/animating/task';
 import WideFolder from '@macro-icons/wide/folder.svg';
 import WideStar from '@macro-icons/wide/star.svg';
 import WideTask from '@macro-icons/wide/task.svg';
@@ -106,7 +110,7 @@ type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {
 export const CREATABLE_BLOCKS: CreatableBlock[] = [
   {
     label: 'Docs',
-    icon: () => <WideFileMd />,
+    icon: (props?) => <FileMdIcon {...props} />,
     description: 'Create doc',
     blockName: 'md',
     hotkeyToken: TOKENS.create.note,
@@ -131,7 +135,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     ? [
         {
           label: 'Task',
-          icon: () => <WideTask />,
+          icon: (props?) => <TaskIcon {...props} />,
           description: 'Create task',
           blockName: 'task' as BlockName,
           hotkeyToken: TOKENS.create.task,
@@ -149,7 +153,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     : []),
   {
     label: 'Email',
-    icon: () => <WideEmail />,
+    icon: (props?) => <WideEmail />,
     description: 'Create email',
     blockName: 'email',
     hotkeyToken: TOKENS.create.email,
@@ -165,7 +169,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'Message',
-    icon: () => <WideChat />,
+    icon: (props?) => <ChatIcon {...props} />,
     description: 'Create message',
     blockName: 'channel',
     hotkeyToken: TOKENS.create.message,
@@ -181,7 +185,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'AI',
-    icon: () => <WideStar />,
+    icon: (props?) => <StarIcon {...props} />,
     description: 'Create AI chat',
     blockName: 'chat' as BlockName,
     hotkeyToken: TOKENS.create.chat,
@@ -204,7 +208,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'Canvas',
-    icon: () => <WideDiagram />,
+    icon: (props?) => <WideDiagram />,
     description: 'Create canvas',
     blockName: 'canvas',
     hotkeyToken: TOKENS.create.canvas,
@@ -230,7 +234,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'Folder',
-    icon: () => <WideFolder />,
+    icon: (props?) => <WideFolder />,
     description: 'Create folder',
     blockName: 'project',
     hotkeyToken: TOKENS.create.project,
@@ -247,7 +251,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'Code',
-    icon: () => <WideFileCode />,
+    icon: (props?) => <WideFileCode />,
     description: 'Create code file',
     blockName: 'code',
     hotkeyToken: TOKENS.create.code,
@@ -378,7 +382,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
           'scale-110': props.focused,
         }}
       >
-        {Icon && <Icon />}
+        {Icon && <Icon triggerAnimation={props.focused} />}
       </div>
     </button>
   );
