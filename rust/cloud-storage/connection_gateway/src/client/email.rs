@@ -17,4 +17,15 @@ impl ConnectionGatewayClient {
         )
         .await
     }
+
+    #[tracing::instrument(skip(self), err)]
+    pub async fn invalidate_contacts(&self, user_id: &str) -> anyhow::Result<Vec<MessageReceipt>> {
+        self.send_message(
+            "user",
+            user_id,
+            "contacts_invalidation".to_string(),
+            json!({}),
+        )
+        .await
+    }
 }

@@ -1,0 +1,27 @@
+[package]
+edition = "2024"
+name = "notification"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+aws-sdk-sesv2 = { workspace = true }
+aws-sdk-sns = { workspace = true }
+aws-sdk-sqs = { workspace = true }
+hex = { workspace = true }
+itertools = { workspace = true }
+macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity" }
+redis = { workspace = true, features = ["tokio-native-tls-comp"] }
+reqwest = { workspace = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
+tracing = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }

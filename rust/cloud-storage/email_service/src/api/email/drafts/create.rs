@@ -10,6 +10,7 @@ use email_db_client::contacts::upsert_message::parse_and_upsert_message_contacts
 use email_db_client::messages::insert::insert_message_to_send_db;
 use email_db_client::parse::service_to_db::addresses_from_message;
 use email_db_client::user_history::upsert_user_history;
+use macro_uuid::generate_uuid_v7;
 use model::response::ErrorResponse;
 use model::user::UserContext;
 use models_email::email::db::address::UpsertedRecipients;
@@ -170,8 +171,10 @@ async fn insert_message_to_send(
     let thread_db_id = if let Some(id) = draft.thread_db_id {
         id
     } else {
+        // Generate thread ID in service layer before insertion
+        let thread_id = generate_uuid_v7();
         let thread = thread::Thread {
-            db_id: None,
+            db_id: thread_id,
             provider_id: None,
             link_id,
             // if we're creating a thread with a sent message, it's not visible in the inbox

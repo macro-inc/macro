@@ -1,7 +1,6 @@
 use ai_toolset::AsyncToolSet;
 use ai_toolset::schema::{ToolSchemaGenerator, ToolSchemas};
 pub mod code_execution;
-pub mod list;
 pub mod prompts;
 pub mod read;
 #[allow(dead_code)]
@@ -13,13 +12,12 @@ use code_execution::{
     anthropic_bash_code_execution_tool, anthropic_text_editor_code_execution_tool,
 };
 use search::web::anthropic_web_search::anthropic_web_search_tool;
+use soup::inbound::toolset::{ListEntities, SoupToolContext};
 use std::sync::Arc;
 use web_fetch::anthropic_web_fetch_tool;
 
 pub use search::search_toolset;
 pub use tool_context::*;
-
-use crate::list::list_toolset;
 
 pub type AiToolSet = AsyncToolSet<ToolServiceContext>;
 
@@ -39,8 +37,10 @@ pub fn all_tools() -> ToolSetWithPrompt {
     let toolset = AsyncToolSet::new()
         .add_toolset(search_toolset())
         .expect("failed to add search toolset")
-        .add_toolset(list_toolset())
-        .expect("failed to add list toolset")
+        // .add_toolset(list_toolset())
+        // .expect("failed to add list toolset")
+        .add_tool::<ListEntities, SoupToolContext<ToolSoupService>>()
+        .expect("failed to add list entities tool")
         .add_tool::<read::Read, Arc<ToolScribe>>()
         .expect("read tool");
     let prompt = prompts::TOOLS_PROMPT;

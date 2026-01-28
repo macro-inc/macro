@@ -2,6 +2,7 @@ use crate::user::{
     Connection, Group, UserVertex, create_connections_message, create_user, unpack_connections,
     unpack_users,
 };
+use connection_gateway_client::client::ConnectionGatewayClient;
 use contacts_db_client::create_connections;
 use model::contacts::{
     AddParticipantsMessageBody, ConnectionsMessage, CreateGroupMessageBody, Message,
@@ -45,10 +46,32 @@ pub async fn create_group(body: &CreateGroupMessageBody) -> Vec<(String, String)
         .collect()
 }
 
-#[derive(Debug)]
 pub struct MessageQueue {
     sqs: SQSWorker,
     db: Pool<Postgres>,
+    connection_gateway_client: Option<ConnectionGatewayClient>,
+}
+
+/// Notify all affected users that their contacts have been updated
+async fn invalidate_contacts_for_users(
+    client: &Option<ConnectionGatewayClient>,
+    connection_pairs: &[(String, String)],
+) {
+    let Some(client) = client else {
+        return;
+    };
+
+    let mut user_ids: HashSet<&str> = HashSet::new();
+    for (user1, user2) in connection_pairs {
+        user_ids.insert(user1);
+        user_ids.insert(user2);
+    }
+
+    for user_id in user_ids {
+        if let Err(e) = client.invalidate_contacts(user_id).await {
+            tracing::error!(user_id = %user_id, error = ?e, "Failed to invalidate contacts");
+        }
+    }
 }
 
 async fn connections_message_handler(conmsg: &ConnectionsMessage, queue: &MessageQueue) {
@@ -62,7 +85,7 @@ async fn connections_message_handler(conmsg: &ConnectionsMessage, queue: &Messag
         .into_iter()
         .map(|e| (e.a.data.id.to_string(), e.b.data.id.to_string()))
         .collect();
-    let _ = create_connections(&mut transaction, connection_pairs)
+    let _ = create_connections(&mut transaction, connection_pairs.clone())
         .await
         .inspect_err(|e| {
             tracing::error!("couldn't create connections: {:?}", e);
@@ -70,6 +93,8 @@ async fn connections_message_handler(conmsg: &ConnectionsMessage, queue: &Messag
     let _ = transaction.commit().await.inspect_err(|e| {
         tracing::error!("transaction error: {:?}", e);
     });
+
+    invalidate_contacts_for_users(&queue.connection_gateway_client, &connection_pairs).await;
 }
 
 #[instrument(level = "info", skip(queue))]
@@ -78,7 +103,7 @@ async fn add_participants_handler(body: &AddParticipantsMessageBody, queue: &Mes
     let db = &queue.db;
     let connection_pairs = add_participants(body).await;
     let mut transaction = db.begin().await.unwrap();
-    let _ = create_connections(&mut transaction, connection_pairs)
+    let _ = create_connections(&mut transaction, connection_pairs.clone())
         .await
         .inspect_err(|e| {
             tracing::error!("couldn't create connections: {:?}", e);
@@ -86,6 +111,9 @@ async fn add_participants_handler(body: &AddParticipantsMessageBody, queue: &Mes
     let _ = transaction.commit().await.inspect_err(|e| {
         tracing::error!("transaction error: {:?}", e);
     });
+
+    // Notify affected users
+    invalidate_contacts_for_users(&queue.connection_gateway_client, &connection_pairs).await;
 }
 
 #[instrument(level = "info", skip(queue))]
@@ -94,7 +122,7 @@ async fn create_group_handler(body: &CreateGroupMessageBody, queue: &MessageQueu
     let db = &queue.db;
     let connection_pairs = create_group(body).await;
     let mut transaction = db.begin().await.unwrap();
-    let _ = create_connections(&mut transaction, connection_pairs)
+    let _ = create_connections(&mut transaction, connection_pairs.clone())
         .await
         .inspect_err(|e| {
             tracing::error!("couldn't create connections: {:?}", e);
@@ -102,6 +130,9 @@ async fn create_group_handler(body: &CreateGroupMessageBody, queue: &MessageQueu
     let _ = transaction.commit().await.inspect_err(|e| {
         tracing::error!("transaction error: {:?}", e);
     });
+
+    // Notify affected users
+    invalidate_contacts_for_users(&queue.connection_gateway_client, &connection_pairs).await;
 }
 
 #[cfg(test)]
@@ -135,8 +166,16 @@ pub async fn process(msg: &Message, queue: &MessageQueue) -> anyhow::Result<()> 
 
 #[allow(dead_code)]
 impl MessageQueue {
-    pub fn new(sqs: SQSWorker, db: Pool<Postgres>) -> MessageQueue {
-        MessageQueue { sqs, db }
+    pub fn new(
+        sqs: SQSWorker,
+        db: Pool<Postgres>,
+        connection_gateway_client: Option<ConnectionGatewayClient>,
+    ) -> MessageQueue {
+        MessageQueue {
+            sqs,
+            db,
+            connection_gateway_client,
+        }
     }
 
     #[instrument(level = "info", skip(self))]
@@ -342,7 +381,7 @@ mod tests {
         let message: Message = message_from_json(input_json).unwrap();
         let db = pool.clone();
         let sqs = sqs_dummy().await;
-        let queue = MessageQueue::new(sqs, db);
+        let queue = MessageQueue::new(sqs, db, None);
         match message {
             Message::AddConnection(con) => connections_message_handler(&con, &queue).await,
             _ => panic!("Message not matched properly"),
@@ -405,7 +444,7 @@ mod tests {
         let message: Message = Message::AddParticipants(body);
         let db = pool.clone();
         let sqs = sqs_dummy().await;
-        let queue = MessageQueue::new(sqs, db);
+        let queue = MessageQueue::new(sqs, db, None);
         match message {
             Message::AddParticipants(body) => add_participants_handler(&body, &queue).await,
             _ => panic!("Message not matched properly"),
@@ -494,7 +533,7 @@ mod tests {
         let message: Message = Message::CreateGroup(body);
         let db = pool.clone();
         let sqs = sqs_dummy().await;
-        let queue = MessageQueue::new(sqs, db);
+        let queue = MessageQueue::new(sqs, db, None);
         match message {
             Message::CreateGroup(body) => create_group_handler(&body, &queue).await,
             _ => panic!("Message not matched properly"),

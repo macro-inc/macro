@@ -29,12 +29,45 @@ services:
       - cache:/data
     networks:
       - databases
+  search:
+    image: opensearchproject/opensearch:latest
+    environment:
+      cluster.name: search 
+      discovery.type: single-node
+      node.name: search
+      plugins.security.disabled: true
+      bootstrap.memory_lock: true
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m" # Set min and max JVM heap sizes to at least 50% of system RAM
+      OPENSEARCH_INITIAL_ADMIN_PASSWORD: "yourStrongPassword123!"
+    healthcheck:
+      interval: 10s
+      retries: 80
+      test: curl --write-out 'HTTP %{http_code}' --fail --silent --output /dev/null http://localhost:9200/
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    ports:
+      - 9200:9200 # REST API
+      - 9600:9600 # Performance Analyzer
+    networks:
+      - databases
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
 
 networks:
   databases:
     external: true
 volumes:
   db:
+    name: macro_postgres_data
     driver: local
   cache:
+    name: macro_redis_data
+    driver: local
+  opensearch_data:
+    name: macro_opensearch_data
     driver: local

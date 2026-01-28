@@ -7,18 +7,20 @@ import type {
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { createEffect, createSignal } from 'solid-js';
 import { useAttachments } from '../../signal/attachment';
-import { createStream } from '../../util/stream';
+import { pausableStream } from '../../util/stream';
 import { ModelSelector } from '../input/ModelSelector';
 import { useChatInput } from '../input/useChatInput';
 import { useChatMarkdownArea } from '../input/useChatMarkdownArea';
 import { useChatMessages } from '../message/ChatMessages';
 import {
   blockDone,
+  createStream,
   delayStream,
   mockMessages,
   poem,
   simpleMessageChain,
   slowFirst,
+  table,
   toolCall,
 } from './mockData';
 import { StreamDebuggerWithControls, StreamStatus } from './stream';
@@ -39,6 +41,7 @@ export default function Debug() {
           <ToolCallRender />
           <ToolCallResponseRender />
           <LoadingMessageScroll />
+          <TableStream />
         </div>
       </div>
     </div>
@@ -360,6 +363,94 @@ function LoadingMessageScroll() {
           autoStart
         />
       </div>
+    </Item>
+  );
+}
+
+function TableStream() {
+  const [isPaused, setIsPaused] = createSignal(false);
+  const [isSlow, setIsSlow] = createSignal(false);
+  const [showRaw, setShowRaw] = createSignal(false);
+  const [stream, setStream] = createSignal<MessageStream>();
+  const [rawText, setRawText] = createSignal('');
+
+  const {
+    ChatMessages,
+    setStream: setMessageStream,
+    reset,
+  } = useChatMessages({
+    messages: mockMessages([
+      {
+        type: 'user',
+        text: 'Can you show me a comparison of frontend frameworks?',
+      },
+    ]),
+  });
+
+  const startStream = () => {
+    reset();
+    setRawText('');
+    const baseStream = table();
+    const controlled = pausableStream(baseStream, {
+      isPaused,
+      isSlow,
+      onChunk: (text) => setRawText((prev) => prev + text),
+    });
+    setStream(controlled);
+    setMessageStream(controlled);
+  };
+
+  return (
+    <Item col label="Table stream with controls">
+      <div class="flex gap-x-2 items-center">
+        <DeprecatedTextButton
+          text="Stream"
+          onClick={startStream}
+          theme="accent"
+        />
+        <DeprecatedTextButton
+          text={isPaused() ? 'Resume' : 'Pause'}
+          onClick={() => setIsPaused((p) => !p)}
+          theme="accent"
+        />
+        <label class="flex items-center gap-x-1 text-xs">
+          <input
+            type="checkbox"
+            checked={isSlow()}
+            onChange={(e) => setIsSlow(e.currentTarget.checked)}
+          />
+          Slow mode
+        </label>
+        <label class="flex items-center gap-x-1 text-xs">
+          <input
+            type="checkbox"
+            checked={showRaw()}
+            onChange={(e) => setShowRaw(e.currentTarget.checked)}
+          />
+          Raw
+        </label>
+        <DeprecatedTextButton
+          text="Reset"
+          theme="accent"
+          onClick={() => {
+            setStream(undefined);
+            setRawText('');
+            reset();
+          }}
+        />
+      </div>
+      <StreamStatus stream={stream} />
+      {showRaw() ? (
+        <div class="min-h-0 max-h-[400px] overflow-y-auto select-text">
+          <pre class="text-xs whitespace-pre-wrap font-mono break-all select-text cursor-text">
+            {rawText()}
+          </pre>
+        </div>
+      ) : (
+        <div data-chat-scroll class="min-h-0 max-h-[400px] overflow-y-auto">
+          <ChatMessages />
+        </div>
+      )}
     </Item>
   );
 }

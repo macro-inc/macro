@@ -4,10 +4,18 @@ create_networks:
   docker network create auth 2>/dev/null || true -- fusionauth network
   echo "docker networks created"
 
+fix_environment *ARGS:
+  # Decrypt ignoring mac error
+  sops --input-type dotenv --output-type dotenv --ignore-mac -d .env-local{{ ARGS }}.enc > .env-local{{ ARGS }}.dec
+  # Encrypt the file
+  sops --input-type dotenv --output-type dotenv -e .env-local{{ ARGS}}.dec > .env-local{{ ARGS }}.enc
+  # Remove the decrypted file
+  rm -rf .env-local{{ ARGS }}.dec
+
 get_environment *ARGS:
   sops --input-type dotenv --output-type dotenv -d .env-local{{ ARGS }}.enc > .env
 
-# Creates the docker networks then runs the databases 
+# Creates the docker networks then runs the databases
 # This is used when initializing your databases
 run_dbs *ARGS:
   just create_networks
@@ -28,7 +36,7 @@ run_local *ARGS:
 # after
 build_run_local *ARGS:
   just rust/cloud-storage/build_dev_service_images
-  just run_local {{ ARGS }} 
+  just run_local {{ ARGS }}
 
 # Stop all local services
 stop-local:

@@ -13,10 +13,8 @@ pub async fn upsert_contacts(pool: &PgPool, contacts: &[Contact]) -> anyhow::Res
         return Ok(0);
     }
 
-    let db_contacts: Vec<db::contact::Contact> = contacts
-        .iter()
-        .map(|c| map_new_contact_to_db(c, macro_uuid::generate_uuid_v7()))
-        .collect();
+    let db_contacts: Vec<db::contact::Contact> =
+        contacts.iter().map(map_new_contact_to_db).collect();
 
     // Filter out contacts without email addresses and prepare vectors for bulk insert
     let mut ids = Vec::new();

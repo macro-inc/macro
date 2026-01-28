@@ -5,7 +5,6 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AccessLevel } from './accessLevel';
-import type { APIThreadDbId } from './aPIThreadDbId';
 import type { APIThreadLatestInboundMessageTs } from './aPIThreadLatestInboundMessageTs';
 import type { APIThreadLatestNonSpamMessageTs } from './aPIThreadLatestNonSpamMessageTs';
 import type { APIThreadLatestOutboundMessageTs } from './aPIThreadLatestOutboundMessageTs';
@@ -18,7 +17,7 @@ import type { MessageWithBodyReplyless } from './messageWithBodyReplyless';
 export interface APIThread {
   access_level: AccessLevel;
   created_at: string;
-  db_id?: APIThreadDbId;
+  db_id: string;
   inbox_visible: boolean;
   is_read: boolean;
   latest_inbound_message_ts?: APIThreadLatestInboundMessageTs;

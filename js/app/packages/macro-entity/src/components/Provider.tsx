@@ -9,6 +9,7 @@ import { fetchApiToken } from '../queries/auth';
 import { queryClient } from '../queries/client';
 import { queryKeys } from '../queries/key';
 import type { EntityData } from '../types/entity';
+import { QuerySyncProvider } from '@queries/sync/SyncProvider';
 
 // NOTE: leaving this in as reference for now.
 // Turning this off due to [M-5344]. This is likely unnecessary.
@@ -58,7 +59,7 @@ export function Provider(props: ParentProps) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {props.children}
+      <QuerySyncProvider>{props.children}</QuerySyncProvider>
     </QueryClientProvider>
   );
 }

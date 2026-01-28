@@ -111,6 +111,7 @@ pub async fn stream_chat_response(
         email_service_client: context.email_service_client_external.clone(),
         search_service_client: context.search_service_client.clone(),
         scribe: context.scribe.clone(),
+        soup_service: context.soup_service.clone(),
     };
 
     #[expect(deprecated)]

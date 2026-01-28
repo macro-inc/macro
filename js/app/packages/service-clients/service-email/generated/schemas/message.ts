@@ -11,7 +11,6 @@ import type { Label } from './label';
 import type { MessageBodyHtmlSanitized } from './messageBodyHtmlSanitized';
 import type { MessageBodyMacro } from './messageBodyMacro';
 import type { MessageBodyText } from './messageBodyText';
-import type { MessageDbId } from './messageDbId';
 import type { MessageFrom } from './messageFrom';
 import type { MessageGlobalId } from './messageGlobalId';
 import type { MessageHeadersJson } from './messageHeadersJson';
@@ -25,7 +24,6 @@ import type { MessageSentAt } from './messageSentAt';
 import type { MessageSizeEstimate } from './messageSizeEstimate';
 import type { MessageSnippet } from './messageSnippet';
 import type { MessageSubject } from './messageSubject';
-import type { MessageThreadDbId } from './messageThreadDbId';
 
 export interface Message {
   attachments: Attachment[];
@@ -37,7 +35,7 @@ export interface Message {
   body_text?: MessageBodyText;
   cc: ContactInfo[];
   created_at: string;
-  db_id?: MessageDbId;
+  db_id: string;
   from?: MessageFrom;
   /** The globally unique Message-ID header value created by the sender to uniquely identify this email
 Used for threading across all providers (In-Reply-To header, References header) */
@@ -60,7 +58,7 @@ Used for threading across all providers (In-Reply-To header, References header) 
   size_estimate?: MessageSizeEstimate;
   snippet?: MessageSnippet;
   subject?: MessageSubject;
-  thread_db_id?: MessageThreadDbId;
+  thread_db_id: string;
   to: ContactInfo[];
   updated_at: string;
 }

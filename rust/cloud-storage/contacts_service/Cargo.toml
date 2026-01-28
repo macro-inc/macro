@@ -20,6 +20,7 @@ aws-config = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
+connection_gateway = { path = "../connection_gateway" }
 contacts_db_client = { path = "../contacts_db_client" }
 http-body-util = { workspace = true }
 macro_auth = { path = "../macro_auth" }

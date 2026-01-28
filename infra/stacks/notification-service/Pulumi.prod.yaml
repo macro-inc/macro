@@ -5,7 +5,6 @@ config:
   notification-service:fusionauth_client_id: fusionauth-client-id-key-prod
   notification-service:fusionauth_issuer: auth.macro.com
   notification-service:internal_api_key: document-storage-service-auth-key-prod
-  notification-service:db-password-secret-key: notification-db-password-prod
   notification-service:apple_team_id: apple-team-id
   notification-service:apple_bundle_id: apple-bundle-id-prod
   notification-service:apns_key_id: apns-key-id

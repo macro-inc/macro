@@ -1025,6 +1025,10 @@
                 "type": "string",
                 "description": "The id of the thread that has the reply"
               },
+              "threadParentSenderId": {
+                "type": ["string", "null"],
+                "description": "The user who sent the root message of the thread"
+              },
               "userId": {
                 "type": "string",
                 "description": "The sender id of the reply"

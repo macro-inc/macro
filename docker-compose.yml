@@ -2,7 +2,6 @@
 include:
   - docker-compose-databases.yml
   - infra/stacks/fusionauth-instance/docker-compose.yml
-  - infra/stacks/opensearch/docker-compose-opensearch.yml
 
 x-common-env: &common-env
   env_file:
@@ -213,28 +212,6 @@ services:
       start_period: 10s
 
   # ============================================================================
-  # experiment_service (Port 8088)
-  # Feature flags and experiments
-  # ============================================================================
-  experiment_service:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: experiment_service
-    ports:
-      - "8088:8080"
-    networks:
-      - databases
-      - services
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  # ============================================================================
   # notification_service (Port 8089)
   # User notifications - NotificationDB
   # ============================================================================
@@ -252,32 +229,6 @@ services:
       - authentication_service
       - connection_gateway
       - document_storage_service
-    networks:
-      - databases
-      - services
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  # ============================================================================
-  # organization_service (Port 8090)
-  # Organization and team management
-  # ============================================================================
-  organization_service:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: organization_service
-    ports:
-      - "8090:8080"
-    depends_on:
-      - redis
-      - document_storage_service
-      - authentication_service
     networks:
       - databases
       - services
@@ -419,6 +370,57 @@ services:
       - "6969:6969"
     networks:
       - services
+
+  # ============================================================================
+  # sync_service (Port 8787)
+  # Document sync service using Cloudflare Workers/Durable Objects (via miniflare)
+  # ============================================================================
+  sync_service:
+    <<: *common-env
+    build:
+      context: ./rust/sync-service
+      dockerfile: Dockerfile
+    ports:
+      - "8787:8787"
+    environment:
+      - INTERNAL_API_SECRET_KEY=${INTERNAL_API_SECRET_KEY}
+    networks:
+      - services
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8787/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ============================================================================
+  # lexical_service (Port 8096)
+  # Lexical document conversion service - converts Lexical JSON to various formats
+  # ============================================================================
+  lexical_service:
+    <<: *common-env
+    build:
+      context: ./js/lexical-service
+      dockerfile: Dockerfile
+      args:
+        GITHUB_PACKAGES_TOKEN: ${GITHUB_PACKAGES_TOKEN}
+    ports:
+      - "8096:8096"
+    depends_on:
+      - sync_service
+    environment:
+      - PORT=8096
+      - INTERNAL_AUTH_KEY=${INTERNAL_API_SECRET_KEY}
+      - SYNC_SERVICE_AUTH_KEY=${INTERNAL_API_SECRET_KEY}
+      - SYNC_SERVICE_URL=http://sync_service:8787
+    networks:
+      - services
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:8096/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 networks:
   services:

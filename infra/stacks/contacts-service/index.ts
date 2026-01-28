@@ -1,6 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { Database, Queue } from '../../packages/resources';
+import { Queue } from '../../packages/resources';
 import { config, getMacroApiToken, stack } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { ContactsService } from './service';
@@ -19,26 +19,6 @@ export const contactsQueueArn = contactsQueue.queue.arn;
 export const contactsQueueName = contactsQueue.queue.name;
 
 export const coparse_api_vpc = get_coparse_api_vpc();
-
-const password = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.require('db-password-secret-key'),
-  })
-  .apply((secret) => secret.secretString);
-
-const contactsDb = new Database('contacts-db', {
-  publiclyAccessible: stack !== 'prod', // Lock down prod db only
-  tags,
-  vpc: coparse_api_vpc,
-  dbArgs: {
-    dbName: 'contacts',
-    instanceClass: stack === 'prod' ? 'db.t4g.large' : 'db.t4g.micro',
-    password,
-    allocatedStorage: 25,
-  },
-});
-
-export const contactsDatabaseEndpoint = contactsDb.endpoint;
 
 const DATABASE_URL = aws.secretsmanager
   .getSecretVersionOutput({
@@ -112,6 +92,10 @@ let containerEnvVars = [
   {
     name: 'MACRO_API_TOKEN_PUBLIC_KEY',
     value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenPublicKey}`,
+  },
+  {
+    name: 'CONNECTION_GATEWAY_URL',
+    value: `https://connection-gateway${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
   },
 ];
 

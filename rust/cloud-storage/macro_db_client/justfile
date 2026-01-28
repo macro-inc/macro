@@ -18,6 +18,10 @@ create_db:
 prepare_db:
     just sqlx::prepare_db {{ DATABASE_URL }}
 
+# Prepare DB for offline cache against dev database
+prepare_db_dev:
+    just sqlx::prepare_db $(../scripts/rds_database_url.sh macro-db-dev macrodb-password-dev macrodb)
+
 migrate_db:
     just sqlx::migrate_db {{ DATABASE_URL }}
 

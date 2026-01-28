@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use config::{Config, Environment};
+use connection_gateway_client::client::ConnectionGatewayClient;
 use contacts_service::queue::MessageQueue;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
@@ -70,7 +71,6 @@ async fn main() -> anyhow::Result<()> {
     let db = connect_to_database(&config).await?;
     let db_clone = db.clone();
     let sqs_worker = create_sqs_worker(&config).await;
-    let mut worker = MessageQueue::new(sqs_worker, db_clone);
 
     let secretsmanager_client =
         secretsmanager_client::SecretsManager::new(aws_sdk_secretsmanager::Client::new(
@@ -83,6 +83,12 @@ async fn main() -> anyhow::Result<()> {
     let internal_api_secret = secretsmanager_client
         .get_maybe_secret_value(config.environment, InternalApiSecretKey::new()?)
         .await?;
+
+    let connection_gateway_client = config.connection_gateway_url.as_ref().map(|url| {
+        ConnectionGatewayClient::new(internal_api_secret.as_ref().to_string(), url.clone())
+    });
+
+    let mut worker = MessageQueue::new(sqs_worker, db_clone, connection_gateway_client);
 
     tokio::spawn(async move {
         worker.poll().await;

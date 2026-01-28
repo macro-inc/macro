@@ -17,17 +17,9 @@ type ToolParserMap = {
     call: types.ContentSearch;
     response: types.SearchToolResponse;
   };
-  ListChannels: {
-    call: types.ListChannels;
-    response: types.ListChannelsResponse;
-  };
-  ListDocuments: {
-    call: types.ListDocuments;
-    response: types.ListDocumentsResponse;
-  };
-  ListEmails: {
-    call: types.ListEmails;
-    response: types.ApiPaginatedThreadCursor;
+  ListEntities: {
+    call: types.ListEntities;
+    response: types.ListEntitiesResponse;
   };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
   Read: { call: types.Read; response: types.ReadResponse };
@@ -51,17 +43,9 @@ const toolParserMap = {
     call: schemas.ContentSearch,
     response: schemas.SearchToolResponse,
   },
-  ListChannels: {
-    call: schemas.ListChannels,
-    response: schemas.ListChannelsResponse,
-  },
-  ListDocuments: {
-    call: schemas.ListDocuments,
-    response: schemas.ListDocumentsResponse,
-  },
-  ListEmails: {
-    call: schemas.ListEmails,
-    response: schemas.ApiPaginatedThreadCursor,
+  ListEntities: {
+    call: schemas.ListEntities,
+    response: schemas.ListEntitiesResponse,
   },
   NameSearch: {
     call: schemas.NameSearch,
@@ -99,17 +83,9 @@ type ToolDataMap = {
     call: types.ContentSearch;
     response: types.SearchToolResponse;
   };
-  ListChannels: {
-    call: types.ListChannels;
-    response: types.ListChannelsResponse;
-  };
-  ListDocuments: {
-    call: types.ListDocuments;
-    response: types.ListDocumentsResponse;
-  };
-  ListEmails: {
-    call: types.ListEmails;
-    response: types.ApiPaginatedThreadCursor;
+  ListEntities: {
+    call: types.ListEntities;
+    response: types.ListEntitiesResponse;
   };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
   Read: { call: types.Read; response: types.ReadResponse };

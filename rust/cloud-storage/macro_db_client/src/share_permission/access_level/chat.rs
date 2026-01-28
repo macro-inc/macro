@@ -2,6 +2,65 @@ use models_permissions::share_permission::access_level::AccessLevel;
 use std::collections::HashMap;
 use std::str::FromStr;
 
+/// Gets the public access level for a chat (no user required).
+///
+/// This function checks only public `SharePermission` records (where `isPublic=true`),
+/// applied either directly to the chat or inherited from its project hierarchy.
+/// It does NOT check user-specific `UserItemAccess` records.
+///
+/// Use this for unauthenticated access to publicly shared chats.
+///
+/// # Arguments
+/// * `db` - A reference to the `sqlx` database connection pool.
+/// * `chat_id` - The ID of the chat to check.
+///
+/// # Returns
+/// A `Result` containing an `Option<AccessLevel>`:
+/// - `Ok(Some(AccessLevel))` if there is public access.
+/// - `Ok(None)` if there is no public access.
+/// - `Err(_)` if a database error occurs.
+#[tracing::instrument(skip(db), err)]
+pub async fn get_public_access_level_for_chat(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    chat_id: &str,
+) -> anyhow::Result<Option<AccessLevel>> {
+    let public_levels: Vec<Option<String>> = sqlx::query_scalar!(
+        r#"
+        WITH RECURSIVE project_hierarchy AS (
+            SELECT p.id as project_id
+            FROM "Chat" c
+            JOIN "Project" p ON c."projectId" = p.id AND p."deletedAt" IS NULL
+            WHERE c.id = $1 AND c."deletedAt" IS NULL
+            UNION ALL
+            SELECT parent.id as project_id
+            FROM project_hierarchy ph
+            JOIN "Project" parent ON parent.id = (
+                SELECT "parentId" FROM "Project" WHERE id = ph.project_id
+                AND "parentId" IS NOT NULL AND "deletedAt" IS NULL
+            )
+        )
+        SELECT "publicAccessLevel" as access_level
+        FROM "SharePermission"
+        WHERE "isPublic" = true AND "publicAccessLevel" IS NOT NULL AND id IN (
+            SELECT "sharePermissionId" FROM "ChatPermission" WHERE "chatId" = $1
+            UNION
+            SELECT "sharePermissionId" FROM "ProjectPermission"
+            WHERE "projectId" IN (SELECT project_id FROM project_hierarchy)
+        )
+        "#,
+        chat_id
+    )
+    .fetch_all(db)
+    .await?;
+
+    let highest_level = public_levels
+        .iter()
+        .filter_map(|opt| opt.as_ref().and_then(|s| AccessLevel::from_str(s).ok()))
+        .max();
+
+    Ok(highest_level)
+}
+
 /// Calculates the highest effective access level a user has for a chat.
 ///
 /// This function determines the best possible permission by considering two sources:

@@ -41,6 +41,10 @@ pub struct Config {
     pub document_cognition_service_url: String,
     /// static file service url
     pub static_file_service_url: String,
+    /// authentication service url (for soup service)
+    pub authentication_service_url: String,
+    /// authentication service secret key (for soup service)
+    pub authentication_service_secret_key: String,
 }
 
 impl Config {
@@ -82,6 +86,7 @@ impl Config {
 
         let sync_service_url =
             std::env::var("SYNC_SERVICE_URL").context("SYNC_SERVICE_URL must be provided")?;
+
         let sync_service_auth_key = std::env::var("SYNC_SERVICE_AUTH_KEY")
             .context("SYNC_SERVICE_AUTH_KEY must be provided")?;
 
@@ -98,6 +103,12 @@ impl Config {
 
         let static_file_service_url = std::env::var("STATIC_FILE_SERVICE_URL")
             .context("STATIC_FILE_SERVICE_URL must be provided")?;
+
+        let authentication_service_url = std::env::var("AUTHENTICATION_SERVICE_URL")
+            .context("AUTHENTICATION_SERVICE_URL must be provided")?;
+
+        let authentication_service_secret_key = std::env::var("AUTHENTICATION_SERVICE_SECRET_KEY")
+            .context("AUTHENTICATION_SERVICE_SECRET_KEY must be provided")?;
 
         Ok(Config {
             database_url,
@@ -118,6 +129,8 @@ impl Config {
             email_service_url,
             document_cognition_service_url,
             static_file_service_url,
+            authentication_service_url,
+            authentication_service_secret_key,
         })
     }
 
@@ -142,6 +155,8 @@ impl Config {
             email_service_url: Default::default(),
             document_cognition_service_url: Default::default(),
             static_file_service_url: Default::default(),
+            authentication_service_url: Default::default(),
+            authentication_service_secret_key: Default::default(),
         }
     }
 }

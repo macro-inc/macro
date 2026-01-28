@@ -7,14 +7,23 @@ start_fusionauth:
 destroy_fusionauth:
     docker-compose down -v
 
+destroy_stack:
+  cp Pulumi.local.yaml Pulumi.local.yaml.bak
+  pulumi stack rm local --yes --force
+  mv Pulumi.local.yaml.bak Pulumi.local.yaml
+
 setup_fusionauth:
-  docker-compose up -d
+  # Get .env for fusionauth
+  just get_fusionauth_env
+  @echo "Launching fusionauth"
+  docker-compose up -d --wait
   @echo "Waiting for FusionAuth to be healthy..."
-  @until curl -s http://localhost:9011/api/status | grep -q '"health":"Healthy"'; do \
+  @until curl -s http://localhost:9011/api/status | grep -q '{"status":"Ok"}'; do \
     echo "FusionAuth not ready, waiting..."; \
     sleep 3; \
   done
   @echo "FusionAuth is healthy, running Pulumi..."
-  cd pulumi up --stack local --yes
-  @echo "FusionAuth setup complete!
+  # Deploy pulumi stack
+  pulumi up --stack local --yes
+  @echo "FusionAuth setup complete!"
   docker-compose stop

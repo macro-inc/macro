@@ -2,7 +2,6 @@ const serverHostLocal: Servers = {
   'auth-service': 'http://localhost:8080',
   'pdf-service': 'http://localhost:4567',
   'document-storage-service': 'http://localhost:8086',
-  'organization-service': 'http://localhost:8090',
   'websocket-service': 'ws://localhost:6969',
   'cognition-service': 'http://localhost:8085',
   'cognition-websocket-service': 'ws://localhost:8085',
@@ -26,7 +25,6 @@ const serverHostRemote = {
   'websocket-service': `wss://services${devServerSuffix}.macro.com`,
   'cognition-service': `https://document-cognition${devServerSuffix}.macro.com`,
   'cognition-websocket-service': `wss://document-cognition${devServerSuffix}.macro.com`,
-  'organization-service': `https://organization-service${devServerSuffix}.macro.com`,
   'connection-gateway': `wss://connection-gateway${devServerSuffix}.macro.com`,
   'comms-service': `https://comms-service${devServerSuffix}.macro.com`,
   'notification-service': `https://notifications${devServerSuffix}.macro.com`,
@@ -70,10 +68,33 @@ function selectLocalServers(): Servers {
 const syncServiceSuffix =
   import.meta.env.MODE === 'development' ? '-dev3' : '-prod2';
 
-export const SYNC_SERVICE_HOSTS = {
+const syncServiceHostLocal = {
+  worker: 'http://localhost:8787',
+  ws: 'ws://localhost:8787',
+} as const;
+
+const syncServiceHostRemote = {
   worker: `https://sync-service${syncServiceSuffix}.macroverse.workers.dev`,
   ws: `wss://sync-service${syncServiceSuffix}.macroverse.workers.dev`,
 } as const;
+
+function selectSyncServiceHost():
+  | typeof syncServiceHostRemote
+  | typeof syncServiceHostLocal {
+  if (import.meta.env.MODE !== 'development') {
+    return syncServiceHostRemote;
+  }
+  const selectedLocalServers: string = import.meta.env.VITE_LOCAL_SERVERS;
+  if (
+    selectedLocalServers === 'ALL' ||
+    selectedLocalServers?.includes('sync-service')
+  ) {
+    return syncServiceHostLocal;
+  }
+  return syncServiceHostRemote;
+}
+
+export const SYNC_SERVICE_HOSTS = selectSyncServiceHost();
 
 /** Creates endpoint URL for accessing a static file by its ID */
 export function staticFileIdEndpoint(id: string): string {

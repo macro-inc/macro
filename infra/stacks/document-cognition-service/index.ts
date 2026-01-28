@@ -87,6 +87,17 @@ const PERPLEXITY_API_KEY = aws.secretsmanager
   })
   .apply((secret) => secret.secretString);
 
+const AUTHENTICATION_SERVICE_INTERNAL_API_KEY_SECRET_NAME = config.require(
+  'authentication_service_internal_api_key'
+);
+
+const authenticationServiceInternalApiKeyArn: pulumi.Output<string> =
+  aws.secretsmanager
+    .getSecretVersionOutput({
+      secretId: AUTHENTICATION_SERVICE_INTERNAL_API_KEY_SECRET_NAME,
+    })
+    .apply((secret) => secret.arn);
+
 export const coparse_api_vpc = get_coparse_api_vpc();
 
 const cloudStorageStack = new pulumi.StackReference('cloud-storage-stack', {
@@ -173,6 +184,7 @@ const documentCognitionService = new DocumentCognitionService(
       jwtSecretKeyArn,
       syncServiceAuthKeyArn,
       MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
+      authenticationServiceInternalApiKeyArn,
     ],
     serviceContainerPort: 8080,
     healthCheckPath: '/health',
@@ -307,6 +319,16 @@ const documentCognitionService = new DocumentCognitionService(
       {
         name: 'STATIC_FILE_SERVICE_URL',
         value: `https://static-file-service${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
+      },
+      {
+        name: 'AUTHENTICATION_SERVICE_URL',
+        value: `https://auth-service${
+          stack === 'prod' ? '' : `-${stack}`
+        }.macro.com`,
+      },
+      {
+        name: 'AUTHENTICATION_SERVICE_SECRET_KEY',
+        value: AUTHENTICATION_SERVICE_INTERNAL_API_KEY_SECRET_NAME,
       },
     ],
     isPrivate: false,

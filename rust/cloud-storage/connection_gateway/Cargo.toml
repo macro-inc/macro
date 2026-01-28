@@ -39,7 +39,7 @@ frecency = { path = "../frecency", features = [
 ] }
 futures = { workspace = true }
 http-body-util = { workspace = true }
-itertools = "0.14.0"
+itertools = { workspace = true }
 macro_auth = { path = "../macro_auth" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
