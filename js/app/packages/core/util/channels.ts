@@ -4,7 +4,7 @@ import { withAnalytics } from '@coparse/analytics';
 import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
 import { invalidateListChannels } from '@queries/channel/channels';
 import { toast } from '@core/component/Toast/Toast';
-import { refetchContacts } from '@core/user/contactService';
+import { invalidateContacts } from '@core/user/contactService';
 import { isErr } from '@core/util/maybeResult';
 import { commsServiceClient, type IdResponse } from '@service-comms/client';
 import type {
@@ -65,7 +65,7 @@ export function useSendMessageToPeople() {
     const messageResponse = message.at(1) as IdResponse;
 
     invalidateListChannels();
-    refetchContacts();
+    invalidateContacts();
 
     const navigateToChannel = async () => {
       replaceSplit({
