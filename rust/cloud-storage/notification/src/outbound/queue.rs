@@ -21,9 +21,9 @@ impl SqsNotificationQueue {
 }
 
 impl NotificationQueue for SqsNotificationQueue {
-    async fn publish<T: Serialize + Send + Sync>(
+    async fn publish<T: Serialize + Send + Sync, U: Serialize + Send + Sync>(
         &self,
-        messages: &[QueueMessage<'_, T>],
+        messages: &[QueueMessage<'_, T, U>],
     ) -> Result<(), Report> {
         for message in messages {
             let body = serde_json::to_string(message)?;

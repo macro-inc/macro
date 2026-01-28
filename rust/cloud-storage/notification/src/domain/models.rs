@@ -15,6 +15,10 @@ pub use rate_limit::{RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimit
 pub use recipient::{ExclusionReason, FilteredRecipient, RecipientExclusion};
 pub use request::{NotificationResult, SendNotificationRequest, SendNotificationRequestBuilder};
 
+use crate::domain::models::{
+    apple::APNSPushNotification, mobile::MessageAttributes, queue_message::EmailContent,
+};
+
 /// Trait that all notification types must implement.
 pub trait Notification: Serialize + DeserializeOwned + Send + Sync {
     /// The type name of this notification.
@@ -28,4 +32,20 @@ pub trait Notification: Serialize + DeserializeOwned + Send + Sync {
     fn rate_limit_config() -> Option<RateLimitConfig>;
     /// The actual key for the rate limit bucket.
     fn rate_limit_key(&self) -> Option<RateLimitKey>;
+}
+
+/// Extension trait for notifications that can be delivered via email.
+pub trait NotificationExtEmail: Notification {
+    /// Convert this notification into email content.
+    fn into_email(self) -> EmailContent;
+}
+
+/// Extension trait for notifications that can be delivered via iOS push (APNS).
+pub trait NotificationExtIos: Notification {
+    /// The custom data type included in the APNS push notification payload.
+    type NotifData: Send;
+    /// Get the message attributes for this push notification.
+    fn message_attributes(&self) -> MessageAttributes;
+    /// Convert this notification into an APNS push notification.
+    fn into_apns(self) -> APNSPushNotification<Self::NotifData>;
 }

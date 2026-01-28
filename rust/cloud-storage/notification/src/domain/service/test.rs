@@ -1,11 +1,13 @@
 //! Unit tests for the notification services.
 
+use crate::domain::models::apple::APNSPushNotification;
+use crate::domain::models::mobile::{MessageAttributes, PushType};
 use crate::domain::models::queue_message::{
-    ConnGatewayNotification, Node, NotificationChannel, QueueMessage, RawQueueMessage,
+    ConnGatewayNotification, EmailContent, Node, NotificationChannel, QueueMessage, RawQueueMessage,
 };
 use crate::domain::models::{
-    DeviceEndpoint, Notification, RateLimitConfig, RateLimitExceeded, RateLimitKey,
-    RateLimitResult, SendNotificationRequestBuilder,
+    DeviceEndpoint, Notification, NotificationExtEmail, NotificationExtIos, RateLimitConfig,
+    RateLimitExceeded, RateLimitKey, RateLimitResult, SendNotificationRequestBuilder,
 };
 use crate::domain::ports::{
     EmailSender, NotificationQueue, NotificationRepository, NotificationSender, RateLimitPort,
@@ -47,6 +49,33 @@ impl Notification for TestNotification {
 
     fn rate_limit_key(&self) -> Option<RateLimitKey> {
         None
+    }
+}
+
+impl NotificationExtIos for TestNotification {
+    type NotifData = TestNotification;
+
+    fn message_attributes(&self) -> crate::domain::models::mobile::MessageAttributes {
+        MessageAttributes {
+            push_type: PushType::Alert,
+            collapse_key: "test".to_string(),
+        }
+    }
+
+    fn into_apns(self) -> crate::domain::models::apple::APNSPushNotification<Self::NotifData> {
+        APNSPushNotification {
+            aps: Default::default(),
+            push_notification_data: self,
+        }
+    }
+}
+
+impl NotificationExtEmail for TestNotification {
+    fn into_email(self) -> crate::domain::models::queue_message::EmailContent {
+        EmailContent {
+            subject: "Test".to_string(),
+            body: self.message,
+        }
     }
 }
 
@@ -161,9 +190,9 @@ impl MockQueue {
 }
 
 impl NotificationQueue for MockQueue {
-    async fn publish<T: serde::Serialize + Send + Sync>(
+    async fn publish<T: serde::Serialize + Send + Sync, U: serde::Serialize + Send + Sync>(
         &self,
-        messages: &[QueueMessage<'_, T>],
+        messages: &[QueueMessage<'_, T, U>],
     ) -> Result<(), Report> {
         let mut published = self.published.lock().unwrap();
         for message in messages {
@@ -183,9 +212,9 @@ impl NotificationQueue for MockQueue {
 }
 
 impl NotificationQueue for std::sync::Arc<MockQueue> {
-    async fn publish<T: serde::Serialize + Send + Sync>(
+    async fn publish<T: serde::Serialize + Send + Sync, U: serde::Serialize + Send + Sync>(
         &self,
-        messages: &[QueueMessage<'_, T>],
+        messages: &[QueueMessage<'_, T, U>],
     ) -> Result<(), Report> {
         (**self).publish(messages).await
     }
@@ -328,7 +357,6 @@ async fn test_queue_message_conn_gateway_only() {
 
 #[tokio::test]
 async fn test_queue_message_email_per_recipient() {
-    use crate::domain::models::queue_message::EmailContent;
     use std::sync::Arc;
 
     let queue = Arc::new(MockQueue::new());
@@ -346,10 +374,7 @@ async fn test_queue_message_email_per_recipient() {
         recipient_ids: HashSet::from([recipient1.clone(), recipient2.clone()]),
     }
     .into_request()
-    .with_email(Box::new(|notif| EmailContent {
-        subject: "Test".to_string(),
-        body: notif.message,
-    }));
+    .with_email();
 
     service.send_notification(request).await.unwrap();
 
@@ -365,9 +390,6 @@ async fn test_queue_message_email_per_recipient() {
 
 #[tokio::test]
 async fn test_queue_message_multiple_channels() {
-    use crate::domain::models::apple::APNSPushNotification;
-    use crate::domain::models::mobile::{MessageAttributes, PushType};
-    use crate::domain::models::queue_message::EmailContent;
     use std::sync::Arc;
 
     let recipient = test_user_id("user@example.com");
@@ -388,22 +410,8 @@ async fn test_queue_message_multiple_channels() {
     }
     .into_request()
     .with_conn_gateway()
-    .with_apns(Box::new(|notif| {
-        (
-            APNSPushNotification {
-                aps: Default::default(),
-                push_notification_data: notif,
-            },
-            MessageAttributes {
-                push_type: PushType::Alert,
-                collapse_key: "test".to_string(),
-            },
-        )
-    }))
-    .with_email(Box::new(|notif| EmailContent {
-        subject: "Test".to_string(),
-        body: notif.message,
-    }));
+    .with_apns()
+    .with_email();
 
     service.send_notification(request).await.unwrap();
 

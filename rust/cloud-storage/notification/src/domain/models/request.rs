@@ -2,8 +2,8 @@
 
 use crate::domain::{
     models::{
-        Notification, RateLimitConfig, RateLimitKey, apple::APNSPushNotification,
-        mobile::MessageAttributes, queue_message::EmailContent,
+        Notification, NotificationExtEmail, NotificationExtIos, RateLimitConfig, RateLimitKey,
+        apple::APNSPushNotification, mobile::MessageAttributes, queue_message::EmailContent,
     },
     service::SendNotificationError,
 };
@@ -33,7 +33,7 @@ pub struct SendNotificationRequestBuilder<'a, T> {
 
 impl<'a, T> SendNotificationRequestBuilder<'a, T> {
     /// Convert this builder into a full request with optional delivery customizers.
-    pub fn into_request(self) -> SendNotificationRequest<'a, T> {
+    pub fn into_request(self) -> SendNotificationRequest<'a, T, ()> {
         SendNotificationRequest {
             req: self,
             build_apns: None,
@@ -43,38 +43,55 @@ impl<'a, T> SendNotificationRequestBuilder<'a, T> {
     }
 }
 
-type BuildApns<T> = Box<dyn FnMut(T) -> (APNSPushNotification<T>, MessageAttributes) + Send>;
+type BuildApns<T, U> = Box<dyn FnMut(T) -> (APNSPushNotification<U>, MessageAttributes) + Send>;
 
 /// Full notification request with optional delivery channel builders.
 ///
 /// Created from [`SendNotificationRequestBuilder::into_request`] and can be
 /// customized with APNS and email builders.
-pub struct SendNotificationRequest<'a, T> {
+pub struct SendNotificationRequest<'a, T, U> {
     pub(crate) req: SendNotificationRequestBuilder<'a, T>,
     /// define how to turn t into an APNSPushNotitication T to be sent to ios
-    pub(crate) build_apns: Option<BuildApns<T>>,
+    pub(crate) build_apns: Option<BuildApns<T, U>>,
     /// define how to turn T into an email content to be sent as an email
     pub(crate) build_email: Option<Box<dyn FnMut(T) -> EmailContent + Send>>,
     /// connection gateway accepts arbitrary json so we just ask if its enabled or not
     pub(crate) send_conn_gateway: bool,
 }
 
-impl<'a, T> SendNotificationRequest<'a, T> {
+impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
     /// Add a custom APNS notification builder.
-    pub fn with_apns(
-        mut self,
-        cb: Box<dyn FnMut(T) -> (APNSPushNotification<T>, MessageAttributes) + Send>,
-    ) -> Self {
-        self.build_apns.replace(cb);
-        self
-    }
+    pub fn with_apns(self) -> SendNotificationRequest<'a, T, T::NotifData> {
+        let SendNotificationRequest {
+            req,
+            build_apns: _,
+            build_email,
+            send_conn_gateway,
+        } = self;
 
+        SendNotificationRequest {
+            req,
+            build_apns: Some(Box::new(|notif: T| {
+                let attrs = notif.message_attributes();
+                let apns = notif.into_apns();
+
+                (apns, attrs)
+            })),
+            build_email,
+            send_conn_gateway,
+        }
+    }
+}
+
+impl<'a, T: NotificationExtEmail, U> SendNotificationRequest<'a, T, U> {
     /// Add a custom email content builder.
-    pub fn with_email(mut self, cb: Box<dyn FnMut(T) -> EmailContent + Send>) -> Self {
-        self.build_email.replace(cb);
+    pub fn with_email(mut self) -> Self {
+        self.build_email = Some(Box::new(|notif: T| notif.into_email()));
         self
     }
+}
 
+impl<'a, T: Notification, U> SendNotificationRequest<'a, T, U> {
     /// Enable delivery via connection gateway (WebSocket).
     pub fn with_conn_gateway(mut self) -> Self {
         self.send_conn_gateway = true;

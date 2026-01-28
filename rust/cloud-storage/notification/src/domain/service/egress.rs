@@ -52,7 +52,7 @@ where
     /// If a rate limit is configured and exceeded, returns an empty list (no delivery).
     pub async fn deliver_notification(
         &self,
-        message: QueueMessage<'static, serde_json::Value>,
+        message: QueueMessage<'static, serde_json::Value, serde_json::Value>,
     ) -> Vec<Result<DeliverySuccess, Report<DeliveryFailure>>> {
         // Check rate limit if configured
         if let Some((key, config)) = message.rate_limit {
@@ -78,7 +78,7 @@ where
     async fn deliver_notification_inner(
         &self,
         message_type: &str,
-        node: Node<'static, serde_json::Value>,
+        node: Node<'static, serde_json::Value, serde_json::Value>,
         mut recursion_tail: Vec<Result<DeliverySuccess, Report>>,
     ) -> Vec<Result<DeliverySuccess, Report>> {
         let result = match &node.notif {

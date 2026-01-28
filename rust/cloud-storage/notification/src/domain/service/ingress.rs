@@ -26,9 +26,9 @@ use uuid::Uuid;
 /// Trait for sending notifications through the ingress service.
 pub trait NotificationIngress: Send + Sync + 'static {
     /// Send a notification to the specified recipients.
-    fn send_notification<'a, T: Notification + Clone + Send + Sync>(
+    fn send_notification<'a, T: Notification + Clone, U: Serialize + Send + Sync>(
         &self,
-        req: SendNotificationRequest<'a, T>,
+        req: SendNotificationRequest<'a, T, U>,
     ) -> impl Future<Output = Result<Option<NotificationResult<'a>>, Report<SendNotificationError>>> + Send;
 }
 
@@ -54,9 +54,9 @@ where
     /// 2. Create notification in the database
     /// 3. Build and publish QueueMessage to SQS
     /// 4. Return result (delivery happens async via worker)
-    async fn send_notification<'a, T: Notification + Clone + Send + Sync>(
+    async fn send_notification<'a, T: Notification + Clone, U: Serialize + Send + Sync>(
         &self,
-        request: SendNotificationRequest<'a, T>,
+        request: SendNotificationRequest<'a, T, U>,
     ) -> Result<Option<NotificationResult<'a>>, Report<SendNotificationError>> {
         let recipients: Vec<_> = request.req.recipient_ids.iter().cloned().collect();
         let (allowed, _excluded): (Vec<_>, Vec<_>) = self
@@ -199,10 +199,10 @@ where
     /// - `send_conn_gateway`: Creates a single message for all recipients (1:M)
     /// - `build_apns`: Creates one message per recipient with their device endpoints (1:1)
     /// - `build_email`: Creates one message per recipient (1:1)
-    async fn build_queue_message<'a, T: Notification + Serialize + Clone>(
+    async fn build_queue_message<'a, T: Notification + Clone, U: Serialize + Send + Sync>(
         &self,
-        notification: &mut SendNotificationRequest<'a, T>,
-    ) -> Result<Vec<QueueMessage<'a, T>>, Report<SendNotificationError>> {
+        notification: &mut SendNotificationRequest<'a, T, U>,
+    ) -> Result<Vec<QueueMessage<'a, T, U>>, Report<SendNotificationError>> {
         let rate_limit = notification.req.get_rate_limit()?;
         let message_type = T::TYPE_NAME.to_string();
         let mut messages = Vec::new();
