@@ -43,7 +43,7 @@ impl<'a, T> SendNotificationRequestBuilder<'a, T> {
     }
 }
 
-type BuildApns<T> = Box<dyn FnMut(T) -> (APNSPushNotification<T>, MessageAttributes)>;
+type BuildApns<T> = Box<dyn FnMut(T) -> (APNSPushNotification<T>, MessageAttributes) + Send>;
 
 /// Full notification request with optional delivery channel builders.
 ///
@@ -54,7 +54,7 @@ pub struct SendNotificationRequest<'a, T> {
     /// define how to turn t into an APNSPushNotitication T to be sent to ios
     pub(crate) build_apns: Option<BuildApns<T>>,
     /// define how to turn T into an email content to be sent as an email
-    pub(crate) build_email: Option<Box<dyn FnMut(T) -> EmailContent>>,
+    pub(crate) build_email: Option<Box<dyn FnMut(T) -> EmailContent + Send>>,
     /// connection gateway accepts arbitrary json so we just ask if its enabled or not
     pub(crate) send_conn_gateway: bool,
 }
@@ -63,14 +63,14 @@ impl<'a, T> SendNotificationRequest<'a, T> {
     /// Add a custom APNS notification builder.
     pub fn with_apns(
         mut self,
-        cb: Box<dyn FnMut(T) -> (APNSPushNotification<T>, MessageAttributes)>,
+        cb: Box<dyn FnMut(T) -> (APNSPushNotification<T>, MessageAttributes) + Send>,
     ) -> Self {
         self.build_apns.replace(cb);
         self
     }
 
     /// Add a custom email content builder.
-    pub fn with_email(mut self, cb: Box<dyn FnMut(T) -> EmailContent>) -> Self {
+    pub fn with_email(mut self, cb: Box<dyn FnMut(T) -> EmailContent + Send>) -> Self {
         self.build_email.replace(cb);
         self
     }

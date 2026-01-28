@@ -8,6 +8,10 @@ use native_app_service::{
     domain::{models::PlatformData, service::NativeAppServiceImpl},
     outbound::DefaultBundleFetcher,
 };
+use notification::domain::service::NotificationIngressService;
+use notification::inbound::http::NotificationClient;
+use notification::outbound::queue::SqsNotificationQueue;
+use notification::outbound::repository::DbNotificationRepository;
 use notification_service_client::NotificationServiceClient;
 use roles_and_permissions::{
     domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,
@@ -169,6 +173,24 @@ async fn main() -> anyhow::Result<()> {
     .await;
     tracing::trace!("initialized macro_notify client");
 
+    let notification_repository = DbNotificationRepository::new(db.clone());
+    let notification_queue = SqsNotificationQueue::new(
+        aws_sdk_sqs::Client::new(
+            &aws_config::defaults(aws_config::BehaviorVersion::latest())
+                .region("us-east-1")
+                .load()
+                .await,
+        ),
+        config.notification_queue.clone(),
+    );
+    let notification_ingress_service = NotificationIngressService::new(
+        notification_repository,
+        notification_queue,
+        "authentication_service",
+    );
+    let notification_client = NotificationClient::new(notification_ingress_service);
+    tracing::trace!("initialized notification client");
+
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(
         &macro_aws_config::get_macro_aws_config().await,
     ))
@@ -201,6 +223,7 @@ async fn main() -> anyhow::Result<()> {
             notification_service_client: Arc::new(notification_service_client),
             ses_client: Arc::new(ses_client),
             macro_notify_client: Arc::new(macro_notify_client),
+            notification_client,
             sqs_client: Arc::new(sqs_client),
             environment: config.environment,
             jwt_args,

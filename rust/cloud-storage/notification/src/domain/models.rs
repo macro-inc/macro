@@ -1,6 +1,5 @@
 //! Domain models for the notification service.
 
-use crate::domain::models::apple::APNSPushNotification;
 use serde::{Serialize, de::DeserializeOwned};
 
 pub(crate) mod android;
@@ -29,10 +28,4 @@ pub trait Notification: Serialize + DeserializeOwned + Send + Sync {
     fn rate_limit_config() -> Option<RateLimitConfig>;
     /// The actual key for the rate limit bucket.
     fn rate_limit_key(&self) -> Option<RateLimitKey>;
-}
-
-/// Trait for notifications that can build APNS push payloads.
-pub trait BuildApnsNotification<T>: Notification {
-    /// Build an APNS push notification from this notification.
-    fn build_apns(&self) -> APNSPushNotification<T>;
 }

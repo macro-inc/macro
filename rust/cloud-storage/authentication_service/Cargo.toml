@@ -70,6 +70,7 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
   "user_permissions",
 ] }
 macro_notify = { path = "../macro_notify" }
+notification = { path = "../notification" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 maud = { version = "0.27.0" }

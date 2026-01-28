@@ -534,6 +534,7 @@ dependencies = [
  "models_team",
  "native_app_service",
  "non_empty",
+ "notification",
  "notification_service_client",
  "openssl",
  "rand 0.9.0",

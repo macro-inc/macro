@@ -1,5 +1,6 @@
 pub mod fetch_and_checksum;
 mod generate_password;
+pub mod notifications;
 pub mod service;
 
 /// expose auth client to be used in bin
