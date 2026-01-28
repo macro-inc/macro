@@ -2,50 +2,8 @@ import FaviconSvg from '@macro-icons/macro-macro.svg?raw';
 import FaviconBadgeSvg from '@macro-icons/macro-macro-badge.svg?raw';
 
 const FAVICON_SIZE = 48;
-const FAVICON_BADGE_CHANNEL = 'macro-favicon-badge';
 
 let currentFaviconLink: HTMLLinkElement | null = null;
-let badgeBroadcastChannel: BroadcastChannel | null = null;
-
-type BadgeMessage = {
-  hasBadge: boolean;
-};
-
-function getBadgeChannel(): BroadcastChannel | null {
-  if (typeof BroadcastChannel === 'undefined') return null;
-  if (!badgeBroadcastChannel) {
-    badgeBroadcastChannel = new BroadcastChannel(FAVICON_BADGE_CHANNEL);
-  }
-  return badgeBroadcastChannel;
-}
-
-/**
- * Subscribe to badge updates from other tabs.
- * Returns an unsubscribe function.
- */
-export function subscribeBadgeUpdates(
-  callback: (hasBadge: boolean) => void
-): () => void {
-  const channel = getBadgeChannel();
-  if (!channel) return () => {};
-
-  const handler = (event: MessageEvent<BadgeMessage>) => {
-    callback(event.data.hasBadge);
-  };
-
-  channel.addEventListener('message', handler);
-  return () => channel.removeEventListener('message', handler);
-}
-
-/**
- * Broadcast badge state to other tabs.
- */
-export function broadcastBadge(hasBadge: boolean): void {
-  const channel = getBadgeChannel();
-  if (channel) {
-    channel.postMessage({ hasBadge } as BadgeMessage);
-  }
-}
 
 /** escapes a color value for use in SVG */
 function escapeColorForSvg(color: string): string {
