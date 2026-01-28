@@ -45,6 +45,7 @@ members = [
   "lambda_client",
   "lexical_client",
   "macro_auth",
+  "macro_aws_config",
   "macro_cache_client",
   "macro_client_errors",
   "macro_cors",

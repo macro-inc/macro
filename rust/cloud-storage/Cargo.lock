@@ -4922,6 +4922,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "macro_aws_config"
+version = "0.1.0"
+dependencies = [
+ "aws-config",
+ "macro_env",
+ "macro_env_var",
+ "thiserror 2.0.17",
+ "tracing",
+]
+
+[[package]]
 name = "macro_axum_utils"
 version = "0.1.0"
 
