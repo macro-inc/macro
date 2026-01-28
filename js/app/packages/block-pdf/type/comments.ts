@@ -1,4 +1,4 @@
-import type { IComment, Reply, Root } from '@core/collab/comments/commentType';
+import type { IComment, Reply, Root } from '@core/comments/commentType';
 
 export type ThreadPayload = {
   threadId: number;
