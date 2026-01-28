@@ -322,7 +322,7 @@ const documentCognitionService = new DocumentCognitionService(
       },
       {
         name: 'AUTHENTICATION_SERVICE_URL',
-        value: `https://authentication-service${
+        value: `https://auth-service${
           stack === 'prod' ? '' : `-${stack}`
         }.macro.com`,
       },
