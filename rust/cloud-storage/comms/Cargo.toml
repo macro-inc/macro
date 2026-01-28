@@ -23,7 +23,7 @@ models_comms = { path = "../models_comms" }
 models_pagination = { path = "../models_pagination" }
 recursion = { workspace = true }
 reqwest = { workspace = true, optional = true }
-rootcause = "0.11"
+rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }

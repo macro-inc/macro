@@ -71,7 +71,7 @@ pub fn map_db_attachment_to_service(
     db_att: db::attachment::Attachment,
 ) -> service::attachment::Attachment {
     service::attachment::Attachment {
-        db_id: Some(db_att.id),
+        db_id: db_att.id,
         provider_id: db_att.provider_attachment_id,
         data_url: None,
         filename: db_att.filename,
@@ -154,10 +154,10 @@ pub fn map_attachmentless_db_message_to_service(
     let labels_list = labels_res.into_iter().map(Into::into).collect();
 
     message::Message {
-        db_id: Some(db_message.id),
+        db_id: db_message.id,
         provider_id: db_message.provider_id,
         provider_thread_id: db_message.provider_thread_id,
-        thread_db_id: Some(db_message.thread_id),
+        thread_db_id: db_message.thread_id,
         replying_to_id: db_message.replying_to_id,
         global_id: db_message.global_id,
         link_id: db_message.link_id,
@@ -227,7 +227,7 @@ pub fn map_db_thread_to_service(
     messages: Vec<message::Message>,
 ) -> thread::Thread {
     thread::Thread {
-        db_id: Some(db_thread.id),
+        db_id: db_thread.id,
         provider_id: db_thread.provider_id,
         link_id: db_thread.link_id,
         inbox_visible: db_thread.inbox_visible,

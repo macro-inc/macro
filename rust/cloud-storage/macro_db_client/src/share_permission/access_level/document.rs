@@ -1,6 +1,65 @@
 use models_permissions::share_permission::access_level::AccessLevel;
 use std::str::FromStr;
 
+/// Gets the public access level for a document (no user required).
+///
+/// This function checks only public `SharePermission` records (where `isPublic=true`),
+/// applied either directly to the document or inherited from its project hierarchy.
+/// It does NOT check user-specific `UserItemAccess` records.
+///
+/// Use this for unauthenticated access to publicly shared documents.
+///
+/// # Arguments
+/// * `db` - A reference to the `sqlx` database connection pool.
+/// * `document_id` - The ID of the document to check.
+///
+/// # Returns
+/// A `Result` containing an `Option<AccessLevel>`:
+/// - `Ok(Some(AccessLevel))` if there is public access.
+/// - `Ok(None)` if there is no public access.
+/// - `Err(_)` if a database error occurs.
+#[tracing::instrument(skip(db), err)]
+pub async fn get_public_access_level_for_document(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    document_id: &str,
+) -> anyhow::Result<Option<AccessLevel>> {
+    let public_levels: Vec<Option<String>> = sqlx::query_scalar!(
+        r#"
+        WITH RECURSIVE project_hierarchy AS (
+            SELECT p.id as project_id
+            FROM "Document" d
+            JOIN "Project" p ON d."projectId" = p.id AND p."deletedAt" IS NULL
+            WHERE d.id = $1 AND d."deletedAt" IS NULL
+            UNION ALL
+            SELECT parent.id as project_id
+            FROM project_hierarchy ph
+            JOIN "Project" parent ON parent.id = (
+                SELECT "parentId" FROM "Project" WHERE id = ph.project_id
+                AND "parentId" IS NOT NULL AND "deletedAt" IS NULL
+            )
+        )
+        SELECT "publicAccessLevel" as access_level
+        FROM "SharePermission"
+        WHERE "isPublic" = true AND "publicAccessLevel" IS NOT NULL AND id IN (
+            SELECT "sharePermissionId" FROM "DocumentPermission" WHERE "documentId" = $1
+            UNION
+            SELECT "sharePermissionId" FROM "ProjectPermission"
+            WHERE "projectId" IN (SELECT project_id FROM project_hierarchy)
+        )
+        "#,
+        document_id
+    )
+    .fetch_all(db)
+    .await?;
+
+    let highest_level = public_levels
+        .iter()
+        .filter_map(|opt| opt.as_ref().and_then(|s| AccessLevel::from_str(s).ok()))
+        .max();
+
+    Ok(highest_level)
+}
+
 /// Calculates the highest effective access level a user has for a document.
 ///
 /// This function determines the best possible permission by considering two sources:

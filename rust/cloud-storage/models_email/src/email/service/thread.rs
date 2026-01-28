@@ -29,7 +29,7 @@ pub struct ThreadList {
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Thread {
-    pub db_id: Option<Uuid>,
+    pub db_id: Uuid,
     pub provider_id: Option<String>,
     pub link_id: Uuid,
     pub inbox_visible: bool,
@@ -48,7 +48,7 @@ pub struct Thread {
 /// Thread object exposed to the FE in Get Threads Call
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct APIThread {
-    pub db_id: Option<Uuid>,
+    pub db_id: Uuid,
     pub provider_id: Option<String>,
     pub link_id: Uuid,
     pub inbox_visible: bool,

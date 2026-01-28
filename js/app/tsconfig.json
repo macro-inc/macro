@@ -91,9 +91,6 @@
       "@service-cognition/*": [
         "./packages/service-clients/service-cognition/*"
       ],
-      "@service-organization/*": [
-        "./packages/service-clients/service-organization/*"
-      ],
       "@service-connection/*": [
         "./packages/service-clients/service-connection/*"
       ],

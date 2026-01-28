@@ -1,12 +1,7 @@
-import { withAnalytics } from '@coparse/analytics';
 import type { IOrganizationUser } from '@core/user';
-import { isErr } from '@core/util/maybeResult';
-import { organizationServiceClient } from '@service-organization/client';
 import { createSingletonRoot } from '@solid-primitives/rootless';
-import { createEffect, createMemo } from 'solid-js';
+import { createMemo } from 'solid-js';
 import { createStore } from 'solid-js/store';
-
-const { track, TrackingEvents } = withAnalytics();
 
 const useActiveTable = createSingletonRoot(() => {
   const [store, setStore] = createStore<{
@@ -19,105 +14,23 @@ const useActiveTable = createSingletonRoot(() => {
     pageSize: 10,
   });
 
-  const getUsers = async (limit: number = 10, offset: number = 0) => {
-    if (store.users.length > 0 && store.users[offset]) return;
-    const users = await organizationServiceClient.getUsers({ limit, offset });
-    if (!users || isErr(users)) return;
-    const [_, data] = users;
-
-    if (store.users.length === 0) {
-      const nulls = Array.from({
-        length: data.total - data.users.length,
-      }).map(() => null);
-      setStore('users', [...data.users, ...nulls]);
-      return;
-    }
-
-    setStore(
-      'users',
-      store.users.map((user, idx) => {
-        if (idx >= offset && idx < offset + data.users.length) {
-          return data.users[idx - offset];
-        }
-        return user;
-      })
-    );
+  const getUsers = async (_limit: number = 10, _offset: number = 0) => {
+    // Organization service has been removed
   };
 
   const patchUserRole = async (
-    userId: string,
-    role: 'owner' | 'member',
-    cb: Function
+    _userId: string,
+    _role: 'owner' | 'member',
+    _cb: Function
   ) => {
-    try {
-      const data = await organizationServiceClient.patchUserRole({
-        userId,
-        role,
-      });
-      if (isErr(data)) throw new Error('Failed to update user role');
-      setStore(
-        'users',
-        store.users.map((user) => {
-          if (user?.id === userId) {
-            return {
-              ...user,
-              is_it_admin: role === 'owner',
-            };
-          }
-          return user;
-        })
-      );
-      track(TrackingEvents.ORGANIZATION.MEMBERS.UPDATE, {
-        role,
-      });
-      cb();
-    } catch (e) {
-      console.error(e);
-    }
+    // Organization service has been removed
   };
 
-  const deleteUser = async (userId: string) => {
-    try {
-      const data = await organizationServiceClient.deleteUser({ userId });
-      if (isErr(data)) throw new Error('Failed to delete user');
-
-      setStore(
-        'users',
-        store.users.filter((user) => user?.id !== userId)
-      );
-      track(TrackingEvents.ORGANIZATION.MEMBERS.DELETE);
-    } catch (e) {
-      console.error(e);
-    }
+  const deleteUser = async (_userId: string) => {
+    // Organization service has been removed
   };
 
-  // Fetch and set users
-  createEffect(() => getUsers(store.pageSize, store.pageIdx * store.pageSize));
-
-  const pageIdxs = createMemo(() => {
-    const { users, pageSize, pageIdx } = store;
-    const totalUsers = users.length;
-    const maxPageIdx = Math.ceil(totalUsers / pageSize) - 1;
-
-    if (maxPageIdx < 3) {
-      // If there are less than 4 pages, show all
-      // return Array.from({ length: maxPageIdx }, (_, i) => i);
-      return [0];
-    }
-
-    if (pageIdx === 0) {
-      // If on the first page, show first three pages and the last page
-      return [0, 1, 2];
-    }
-
-    if (pageIdx === maxPageIdx) {
-      // If on the last page, show first page and the last three pages
-      return [maxPageIdx - 2, maxPageIdx - 1, maxPageIdx];
-    }
-
-    // If on a middle page, show previous, current, next, and last page
-    return [pageIdx - 1, pageIdx, pageIdx + 1];
-  });
+  const pageIdxs = createMemo(() => [0]);
 
   const userPageSlice = createMemo(() => {
     return store.users.slice(

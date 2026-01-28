@@ -1,7 +1,9 @@
+use crate::convert::map_message_resource_to_service;
 use crate::pubsub::backfill::increment_counters;
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::util::{CheckGmailRateLimitArgs, check_gmail_rate_limit};
 use crate::util::process_pre_insert::process_message_pre_insert;
+use anyhow::Context;
 use models_email::email::service::backfill::{BackfillMessagePayload, BackfillPubsubMessage};
 use models_email::email::service::link;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
@@ -27,9 +29,9 @@ pub async fn backfill_message(
     .await?;
 
     // get message from gmail
-    let mut message = match ctx
+    let message_resource = match ctx
         .gmail_client
-        .get_message(access_token, &p.message_provider_id, link.id)
+        .get_message(access_token, &p.message_provider_id)
         .await
     {
         Ok(Some(message)) => message,
@@ -46,6 +48,16 @@ pub async fn backfill_message(
             }));
         }
     };
+
+    // Map Gmail resource to service model (IDs are generated in the parse function)
+    let mut message = map_message_resource_to_service(message_resource, link.id)
+        .context("Failed to map message resource to service")
+        .map_err(|e| {
+            ProcessingError::NonRetryable(DetailedError {
+                reason: FailureReason::GmailApiFailed,
+                source: e,
+            })
+        })?;
 
     process_message_pre_insert(&ctx.db, &ctx.sfs_client, &mut message).await;
 

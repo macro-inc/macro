@@ -93,21 +93,8 @@ async function batchFetchNames(ids: string[]) {
   setUserDisplayNames((prev) => ({ ...prev, ...updates }));
 }
 
-export function useDisplayName(
-  id: MacroId | undefined | null
-): UserNamePreviewFetcher {
-  if (!id) {
-    const dummy_accessor = () => {
-      return '';
-    };
-
-    const dummy_controls = {
-      refetch: () => {},
-      mutate: (_value: UserNameItem) => {},
-    };
-
-    return [dummy_accessor, dummy_controls];
-  }
+/** Shared hook that handles caching/fetching and returns the underlying UserNameItem */
+function useUserNameItem(id: MacroId) {
   const cached = userDisplayNames[id];
   const cacheExpired =
     cached &&
@@ -131,24 +118,80 @@ export function useDisplayName(
     }
   });
 
-  const accessor = () => {
-    const _item = unwrap(userDisplayNames[id]);
-    return defaultNameTransform(_item);
+  const getItem = () => unwrap(userDisplayNames[id]);
+
+  const refetch = () => {
+    setUserDisplayNames(id, {
+      loading: true,
+      _createdAt: new Date(),
+      id: id,
+    });
+    queueItemsForFetch([id]);
   };
 
-  const controls = {
-    refetch: () => {
-      setUserDisplayNames(id, {
-        loading: true,
-        _createdAt: new Date(),
-        id: id,
-      });
-      queueItemsForFetch([id]);
-    },
-    mutate: (value: UserNameItem) => {
-      setUserDisplayNames(id, value);
-    },
+  const mutate = (value: UserNameItem) => {
+    setUserDisplayNames(id, value);
   };
 
-  return [accessor, controls];
+  return { getItem, refetch, mutate };
+}
+
+export type DisplayNameParts = {
+  firstName: () => string;
+  lastName: () => string;
+  fullName: () => string;
+  refetch: () => void;
+};
+
+export function useDisplayNameParts(
+  id: MacroId | undefined | null
+): DisplayNameParts {
+  if (!id) {
+    return {
+      firstName: () => '',
+      lastName: () => '',
+      fullName: () => '',
+      refetch: () => {},
+    };
+  }
+
+  const { getItem, refetch } = useUserNameItem(id);
+
+  const firstName = () => {
+    const item = getItem();
+    if (item?.loading) return '';
+    const name = item?.firstName;
+    return name && name !== 'N/A' ? name : '';
+  };
+
+  const lastName = () => {
+    const item = getItem();
+    if (item?.loading) return '';
+    const name = item?.lastName;
+    return name && name !== 'N/A' ? name : '';
+  };
+
+  const fullName = () => defaultNameTransform(getItem());
+
+  return { firstName, lastName, fullName, refetch };
+}
+
+export function useDisplayName(
+  id: MacroId | undefined | null
+): UserNamePreviewFetcher {
+  if (!id) {
+    return [
+      () => '',
+      {
+        refetch: () => {},
+        mutate: (_value: UserNameItem) => {},
+      },
+    ];
+  }
+
+  const { getItem, refetch, mutate } = useUserNameItem(id);
+
+  const accessor = () => defaultNameTransform(getItem());
+
+  return [accessor, { refetch, mutate }];
 }

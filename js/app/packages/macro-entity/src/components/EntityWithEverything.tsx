@@ -2,22 +2,38 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import type { Property } from '@core/component/Properties/types';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import '@core/directive/dnd';
+import { useDragOperation } from '@app/component/ItemDragAndDrop';
+import { useEmail, useUserId } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { matches } from '@core/util/match';
+import ArrowBendUpLeftIcon from '@icon/regular/arrow-bend-up-left.svg';
+import AtIcon from '@icon/regular/at.svg';
+import ChatIcon from '@icon/regular/chat.svg';
 import CheckIcon from '@icon/regular/check.svg';
-import { tryToTypedNotification } from '@notifications';
-import { useEmail, useUserId } from '@core/context/user';
+import {
+  getAllNotificationsFromGroup,
+  getMostRecentNotification,
+  isChannelMessageReply,
+  type NotificationStack,
+  stackNotifications,
+  type TypedNotification,
+  tryToTypedNotification,
+} from '@notifications';
 import { formatDocumentName } from '@service-storage/util/filename';
 import { syncServiceClient } from '@service-sync/client';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable } from '@thisbeyond/solid-dnd';
-import { useDragOperation } from '@app/component/ItemDragAndDrop';
 import { getIconConfig } from 'core/component/EntityIcon';
 import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import { UserIcon } from 'core/component/UserIcon';
-import { emailToMacroId, tryMacroId, useDisplayName } from 'core/user';
+import {
+  emailToMacroId,
+  tryMacroId,
+  useDisplayName,
+  useDisplayNameParts,
+} from 'core/user';
 import type { JSX, ParentProps, Ref } from 'solid-js';
 import {
   createDeferred,
@@ -39,12 +55,17 @@ import {
   type ProjectContainedEntity,
 } from '../queries/project';
 import { isSearchEntity } from '../queries/search';
+import type { EntityDragData } from '../types/drag';
 import {
   type EntityData,
   isTaskEntity,
   type ProjectEntity,
 } from '../types/entity';
-import type { Notification, WithNotification } from '../types/notification';
+import type {
+  Notification,
+  WithNotification,
+  WithStackedNotifications,
+} from '../types/notification';
 import type {
   ChannelContentHitData,
   ContentHitData,
@@ -52,7 +73,6 @@ import type {
   SearchLocation,
   WithSearch,
 } from '../types/search';
-import type { EntityDragData } from '../types/drag';
 import { KeyPropertiesGrid } from './EntityPropertyValues';
 
 export type EntityClickEvent = Parameters<
@@ -281,6 +301,7 @@ function NotificationRow(props: {
   notification: Notification;
   onClick?: NotificationClickHandler;
   entity: EntityData;
+  icon?: (props: { class?: string }) => JSX.Element;
 }) {
   const [userName] = useDisplayName(
     tryMacroId(props.notification.senderId ?? '')
@@ -295,6 +316,9 @@ function NotificationRow(props: {
     }
     if (props.notification.notificationEventType === 'task_assigned') {
       return 'assigned to you';
+    }
+    if (props.notification.notificationEventType === 'channel_mention') {
+      return 'mentioned you';
     }
 
     const metadata = tryToTypedNotification(
@@ -358,7 +382,12 @@ function NotificationRow(props: {
       }
     >
       <div class="flex size-5 shrink-0 items-center justify-center mr-1">
-        <UserIcon id={props.notification.senderId!} size="xs" />
+        <Show
+          when={props.icon}
+          fallback={<UserIcon id={props.notification.senderId!} size="xs" />}
+        >
+          <Dynamic component={props.icon} class="size-4 text-ink-muted" />
+        </Show>
       </div>
       <div class="flex gap-1 w-full min-w-0 overflow-hidden items-baseline">
         <div class="w-[20cqw] shrink-0 truncate min-w-0">
@@ -373,6 +402,237 @@ function NotificationRow(props: {
         {createFormattedDate(props.notification.createdAt)}
       </div>
     </CollapsibleListRow>
+  );
+}
+
+/**
+ * Shared row component for stacked notifications (new messages and replies)
+ */
+function StackedNotificationRow(props: {
+  notifications: TypedNotification[];
+  title: JSX.Element;
+  icon: (props: { class?: string }) => JSX.Element;
+  onClick?: (e: EntityClickEvent) => void;
+}) {
+  const mostRecent = () => props.notifications[0];
+
+  // Get up to 3 unique sender IDs for avatar display
+  const senderIds = createMemo(() => {
+    const ids = new Set<string>();
+    for (const n of props.notifications) {
+      if (n.senderId) {
+        ids.add(n.senderId);
+        if (ids.size >= 3) break;
+      }
+    }
+    return Array.from(ids);
+  });
+
+  // Get the sender of the most recent message
+  const mostRecentSenderId = () => mostRecent()?.senderId ?? '';
+  const [mostRecentSenderName] = useDisplayName(
+    tryMacroId(mostRecentSenderId())
+  );
+
+  const messageContent = createMemo(() => {
+    const metadata = mostRecent()?.notificationMetadata;
+    if (metadata && 'messageContent' in metadata) {
+      return metadata.messageContent?.trim() ?? '';
+    }
+    return '';
+  });
+
+  return (
+    <CollapsibleListRow showThreadBorder onClick={props.onClick}>
+      <div class="flex size-5 shrink-0 items-center justify-center mr-1">
+        <props.icon class="size-4 text-ink-muted" />
+      </div>
+      <div class="flex gap-1 w-full overflow-hidden items-baseline">
+        {/* Count + Stacked avatars */}
+        <div class="min-w-[20cqw] shrink-0 flex items-center gap-1">
+          <span>{props.title}</span>
+          <div class="flex shrink-0 items-center">
+            <For each={senderIds()}>
+              {(id, index) => (
+                <div
+                  class="flex size-5 items-center justify-center"
+                  classList={{ '-ml-2': index() > 0 }}
+                >
+                  <UserIcon id={id} size="xs" />
+                </div>
+              )}
+            </For>
+          </div>
+        </div>
+        {/* Sender avatar + name + message content */}
+        <Show when={mostRecentSenderId()}>
+          <div class="flex items-center gap-1 flex-1 min-w-0">
+            <span class="shrink-0 font-medium">{mostRecentSenderName()}</span>
+            <Show when={messageContent()}>
+              {(content) => (
+                <div class="text-ink-muted truncate flex items-center flex-1 min-w-0">
+                  <StaticMarkdown
+                    markdown={content()}
+                    theme={unifiedListMarkdownTheme}
+                    singleLine={true}
+                  />
+                </div>
+              )}
+            </Show>
+          </div>
+        </Show>
+      </div>
+      <div class="shrink-0 font-mono text-xs touch:mobile-width:text-sm uppercase text-ink-extra-muted ml-2">
+        {createFormattedDate(mostRecent().createdAt)}
+      </div>
+    </CollapsibleListRow>
+  );
+}
+
+/**
+ * Row component for stacked new messages
+ */
+function StackedNewMessagesRow(props: {
+  group: NotificationStack & { type: 'channel_message_send' };
+  onClick?: StackedNotificationClickHandler;
+  entity: EntityData;
+}) {
+  const count = () => props.group.notifications.length;
+
+  return (
+    <StackedNotificationRow
+      notifications={props.group.notifications}
+      title={<>{count()} New Messages</>}
+      icon={ChatIcon}
+      onClick={
+        props.onClick
+          ? (e) =>
+              props.onClick?.({
+                group: props.group,
+                entity: props.entity,
+                event: e,
+              })
+          : undefined
+      }
+    />
+  );
+}
+
+/**
+ * Row component for stacked replies to a thread
+ */
+function StackedRepliesRow(props: {
+  group: NotificationStack & { type: 'channel_message_reply' };
+  onClick?: StackedNotificationClickHandler;
+  entity: EntityData;
+}) {
+  const count = () => props.group.notifications.length;
+
+  // Derive from notifications[0] (mostRecent)
+  const threadParentSenderId = () => {
+    const notification = props.group.notifications[0];
+    if (!notification) return '';
+    const typed = tryToTypedNotification(notification);
+    if (!typed || !isChannelMessageReply(typed) || !typed.notificationMetadata)
+      return '';
+    return typed.notificationMetadata.threadParentSenderId ?? '';
+  };
+
+  const { firstName } = useDisplayNameParts(tryMacroId(threadParentSenderId()));
+
+  const title = () => (
+    <>
+      {count()} {count() === 1 ? 'Reply' : 'Replies'}
+      <Show when={firstName()}>{(name) => <> to {name}</>}</Show>
+    </>
+  );
+
+  return (
+    <StackedNotificationRow
+      notifications={props.group.notifications}
+      title={title()}
+      icon={ArrowBendUpLeftIcon}
+      onClick={
+        props.onClick
+          ? (e) =>
+              props.onClick?.({
+                group: props.group,
+                entity: props.entity,
+                event: e,
+              })
+          : undefined
+      }
+    />
+  );
+}
+
+type StackedNotificationClickHandler<T extends EntityData = EntityData> =
+  (args: {
+    group: NotificationStack;
+    entity: T;
+    event: EntityClickEvent;
+  }) => void;
+
+/**
+ * Renderer component that switches between different stacked notification types
+ */
+function StackedNotificationRenderer(props: {
+  group: NotificationStack;
+  onClick?: NotificationClickHandler;
+  onClickStacked?: StackedNotificationClickHandler;
+  entity: EntityData;
+}) {
+  return (
+    <Switch>
+      <Match when={props.group.type === 'channel_message_send' && props.group}>
+        {(group) => (
+          <StackedNewMessagesRow
+            group={
+              group() as NotificationStack & { type: 'channel_message_send' }
+            }
+            onClick={props.onClickStacked}
+            entity={props.entity}
+          />
+        )}
+      </Match>
+      <Match when={props.group.type === 'channel_message_reply' && props.group}>
+        {(group) => (
+          <StackedRepliesRow
+            group={
+              group() as NotificationStack & { type: 'channel_message_reply' }
+            }
+            onClick={props.onClickStacked}
+            entity={props.entity}
+          />
+        )}
+      </Match>
+      <Match when={props.group.type === 'channel_mention' && props.group}>
+        {(group) => (
+          <NotificationRow
+            notification={group().notifications[0]}
+            onClick={props.onClick}
+            entity={props.entity}
+            icon={AtIcon}
+          />
+        )}
+      </Match>
+      <Match
+        when={
+          props.group.type !== 'channel_message_send' &&
+          props.group.type !== 'channel_message_reply' &&
+          props.group.type !== 'channel_mention' &&
+          props.group
+        }
+      >
+        {(group) => (
+          <NotificationRow
+            notification={group().notifications[0]}
+            onClick={props.onClick}
+            entity={props.entity}
+          />
+        )}
+      </Match>
+    </Switch>
   );
 }
 
@@ -441,7 +701,9 @@ function ContentHitRow(props: {
 //
 
 type NotificationClickHandler<T extends EntityData = EntityData> =
-  EntityClickHandler<T & { notification: Notification }>;
+  EntityClickHandler<
+    WithStackedNotifications<T & { notification: Notification }>
+  >;
 
 interface EntityProps<T extends WithNotification<EntityData>>
   extends ParentProps {
@@ -539,6 +801,10 @@ export function EntityWithEverything(
   const notDoneNotifications = () => {
     return validNotifications().filter(({ done }) => !done);
   };
+
+  const stackedNotificationsGroups = createMemo(() =>
+    stackNotifications(notDoneNotifications())
+  );
 
   const isSearch = createMemo(
     () => !!props.searchActive && isSearchEntity(props.entity)
@@ -1214,7 +1480,7 @@ export function EntityWithEverything(
             </CollapsibleList>
           </div>
         </Show>
-        {/* Notifications */}
+        {/* Notifications (stacked by type) */}
         <Show
           when={
             props.showUnrollNotifications &&
@@ -1223,11 +1489,27 @@ export function EntityWithEverything(
           }
         >
           <div class="relative col-2 col-end-4 pb-2 @max-md/uList:col-auto @max-md/uList:w-full @max-md/uList:mt-1">
-            <CollapsibleList items={notDoneNotifications()} threadBorder>
-              {(notification) => (
-                <NotificationRow
-                  notification={notification}
+            <CollapsibleList items={stackedNotificationsGroups()} threadBorder>
+              {(group) => (
+                <StackedNotificationRenderer
+                  group={group}
                   onClick={props.onClickNotification}
+                  onClickStacked={(args) => {
+                    // Navigate to the most recent notification in the stack
+                    const mostRecent = getMostRecentNotification(args.group);
+                    props.onClickNotification?.({
+                      type: 'entity',
+                      entity: {
+                        ...args.entity,
+                        notification: mostRecent,
+                        // Attach all notifications in the group for bulk operations
+                        stackedNotifications: getAllNotificationsFromGroup(
+                          args.group
+                        ),
+                      },
+                      event: args.event,
+                    });
+                  }}
                   entity={props.entity}
                 />
               )}

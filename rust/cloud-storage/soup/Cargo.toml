@@ -51,17 +51,17 @@ models_pagination = { path = "../models_pagination" }
 models_properties = { path = "../models_properties" }
 models_soup = { path = "../models_soup" }
 non_empty = { path = "../non_empty" }
+properties_db_client = { path = "../properties_db_client/" }
 recursion = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 sqlx = { workspace = true }
+system_properties = { path = "../system_properties" }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros"], optional = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
-system_properties = { path = "../system_properties" }
-properties_db_client = { path = "../properties_db_client/" }
 
 [dev-dependencies]
 cool_asserts = "2"
@@ -73,7 +73,7 @@ item_filters = { path = "../item_filters", features = ["mock"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 mockall = { workspace = true }
 ordered-float = { workspace = true }
-rootcause = "0.11"
+rootcause = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }

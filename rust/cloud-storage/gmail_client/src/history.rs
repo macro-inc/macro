@@ -1,18 +1,17 @@
 use crate::GmailClient;
-use crate::parse::map_history_list_response_to_history;
 use anyhow::Context;
-use models_email::gmail;
 use models_email::gmail::{HistoryListResponse, UserProfileResponse};
 
 const MAX_RESULTS: usize = 500;
 
-/// Gets the changes to a user's inbox that have occurred since start_history_id
+/// Gets the changes to a user's inbox that have occurred since start_history_id.
+/// Returns raw HistoryListResponse - callers should map to InboxChanges using convert module.
 #[tracing::instrument(skip(client, access_token))]
 pub(crate) async fn get_history(
     client: &GmailClient,
     access_token: &str,
     start_history_id: &str,
-) -> anyhow::Result<gmail::history::InboxChanges> {
+) -> anyhow::Result<HistoryListResponse> {
     let url = format!(
         "{}/users/me/history?startHistoryId={}&maxResults={}",
         client.base_url, start_history_id, MAX_RESULTS
@@ -76,7 +75,7 @@ pub(crate) async fn get_history(
         }
     }
 
-    Ok(map_history_list_response_to_history(history_list_response))
+    Ok(history_list_response)
 }
 
 /// returns the current history id for the user's inbox using the /profile endpoint

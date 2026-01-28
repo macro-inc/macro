@@ -139,6 +139,7 @@ fn test_build_key_channel_message_reply_uses_message_id() {
             message_id: "reply_msg_123".to_string(),
             user_id: make_user_id("replier@example.com"),
             message_content: "This is a reply".to_string(),
+            thread_parent_sender_id: None,
             common: CommonChannelMetadata {
                 channel_type: ChannelType::Public,
                 channel_name: "general".to_string(),
@@ -157,6 +158,7 @@ fn test_build_key_channel_message_reply_uses_message_id() {
             message_id: "reply_msg_123".to_string(),
             user_id: make_user_id("other@example.com"),
             message_content: "Different reply".to_string(),
+            thread_parent_sender_id: None,
             common: CommonChannelMetadata {
                 channel_type: ChannelType::Private,
                 channel_name: "other".to_string(),

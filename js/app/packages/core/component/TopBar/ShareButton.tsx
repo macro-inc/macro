@@ -2,6 +2,8 @@ import { withAnalytics } from '@coparse/analytics';
 import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
 import { useIsAuthenticated } from '@core/auth';
 import {
+  type BlockAlias,
+  type BlockName,
   createBlockEffect,
   createBlockResource,
   useBlockAliasedName,
@@ -135,6 +137,7 @@ interface ShareModalProps {
   setIsSharePermOpen: (value: boolean) => void;
   userPermissions: Permissions;
   isSharePermOpen: boolean;
+  blockAlias: BlockName | BlockAlias;
   itemType: ItemType;
   owner?: string;
   name: string;
@@ -150,7 +153,7 @@ export function ShareModal(props: ShareModalProps) {
   const copyPublicLink = createCallback(() => {
     const url = buildSimpleEntityUrl(
       {
-        type: props.itemType,
+        type: props.blockAlias,
         id: props.id,
       },
       {}
@@ -769,6 +772,7 @@ export function ShareButton(props: ShareButtonProps) {
         itemType={props.itemType}
         owner={props.owner}
         name={props.name}
+        blockAlias={blockType}
         id={props.id}
       />
     </>

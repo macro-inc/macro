@@ -102,9 +102,7 @@ pub async fn insert_thread<'e, E>(
 where
     E: Executor<'e, Database = Postgres>,
 {
-    let thread_id = macro_uuid::generate_uuid_v7();
-    let db_thread =
-        parse::service_to_db::map_service_thread_to_db(service_thread, thread_id, link_id);
+    let db_thread = parse::service_to_db::map_service_thread_to_db(service_thread, link_id);
 
     let result = sqlx::query!(
         r#"
@@ -147,7 +145,7 @@ where
     E: Executor<'e, Database = Postgres>,
 {
     let thread = thread::Thread {
-        db_id: None,
+        db_id: macro_uuid::generate_uuid_v7(),
         provider_id: Some(thread_provider_id.to_string()),
         link_id,
         inbox_visible: false,

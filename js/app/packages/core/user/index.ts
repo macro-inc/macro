@@ -7,7 +7,11 @@ export {
   type WithCustomUserInput,
 } from './combinedRecipient';
 export { useContacts } from './contactService';
-export { useDisplayName } from './displayName';
+export {
+  type DisplayNameParts,
+  useDisplayName,
+  useDisplayNameParts,
+} from './displayName';
 export {
   emailToMacroId,
   isMacroId,
