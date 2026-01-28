@@ -7,10 +7,10 @@ use axum::{
 };
 use sqlx::PgPool;
 
-use super::get_users_access_level_v2;
+use super::{EntityType, get_public_access_level, get_users_access_level_v2};
 use crate::cloud_storage::ensure_access::{AccessLevelErr, BuildAccessLevel};
 use model::document::DocumentBasic;
-use model_user::axum_extractor::MacroUserExtractor;
+use model_user::axum_extractor::OptionalMacroUserExtractor;
 use models_permissions::share_permission::access_level::AccessLevel;
 
 #[derive(Debug)]
@@ -32,41 +32,57 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let db = PgPool::from_ref(state);
 
-        let MacroUserExtractor {
+        let OptionalMacroUserExtractor {
             macro_user_id,
             user_context,
             ..
         } = parts
             .extract()
             .await
-            .map_err(|_| AccessLevelErr::UnAuthorized)?;
+            .map_err(|_| AccessLevelErr::InternalErr)?;
+
         let document_context: Extension<DocumentBasic> =
             <Extension<DocumentBasic>>::from_request_parts(parts, state)
                 .await
                 .map_err(|_| AccessLevelErr::InternalErr)?;
 
-        if document_context.owner == macro_user_id {
+        // Check ownership only if authenticated
+        if let Some(ref user_id) = macro_user_id
+            && document_context.owner == *user_id
+        {
             return Ok(Self {
                 access_level: AccessLevel::Owner,
                 desired: PhantomData,
             });
         }
 
-        // If the was deleted and you are not the owner, you can't access it
+        // If the document was deleted and you are not the owner, you can't access it
         if document_context.deleted_at.is_some() {
             return Err(AccessLevelErr::UnAuthorizedWithMsg(
                 "only owner can access deleted resource",
             ));
         }
 
-        let access_level: Option<AccessLevel> = get_users_access_level_v2(
-            &db,
-            &user_context.user_id,
-            &document_context.document_id,
-            "document",
-        )
-        .await
-        .map_err(AccessLevelErr::DbErr)?;
+        // Check access based on auth state
+        let access_level: Option<AccessLevel> = match macro_user_id {
+            Some(_) => {
+                // Authenticated user: check user-specific and public access
+                get_users_access_level_v2(
+                    &db,
+                    &user_context.user_id,
+                    &document_context.document_id,
+                    "document",
+                )
+                .await
+                .map_err(AccessLevelErr::DbErr)?
+            }
+            None => {
+                // Unauthenticated user: check public access only
+                get_public_access_level(&db, &document_context.document_id, EntityType::Document)
+                    .await
+                    .map_err(AccessLevelErr::DbErr)?
+            }
+        };
 
         let desired = T::into_access_level();
 

@@ -79,23 +79,11 @@
       ],
       "stack_path": "infra/stacks/email-service/**"
     },
-    "experiment-service": {
-      "source_paths": [
-        "rust/cloud-storage/experiment_service/**"
-      ],
-      "stack_path": "infra/stacks/experiment-service/**"
-    },
     "notification-service": {
       "source_paths": [
         "rust/cloud-storage/notification_service/**"
       ],
       "stack_path": "infra/stacks/notification-service/**"
-    },
-    "organization-service": {
-      "source_paths": [
-        "rust/cloud-storage/organization_service/**"
-      ],
-      "stack_path": "infra/stacks/organization-service/**"
     },
     "organization-retention": {
       "source_paths": [

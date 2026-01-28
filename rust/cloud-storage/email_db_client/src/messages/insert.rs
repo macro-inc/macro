@@ -90,14 +90,8 @@ async fn insert_db_message(
     from_contact_id: Option<Uuid>,
     update_thread_metadata: bool,
 ) -> anyhow::Result<Uuid> {
-    let message_db_id = macro_uuid::generate_uuid_v7();
-
-    let db_message = parse::service_to_db::map_service_message_to_db(
-        message,
-        message_db_id,
-        thread_id,
-        from_contact_id,
-    );
+    let db_message =
+        parse::service_to_db::map_service_message_to_db(message, thread_id, from_contact_id);
 
     let result = sqlx::query!(
         r#"

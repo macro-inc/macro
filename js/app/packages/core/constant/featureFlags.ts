@@ -122,4 +122,4 @@ export const ENABLE_MARKDOWN_AI_GENERATE = false;
 export const ENABLE_UNIFIED_LIST_AI_INPUT = false;
 
 // snapshot mention content inline for AI chat
-export const ENABLE_SNAPSHOT_NODE = DEV_MODE_ENV;
+export const ENABLE_SNAPSHOT_NODE = true;

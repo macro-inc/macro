@@ -421,7 +421,15 @@ tools.sort((a, b) => a.name.localeCompare(b.name));
 await generateSchemasFile(tools);
 await generateToolsFile(tools);
 await generateToolTypesFile(tools);
-await $`bunx biome format --write --no-errors-on-unmatched ${toolFile} ${schemasFile} ${typesFile}`;
+// On NixOS, the npm-installed biome binary doesn't work due to dynamic linking issues.
+// We detect NixOS and use the system biome instead.
+const isNixOS = process.env.NIX_PATH !== undefined || (await Bun.file("/etc/os-release").exists() && (await Bun.file("/etc/os-release").text()).includes("NixOS"));
+if (isNixOS) {
+	const systemBiomePath = await $`bash -c 'PATH=$(echo "$PATH" | tr ":" "\n" | grep -v node_modules | tr "\n" ":") which biome'`.text();
+	await $`${systemBiomePath.trim()} format --write --no-errors-on-unmatched ${toolFile} ${schemasFile} ${typesFile}`;
+} else {
+	await $`biome format --write --no-errors-on-unmatched ${toolFile} ${schemasFile} ${typesFile}`;
+}
 
 console.log(
 	`Generated AI tools types at: ${serviceDir}/generated/tools/tools.ts`,

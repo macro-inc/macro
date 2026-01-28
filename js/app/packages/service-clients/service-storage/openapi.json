@@ -5469,7 +5469,8 @@
           "owner",
           "documentName",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "deletedAt"
         ],
         "properties": {
           "branchedFromId": {
@@ -5485,6 +5486,11 @@
             "type": "integer",
             "format": "int64",
             "description": "The time the document was created"
+          },
+          "deletedAt": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The time the document was deleted"
           },
           "documentBom": {
             "type": ["array", "null"],
@@ -8312,6 +8318,7 @@
           "createdAt",
           "updatedAt",
           "viewedAt",
+          "deletedAt",
           "properties"
         ],
         "properties": {
@@ -8319,6 +8326,11 @@
             "type": "integer",
             "format": "int64",
             "description": "The time the chat was created"
+          },
+          "deletedAt": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The time the chat was deleted"
           },
           "id": {
             "type": "string",
@@ -8394,6 +8406,7 @@
           "createdAt",
           "updatedAt",
           "viewedAt",
+          "deletedAt",
           "properties"
         ],
         "properties": {
@@ -8411,6 +8424,11 @@
             "type": "integer",
             "format": "int64",
             "description": "The time the document was created"
+          },
+          "deletedAt": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The time the document was deleted"
           },
           "documentFamilyId": {
             "type": ["integer", "null"],
@@ -8788,6 +8806,7 @@
           "createdAt",
           "updatedAt",
           "viewedAt",
+          "deletedAt",
           "properties"
         ],
         "properties": {
@@ -8795,6 +8814,11 @@
             "type": "integer",
             "format": "int64",
             "description": "The time the project was created"
+          },
+          "deletedAt": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The time the project was deleted"
           },
           "id": {
             "type": "string",

@@ -63,6 +63,7 @@ sfs_map = []
 sfs_delete = []
 
 [dependencies]
+ammonia = "4.1.0"
 anyhow = { workspace = true }
 authentication_service_client = { path = "../authentication_service_client" }
 aws-config = { workspace = true }
@@ -93,6 +94,7 @@ macro_auth = { path = "../macro_auth" }
 macro_cors = { path = "../macro_cors" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
+mailparse = "0.16.1"
 macro_env_var = { path = "../macro_env_var" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
   "auth",
@@ -109,6 +111,7 @@ models_email = { path = "../models_email" }
 models_opensearch = { path = "../models_opensearch" }
 models_pagination = { path = "../models_pagination", features = ["axum"] }
 models_permissions = { path = "../models_permissions" }
+once_cell = { workspace = true }
 models_properties = { path = "../models_properties" }
 redis = { workspace = true, features = [
   "cluster-async",

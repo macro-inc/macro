@@ -103,7 +103,7 @@ pub async fn archived_handler(
 
     for m in messages.iter() {
         if has_inbox_label(m) == is_archiving {
-            message_db_ids.push(m.db_id.unwrap());
+            message_db_ids.push(m.db_id);
             // should always exist
             message_provider_ids.push(m.provider_id.clone().unwrap_or_default());
         }

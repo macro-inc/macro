@@ -92,14 +92,15 @@ static DOCUMENT_CLAUSE: &str = r#"
             WHEN 'created_at' THEN d."createdAt"
             ELSE d."updatedAt"
         END::timestamptz as "sort_ts",
-        CASE 
-            WHEN dt.sub_type = 'task' 
+        CASE
+            WHEN dt.sub_type = 'task'
                 AND ep_status.values->'value' ? $6
-            THEN true 
+            THEN true
             WHEN dt.sub_type = 'task'
             THEN false
-            ELSE NULL 
-        END as "is_completed"
+            ELSE NULL
+        END as "is_completed",
+        d."deletedAt"::timestamptz as "deleted_at"
     FROM "Document" d
     LEFT JOIN document_sub_type dt ON dt.document_id = d.id
     LEFT JOIN entity_properties ep_status 
@@ -151,7 +152,8 @@ static CHAT_CLAUSE: &str = r#"
             WHEN 'created_at' THEN c."createdAt"
             ELSE c."updatedAt"
         END::timestamptz as "sort_ts",
-        NULL as "is_completed"
+        NULL as "is_completed",
+        c."deletedAt"::timestamptz as "deleted_at"
     FROM "Chat" c
     INNER JOIN UserAccessibleItems uai ON uai.item_id = c.id AND uai.item_type = 'chat'
     LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1
@@ -182,7 +184,8 @@ static PROJECT_CLAUSE: &str = r#"
             WHEN 'created_at'  THEN p."createdAt"
             ELSE p."updatedAt"
         END::timestamptz as "sort_ts",
-        NULL as "is_completed"
+        NULL as "is_completed",
+        p."deletedAt"::timestamptz as "deleted_at"
     FROM "Project" p
     INNER JOIN UserAccessibleItems uai
         ON uai.item_id = p.id
@@ -335,6 +338,7 @@ struct DocumentRow {
     viewed_at: Option<DateTime<Utc>>,
     sub_type: Option<DocumentSubType>,
     is_completed: Option<bool>,
+    deleted_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, FromRow)]
@@ -348,6 +352,7 @@ struct ChatRow {
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     viewed_at: Option<DateTime<Utc>>,
+    deleted_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, FromRow)]
@@ -359,6 +364,7 @@ struct ProjectRow {
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     viewed_at: Option<DateTime<Utc>>,
+    deleted_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug)]
@@ -401,6 +407,7 @@ impl SoupRow {
                 viewed_at,
                 sub_type,
                 is_completed,
+                deleted_at,
             }) => SoupItem::Document(SoupDocument {
                 id: Uuid::parse_str(&id).map_err(type_err)?,
                 document_version_id: document_version_id
@@ -428,6 +435,7 @@ impl SoupRow {
                 updated_at,
                 viewed_at,
                 sub_type: SoupDocumentSubType::from_db(sub_type, is_completed),
+                deleted_at,
                 properties: Default::default(),
             }),
             SoupRow::Chat(ChatRow {
@@ -439,6 +447,7 @@ impl SoupRow {
                 created_at,
                 updated_at,
                 viewed_at,
+                deleted_at,
             }) => SoupItem::Chat(SoupChat {
                 id: Uuid::parse_str(&id).map_err(type_err)?,
                 name,
@@ -454,6 +463,7 @@ impl SoupRow {
                 created_at,
                 updated_at,
                 viewed_at,
+                deleted_at,
                 properties: Default::default(),
             }),
             SoupRow::Project(ProjectRow {
@@ -464,6 +474,7 @@ impl SoupRow {
                 created_at,
                 updated_at,
                 viewed_at,
+                deleted_at,
             }) => SoupItem::Project(SoupProject {
                 id: Uuid::parse_str(&id).map_err(type_err)?,
                 name,
@@ -478,6 +489,7 @@ impl SoupRow {
                 created_at,
                 updated_at,
                 viewed_at,
+                deleted_at,
                 properties: Default::default(),
             }),
         })
