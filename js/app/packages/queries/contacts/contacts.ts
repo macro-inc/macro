@@ -25,7 +25,8 @@ export function useContactsQuery() {
 export function useContacts(): Accessor<IUser[]> {
   const query = useContactsQuery();
   return () => {
-    const contacts = query.data?.contacts ?? [];
+    if (!query.isSuccess) return [];
+    const contacts = query.data.contacts;
     return contacts.map((c) => ({
       id: c,
       email: idToEmail(c),
