@@ -4,8 +4,8 @@ import { createStore } from 'solid-js/store';
 
 const useInactiveTable = createSingletonRoot(() => {
   const [email, setEmail] = createSignal('');
-  const [message, setMessage] = createSignal('');
-  const [success, setSuccess] = createSignal(false);
+  const [message, _setMessage] = createSignal('');
+  const [success, _setSuccess] = createSignal(false);
   const [loading] = createSignal(false);
 
   const [store, setStore] = createStore<{
