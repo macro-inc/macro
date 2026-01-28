@@ -82,8 +82,6 @@ members = [
   "opensearch_client",
   "organization_retention_handler",
   "organization_retention_trigger",
-  "organization_service",
-  "organization_service_client",
   "permission",
   "properties",
   "properties_db_client",

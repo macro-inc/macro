@@ -6171,54 +6171,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "organization_service"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aws-config",
- "aws-sdk-secretsmanager",
- "aws-sdk-sesv2",
- "axum",
- "http-body-util",
- "lazy_static",
- "macro_auth",
- "macro_cors",
- "macro_db_client",
- "macro_entrypoint",
- "macro_env",
- "macro_env_var",
- "macro_middleware",
- "model",
- "models_permissions",
- "redis",
- "regex",
- "reqwest",
- "secretsmanager_client",
- "serde",
- "serde_json",
- "ses_client",
- "sqlx",
- "strum",
- "thiserror 2.0.17",
- "tokio",
- "tower 0.5.2",
- "tower-http",
- "tracing",
- "urlencoding",
- "utoipa",
- "utoipa-swagger-ui",
-]
-
-[[package]]
-name = "organization_service_client"
-version = "0.1.0"
-dependencies = [
- "macro_client_errors",
- "reqwest",
- "serde",
-]
-
-[[package]]
 name = "outref"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
