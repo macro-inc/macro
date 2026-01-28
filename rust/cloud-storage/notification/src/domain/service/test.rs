@@ -434,6 +434,98 @@ async fn test_queue_message_multiple_channels() {
     assert!(has_email, "Should have Email message");
 }
 
+#[tokio::test]
+async fn test_apns_enqueues_correct_data_for_multiple_users() {
+    use std::sync::Arc;
+
+    let user1 = test_user_id("alice@example.com");
+    let user2 = test_user_id("bob@example.com");
+    let user3 = test_user_id("charlie@example.com");
+
+    let queue = Arc::new(MockQueue::new());
+    let repo = MockRepository::new()
+        .with_device_endpoint(
+            user1.clone(),
+            DeviceEndpoint::Ios("arn:aws:sns:us-east-1:111:endpoint/APNS/app/alice-device".to_string()),
+        )
+        .with_device_endpoint(
+            user2.clone(),
+            DeviceEndpoint::Ios("arn:aws:sns:us-east-1:111:endpoint/APNS/app/bob-device".to_string()),
+        )
+        .with_device_endpoint(
+            user2.clone(),
+            DeviceEndpoint::Ios("arn:aws:sns:us-east-1:111:endpoint/APNS/app/bob-device-2".to_string()),
+        )
+        .with_device_endpoint(
+            user3.clone(),
+            DeviceEndpoint::Ios("arn:aws:sns:us-east-1:111:endpoint/APNS/app/charlie-device".to_string()),
+        );
+
+    let service = NotificationIngressService::new(repo, queue.clone(), "test_service");
+
+    let request = SendNotificationRequestBuilder {
+        notification_entity: EntityType::Document.with_entity_str("doc_123"),
+        notification: TestNotification {
+            message: "You were mentioned".to_string(),
+        },
+        sender_id: None,
+        recipient_ids: HashSet::from([user1.clone(), user2.clone(), user3.clone()]),
+    }
+    .into_request()
+    .with_apns();
+
+    service.send_notification(request).await.unwrap();
+
+    let published = queue.get_published();
+    assert_eq!(published.len(), 1, "APNS produces a single queue message for all recipients");
+
+    let msg = &published[0];
+    assert_eq!(msg["message_type"], "test_notification");
+
+    // The message should be an Ios variant
+    let ios = &msg["content"]["notif"]["Ios"];
+    assert!(ios.is_object(), "Expected Ios notification channel");
+
+    // Verify the APNS notification payload contains the notification data
+    // push_notification_data is #[serde(flatten)]'d so fields appear directly on notif
+    let apns_notif = &ios["notif"];
+    assert_eq!(
+        apns_notif["message"], "You were mentioned",
+        "APNS payload should contain the flattened notification data"
+    );
+
+    // Verify message attributes
+    let attrs = &ios["attributes"];
+    assert_eq!(attrs["push_type"], "Alert");
+    assert_eq!(attrs["collapse_key"], "test");
+
+    // Verify all device endpoints from all users are included
+    let endpoints: Vec<&str> = ios["ios_device_endpoints"]
+        .as_array()
+        .expect("iosDeviceEndpoints should be an array")
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
+
+    assert_eq!(endpoints.len(), 4, "Should include all 4 device endpoints across 3 users");
+    assert!(
+        endpoints.contains(&"arn:aws:sns:us-east-1:111:endpoint/APNS/app/alice-device"),
+        "Should include alice's device"
+    );
+    assert!(
+        endpoints.contains(&"arn:aws:sns:us-east-1:111:endpoint/APNS/app/bob-device"),
+        "Should include bob's first device"
+    );
+    assert!(
+        endpoints.contains(&"arn:aws:sns:us-east-1:111:endpoint/APNS/app/bob-device-2"),
+        "Should include bob's second device"
+    );
+    assert!(
+        endpoints.contains(&"arn:aws:sns:us-east-1:111:endpoint/APNS/app/charlie-device"),
+        "Should include charlie's device"
+    );
+}
+
 // ============================================================================
 // Egress Service Tests
 // ============================================================================
