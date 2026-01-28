@@ -87,16 +87,14 @@ const PERPLEXITY_API_KEY = aws.secretsmanager
   })
   .apply((secret) => secret.secretString);
 
-const AUTHENTICATION_SERVICE_INTERNAL_API_KEY = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.require('authentication_service_internal_api_key'),
-  })
-  .apply((secret) => secret.secretString);
+const AUTHENTICATION_SERVICE_INTERNAL_API_KEY_SECRET_NAME = config.require(
+  'authentication_service_internal_api_key'
+);
 
 const authenticationServiceInternalApiKeyArn: pulumi.Output<string> =
   aws.secretsmanager
     .getSecretVersionOutput({
-      secretId: config.require('authentication_service_internal_api_key'),
+      secretId: AUTHENTICATION_SERVICE_INTERNAL_API_KEY_SECRET_NAME,
     })
     .apply((secret) => secret.arn);
 
@@ -330,7 +328,7 @@ const documentCognitionService = new DocumentCognitionService(
       },
       {
         name: 'AUTHENTICATION_SERVICE_SECRET_KEY',
-        value: pulumi.interpolate`${AUTHENTICATION_SERVICE_INTERNAL_API_KEY}`,
+        value: AUTHENTICATION_SERVICE_INTERNAL_API_KEY_SECRET_NAME,
       },
     ],
     isPrivate: false,
