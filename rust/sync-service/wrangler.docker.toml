@@ -2,8 +2,7 @@ name = "sync_service2"
 main = "build/worker/shim.mjs"
 compatibility_date = "2025-03-05"
 
-[build]
-command = "cargo install -q worker-build --locked && worker-build --release"
+# No [build] section - build is done during Docker image creation
 
 [observability.logs]
 enabled = true
@@ -117,4 +116,3 @@ id = "1e4c79d4265e40f08f9bfcb4c985c6d0"
 [[env.prod.kv_namespaces]]
 binding = "SNAPSHOT_STORE_KV"
 id = "50a128e2f8aa4357938fdb0ed0d629c5"
-

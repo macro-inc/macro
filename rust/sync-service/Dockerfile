@@ -43,5 +43,5 @@ RUN worker-build --release
 
 EXPOSE 8787
 
-# Run wrangler dev - build already done
-CMD ["npx", "wrangler", "dev", "--local", "--ip", "0.0.0.0", "--port", "8787"]
+# Run wrangler dev - use docker config without build command
+CMD ["npx", "wrangler", "dev", "--local", "--ip", "0.0.0.0", "--port", "8787", "--config", "wrangler.docker.toml"]
