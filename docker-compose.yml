@@ -213,28 +213,6 @@ services:
       start_period: 10s
 
   # ============================================================================
-  # experiment_service (Port 8088)
-  # Feature flags and experiments
-  # ============================================================================
-  experiment_service:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: experiment_service
-    ports:
-      - "8088:8080"
-    networks:
-      - databases
-      - services
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  # ============================================================================
   # notification_service (Port 8089)
   # User notifications - NotificationDB
   # ============================================================================

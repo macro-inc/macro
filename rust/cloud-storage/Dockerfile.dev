@@ -15,7 +15,6 @@ RUN cargo build --release \
     --bin document_cognition_service \
     --bin document_storage_service \
     --bin email_service \
-    --bin experiment_service \
     --bin notification_service \
     --bin organization_service \
     --bin properties_service \
@@ -66,11 +65,6 @@ ENTRYPOINT ["dumb-init", "./svc"]
 
 FROM base AS email_service
 COPY --from=builder /app/target/release/email_service /app/svc
-RUN chmod +x /app/svc
-ENTRYPOINT ["dumb-init", "./svc"]
-
-FROM base AS experiment_service
-COPY --from=builder /app/target/release/experiment_service /app/svc
 RUN chmod +x /app/svc
 ENTRYPOINT ["dumb-init", "./svc"]
 
