@@ -39,7 +39,6 @@ members = [
   "email_utils",
   "email_validator",
   "entity_access",
-  "experiment_service",
   "frecency",
   "gmail_client",
   "integration_tests/*",
