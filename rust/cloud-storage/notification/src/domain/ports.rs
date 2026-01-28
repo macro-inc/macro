@@ -12,7 +12,7 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    DeviceEndpoint, Notification, RateLimitConfig, RateLimitKey, RateLimitResult, RevokeCriteria,
+    DeviceEndpoint, Notification, RateLimitConfig, RateLimitKey, RateLimitResult,
     SendNotificationRequestBuilder, android::FCMMessage, apple::APNSPushNotification,
     mobile::MessageAttributes,
 };
@@ -88,14 +88,6 @@ pub trait NotificationRepository {
         &self,
         user_ids: &[MacroUserIdStr<'a>],
     ) -> impl Future<Output = Result<HashMap<MacroUserIdStr<'static>, Vec<DeviceEndpoint>>, Report>> + Send;
-
-    /// Delete notifications matching the given criteria.
-    ///
-    /// Returns the number of notifications deleted.
-    fn delete_notifications<'a>(
-        &self,
-        criteria: &RevokeCriteria<'a>,
-    ) -> impl Future<Output = Result<u64, Report>> + Send;
 }
 
 /// Port for WebSocket delivery via connection gateway.

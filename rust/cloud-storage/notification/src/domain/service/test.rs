@@ -5,7 +5,7 @@ use crate::domain::models::queue_message::{
 };
 use crate::domain::models::{
     DeviceEndpoint, Notification, RateLimitConfig, RateLimitExceeded, RateLimitKey,
-    RateLimitResult, RevokeCriteria, SendNotificationRequestBuilder,
+    RateLimitResult, SendNotificationRequestBuilder,
 };
 use crate::domain::ports::{
     EmailSender, NotificationQueue, NotificationRepository, NotificationSender, RateLimitPort,
@@ -137,13 +137,6 @@ impl NotificationRepository for MockRepository {
         _user_ids: &[MacroUserIdStr<'a>],
     ) -> Result<HashMap<MacroUserIdStr<'static>, Vec<DeviceEndpoint>>, Report> {
         Ok(self.device_endpoints.clone())
-    }
-
-    async fn delete_notifications<'a>(
-        &self,
-        _criteria: &RevokeCriteria<'a>,
-    ) -> Result<u64, Report> {
-        Ok(0)
     }
 }
 

@@ -8,9 +8,7 @@ use std::sync::Arc;
 use rootcause::Report;
 use serde::Serialize;
 
-use crate::domain::models::{
-    Notification, NotificationResult, RevokeCriteria, SendNotificationRequest,
-};
+use crate::domain::models::{Notification, NotificationResult, SendNotificationRequest};
 use crate::domain::ports::{NotificationQueue, NotificationRepository};
 use crate::domain::service::{NotificationIngressService, SendNotificationError};
 
@@ -60,16 +58,5 @@ where
         request: SendNotificationRequest<'a, T>,
     ) -> Result<Option<NotificationResult<'a>>, Report<SendNotificationError>> {
         self.service.send_notification(request).await
-    }
-
-    /// Revoke/delete notifications matching the given criteria.
-    ///
-    /// At least one filter must be set in the criteria.
-    ///
-    /// # Returns
-    ///
-    /// Returns the number of notifications deleted.
-    pub async fn revoke<'a>(&self, criteria: RevokeCriteria<'a>) -> Result<u64, Report> {
-        self.service.revoke_notifications(criteria).await
     }
 }

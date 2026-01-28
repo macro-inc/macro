@@ -8,9 +8,7 @@ use rootcause::Report;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::domain::models::{
-    DeviceEndpoint, Notification, RevokeCriteria, SendNotificationRequestBuilder,
-};
+use crate::domain::models::{DeviceEndpoint, Notification, SendNotificationRequestBuilder};
 use crate::domain::ports::NotificationRepository;
 
 /// Database-backed implementation of the notification repository port.
@@ -70,14 +68,6 @@ pub trait NotificationDbOps {
         notification_id: Uuid,
         user_ids: &[MacroUserIdStr<'a>],
     ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
-
-    /// Delete notifications matching the given criteria.
-    ///
-    /// Returns the number of notifications deleted.
-    fn delete_notifications<'a>(
-        &self,
-        criteria: &RevokeCriteria<'a>,
-    ) -> impl std::future::Future<Output = Result<u64, Report>> + Send;
 }
 
 impl NotificationDbOps for PgPool {
@@ -251,64 +241,6 @@ impl NotificationDbOps for PgPool {
 
         Ok(())
     }
-
-    async fn delete_notifications<'a>(&self, criteria: &RevokeCriteria<'a>) -> Result<u64, Report> {
-        // Build dynamic query based on criteria
-        let mut conditions = Vec::new();
-        let mut param_idx = 1;
-
-        if criteria.entity.is_some() {
-            conditions.push(format!(
-                "event_item_id = ${} AND event_item_type = ${}",
-                param_idx,
-                param_idx + 1
-            ));
-            param_idx += 2;
-        }
-        if criteria.event_type.is_some() {
-            conditions.push(format!("notification_event_type = ${}", param_idx));
-            param_idx += 1;
-        }
-        if criteria.sender.is_some() {
-            conditions.push(format!("sender_id = ${}", param_idx));
-            param_idx += 1;
-        }
-        if criteria.recipient.is_some() {
-            conditions.push(format!(
-                "id IN (SELECT notification_id FROM user_notification WHERE user_id = ${})",
-                param_idx
-            ));
-        }
-
-        if conditions.is_empty() {
-            return Ok(0);
-        }
-
-        let query = format!(
-            "DELETE FROM notification WHERE {}",
-            conditions.join(" AND ")
-        );
-
-        let mut q = sqlx::query(&query);
-
-        if let Some(ref entity) = criteria.entity {
-            let entity_type: &str = entity.entity_type.into();
-            q = q.bind(entity.entity_id.as_ref()).bind(entity_type);
-        }
-        if let Some(event_type) = criteria.event_type {
-            q = q.bind(event_type);
-        }
-        if let Some(ref sender) = criteria.sender {
-            q = q.bind(sender.to_string());
-        }
-        if let Some(ref recipient) = criteria.recipient {
-            q = q.bind(recipient.to_string());
-        }
-
-        let result = q.execute(self).await?;
-
-        Ok(result.rows_affected())
-    }
 }
 
 impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificationRepository<D> {
@@ -352,9 +284,5 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
         user_ids: &[MacroUserIdStr<'a>],
     ) -> Result<(), Report> {
         self.db.update_sent_status(notification_id, user_ids).await
-    }
-
-    async fn delete_notifications<'a>(&self, criteria: &RevokeCriteria<'a>) -> Result<u64, Report> {
-        self.db.delete_notifications(criteria).await
     }
 }

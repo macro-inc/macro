@@ -10,10 +10,10 @@ use crate::domain::models::queue_message::{
 use crate::domain::models::recipient::FilteredRecipient;
 use crate::domain::models::{
     DeviceEndpoint, ExclusionReason, Notification, NotificationResult, RecipientExclusion,
-    RevokeCriteria, SendNotificationRequest,
+    SendNotificationRequest,
 };
 use crate::domain::ports::{NotificationQueue, NotificationRepository};
-use crate::domain::service::{MissingRevokeFilter, SendNotificationError};
+use crate::domain::service::SendNotificationError;
 use itertools::Itertools;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -113,20 +113,6 @@ where
             notification_id,
             notified_recipients: req.req.recipient_ids,
         }))
-    }
-
-    /// Revoke/delete notifications matching the given criteria.
-    ///
-    /// Returns the number of notifications deleted.
-    pub async fn revoke_notifications<'a>(
-        &self,
-        criteria: RevokeCriteria<'a>,
-    ) -> Result<u64, Report> {
-        if !criteria.has_filter() {
-            return Err(Report::new(MissingRevokeFilter).into());
-        }
-
-        self.repository.delete_notifications(&criteria).await
     }
 
     /// Filter recipients based on:

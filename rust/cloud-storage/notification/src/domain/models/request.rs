@@ -118,29 +118,3 @@ pub struct NotificationResult<'a> {
     /// The users who were actually notified (after filtering).
     pub notified_recipients: HashSet<MacroUserIdStr<'a>>,
 }
-
-/// Criteria for revoking/deleting notifications.
-///
-/// All fields are optional - combine them to narrow the scope.
-/// At least one field must be set to prevent accidental mass deletion.
-#[derive(Debug, Clone, Default)]
-pub struct RevokeCriteria<'a> {
-    /// Filter by entity (e.g., Channel, Team, Document).
-    pub entity: Option<Entity<'a>>,
-    /// Filter by notification event type name.
-    pub event_type: Option<&'a str>,
-    /// Filter by recipient user.
-    pub recipient: Option<MacroUserIdStr<'a>>,
-    /// Filter by sender user.
-    pub sender: Option<MacroUserIdStr<'a>>,
-}
-
-impl<'a> RevokeCriteria<'a> {
-    /// Returns true if at least one filter is set.
-    pub fn has_filter(&self) -> bool {
-        self.entity.is_some()
-            || self.event_type.is_some()
-            || self.recipient.is_some()
-            || self.sender.is_some()
-    }
-}

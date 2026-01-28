@@ -27,8 +27,3 @@ pub enum SendNotificationError {
     #[error("Internal error")]
     Other,
 }
-
-/// Error returned when revoke criteria has no filters set.
-#[derive(Debug, Error)]
-#[error("At least one filter must be set to revoke notifications")]
-pub struct MissingRevokeFilter;
