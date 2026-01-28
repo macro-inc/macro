@@ -56,7 +56,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
       <div class="macro-message-width w-full pl-2 pr-4 sm:px-0">
         <BozzyBracket active={props.isFocused} hover={hover()} class="">
           <div
-            class="relative flex flex-row items-center w-full py-2 cursor-pointer opacity-60 hover:opacity-100 transition-all"
+            class="relative flex flex-row items-center w-full py-2 cursor-pointer opacity-80 hover:opacity-100 transition-all"
             data-message-body-id={props.message.db_id}
             tabIndex={0}
             onClick={props.onClick}
@@ -98,13 +98,13 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
                   'calc(var(--left-of-connector) - var(--user-icon-width) / 2)',
               }}
             >
-              <span class="text-ink-muted w-16 shrink-0 truncate">
+              <span class="text-ink w-16 shrink-0 truncate">
                 {senderDisplay()}
               </span>
-              <span class="text-ink-extra-muted truncate">{snippet()}</span>
+              <span class="text-ink truncate">{snippet()}</span>
             </div>
             {/* Date */}
-            <div class="text-xs touch:mobile-width:text-sm text-ink-muted shrink-0 ml-4 pr-2">
+            <div class="text-xs touch:mobile-width:text-sm text-ink shrink-0 ml-4 pr-2">
               {props.message.internal_date_ts &&
                 new Date(props.message.internal_date_ts).toLocaleDateString(
                   'en-US',
