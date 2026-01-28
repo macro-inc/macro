@@ -26,7 +26,6 @@ on:
           - lambda-aggregate-frecency
           - link-sharing
           - notification-service
-          - organization-service
           - organization-retention
           - properties-service
           - search-processing-service

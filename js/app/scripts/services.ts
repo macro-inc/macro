@@ -104,14 +104,6 @@ export const services: Service[] = [
     output: "../packages/service-clients/service-properties/",
     orvalKey: "propertiesService",
   },
-  {
-    name: "organization-service",
-    dev: "https://organization-service-dev.macro.com/api-doc/openapi.json",
-    prod: "https://organization-service.macro.com/api-doc/openapi.json",
-    local: "http://localhost:8090/api-doc/openapi.json",
-    output: "../packages/service-clients/service-organization/",
-    orvalKey: "organization",
-  }
 ];
 
 export const documentCognitionBase: Service = {

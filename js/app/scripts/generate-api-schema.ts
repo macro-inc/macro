@@ -24,7 +24,6 @@ const serviceToCrate: Record<string, string> = {
   'email-service': 'email_service',
   'search-service': 'search_service',
   'properties-service': 'properties_service',
-  'organization-service': 'organization_service',
 };
 
 const getRustCloudStorageDir = () => path.resolve(import.meta.dirname, '../../../rust/cloud-storage');

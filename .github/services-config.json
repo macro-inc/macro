@@ -85,12 +85,6 @@
       ],
       "stack_path": "infra/stacks/notification-service/**"
     },
-    "organization-service": {
-      "source_paths": [
-        "rust/cloud-storage/organization_service/**"
-      ],
-      "stack_path": "infra/stacks/organization-service/**"
-    },
     "organization-retention": {
       "source_paths": [
         "rust/cloud-storage/organization_retention/**"

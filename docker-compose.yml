@@ -241,32 +241,6 @@ services:
       start_period: 10s
 
   # ============================================================================
-  # organization_service (Port 8090)
-  # Organization and team management
-  # ============================================================================
-  organization_service:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: organization_service
-    ports:
-      - "8090:8080"
-    depends_on:
-      - redis
-      - document_storage_service
-      - authentication_service
-    networks:
-      - databases
-      - services
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  # ============================================================================
   # properties_service (Port 8091)
   # User/document properties
   # ============================================================================
