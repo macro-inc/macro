@@ -23,7 +23,6 @@ on:
           - document-text-extractor
           - email-service
           - email-suppression
-          - experiment-service
           - lambda-aggregate-frecency
           - link-sharing
           - notification-service
