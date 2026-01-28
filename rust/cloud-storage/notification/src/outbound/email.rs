@@ -48,14 +48,9 @@ impl EmailServiceOps for aws_sdk_sesv2::Client {
         subject: &str,
         html_body: &str,
     ) -> Result<(), Report> {
-        let dest = Destination::builder()
-            .to_addresses(to_email)
-            .build();
+        let dest = Destination::builder().to_addresses(to_email).build();
 
-        let subject_content = Content::builder()
-            .data(subject)
-            .charset("UTF-8")
-            .build()?;
+        let subject_content = Content::builder().data(subject).charset("UTF-8").build()?;
 
         let body_content = Content::builder()
             .data(html_body)

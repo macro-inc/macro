@@ -1,10 +1,7 @@
 //! Domain models for the notification service.
 
-use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
-
 use crate::domain::models::apple::APNSPushNotification;
+use serde::{Serialize, de::DeserializeOwned};
 
 pub(crate) mod android;
 pub(crate) mod apple;
@@ -18,18 +15,6 @@ pub use mobile::DeviceEndpoint;
 pub use rate_limit::{RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimitResult};
 pub use recipient::{ExclusionReason, FilteredRecipient, RecipientExclusion};
 pub use request::{NotificationResult, SendNotificationRequest, SendNotificationRequestBuilder};
-
-#[derive(Debug, Serialize, Deserialize)]
-struct NotificationPayload<'a, T> {
-    /// some arbitraty T which implements [Notification]
-    notification: T,
-    /// the entity for which the notification is associated
-    notification_entity: Entity<'a>,
-    /// the sender id of the user
-    sender: Option<MacroUserIdStr<'a>>,
-    /// the recipient ids of the notification
-    recipients: Vec<MacroUserIdStr<'a>>,
-}
 
 /// Trait that all notification types must implement.
 pub trait Notification: Serialize + DeserializeOwned + Send + Sync {
@@ -50,9 +35,4 @@ pub trait Notification: Serialize + DeserializeOwned + Send + Sync {
 pub trait BuildApnsNotification<T>: Notification {
     /// Build an APNS push notification from this notification.
     fn build_apns(&self) -> APNSPushNotification<T>;
-}
-
-struct MobileNotification<'a, T> {
-    payload: NotificationPayload<'a, T>,
-    device_endpoint: DeviceEndpoint,
 }

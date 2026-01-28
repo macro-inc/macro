@@ -59,7 +59,7 @@ where
         request: SendNotificationRequest<'a, T>,
     ) -> Result<Option<NotificationResult<'a>>, Report<SendNotificationError>> {
         let recipients: Vec<_> = request.req.recipient_ids.iter().cloned().collect();
-        let (allowed, excluded): (Vec<_>, Vec<_>) = self
+        let (allowed, _excluded): (Vec<_>, Vec<_>) = self
             .filter_recipients(
                 request.req.sender_id.as_ref(),
                 &recipients,

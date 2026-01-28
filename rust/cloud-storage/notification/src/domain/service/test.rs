@@ -299,7 +299,8 @@ async fn test_queue_message_conn_gateway_only() {
     use std::sync::Arc;
 
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationIngressService::new(MockRepository::new(), queue.clone(), "test_service");
+    let service =
+        NotificationIngressService::new(MockRepository::new(), queue.clone(), "test_service");
 
     let recipient = test_user_id("user@example.com");
     let request = SendNotificationRequestBuilder {
@@ -329,7 +330,8 @@ async fn test_queue_message_email_per_recipient() {
     use std::sync::Arc;
 
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationIngressService::new(MockRepository::new(), queue.clone(), "test_service");
+    let service =
+        NotificationIngressService::new(MockRepository::new(), queue.clone(), "test_service");
 
     let recipient1 = test_user_id("user1@example.com");
     let recipient2 = test_user_id("user2@example.com");
@@ -368,8 +370,10 @@ async fn test_queue_message_multiple_channels() {
 
     let recipient = test_user_id("user@example.com");
     let queue = Arc::new(MockQueue::new());
-    let repo = MockRepository::new()
-        .with_device_endpoint(recipient.clone(), DeviceEndpoint::Ios("arn:aws:sns:test".to_string()));
+    let repo = MockRepository::new().with_device_endpoint(
+        recipient.clone(),
+        DeviceEndpoint::Ios("arn:aws:sns:test".to_string()),
+    );
     let service = NotificationIngressService::new(repo, queue.clone(), "test_service");
 
     let request = SendNotificationRequestBuilder {
@@ -512,8 +516,13 @@ impl RateLimitPort for MockRateLimiter {
 
 fn create_egress_service<R: RateLimitPort>(
     rate_limiter: R,
-) -> NotificationEgressService<MockRepository, MockWebSocketSender, MockMobileSender, MockEmailSender, R>
-{
+) -> NotificationEgressService<
+    MockRepository,
+    MockWebSocketSender,
+    MockMobileSender,
+    MockEmailSender,
+    R,
+> {
     NotificationEgressService::new(
         MockRepository::new(),
         MockWebSocketSender,

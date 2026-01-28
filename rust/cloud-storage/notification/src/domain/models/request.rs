@@ -43,6 +43,8 @@ impl<'a, T> SendNotificationRequestBuilder<'a, T> {
     }
 }
 
+type BuildApns<T> = Box<dyn FnMut(T) -> (APNSPushNotification<T>, MessageAttributes)>;
+
 /// Full notification request with optional delivery channel builders.
 ///
 /// Created from [`SendNotificationRequestBuilder::into_request`] and can be
@@ -50,8 +52,7 @@ impl<'a, T> SendNotificationRequestBuilder<'a, T> {
 pub struct SendNotificationRequest<'a, T> {
     pub(crate) req: SendNotificationRequestBuilder<'a, T>,
     /// define how to turn t into an APNSPushNotitication T to be sent to ios
-    pub(crate) build_apns:
-        Option<Box<dyn FnMut(T) -> (APNSPushNotification<T>, MessageAttributes)>>,
+    pub(crate) build_apns: Option<BuildApns<T>>,
     /// define how to turn T into an email content to be sent as an email
     pub(crate) build_email: Option<Box<dyn FnMut(T) -> EmailContent>>,
     /// connection gateway accepts arbitrary json so we just ask if its enabled or not
@@ -104,7 +105,7 @@ impl<'a, T: Notification> SendNotificationRequestBuilder<'a, T> {
             (Some(config), Some(key)) => Ok(Some((key, config))),
             (None, None) => Ok(None),
             (Some(_), None) | (None, Some(_)) => {
-                return Err(report!(SendNotificationError::RateLimitConfigErr));
+                Err(report!(SendNotificationError::RateLimitConfigErr))
             }
         }
     }

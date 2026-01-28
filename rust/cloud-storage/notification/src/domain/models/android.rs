@@ -22,7 +22,7 @@ impl<T> FCMMessage<T> {
 }
 
 #[derive(Debug, Serialize)]
-enum AndroidNotifPrio {
+pub enum AndroidNotifPrio {
     Normal,
     #[expect(dead_code)]
     High,
