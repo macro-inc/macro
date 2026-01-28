@@ -1,4 +1,3 @@
-import ArrowUp from '@icon/bold/arrow-up-bold.svg';
 import { withAnalytics } from '@coparse/analytics';
 import { useBuildChatSendRequest } from '@core/component/AI/component/input/buildRequest';
 import { DEFAULT_MODEL, SMART_MODE_MODEL } from '@core/component/AI/constant';
@@ -20,6 +19,8 @@ import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { Hotkey, modifierMap } from '@core/component/Hotkey';
 import { Tooltip } from '@core/component/Tooltip';
 import { pressedKeys } from '@core/hotkey/state';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import ArrowUp from '@icon/bold/arrow-up-bold.svg';
 import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
 import Stop from '@phosphor-icons/core/regular/stop.svg';
@@ -36,7 +37,6 @@ import {
   type UseChatMarkdown,
   useChatMarkdownArea,
 } from './useChatMarkdownArea';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 const { track, TrackingEvents } = withAnalytics();
 
@@ -172,7 +172,7 @@ function ChatInput(props: ChatInputInternalProps) {
   const canSendMessage = () =>
     !isEmptyInput() && !generating() && !hasUploadingAttachments();
 
-  const LINE_HEIGHT_THRESHOLD = 32;
+  const LINE_HEIGHT_THRESHOLD = 40;
   let mdRef: undefined | HTMLDivElement;
   const isMultiline = () => {
     // Access markdownText to create reactive dependency
