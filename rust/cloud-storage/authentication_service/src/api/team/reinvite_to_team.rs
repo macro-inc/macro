@@ -9,10 +9,7 @@ use axum::{
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use notification::domain::models::SendNotificationRequestBuilder;
-use notification::inbound::http::NotificationClient;
-use notification::outbound::queue::SqsNotificationQueue;
-use notification::outbound::repository::DbNotificationRepository;
-use sqlx::PgPool;
+use notification::domain::service::NotificationIngress;
 
 use crate::api::{
     context::ApiContext,
@@ -108,14 +105,14 @@ pub async fn handler(
 
     tokio::spawn({
         let db = ctx.db.clone();
-        let notification_client = ctx.notification_client.clone();
+        let notification_ingress_service = ctx.notification_ingress_service.clone();
         let normalized_email = team_invite.email;
         let invited_by = user_context.macro_user_id;
         let team_invite_id = team_invite.id;
         async move {
             let _ = notify_team_invite(
                 &db,
-                &notification_client,
+                &*notification_ingress_service,
                 &team_id,
                 &team_invite_id,
                 invited_by,
@@ -131,7 +128,7 @@ pub async fn handler(
 
 async fn notify_team_invite(
     db: &sqlx::Pool<sqlx::Postgres>,
-    notification_client: &NotificationClient<DbNotificationRepository<PgPool>, SqsNotificationQueue>,
+    notification_ingress_service: &impl NotificationIngress,
     team_id: &uuid::Uuid,
     team_invite_id: &uuid::Uuid,
     invited_by: MacroUserIdStr<'static>,
@@ -159,8 +156,8 @@ async fn notify_team_invite(
     .into_request()
     .with_conn_gateway();
 
-    notification_client
-        .send(request)
+    notification_ingress_service
+        .send_notification(request)
         .await
         .map_err(|e| anyhow::anyhow!("failed to send notification: {}", e))?;
 

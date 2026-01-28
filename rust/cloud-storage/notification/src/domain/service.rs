@@ -12,6 +12,7 @@ mod test;
 use thiserror::Error;
 
 pub use egress::NotificationEgressService;
+pub use ingress::NotificationIngress;
 pub use ingress::NotificationIngressService;
 
 /// Error returned when sending a notification fails.

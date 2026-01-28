@@ -10,10 +10,7 @@ use macro_user_id::{cowlike::CowLike, email::Email, lowercased::Lowercase, user_
 use model_entity::EntityType;
 use model_user::axum_extractor::MacroUserExtractor;
 use notification::domain::models::SendNotificationRequestBuilder;
-use notification::inbound::http::NotificationClient;
-use notification::outbound::queue::SqsNotificationQueue;
-use notification::outbound::repository::DbNotificationRepository;
-use sqlx::PgPool;
+use notification::domain::service::NotificationIngress;
 use teams::domain::{
     model::{InviteUsersToTeamError, TeamInvite},
     team_repo::TeamService,
@@ -149,13 +146,13 @@ pub async fn handler(
     // Send the invites
     tokio::spawn({
         let db = ctx.db.clone();
-        let notification_client = ctx.notification_client.clone();
+        let notification_ingress_service = ctx.notification_ingress_service.clone();
         let team_invites = team_invites.clone();
         let invited_by = user_context.macro_user_id;
         async move {
             let _ = notify_team_invite(
                 &db,
-                &notification_client,
+                &*notification_ingress_service,
                 &team_id,
                 team_invites,
                 invited_by,
@@ -170,7 +167,7 @@ pub async fn handler(
 
 pub(in crate::api::team) async fn notify_team_invite(
     db: &sqlx::Pool<sqlx::Postgres>,
-    notification_client: &NotificationClient<DbNotificationRepository<PgPool>, SqsNotificationQueue>,
+    notification_ingress_service: &impl NotificationIngress,
     team_id: &uuid::Uuid,
     team_invites: Vec<TeamInvite<'_>>,
     invited_by: MacroUserIdStr<'static>,
@@ -200,8 +197,8 @@ pub(in crate::api::team) async fn notify_team_invite(
         .into_request()
         .with_conn_gateway();
 
-        notification_client
-            .send(request)
+        notification_ingress_service
+            .send_notification(request)
             .await
             .map_err(|e| anyhow::anyhow!("failed to send notification: {}", e))?;
     }

@@ -7,9 +7,8 @@ use macro_env::Environment;
 use macro_env_var::env_var;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use native_app_service::{domain::service::NativeAppServiceImpl, outbound::DefaultBundleFetcher};
-use notification::inbound::http::NotificationClient;
-use notification::outbound::queue::SqsNotificationQueue;
-use notification::outbound::repository::DbNotificationRepository;
+use notification::domain::service::NotificationIngressService;
+use notification::outbound::{queue::SqsNotificationQueue, repository::DbNotificationRepository};
 use remote_env_var::LocalOrRemoteSecret;
 use roles_and_permissions::{
     domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,
@@ -31,8 +30,8 @@ pub(crate) struct ApiContext {
     pub notification_service_client: Arc<notification_service_client::NotificationServiceClient>,
     pub ses_client: Arc<ses_client::Ses>,
     pub macro_notify_client: Arc<macro_notify::MacroNotify>,
-    pub notification_client:
-        NotificationClient<DbNotificationRepository<PgPool>, SqsNotificationQueue>,
+    pub notification_ingress_service:
+        Arc<NotificationIngressService<DbNotificationRepository<PgPool>, SqsNotificationQueue>>,
     pub sqs_client: Arc<sqs_client::SQS>,
     pub environment: Environment,
     pub jwt_args: JwtValidationArgs,

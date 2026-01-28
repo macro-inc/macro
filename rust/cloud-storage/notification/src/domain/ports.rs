@@ -50,7 +50,7 @@ pub trait RateLimitPort {
 }
 
 /// Port for notification persistence operations.
-pub trait NotificationRepository {
+pub trait NotificationRepository: Send + Sync + 'static {
     /// Get users who have muted notifications.
     fn get_muted_users<'a>(
         &self,
@@ -118,7 +118,7 @@ pub trait EmailSender {
 use crate::domain::models::queue_message::{QueueMessage, RawQueueMessage};
 
 /// Port for publishing notifications to delivery queue and receiving them.
-pub trait NotificationQueue {
+pub trait NotificationQueue: Send + Sync + 'static {
     /// Publish notifications for async delivery (after DB persistence).
     fn publish<T: Serialize + Send + Sync>(
         &self,

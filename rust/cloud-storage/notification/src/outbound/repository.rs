@@ -42,7 +42,7 @@ impl<D> DbNotificationRepository<D> {
 /// Trait for database operations needed by the notification repository.
 ///
 /// This allows the adapter to work with different database client implementations.
-pub trait NotificationDbOps {
+pub trait NotificationDbOps: Send + Sync + 'static {
     /// Get users who have muted all notifications.
     fn get_muted_users<'a>(
         &self,

@@ -6,8 +6,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use notification::domain::models::{
     Notification, RateLimitConfig, RateLimitKey, SendNotificationRequestBuilder,
 };
-use notification::domain::ports::{NotificationQueue, NotificationRepository};
-use notification::inbound::http::NotificationClient;
+use notification::domain::service::NotificationIngress;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -49,23 +48,25 @@ impl Notification for TaskAssignedNotification {
 }
 
 /// Notification service implementation using the new notification client.
-pub struct NotificationServiceImpl<N, Q> {
-    notification_client: NotificationClient<N, Q>,
+pub struct NotificationServiceImpl<T> {
+    notification_client: T,
 }
 
-impl<N, Q> NotificationServiceImpl<N, Q> {
+impl<T> NotificationServiceImpl<T>
+where
+    T: NotificationIngress,
+{
     /// Create a new notification service with the notification client.
-    pub fn new(notification_client: NotificationClient<N, Q>) -> Self {
+    pub fn new(notification_client: T) -> Self {
         Self {
             notification_client,
         }
     }
 }
 
-impl<N, Q> NotificationService for NotificationServiceImpl<N, Q>
+impl<T> NotificationService for NotificationServiceImpl<T>
 where
-    N: NotificationRepository + Send + Sync + 'static,
-    Q: NotificationQueue + Send + Sync + 'static,
+    T: NotificationIngress,
 {
     type Err = anyhow::Error;
 
@@ -107,11 +108,13 @@ where
 
                 let result = self
                     .notification_client
-                    .send(request)
+                    .send_notification(request)
                     .await
                     .map_err(|e| anyhow::anyhow!("failed to send notification: {}", e))?;
 
-                Ok(result.map(|r| r.notification_id).unwrap_or_else(Uuid::now_v7))
+                Ok(result
+                    .map(|r| r.notification_id)
+                    .unwrap_or_else(Uuid::now_v7))
             }
             _ => {
                 // For other notification types, log and return success

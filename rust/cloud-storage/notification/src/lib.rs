@@ -9,5 +9,5 @@
 pub mod domain;
 /// Inbound adapters (HTTP handlers, clients).
 pub mod inbound;
-/// Outbound adapters (database, Redis, WebSocket gateway, SNS, SES).
+
 pub mod outbound;

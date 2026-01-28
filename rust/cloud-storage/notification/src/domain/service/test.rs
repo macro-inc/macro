@@ -11,7 +11,9 @@ use crate::domain::ports::{
     EmailSender, NotificationQueue, NotificationRepository, NotificationSender, RateLimitPort,
     WebSocketSender,
 };
-use crate::domain::service::{NotificationEgressService, NotificationIngressService};
+use crate::domain::service::{
+    NotificationEgressService, NotificationIngress, NotificationIngressService,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use rootcause::Report;

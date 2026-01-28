@@ -23,6 +23,15 @@ use serde::Serialize;
 use std::collections::HashSet;
 use uuid::Uuid;
 
+/// Trait for sending notifications through the ingress service.
+pub trait NotificationIngress: Send + Sync + 'static {
+    /// Send a notification to the specified recipients.
+    fn send_notification<'a, T: Notification + Clone + Send + Sync>(
+        &self,
+        req: SendNotificationRequest<'a, T>,
+    ) -> impl Future<Output = Result<Option<NotificationResult<'a>>, Report<SendNotificationError>>> + Send;
+}
+
 /// Service for sending notifications (ingress side).
 ///
 /// Handles recipient filtering, DB persistence, and queue publishing.
@@ -33,20 +42,11 @@ pub struct NotificationIngressService<N, Q> {
     service_name: String,
 }
 
-impl<N, Q> NotificationIngressService<N, Q>
+impl<N, Q> NotificationIngress for NotificationIngressService<N, Q>
 where
     N: NotificationRepository,
     Q: NotificationQueue,
 {
-    /// Create a new ingress service.
-    pub fn new(repository: N, queue: Q, service_name: impl Into<String>) -> Self {
-        Self {
-            repository,
-            queue,
-            service_name: service_name.into(),
-        }
-    }
-
     /// Send a notification to the specified recipients.
     ///
     /// This method performs the following steps:
@@ -54,7 +54,7 @@ where
     /// 2. Create notification in the database
     /// 3. Build and publish QueueMessage to SQS
     /// 4. Return result (delivery happens async via worker)
-    pub async fn send_notification<'a, T: Notification + Serialize + Clone + Send + Sync>(
+    async fn send_notification<'a, T: Notification + Clone + Send + Sync>(
         &self,
         request: SendNotificationRequest<'a, T>,
     ) -> Result<Option<NotificationResult<'a>>, Report<SendNotificationError>> {
@@ -113,6 +113,21 @@ where
             notification_id,
             notified_recipients: req.req.recipient_ids,
         }))
+    }
+}
+
+impl<N, Q> NotificationIngressService<N, Q>
+where
+    N: NotificationRepository,
+    Q: NotificationQueue,
+{
+    /// Create a new ingress service.
+    pub fn new(repository: N, queue: Q, service_name: impl Into<String>) -> Self {
+        Self {
+            repository,
+            queue,
+            service_name: service_name.into(),
+        }
     }
 
     /// Filter recipients based on:
