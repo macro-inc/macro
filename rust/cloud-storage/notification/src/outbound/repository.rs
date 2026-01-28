@@ -1,20 +1,24 @@
 //! Database repository adapter for notifications.
 
-use std::collections::{HashMap, HashSet};
+#[cfg(test)]
+mod test;
 
+use crate::domain::models::{DeviceEndpoint, Notification, SendNotificationRequestBuilder};
+use crate::domain::ports::NotificationRepository;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use sqlx::PgPool;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
-
-use crate::domain::models::{DeviceEndpoint, Notification, SendNotificationRequestBuilder};
-use crate::domain::ports::NotificationRepository;
 
 /// Local representation of the `notification_device_type_option` Postgres enum
 /// for compile-time checked sqlx queries.
 #[derive(Debug, sqlx::Type)]
-#[sqlx(type_name = "notification_device_type_option", rename_all = "lowercase")]
+#[sqlx(
+    type_name = "notification_device_type_option",
+    rename_all = "lowercase"
+)]
 enum DbDeviceType {
     Ios,
     Android,

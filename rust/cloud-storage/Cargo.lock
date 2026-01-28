@@ -5845,6 +5845,7 @@ dependencies = [
  "aws-sdk-sqs",
  "hex",
  "itertools 0.14.0",
+ "macro_db_migrator",
  "macro_user_id",
  "model-entity",
  "redis",

@@ -56,6 +56,7 @@ build_lambdas:
 setup_test_envs:
     echo "DATABASE_URL={{ MACRODB }}" >> ./contacts_db_client/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./notification_db_client/.env
+    echo "DATABASE_URL={{ MACRODB }}" >> ./notification/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./properties_db_client/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./macro_db_client/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./email_db_client/.env
