@@ -4,6 +4,14 @@ create_networks:
   docker network create auth 2>/dev/null || true -- fusionauth network
   echo "docker networks created"
 
+fix_environment *ARGS:
+  # Decrypt ignoring mac error
+  sops --input-type dotenv --output-type dotenv --ignore-mac -d .env-local{{ ARGS }}.enc > .env-local{{ ARGS }}.dec
+  # Encrypt the file
+  sops --input-type dotenv --output-type dotenv -e .env-local{{ ARGS}}.dec > .env-local{{ ARGS }}.enc
+  # Remove the decrypted file
+  rm -rf .env-local{{ ARGS }}.dec
+
 get_environment *ARGS:
   sops --input-type dotenv --output-type dotenv -d .env-local{{ ARGS }}.enc > .env
 
