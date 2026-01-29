@@ -30,7 +30,7 @@ import ReplyAll from '@icon/regular/arrow-bend-double-up-left.svg';
 import Reply from '@icon/regular/arrow-bend-up-left.svg';
 import Forward from '@icon/regular/arrow-bend-up-right.svg';
 import Plus from '@icon/regular/plus.svg';
-import Quotes from '@icon/regular/quotes.svg';
+import Quotes from '@icon/bold/quotes-bold.svg';
 import TextAa from '@icon/regular/text-aa.svg';
 import Trash from '@icon/regular/trash.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
