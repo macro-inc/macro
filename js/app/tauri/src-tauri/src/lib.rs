@@ -5,13 +5,23 @@ use reqwest::cookie::CookieStore;
 use reqwest::header::COOKIE;
 use rootcause::{Report, report};
 use serde::Serialize;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::http::{HeaderMap, HeaderValue};
 use tauri::{AppHandle, Emitter};
-use tauri::{Manager, Runtime};
+use tauri::{Manager, Runtime, RunEvent};
 use tauri_plugin_deep_link::{DeepLinkExt, OpenUrlEvent};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use url::Url;
+
+struct HeartbeatState {
+    alive: AtomicBool,
+}
+
+#[tauri::command]
+fn heartbeat_response(state: tauri::State<'_, HeartbeatState>) {
+    state.alive.store(true, Ordering::SeqCst);
+}
 
 /// This module provides debuging utilities and should not be compiled in prodiction builds
 #[cfg(debug_assertions)] // do not remove this
@@ -116,6 +126,10 @@ pub fn run() {
     }
 
     builder
+        .manage(HeartbeatState {
+            alive: AtomicBool::new(true),
+        })
+        .invoke_handler(tauri::generate_handler![heartbeat_response])
         .setup(|app| {
             #[cfg(any(target_os = "linux", all(windows, debug_assertions)))]
             {
@@ -130,8 +144,35 @@ pub fn run() {
 
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if let RunEvent::Resumed = event {
+                tracing::info!("app resumed, sending heartbeat ping");
+
+                let state = app.state::<HeartbeatState>();
+                state.alive.store(false, Ordering::SeqCst);
+
+                // Ping the JS side via a Tauri event to check if the content process is alive
+                let _ = app.emit("heartbeat_ping", ());
+
+                let handle = app.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(3));
+                    let state = handle.state::<HeartbeatState>();
+                    if !state.alive.load(Ordering::SeqCst) {
+                        tracing::warn!(
+                            "heartbeat: no response from JS — content process likely dead, reloading webview"
+                        );
+                        if let Some(webview) = handle.webview_windows().values().next() {
+                            let _ = webview.eval("window.location.reload()");
+                        }
+                    } else {
+                        tracing::info!("heartbeat: JS responded, content process alive");
+                    }
+                });
+            }
+        });
 }
 
 /// fn to merge the headers from the http cookie store into the initial
