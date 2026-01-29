@@ -2,11 +2,7 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import { URL_PARAMS } from '@block-channel/constants';
 import type { ChannelData } from '@block-channel/definition';
-import {
-  latestActivitySignal,
-  updateActivityOnChannelClose,
-  updateActivityOnChannelOpen,
-} from '@block-channel/signal/activity';
+import { postChannelViewActivity } from '@block-channel/signal/activity';
 import {
   isDraggingOverChannelSignal,
   isValidChannelDragSignal,
@@ -19,6 +15,7 @@ import { useBlockId } from '@core/block';
 import type { EntityDragEvent } from '@macro-entity';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { useChannelActivity } from '@core/context/channels';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
 import {
@@ -111,14 +108,19 @@ export function Channel(props: {
   const attachments = createMemo(() => channel.data?.attachments ?? []);
 
   const [_activeThreadId, setActiveThreadId] = activeThreadIdSignal;
-  const latestActivity = latestActivitySignal.get;
   const channelId = useBlockId();
 
-  const updateActivityOnOpen = createCallback(() =>
-    updateActivityOnChannelOpen(channelId)
-  );
+  // Get activity from context (backed by query)
+  const latestActivity = useChannelActivity(channelId);
+  // Track when this channel instance was opened (for "new" message indicators)
+  const [openedChannel, setOpenedChannel] = createSignal<Date>();
+
+  const updateActivityOnOpen = createCallback(() => {
+    setOpenedChannel(new Date());
+    postChannelViewActivity(channelId);
+  });
   const updateActivityOnClose = createCallback(() =>
-    updateActivityOnChannelClose(channelId)
+    postChannelViewActivity(channelId)
   );
 
   const { track } = withAnalytics();
@@ -431,6 +433,7 @@ export function Channel(props: {
             setFocusedMessageId={setSelectedMessageId}
             targetMessage={targetMessage}
             latestActivity={latestActivity()}
+            openedChannel={openedChannel()}
             orderedMessages={orderedMessages}
             setOrderedMessages={setOrderedMessages}
             onNavigationReady={setMessageListNav}

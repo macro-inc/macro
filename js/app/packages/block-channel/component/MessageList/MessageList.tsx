@@ -2,7 +2,6 @@ import {
   COLLAPSED_THREAD_INDEX_CUTOFF,
   TARGET_MESSAGE_ACTIVE_TIME,
 } from '@block-channel/constants';
-import { openedChannelSignal } from '@block-channel/signal/activity';
 import type { MessageWithThreadId } from '@block-channel/signal/threads';
 import type {
   ThreadView,
@@ -110,6 +109,7 @@ export type MessageListProps = {
   attachments: Attachment[];
   participants: ChannelParticipant[];
   latestActivity?: ChannelActivity;
+  openedChannel?: Date;
   containerRef?: HTMLDivElement;
   targetMessage: Accessor<TargetMessageInfo | undefined>;
   focusedMessageId: Accessor<string | undefined>;
@@ -256,8 +256,6 @@ function MessageListImpl(props: MessageListProps) {
   const [isNearBottom, setIsNearBottom] = createSignal(true);
   const [initialScrollComplete, setInitialScrollComplete] = createSignal(false);
 
-  const openedChannel = openedChannelSignal.get;
-
   const normalizeIndex = (index: number) => {
     const length = props.orderedMessages().length;
 
@@ -328,13 +326,13 @@ function MessageListImpl(props: MessageListProps) {
 
   const checkIfNewMessage = (message: Message) => {
     const lastViewed_ = lastViewed();
-    const openedChannel_ = openedChannel();
+    const openedChannel_ = props.openedChannel;
     return (
       !!lastViewed_ &&
       !!openedChannel_ &&
       new Date(message.created_at) > new Date(lastViewed_) &&
       userId() !== message.sender_id &&
-      new Date(message.created_at) < new Date(openedChannel_)
+      new Date(message.created_at) < openedChannel_
     );
   };
 
