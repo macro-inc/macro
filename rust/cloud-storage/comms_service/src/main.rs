@@ -17,6 +17,7 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 
 mod api;
+mod channel_permissions;
 mod config;
 mod constants;
 mod notification;
@@ -69,12 +70,6 @@ async fn main() -> anyhow::Result<()> {
     )
     .await;
     tracing::trace!("initialized macro_notify client");
-
-    let document_storage_service_client =
-        document_storage_service_client::DocumentStorageServiceClient::new(
-            config.internal_auth_key.as_ref().to_string(),
-            config.document_storage_service_url.clone(),
-        );
 
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
         .contacts_queue(&config.contacts_queue)
@@ -136,7 +131,6 @@ async fn main() -> anyhow::Result<()> {
         db,
         sqs_client: Arc::new(sqs_client),
         macro_notify_client: Arc::new(macro_notify_client),
-        document_storage_service_client: Arc::new(document_storage_service_client),
         connection_gateway_client: Arc::new(connection_gateway_client),
         permissions_token_secret,
         comms_state: CommsRouterState::new(ChannelServiceImpl::new(

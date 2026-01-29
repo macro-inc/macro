@@ -3,6 +3,7 @@ use crate::api::context::{AppState, ChannelImpl};
 use crate::api::extractors::{
     ChannelId, ChannelMember, ChannelName, ChannelParticipants, ChannelTypeExtractor,
 };
+use crate::channel_permissions;
 use crate::notification as comms_notification;
 use anyhow::Result;
 use axum::extract::Json;
@@ -12,10 +13,8 @@ use comms_db_client::participants::add_participant::{AddParticipantOptions, add_
 use doppleganger::Mirror;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document_storage_service_internal::UpdateUserChannelPermissionsRequest;
 use model_notifications::CommonChannelMetadata;
 use models_comms::channel::ChannelType;
-use models_permissions::share_permission::channel_share_permission::UpdateOperation;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -81,20 +80,19 @@ pub async fn handler(
     }
 
     let start = std::time::Instant::now();
-    ctx.document_storage_service_client
-        .update_user_channel_permissions(UpdateUserChannelPermissionsRequest {
-            user_ids: participants.clone(),
-            channel_id: channel_id.to_string(),
-            operation: UpdateOperation::Add,
-        })
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "unable to add permissions for channel items");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "unable to remove participant from channel".to_string(),
-            )
-        })?;
+    channel_permissions::add_permissions_for_channel_users(
+        &ctx.db,
+        &channel_id.to_string(),
+        &participants,
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!(error=?e, "unable to add permissions for channel items");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "unable to add permissions for channel items".to_string(),
+        )
+    })?;
     tracing::info!(elapsed=?start.elapsed(), "added user channel permissions");
 
     // There should always be participants, but better safe than sorry

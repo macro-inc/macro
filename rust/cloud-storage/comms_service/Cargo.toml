@@ -38,7 +38,7 @@ chrono = { workspace = true }
 comms = { path = "../comms", features = ["inbound", "outbound"] }
 comms_db_client = { path = "../comms_db_client", optional = true }
 connection_gateway = { path = "../connection_gateway" }
-document_storage_service_client = { path = "../document_storage_service_client" }
+macro_db_client = { path = "../macro_db_client" }
 doppleganger = { workspace = true }
 frecency = { path = "../frecency", features = ["postgres"] }
 futures = { workspace = true }
@@ -53,7 +53,9 @@ macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
   "auth",
+  "cloud_storage",
 ] }
+macro_uuid = { path = "../macro_uuid" }
 macro_notify = { path = "../macro_notify" }
 macro_user_id = { path = "../macro_user_id" }
 model = { path = "../model" }

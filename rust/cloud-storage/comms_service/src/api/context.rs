@@ -25,8 +25,6 @@ pub struct AppState {
     pub db: PgPool,
     pub connection_gateway_client: Arc<ConnectionGatewayClient>,
     pub macro_notify_client: Arc<macro_notify::MacroNotify>,
-    pub document_storage_service_client:
-        Arc<document_storage_service_client::DocumentStorageServiceClient>,
     pub sqs_client: Arc<sqs_client::SQS>,
     pub permissions_token_secret: LocalOrRemoteSecret<DocumentPermissionJwtSecretKey>,
     pub frecency_storage: FrecencyPgStorage,

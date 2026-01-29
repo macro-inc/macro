@@ -1,5 +1,6 @@
 use crate::api::context::ChannelImpl;
 use crate::api::{context::AppState, extractors::ChannelName};
+use crate::channel_permissions;
 use crate::notification as comms_notification;
 use crate::{
     api::extractors::{ChannelId, ChannelMember, ChannelParticipants, ChannelTypeExtractor},
@@ -25,9 +26,9 @@ use comms_db_client::{
 use doppleganger::Mirror;
 use macro_user_id::cowlike::CowLike;
 use model::comms::ChannelParticipant;
-use model::document_storage_service_internal::UpdateChannelSharePermissionRequest;
 use model_notifications::CommonChannelMetadata;
 use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
 use std::time::Instant;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -120,93 +121,34 @@ pub async fn post_message_handler(
     })
     .ok();
 
-    // TODO: start -- the following two blocks are duplicated and cope, I don't want to fix in my current pr
-    // but either myself or someone else needs to fix this - @synoet
+    // Update channel share permissions for attachments and mentions
+    let items_to_share: Vec<(String, String)> = req
+        .attachments
+        .iter()
+        .filter(|a| a.entity_type != "user")
+        .map(|a| (a.entity_id.clone(), a.entity_type.clone()))
+        .chain(
+            req.mentions
+                .iter()
+                .filter(|m| m.entity_type != "user")
+                .map(|m| (m.entity_id.clone(), m.entity_type.clone())),
+        )
+        .collect();
 
-    // If there are attachments we need to update channel share permissions through DSS
-    if !req.attachments.is_empty() {
-        let document_storage_service_client = ctx.document_storage_service_client.clone();
-        let channel_id: uuid::Uuid = channel_id;
-        let attachments = req.attachments.clone();
+    if !items_to_share.is_empty() {
+        let channel_id_str = channel_id.to_string();
         let user_id = message.sender_id.clone();
         let db = ctx.db.clone();
         tokio::spawn(async move {
-            tracing::trace!(attachments=?attachments, "updating channel share permissions for attachments");
-            let channel_info = match comms_db_client::channels::get_channel_info::get_channel_info(
+            update_channel_share_permissions_for_items(
                 &db,
-                &channel_id,
+                user_id.0.as_ref(),
+                &channel_id_str,
+                items_to_share,
             )
-            .await
-            {
-                Ok(info) => info,
-                Err(e) => {
-                    tracing::error!(error=?e, "unable to get channel info");
-                    return;
-                }
-            };
-
-            for attachment in attachments {
-                if attachment.entity_type == "user" {
-                    continue;
-                }
-                document_storage_service_client
-                    .update_channel_share_permission(UpdateChannelSharePermissionRequest {
-                        user_id: user_id.clone(),
-                        channel_id: channel_id.to_string().clone(),
-                        item_id: attachment.entity_id,
-                        item_type: attachment.entity_type,
-                        channel_type: channel_info.channel_type.to_string(),
-                    })
-                    .await
-                    .unwrap_or_else(|e| {
-                        tracing::error!("unable to update channel share permission: {e}");
-                    });
-            }
+            .await;
         });
     }
-
-    // If there are mentions we need to update channel share permissions through DSS
-    if !req.mentions.is_empty() {
-        let document_storage_service_client = ctx.document_storage_service_client.clone();
-        let channel_id: uuid::Uuid = channel_id;
-        let mentions = req.mentions.clone();
-        let user_id = message.sender_id.clone();
-        let db = ctx.db.clone();
-        tokio::spawn(async move {
-            tracing::trace!(mentions=?mentions, "updating channel share permissions for mentions");
-            let channel_info = match comms_db_client::channels::get_channel_info::get_channel_info(
-                &db,
-                &channel_id,
-            )
-            .await
-            {
-                Ok(info) => info,
-                Err(e) => {
-                    tracing::error!(error=?e, "unable to get channel info");
-                    return;
-                }
-            };
-            for mention in mentions {
-                if mention.entity_type == "user" {
-                    continue;
-                }
-                document_storage_service_client
-                    .update_channel_share_permission(UpdateChannelSharePermissionRequest {
-                        user_id: user_id.clone(),
-                        channel_id: channel_id.to_string().clone(),
-                        item_id: mention.entity_id,
-                        item_type: mention.entity_type,
-                        channel_type: channel_info.channel_type.to_string(),
-                    })
-                    .await
-                    .unwrap_or_else(|e| {
-                        tracing::error!("unable to update channel share permission: {e}");
-                    });
-            }
-        });
-    }
-
-    // TODO: -- end
 
     let participants: Vec<_> = channel_participants
         .iter()
@@ -329,4 +271,23 @@ pub fn dispatch_notification_task(
             tracing::error!(error = ?e, "Failed to dispatch notifications");
         }
     });
+}
+
+/// Updates channel share permissions for a list of items shared in a message.
+async fn update_channel_share_permissions_for_items(
+    db: &PgPool,
+    user_id: &str,
+    channel_id: &str,
+    items: Vec<(String, String)>,
+) {
+    tracing::trace!(items=?items, "updating channel share permissions for items");
+    for (item_id, item_type) in items {
+        if let Err(e) = channel_permissions::update_channel_share_permission(
+            db, user_id, channel_id, &item_id, &item_type,
+        )
+        .await
+        {
+            tracing::error!(error=?e, "unable to update channel share permission");
+        }
+    }
 }
