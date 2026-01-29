@@ -35,8 +35,8 @@ pub struct Config {
     /// The email service URL
     pub email_service_url: String,
 
-    /// The comms service URL
-    pub comms_service_url: String,
+    /// The connection URL for the comms Postgres database
+    pub comms_database_url: String,
 
     /// The number of workers to spawn
     pub worker_count: u8,
@@ -86,8 +86,8 @@ impl Config {
         let email_service_url =
             std::env::var("EMAIL_SERVICE_URL").context("EMAIL_SERVICE_URL must be provided")?;
 
-        let comms_service_url =
-            std::env::var("COMMS_SERVICE_URL").context("COMMS_SERVICE_URL must be provided")?;
+        let comms_database_url =
+            std::env::var("COMMS_DATABASE_URL").context("COMMS_DATABASE_URL must be provided")?;
 
         let worker_count: u8 = std::env::var("WORKER_COUNT")
             .unwrap_or("10".to_string())
@@ -110,7 +110,7 @@ impl Config {
             document_storage_bucket,
             sync_service_auth_key,
             email_service_url,
-            comms_service_url,
+            comms_database_url,
             worker_count,
             lexical_service_url,
         })

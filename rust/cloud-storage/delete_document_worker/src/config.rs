@@ -22,9 +22,8 @@ pub struct Config {
 
     pub port: usize,
 
-    pub comms_service_auth_key: String,
-
-    pub comms_service_url: String,
+    /// The connection URL for the comms Postgres database
+    pub comms_database_url: String,
 
     /// API key for sync service
     pub sync_service_auth_key: String,
@@ -61,11 +60,8 @@ impl Config {
             .parse::<usize>()
             .context("PORT must be a valid number")?;
 
-        let comms_service_auth_key = std::env::var("COMMS_SERVICE_AUTH_KEY")
-            .context("COMMS_SERVICE_AUTH_KEY must be provided")?;
-
-        let comms_service_url =
-            std::env::var("COMMS_SERVICE_URL").context("COMMS_SERVICE_URL must be provided")?;
+        let comms_database_url = std::env::var("COMMS_DATABASE_URL")
+            .context("COMMS_DATABASE_URL must be provided")?;
 
         let sync_service_auth_key = std::env::var("SYNC_SERVICE_AUTH_KEY")
             .context("SYNC_SERVICE_AUTH_KEY must be provided")?;
@@ -82,8 +78,7 @@ impl Config {
             environment,
             port,
             delete_document_queue,
-            comms_service_auth_key,
-            comms_service_url,
+            comms_database_url,
             sync_service_auth_key,
             sync_service_url,
         })

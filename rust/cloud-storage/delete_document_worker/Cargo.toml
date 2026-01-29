@@ -16,7 +16,7 @@ aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
-comms_service_client = { path = "../comms_service_client" }
+comms_db_client = { path = "../comms_db_client" }
 futures = { workspace = true }
 macro_cors = { path = "../macro_cors" }
 macro_db_client = { path = "../macro_db_client" }

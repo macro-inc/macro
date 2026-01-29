@@ -158,10 +158,10 @@ async fn delete_user(
         .in_current_span(),
     );
 
-    // Send delete user call to comms service
+    // Remove user from org channels
     tokio::spawn(
         {
-            let comms_client = ctx.comms_client.clone();
+            let comms_db = ctx.comms_db.clone();
             let user_infos = user_infos.clone();
             async move {
                 for user_info in user_infos {
@@ -170,9 +170,8 @@ async fn delete_user(
                     // TODO: create delete user endpoint in comms service and handle removing this user and
                     // deleting all of their channels. Keep the messages for now.
                     if let Some(org_id) = user_info.organization_id
-                        && let Err(err) = comms_client
-                            .remove_user_from_org_channels(&user_id, &(org_id as i64))
-                            .await
+                        && let Err(err) =
+                            remove_user_from_org_channels(&comms_db, &user_id, org_id as i64).await
                     {
                         tracing::error!(error=?err, "unable to remove user from org channels");
                     }
@@ -233,6 +232,39 @@ async fn delete_user(
                 let _ = macro_db_client::macro_user::delete_macro_user(&db, &macro_user_id).await.inspect_err(|e| tracing::error!(error=?e, "unable to delete macro user"));
             }
         }.in_current_span());
+
+    Ok(())
+}
+
+/// Removes a user from all org channels
+async fn remove_user_from_org_channels(
+    comms_db: &sqlx::Pool<sqlx::Postgres>,
+    user_id: &str,
+    org_id: i64,
+) -> anyhow::Result<()> {
+    use anyhow::Context;
+    use comms_db_client::channels::get_channels::get_org_channels;
+    use comms_db_client::participants::remove_participant::{
+        remove_participant, RemoveParticipantOptions,
+    };
+
+    let channels = get_org_channels(comms_db, &org_id)
+        .await
+        .context("failed to get org channels")?;
+
+    for channel in channels {
+        if let Err(e) = remove_participant(
+            comms_db,
+            RemoveParticipantOptions {
+                channel_id: &channel.id.0,
+                user_id,
+            },
+        )
+        .await
+        {
+            tracing::warn!(error=?e, channel_id=?channel.id, "failed to remove user from channel, may not be a member");
+        }
+    }
 
     Ok(())
 }

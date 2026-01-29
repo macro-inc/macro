@@ -17,13 +17,25 @@ use teams::{
     outbound::team_repo::TeamRepositoryImpl,
 };
 
+/// Wrapper type for the comms database pool to avoid FromRef conflicts
+#[derive(Clone)]
+pub struct CommsDbPool(pub PgPool);
+
+impl std::ops::Deref for CommsDbPool {
+    type Target = PgPool;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub db: PgPool,
+    pub comms_db: CommsDbPool,
     pub auth_client: Arc<authentication_service::service::fusionauth_client::FusionAuthClient>,
     pub macro_cache_client: Arc<MacroCache>,
     pub stripe_client: Arc<stripe::Client>,
-    pub comms_client: Arc<comms_service_client::CommsServiceClient>,
     pub document_storage_service_client:
         Arc<document_storage_service_client::DocumentStorageServiceClient>,
     pub notification_service_client: Arc<notification_service_client::NotificationServiceClient>,

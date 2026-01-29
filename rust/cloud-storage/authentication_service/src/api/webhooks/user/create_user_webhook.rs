@@ -170,14 +170,12 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
     // If the user belongs to an organization,
     // we should add them to the organization's channels
     if let Some(org_id) = organization_id {
-        let comms_client = ctx.comms_client.clone();
-        tracing::trace!("dispatching request to comms service to add user to org channels");
+        let comms_db = ctx.comms_db.clone();
+        let user_id = user_id.clone();
+        tracing::trace!("adding user to org channels");
         tokio::spawn(async move {
-            if let Err(err) = comms_client
-                .add_user_to_org_channels(&user_id, &(org_id as i64))
-                .await
-            {
-                tracing::error!(error=?err, "failed to call comms service client to add user to org channels");
+            if let Err(err) = add_user_to_org_channels(&comms_db, &user_id, org_id as i64).await {
+                tracing::error!(error=?err, "failed to add user to org channels");
             }
         });
     }
@@ -255,6 +253,38 @@ async fn initialize_user_experiments(
     macro_db_client::experiment_log::bulk_create_experiment_logs(db, user_id, &active_experiments)
         .await
         .context("failed to bulk create experiment logs")?;
+
+    Ok(())
+}
+
+/// Adds a user to all org channels
+async fn add_user_to_org_channels(
+    comms_db: &sqlx::Pool<sqlx::Postgres>,
+    user_id: &str,
+    org_id: i64,
+) -> anyhow::Result<()> {
+    use comms_db_client::channels::get_channels::get_org_channels;
+    use comms_db_client::participants::add_participant::{add_participant, AddParticipantOptions};
+    use model::comms::ParticipantRole;
+
+    let channels = get_org_channels(comms_db, &org_id)
+        .await
+        .context("failed to get org channels")?;
+
+    for channel in channels {
+        if let Err(e) = add_participant(
+            comms_db,
+            AddParticipantOptions {
+                channel_id: &channel.id.0,
+                user_id,
+                participant_role: Some(ParticipantRole::Member),
+            },
+        )
+        .await
+        {
+            tracing::warn!(error=?e, channel_id=?channel.id, "failed to add user to channel, may already be a member");
+        }
+    }
 
     Ok(())
 }

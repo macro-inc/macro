@@ -41,7 +41,7 @@ aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, features = ["macros"] }
 base64 = { workspace = true }
 chrono = { workspace = true }
-comms_service_client = { path = "../comms_service_client" }
+comms_db_client = { path = "../comms_db_client" }
 cookie = { workspace = true }
 document_storage_service_client = { path = "../document_storage_service_client" }
 doppleganger = { workspace = true }
@@ -119,4 +119,4 @@ uuid = { workspace = true }
 cool_asserts = "2"
 
 [package.metadata.cargo-machete]
-ignored = ["async-stripe", "comms_service"]
+ignored = ["async-stripe"]
