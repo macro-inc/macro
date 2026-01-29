@@ -137,20 +137,6 @@ const deleteDocumentWorker = new Worker(`delete-document-worker-${stack}`, {
       name: 'PROPERTIES_SERVICE_AUTH_KEY',
       value: PROPERTIES_SERVICE_AUTH_KEY,
     },
-    {
-      name: 'PROPERTIES_SERVICE_URL',
-      value: `https://properties-service${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
-    },
-    // {
-    //   name: 'QUEUE_MAX_MESSAGES',
-    //   value: '10',
-    // },
-    // {
-    //   name: 'QUEUE_WAIT_TIME_SECONDS',
-    //   value: '4',
-    // },
   ],
   cloudStorageClusterName: cloudStorageClusterName,
   deleteDocumentQueueArn: deleteDocumentQueueArn,
