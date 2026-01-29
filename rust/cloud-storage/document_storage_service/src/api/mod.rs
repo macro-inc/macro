@@ -169,11 +169,6 @@ fn api_router(state: ApiContext) -> Router {
             "/internal",
             internal::router(state.clone())
                 .nest("/notifications", notification::router())
-                .nest(
-                    "/properties",
-                    properties_service::internal_router()
-                        .with_state(PropertiesHandlerState::from_ref(&state)),
-                )
                 .layer(
                     ServiceBuilder::new()
                         .layer(axum::middleware::from_fn_with_state(

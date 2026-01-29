@@ -19,7 +19,6 @@ aws-sdk-secretsmanager = { workspace = true }
 macro_aws_config = { path = "../macro_aws_config" }
 axum = { workspace = true, features = ["tower-log", "ws"] }
 chrono = { workspace = true }
-comms_service_client = { path = "../comms_service_client" }
 email_db_client = { path = "../email_db_client" }
 http-body-util = { workspace = true }
 macro_auth = { path = "../macro_auth" }
