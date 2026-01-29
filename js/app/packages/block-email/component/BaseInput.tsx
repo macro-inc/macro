@@ -955,18 +955,21 @@ export function BaseInput(props: {
             />
           }
         >
-          <div ref={setExpandedRecipientsRef} class="w-full">
+          <div
+            ref={setExpandedRecipientsRef}
+            class="w-full text-sm text-ink-muted"
+          >
             {/* Expanded FROM */}
             <div class="flex flex-row items-baseline py-0.5">
-              <div class="text-sm text-ink-muted min-w-8">from</div>
-              <span class="text-sm text-ink-muted ml-2">
+              <div class="min-w-8">from</div>
+              <span class="ml-2">
                 {userName()} &lt;{userEmail()}&gt;
               </span>
             </div>
             {/* Expanded TO */}
 
             <div class="flex flex-row items-center -mt-0.5">
-              <div class="text-sm text-ink-muted min-w-8">to</div>
+              <div class="min-w-8">to</div>
               <RecipientSelector<EmailRecipient['kind']>
                 inputRef={setToRef}
                 options={ctx.recipientOptions}
@@ -979,7 +982,7 @@ export function BaseInput(props: {
             {/* Expanded CC */}
             <Show when={showCc() || form().recipients().cc.length > 0}>
               <div class="flex flex-row items-center -mt-1.5">
-                <div class="text-sm text-ink-muted min-w-8">cc</div>
+                <div class="min-w-8">cc</div>
                 <RecipientSelector<EmailRecipient['kind']>
                   inputRef={setCcRef}
                   options={ctx.recipientOptions}
@@ -993,7 +996,7 @@ export function BaseInput(props: {
             {/* Expanded BCC */}
             <Show when={showBcc() || form().recipients().bcc.length > 0}>
               <div class="flex flex-row items-center -mt-1.5">
-                <div class="text-sm text-ink-muted min-w-8">bcc</div>
+                <div class="min-w-8">bcc</div>
                 <RecipientSelector<EmailRecipient['kind']>
                   inputRef={setBccRef}
                   options={ctx.recipientOptions}
