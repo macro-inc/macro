@@ -277,7 +277,7 @@ const Root: Component<MessageRootProps> = (props) => {
               }}
             >
               {/* User Icon */}
-              <div class="absolute -left-[1px] -translate-x-1/2">
+              <div class="absolute left-0 -translate-x-1/2">
                 <Show when={!props.isConsecutive}>
                   <div class="relative">
                     <Show when={props.isFirstInThread}>

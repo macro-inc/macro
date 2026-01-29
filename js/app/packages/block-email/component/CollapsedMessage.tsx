@@ -88,7 +88,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
                 width: 'var(--user-icon-width)',
                 height: 'var(--user-icon-width)',
                 'margin-left':
-                  'calc(var(--left-of-connector) - var(--user-icon-width) / 2)',
+                  'calc(var(--left-of-connector) - var(--user-icon-width) / 2 + 1px)',
               }}
             >
               <UserIcon
