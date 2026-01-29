@@ -49,7 +49,6 @@ env_var! {
         pub SyncServiceAuthKey,
         pub AuthenticationServiceUrl,
         pub AuthenticationServiceSecretKey,
-        pub CommsServiceUrl,
     }
 }
 

@@ -236,6 +236,9 @@ use utoipa::OpenApi;
             CreateTaskRequest,
             CreateTaskResponse,
             PropertyInput,
+            models_properties::api::requests::SetPropertyValue,
+            models_properties::shared::EntityReference,
+            models_properties::shared::EntityType, // Quick create task
             CreateBulkDocumentResponseData,
             CreateBulkDocumentResponse, // Create document bulk
             GetDocumentListResult,
