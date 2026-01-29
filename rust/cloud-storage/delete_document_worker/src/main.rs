@@ -78,27 +78,8 @@ pub async fn main() -> anyhow::Result<()> {
         config.sync_service_url.clone(),
     );
 
-    let comms_database_url = match config.environment {
-        Environment::Local => config.comms_database_url.clone(),
-        _ => secretsmanager_client
-            .get_secret_value(&config.comms_database_url)
-            .await
-            .context("unable to get comms database secret")?
-            .to_string(),
-    };
-
-    let comms_db = PgPoolOptions::new()
-        .min_connections(min_connections)
-        .max_connections(max_connections)
-        .connect(&comms_database_url)
-        .await
-        .context("could not connect to comms db")?;
-
-    tracing::trace!("initialized comms db connection");
-
     let queue_worker_context = QueueWorkerContext {
         db: db.clone(),
-        comms_db,
         worker: Arc::new(delete_document_worker),
         s3_client: Arc::new(s3_client),
         redis_client: Arc::new(redis_client),

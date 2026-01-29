@@ -161,7 +161,7 @@ async fn delete_user(
     // Remove user from org channels
     tokio::spawn(
         {
-            let comms_db = ctx.comms_db.clone();
+            let db = ctx.db.clone();
             let user_infos = user_infos.clone();
             async move {
                 for user_info in user_infos {
@@ -171,7 +171,7 @@ async fn delete_user(
                     // deleting all of their channels. Keep the messages for now.
                     if let Some(org_id) = user_info.organization_id
                         && let Err(err) =
-                            remove_user_from_org_channels(&comms_db, &user_id, org_id as i64).await
+                            remove_user_from_org_channels(&db, &user_id, org_id as i64).await
                     {
                         tracing::error!(error=?err, "unable to remove user from org channels");
                     }

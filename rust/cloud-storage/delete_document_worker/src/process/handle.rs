@@ -67,7 +67,7 @@ pub async fn handle(
 
     // delete entity mentions where this doc is the source
     let _ = comms_db_client::entity_mentions::delete_entity_mentions_by_source(
-        &ctx.comms_db,
+        &ctx.db,
         vec![document_id.to_string()],
     )
     .await

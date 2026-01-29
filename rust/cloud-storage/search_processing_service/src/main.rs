@@ -124,24 +124,6 @@ async fn main() -> anyhow::Result<()> {
             config.email_service_url.clone(),
         );
 
-        let comms_database_url = match config.environment {
-            Environment::Local => config.comms_database_url.clone(),
-            _ => secretsmanager_client
-                .get_secret_value(&config.comms_database_url)
-                .await
-                .context("unable to get comms database secret")?
-                .to_string(),
-        };
-
-        let comms_db = PgPoolOptions::new()
-            .min_connections(min_connections)
-            .max_connections(max_connections)
-            .connect(&comms_database_url)
-            .await
-            .context("could not connect to comms db")?;
-
-        tracing::trace!("initialized comms db connection");
-
         let worker = sqs_worker::SQSWorker::new(
             aws_sdk_sqs::Client::new(&aws_config),
             config.search_event_queue.clone(),
@@ -150,7 +132,6 @@ async fn main() -> anyhow::Result<()> {
         );
         let ctx = SearchProcessingContext {
             db: db.clone(),
-            comms_db,
             worker: Arc::new(worker.clone()),
             document_storage_bucket: config.document_storage_bucket.clone(),
             s3_client: Arc::new(s3_client),

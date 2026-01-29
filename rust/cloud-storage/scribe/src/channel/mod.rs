@@ -1,16 +1,16 @@
 mod client;
 pub use client::ChannelClient;
-use comms_service_client::CommsServiceClient;
 
 use crate::client::ScribeClient;
+use sqlx::PgPool;
 use std::sync::Arc;
 
 impl<D, C, A, E, S> ScribeClient<D, C, A, E, S> {
-    pub fn with_channel_client<T: Into<Arc<CommsServiceClient>>>(
+    pub fn with_comms_db<T: Into<Arc<PgPool>>>(
         self,
-        channel_client: T,
+        db: T,
     ) -> ScribeClient<D, ChannelClient, A, E, S> {
-        let client = ChannelClient::new(channel_client.into());
+        let client = ChannelClient::new(db.into());
         ScribeClient {
             document: self.document,
             channel: client,

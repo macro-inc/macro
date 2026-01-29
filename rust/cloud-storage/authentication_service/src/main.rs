@@ -20,7 +20,7 @@ use teams::{
 };
 
 use crate::api::context::{
-    ApiContext, CommsDbPool, MacroApiTokenContext, MacroApiTokenExpirySeconds, MacroApiTokenIssuer,
+    ApiContext, MacroApiTokenContext, MacroApiTokenExpirySeconds, MacroApiTokenIssuer,
     MacroApiTokenPrivateSecretKey, StripeWebhookSecretKey,
 };
 use std::sync::Arc;
@@ -135,24 +135,6 @@ async fn main() -> anyhow::Result<()> {
     );
     tracing::trace!("initialized auth client");
 
-    let comms_database_url = match config.environment {
-        Environment::Local => config.comms_database_url.clone(),
-        _ => secretsmanager_client
-            .get_secret_value(&config.comms_database_url)
-            .await
-            .context("unable to get comms database secret")?
-            .to_string(),
-    };
-
-    let comms_db = PgPoolOptions::new()
-        .min_connections(min_connections)
-        .max_connections(max_connections)
-        .connect(&comms_database_url)
-        .await
-        .context("could not connect to comms db")?;
-
-    tracing::trace!("initialized comms db connection");
-
     let document_storage_service_client = DocumentStorageServiceClient::new(
         config.service_internal_auth_key.clone(),
         config.document_storage_service_url.clone(),
@@ -212,7 +194,6 @@ async fn main() -> anyhow::Result<()> {
     api::setup_and_serve(
         ApiContext {
             db,
-            comms_db: CommsDbPool(comms_db),
             auth_client: Arc::new(auth_client),
             macro_cache_client: Arc::new(macro_cache_client),
             stripe_client: Arc::new(stripe_client),

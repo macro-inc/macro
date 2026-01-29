@@ -170,11 +170,11 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
     // If the user belongs to an organization,
     // we should add them to the organization's channels
     if let Some(org_id) = organization_id {
-        let comms_db = ctx.comms_db.clone();
+        let db = ctx.db.clone();
         let user_id = user_id.clone();
         tracing::trace!("adding user to org channels");
         tokio::spawn(async move {
-            if let Err(err) = add_user_to_org_channels(&comms_db, &user_id, org_id as i64).await {
+            if let Err(err) = add_user_to_org_channels(&db, &user_id, org_id as i64).await {
                 tracing::error!(error=?err, "failed to add user to org channels");
             }
         });

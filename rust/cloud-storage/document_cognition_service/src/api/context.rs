@@ -22,7 +22,6 @@ pub struct ApiContext {
     pub sqs_client: Arc<sqs_client::SQS>,
     pub document_storage_client: Arc<DocumentStorageServiceClient>,
     pub macro_notify_client: Arc<macro_notify::MacroNotify>,
-    pub comms_service_client: Arc<comms_service_client::CommsServiceClient>,
     pub search_service_client: Arc<SearchServiceClient>,
     pub scribe: Arc<DcsScribe>,
     pub email_service_client_external: Arc<email_service_client::EmailServiceClientExternal>,
@@ -40,7 +39,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     use comms::domain::service::ChannelServiceImpl;
     use comms::outbound::http::user_repo::UserRepoImpl;
     use comms::outbound::postgres::comms_repo::PgCommsRepo;
-    use comms_service_client::CommsServiceClient;
     use document_cognition_service_client::DocumentCognitionServiceClient;
     use document_storage_service_client::DocumentStorageServiceClient;
     use email::domain::service::EmailServiceImpl;
@@ -71,10 +69,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     ));
     let macro_notify_client =
         MacroNotifyClient::new("dummy_queue".into(), "dummy_service".into()).await;
-    let comms_service_client = Arc::new(CommsServiceClient::new(
-        "dummy_auth_key".into(),
-        "http://localhost".into(),
-    ));
     let search_service_client =
         SearchServiceClient::new("dummy_auth_key".into(), "http://localhost".into());
     let lexical_client = Arc::new(LexicalClient::new(
@@ -111,7 +105,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 .with_macro_db(pool.clone())
                 .build(),
         )
-        .with_channel_client(comms_service_client.clone())
+        .with_comms_db(pool.clone())
         .with_dcs_client(document_cognition_service_client)
         .with_email_client(email_service_client)
         .with_static_file_client(static_file_service_client.clone());
@@ -139,7 +133,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         sqs_client: Arc::new(sqs_client),
         document_storage_client,
         macro_notify_client: Arc::new(macro_notify_client),
-        comms_service_client,
         search_service_client: Arc::new(search_service_client),
         scribe: Arc::new(content_client),
         email_service_client_external,

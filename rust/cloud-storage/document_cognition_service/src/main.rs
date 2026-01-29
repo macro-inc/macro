@@ -3,7 +3,6 @@ use anyhow::Context;
 use comms::domain::service::ChannelServiceImpl;
 use comms::outbound::http::user_repo::UserRepoImpl;
 use comms::outbound::postgres::comms_repo::PgCommsRepo;
-use comms_service_client::CommsServiceClient;
 use config::{Config, Environment};
 use document_cognition_service_client::DocumentCognitionServiceClient;
 use document_storage_service_client::DocumentStorageServiceClient;
@@ -89,12 +88,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     tracing::info!("initialized dss client");
-    let comms_service_client = CommsServiceClient::new(
-        internal_auth_key.as_ref().to_string(),
-        config.comms_service_url.clone(),
-    );
 
-    tracing::info!("initialized comms client");
     let sync_service_auth_key = match config.environment {
         Environment::Local => config.sync_service_auth_key.clone(),
         _ => secretsmanager_client
@@ -195,7 +189,7 @@ async fn main() -> anyhow::Result<()> {
                         .with_macro_db(db.clone())
                         .build(),
                 )
-                .with_channel_client(comms_service_client.clone())
+                .with_comms_db(db.clone())
                 .with_dcs_client(document_cognition_service_client)
                 .with_email_client(email_service_client)
                 .with_static_file_client(static_file_service_client.clone()),
@@ -203,7 +197,6 @@ async fn main() -> anyhow::Result<()> {
         sqs_client: Arc::new(sqs_client),
         document_storage_client: Arc::new(document_storage_client),
         macro_notify_client: Arc::new(macro_notify_client),
-        comms_service_client: Arc::new(comms_service_client),
         search_service_client: Arc::new(search_service_client),
         jwt_args,
         config: Arc::new(config),

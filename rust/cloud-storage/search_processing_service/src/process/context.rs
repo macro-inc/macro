@@ -1,11 +1,8 @@
 use std::sync::Arc;
 
-use sqlx::PgPool;
-
 #[derive(Clone)]
 pub struct SearchProcessingContext {
-    pub db: PgPool,
-    pub comms_db: PgPool,
+    pub db: sqlx::Pool<sqlx::Postgres>,
     pub worker: Arc<sqs_worker::SQSWorker>,
     pub document_storage_bucket: String,
     pub s3_client: Arc<s3_client::S3>,

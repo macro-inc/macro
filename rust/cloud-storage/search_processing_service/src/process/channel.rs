@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 pub async fn process_channel_message_update(
     opensearch_client: &OpensearchClient,
-    comms_db: &PgPool,
+    db: &PgPool,
     message: &ChannelMessageUpdate,
 ) -> anyhow::Result<()> {
     let channel_id: Uuid = message.channel_id.parse().context("invalid channel_id")?;
@@ -17,7 +17,7 @@ pub async fn process_channel_message_update(
 
     let channel_message_info =
         comms_db_client::messages::get_channel_message::get_channel_message_by_id(
-            comms_db,
+            db,
             &channel_id,
             &message_id,
         )

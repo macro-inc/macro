@@ -36,7 +36,6 @@ axum = { workspace = true, features = ["tower-log", "ws"] }
 base64 = { workspace = true }
 chrono = { workspace = true }
 comms = { path = "../comms", features = ["outbound"] }
-comms_service_client = { path = "../comms_service_client" }
 connection_gateway = { path = "../connection_gateway" }
 cookie = { workspace = true }
 dashmap = { workspace = true }
