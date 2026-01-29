@@ -23,7 +23,7 @@ import {
   KEY_ENTER_COMMAND,
 } from 'lexical';
 import type { JSX } from 'solid-js';
-import { createMemo, createSignal, Show, useContext } from 'solid-js';
+import { createMemo, createSignal, Show, Suspense, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { autoRegister } from '../../plugins';
 import { openDocument } from '../core/BlockLink';
@@ -55,6 +55,14 @@ function Loading() {
 }
 
 export function Snapshot(props: SnapshotDecoratorProps) {
+  return (
+    <Suspense>
+      <SnapshotInner {...props} />
+    </Suspense>
+  );
+}
+
+function SnapshotInner(props: SnapshotDecoratorProps) {
   const currentBlockId = useMaybeBlockId();
 
   const lexicalWrapper = useContext(LexicalWrapperContext);
