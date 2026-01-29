@@ -94,11 +94,7 @@ pub async fn get_entity_properties(
     let (user_properties, metadata_properties) = if query.include_metadata {
         // Fetch user properties and metadata in parallel when metadata is requested
         let (user_properties_result, metadata_properties_result) = tokio::join!(
-            entity_properties_get::get_entity_properties_values(
-                &state.db,
-                &entity_id,
-                entity_type
-            ),
+            entity_properties_get::get_entity_properties_values(&state.db, &entity_id, entity_type),
             async {
                 match entity_type {
                     EntityType::Document | EntityType::Task => {
@@ -115,15 +111,13 @@ pub async fn get_entity_properties(
                             crate::api::properties::metadata::MetadataError::NotFound
                         })?;
                         crate::api::properties::metadata::get_thread_metadata_properties(
-                            &state.db,
-                            thread_id,
+                            &state.db, thread_id,
                         )
                         .await
                     }
                     EntityType::Project => {
                         super::super::metadata::get_project_metadata_properties(
-                            &state.db,
-                            &entity_id,
+                            &state.db, &entity_id,
                         )
                         .await
                     }
@@ -158,19 +152,16 @@ pub async fn get_entity_properties(
     } else {
         // Only fetch user properties when metadata not requested - no parallel task needed
         tracing::debug!("skipping metadata properties due to include_metadata=false");
-        let user_properties = entity_properties_get::get_entity_properties_values(
-            &state.db,
-            &entity_id,
-            entity_type,
-        )
-        .await
-        .inspect_err(|e| {
-            tracing::error!(
-                error = ?e,
-                entity_id = %entity_id,
-                "failed to retrieve entity properties from database"
-            );
-        })?;
+        let user_properties =
+            entity_properties_get::get_entity_properties_values(&state.db, &entity_id, entity_type)
+                .await
+                .inspect_err(|e| {
+                    tracing::error!(
+                        error = ?e,
+                        entity_id = %entity_id,
+                        "failed to retrieve entity properties from database"
+                    );
+                })?;
 
         (user_properties, vec![])
     };

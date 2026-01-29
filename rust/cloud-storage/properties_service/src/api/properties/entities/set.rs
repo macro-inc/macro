@@ -7,7 +7,9 @@ use axum::{
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::api::{context::PropertiesHandlerState, properties::entities::types::SetEntityPropertyRequest};
+use crate::api::{
+    context::PropertiesHandlerState, properties::entities::types::SetEntityPropertyRequest,
+};
 use model::user::UserContext;
 use models_properties::EntityType;
 use properties::{PropertiesErr, PropertiesService};

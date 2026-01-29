@@ -65,8 +65,7 @@ async fn get_bulk_entity_properties_impl(
     // Note: the public endpoint requires property_ids, but internal callers can
     // pass an empty vec to fetch all properties for the given entities.
     let bulk_properties = if request.property_ids.is_empty() {
-        entity_properties_get::get_bulk_entity_properties_values(&state.db, &request.entities)
-            .await
+        entity_properties_get::get_bulk_entity_properties_values(&state.db, &request.entities).await
     } else {
         entity_properties_get::get_bulk_entity_properties_values_filtered(
             &state.db,

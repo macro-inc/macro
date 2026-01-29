@@ -1,5 +1,4 @@
 [package]
-default-run = "properties_service"
 edition = "2024"
 name = "properties_service"
 publish = false
@@ -10,17 +9,8 @@ name = "properties_service"
 path = "src/lib.rs"
 
 [[bin]]
-name = "properties_service"
-path = "src/main.rs"
-required-features = []
-
-[[bin]]
 name = "properties_service_openapi"
 path = "src/openapi.rs"
-
-[features]
-local_auth = []
-tree_trace = []
 
 [dependencies]
 anyhow = { workspace = true }

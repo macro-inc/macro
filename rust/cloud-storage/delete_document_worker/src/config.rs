@@ -31,12 +31,6 @@ pub struct Config {
 
     /// sync service URL
     pub sync_service_url: String,
-
-    /// Properties service auth key
-    pub properties_service_auth_key: String,
-
-    /// Properties service URL
-    pub properties_service_url: String,
 }
 
 impl Config {
@@ -79,12 +73,6 @@ impl Config {
         let sync_service_url =
             std::env::var("SYNC_SERVICE_URL").context("SYNC_SERVICE_URL must be provided")?;
 
-        let properties_service_auth_key = std::env::var("PROPERTIES_SERVICE_AUTH_KEY")
-            .context("PROPERTIES_SERVICE_AUTH_KEY must be provided")?;
-
-        let properties_service_url = std::env::var("PROPERTIES_SERVICE_URL")
-            .context("PROPERTIES_SERVICE_URL must be provided")?;
-
         Ok(Config {
             database_url,
             redis_uri,
@@ -98,8 +86,6 @@ impl Config {
             comms_service_url,
             sync_service_auth_key,
             sync_service_url,
-            properties_service_auth_key,
-            properties_service_url,
         })
     }
 }

@@ -109,13 +109,6 @@ use models_soup::email_thread::{
 };
 use models_soup::item::SoupItem;
 use models_soup::project::SoupProject;
-use properties_service::api::properties::{
-    definitions::{ListPropertiesQuery, PropertyDefinitionResponse},
-    entities::{
-        EntityPropertiesResponse, EntityQueryParams, SetEntityPropertyRequest,
-        types::BulkEntityPropertiesRequest,
-    },
-};
 use soup::inbound::axum_router::{PostSoupRequest, SoupApiItem, SoupApiSort, SoupPage};
 use utoipa::OpenApi;
 
@@ -218,18 +211,6 @@ use utoipa::OpenApi;
         saved_views::delete_view_handler,
         saved_views::patch_view_handler,
         saved_views::exclude_default_view_handler,
-
-        // properties
-        properties_service::api::properties::definitions::list::list_properties,
-        properties_service::api::properties::definitions::create::create_property_definition,
-        properties_service::api::properties::definitions::delete::delete_property_definition,
-        properties_service::api::properties::options::get::get_property_options,
-        properties_service::api::properties::options::create::add_property_option,
-        properties_service::api::properties::options::delete::delete_property_option,
-        properties_service::api::properties::entities::get::get_entity_properties,
-        properties_service::api::properties::entities::get_bulk::get_bulk_entity_properties,
-        properties_service::api::properties::entities::set::set_entity_property,
-        properties_service::api::properties::entities::delete_property::delete_entity_property,
     ),
     components(
         schemas(
@@ -255,9 +236,6 @@ use utoipa::OpenApi;
             CreateTaskRequest,
             CreateTaskResponse,
             PropertyInput,
-            models_properties::api::requests::SetPropertyValue,
-            models_properties::shared::EntityReference,
-            models_properties::shared::EntityType, // Quick create task
             CreateBulkDocumentResponseData,
             CreateBulkDocumentResponse, // Create document bulk
             GetDocumentListResult,
@@ -365,27 +343,6 @@ use utoipa::OpenApi;
 
             CreateViewRequest,
             ExcludeDefaultViewRequest,
-
-            // Properties
-            models_properties::api::CreatePropertyDefinitionRequest,
-            models_properties::api::PropertyDataType,
-            models_properties::api::SelectStringOption,
-            models_properties::api::SelectNumberOption,
-            ListPropertiesQuery,
-            PropertyDefinitionResponse,
-            models_properties::api::PropertyDefinitionWithOptionsResponse,
-            EntityPropertiesResponse,
-            SetEntityPropertyRequest,
-            EntityQueryParams,
-            BulkEntityPropertiesRequest,
-            models_properties::api::AddPropertyOptionRequest,
-            models_properties::api::AddStringOptionRequest,
-            models_properties::api::AddNumberOptionRequest,
-            models_properties::api::PropertyDefinitionResponse,
-            models_properties::api::PropertyOptionResponse,
-            models_properties::DataType,
-            models_properties::api::EntityPropertyWithDefinitionResponse,
-            models_properties::api::PropertyValue,
         ),
     ),
     tags(

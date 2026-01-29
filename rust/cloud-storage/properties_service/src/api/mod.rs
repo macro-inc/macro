@@ -42,29 +42,19 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
 fn api_router(app_state: ApiContext) -> Router {
     let handler_state = PropertiesHandlerState::from(&app_state);
 
-    Router::new()
-        .nest(
-            "/properties",
-            properties::router()
-                .with_state(handler_state.clone())
-                .layer(
-                    tower::ServiceBuilder::new()
-                        .layer(axum::middleware::from_fn(
-                            macro_middleware::auth::initialize_user_context::handler,
-                        ))
-                        .layer(axum::middleware::from_fn_with_state(
-                            app_state.jwt_args.clone(),
-                            macro_middleware::auth::attach_user::handler,
-                        )),
-                ),
-        )
-        .nest(
-            "/internal",
-            internal::router()
-                .with_state(handler_state)
-                .layer(axum::middleware::from_fn_with_state(
-                    app_state.clone(),
-                    macro_middleware::auth::internal_access::handler,
-                )),
-        )
+    Router::new().nest(
+        "/properties",
+        properties::router()
+            .with_state(handler_state.clone())
+            .layer(
+                tower::ServiceBuilder::new()
+                    .layer(axum::middleware::from_fn(
+                        macro_middleware::auth::initialize_user_context::handler,
+                    ))
+                    .layer(axum::middleware::from_fn_with_state(
+                        app_state.jwt_args.clone(),
+                        macro_middleware::auth::attach_user::handler,
+                    )),
+            ),
+    )
 }

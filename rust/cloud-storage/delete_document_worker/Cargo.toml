@@ -25,7 +25,6 @@ macro_env = { path = "../macro_env" }
 macro_redis_cluster_client = { path = "../macro_redis_cluster_client" }
 model = { path = "../model" }
 openssl = { workspace = true }
-properties_service_client = { path = "../properties_service_client" }
 redis = { workspace = true, features = [
   "aio",
   "cluster-async",
@@ -41,6 +40,8 @@ tokio = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }
 tracing = { workspace = true }
+properties_db_client = { path = "../properties_db_client" }
+models_properties = { path = "../models_properties" }
 
 [package.metadata.cargo-machete]
 ignored = ["openssl"]

@@ -1,4 +1,6 @@
 use anyhow::Context;
+use models_properties::{EntityReference, EntityType};
+use properties_db_client::entity_properties::delete as entity_properties_delete;
 
 #[tracing::instrument(skip(ctx, message), fields(message_id=message.message_id))]
 pub async fn handle(
@@ -95,13 +97,11 @@ pub async fn handle(
 
     // Delete document properties
     tracing::trace!(document_id=%document_id, "deleting document properties");
-    let _ = ctx
-        .properties_service_client
-        .delete_entity(document_id, properties_service_client::EntityType::Document)
+
+    let entity_reference = EntityReference::new(document_id, EntityType::Document);
+    let _ = entity_properties_delete::delete_entity(&ctx.db, &entity_reference)
         .await
-        .inspect_err(|e| {
-            tracing::warn!(error=?e, document_id=%document_id, "could not delete document properties");
-        });
+        .inspect_err(|e| tracing::error!(error=?e, "failed to delete entity properties"));
     tracing::trace!(document_id=%document_id, "deleted document properties");
 
     let _ = ctx.worker.cleanup_message(message).await.inspect_err(|e| {

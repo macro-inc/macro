@@ -92,20 +92,6 @@ pub async fn main() -> anyhow::Result<()> {
         config.comms_service_url.clone(),
     );
 
-    let properties_service_auth_key = match config.environment {
-        Environment::Local => config.properties_service_auth_key.clone(),
-        _ => secretsmanager_client
-            .get_secret_value(&config.properties_service_auth_key)
-            .await
-            .context("unable to get secret")?
-            .to_string(),
-    };
-
-    let properties_service_client = properties_service_client::PropertiesServiceClient::new(
-        properties_service_auth_key,
-        config.properties_service_url.clone(),
-    );
-
     let queue_worker_context = QueueWorkerContext {
         db: db.clone(),
         worker: Arc::new(delete_document_worker),
@@ -113,7 +99,6 @@ pub async fn main() -> anyhow::Result<()> {
         redis_client: Arc::new(redis_client),
         sync_service_client: Arc::new(sync_service_client),
         comms_service_client: Arc::new(comms_service_client),
-        properties_service_client: Arc::new(properties_service_client),
         config: config.clone(),
     };
 

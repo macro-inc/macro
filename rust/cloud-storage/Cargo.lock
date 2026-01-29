@@ -2500,8 +2500,9 @@ dependencies = [
  "macro_env",
  "macro_redis_cluster_client",
  "model",
+ "models_properties",
  "openssl",
- "properties_service_client",
+ "properties_db_client",
  "redis",
  "s3_client",
  "secretsmanager_client",
@@ -6737,18 +6738,6 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
-]
-
-[[package]]
-name = "properties_service_client"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "macro_service_client",
- "models_properties",
- "reqwest",
- "serde",
- "tracing",
 ]
 
 [[package]]

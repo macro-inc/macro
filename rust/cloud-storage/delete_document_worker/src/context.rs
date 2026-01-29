@@ -12,6 +12,5 @@ pub struct QueueWorkerContext {
     pub redis_client: Arc<Redis>,
     pub sync_service_client: Arc<sync_service_client::SyncServiceClient>,
     pub comms_service_client: Arc<comms_service_client::CommsServiceClient>,
-    pub properties_service_client: Arc<properties_service_client::PropertiesServiceClient>,
     pub config: Config,
 }
