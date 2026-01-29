@@ -240,30 +240,6 @@ services:
       start_period: 10s
 
   # ============================================================================
-  # properties_service (Port 8091)
-  # User/document properties
-  # ============================================================================
-  properties_service:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: properties_service
-    ports:
-      - "8091:8080"
-    depends_on:
-      - comms_service
-    networks:
-      - databases
-      - services
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  # ============================================================================
   # search_processing_service (Port 8092)
   # Search indexing worker
   # ============================================================================
