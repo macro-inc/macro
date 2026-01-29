@@ -29,7 +29,6 @@ pub(crate) struct ApiContext {
         Arc<document_storage_service_client::DocumentStorageServiceClient>,
     pub notification_service_client: Arc<notification_service_client::NotificationServiceClient>,
     pub ses_client: Arc<ses_client::Ses>,
-    pub macro_notify_client: Arc<macro_notify::MacroNotify>,
     pub notification_ingress_service:
         Arc<NotificationIngressService<DbNotificationRepository<PgPool>, SqsNotificationQueue>>,
     pub sqs_client: Arc<sqs_client::SQS>,

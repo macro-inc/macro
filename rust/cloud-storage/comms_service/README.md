@@ -51,13 +51,6 @@ If required, you can just point to a local instance of comms.
 
 Please see the [comms_db_client](../comms_db_client) for more details.
 
-## Interactions with `macro_notify`
-
-The `macro_notify` crate is used to send notifications to the client.
-
-While this also uses the `connection_gateway`, notifications are seperate from the websocket updates the comms service send directly to the gateway.  
-
-
 # Technical Documentation
 
 ## Creating Channels

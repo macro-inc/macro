@@ -133,13 +133,6 @@ async fn main() -> anyhow::Result<()> {
         .get_maybe_secret_value(config.environment, InternalApiSecretKey::new()?)
         .await?;
 
-    let macro_notify_client = macro_notify::MacroNotify::new(
-        config.vars.notification_queue.as_ref().to_string(),
-        "document_storage_service".to_string(),
-    )
-    .await;
-    tracing::trace!("initialized macro_notify client");
-
     let dss_auth_key = DocumentStorageServiceAuthKey::new()?;
 
     let conn_gateway_client = ConnectionGatewayClient::new(
@@ -272,7 +265,6 @@ async fn main() -> anyhow::Result<()> {
         dynamodb_client: Arc::new(dynamodb_client),
         dynamo_db,
         sqs_client: Arc::new(sqs_client),
-        macro_notify_client: Arc::new(macro_notify_client),
         notification_ingress_service,
         conn_gateway_client: Arc::new(conn_gateway_client),
         sync_service_client: Arc::new(sync_service_client),

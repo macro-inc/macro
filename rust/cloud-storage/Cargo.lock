@@ -498,6 +498,7 @@ dependencies = [
  "anyhow",
  "async-stripe",
  "async-stripe-webhook",
+ "aws-config",
  "aws-sdk-secretsmanager",
  "aws-sdk-sesv2",
  "aws-sdk-sqs",
@@ -522,7 +523,6 @@ dependencies = [
  "macro_env",
  "macro_env_var",
  "macro_middleware",
- "macro_notify",
  "macro_user_id",
  "macro_uuid",
  "maud",
@@ -1864,6 +1864,7 @@ dependencies = [
  "ai_format",
  "anyhow",
  "async-trait",
+ "aws-config",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
@@ -2633,7 +2634,6 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_middleware",
- "macro_notify",
  "macro_project_utils",
  "macro_share_permissions",
  "macro_user_id",
@@ -2724,7 +2724,6 @@ dependencies = [
  "macro_env",
  "macro_env_var",
  "macro_middleware",
- "macro_notify",
  "macro_project_utils",
  "macro_sha_count_client",
  "macro_share_permissions",
@@ -5072,28 +5071,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "macro_notify"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aws-sdk-sqs",
- "macro_aws_config",
- "macro_uuid",
- "model",
- "model_notifications",
- "serde",
- "serde_json",
- "tracing",
- "uuid",
-]
-
-[[package]]
 name = "macro_project_utils"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "macro_db_client",
- "macro_notify",
  "model",
  "sqlx",
  "tokio",
@@ -5918,7 +5900,6 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_middleware",
- "macro_notify",
  "macro_user_id",
  "macro_uuid",
  "mention_utils",
@@ -6621,7 +6602,6 @@ dependencies = [
  "macro_db_client",
  "macro_db_migrator",
  "macro_middleware",
- "macro_notify",
  "macro_user_id",
  "macro_uuid",
  "mockall",
