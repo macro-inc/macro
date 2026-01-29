@@ -3,7 +3,8 @@ import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { withAnalytics } from '@coparse/analytics';
 import { ChannelsContextProvider } from '@core/context/channels';
-import { UserContextProvider } from '@core/context/user';
+import { UserContextProvider, useUserId } from '@core/context/user';
+import { QuerySyncProvider } from '@queries/sync/SyncProvider';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
@@ -338,6 +339,11 @@ const clearBodyInlineStyleColor = () => {
   document.body.style.backgroundColor = '';
 };
 
+function QuerySyncProviderWithUserId() {
+  const userId = useUserId();
+  return <QuerySyncProvider userId={userId} />;
+}
+
 export function Root() {
   setHotkeyRoot(useHotKeyRoot());
 
@@ -389,6 +395,7 @@ export function Root() {
       <MetaProvider>
         <EntityProvider>
           <UserContextProvider>
+            <QuerySyncProviderWithUserId />
             <UserInfoSideEffects />
             <ConfiguredGlobalAppStateProvider>
               <ChannelsContextProvider>

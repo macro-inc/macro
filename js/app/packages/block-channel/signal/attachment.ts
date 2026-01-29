@@ -1,10 +1,7 @@
 import { createBlockSignal, createBlockStore } from '@core/block';
 import { isStaticAttachmentType } from '@core/store/cacheChannelInput';
 import type { Attachment } from '@service-comms/generated/models/attachment';
-import { createConnectionBlockWebsocketEffect } from '@service-connection/websocket';
-import { useUserId } from '@core/context/user';
 import { isItemType } from '@service-storage/client';
-import { channelStore } from './channel';
 
 export const isDraggingOverChannelSignal = createBlockSignal(false);
 export const isValidChannelDragSignal = createBlockSignal(true);
@@ -47,22 +44,3 @@ export function addAttachmentToMessage(attachment: Attachment) {
     attachment,
   ]);
 }
-
-createConnectionBlockWebsocketEffect((msg) => {
-  if (msg.type === 'comms_attachment') {
-    const userId_ = useUserId();
-    const userId = userId_();
-    const channel = channelStore.get;
-    const channelId = channel?.channel?.id;
-    if (!channelId || !userId) return;
-    let value = JSON.parse(msg.data as any);
-
-    const { channel_id: targetChannelId, attachments } = value;
-
-    if (targetChannelId === channelId) {
-      for (const attachment of attachments) {
-        addAttachmentToMessage(attachment);
-      }
-    }
-  }
-});

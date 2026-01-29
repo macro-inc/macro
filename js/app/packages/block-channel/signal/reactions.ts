@@ -1,9 +1,8 @@
 import { withAnalytics } from '@coparse/analytics';
 import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
 import { createBlockStore } from '@core/block';
-import { commsServiceClient } from '@service-comms/client';
-import { createConnectionBlockWebsocketEffect } from '@service-connection/websocket';
 import { useUserId } from '@core/context/user';
+import { commsServiceClient } from '@service-comms/client';
 import { channelStore } from './channel';
 
 type CountedReaction = {
@@ -97,21 +96,3 @@ export async function reactToMessage(emoji: string, messageId: string) {
     action,
   });
 }
-
-createConnectionBlockWebsocketEffect((msg) => {
-  if (msg.type === 'comms_reaction') {
-    const userId_ = useUserId();
-    const userId = userId_();
-    const channel = channelStore.get;
-    const channelId = channel?.channel?.id;
-    const setMessageToReaction = messageToReactionStore.set;
-    if (!channelId || !userId) return;
-    //TODO: make this better, once things are more fleshed out
-    let value = JSON.parse(msg.data as any);
-    const { channel_id: targetChannelId, reactions } = value;
-
-    if (targetChannelId === channelId) {
-      setMessageToReaction(value.message_id, reactions);
-    }
-  }
-});

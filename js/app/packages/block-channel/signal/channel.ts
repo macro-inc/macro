@@ -10,20 +10,17 @@ import { getImageDimensions, getVideoDimensions } from '@core/util/media';
 import { useSendMessageMutation } from '@queries/channel/message';
 import { commsServiceClient } from '@service-comms/client';
 import type { NewAttachment } from '@service-comms/generated/models';
-import type { Attachment } from '@service-comms/generated/models/attachment';
 import type { Channel } from '@service-comms/generated/models/channel';
 import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
 import type { Message } from '@service-comms/generated/models/message';
 import type { ParticipantAccess } from '@service-comms/generated/models/participantAccess';
 import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
-import { createConnectionBlockWebsocketEffect } from '@service-connection/websocket';
 import { useUserId } from '@core/context/user';
 import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { toast } from 'core/component/Toast/Toast';
 import type { Accessor } from 'solid-js';
-import { updateActivityOnMessageReceived } from './activity';
-import { initializeAttachments, messageAttachmentsStore } from './attachment';
+import { initializeAttachments } from './attachment';
 import { messageToReactionStore } from './reactions';
 import {
   type MessageWithThreadId,
@@ -146,16 +143,6 @@ function upsertMessage(message: Message) {
   } else {
     setChannel('messages', index, message);
   }
-}
-
-function upsertAttachment(messageId: string, attachments: Attachment[]) {
-  let attachmentStore = messageAttachmentsStore.get;
-  let messageAttachments = attachmentStore[messageId];
-  if (!messageAttachments) {
-    console.error('message attachments not found', messageId);
-    return;
-  }
-  messageAttachmentsStore.set(messageId, attachments);
 }
 
 function optimisticChannelMessage({
@@ -287,41 +274,3 @@ export function useSendChannelMessageAction(channelID: Accessor<string>) {
     });
   };
 }
-
-createConnectionBlockWebsocketEffect((msg) => {
-  const channel = channelStore.get;
-  const upsert = createCallback(upsertMessage);
-  const upsertThread = createCallback(upsertInThread);
-  const updateActivity = createCallback(updateActivityOnMessageReceived);
-  const channelId = channel?.channel?.id;
-  if (!channelId) return;
-  if (msg.type === 'comms_message') {
-    //TODO: make this better, once things are more fleshed out
-    let value = JSON.parse(msg.data as any);
-    updateActivity(value.channel_id);
-    if (value.channel_id !== channelId) {
-      return;
-    }
-    if (!value.thread_id) {
-      upsert(value);
-    } else {
-      upsertThread(value);
-    }
-  }
-});
-
-// Update on attachment deletion
-createConnectionBlockWebsocketEffect((msg) => {
-  const channel = channelStore.get;
-  const updateActivity = createCallback(updateActivityOnMessageReceived);
-  const channelId = channel?.channel?.id;
-  if (!channelId) return;
-  if (msg.type === 'comms_attachment') {
-    let value = JSON.parse(msg.data as any);
-    updateActivity(value.channel_id);
-    if (value.channel_id !== channelId) {
-      return;
-    }
-    upsertAttachment(value.message_id, value.attachments);
-  }
-});
