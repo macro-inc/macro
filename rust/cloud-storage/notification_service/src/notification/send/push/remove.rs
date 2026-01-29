@@ -112,4 +112,3 @@ pub async fn clear_push_notification(
 
     Ok(())
 }
-

@@ -118,4 +118,3 @@ async fn test_bulk_patch_done(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
     Ok(())
 }
-
