@@ -18,7 +18,7 @@ pub struct DynamodbClient {
 
 impl DynamodbClient {
     /// Create a new DynamodbClient with the given AWS config and table name.
-    pub fn new(aws_config: &aws_config::SdkConfig, table: String) -> Self {
+    pub fn new(aws_config: &macro_aws_config::SdkConfig, table: String) -> Self {
         let client = Client::new(aws_config);
         DynamodbClient { client, table }
     }

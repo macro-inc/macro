@@ -17,7 +17,6 @@ use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
-use macro_env_var::env_var;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use macro_redis_cluster_client::Redis;
 use properties::{
@@ -88,30 +87,7 @@ async fn main() -> anyhow::Result<()> {
         "initialized db connection"
     );
 
-    // Create DynamoDB client with local endpoint for local environment
-    // If DynamoEndpointUrl is not set, use AWS DynamoDB even in local mode
-    let dynamo_db = if matches!(config.environment, Environment::Local) {
-        env_var!(
-            struct DynamoEndpointUrl;
-        );
-        match DynamoEndpointUrl::new() {
-            Ok(endpoint_url) => {
-                tracing::info!("Using local DynamoDB endpoint: {}", endpoint_url.as_ref());
-                let local_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-                    .region("us-east-1")
-                    .endpoint_url(endpoint_url.to_string())
-                    .load()
-                    .await;
-                aws_sdk_dynamodb::Client::new(&local_config)
-            }
-            Err(_) => {
-                tracing::info!("DynamoEndpointUrl not set, using AWS DynamoDB");
-                aws_sdk_dynamodb::Client::new(&aws_config)
-            }
-        }
-    } else {
-        aws_sdk_dynamodb::Client::new(&aws_config)
-    };
+    let dynamo_db = aws_sdk_dynamodb::Client::new(&aws_config);
 
     let dynamodb_client = DynamodbClient::new_from_client(
         dynamo_db.clone(),

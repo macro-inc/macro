@@ -245,7 +245,7 @@ macro_rules! env_var {
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```
 /// maybe_env_var! {
 ///     pub struct OptionalApiKey;
 /// }

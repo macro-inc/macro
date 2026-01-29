@@ -2743,7 +2743,6 @@ name = "document_storage_service"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-config",
  "aws-sdk-dynamodb",
  "aws-sdk-s3",
  "aws-sdk-secretsmanager",
@@ -8559,7 +8558,6 @@ name = "static_file_service"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-config",
  "aws-sdk-dynamodb",
  "aws-sdk-s3",
  "aws-sdk-secretsmanager",
