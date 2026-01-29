@@ -8,20 +8,42 @@ import {
   type IdResponse,
   type MessageResponse,
 } from '@service-comms/client';
-import type { PostMessageRequest } from '@service-comms/generated/models';
+import type {
+  GetChannelResponse,
+  PostMessageRequest,
+} from '@service-comms/generated/models';
 import { useMutation } from '@tanstack/solid-query';
+import { queryClient } from '../client';
+import { channelKeys } from './keys';
+import {
+  optimisticDeleteChannelMessage,
+  optimisticInsertChannelMessage,
+  optimisticUpdateChannelMessage,
+  replaceOptimisticMessage,
+} from './optimistic';
 
 const { track } = withAnalytics();
 
 type WithChannelID<T> = T & { channelID: string };
 
-type SendMessageParams = WithChannelID<{ message: PostMessageRequest }>;
+type MessageMutationContext = { previous: GetChannelResponse | undefined };
+
+type SendMessageParams = WithChannelID<{
+  message: PostMessageRequest;
+  optimisticId: string;
+  senderId: string;
+}>;
 
 /**
  * Mutation to send an channel message.
  */
 export function useSendMessageMutation(
-  callbacks?: MutationCallbacks<IdResponse, Error, SendMessageParams>
+  callbacks?: MutationCallbacks<
+    IdResponse,
+    Error,
+    SendMessageParams,
+    MessageMutationContext
+  >
 ) {
   return useMutation(() => ({
     mutationFn: async (vars: SendMessageParams) => {
@@ -33,19 +55,44 @@ export function useSendMessageMutation(
           })
       );
     },
-    ...withCallbacks<IdResponse, Error, SendMessageParams>(
+    ...withCallbacks<
+      IdResponse,
+      Error,
+      SendMessageParams,
+      MessageMutationContext
+    >(
       {
-        onError(error) {
-          console.error('failed to send message', error);
-          toast.failure('Failed to send message');
+        onMutate: (vars) => {
+          const previous = optimisticInsertChannelMessage({
+            channelId: vars.channelID,
+            optimisticId: vars.optimisticId,
+            senderId: vars.senderId,
+            ...vars.message,
+          });
+          return { previous };
         },
-        onSuccess(_data, variables) {
+        onSuccess(data, variables) {
+          replaceOptimisticMessage({
+            channelId: variables.channelID,
+            optimisticId: variables.optimisticId,
+            realId: data.id,
+          });
           track(TrackingEvents.BLOCKCHANNEL.MESSAGE.SEND, {
             channelId: variables.channelID,
             contentLength: variables.message.content?.length ?? 0,
             attachmentsLength: variables.message.attachments.length,
             inThread: variables.message.thread_id !== undefined,
           });
+        },
+        onError(error, vars, context) {
+          console.error('failed to send message', error);
+          toast.failure('Failed to send message');
+          if (context?.previous) {
+            queryClient.setQueryData(
+              channelKeys.withID(vars.channelID).queryKey,
+              context.previous
+            );
+          }
         },
         onSettled: (_data, _error, variables) => {
           invalidateChannelWithID(variables.channelID);
@@ -62,7 +109,12 @@ type DeleteMessageParams = { channelID: string; messageID: string };
  * Mutation to delete a channel message
  */
 export function useDeleteMessageMutation(
-  callbacks?: MutationCallbacks<void, Error, DeleteMessageParams>
+  callbacks?: MutationCallbacks<
+    void,
+    Error,
+    DeleteMessageParams,
+    MessageMutationContext
+  >
 ) {
   return useMutation(() => ({
     mutationFn: async (vars: DeleteMessageParams) => {
@@ -74,11 +126,24 @@ export function useDeleteMessageMutation(
           })
       );
     },
-    ...withCallbacks<void, Error, DeleteMessageParams>(
+    ...withCallbacks<void, Error, DeleteMessageParams, MessageMutationContext>(
       {
-        onError(error) {
+        onMutate: (vars) => {
+          const previous = optimisticDeleteChannelMessage({
+            channelId: vars.channelID,
+            message_id: vars.messageID,
+          });
+          return { previous };
+        },
+        onError(error, vars, context) {
           console.error('failed to delete message', error);
           toast.failure('Failed to delete message');
+          if (context?.previous) {
+            queryClient.setQueryData(
+              channelKeys.withID(vars.channelID).queryKey,
+              context.previous
+            );
+          }
         },
         onSettled: (_data, _error, variables) => {
           invalidateChannelWithID(variables.channelID);
@@ -99,7 +164,12 @@ type PatchMessageParams = {
  * Mutation to patch a channel message
  */
 export function usePatchMessageMutation(
-  callbacks?: MutationCallbacks<MessageResponse, Error, PatchMessageParams>
+  callbacks?: MutationCallbacks<
+    MessageResponse,
+    Error,
+    PatchMessageParams,
+    MessageMutationContext
+  >
 ) {
   return useMutation(() => ({
     mutationFn: async (vars: PatchMessageParams) => {
@@ -112,11 +182,30 @@ export function usePatchMessageMutation(
           })
       );
     },
-    ...withCallbacks<MessageResponse, Error, PatchMessageParams>(
+    ...withCallbacks<
+      MessageResponse,
+      Error,
+      PatchMessageParams,
+      MessageMutationContext
+    >(
       {
-        onError(error) {
+        onMutate: (vars) => {
+          const previous = optimisticUpdateChannelMessage({
+            channelId: vars.channelID,
+            message_id: vars.messageID,
+            content: vars.content,
+          });
+          return { previous };
+        },
+        onError(error, vars, context) {
           console.error('failed to update message', error);
           toast.failure('Failed to update message');
+          if (context?.previous) {
+            queryClient.setQueryData(
+              channelKeys.withID(vars.channelID).queryKey,
+              context.previous
+            );
+          }
         },
         onSettled: (_data, _error, variables) => {
           invalidateChannelWithID(variables.channelID);

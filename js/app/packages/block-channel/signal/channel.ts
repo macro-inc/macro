@@ -1,6 +1,4 @@
 import type { ChannelData } from '@block-channel/definition';
-import { withAnalytics } from '@coparse/analytics';
-import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
 import { createBlockMemo, createBlockStore } from '@core/block';
 import { invalidateListChannels } from '@queries/channel/channels';
 import {
@@ -33,8 +31,6 @@ import {
   threadsStore,
   upsertInThread,
 } from './threads';
-
-const { track } = withAnalytics();
 
 type ChannelStoreData = {
   messages: Message[];
@@ -216,15 +212,6 @@ export function useSendChannelMessageAction(channelID: Accessor<string>) {
     onSettled() {
       invalidateListChannels();
     },
-    onSuccess(_, variables) {
-      const message = variables.message;
-      track(TrackingEvents.BLOCKCHANNEL.MESSAGE.SEND, {
-        channelId: variables.channelID,
-        contentLength: message.content?.length ?? 0,
-        attachmentsLength: message.attachments.length,
-        inThread: message.thread_id !== undefined,
-      });
-    },
   });
 
   return async ({
@@ -237,6 +224,8 @@ export function useSendChannelMessageAction(channelID: Accessor<string>) {
     if (!isMessageSendable(content, attachments)) return;
 
     const channelId = channelID();
+    const senderId = userId()!;
+    const optimisticId = crypto.randomUUID();
 
     const attachmentsToSend = await Promise.allSettled(
       attachments.map(async (a) => {
@@ -278,6 +267,8 @@ export function useSendChannelMessageAction(channelID: Accessor<string>) {
 
     const data = await mutation.mutateAsync({
       channelID: channelId,
+      optimisticId,
+      senderId,
       message: {
         attachments: filteredAttachements,
         content: content ?? '',
@@ -286,12 +277,13 @@ export function useSendChannelMessageAction(channelID: Accessor<string>) {
       },
     });
 
+    // Update local signal store with real ID (for thread upsert handling)
     optimisticSend({
       channelId,
       messageId: data.id,
       content: content ?? '',
       threadId,
-      senderId: userId()!,
+      senderId,
     });
   };
 }
