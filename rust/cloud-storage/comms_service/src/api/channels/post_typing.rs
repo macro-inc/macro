@@ -18,6 +18,7 @@ use uuid::Uuid;
 pub struct PostTypingRequest {
     pub action: TypingAction,
     pub thread_id: Option<String>,
+    pub nonce: Option<String>,
 }
 
 #[utoipa::path(
@@ -55,10 +56,11 @@ pub async fn post_typing_handler(
     notify_typing(
         &app_state,
         TypingUpdate {
-            channel_id,
-            user_id: channel_member.context.user_id.clone(),
+            channel_id: &channel_id,
+            user_id: &channel_member.context.user_id,
             action: req.action,
-            thread_id,
+            thread_id: thread_id.as_ref(),
+            nonce: req.nonce.as_deref(),
         },
     )
     .await

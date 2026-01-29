@@ -3,7 +3,10 @@ use crate::{
         context::AppState,
         extractors::{ChannelId, ChannelParticipants, MessageId, MessageSender},
     },
-    service::{self, sender::notify},
+    service::{
+        self,
+        sender::notify::{self, MessageWithNonce},
+    },
 };
 use anyhow::Result;
 use axum::{
@@ -25,6 +28,7 @@ use uuid::Uuid;
 pub struct PatchMessageRequest {
     pub content: Option<String>,
     pub attachment_ids_to_delete: Option<Vec<String>>,
+    pub nonce: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -64,8 +68,14 @@ pub async fn patch_message_handler(
     if let Some(attachment_ids) = &req.attachment_ids_to_delete
         && !attachment_ids.is_empty()
     {
-        delete_message_attachments(&app_state, attachment_ids.clone(), message_id, channel_id)
-            .await?;
+        delete_message_attachments(
+            &app_state,
+            attachment_ids.clone(),
+            message_id,
+            channel_id,
+            req.nonce.as_deref(),
+        )
+        .await?;
     }
 
     if let Some(content) = &req.content {
@@ -96,15 +106,22 @@ pub async fn patch_message_handler(
         } else {
             participants.iter().map(|p| p.user_id.copied()).collect()
         };
-        notify::notify_message(&app_state, message, &participants)
-            .await
-            .map_err(|e| {
-                tracing::error!(error=?e, "unable to notify message");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "failed to deliver message".to_string(),
-                )
-            })?;
+        notify::notify_message(
+            &app_state,
+            MessageWithNonce {
+                message: &message,
+                nonce: req.nonce.as_deref(),
+            },
+            &participants,
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!(error=?e, "unable to notify message");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to deliver message".to_string(),
+            )
+        })?;
 
         upsert_activity(
             &app_state.db,
@@ -134,6 +151,7 @@ async fn delete_message_attachments(
     attachment_ids: Vec<String>,
     message_id: Uuid,
     channel_id: Uuid,
+    nonce: Option<&str>,
 ) -> Result<(), (StatusCode, String)> {
     // Parse string IDs into UUIDs
     let attachment_uuids = attachment_ids
@@ -207,9 +225,10 @@ async fn delete_message_attachments(
 
     // Notify about the remaining attachments
     let attachment_update = notify::AttachmentUpdate {
-        channel_id,
-        message_id,
-        attachments: remaining_attachments.clone(),
+        channel_id: &channel_id,
+        message_id: &message_id,
+        attachments: &remaining_attachments,
+        nonce,
     };
     notify::notify_attachments(ctx, attachment_update)
         .await

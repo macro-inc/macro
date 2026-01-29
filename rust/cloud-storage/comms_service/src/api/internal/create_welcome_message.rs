@@ -15,7 +15,10 @@ use comms_db_client::{
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use tracing::Instrument;
 
-use crate::{api::context::AppState, service::sender::notify};
+use crate::{
+    api::context::AppState,
+    service::sender::notify::{self, MessageWithNonce},
+};
 use model::{
     comms::{ChannelType, CreateWelcomeMessageRequest, GetOrCreateAction},
     response::EmptyResponse,
@@ -111,7 +114,15 @@ async fn create_welcome_message(
         })
         .ok();
 
-    notify::notify_message(ctx, message.clone(), &participants).await?;
+    notify::notify_message(
+        ctx,
+        MessageWithNonce {
+            message: &message,
+            nonce: None,
+        },
+        &participants,
+    )
+    .await?;
 
     upsert_activity(
         &ctx.db,

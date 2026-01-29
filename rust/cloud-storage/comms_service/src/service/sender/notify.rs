@@ -3,15 +3,22 @@ use comms_db_client::model::{Attachment, CountedReaction, Message, TypingAction}
 use comms_db_client::participants::get_participants::get_participants;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::api::context::AppState;
 
+#[derive(Serialize, ToSchema)]
+pub struct MessageWithNonce<'a> {
+    #[serde(flatten)]
+    pub message: &'a Message,
+    pub nonce: Option<&'a str>,
+}
+
 pub async fn notify_message(
     ctx: &AppState,
-    message: Message,
+    message: MessageWithNonce<'_>,
     participants: &[MacroUserIdStr<'_>],
 ) -> Result<()> {
     if participants.is_empty() {
@@ -31,15 +38,16 @@ pub async fn notify_message(
     Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-pub struct TypingUpdate {
-    pub channel_id: Uuid,
-    pub user_id: String,
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TypingUpdate<'a> {
+    pub channel_id: &'a Uuid,
+    pub user_id: &'a str,
     pub action: TypingAction,
-    pub thread_id: Option<Uuid>,
+    pub thread_id: Option<&'a Uuid>,
+    pub nonce: Option<&'a str>,
 }
 
-pub async fn notify_typing(ctx: &AppState, update: TypingUpdate) -> Result<()> {
+pub async fn notify_typing(ctx: &AppState, update: TypingUpdate<'_>) -> Result<()> {
     let participants = get_participants(&ctx.db, &update.channel_id).await?;
 
     ctx.connection_gateway_client
@@ -56,14 +64,15 @@ pub async fn notify_typing(ctx: &AppState, update: TypingUpdate) -> Result<()> {
     Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-pub struct ReactionUpdate {
-    pub channel_id: Uuid,
-    pub message_id: Uuid,
-    pub reactions: Vec<CountedReaction>,
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ReactionUpdate<'a> {
+    pub channel_id: &'a Uuid,
+    pub message_id: &'a Uuid,
+    pub reactions: &'a [CountedReaction],
+    pub nonce: Option<&'a str>,
 }
 
-pub async fn notify_reactions(ctx: &AppState, update: ReactionUpdate) -> Result<()> {
+pub async fn notify_reactions(ctx: &AppState, update: ReactionUpdate<'_>) -> Result<()> {
     let participants = get_participants(&ctx.db, &update.channel_id).await?;
 
     ctx.connection_gateway_client
@@ -80,14 +89,15 @@ pub async fn notify_reactions(ctx: &AppState, update: ReactionUpdate) -> Result<
     Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-pub struct AttachmentUpdate {
-    pub channel_id: Uuid,
-    pub message_id: Uuid,
-    pub attachments: Vec<Attachment>,
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AttachmentUpdate<'a> {
+    pub channel_id: &'a Uuid,
+    pub message_id: &'a Uuid,
+    pub attachments: &'a [Attachment],
+    pub nonce: Option<&'a str>,
 }
 
-pub async fn notify_attachments(ctx: &AppState, update: AttachmentUpdate) -> Result<()> {
+pub async fn notify_attachments(ctx: &AppState, update: AttachmentUpdate<'_>) -> Result<()> {
     let participants = get_participants(&ctx.db, &update.channel_id).await?;
 
     ctx.connection_gateway_client

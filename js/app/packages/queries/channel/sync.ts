@@ -7,22 +7,25 @@ import type {
 import { queryClient } from '../client';
 import { channelKeys } from './keys';
 import { softInvalidateChannelWithID } from './channel';
+import { consumeNonce, NonceKeys } from './nonce';
 
 /**
  * Websocket payload types
  */
-type CommsMessagePayload = Message & { channel_id: string };
+type CommsMessagePayload = Message & { channel_id: string, nonce: string};
 
 type CommsReactionPayload = {
   channel_id: string;
   message_id: string;
   reactions: CountedReaction[];
+  nonce: string;
 };
 
 type CommsAttachmentPayload = {
   channel_id: string;
   message_id: string;
   attachments: Attachment[];
+  nonce: string;
 };
 
 /**
@@ -30,15 +33,19 @@ type CommsAttachmentPayload = {
  * Always invalidate to ensure cross-tab/cross-device sync.
  */
 export function handleCommsMessage(payload: CommsMessagePayload): void {
-  // Invalidate to refetch fresh data from server
-  const queryKey = channelKeys.withID(payload.channel_id).queryKey;
-  queryClient.setQueryData<GetChannelResponse>(queryKey, (prev) => {
-    if (!prev) return prev;
-    return {
-      ...prev,
-      messages: [...prev.messages, payload],
-    }
-  })
+  const requiresUpdate = !consumeNonce(NonceKeys.MESSAGE, payload.nonce);
+
+  if (requiresUpdate) {
+    const queryKey = channelKeys.withID(payload.channel_id).queryKey;
+    queryClient.setQueryData<GetChannelResponse>(queryKey, (prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        messages: [...prev.messages, payload],
+      }
+    })
+  }
+
   softInvalidateChannelWithID(payload.channel_id);
 }
 
@@ -48,17 +55,20 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
  */
 export function handleCommsReaction(payload: CommsReactionPayload): void {
   const queryKey = channelKeys.withID(payload.channel_id).queryKey;
+  const requiresUpdate = !consumeNonce(NonceKeys.REACTION, payload.nonce);
 
-  queryClient.setQueryData<GetChannelResponse>(queryKey, (prev) => {
-    if (!prev) return prev;
-    return {
-      ...prev,
-      reactions: {
-        ...prev.reactions,
-        [payload.message_id]: payload.reactions,
-      },
-    };
-  });
+  if (requiresUpdate) {
+    queryClient.setQueryData<GetChannelResponse>(queryKey, (prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        reactions: {
+          ...prev.reactions,
+          [payload.message_id]: payload.reactions,
+        },
+      };
+    });
+  };
 
   softInvalidateChannelWithID(payload.channel_id);
 }
@@ -69,7 +79,9 @@ export function handleCommsReaction(payload: CommsReactionPayload): void {
  */
 export function handleCommsAttachment(payload: CommsAttachmentPayload): void {
   const queryKey = channelKeys.withID(payload.channel_id).queryKey;
+  const requiresUpdate = !consumeNonce(NonceKeys.ATTACHMENT, payload.nonce);
 
+  if (requiresUpdate) {
   queryClient.setQueryData<GetChannelResponse>(queryKey, (prev) => {
     if (!prev) return prev;
 
@@ -84,6 +96,7 @@ export function handleCommsAttachment(payload: CommsAttachmentPayload): void {
       attachments: [...prev.attachments, ...newAttachments],
     };
   });
+  }
 
   softInvalidateChannelWithID(payload.channel_id);
 }

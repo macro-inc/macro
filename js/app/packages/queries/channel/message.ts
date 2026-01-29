@@ -19,6 +19,7 @@ import type {
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { channelKeys } from './keys';
+import { NonceKeys, registerNonce } from './nonce';
 
 type WithChannelId<T> = T & { channelId: string };
 type WithOptimisticId<T> = T & { optimisticId: string };
@@ -325,17 +326,21 @@ export function useSendMessageMutation(
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: SendMessageParams) => {
+      // Use optimisticId as nonce - allows server to echo it back for correlation
       return await throwOnErr(
         async () =>
           await commsServiceClient.postMessage({
             channel_id: vars.channelID,
             message: vars.message,
+            nonce: vars.optimisticId,
           })
       );
     },
     ...withCallbacks<IdResponse, Error, SendMessageParams, SendMessageContext>(
       {
         onMutate: (vars) => {
+          // Register nonce for deduplication when WebSocket event arrives
+          registerNonce(NonceKeys.MESSAGE, vars.optimisticId);
           return optimisticInsertChannelMessage({
             channelId: vars.channelID,
             optimisticId: vars.optimisticId,
@@ -390,11 +395,14 @@ export function useDeleteMessageMutation(
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: DeleteMessageParams) => {
+      const nonce = crypto.randomUUID();
+      registerNonce(NonceKeys.MESSAGE, nonce);
       await throwOnErr(
         async () =>
           await commsServiceClient.deleteMessage({
             channel_id: vars.channelID,
             message_id: vars.messageID,
+            nonce,
           })
       );
     },
@@ -444,12 +452,15 @@ export function usePatchMessageMutation(
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: PatchMessageParams) => {
+      const nonce = crypto.randomUUID();
+      registerNonce(NonceKeys.MESSAGE, nonce);
       return await throwOnErr(
         async () =>
           await commsServiceClient.patchMessage({
             channel_id: vars.channelID,
             message_id: vars.messageID,
             content: vars.content,
+            nonce,
           })
       );
     },

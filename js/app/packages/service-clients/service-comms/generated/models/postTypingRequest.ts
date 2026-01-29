@@ -5,10 +5,12 @@
  * OpenAPI spec version: 0.1.0
  */
 
+import type { PostTypingRequestNonce } from './postTypingRequestNonce';
 import type { PostTypingRequestThreadId } from './postTypingRequestThreadId';
 import type { TypingAction } from './typingAction';
 
 export interface PostTypingRequest {
   action: TypingAction;
+  nonce?: PostTypingRequestNonce;
   thread_id?: PostTypingRequestThreadId;
 }

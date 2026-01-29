@@ -4,7 +4,9 @@
  * comms_service
  * OpenAPI spec version: 0.1.0
  */
+import type { PostMessageResponseNonce } from './postMessageResponseNonce';
 
 export interface PostMessageResponse {
   id: string;
+  nonce?: PostMessageResponseNonce;
 }

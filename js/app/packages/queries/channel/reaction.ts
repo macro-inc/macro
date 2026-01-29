@@ -13,6 +13,7 @@ import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { softInvalidateChannelWithID } from './channel';
 import { channelKeys } from './keys';
+import { NonceKeys, registerNonce } from './nonce';
 
 type WithChannelId<T> = T & { channelId: string };
 type WithUserId<T> = T & { userId: string };
@@ -268,6 +269,8 @@ export function useAddReactionMutation(
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: ReactionParams) => {
+      const nonce = crypto.randomUUID();
+      registerNonce(NonceKeys.REACTION, nonce);
       return await throwOnErr(
         async () =>
           await commsServiceClient.postReaction({
@@ -275,6 +278,7 @@ export function useAddReactionMutation(
             message_id: vars.messageId,
             emoji: vars.emoji,
             action: 'Add',
+            nonce,
           })
       );
     },
@@ -323,6 +327,8 @@ export function useRemoveReactionMutation(
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: ReactionParams) => {
+      const nonce = crypto.randomUUID();
+      registerNonce(NonceKeys.REACTION, nonce);
       return await throwOnErr(
         async () =>
           await commsServiceClient.postReaction({
@@ -330,6 +336,7 @@ export function useRemoveReactionMutation(
             message_id: vars.messageId,
             emoji: vars.emoji,
             action: 'Remove',
+            nonce,
           })
       );
     },

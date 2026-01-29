@@ -1,6 +1,7 @@
 use crate::api::context::ChannelImpl;
 use crate::api::{context::AppState, extractors::ChannelName};
 use crate::notification as comms_notification;
+use crate::service::sender::notify::MessageWithNonce;
 use crate::{
     api::extractors::{ChannelId, ChannelMember, ChannelParticipants, ChannelTypeExtractor},
     service::{
@@ -38,11 +39,13 @@ pub struct PostMessageRequest {
     pub mentions: Vec<SimpleMention>,
     pub thread_id: Option<Uuid>,
     pub attachments: Vec<NewAttachment>,
+    pub nonce: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct PostMessageResponse {
     pub id: String,
+    pub nonce: Option<String>,
 }
 
 #[utoipa::path(
@@ -214,15 +217,22 @@ pub async fn post_message_handler(
         .collect();
 
     let start_time = Instant::now();
-    notify::notify_message(&ctx, message.clone(), &participants)
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "unable to notify message");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "failed to deliver message".to_string(),
-            )
-        })?;
+    notify::notify_message(
+        &ctx,
+        MessageWithNonce {
+            message: &message,
+            nonce: req.nonce.as_deref(),
+        },
+        &participants,
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!(error=?e, "unable to notify message");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "failed to deliver message".to_string(),
+        )
+    })?;
     tracing::debug!("message notification took {:?}ms", start_time.elapsed());
 
     let start_time = Instant::now();
@@ -262,9 +272,10 @@ pub async fn post_message_handler(
         notify::notify_attachments(
             &ctx,
             AttachmentUpdate {
-                channel_id,
-                message_id: message.id,
-                attachments,
+                channel_id: &channel_id,
+                message_id: &message.id,
+                attachments: &attachments,
+                nonce: req.nonce.as_deref(),
             },
         )
         .await
@@ -300,6 +311,7 @@ pub async fn post_message_handler(
         StatusCode::OK,
         Json(PostMessageResponse {
             id: message.id.to_string(),
+            nonce: req.nonce.clone(),
         }),
     ))
 }
