@@ -2,7 +2,6 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import { URL_PARAMS } from '@block-channel/constants';
 import type { ChannelData } from '@block-channel/definition';
-import { postChannelViewActivity } from '@block-channel/signal/activity';
 import {
   isDraggingOverChannelSignal,
   isValidChannelDragSignal,
@@ -32,6 +31,7 @@ import {
   createEffectOnEntityTypeNotification,
   useEntityHasUnreadNotifications,
 } from '@notifications';
+import { useUpdateChannelsActivityMutation } from '@queries/channel/activity';
 import {
   useChannelQuery,
   invalidateChannelWithID,
@@ -42,7 +42,6 @@ import {
 } from '@queries/channel/derived';
 import type { Message } from '@service-comms/generated/models';
 import { connectionGatewayClient } from '@service-connection/client';
-import { createCallback } from '@solid-primitives/rootless';
 import { useBeforeLeave, useSearchParams } from '@solidjs/router';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { toast } from 'core/component/Toast/Toast';
@@ -50,7 +49,6 @@ import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createMethodRegistration } from 'core/orchestrator';
 import {
   createEffect,
-  createMemo,
   createRenderEffect,
   createSignal,
   on,
@@ -95,33 +93,30 @@ export function Channel(props: {
   data: Required<ChannelData>;
   target?: TargetMessageInfo;
 }) {
+  const [_activeThreadId, setActiveThreadId] = activeThreadIdSignal;
   const channel = useChannelQuery(() => props.data.channel.id);
 
   // Derive messages and threads from query data
-  const messages = createMemo(() =>
-    channel.data ? getTopLevelMessages(channel.data) : []
-  );
-  const threads = createMemo(() =>
-    channel.data ? getThreadMessages(channel.data) : {}
-  );
-  const reactions = createMemo(() => channel.data?.reactions ?? {});
-  const attachments = createMemo(() => channel.data?.attachments ?? []);
+  const messages = () => getTopLevelMessages(channel.data);
+  const threads = () => getThreadMessages(channel.data);
+  const reactions = () => channel.data?.reactions ?? {};
+  const attachments = () => channel.data?.attachments ?? [];
 
-  const [_activeThreadId, setActiveThreadId] = activeThreadIdSignal;
   const channelId = useBlockId();
 
-  // Get activity from context (backed by query)
   const latestActivity = useChannelActivity(channelId);
-  // Track when this channel instance was opened (for "new" message indicators)
+
   const [openedChannel, setOpenedChannel] = createSignal<Date>();
 
-  const updateActivityOnOpen = createCallback(() => {
+  const updateActivityMutation = useUpdateChannelsActivityMutation();
+
+  const updateActivityOnOpen = () => {
     setOpenedChannel(new Date());
-    postChannelViewActivity(channelId);
-  });
-  const updateActivityOnClose = createCallback(() =>
-    postChannelViewActivity(channelId)
-  );
+    updateActivityMutation.mutate({ channelId, activityType: 'view' });
+  };
+
+  const updateActivityOnClose = () =>
+    updateActivityMutation.mutate({ channelId, activityType: 'view' });
 
   const { track } = withAnalytics();
   let containerRef!: HTMLDivElement;

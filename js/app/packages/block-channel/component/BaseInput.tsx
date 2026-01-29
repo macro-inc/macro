@@ -45,7 +45,6 @@ import { $getRoot } from 'lexical';
 import { logger } from '@observability';
 import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
 import { staticFileClient } from '@service-static-files/client';
-import { createCallback } from '@solid-primitives/rootless';
 import { leading, throttle } from '@solid-primitives/scheduled';
 import { Button } from '@ui/components/Button';
 import { activeElement } from 'app/signal/focus';
@@ -54,7 +53,6 @@ import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   type Accessor,
   createEffect,
-  createMemo,
   createRenderEffect,
   createSignal,
   For,
@@ -140,11 +138,10 @@ export function BaseInput(props: BaseInputProps) {
     ? isDraggingOverChannelSignal
     : createSignal(false);
 
-  const attachments = createMemo(() => props.inputAttachments.store[key] ?? []);
+  const attachments = () => props.inputAttachments.store[key] ?? [];
 
-  const hasPendingAttachments = createMemo(() =>
-    attachments().some((item) => item.pending)
-  );
+  const hasPendingAttachments = () =>
+    attachments().some((item) => item.pending);
 
   const [typing, setTyping] = createSignal(false);
   let remoteInactivityTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -190,13 +187,13 @@ export function BaseInput(props: BaseInputProps) {
 
   const startTyping = leading(
     throttle,
-    createCallback(() => {
+    () => {
       if (!typing()) {
         setTyping(true);
         props.onStartTyping();
       }
       props.setLocalTyping?.(true);
-    }),
+    },
     1000
   );
 

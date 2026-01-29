@@ -30,7 +30,6 @@ import { ContextMenu } from '@kobalte/core/context-menu';
 import { usePatchMessageMutation } from '@queries/channel/message';
 import type { Message as MessageType } from '@service-comms/generated/models/message';
 import { useUserId } from '@core/context/user';
-import { createCallback } from '@solid-primitives/rootless';
 import { activeElement } from 'app/signal/focus';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
@@ -181,20 +180,20 @@ export function MessageContainer(props: MessageProps) {
   const isParentNewMessage = () =>
     props.listContext?.isParentNewMessage ?? false;
 
-  const previousMessage = createMemo(() => {
+  const previousMessage = () => {
     return props.index() > 0
       ? props.orderedMessages()[props.index() - 1]
       : undefined;
-  });
+  };
 
-  const newDayPreviousNonThreadMessage = createMemo(() => {
+  const newDayPreviousNonThreadMessage = () => {
     const prev = props.listContext?.previousNonThreadedMessage;
     if (!prev) return false;
     return !isSameDay(new Date(message.created_at), new Date(prev.created_at));
-  });
+  };
 
   // We consider a message consecutive if it's from the same user and the same day and has the same thread id.
-  const isConsecutive = createMemo(() => {
+  const isConsecutive = () => {
     const prevMessage_ = previousMessage();
     if (!prevMessage_) return false;
     const prevSenderId = prevMessage_?.sender_id;
@@ -203,7 +202,7 @@ export function MessageContainer(props: MessageProps) {
       prevSenderId === message.sender_id &&
       isSameDay(new Date(prevMessage_.created_at), new Date(message.created_at))
     );
-  });
+  };
 
   const threadState = createMemo(() => {
     const threadID = message.thread_id;
@@ -316,9 +315,8 @@ export function MessageContainer(props: MessageProps) {
     props.channelId,
     () => props.reactions
   );
-  const react = createCallback((emoji: string) =>
-    reactToMessage(emoji, message.id)
-  );
+
+  const react = (emoji: string) => reactToMessage(emoji, message.id);
 
   const onThreadAppend = () => {
     const threadId = message.thread_id;

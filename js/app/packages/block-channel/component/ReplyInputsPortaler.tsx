@@ -12,10 +12,8 @@ import {
 } from '@block-channel/utils/draftMessages';
 import { blockElementSignal } from '@core/signal/blockElement';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
-import type { IUser } from '@core/user';
 import { channelParticipantInfo } from '@core/user/util';
 import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
-import { createCallback } from '@solid-primitives/rootless';
 import {
   createEffect,
   createMemo,
@@ -44,15 +42,12 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
   const listContext = useMessageListContext();
   const sendMessage = useSendChannelMessageAction(() => props.channelId);
 
-  const postTypingUpdate_ = createCallback(
-    (action: 'start' | 'stop', threadId?: string) =>
-      postTypingUpdate(props.channelId, action, threadId)
-  );
+  const postTypingUpdate_ = (action: 'start' | 'stop', threadId?: string) =>
+    postTypingUpdate(props.channelId, action, threadId);
+
   const blockRef = blockElementSignal.get;
 
-  const channelUsers = createMemo<IUser[]>(() => {
-    return props.participants.map(channelParticipantInfo);
-  });
+  const channelUsers = () => props.participants.map(channelParticipantInfo);
 
   const [focusedReplyInputThreadId, setFocusedReplyInputThreadId] =
     createSignal<string>();

@@ -12,7 +12,6 @@ import type {
 import type { IUser } from '@core/user';
 import { channelParticipantInfo } from '@core/user/util';
 import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
-import { createCallback } from '@solid-primitives/rootless';
 import { createMemo, createSignal, onMount } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
 import { BaseInput } from './BaseInput';
@@ -32,21 +31,17 @@ export type ChannelInputProps = {
 export function ChannelInput(props: ChannelInputProps) {
   const sendMessage = useSendChannelMessageAction(() => props.channelId);
 
-  const postTypingUpdate_ = createCallback((action: 'start' | 'stop') =>
-    postTypingUpdate(props.channelId, action)
-  );
-
   const channelUsers = createMemo<IUser[]>(() => {
     return props.participants.map(channelParticipantInfo);
   });
 
-  const handleChange = createCallback((content: string) => {
+  const handleChange = (content: string) => {
     if (!props.channelId) return;
     saveDraftMessage(props.channelId, {
       content,
       attachments: props.inputAttachmentsStore[props.inputAttachmentsKey] ?? [],
     });
-  });
+  };
 
   const [draftMessage, setDraftMessage] = createSignal<DraftMessage | null>(
     null
@@ -67,8 +62,8 @@ export function ChannelInput(props: ChannelInputProps) {
   return (
     <BaseInput
       placeholder={`Message ${props.channelName} — @mention to share`}
-      onStartTyping={() => postTypingUpdate_('start')}
-      onStopTyping={() => postTypingUpdate_('stop')}
+      onStartTyping={() => postTypingUpdate(props.channelId, 'start')}
+      onStopTyping={() => postTypingUpdate(props.channelId, 'stop')}
       onSend={sendMessage}
       afterSend={() => clearDraftMessage(props.channelId)}
       onChange={handleChange}
