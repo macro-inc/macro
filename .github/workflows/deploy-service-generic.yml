@@ -27,7 +27,6 @@ on:
           - link-sharing
           - notification-service
           - organization-retention
-          - properties-service
           - search-processing-service
           - search-service
           - search-upload

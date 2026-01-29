@@ -91,12 +91,6 @@
       ],
       "stack_path": "infra/stacks/organization-retention/**"
     },
-    "properties-service": {
-      "source_paths": [
-        "rust/cloud-storage/properties_service/**"
-      ],
-      "stack_path": "infra/stacks/properties-service/**"
-    },
     "search-processing-service": {
       "source_paths": [
         "rust/cloud-storage/search_processing_service/**"
