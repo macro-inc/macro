@@ -264,7 +264,7 @@ const Root: Component<MessageRootProps> = (props) => {
                 'border-l': !props.hideConnectors,
                 'border-accent': props.isNewMessage ?? false,
                 'border-edge-muted': !props.isNewMessage,
-                'pt-4': !(
+                'pt-1.5': !(
                   props.isConsecutive ||
                   props.isFirstMessage ||
                   props.isFirstInThread

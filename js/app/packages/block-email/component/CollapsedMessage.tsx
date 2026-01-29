@@ -60,7 +60,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
           <div
             class="relative flex flex-row items-center w-full pb-2 cursor-pointer transition-all"
             classList={{
-              'pt-4': !props.isFirstMessage,
+              'pt-1.5': !props.isFirstMessage,
               'opacity-80': hasMouseLeft() && !hover(),
               'opacity-100': !hasMouseLeft() || hover(),
             }}
