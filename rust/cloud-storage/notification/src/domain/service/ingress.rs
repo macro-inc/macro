@@ -250,7 +250,7 @@ where
     /// - `send_conn_gateway`: Creates a single message for all recipients (1:M)
     /// - `build_apns`: Creates one message per recipient with their device endpoints (1:1)
     /// - `build_email`: Creates one message per recipient (1:1)
-    /// Returns `(queue_messages, apns_collapse_key)`.
+    ///   Returns `(queue_messages, apns_collapse_key)`.
     async fn build_queue_message<'a, T: Notification + Clone, U: Serialize + Send + Sync>(
         &self,
         notification: &mut SendNotificationRequest<'a, T, U>,
@@ -293,8 +293,10 @@ where
                 })
                 .collect();
 
-            if !ios_endpoints.is_empty() {
-                let (apns_notif, attributes) = build_apns(notification.req.notification.clone());
+            if !ios_endpoints.is_empty()
+                && let Some((apns_notif, attributes)) =
+                    build_apns(notification.req.notification.clone())
+            {
                 apns_collapse_key = Some(attributes.collapse_key.clone());
                 messages.push(QueueMessage {
                     message_type: message_type.clone(),

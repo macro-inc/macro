@@ -52,5 +52,5 @@ pub trait NotificationExtIos: Notification {
     /// Get the message attributes for this push notification.
     fn message_attributes(&self) -> MessageAttributes;
     /// Convert this notification into an APNS push notification.
-    fn into_apns(self) -> APNSPushNotification<Self::NotifData>;
+    fn into_apns(self) -> Option<APNSPushNotification<Self::NotifData>>;
 }

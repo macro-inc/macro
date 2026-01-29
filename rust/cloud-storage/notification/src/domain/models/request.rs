@@ -45,7 +45,8 @@ impl<'a, T> SendNotificationRequestBuilder<'a, T> {
     }
 }
 
-type BuildApns<T, U> = Box<dyn FnMut(T) -> (APNSPushNotification<U>, MessageAttributes) + Send>;
+type BuildApns<T, U> =
+    Box<dyn FnMut(T) -> Option<(APNSPushNotification<U>, MessageAttributes)> + Send>;
 
 /// Full notification request with optional delivery channel builders.
 ///
@@ -75,9 +76,9 @@ impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
             req,
             build_apns: Some(Box::new(|notif: T| {
                 let attrs = notif.message_attributes();
-                let apns = notif.into_apns();
+                let apns = notif.into_apns()?;
 
-                (apns, attrs)
+                Some((apns, attrs))
             })),
             build_email,
             send_conn_gateway,
