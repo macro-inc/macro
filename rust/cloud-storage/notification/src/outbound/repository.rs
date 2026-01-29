@@ -91,6 +91,14 @@ pub trait NotificationDbOps: Send + Sync + 'static {
         notification_ids: &[Uuid],
     ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
 
+    /// Mark notifications as done or undone for a user.
+    fn mark_notifications_done(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+        done: bool,
+    ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
+
     /// Get basic notification data (collapse keys) for push clearing.
     fn get_basic_notifications(
         &self,
@@ -294,6 +302,30 @@ impl NotificationDbOps for PgPool {
         Ok(())
     }
 
+    async fn mark_notifications_done(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+        done: bool,
+    ) -> Result<(), Report> {
+        let user_id_str = user_id.to_string();
+
+        sqlx::query!(
+            r#"
+            UPDATE user_notification
+            SET done = $3
+            WHERE user_id = $1 AND notification_id = ANY($2)
+            "#,
+            user_id_str,
+            notification_ids,
+            done
+        )
+        .execute(self)
+        .await?;
+
+        Ok(())
+    }
+
     async fn get_basic_notifications(
         &self,
         notification_ids: &[Uuid],
@@ -369,6 +401,17 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
     ) -> Result<(), Report> {
         self.db
             .mark_notifications_seen(user_id, notification_ids)
+            .await
+    }
+
+    async fn mark_notifications_done(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+        done: bool,
+    ) -> Result<(), Report> {
+        self.db
+            .mark_notifications_done(user_id, notification_ids, done)
             .await
     }
 

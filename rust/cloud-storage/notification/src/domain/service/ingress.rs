@@ -9,13 +9,13 @@ use crate::domain::models::queue_message::{
     APNSTargets, ClearPushIdentifier, ConnGatewayNotification, EmailNotification, Node,
     NotificationChannel, QueueMessage,
 };
+use crate::domain::models::request::{NotificationStatus, UpdateNotificationsRequest};
 use crate::domain::models::{
     DeviceEndpoint, Notification, NotificationResult, SendNotificationRequest,
 };
 use crate::domain::ports::{NotificationQueue, NotificationRepository};
 use crate::domain::service::SendNotificationError;
 use macro_user_id::cowlike::CowLike;
-use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use rootcause::prelude::ResultExt;
 use serde::Serialize;
@@ -31,10 +31,9 @@ pub trait NotificationIngress: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<NotificationResult<'a>>, Report<SendNotificationError>>> + Send;
 
     /// Mark notifications as seen for a user and enqueue push notification clearing.
-    fn mark_notifications_seen(
+    fn update_notifications(
         &self,
-        user_id: &MacroUserIdStr<'_>,
-        notification_ids: &[Uuid],
+        req: UpdateNotificationsRequest,
     ) -> impl Future<Output = Result<(), Report<SendNotificationError>>> + Send;
 }
 
@@ -53,27 +52,41 @@ where
     N: NotificationRepository,
     Q: NotificationQueue,
 {
-    /// Mark notifications as seen for a user and enqueue push notification clearing.
+    /// Update notification status for a user and optionally enqueue push notification clearing.
     ///
     /// This method performs the following steps:
-    /// 1. Update the `seen` status in the database
-    /// 2. Look up collapse keys for the given notifications
-    /// 3. Look up the user's iOS device endpoints
-    /// 4. Publish silent background push messages to clear badges on devices
+    /// 1. Update the notification status in the database (seen/done/undone)
+    /// 2. If the status change should clear push notifications:
+    ///    a. Look up collapse keys for the given notifications
+    ///    b. Look up the user's iOS device endpoints
+    ///    c. Publish silent background push messages to clear badges on devices
     #[tracing::instrument(err, skip(self))]
-    async fn mark_notifications_seen(
+    async fn update_notifications(
         &self,
-        user_id: &MacroUserIdStr<'_>,
-        notification_ids: &[Uuid],
+        req: UpdateNotificationsRequest<'_>,
     ) -> Result<(), Report<SendNotificationError>> {
-        self.repository
-            .mark_notifications_seen(user_id, notification_ids)
-            .await
-            .context(SendNotificationError::Other)?;
+        match &req.status {
+            NotificationStatus::Seen => {
+                self.repository
+                    .mark_notifications_seen(&req.user_id, req.notification_ids)
+                    .await
+                    .context(SendNotificationError::Other)?;
+            }
+            NotificationStatus::Done(done) => {
+                self.repository
+                    .mark_notifications_done(&req.user_id, req.notification_ids, *done)
+                    .await
+                    .context(SendNotificationError::Other)?;
+            }
+        }
+
+        if !req.status.should_clear_push_notifs() {
+            return Ok(());
+        }
 
         let notifications_with_keys = self
             .repository
-            .get_basic_notifications(notification_ids)
+            .get_basic_notifications(req.notification_ids)
             .await
             .context(SendNotificationError::Other)?;
 
@@ -83,7 +96,7 @@ where
 
         let device_endpoints = self
             .repository
-            .get_device_endpoints(&[user_id.copied()])
+            .get_device_endpoints(&[req.user_id.copied()])
             .await
             .context(SendNotificationError::Other)?;
 
@@ -106,28 +119,29 @@ where
                 .map(|n| {
                     let collapse_key = n.apns_collapse_key;
                     QueueMessage {
-                    message_type: "clear_push_notification".to_string(),
-                    rate_limit: None,
-                    content: Node {
-                        notif: NotificationChannel::Ios(Box::new(APNSTargets {
-                            notif: APNSPushNotification {
-                                aps: Aps {
-                                    content_available: Some(1),
-                                    ..Default::default()
+                        message_type: "clear_push_notification".to_string(),
+                        rate_limit: None,
+                        content: Node {
+                            notif: NotificationChannel::Ios(Box::new(APNSTargets {
+                                notif: APNSPushNotification {
+                                    aps: Aps {
+                                        content_available: Some(1),
+                                        ..Default::default()
+                                    },
+                                    push_notification_data: ClearPushIdentifier {
+                                        identifier: collapse_key.clone(),
+                                    },
                                 },
-                                push_notification_data: ClearPushIdentifier {
-                                    identifier: collapse_key.clone(),
+                                attributes: MessageAttributes {
+                                    push_type: PushType::Background,
+                                    collapse_key,
                                 },
-                            },
-                            attributes: MessageAttributes {
-                                push_type: PushType::Background,
-                                collapse_key,
-                            },
-                            ios_device_endpoints: ios_endpoints.clone(),
-                        })),
-                        on_failure: None,
+                                ios_device_endpoints: ios_endpoints.clone(),
+                            })),
+                            on_failure: None,
+                        },
                     }
-                }})
+                })
                 .collect();
 
         self.queue

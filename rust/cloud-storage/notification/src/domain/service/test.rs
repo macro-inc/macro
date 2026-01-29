@@ -5,10 +5,11 @@ use crate::domain::models::mobile::{MessageAttributes, PushType};
 use crate::domain::models::queue_message::{
     ConnGatewayNotification, EmailContent, Node, NotificationChannel, QueueMessage, RawQueueMessage,
 };
+use crate::domain::models::request::{NotificationStatus, UpdateNotificationsRequest};
 use crate::domain::models::{
-    DeviceEndpoint, Notification, NotificationExtEmail, NotificationExtIos, NotificationIdAndCollapseKey,
-    RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimitResult,
-    SendNotificationRequestBuilder,
+    DeviceEndpoint, Notification, NotificationExtEmail, NotificationExtIos,
+    NotificationIdAndCollapseKey, RateLimitConfig, RateLimitExceeded, RateLimitKey,
+    RateLimitResult, SendNotificationRequestBuilder,
 };
 use crate::domain::ports::{
     EmailSender, NotificationQueue, NotificationRepository, NotificationSender, RateLimitPort,
@@ -86,6 +87,7 @@ struct MockRepository {
     stored_collapse_keys: Mutex<Vec<(Uuid, Option<String>)>>,
     basic_notifications: Vec<NotificationIdAndCollapseKey>,
     mark_seen_calls: Mutex<Vec<(String, Vec<Uuid>)>>,
+    mark_done_calls: Mutex<Vec<(String, Vec<Uuid>, bool)>>,
 }
 
 impl MockRepository {
@@ -98,6 +100,7 @@ impl MockRepository {
             stored_collapse_keys: Mutex::new(Vec::new()),
             basic_notifications: Vec::new(),
             mark_seen_calls: Mutex::new(Vec::new()),
+            mark_done_calls: Mutex::new(Vec::new()),
         }
     }
 
@@ -193,6 +196,19 @@ impl NotificationRepository for MockRepository {
         Ok(())
     }
 
+    async fn mark_notifications_done(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+        done: bool,
+    ) -> Result<(), Report> {
+        self.mark_done_calls
+            .lock()
+            .unwrap()
+            .push((user_id.to_string(), notification_ids.to_vec(), done));
+        Ok(())
+    }
+
     async fn get_basic_notifications(
         &self,
         _notification_ids: &[Uuid],
@@ -251,6 +267,17 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
     ) -> Result<(), Report> {
         (**self)
             .mark_notifications_seen(user_id, notification_ids)
+            .await
+    }
+
+    async fn mark_notifications_done(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+        done: bool,
+    ) -> Result<(), Report> {
+        (**self)
+            .mark_notifications_done(user_id, notification_ids, done)
             .await
     }
 
@@ -639,12 +666,10 @@ async fn test_apns_collapse_key_stored_on_create() {
 
     let user = test_user_id("alice@example.com");
 
-    let repo = Arc::new(
-        MockRepository::new().with_device_endpoint(
-            user.clone(),
-            DeviceEndpoint::Ios("arn:aws:sns:us-east-1:111:endpoint/APNS/app/alice".to_string()),
-        ),
-    );
+    let repo = Arc::new(MockRepository::new().with_device_endpoint(
+        user.clone(),
+        DeviceEndpoint::Ios("arn:aws:sns:us-east-1:111:endpoint/APNS/app/alice".to_string()),
+    ));
     let queue = Arc::new(MockQueue::new());
     let service = NotificationIngressService::new(repo.clone(), queue, "test_service");
 
@@ -910,14 +935,21 @@ async fn test_mark_seen_publishes_ios_clear_message() {
             .with_basic_notification(notif_id, "collapse_key_1".to_string())
             .with_device_endpoint(
                 user.clone(),
-                DeviceEndpoint::Ios("arn:aws:sns:us-east-1:111:endpoint/APNS/app/alice".to_string()),
+                DeviceEndpoint::Ios(
+                    "arn:aws:sns:us-east-1:111:endpoint/APNS/app/alice".to_string(),
+                ),
             ),
     );
     let queue = Arc::new(MockQueue::new());
     let service = NotificationIngressService::new(repo.clone(), queue.clone(), "test_service");
 
+    let notification_ids = [notif_id];
     service
-        .mark_notifications_seen(&user, &[notif_id])
+        .update_notifications(UpdateNotificationsRequest {
+            user_id: user.clone(),
+            notification_ids: &notification_ids,
+            status: NotificationStatus::Seen,
+        })
         .await
         .unwrap();
 
@@ -974,8 +1006,13 @@ async fn test_mark_seen_skips_push_when_no_collapse_key() {
     let queue = Arc::new(MockQueue::new());
     let service = NotificationIngressService::new(repo.clone(), queue.clone(), "test_service");
 
+    let notification_ids = [notif_id];
     service
-        .mark_notifications_seen(&user, &[notif_id])
+        .update_notifications(UpdateNotificationsRequest {
+            user_id: user.clone(),
+            notification_ids: &notification_ids,
+            status: NotificationStatus::Seen,
+        })
         .await
         .unwrap();
 
@@ -999,15 +1036,19 @@ async fn test_mark_seen_skips_push_when_no_device_endpoints() {
     let notif_id = Uuid::now_v7();
 
     let repo = Arc::new(
-        MockRepository::new()
-            .with_basic_notification(notif_id, "collapse_key_1".to_string()),
+        MockRepository::new().with_basic_notification(notif_id, "collapse_key_1".to_string()),
         // No device endpoints registered
     );
     let queue = Arc::new(MockQueue::new());
     let service = NotificationIngressService::new(repo.clone(), queue.clone(), "test_service");
 
+    let notification_ids = [notif_id];
     service
-        .mark_notifications_seen(&user, &[notif_id])
+        .update_notifications(UpdateNotificationsRequest {
+            user_id: user.clone(),
+            notification_ids: &notification_ids,
+            status: NotificationStatus::Seen,
+        })
         .await
         .unwrap();
 
@@ -1020,5 +1061,93 @@ async fn test_mark_seen_skips_push_when_no_device_endpoints() {
     assert!(
         published.is_empty(),
         "Should not publish when no device endpoints"
+    );
+}
+
+#[tokio::test]
+async fn test_mark_done_updates_db_and_clears_push() {
+    use std::sync::Arc;
+
+    let user = test_user_id("alice@example.com");
+    let notif_id = Uuid::now_v7();
+
+    let repo = Arc::new(
+        MockRepository::new()
+            .with_basic_notification(notif_id, "collapse_key_1".to_string())
+            .with_device_endpoint(
+                user.clone(),
+                DeviceEndpoint::Ios(
+                    "arn:aws:sns:us-east-1:111:endpoint/APNS/app/alice".to_string(),
+                ),
+            ),
+    );
+    let queue = Arc::new(MockQueue::new());
+    let service = NotificationIngressService::new(repo.clone(), queue.clone(), "test_service");
+
+    let notification_ids = [notif_id];
+    service
+        .update_notifications(UpdateNotificationsRequest {
+            user_id: user.clone(),
+            notification_ids: &notification_ids,
+            status: NotificationStatus::Done(true),
+        })
+        .await
+        .unwrap();
+
+    // Verify done was called (not seen)
+    let mark_seen_calls = repo.mark_seen_calls.lock().unwrap();
+    assert!(mark_seen_calls.is_empty(), "Should not call mark_seen");
+
+    let mark_done_calls = repo.mark_done_calls.lock().unwrap();
+    assert_eq!(mark_done_calls.len(), 1);
+    assert_eq!(mark_done_calls[0].1, vec![notif_id]);
+    assert!(mark_done_calls[0].2, "Should mark as done=true");
+
+    // Verify push clearing was published (Done(true) should clear push)
+    let published = queue.get_published();
+    assert_eq!(published.len(), 1);
+    assert_eq!(published[0]["message_type"], "clear_push_notification");
+}
+
+#[tokio::test]
+async fn test_mark_undone_updates_db_no_push_clear() {
+    use std::sync::Arc;
+
+    let user = test_user_id("alice@example.com");
+    let notif_id = Uuid::now_v7();
+
+    let repo = Arc::new(
+        MockRepository::new()
+            .with_basic_notification(notif_id, "collapse_key_1".to_string())
+            .with_device_endpoint(
+                user.clone(),
+                DeviceEndpoint::Ios(
+                    "arn:aws:sns:us-east-1:111:endpoint/APNS/app/alice".to_string(),
+                ),
+            ),
+    );
+    let queue = Arc::new(MockQueue::new());
+    let service = NotificationIngressService::new(repo.clone(), queue.clone(), "test_service");
+
+    let notification_ids = [notif_id];
+    service
+        .update_notifications(UpdateNotificationsRequest {
+            user_id: user.clone(),
+            notification_ids: &notification_ids,
+            status: NotificationStatus::Done(false),
+        })
+        .await
+        .unwrap();
+
+    // Verify done was called with false
+    let mark_done_calls = repo.mark_done_calls.lock().unwrap();
+    assert_eq!(mark_done_calls.len(), 1);
+    assert!(!mark_done_calls[0].2, "Should mark as done=false");
+
+    // Verify NO push clearing was published (Done(false) should not clear push)
+    let published = queue.get_published();
+    assert!(
+        published.is_empty(),
+        "Should not clear push when marking undone"
     );
 }

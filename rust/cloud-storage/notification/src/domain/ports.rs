@@ -96,6 +96,14 @@ pub trait NotificationRepository: Send + Sync + 'static {
         notification_ids: &[Uuid],
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
+    /// Mark notifications as done or undone for a user.
+    fn mark_notifications_done(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+        done: bool,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
     /// Get basic notification data (collapse keys) needed for push clearing.
     fn get_basic_notifications(
         &self,

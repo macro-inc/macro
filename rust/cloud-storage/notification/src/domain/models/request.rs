@@ -194,3 +194,34 @@ pub struct NotificationResult<'a> {
     /// The users who were actually notified (after filtering).
     pub notified_recipients: HashSet<MacroUserIdStr<'a>>,
 }
+
+/// the status the user is requesting to set on the notification
+#[derive(Debug)]
+pub enum NotificationStatus {
+    /// the notification has been seen
+    Seen,
+    /// the notification is either done or _not_ done
+    Done(bool),
+}
+
+impl NotificationStatus {
+    /// returns true if we should be clearing the relevant push notifications
+    /// for this notification
+    pub(crate) fn should_clear_push_notifs(&self) -> bool {
+        match self {
+            NotificationStatus::Seen => true,
+            NotificationStatus::Done(x) => *x,
+        }
+    }
+}
+
+/// Request to update the status of one or more notifications for a user.
+#[derive(Debug)]
+pub struct UpdateNotificationsRequest<'a> {
+    /// The user whose notifications are being updated.
+    pub user_id: MacroUserIdStr<'a>,
+    /// The notification IDs to update.
+    pub notification_ids: &'a [Uuid],
+    /// The status to set on the notifications.
+    pub status: NotificationStatus,
+}
