@@ -6,7 +6,7 @@ import type {
 } from '@service-comms/generated/models';
 import { queryClient } from '../client';
 import { channelKeys } from './keys';
-import { invalidateChannelWithID } from './channel';
+import { softInvalidateChannelWithID } from './channel';
 
 /**
  * Websocket payload types
@@ -31,8 +31,15 @@ type CommsAttachmentPayload = {
  */
 export function handleCommsMessage(payload: CommsMessagePayload): void {
   // Invalidate to refetch fresh data from server
-  // This ensures cross-tab and cross-device sync works correctly
-  invalidateChannelWithID(payload.channel_id);
+  const queryKey = channelKeys.withID(payload.channel_id).queryKey;
+  queryClient.setQueryData<GetChannelResponse>(queryKey, (prev) => {
+    if (!prev) return prev;
+    return {
+      ...prev,
+      messages: [...prev.messages, payload],
+    }
+  })
+  softInvalidateChannelWithID(payload.channel_id);
 }
 
 /**
@@ -52,6 +59,8 @@ export function handleCommsReaction(payload: CommsReactionPayload): void {
       },
     };
   });
+
+  softInvalidateChannelWithID(payload.channel_id);
 }
 
 /**
@@ -75,4 +84,6 @@ export function handleCommsAttachment(payload: CommsAttachmentPayload): void {
       attachments: [...prev.attachments, ...newAttachments],
     };
   });
+
+  softInvalidateChannelWithID(payload.channel_id);
 }

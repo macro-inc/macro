@@ -11,7 +11,7 @@ import type {
 } from '@service-comms/generated/models';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
-import { invalidateChannelWithID } from './channel';
+import { softInvalidateChannelWithID } from './channel';
 import { channelKeys } from './keys';
 
 type WithChannelId<T> = T & { channelId: string };
@@ -301,7 +301,7 @@ export function useAddReactionMutation(
           }
         },
         onSettled: (_, __, vars) => {
-          invalidateChannelWithID(vars.channelId);
+          softInvalidateChannelWithID(vars.channelId);
         },
       },
       callbacks
@@ -356,7 +356,7 @@ export function useRemoveReactionMutation(
           }
         },
         onSettled: (_, __, vars) => {
-          invalidateChannelWithID(vars.channelId);
+          softInvalidateChannelWithID(vars.channelId);
         },
       },
       callbacks

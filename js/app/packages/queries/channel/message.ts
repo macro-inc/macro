@@ -1,7 +1,7 @@
 import { TrackingEvents, withAnalytics } from '@coparse/analytics';
 import { toast } from '@core/component/Toast/Toast';
 import { throwOnErr } from '@core/util/maybeResult';
-import { invalidateChannelWithID } from '@queries/channel/channel';
+import { softInvalidateChannelWithID } from '@queries/channel/channel';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import {
   commsServiceClient,
@@ -364,7 +364,7 @@ export function useSendMessageMutation(
           }
         },
         onSettled: (_data, _error, variables) => {
-          invalidateChannelWithID(variables.channelID);
+          softInvalidateChannelWithID(variables.channelID);
         },
       },
       callbacks
@@ -414,7 +414,7 @@ export function useDeleteMessageMutation(
           }
         },
         onSettled: (_data, _error, variables) => {
-          invalidateChannelWithID(variables.channelID);
+          softInvalidateChannelWithID(variables.channelID);
         },
       },
       callbacks
@@ -475,7 +475,7 @@ export function usePatchMessageMutation(
           }
         },
         onSettled: (_data, _error, variables) => {
-          invalidateChannelWithID(variables.channelID);
+          softInvalidateChannelWithID(variables.channelID);
         },
       },
       callbacks

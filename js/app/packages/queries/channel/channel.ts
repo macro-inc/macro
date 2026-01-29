@@ -148,6 +148,13 @@ export function invalidateChannelWithID(channelID: string) {
   });
 }
 
+export function softInvalidateChannelWithID(channelID: string) {
+  queryClient.invalidateQueries({
+    queryKey: channelKeys.withID(channelID).queryKey,
+    refetchType: 'inactive'
+  });
+}
+
 export function optimisticUpdateChannelViewedAt(channelId: string) {
   const now = new Date().toISOString();
 
