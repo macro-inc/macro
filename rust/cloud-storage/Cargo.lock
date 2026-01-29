@@ -1968,24 +1968,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "comms_service_client"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "chrono",
- "model",
- "models_comms",
- "reqwest",
- "serde",
- "serde_json",
- "thiserror 2.0.17",
- "tracing",
- "urlencoding",
- "uuid",
-]
-
-[[package]]
 name = "concurrent-queue"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5131,7 +5113,6 @@ name = "macro_project_utils"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "comms_service_client",
  "macro_db_client",
  "macro_notify",
  "model",

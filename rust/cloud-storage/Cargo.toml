@@ -11,7 +11,6 @@ members = [
   "authentication_service_client",
   "comms_db_client",
   "comms_service",
-  "comms_service_client",
   "connection_gateway",
   "contacts_db_client",
   "contacts_service",
