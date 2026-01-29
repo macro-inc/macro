@@ -17,6 +17,7 @@ interface CollapsedMessageProps {
 
 export function CollapsedMessage(props: CollapsedMessageProps) {
   const [hover, setHover] = createSignal(false);
+  const [hasMouseLeft, setHasMouseLeft] = createSignal(false);
   const currentUserEmail = useEmail();
   const currentUserId = useUserId();
 
@@ -57,16 +58,21 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
       <div class="macro-message-width w-full pl-2 pr-4 sm:px-0">
         <BozzyBracket active={props.isFocused} hover={hover()} class="">
           <div
-            class="relative flex flex-row items-center w-full pb-2 cursor-pointer opacity-80 hover:opacity-100 transition-all"
+            class="relative flex flex-row items-center w-full pb-2 cursor-pointer transition-all"
             classList={{
               'pt-4': !props.isFirstMessage,
+              'opacity-80': hasMouseLeft() && !hover(),
+              'opacity-100': !hasMouseLeft() || hover(),
             }}
             data-message-body-id={props.message.db_id}
             tabIndex={0}
             onClick={props.onClick}
             onKeyDown={handleKeyDown}
             onMouseEnter={() => setHover(true)}
-            onMouseLeave={() => setHover(false)}
+            onMouseLeave={() => {
+              setHover(false);
+              setHasMouseLeft(true);
+            }}
           >
             {/* Rail line - behind avatar */}
             <div
