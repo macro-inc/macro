@@ -1,6 +1,5 @@
 import {
   doesChannelRequireJoin,
-  initializeChannelData,
   isValidChannelData,
 } from '@block-channel/signal/channel';
 import { useBlockId } from '@core/block';
@@ -52,7 +51,6 @@ export default function BlockChannel(props: BlockChannelProps) {
     if (!blockData_) return;
     if (!isValidChannelData(blockData_)) return;
 
-    initializeChannelData(blockData_);
     setJoinState(
       doesChannelRequireJoin(blockData_, userId_) ? 'REQUIRED' : 'NOT_REQUIRED'
     );

@@ -1,7 +1,10 @@
 import { useMessageListContext } from '@block-channel/component/MessageList/MessageList';
 import { COLLAPSED_THREAD_INDEX_CUTOFF } from '@block-channel/constants';
-import { messageAttachmentsStore } from '@block-channel/signal/attachment';
-import { reactToMessage } from '@block-channel/signal/reactions';
+import { useReactToMessage } from '@block-channel/signal/reactions';
+import type {
+  Attachment,
+  GetChannelResponseReactions,
+} from '@service-comms/generated/models';
 import type { MessageListContext } from '@block-channel/utils/listContext';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
@@ -112,6 +115,9 @@ type MessageProps = {
   listContext: MessageListContext;
   setMessageContainerRef?: Setter<HTMLDivElement | undefined>;
   isTarget: boolean;
+  channelId: Accessor<string>;
+  attachments: Attachment[];
+  reactions: GetChannelResponseReactions;
 };
 
 export function MessageContainer(props: MessageProps) {
@@ -138,8 +144,6 @@ export function MessageContainer(props: MessageProps) {
 
   const userId = useUserId();
   const [currentUserName] = useDisplayName(tryMacroId(userId() ?? ''));
-
-  const attachmentStore = messageAttachmentsStore.get;
 
   const [displayName] = useDisplayName(tryMacroId(message.sender_id));
 
@@ -294,18 +298,24 @@ export function MessageContainer(props: MessageProps) {
   });
 
   const attachments = createMemo(() =>
-    message.id ? (attachmentStore[message.id] ?? []) : []
+    props.attachments.filter((a) => a.message_id === message.id)
   );
   const imageAttachments = createMemo(() =>
-    attachments().filter((a) => a.entity_type === STATIC_IMAGE)
+    attachments().filter((a: Attachment) => a.entity_type === STATIC_IMAGE)
   );
   const videoAttachments = createMemo(() =>
-    attachments().filter((a) => a.entity_type === STATIC_VIDEO)
+    attachments().filter((a: Attachment) => a.entity_type === STATIC_VIDEO)
   );
   const documentAttachments = createMemo(() =>
-    attachments().filter((a) => !isStaticAttachmentType(a.entity_type))
+    attachments().filter(
+      (a: Attachment) => !isStaticAttachmentType(a.entity_type)
+    )
   );
 
+  const reactToMessage = useReactToMessage(
+    props.channelId,
+    () => props.reactions
+  );
   const react = createCallback((emoji: string) =>
     reactToMessage(emoji, message.id)
   );
@@ -540,6 +550,8 @@ export function MessageContainer(props: MessageProps) {
               hoverActions={
                 <ActionMenu
                   messageId={message.id}
+                  channelId={props.channelId}
+                  reactions={() => props.reactions}
                   actions={actions()}
                   setReactionMenuActivated={setTopBarEmojiMenuOpen}
                 />
@@ -601,7 +613,11 @@ export function MessageContainer(props: MessageProps) {
                 content={message.content}
               />
               <Show when={!message.deleted_at}>
-                <MessageReactions messageId={props.message?.id ?? ''} />
+                <MessageReactions
+                  messageId={props.message?.id ?? ''}
+                  channelId={props.channelId}
+                  reactions={() => props.reactions}
+                />
               </Show>
             </MessageComponent>
             <Show when={isLastInCollapsedThread()}>

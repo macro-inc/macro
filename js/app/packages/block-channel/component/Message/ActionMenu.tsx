@@ -1,8 +1,9 @@
-import { reactToMessage } from '@block-channel/signal/reactions';
+import { useReactToMessage } from '@block-channel/signal/reactions';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import clickOutside from '@core/directive/clickOutside';
+import type { GetChannelResponseReactions } from '@service-comms/generated/models';
 import { createCallback } from '@solid-primitives/rootless';
-import { type Component, For, type Setter } from 'solid-js';
+import { type Accessor, type Component, For, type Setter } from 'solid-js';
 import { ReactionSelector } from '../ReactionSelector';
 import type { MessageAction } from './actions';
 
@@ -17,12 +18,15 @@ export type Action = {
 
 export function ActionMenu(props: {
   messageId: string;
+  channelId: Accessor<string>;
+  reactions: Accessor<GetChannelResponseReactions>;
   actions: MessageAction[];
   setReactionMenuActivated?: Setter<boolean>;
 }) {
   // default emojis
   const defaultEmojis = ['❤️', '👍', '😂'];
 
+  const reactToMessage = useReactToMessage(props.channelId, props.reactions);
   const react = createCallback((emoji: string) =>
     reactToMessage(emoji, props.messageId)
   );

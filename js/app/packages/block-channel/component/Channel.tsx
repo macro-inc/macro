@@ -11,10 +11,6 @@ import {
   isDraggingOverChannelSignal,
   isValidChannelDragSignal,
 } from '@block-channel/signal/attachment';
-import {
-  channelStore,
-  refetchChannelData,
-} from '@block-channel/signal/channel';
 import { activeThreadIdSignal } from '@block-channel/signal/threads';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
 import { withAnalytics } from '@coparse/analytics';
@@ -39,7 +35,14 @@ import {
   createEffectOnEntityTypeNotification,
   useEntityHasUnreadNotifications,
 } from '@notifications';
-import { useChannelQuery } from '@queries/channel/channel';
+import {
+  useChannelQuery,
+  invalidateChannelWithID,
+} from '@queries/channel/channel';
+import {
+  getTopLevelMessages,
+  getThreadMessages,
+} from '@queries/channel/derived';
 import type { Message } from '@service-comms/generated/models';
 import { connectionGatewayClient } from '@service-connection/client';
 import { createCallback } from '@solid-primitives/rootless';
@@ -50,6 +53,7 @@ import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createMethodRegistration } from 'core/orchestrator';
 import {
   createEffect,
+  createMemo,
   createRenderEffect,
   createSignal,
   on,
@@ -72,14 +76,14 @@ false && fileFolderDrop;
 /** 10 seconds threshold */
 const THRESHOLD = 10_000;
 
-export function createChannelRefetchEffect(channelId: string) {
+function createChannelRefetchEffect(channelId: string) {
   let lastTime = Date.now();
 
   /** Refetch channel data if the tab is focused */
   createTabFocusEffect((isTabFocused) => {
     if (isTabFocused && Date.now() - lastTime > THRESHOLD) {
       console.log('tab focused, refetching channel data');
-      refetchChannelData(channelId);
+      invalidateChannelWithID(channelId);
       connectionGatewayClient.trackEntity({
         entity_type: 'channel',
         entity_id: channelId,
@@ -94,14 +98,29 @@ export function Channel(props: {
   data: Required<ChannelData>;
   target?: TargetMessageInfo;
 }) {
-  const channelStoreData = channelStore.get;
   const channel = useChannelQuery(() => props.data.channel.id);
+
+  // Derive messages and threads from query data
+  const messages = createMemo(() =>
+    channel.data ? getTopLevelMessages(channel.data) : []
+  );
+  const threads = createMemo(() =>
+    channel.data ? getThreadMessages(channel.data) : {}
+  );
+  const reactions = createMemo(() => channel.data?.reactions ?? {});
+  const attachments = createMemo(() => channel.data?.attachments ?? []);
 
   const [_activeThreadId, setActiveThreadId] = activeThreadIdSignal;
   const latestActivity = latestActivitySignal.get;
-  const updateActivityOnOpen = createCallback(updateActivityOnChannelOpen);
-  const updateActivityOnClose = createCallback(updateActivityOnChannelClose);
   const channelId = useBlockId();
+
+  const updateActivityOnOpen = createCallback(() =>
+    updateActivityOnChannelOpen(channelId)
+  );
+  const updateActivityOnClose = createCallback(() =>
+    updateActivityOnChannelClose(channelId)
+  );
+
   const { track } = withAnalytics();
   let containerRef!: HTMLDivElement;
   const [searchParams] = useSearchParams();
@@ -138,9 +157,9 @@ export function Channel(props: {
   >(initialTargetMessage());
 
   createMethodRegistration(blockHandle, {
-    goToLocationFromParams: async (params: Record<string, any>) => {
-      const threadId = params[URL_PARAMS.thread];
-      const messageId = params[URL_PARAMS.message];
+    goToLocationFromParams: async (params: Record<string, unknown>) => {
+      const threadId = params[URL_PARAMS.thread] as string | undefined;
+      const messageId = params[URL_PARAMS.message] as string | undefined;
       if (threadId) {
         setActiveThreadId(threadId);
       }
@@ -403,7 +422,11 @@ export function Channel(props: {
           />
           <MessageList
             channelId={channelId}
-            messages={channelStoreData.messages}
+            messages={messages()}
+            threads={threads()}
+            reactions={reactions()}
+            attachments={attachments()}
+            participants={channel.data?.participants ?? []}
             focusedMessageId={selectedMessageId}
             setFocusedMessageId={setSelectedMessageId}
             targetMessage={targetMessage}
@@ -417,7 +440,9 @@ export function Channel(props: {
             <div class="mx-auto -translate-x-1 w-full macro-message-width">
               <Suspense>
                 <ChannelInput
+                  channelId={channelId}
                   channelName={channel.data?.channel?.name ?? ''}
+                  participants={channel.data?.participants ?? []}
                   inputAttachmentsStore={channelInputAttachmentsStore}
                   setInputAttachmentsStore={setChannelInputAttachmentsStore}
                   inputAttachmentsKey={channelId}

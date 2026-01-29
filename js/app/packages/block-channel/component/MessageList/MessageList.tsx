@@ -3,15 +3,12 @@ import {
   TARGET_MESSAGE_ACTIVE_TIME,
 } from '@block-channel/constants';
 import { openedChannelSignal } from '@block-channel/signal/activity';
-import { messageToReactionStore } from '@block-channel/signal/reactions';
-import {
-  type ThreadStoreData,
-  threadsStore,
-} from '@block-channel/signal/threads';
+import type { MessageWithThreadId } from '@block-channel/signal/threads';
 import type {
   ThreadView,
   ThreadViewData,
 } from '@block-channel/type/threadView';
+import type { GetChannelResponseReactions } from '@service-comms/generated/models';
 import { loadDraftMessage } from '@block-channel/utils/draftMessages';
 import {
   createMessageListContextLookup,
@@ -26,6 +23,8 @@ import SunIcon from '@icon/duotone/sun-horizon-duotone.svg';
 import ArrowDownIcon from '@icon/regular/arrow-down.svg';
 import XIcon from '@icon/regular/x.svg';
 import type { Activity as ChannelActivity } from '@service-comms/generated/models/activity';
+import type { Attachment } from '@service-comms/generated/models/attachment';
+import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
 import type { Message } from '@service-comms/generated/models/message';
 import { useUserId } from '@core/context/user';
 import { debounce } from '@solid-primitives/scheduled';
@@ -101,9 +100,15 @@ export type MessageListNavigation = {
   navigateToMessage: (messageId: string) => boolean;
 };
 
+export type ThreadStoreData = Record<string, MessageWithThreadId[]>;
+
 export type MessageListProps = {
   channelId: string;
   messages: Message[];
+  threads: ThreadStoreData;
+  reactions: GetChannelResponseReactions;
+  attachments: Attachment[];
+  participants: ChannelParticipant[];
   latestActivity?: ChannelActivity;
   containerRef?: HTMLDivElement;
   targetMessage: Accessor<TargetMessageInfo | undefined>;
@@ -243,7 +248,6 @@ function MessageListImpl(props: MessageListProps) {
     createStore<MessageListContextLookup>({});
 
   const userId = useUserId();
-  const threads = threadsStore.get;
   const [viewThreads, setViewThreads] = createStore<ThreadStoreData>({});
 
   const [threadInputAttachmentsStore, setThreadInputAttachmentsStore] =
@@ -509,7 +513,7 @@ function MessageListImpl(props: MessageListProps) {
 
     for (const message of baseMessages) {
       const id = message.id;
-      const threadArr = threads[id] ?? [];
+      const threadArr = props.threads[id] ?? [];
       const currentView = viewThreads[id];
       const isTypingThisThread = id === activeThreadId;
 
@@ -539,7 +543,7 @@ function MessageListImpl(props: MessageListProps) {
       prevTypingId !== currentTypingId &&
       dirtyTypingThreadId === prevTypingId
     ) {
-      const threadArr = untrack(() => threads[prevTypingId] ?? []);
+      const threadArr = untrack(() => props.threads[prevTypingId] ?? []);
       setViewThreads(prevTypingId, reconcile(threadArr));
       dirtyTypingThreadId = undefined;
     }
@@ -615,10 +619,9 @@ function MessageListImpl(props: MessageListProps) {
   };
 
   const lastMessageReaction = createMemo(() => {
-    const messageToReaction = messageToReactionStore.get;
     const list = props.orderedMessages();
     const lastMessageId = list[list.length - 1]?.id;
-    return messageToReaction[lastMessageId];
+    return props.reactions[lastMessageId];
   });
 
   const lastMessageThread = createMemo(() => {
@@ -868,6 +871,9 @@ function MessageListImpl(props: MessageListProps) {
                       container={containerRef()}
                       listContext={messageListContext[row.id]}
                       isTarget={isActiveTargetMessage(row.message.id)}
+                      channelId={() => props.channelId}
+                      attachments={props.attachments}
+                      reactions={props.reactions}
                     />
                   </Show>
                 );
@@ -922,6 +928,7 @@ function MessageListImpl(props: MessageListProps) {
         threadInputAttachmentsStore={threadInputAttachmentsStore}
         setThreadInputAttachmentsStore={setThreadInputAttachmentsStore}
         setLocalTypingThreadId={setLocalTypingThreadId}
+        participants={props.participants}
       />
     </div>
   );

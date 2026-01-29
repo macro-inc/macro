@@ -1,13 +1,11 @@
 import { commsServiceClient } from '@service-comms/client';
-import { channelStore } from './channel';
 
 export async function postTypingUpdate(
+  channelId: string,
   action: 'start' | 'stop',
   threadId?: string
 ) {
-  const channel = channelStore.get;
-  const channelId = channel?.channel?.id;
-  if (!channelId || !channel) return;
+  if (!channelId) return;
 
   try {
     await commsServiceClient.postTypingUpdate({
@@ -17,6 +15,5 @@ export async function postTypingUpdate(
     });
   } catch (e) {
     console.error(`failed to post typing update ${e}`);
-    // TODO: handle error
   }
 }
