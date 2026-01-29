@@ -1,4 +1,4 @@
-import { useReactToMessage } from '@block-channel/signal/reactions';
+import { useReactToMessage } from '@block-channel/hooks/reactions';
 import { EmojiButton } from '@core/component/Emoji/EmojiButton';
 import { resolveEmojiFromUnicode } from '@core/component/Emoji/emojis';
 import clickOutside from '@core/directive/clickOutside';

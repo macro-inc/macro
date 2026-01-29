@@ -1,5 +1,4 @@
 import { useSendChannelMessageAction } from '@block-channel/signal/channel';
-import { postTypingUpdate } from '@block-channel/signal/typing';
 import {
   clearDraftMessage,
   loadDraftMessage,
@@ -11,6 +10,7 @@ import type {
 } from '@core/store/cacheChannelInput';
 import type { IUser } from '@core/user';
 import { channelParticipantInfo } from '@core/user/util';
+import { usePostTypingUpdateMutation } from '@queries/channel/typing';
 import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
 import { createMemo, createSignal, onMount } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
@@ -30,6 +30,7 @@ export type ChannelInputProps = {
 
 export function ChannelInput(props: ChannelInputProps) {
   const sendMessage = useSendChannelMessageAction(() => props.channelId);
+  const typingMutation = usePostTypingUpdateMutation();
 
   const channelUsers = createMemo<IUser[]>(() => {
     return props.participants.map(channelParticipantInfo);
@@ -62,8 +63,12 @@ export function ChannelInput(props: ChannelInputProps) {
   return (
     <BaseInput
       placeholder={`Message ${props.channelName} — @mention to share`}
-      onStartTyping={() => postTypingUpdate(props.channelId, 'start')}
-      onStopTyping={() => postTypingUpdate(props.channelId, 'stop')}
+      onStartTyping={() =>
+        typingMutation.mutate({ channelId: props.channelId, action: 'start' })
+      }
+      onStopTyping={() =>
+        typingMutation.mutate({ channelId: props.channelId, action: 'stop' })
+      }
       onSend={sendMessage}
       afterSend={() => clearDraftMessage(props.channelId)}
       onChange={handleChange}

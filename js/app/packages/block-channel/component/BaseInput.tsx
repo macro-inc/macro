@@ -13,7 +13,7 @@ import {
   createTasksFromPotential,
   replaceCheckboxesWithMentions,
 } from '@block-channel/utils/taskModeConversion';
-import { useTaskMode } from '@block-channel/utils/useTaskMode';
+import { useTaskMode } from '@block-channel/hooks/taskmode';
 import { isInBlock } from '@core/block';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';

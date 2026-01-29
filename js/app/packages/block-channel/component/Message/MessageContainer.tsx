@@ -1,6 +1,6 @@
 import { useMessageListContext } from '@block-channel/component/MessageList/MessageList';
 import { COLLAPSED_THREAD_INDEX_CUTOFF } from '@block-channel/constants';
-import { useReactToMessage } from '@block-channel/signal/reactions';
+import { useReactToMessage } from '@block-channel/hooks/reactions';
 import type {
   Attachment,
   GetChannelResponseReactions,

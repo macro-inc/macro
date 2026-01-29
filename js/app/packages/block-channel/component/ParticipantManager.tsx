@@ -1,7 +1,7 @@
 import {
   useAddParticipantsToChannel,
   useRemoveParticipantsFromChannel,
-} from '@block-channel/signal/participants';
+} from '@block-channel/hooks/participants';
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';

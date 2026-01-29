@@ -1,3 +1,5 @@
+import { commsServiceClient } from '@service-comms/client';
+import { useMutation } from '@tanstack/solid-query';
 import { createSignal } from 'solid-js';
 
 /**
@@ -92,4 +94,25 @@ export function handleCommsTyping(
       payload.thread_id ?? null
     );
   }
+}
+
+type PostTypingUpdateVars = {
+  channelId: string;
+  action: 'start' | 'stop';
+  threadId?: string;
+};
+
+export function usePostTypingUpdateMutation() {
+  return useMutation(() => ({
+    mutationFn: async (vars: PostTypingUpdateVars) => {
+      await commsServiceClient.postTypingUpdate({
+        channel_id: vars.channelId,
+        action: vars.action,
+        thread_id: vars.threadId,
+      });
+    },
+    onError: (error: Error) => {
+      console.error('failed to post typing update', error);
+    },
+  }));
 }

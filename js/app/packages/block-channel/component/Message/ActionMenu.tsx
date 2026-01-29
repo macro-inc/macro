@@ -1,4 +1,4 @@
-import { useReactToMessage } from '@block-channel/signal/reactions';
+import { useReactToMessage } from '@block-channel/hooks/reactions';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import clickOutside from '@core/directive/clickOutside';
 import type { GetChannelResponseReactions } from '@service-comms/generated/models';

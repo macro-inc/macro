@@ -4,7 +4,6 @@ import {
   useSendChannelMessageAction,
 } from '@block-channel/signal/channel';
 import type { MessageWithThreadId } from '@block-channel/signal/threads';
-import { postTypingUpdate } from '@block-channel/signal/typing';
 import {
   clearDraftMessage,
   loadDraftMessage,
@@ -13,6 +12,7 @@ import {
 import { blockElementSignal } from '@core/signal/blockElement';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
 import { channelParticipantInfo } from '@core/user/util';
+import { usePostTypingUpdateMutation } from '@queries/channel/typing';
 import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
 import {
   createEffect,
@@ -41,9 +41,7 @@ export type ReplyInputsPortalerProps = {
 export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
   const listContext = useMessageListContext();
   const sendMessage = useSendChannelMessageAction(() => props.channelId);
-
-  const postTypingUpdate_ = (action: 'start' | 'stop', threadId?: string) =>
-    postTypingUpdate(props.channelId, action, threadId);
+  const typingMutation = usePostTypingUpdateMutation();
 
   const blockRef = blockElementSignal.get;
 
@@ -152,8 +150,20 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
                     setFocusedReplyInputThreadId(undefined);
                   }, 100);
                 }}
-                onStartTyping={() => postTypingUpdate_('start', threadId)}
-                onStopTyping={() => postTypingUpdate_('stop', threadId)}
+                onStartTyping={() =>
+                  typingMutation.mutate({
+                    channelId: props.channelId,
+                    action: 'start',
+                    threadId,
+                  })
+                }
+                onStopTyping={() =>
+                  typingMutation.mutate({
+                    channelId: props.channelId,
+                    action: 'stop',
+                    threadId,
+                  })
+                }
                 inputAttachments={{
                   store: props.threadInputAttachmentsStore,
                   setStore: props.setThreadInputAttachmentsStore,
