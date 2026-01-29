@@ -27,17 +27,11 @@ type CommsAttachmentPayload = {
 
 /**
  * Handle incoming message from websocket.
- * Ignores messages from currentUserId (already optimistically updated).
+ * Always invalidate to ensure cross-tab/cross-device sync.
  */
-export function handleCommsMessage(
-  payload: CommsMessagePayload,
-  currentUserId: string
-): void {
-  // Ignore our own messages - already handled by optimistic update
-  if (payload.sender_id === currentUserId) return;
-
-  // For other users' messages, invalidate to refetch
-  // This ensures we get the complete message with server-assigned fields
+export function handleCommsMessage(payload: CommsMessagePayload): void {
+  // Invalidate to refetch fresh data from server
+  // This ensures cross-tab and cross-device sync works correctly
   invalidateChannelWithID(payload.channel_id);
 }
 

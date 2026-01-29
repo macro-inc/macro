@@ -23,9 +23,7 @@ export function QuerySyncProvider(props: SyncProviderProps) {
         invalidateContacts();
       })
       .with({ type: 'comms_message' }, () => {
-        const userId = props.userId();
-        if (!userId) return;
-        handleCommsMessage(payload, userId);
+        handleCommsMessage(payload);
       })
       .with({ type: 'comms_reaction' }, () => {
         handleCommsReaction(payload);
