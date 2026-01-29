@@ -2,11 +2,10 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
 /**
- * Listens for heartbeat pings from the native side.
- * On iOS, the content process can be killed when the app is backgrounded.
- * On resume, the native side emits a "heartbeat_ping" event to check if
- * the JS context is still alive. If this listener responds, the native side
- * knows the webview is healthy. If not, it reloads the webview.
+ * Registers a permanent listener for heartbeat pings from the native side.
+ *
+ * This listener is intentionally never cleaned up — it must remain active
+ * for the entire app lifecycle to respond to resume pings.
  */
 export function listenForHeartbeat() {
   listen('heartbeat_ping', () => {

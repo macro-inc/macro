@@ -5,7 +5,7 @@ use reqwest::cookie::CookieStore;
 use reqwest::header::COOKIE;
 use rootcause::{Report, report};
 use serde::Serialize;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use tauri::http::{HeaderMap, HeaderValue};
 use tauri::{AppHandle, Emitter};
 use tauri::{Manager, Runtime};
@@ -16,6 +16,8 @@ use url::Url;
 
 struct HeartbeatState {
     alive: AtomicBool,
+    /// Incremented on each resume event so stale check threads are ignored
+    generation: AtomicU64,
 }
 
 #[tauri::command]
@@ -128,6 +130,7 @@ pub fn run() {
     builder
         .manage(HeartbeatState {
             alive: AtomicBool::new(true),
+            generation: AtomicU64::new(0),
         })
         .invoke_handler(tauri::generate_handler![heartbeat_response])
         .setup(|app| {
@@ -157,6 +160,7 @@ pub fn run() {
                         tracing::info!("app resumed, sending heartbeat ping");
 
                         let state = handle.state::<HeartbeatState>();
+                        let current_gen = state.generation.fetch_add(1, Ordering::SeqCst) + 1;
                         state.alive.store(false, Ordering::SeqCst);
 
                         let _ = handle.emit("heartbeat_ping", ());
@@ -165,12 +169,19 @@ pub fn run() {
                         std::thread::spawn(move || {
                             std::thread::sleep(std::time::Duration::from_secs(1));
                             let state = handle.state::<HeartbeatState>();
+
+                            // A newer resume has superseded this one; bail out
+                            if state.generation.load(Ordering::SeqCst) != current_gen {
+                                tracing::debug!("heartbeat: stale generation {current_gen}, skipping");
+                                return;
+                            }
+
                             if !state.alive.load(Ordering::SeqCst) {
                                 tracing::warn!(
                                     "heartbeat: no response from JS — content process likely dead, reloading webview"
                                 );
                                 if let Some(webview) = handle.webview_windows().values().next() {
-                                    let _ = webview.eval("window.location.reload()");
+                                    let _ = webview.reload();
                                 }
                             } else {
                                 tracing::info!("heartbeat: JS responded, content process alive");
