@@ -90,6 +90,7 @@ dependencies = [
  "serde_qs",
  "tauri",
  "tauri-build",
+ "tauri-plugin-app-events",
  "tauri-plugin-deep-link",
  "tauri-plugin-haptics",
  "tauri-plugin-http",
@@ -4524,6 +4525,18 @@ dependencies = [
  "tauri-utils",
  "toml 0.9.8",
  "walkdir",
+]
+
+[[package]]
+name = "tauri-plugin-app-events"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e625f35abcfc422c7c4af8b348d2069cdf387a39c12429fdce570137d02f069"
+dependencies = [
+ "serde",
+ "tauri",
+ "tauri-plugin",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

@@ -59,4 +59,5 @@ tauri-plugin-virtual-keyboard = { git = "https://github.com/voxelbee/tauri-plugi
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
+tauri-plugin-app-events = "0.2"
 tauri-plugin-haptics = "2"

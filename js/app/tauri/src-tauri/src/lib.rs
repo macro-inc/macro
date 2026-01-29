@@ -8,7 +8,7 @@ use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::http::{HeaderMap, HeaderValue};
 use tauri::{AppHandle, Emitter};
-use tauri::{Manager, Runtime, RunEvent};
+use tauri::{Manager, Runtime};
 use tauri_plugin_deep_link::{DeepLinkExt, OpenUrlEvent};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -142,37 +142,49 @@ pub fn run() {
 
             app.chain(attach_deep_link_handler);
 
+            #[cfg(mobile)]
+            {
+                use tauri::ipc::Channel;
+                use tauri_plugin_app_events::AppEventsExt;
+
+                let app_handle = app.handle().clone();
+                app_handle.plugin(tauri_plugin_app_events::init())?;
+
+                let handle = app_handle.clone();
+                app_handle
+                    .app_events()
+                    .set_resume_handler(Channel::new(move |_| {
+                        tracing::info!("app resumed, sending heartbeat ping");
+
+                        let state = handle.state::<HeartbeatState>();
+                        state.alive.store(false, Ordering::SeqCst);
+
+                        let _ = handle.emit("heartbeat_ping", ());
+
+                        let handle = handle.clone();
+                        std::thread::spawn(move || {
+                            std::thread::sleep(std::time::Duration::from_secs(1));
+                            let state = handle.state::<HeartbeatState>();
+                            if !state.alive.load(Ordering::SeqCst) {
+                                tracing::warn!(
+                                    "heartbeat: no response from JS — content process likely dead, reloading webview"
+                                );
+                                if let Some(webview) = handle.webview_windows().values().next() {
+                                    let _ = webview.eval("window.location.reload()");
+                                }
+                            } else {
+                                tracing::info!("heartbeat: JS responded, content process alive");
+                            }
+                        });
+
+                        Ok(())
+                    }))?;
+            }
+
             Ok(())
         })
-        .build(tauri::generate_context!())
-        .expect("error while building tauri application")
-        .run(|app, event| {
-            if let RunEvent::Resumed = event {
-                tracing::info!("app resumed, sending heartbeat ping");
-
-                let state = app.state::<HeartbeatState>();
-                state.alive.store(false, Ordering::SeqCst);
-
-                // Ping the JS side via a Tauri event to check if the content process is alive
-                let _ = app.emit("heartbeat_ping", ());
-
-                let handle = app.clone();
-                std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_secs(3));
-                    let state = handle.state::<HeartbeatState>();
-                    if !state.alive.load(Ordering::SeqCst) {
-                        tracing::warn!(
-                            "heartbeat: no response from JS — content process likely dead, reloading webview"
-                        );
-                        if let Some(webview) = handle.webview_windows().values().next() {
-                            let _ = webview.eval("window.location.reload()");
-                        }
-                    } else {
-                        tracing::info!("heartbeat: JS responded, content process alive");
-                    }
-                });
-            }
-        });
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
 }
 
 /// fn to merge the headers from the http cookie store into the initial
