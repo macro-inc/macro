@@ -68,120 +68,6 @@ const PRIORITY_METADATA_SIGNAL_CONFIGS: SignalConfig<
   },
 ];
 
-const PRIORITY_DOMAIN_SIGNAL_CONFIGS: SignalConfig<string>[] = [
-  // E-Signature Services
-  { key: '@docusign.com', label: 'DocuSign', defaultValue: true },
-  { key: '@docusign.net', label: 'DocuSign Net', defaultValue: true },
-  { key: '@hellosign.com', label: 'HelloSign', defaultValue: true },
-  { key: '@dropboxsign.com', label: 'Dropbox Sign', defaultValue: true },
-  { key: '@adobesign.com', label: 'Adobe Sign', defaultValue: true },
-  { key: '@signnow.com', label: 'SignNow', defaultValue: true },
-  { key: '@pandadoc.com', label: 'PandaDoc', defaultValue: true },
-
-  // Accounting & Finance
-  { key: '@quickbooks.com', label: 'QuickBooks', defaultValue: true },
-  { key: '@xero.com', label: 'Xero', defaultValue: true },
-  { key: '@stripe.com', label: 'Stripe', defaultValue: true },
-  { key: '@paypal.com', label: 'PayPal', defaultValue: true },
-  { key: '@squareup.com', label: 'Square', defaultValue: true },
-  { key: '@bill.com', label: 'Bill.com', defaultValue: true },
-  { key: '@intuit.com', label: 'Intuit', defaultValue: true },
-
-  // HR & Payroll
-  { key: '@gusto.com', label: 'Gusto', defaultValue: true },
-  { key: '@justworks.com', label: 'Justworks', defaultValue: true },
-  { key: '@rippling.com', label: 'Rippling', defaultValue: true },
-
-  // Banks
-  { key: '@chase.com', label: 'Chase', defaultValue: true },
-  { key: '@bankofamerica.com', label: 'Bank of America', defaultValue: true },
-  { key: '@wellsfargo.com', label: 'Wells Fargo', defaultValue: true },
-  { key: '@capitalone.com', label: 'Capital One', defaultValue: true },
-  { key: '@amex.com', label: 'American Express', defaultValue: true },
-  { key: '@citibank.com', label: 'Citibank', defaultValue: true },
-
-  // Investment & Brokerage
-  { key: '@robinhood.com', label: 'Robinhood', defaultValue: true },
-  { key: '@etrade.com', label: 'E*TRADE', defaultValue: true },
-  { key: '@fidelity.com', label: 'Fidelity', defaultValue: true },
-  { key: '@schwab.com', label: 'Charles Schwab', defaultValue: true },
-  {
-    key: '@interactivebrokers.com',
-    label: 'Interactive Brokers',
-    defaultValue: true,
-  },
-  { key: '@vanguard.com', label: 'Vanguard', defaultValue: true },
-  { key: '@plaid.com', label: 'Plaid', defaultValue: true },
-
-  // Government
-  { key: '@irs.gov', label: 'IRS', defaultValue: true },
-  { key: '@ssa.gov', label: 'Social Security', defaultValue: true },
-  { key: '@uscis.gov', label: 'USCIS', defaultValue: true },
-  { key: '@treasury.gov', label: 'Treasury', defaultValue: true },
-  { key: '@efiletexas.gov', label: 'eFile Texas', defaultValue: true },
-  { key: '@efilemanager.com', label: 'eFile Manager', defaultValue: true },
-  { key: '@efile.ca.gov', label: 'eFile California', defaultValue: true },
-  { key: '@sec.gov', label: 'SEC', defaultValue: true },
-
-  // Recruiting & HR Software
-  { key: '@greenhouse.io', label: 'Greenhouse', defaultValue: true },
-  { key: '@lever.co', label: 'Lever', defaultValue: true },
-  { key: '@bamboohr.com', label: 'BambooHR', defaultValue: true },
-  { key: '@workday.com', label: 'Workday', defaultValue: true },
-  { key: '@sap.com', label: 'SAP', defaultValue: true },
-  { key: '@indeed.com', label: 'Indeed', defaultValue: true },
-  { key: '@linkedin.com', label: 'LinkedIn', defaultValue: true },
-  { key: '@ziprecruiter.com', label: 'ZipRecruiter', defaultValue: true },
-
-  // Cloud Storage & File Sharing
-  { key: '@dropbox.com', label: 'Dropbox', defaultValue: true },
-  { key: '@box.com', label: 'Box', defaultValue: true },
-  { key: '@drive.google.com', label: 'Google Drive', defaultValue: true },
-  { key: '@sharepoint.com', label: 'SharePoint', defaultValue: true },
-  { key: '@onedrive.live.com', label: 'OneDrive', defaultValue: true },
-  { key: '@wetransfer.com', label: 'WeTransfer', defaultValue: true },
-
-  // Productivity & Design
-  { key: '@figma.com', label: 'Figma', defaultValue: true },
-  { key: '@canva.com', label: 'Canva', defaultValue: true },
-  { key: '@notion.so', label: 'Notion', defaultValue: true },
-  { key: '@clickup.com', label: 'ClickUp', defaultValue: true },
-  { key: '@airtable.com', label: 'Airtable', defaultValue: true },
-
-  // Health Insurance
-  {
-    key: '@unitedhealthcare.com',
-    label: 'UnitedHealthcare',
-    defaultValue: true,
-  },
-  { key: '@aetna.com', label: 'Aetna', defaultValue: true },
-  { key: '@cigna.com', label: 'Cigna', defaultValue: true },
-  { key: '@metlife.com', label: 'MetLife', defaultValue: true },
-  { key: '@anthem.com', label: 'Anthem', defaultValue: true },
-  { key: '@oscarhealth.com', label: 'Oscar Health', defaultValue: true },
-  { key: '@delta-dental.com', label: 'Delta Dental', defaultValue: true },
-  {
-    key: '@vanguardbenefits.com',
-    label: 'Vanguard Benefits',
-    defaultValue: true,
-  },
-  {
-    key: '@fidelitybenefits.com',
-    label: 'Fidelity Benefits',
-    defaultValue: true,
-  },
-
-  // Tech & Development
-  { key: '@aws.amazon.com', label: 'AWS', defaultValue: true },
-  { key: '@cloudflare.com', label: 'Cloudflare', defaultValue: true },
-  { key: '@digitalocean.com', label: 'DigitalOcean', defaultValue: true },
-  { key: '@github.com', label: 'GitHub', defaultValue: true },
-  { key: '@gitlab.com', label: 'GitLab', defaultValue: true },
-  { key: '@atlassian.com', label: 'Atlassian', defaultValue: true },
-  { key: '@openai.com', label: 'OpenAI', defaultValue: true },
-  { key: '@anthropic.com', label: 'Anthropic', defaultValue: true },
-];
-
 const DEPRIORITY_LABEL_SIGNAL_CONFIGS: SignalConfig<string>[] = [
   {
     key: 'CATEGORY_UPDATES',
@@ -228,10 +114,6 @@ export const PRIORITY_METADATA_SIGNAL_TOGGLES = createSignalToggles(
   'priority_metadata',
   PRIORITY_METADATA_SIGNAL_CONFIGS
 );
-export const PRIORITY_DOMAIN_SIGNAL_TOGGLES = createSignalToggles(
-  'priority_domain',
-  PRIORITY_DOMAIN_SIGNAL_CONFIGS
-);
 export const DEPRIORITY_LABEL_SIGNAL_TOGGLES = createSignalToggles(
   'depriority_label',
   DEPRIORITY_LABEL_SIGNAL_CONFIGS
@@ -265,15 +147,6 @@ const SIGNAL_PRIORITY_METADATA = createMemo(
     new Set<keyof SoupEmailThreadPreviewMetadata>(
       PRIORITY_METADATA_SIGNAL_TOGGLES.filter(({ enabled }) => enabled()).map(
         ({ key }) => key
-      )
-    )
-);
-
-const SIGNAL_PRIORITY_DOMAINS = createMemo(
-  () =>
-    new Set(
-      PRIORITY_DOMAIN_SIGNAL_TOGGLES.filter(({ enabled }) => enabled()).map(
-        ({ key }) => key.toLowerCase()
       )
     )
 );
@@ -328,20 +201,6 @@ const getMetadataValue = (
   return undefined;
 };
 
-const hasParticipantWithPriorityDomain = (
-  entity: Extract<EntityData, { type: 'email' }>
-): boolean => {
-  const priorityDomains = SIGNAL_PRIORITY_DOMAINS();
-  if (priorityDomains.size === 0) return false;
-
-  const participants = entity.participants ?? [];
-  return participants.some((participant) => {
-    const email = participant.email?.toLowerCase();
-    if (!email) return false;
-    return Array.from(priorityDomains).some((domain) => email.endsWith(domain));
-  });
-};
-
 const getEmailSignalInfo = (entity: Extract<EntityData, { type: 'email' }>) => {
   const labelTokens = getLabelTokens(entity.labels);
   const priorityLabels = SIGNAL_PRIORITY_LABELS();
@@ -367,10 +226,8 @@ const getEmailSignalInfo = (entity: Extract<EntityData, { type: 'email' }>) => {
       )
     : false;
 
-  const hasPriorityDomain = hasParticipantWithPriorityDomain(entity);
-
   return {
-    hasPriority: hasPriorityMetadata || hasPriorityLabel || hasPriorityDomain,
+    hasPriority: hasPriorityMetadata || hasPriorityLabel,
     hasDepriority: hasDeprioritizingLabel || hasDeprioritizingMetadata,
   };
 };
