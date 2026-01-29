@@ -11,6 +11,7 @@ import {
 interface CollapsedMessageProps {
   message: MessageWithBodyReplyless;
   isFocused: boolean;
+  isFirstMessage: boolean;
   onClick: () => void;
 }
 
@@ -56,7 +57,10 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
       <div class="macro-message-width w-full pl-2 pr-4 sm:px-0">
         <BozzyBracket active={props.isFocused} hover={hover()} class="">
           <div
-            class="relative flex flex-row items-center w-full py-2 cursor-pointer opacity-80 hover:opacity-100 transition-all"
+            class="relative flex flex-row items-center w-full pb-2 cursor-pointer opacity-80 hover:opacity-100 transition-all"
+            classList={{
+              'pt-4': !props.isFirstMessage,
+            }}
             data-message-body-id={props.message.db_id}
             tabIndex={0}
             onClick={props.onClick}
@@ -98,7 +102,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
                   'calc(var(--left-of-connector) - var(--user-icon-width) / 2)',
               }}
             >
-              <span class="text-ink w-16 shrink-0 truncate">
+              <span class="text-ink w-16 shrink-0 truncate text-sm">
                 {senderDisplay()}
               </span>
               <span class="text-ink truncate">{snippet()}</span>

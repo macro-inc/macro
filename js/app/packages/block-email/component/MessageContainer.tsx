@@ -198,6 +198,7 @@ export function MessageContainer(props: MessageContainerProps) {
         <CollapsedMessage
           message={props.message}
           isFocused={props.isFocused}
+          isFirstMessage={props.isFirstMessage}
           onClick={handleExpand}
         />
       }
