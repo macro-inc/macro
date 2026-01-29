@@ -104,6 +104,7 @@ type PostTypingUpdateVars = {
 
 export function usePostTypingUpdateMutation() {
   return useMutation(() => ({
+    gcTime: 0,
     mutationFn: async (vars: PostTypingUpdateVars) => {
       await commsServiceClient.postTypingUpdate({
         channel_id: vars.channelId,

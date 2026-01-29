@@ -2,10 +2,13 @@ import { useUpsertSavedViewMutation } from '@app/component/Soup';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ViewConfigBase } from '@app/component/ViewConfig';
 import { unwrapSignals } from '@core/util/unwrapSignals';
-import { optimisticUpdateChannelName } from '@queries/channel/channel';
+import {
+  optimisticUpdateChannelName,
+  rollbackUpdateChannelName,
+  type UpdateChannelNameContext,
+} from '@queries/channel/channel';
 import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
-import type { GetChannelResponse } from '@service-comms/generated/models';
 import { createMemo, createSignal, onMount } from 'solid-js';
 import { createRenameDssEntityMutation } from '../../../macro-entity/src/queries/dss';
 import type { EntityData } from '../../../macro-entity/src/types/entity';
@@ -21,24 +24,26 @@ export const RenameView = (props: {
     onMutate(variables) {
       if (variables.entity.type !== 'channel') return;
 
-      const queryKey = channelKeys.withID(variables.entity.id).queryKey;
-
-      const previousData: GetChannelResponse | undefined =
-        queryClient.getQueryData(queryKey);
-
-      optimisticUpdateChannelName(variables.entity.id, variables.newName);
-      return { previousData };
+      const context = optimisticUpdateChannelName({
+        channelId: variables.entity.id,
+        name: variables.newName,
+      });
+      return { context, channelId: variables.entity.id };
     },
     onError(
       _,
-      variables,
-      onMutateResult: { previousData: GetChannelResponse | undefined }
+      _variables,
+      onMutateResult: {
+        context: UpdateChannelNameContext | undefined;
+        channelId: string;
+      }
     ) {
-      const queryKey = channelKeys.withID(variables.entity.id).queryKey;
-      queryClient.setQueriesData(
-        { queryKey },
-        () => onMutateResult.previousData
-      );
+      if (onMutateResult?.context) {
+        rollbackUpdateChannelName(
+          onMutateResult.channelId,
+          onMutateResult.context
+        );
+      }
     },
     onSettled(_, __, variables) {
       // TODO: fix the backend so that the /channels/{id} endpoint returns the updated name
