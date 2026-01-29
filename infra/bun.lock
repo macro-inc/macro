@@ -142,10 +142,6 @@
       "name": "organization-retention-stack",
       "version": "0.0.0",
     },
-    "stacks/organization-service": {
-      "name": "organization-service-stack",
-      "version": "0.0.0",
-    },
     "stacks/properties-service": {
       "name": "properties-service-stack",
       "version": "0.0.0",
@@ -825,8 +821,6 @@
     "opensearch-stack": ["opensearch-stack@workspace:stacks/opensearch"],
 
     "organization-retention-stack": ["organization-retention-stack@workspace:stacks/organization-retention"],
-
-    "organization-service-stack": ["organization-service-stack@workspace:stacks/organization-service"],
 
     "p-cancelable": ["p-cancelable@2.1.1", "", {}, "sha512-BZOr3nRQHOntUjTrH8+Lh54smKHoHyur8We1V8DSMVrl5A2malOOwuJRnKRDjSnkoeBh4at6BwEnb5I7Jl31wg=="],
 
