@@ -9,16 +9,19 @@ use uuid::Uuid;
 
 use crate::api::context::AppState;
 
+/// Generic wrapper that adds an optional nonce to any serializable payload.
+/// Used for optimistic update correlation - the nonce is echoed back to the client.
 #[derive(Serialize, ToSchema)]
-pub struct MessageWithNonce<'a> {
+pub struct WithNonce<'a, T: Serialize> {
     #[serde(flatten)]
-    pub message: &'a Message,
+    pub data: T,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub nonce: Option<&'a str>,
 }
 
 pub async fn notify_message(
     ctx: &AppState,
-    message: MessageWithNonce<'_>,
+    message: WithNonce<'_, &Message>,
     participants: &[MacroUserIdStr<'_>],
 ) -> Result<()> {
     if participants.is_empty() {
@@ -39,16 +42,15 @@ pub async fn notify_message(
 }
 
 #[derive(Debug, Serialize, ToSchema)]
-pub struct TypingUpdate<'a> {
+pub struct TypingData<'a> {
     pub channel_id: &'a Uuid,
     pub user_id: &'a str,
     pub action: TypingAction,
     pub thread_id: Option<&'a Uuid>,
-    pub nonce: Option<&'a str>,
 }
 
-pub async fn notify_typing(ctx: &AppState, update: TypingUpdate<'_>) -> Result<()> {
-    let participants = get_participants(&ctx.db, &update.channel_id).await?;
+pub async fn notify_typing(ctx: &AppState, update: WithNonce<'_, TypingData<'_>>) -> Result<()> {
+    let participants = get_participants(&ctx.db, update.data.channel_id).await?;
 
     ctx.connection_gateway_client
         .batch_send_message(
@@ -65,15 +67,14 @@ pub async fn notify_typing(ctx: &AppState, update: TypingUpdate<'_>) -> Result<(
 }
 
 #[derive(Debug, Serialize, ToSchema)]
-pub struct ReactionUpdate<'a> {
+pub struct ReactionData<'a> {
     pub channel_id: &'a Uuid,
     pub message_id: &'a Uuid,
     pub reactions: &'a [CountedReaction],
-    pub nonce: Option<&'a str>,
 }
 
-pub async fn notify_reactions(ctx: &AppState, update: ReactionUpdate<'_>) -> Result<()> {
-    let participants = get_participants(&ctx.db, &update.channel_id).await?;
+pub async fn notify_reactions(ctx: &AppState, update: WithNonce<'_, ReactionData<'_>>) -> Result<()> {
+    let participants = get_participants(&ctx.db, update.data.channel_id).await?;
 
     ctx.connection_gateway_client
         .batch_send_message(
@@ -90,15 +91,14 @@ pub async fn notify_reactions(ctx: &AppState, update: ReactionUpdate<'_>) -> Res
 }
 
 #[derive(Debug, Serialize, ToSchema)]
-pub struct AttachmentUpdate<'a> {
+pub struct AttachmentData<'a> {
     pub channel_id: &'a Uuid,
     pub message_id: &'a Uuid,
     pub attachments: &'a [Attachment],
-    pub nonce: Option<&'a str>,
 }
 
-pub async fn notify_attachments(ctx: &AppState, update: AttachmentUpdate<'_>) -> Result<()> {
-    let participants = get_participants(&ctx.db, &update.channel_id).await?;
+pub async fn notify_attachments(ctx: &AppState, update: WithNonce<'_, AttachmentData<'_>>) -> Result<()> {
+    let participants = get_participants(&ctx.db, update.data.channel_id).await?;
 
     ctx.connection_gateway_client
         .batch_send_message(

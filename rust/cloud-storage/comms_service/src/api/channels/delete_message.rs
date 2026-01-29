@@ -5,7 +5,7 @@ use crate::{
     },
     service::{
         self,
-        sender::notify::{MessageWithNonce, notify_message},
+        sender::notify::{WithNonce, notify_message},
     },
 };
 use anyhow::Result;
@@ -69,8 +69,8 @@ pub async fn delete_message_handler(
 
     notify_message(
         &ctx,
-        MessageWithNonce {
-            message: &message,
+        WithNonce {
+            data: &message,
             nonce: query.nonce.as_deref(),
         },
         &participants,

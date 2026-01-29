@@ -3,7 +3,7 @@ use crate::{
         context::AppState,
         extractors::{ChannelId, ChannelMember},
     },
-    service::sender::notify::{TypingUpdate, notify_typing},
+    service::sender::notify::{TypingData, WithNonce, notify_typing},
 };
 
 use anyhow::Result;
@@ -55,11 +55,13 @@ pub async fn post_typing_handler(
 
     notify_typing(
         &app_state,
-        TypingUpdate {
-            channel_id: &channel_id,
-            user_id: &channel_member.context.user_id,
-            action: req.action,
-            thread_id: thread_id.as_ref(),
+        WithNonce {
+            data: TypingData {
+                channel_id: &channel_id,
+                user_id: &channel_member.context.user_id,
+                action: req.action,
+                thread_id: thread_id.as_ref(),
+            },
             nonce: req.nonce.as_deref(),
         },
     )

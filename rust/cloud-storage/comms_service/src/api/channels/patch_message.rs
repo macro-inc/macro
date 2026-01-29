@@ -5,7 +5,7 @@ use crate::{
     },
     service::{
         self,
-        sender::notify::{self, MessageWithNonce},
+        sender::notify::{self, AttachmentData, WithNonce},
     },
 };
 use anyhow::Result;
@@ -108,8 +108,8 @@ pub async fn patch_message_handler(
         };
         notify::notify_message(
             &app_state,
-            MessageWithNonce {
-                message: &message,
+            WithNonce {
+                data: &message,
                 nonce: req.nonce.as_deref(),
             },
             &participants,
@@ -224,13 +224,17 @@ async fn delete_message_attachments(
     // TODO: delete from sfs it's a static file attachment (image)
 
     // Notify about the remaining attachments
-    let attachment_update = notify::AttachmentUpdate {
-        channel_id: &channel_id,
-        message_id: &message_id,
-        attachments: &remaining_attachments,
-        nonce,
-    };
-    notify::notify_attachments(ctx, attachment_update)
+    notify::notify_attachments(
+        ctx,
+        WithNonce {
+            data: AttachmentData {
+                channel_id: &channel_id,
+                message_id: &message_id,
+                attachments: &remaining_attachments,
+            },
+            nonce,
+        },
+    )
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "unable to notify attachments");

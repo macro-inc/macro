@@ -17,7 +17,7 @@ use tracing::Instrument;
 
 use crate::{
     api::context::AppState,
-    service::sender::notify::{self, MessageWithNonce},
+    service::sender::notify::{self, WithNonce},
 };
 use model::{
     comms::{ChannelType, CreateWelcomeMessageRequest, GetOrCreateAction},
@@ -116,8 +116,8 @@ async fn create_welcome_message(
 
     notify::notify_message(
         ctx,
-        MessageWithNonce {
-            message: &message,
+        WithNonce {
+            data: &message,
             nonce: None,
         },
         &participants,

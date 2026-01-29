@@ -1,12 +1,12 @@
 use crate::api::context::ChannelImpl;
 use crate::api::{context::AppState, extractors::ChannelName};
 use crate::notification as comms_notification;
-use crate::service::sender::notify::MessageWithNonce;
+use crate::service::sender::notify::WithNonce;
 use crate::{
     api::extractors::{ChannelId, ChannelMember, ChannelParticipants, ChannelTypeExtractor},
     service::{
         self,
-        sender::notify::{self, AttachmentUpdate},
+        sender::notify::{self, AttachmentData},
     },
 };
 use anyhow::Result;
@@ -219,8 +219,8 @@ pub async fn post_message_handler(
     let start_time = Instant::now();
     notify::notify_message(
         &ctx,
-        MessageWithNonce {
-            message: &message,
+        WithNonce {
+            data: &message,
             nonce: req.nonce.as_deref(),
         },
         &participants,
@@ -271,10 +271,12 @@ pub async fn post_message_handler(
         let start_time = Instant::now();
         notify::notify_attachments(
             &ctx,
-            AttachmentUpdate {
-                channel_id: &channel_id,
-                message_id: &message.id,
-                attachments: &attachments,
+            WithNonce {
+                data: AttachmentData {
+                    channel_id: &channel_id,
+                    message_id: &message.id,
+                    attachments: &attachments,
+                },
                 nonce: req.nonce.as_deref(),
             },
         )

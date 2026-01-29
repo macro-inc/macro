@@ -11,7 +11,7 @@ use crate::{
         context::AppState,
         extractors::{ChannelId, ChannelMember},
     },
-    service::sender::notify::{ReactionUpdate, notify_reactions},
+    service::sender::notify::{ReactionData, WithNonce, notify_reactions},
 };
 
 use comms_db_client::{
@@ -106,10 +106,12 @@ pub async fn post_reaction_handler(
 
     notify_reactions(
         &ctx,
-        ReactionUpdate {
-            channel_id: &channel_id,
-            message_id: &message_id,
-            reactions: &counted_reactions,
+        WithNonce {
+            data: ReactionData {
+                channel_id: &channel_id,
+                message_id: &message_id,
+                reactions: &counted_reactions,
+            },
             nonce: req.nonce.as_deref(),
         },
     )
