@@ -166,8 +166,8 @@ pub fn run() {
                         let _ = handle.emit("heartbeat_ping", ());
 
                         let handle = handle.clone();
-                        std::thread::spawn(move || {
-                            std::thread::sleep(std::time::Duration::from_secs(1));
+                        tokio::spawn(async move {
+                            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                             let state = handle.state::<HeartbeatState>();
 
                             // A newer resume has superseded this one; bail out
