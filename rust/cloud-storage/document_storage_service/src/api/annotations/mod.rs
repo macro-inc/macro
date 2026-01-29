@@ -19,8 +19,11 @@ use macro_db_client::annotations::CommentError;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::{annotations::Comment, response::ErrorResponse};
 use model_entity::EntityType;
+use macro_user_id::email::ReadEmailParts;
 use notification::domain::models::{
-    Notification, RateLimitConfig, RateLimitKey, SendNotificationRequestBuilder,
+    Notification, NotificationExtIos, RateLimitConfig, RateLimitKey, SendNotificationRequestBuilder,
+    apple::{APNSPushNotification, AlertDictionary, Aps},
+    mobile::{MessageAttributes, PushType},
 };
 use serde::{Deserialize, Serialize};
 use tower::ServiceBuilder;
@@ -187,6 +190,40 @@ impl Notification for DocumentMentionNotification {
 
     fn rate_limit_key(&self) -> Option<RateLimitKey> {
         None
+    }
+}
+
+impl NotificationExtIos for DocumentMentionNotification {
+    type NotifData = ();
+
+    fn message_attributes(&self) -> MessageAttributes {
+        MessageAttributes {
+            push_type: PushType::Alert,
+            collapse_key: "document_mention".to_string(),
+        }
+    }
+
+    fn into_apns<'a>(
+        self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        let sender = sender_id?;
+        let file_type = self.file_type.as_ref()?;
+        let title = sender.0.email_part().email_str().to_string();
+        let body = format!("You were mentioned in {}.{}", self.document_name, file_type);
+        Some(APNSPushNotification {
+            aps: Aps {
+                alert: Some(notification::domain::models::apple::Alert::Dictionary(
+                    AlertDictionary {
+                        title: Some(title),
+                        body: Some(body),
+                        ..Default::default()
+                    },
+                )),
+                ..Default::default()
+            },
+            push_notification_data: (),
+        })
     }
 }
 

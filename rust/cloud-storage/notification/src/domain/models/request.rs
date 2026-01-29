@@ -9,7 +9,7 @@ use crate::domain::{
     service::SendNotificationError,
 };
 use itertools::Itertools;
-use macro_user_id::user_id::MacroUserIdStr;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_entity::Entity;
 use rootcause::{Report, report};
 use serde::{Deserialize, Serialize};
@@ -72,11 +72,13 @@ impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
             send_conn_gateway,
         } = self;
 
+        let sender = req.sender_id.clone().map(CowLike::into_owned);
+
         SendNotificationRequest {
             req,
-            build_apns: Some(Box::new(|notif: T| {
+            build_apns: Some(Box::new(move |notif: T| {
                 let attrs = notif.message_attributes();
-                let apns = notif.into_apns()?;
+                let apns = notif.into_apns(sender.clone())?;
 
                 Some((apns, attrs))
             })),

@@ -1,10 +1,11 @@
 //! Domain models for the notification service.
 
+use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Serialize, de::DeserializeOwned};
 
 pub(crate) mod android;
-pub(crate) mod apple;
-pub(crate) mod mobile;
+pub mod apple;
+pub mod mobile;
 pub(crate) mod queue_message;
 pub mod rate_limit;
 pub mod recipient;
@@ -52,5 +53,8 @@ pub trait NotificationExtIos: Notification {
     /// Get the message attributes for this push notification.
     fn message_attributes(&self) -> MessageAttributes;
     /// Convert this notification into an APNS push notification.
-    fn into_apns(self) -> Option<APNSPushNotification<Self::NotifData>>;
+    fn into_apns<'a>(
+        self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+    ) -> Option<APNSPushNotification<Self::NotifData>>;
 }

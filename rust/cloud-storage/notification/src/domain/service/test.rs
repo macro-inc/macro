@@ -56,11 +56,14 @@ impl NotificationExtIos for TestNotification {
         }
     }
 
-    fn into_apns(self) -> crate::domain::models::apple::APNSPushNotification<Self::NotifData> {
-        APNSPushNotification {
+    fn into_apns<'a>(
+        self,
+        _sender: Option<MacroUserIdStr<'a>>,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        Some(APNSPushNotification {
             aps: Default::default(),
             push_notification_data: self,
-        }
+        })
     }
 }
 
@@ -202,10 +205,11 @@ impl NotificationRepository for MockRepository {
         notification_ids: &[Uuid],
         done: bool,
     ) -> Result<(), Report> {
-        self.mark_done_calls
-            .lock()
-            .unwrap()
-            .push((user_id.to_string(), notification_ids.to_vec(), done));
+        self.mark_done_calls.lock().unwrap().push((
+            user_id.to_string(),
+            notification_ids.to_vec(),
+            done,
+        ));
         Ok(())
     }
 

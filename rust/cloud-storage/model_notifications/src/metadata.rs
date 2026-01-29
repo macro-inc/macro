@@ -1,7 +1,13 @@
 use crate::NotificationEventType;
 use doppleganger::Doppleganger;
-use macro_user_id::user_id::MacroUserIdStr;
+use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
+use mention_utils::parse::{ParsedXmlText, XmlFormatter};
 use model_entity::EntityType;
+use notification::domain::models::{
+    NotificationExtIos,
+    apple::{APNSPushNotification, AlertDictionary, Aps},
+    mobile::{MessageAttributes, PushType},
+};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use utoipa::ToSchema;
 
@@ -351,3 +357,201 @@ impl_notification_metadata!(
 );
 impl_notification_metadata!(NewEmailMetadata, NotificationEventType::NewEmail);
 impl_notification_metadata!(TaskAssignedMetadata, NotificationEventType::TaskAssigned);
+
+// Plain text formatter for converting XML message content to plain text for APNS payloads.
+struct PlainTextFormatter;
+
+impl XmlFormatter for PlainTextFormatter {
+    fn format_plain_text(s: &str, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", s)
+    }
+
+    fn format_link(
+        link: &mention_utils::parse::ParsedLink<'_>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        write!(f, "{}", link.text)
+    }
+
+    fn format_doc(
+        doc: &mention_utils::parse::ParsedDocumentMention<'_>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        write!(f, "{}", doc.document_name)
+    }
+
+    fn format_user(
+        user: &mention_utils::parse::ParsedUserMention<'_>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        write!(f, "{}", user.user_id.0.email_part().email_str())
+    }
+
+    fn format_contact(
+        contact: &mention_utils::parse::ParsedContactMention<'_>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        write!(f, "{}", contact.name)
+    }
+
+    fn format_date(
+        date: &mention_utils::parse::ParsedDateMention<'_>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        write!(f, "{}", date.display_format)
+    }
+
+    fn format_group(
+        group: &mention_utils::parse::ParsedGroupMention<'_>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        write!(f, "@{}", group.group_alias)
+    }
+}
+
+/// Helper to parse XML message content to plain text, returning None on failure.
+fn parse_message_plain_text(content: &str) -> Option<String> {
+    let parsed = ParsedXmlText::parse(content).ok()?;
+    Some(PlainTextFormatter::format_xml_text(parsed).0)
+}
+
+/// Helper to create an alert-style APNS notification with title and body.
+fn alert_apns(title: String, body: String) -> APNSPushNotification<()> {
+    APNSPushNotification {
+        aps: Aps {
+            alert: Some(notification::domain::models::apple::Alert::Dictionary(
+                AlertDictionary {
+                    title: Some(title),
+                    body: Some(body),
+                    ..Default::default()
+                },
+            )),
+            ..Default::default()
+        },
+        push_notification_data: (),
+    }
+}
+
+impl NotificationExtIos for ChannelInviteMetadata {
+    type NotifData = ();
+
+    fn message_attributes(&self) -> MessageAttributes {
+        MessageAttributes {
+            push_type: PushType::Alert,
+            collapse_key: "channel_invite".to_string(),
+        }
+    }
+
+    fn into_apns<'a>(
+        self,
+        _sender_id: Option<MacroUserIdStr<'a>>,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        Some(alert_apns(
+            format!("{} Invite", self.common.channel_name),
+            format!("{} invited you to join the channel", self.invited_by),
+        ))
+    }
+}
+
+impl NotificationExtIos for ChannelMessageSendMetadata {
+    type NotifData = ();
+
+    fn message_attributes(&self) -> MessageAttributes {
+        MessageAttributes {
+            push_type: PushType::Alert,
+            collapse_key: "channel_message_send".to_string(),
+        }
+    }
+
+    fn into_apns<'a>(
+        self,
+        _sender_id: Option<MacroUserIdStr<'a>>,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        let title = match self.common.channel_type {
+            ChannelType::DirectMessage => {
+                self.sender.email_part().local_part().to_string()
+            }
+            _ => format!(
+                "{} <{}>",
+                self.sender.email_part().local_part(),
+                self.common.channel_name
+            ),
+        };
+        let body = parse_message_plain_text(&self.message_content)?;
+        Some(alert_apns(title, body))
+    }
+}
+
+impl NotificationExtIos for ChannelMentionMetadata {
+    type NotifData = ();
+
+    fn message_attributes(&self) -> MessageAttributes {
+        MessageAttributes {
+            push_type: PushType::Alert,
+            collapse_key: "channel_mention".to_string(),
+        }
+    }
+
+    fn into_apns<'a>(
+        self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        let sender = sender_id?;
+        let title = match self.common.channel_type {
+            ChannelType::DirectMessage => {
+                format!("{} mentioned you", sender.email_part().local_part())
+            }
+            _ => format!(
+                "{} mentioned you in #{}",
+                sender.email_part().local_part(),
+                self.common.channel_name
+            ),
+        };
+        let body = parse_message_plain_text(&self.message_content)?;
+        Some(alert_apns(title, body))
+    }
+}
+
+impl NotificationExtIos for ChannelReplyMetadata {
+    type NotifData = ();
+
+    fn message_attributes(&self) -> MessageAttributes {
+        MessageAttributes {
+            push_type: PushType::Alert,
+            collapse_key: "channel_message_reply".to_string(),
+        }
+    }
+
+    fn into_apns<'a>(
+        self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        let sender = sender_id?;
+        let title = format!("{} Replied", sender.0.email_part().email_str());
+        let body = parse_message_plain_text(&self.message_content)?;
+        Some(alert_apns(title, body))
+    }
+}
+
+impl NotificationExtIos for DocumentMentionMetadata {
+    type NotifData = ();
+
+    fn message_attributes(&self) -> MessageAttributes {
+        MessageAttributes {
+            push_type: PushType::Alert,
+            collapse_key: "document_mention".to_string(),
+        }
+    }
+
+    fn into_apns<'a>(
+        self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        let sender = sender_id?;
+        let file_type = self.file_type.as_ref()?;
+        let title = sender.0.email_part().email_str().to_string();
+        let body = format!("You were mentioned in {}.{}", self.document_name, file_type);
+        Some(alert_apns(title, body))
+    }
+}
+

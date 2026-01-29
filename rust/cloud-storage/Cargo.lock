@@ -5495,6 +5495,7 @@ dependencies = [
  "chrono",
  "doppleganger",
  "macro_user_id",
+ "mention_utils",
  "model-entity",
  "models_comms",
  "models_pagination",

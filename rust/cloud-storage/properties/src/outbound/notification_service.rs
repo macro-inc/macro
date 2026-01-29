@@ -2,9 +2,11 @@
 
 use std::collections::HashSet;
 
-use macro_user_id::user_id::MacroUserIdStr;
+use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
 use notification::domain::models::{
-    Notification, RateLimitConfig, RateLimitKey, SendNotificationRequestBuilder,
+    Notification, NotificationExtIos, RateLimitConfig, RateLimitKey, SendNotificationRequestBuilder,
+    apple::{APNSPushNotification, AlertDictionary, Aps},
+    mobile::{MessageAttributes, PushType},
 };
 use notification::domain::service::NotificationIngress;
 use serde::{Deserialize, Serialize};
@@ -33,6 +35,42 @@ impl Notification for TaskAssignedNotification {
 
     fn rate_limit_key(&self) -> Option<RateLimitKey> {
         None
+    }
+}
+
+impl NotificationExtIos for TaskAssignedNotification {
+    type NotifData = ();
+
+    fn message_attributes(&self) -> MessageAttributes {
+        MessageAttributes {
+            push_type: PushType::Alert,
+            collapse_key: "task_assigned".to_string(),
+        }
+    }
+
+    fn into_apns<'a>(
+        self,
+        _sender_id: Option<MacroUserIdStr<'a>>,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        let title = self.assigned_by.email_part().email_str().to_string();
+        let body = if let Some(ref task_name) = self.task_name {
+            format!("assigned you to {}", task_name)
+        } else {
+            "assigned you a task".to_string()
+        };
+        Some(APNSPushNotification {
+            aps: Aps {
+                alert: Some(notification::domain::models::apple::Alert::Dictionary(
+                    AlertDictionary {
+                        title: Some(title),
+                        body: Some(body),
+                        ..Default::default()
+                    },
+                )),
+                ..Default::default()
+            },
+            push_notification_data: (),
+        })
     }
 }
 
@@ -93,6 +131,7 @@ where
                     recipient_ids,
                 }
                 .into_request()
+                .with_apns()
                 .with_conn_gateway();
 
                 let result = self
