@@ -245,7 +245,7 @@ async fn remove_user_from_org_channels(
     use anyhow::Context;
     use comms_db_client::channels::get_channels::get_org_channels;
     use comms_db_client::participants::remove_participant::{
-        remove_participant, RemoveParticipantOptions,
+        RemoveParticipantOptions, remove_participant,
     };
 
     let channels = get_org_channels(comms_db, &org_id)

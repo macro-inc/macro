@@ -264,7 +264,7 @@ async fn add_user_to_org_channels(
     org_id: i64,
 ) -> anyhow::Result<()> {
     use comms_db_client::channels::get_channels::get_org_channels;
-    use comms_db_client::participants::add_participant::{add_participant, AddParticipantOptions};
+    use comms_db_client::participants::add_participant::{AddParticipantOptions, add_participant};
     use model::comms::ParticipantRole;
 
     let channels = get_org_channels(comms_db, &org_id)
