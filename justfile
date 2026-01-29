@@ -42,6 +42,9 @@ build_run_local *ARGS:
 stop-local:
   docker compose down
 
+stop-databases:
+  docker-compose -f docker-compose-databases.yml down
+
 # Start LocalStack for local AWS emulation
 start_localstack:
   docker run -d --name localstack \
