@@ -136,21 +136,10 @@ export function EmailDebouncedReadMarker(props: {
 }) {
   const markSeenMutation = useMarkThreadAsSeenMutation();
 
-  const isAlreadySeen = () => {
-    const data = queryClient.getQueryData(
-      emailKeys.threadMessages(props.threadId).queryKey
-    );
-    return (
-      (data as { pages?: { is_read?: boolean }[] })?.pages?.[0]?.is_read ===
-      true
-    );
-  };
-
   return (
     <DebouncedMarker
       debounceTime={props.debounceTime}
       debouncedFn={() => {
-        if (isAlreadySeen()) return;
         markSeenMutation.mutate({ threadId: props.threadId });
       }}
     />
