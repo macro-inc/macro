@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-use crate::domain::models::Notification;
-
 #[derive(Serialize, Debug, Default, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Aps {

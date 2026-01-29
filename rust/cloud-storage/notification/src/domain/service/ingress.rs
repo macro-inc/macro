@@ -3,9 +3,11 @@
 //! This service handles the caller-facing side of notifications:
 //! filtering recipients, persisting to DB, and publishing to the queue.
 
+use crate::domain::models::apple::{APNSPushNotification, Aps};
+use crate::domain::models::mobile::{MessageAttributes, PushType};
 use crate::domain::models::queue_message::{
-    APNSTargets, ConnGatewayNotification, EmailNotification, Node, NotificationChannel,
-    QueueMessage,
+    APNSTargets, ClearPushIdentifier, ConnGatewayNotification, EmailNotification, Node,
+    NotificationChannel, QueueMessage,
 };
 use crate::domain::models::{
     DeviceEndpoint, Notification, NotificationResult, SendNotificationRequest,
@@ -13,6 +15,7 @@ use crate::domain::models::{
 use crate::domain::ports::{NotificationQueue, NotificationRepository};
 use crate::domain::service::SendNotificationError;
 use macro_user_id::cowlike::CowLike;
+use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use rootcause::prelude::ResultExt;
 use serde::Serialize;
@@ -26,6 +29,13 @@ pub trait NotificationIngress: Send + Sync + 'static {
         &self,
         req: SendNotificationRequest<'a, T, U>,
     ) -> impl Future<Output = Result<Option<NotificationResult<'a>>, Report<SendNotificationError>>> + Send;
+
+    /// Mark notifications as seen for a user and enqueue push notification clearing.
+    fn mark_notifications_seen(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+    ) -> impl Future<Output = Result<(), Report<SendNotificationError>>> + Send;
 }
 
 /// Service for sending notifications (ingress side).
@@ -43,6 +53,91 @@ where
     N: NotificationRepository,
     Q: NotificationQueue,
 {
+    /// Mark notifications as seen for a user and enqueue push notification clearing.
+    ///
+    /// This method performs the following steps:
+    /// 1. Update the `seen` status in the database
+    /// 2. Look up collapse keys for the given notifications
+    /// 3. Look up the user's iOS device endpoints
+    /// 4. Publish silent background push messages to clear badges on devices
+    #[tracing::instrument(err, skip(self))]
+    async fn mark_notifications_seen(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+    ) -> Result<(), Report<SendNotificationError>> {
+        self.repository
+            .mark_notifications_seen(user_id, notification_ids)
+            .await
+            .context(SendNotificationError::Other)?;
+
+        let notifications_with_keys = self
+            .repository
+            .get_basic_notifications(notification_ids)
+            .await
+            .context(SendNotificationError::Other)?;
+
+        if notifications_with_keys.is_empty() {
+            return Ok(());
+        }
+
+        let device_endpoints = self
+            .repository
+            .get_device_endpoints(&[user_id.copied()])
+            .await
+            .context(SendNotificationError::Other)?;
+
+        let ios_endpoints: Vec<String> = device_endpoints
+            .values()
+            .flatten()
+            .filter_map(|e| match e {
+                DeviceEndpoint::Ios(arn) => Some(arn.clone()),
+                DeviceEndpoint::Android(_) => None,
+            })
+            .collect();
+
+        if ios_endpoints.is_empty() {
+            return Ok(());
+        }
+
+        let messages: Vec<QueueMessage<'_, ClearPushIdentifier, ClearPushIdentifier>> =
+            notifications_with_keys
+                .into_iter()
+                .map(|n| {
+                    let collapse_key = n.apns_collapse_key;
+                    QueueMessage {
+                    message_type: "clear_push_notification".to_string(),
+                    rate_limit: None,
+                    content: Node {
+                        notif: NotificationChannel::Ios(Box::new(APNSTargets {
+                            notif: APNSPushNotification {
+                                aps: Aps {
+                                    content_available: Some(1),
+                                    ..Default::default()
+                                },
+                                push_notification_data: ClearPushIdentifier {
+                                    identifier: collapse_key.clone(),
+                                },
+                            },
+                            attributes: MessageAttributes {
+                                push_type: PushType::Background,
+                                collapse_key,
+                            },
+                            ios_device_endpoints: ios_endpoints.clone(),
+                        })),
+                        on_failure: None,
+                    }
+                }})
+                .collect();
+
+        self.queue
+            .publish(&messages)
+            .await
+            .context(SendNotificationError::Other)?;
+
+        Ok(())
+    }
+
     /// Send a notification to the specified recipients.
     ///
     /// This method performs the following steps:

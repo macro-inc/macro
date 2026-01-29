@@ -177,3 +177,103 @@ async fn test_update_sent_status(pool: Pool<Postgres>) {
 
     assert!(row.sent);
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("notifications_with_collapse_keys")
+    )
+)]
+async fn test_mark_notifications_seen(pool: Pool<Postgres>) {
+    let user = test_user("user@test.com");
+    let notification_id =
+        uuid::Uuid::parse_str("0193b1ea-a542-7589-893b-2b4a509c1e76").unwrap();
+
+    pool.mark_notifications_seen(&user, &[notification_id])
+        .await
+        .unwrap();
+
+    let row = sqlx::query!(
+        "SELECT seen_at FROM user_notification WHERE notification_id = $1 AND user_id = $2",
+        notification_id,
+        user.to_string()
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert!(row.seen_at.is_some());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("notifications_with_collapse_keys")
+    )
+)]
+async fn test_mark_notifications_seen_does_not_affect_other_users(pool: Pool<Postgres>) {
+    let user = test_user("user@test.com");
+    let other_user = test_user("other@test.com");
+    let notification_id =
+        uuid::Uuid::parse_str("0193b1ea-a542-7589-893b-2b4a509c1e76").unwrap();
+
+    // Insert a user_notification for the other user
+    sqlx::query!(
+        "INSERT INTO user_notification (user_id, notification_id, created_at) VALUES ($1, $2, '2025-01-01 00:00:00')",
+        other_user.to_string(),
+        notification_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // Mark seen only for the first user
+    pool.mark_notifications_seen(&user, &[notification_id])
+        .await
+        .unwrap();
+
+    // Other user's notification should still be unseen
+    let row = sqlx::query!(
+        "SELECT seen_at FROM user_notification WHERE notification_id = $1 AND user_id = $2",
+        notification_id,
+        other_user.to_string()
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert!(row.seen_at.is_none());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("notifications_with_collapse_keys")
+    )
+)]
+async fn test_get_basic_notifications(pool: Pool<Postgres>) {
+    let with_key = uuid::Uuid::parse_str("0193b1ea-a542-7589-893b-2b4a509c1e76").unwrap();
+    let without_key = uuid::Uuid::parse_str("0193b1ea-b642-7589-893b-2b4a509c1e76").unwrap();
+
+    let result = pool
+        .get_basic_notifications(&[with_key, without_key])
+        .await
+        .unwrap();
+
+    // Only the notification with a collapse key should be returned
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].id, with_key);
+    assert_eq!(result[0].apns_collapse_key, "collapse-key-1");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_get_basic_notifications_empty(pool: Pool<Postgres>) {
+    let id = uuid::Uuid::new_v4();
+
+    let result = pool.get_basic_notifications(&[id]).await.unwrap();
+
+    assert!(result.is_empty());
+}

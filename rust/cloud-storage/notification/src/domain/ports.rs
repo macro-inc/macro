@@ -12,9 +12,9 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    DeviceEndpoint, Notification, RateLimitConfig, RateLimitKey, RateLimitResult,
-    SendNotificationRequestBuilder, android::FCMMessage, apple::APNSPushNotification,
-    mobile::MessageAttributes,
+    DeviceEndpoint, Notification, NotificationIdAndCollapseKey, RateLimitConfig, RateLimitKey,
+    RateLimitResult, SendNotificationRequestBuilder, android::FCMMessage,
+    apple::APNSPushNotification, mobile::MessageAttributes,
 };
 
 /// Port for sending mobile push notifications (iOS/Android via SNS).
@@ -88,6 +88,19 @@ pub trait NotificationRepository: Send + Sync + 'static {
         &self,
         user_ids: &[MacroUserIdStr<'a>],
     ) -> impl Future<Output = Result<HashMap<MacroUserIdStr<'static>, Vec<DeviceEndpoint>>, Report>> + Send;
+
+    /// Mark notifications as seen for a user.
+    fn mark_notifications_seen(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Get basic notification data (collapse keys) needed for push clearing.
+    fn get_basic_notifications(
+        &self,
+        notification_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<NotificationIdAndCollapseKey>, Report>> + Send;
 }
 
 /// Port for WebSocket delivery via connection gateway.

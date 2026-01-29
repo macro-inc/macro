@@ -6,8 +6,9 @@ use crate::domain::models::queue_message::{
     ConnGatewayNotification, EmailContent, Node, NotificationChannel, QueueMessage, RawQueueMessage,
 };
 use crate::domain::models::{
-    DeviceEndpoint, Notification, NotificationExtEmail, NotificationExtIos, RateLimitConfig,
-    RateLimitExceeded, RateLimitKey, RateLimitResult, SendNotificationRequestBuilder,
+    DeviceEndpoint, Notification, NotificationExtEmail, NotificationExtIos, NotificationIdAndCollapseKey,
+    RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimitResult,
+    SendNotificationRequestBuilder,
 };
 use crate::domain::ports::{
     EmailSender, NotificationQueue, NotificationRepository, NotificationSender, RateLimitPort,
@@ -83,6 +84,8 @@ struct MockRepository {
     device_endpoints: HashMap<MacroUserIdStr<'static>, Vec<DeviceEndpoint>>,
     created_notifications: Mutex<Vec<Uuid>>,
     stored_collapse_keys: Mutex<Vec<(Uuid, Option<String>)>>,
+    basic_notifications: Vec<NotificationIdAndCollapseKey>,
+    mark_seen_calls: Mutex<Vec<(String, Vec<Uuid>)>>,
 }
 
 impl MockRepository {
@@ -93,7 +96,17 @@ impl MockRepository {
             device_endpoints: HashMap::new(),
             created_notifications: Mutex::new(Vec::new()),
             stored_collapse_keys: Mutex::new(Vec::new()),
+            basic_notifications: Vec::new(),
+            mark_seen_calls: Mutex::new(Vec::new()),
         }
+    }
+
+    fn with_basic_notification(mut self, id: Uuid, collapse_key: String) -> Self {
+        self.basic_notifications.push(NotificationIdAndCollapseKey {
+            id,
+            apns_collapse_key: collapse_key,
+        });
+        self
     }
 
     fn with_muted_user(mut self, user_id: MacroUserIdStr<'static>) -> Self {
@@ -167,6 +180,25 @@ impl NotificationRepository for MockRepository {
     ) -> Result<HashMap<MacroUserIdStr<'static>, Vec<DeviceEndpoint>>, Report> {
         Ok(self.device_endpoints.clone())
     }
+
+    async fn mark_notifications_seen(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+    ) -> Result<(), Report> {
+        self.mark_seen_calls
+            .lock()
+            .unwrap()
+            .push((user_id.to_string(), notification_ids.to_vec()));
+        Ok(())
+    }
+
+    async fn get_basic_notifications(
+        &self,
+        _notification_ids: &[Uuid],
+    ) -> Result<Vec<NotificationIdAndCollapseKey>, Report> {
+        Ok(self.basic_notifications.clone())
+    }
 }
 
 impl NotificationRepository for std::sync::Arc<MockRepository> {
@@ -210,6 +242,23 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
         user_ids: &[MacroUserIdStr<'a>],
     ) -> Result<HashMap<MacroUserIdStr<'static>, Vec<DeviceEndpoint>>, Report> {
         (**self).get_device_endpoints(user_ids).await
+    }
+
+    async fn mark_notifications_seen(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+    ) -> Result<(), Report> {
+        (**self)
+            .mark_notifications_seen(user_id, notification_ids)
+            .await
+    }
+
+    async fn get_basic_notifications(
+        &self,
+        notification_ids: &[Uuid],
+    ) -> Result<Vec<NotificationIdAndCollapseKey>, Report> {
+        (**self).get_basic_notifications(notification_ids).await
     }
 }
 
@@ -843,4 +892,133 @@ async fn test_egress_no_rate_limit_configured() {
     // Should succeed even though rate limiter would exceed - because no rate limit is configured
     assert_eq!(results.len(), 1);
     assert!(results[0].is_ok());
+}
+
+// ============================================================================
+// Mark Notifications Seen Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_mark_seen_publishes_ios_clear_message() {
+    use std::sync::Arc;
+
+    let user = test_user_id("alice@example.com");
+    let notif_id = Uuid::now_v7();
+
+    let repo = Arc::new(
+        MockRepository::new()
+            .with_basic_notification(notif_id, "collapse_key_1".to_string())
+            .with_device_endpoint(
+                user.clone(),
+                DeviceEndpoint::Ios("arn:aws:sns:us-east-1:111:endpoint/APNS/app/alice".to_string()),
+            ),
+    );
+    let queue = Arc::new(MockQueue::new());
+    let service = NotificationIngressService::new(repo.clone(), queue.clone(), "test_service");
+
+    service
+        .mark_notifications_seen(&user, &[notif_id])
+        .await
+        .unwrap();
+
+    // Verify DB was updated
+    let mark_seen_calls = repo.mark_seen_calls.lock().unwrap();
+    assert_eq!(mark_seen_calls.len(), 1);
+    assert_eq!(mark_seen_calls[0].1, vec![notif_id]);
+
+    // Verify queue message was published
+    let published = queue.get_published();
+    assert_eq!(published.len(), 1);
+
+    let msg = &published[0];
+    assert_eq!(msg["message_type"], "clear_push_notification");
+
+    // Should be an Ios variant with background push
+    let ios = &msg["content"]["notif"]["Ios"];
+    assert!(ios.is_object(), "Expected Ios notification channel");
+
+    // Verify silent background push payload
+    let aps = &ios["notif"]["aps"];
+    assert_eq!(aps["content-available"], 1);
+    assert!(aps.get("alert").is_none() || aps["alert"].is_null());
+
+    // Verify collapse key in attributes
+    let attrs = &ios["attributes"];
+    assert_eq!(attrs["push_type"], "Background");
+    assert_eq!(attrs["collapse_key"], "collapse_key_1");
+
+    // Verify identifier in custom data
+    assert_eq!(ios["notif"]["identifier"], "collapse_key_1");
+
+    // Verify device endpoint
+    let endpoints = ios["ios_device_endpoints"].as_array().unwrap();
+    assert_eq!(endpoints.len(), 1);
+    assert_eq!(
+        endpoints[0],
+        "arn:aws:sns:us-east-1:111:endpoint/APNS/app/alice"
+    );
+}
+
+#[tokio::test]
+async fn test_mark_seen_skips_push_when_no_collapse_key() {
+    use std::sync::Arc;
+
+    let user = test_user_id("bob@example.com");
+    let notif_id = Uuid::now_v7();
+
+    // No basic notifications with collapse keys (DB query filters them out)
+    let repo = Arc::new(MockRepository::new().with_device_endpoint(
+        user.clone(),
+        DeviceEndpoint::Ios("arn:aws:sns:us-east-1:111:endpoint/APNS/app/bob".to_string()),
+    ));
+    let queue = Arc::new(MockQueue::new());
+    let service = NotificationIngressService::new(repo.clone(), queue.clone(), "test_service");
+
+    service
+        .mark_notifications_seen(&user, &[notif_id])
+        .await
+        .unwrap();
+
+    // DB should still be updated
+    let mark_seen_calls = repo.mark_seen_calls.lock().unwrap();
+    assert_eq!(mark_seen_calls.len(), 1);
+
+    // But no queue message should be published
+    let published = queue.get_published();
+    assert!(
+        published.is_empty(),
+        "Should not publish when no collapse keys"
+    );
+}
+
+#[tokio::test]
+async fn test_mark_seen_skips_push_when_no_device_endpoints() {
+    use std::sync::Arc;
+
+    let user = test_user_id("charlie@example.com");
+    let notif_id = Uuid::now_v7();
+
+    let repo = Arc::new(
+        MockRepository::new()
+            .with_basic_notification(notif_id, "collapse_key_1".to_string()),
+        // No device endpoints registered
+    );
+    let queue = Arc::new(MockQueue::new());
+    let service = NotificationIngressService::new(repo.clone(), queue.clone(), "test_service");
+
+    service
+        .mark_notifications_seen(&user, &[notif_id])
+        .await
+        .unwrap();
+
+    // DB should still be updated
+    let mark_seen_calls = repo.mark_seen_calls.lock().unwrap();
+    assert_eq!(mark_seen_calls.len(), 1);
+
+    // But no queue message should be published
+    let published = queue.get_published();
+    assert!(
+        published.is_empty(),
+        "Should not publish when no device endpoints"
+    );
 }

@@ -3,7 +3,9 @@
 #[cfg(test)]
 mod test;
 
-use crate::domain::models::{DeviceEndpoint, Notification, SendNotificationRequestBuilder};
+use crate::domain::models::{
+    DeviceEndpoint, Notification, NotificationIdAndCollapseKey, SendNotificationRequestBuilder,
+};
 use crate::domain::ports::NotificationRepository;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -81,6 +83,19 @@ pub trait NotificationDbOps: Send + Sync + 'static {
         notification_id: Uuid,
         user_ids: &[MacroUserIdStr<'a>],
     ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
+
+    /// Mark notifications as seen for a user.
+    fn mark_notifications_seen(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+    ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
+
+    /// Get basic notification data (collapse keys) for push clearing.
+    fn get_basic_notifications(
+        &self,
+        notification_ids: &[Uuid],
+    ) -> impl std::future::Future<Output = Result<Vec<NotificationIdAndCollapseKey>, Report>> + Send;
 }
 
 impl NotificationDbOps for PgPool {
@@ -256,6 +271,52 @@ impl NotificationDbOps for PgPool {
 
         Ok(())
     }
+
+    async fn mark_notifications_seen(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+    ) -> Result<(), Report> {
+        let user_id_str = user_id.to_string();
+
+        sqlx::query!(
+            r#"
+            UPDATE user_notification
+            SET seen_at = NOW()
+            WHERE user_id = $1 AND notification_id = ANY($2)
+            "#,
+            user_id_str,
+            notification_ids
+        )
+        .execute(self)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn get_basic_notifications(
+        &self,
+        notification_ids: &[Uuid],
+    ) -> Result<Vec<NotificationIdAndCollapseKey>, Report> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT id, apns_collapse_key as "apns_collapse_key!: String"
+            FROM notification
+            WHERE id = ANY($1) AND apns_collapse_key IS NOT NULL
+            "#,
+            notification_ids
+        )
+        .fetch_all(self)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| NotificationIdAndCollapseKey {
+                id: row.id,
+                apns_collapse_key: row.apns_collapse_key,
+            })
+            .collect())
+    }
 }
 
 impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificationRepository<D> {
@@ -299,5 +360,22 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
         user_ids: &[MacroUserIdStr<'a>],
     ) -> Result<(), Report> {
         self.db.update_sent_status(notification_id, user_ids).await
+    }
+
+    async fn mark_notifications_seen(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+    ) -> Result<(), Report> {
+        self.db
+            .mark_notifications_seen(user_id, notification_ids)
+            .await
+    }
+
+    async fn get_basic_notifications(
+        &self,
+        notification_ids: &[Uuid],
+    ) -> Result<Vec<NotificationIdAndCollapseKey>, Report> {
+        self.db.get_basic_notifications(notification_ids).await
     }
 }

@@ -75,6 +75,14 @@ pub struct QueueMessage<'a, T, U> {
     pub content: Node<'a, T, U>,
 }
 
+/// Custom data payload for a silent background push that clears a previously
+/// delivered notification from the user's device.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ClearPushIdentifier {
+    /// The collapse key identifier used to match the notification to clear.
+    pub identifier: String,
+}
+
 /// Raw message received from SQS.
 #[derive(Debug)]
 pub struct RawQueueMessage {

@@ -19,6 +19,15 @@ use crate::domain::models::{
     apple::APNSPushNotification, mobile::MessageAttributes, queue_message::EmailContent,
 };
 
+/// Notification ID paired with its APNS collapse key, for push clearing.
+#[derive(Debug, Clone)]
+pub struct NotificationIdAndCollapseKey {
+    /// The notification ID.
+    pub id: uuid::Uuid,
+    /// The APNS collapse key used to identify the push notification to clear.
+    pub apns_collapse_key: String,
+}
+
 /// Trait that all notification types must implement.
 pub trait Notification: Serialize + DeserializeOwned + Send + Sync {
     /// The type name of this notification.
