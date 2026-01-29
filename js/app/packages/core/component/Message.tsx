@@ -269,7 +269,7 @@ const Root: Component<MessageRootProps> = (props) => {
                   props.isFirstMessage ||
                   props.isFirstInThread
                 ),
-                'pb-2': props.isLastMessage && !props.isLastInThread,
+                'pb-2': !props.isLastMessage,
                 'pb-4': props.hasThreadChildren ?? false,
               }}
               style={{

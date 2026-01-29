@@ -254,9 +254,9 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
               theme="clear"
               icon={DotsThree}
               onclick={() => setShowFullHTML(true)}
-              iconSize={20}
+              iconSize={15}
               size="xxs"
-              class={`rounded ${props.isFocused ? 'hover:bg-panel' : 'hover:bg-active'}`}
+              class={`${props.isFocused ? 'hover:bg-panel' : 'hover:bg-active'}`}
             />
           </div>
         </Show>
