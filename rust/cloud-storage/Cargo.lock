@@ -2796,6 +2796,7 @@ dependencies = [
  "models_soup",
  "ordered-float",
  "properties",
+ "properties_service",
  "rayon",
  "redis",
  "regex",

@@ -5,6 +5,10 @@ name = "properties_service"
 publish = false
 version = "0.1.0"
 
+[lib]
+name = "properties_service"
+path = "src/lib.rs"
+
 [[bin]]
 name = "properties_service"
 path = "src/main.rs"

@@ -1,12 +1,14 @@
 use crate::api::context::ApiContext;
 use anyhow::Context;
 use axum::Router;
+use axum::extract::FromRef;
 use axum::extract::Request;
 use axum::http::Method;
 use axum::middleware::Next;
 use context::InternalFlag;
 use macro_axum_utils::compose_layers;
 use model::version::{ServiceNameState, VersionedApiServiceName, validate_api_version};
+use properties_service::PropertiesHandlerState;
 use tower::ServiceBuilder;
 use tower_http::compression::CompressionLayer;
 use tower_http::trace::TraceLayer;
@@ -148,6 +150,11 @@ fn api_router(state: ApiContext) -> Router {
                 macro_middleware::connection_drop_prevention_handler,
             )),
         )
+        .nest(
+            "/properties",
+            properties_service::properties_router()
+                .with_state(PropertiesHandlerState::from_ref(&state)),
+        )
         .layer(
             ServiceBuilder::new()
                 .layer(axum::middleware::from_fn(
@@ -162,6 +169,11 @@ fn api_router(state: ApiContext) -> Router {
             "/internal",
             internal::router(state.clone())
                 .nest("/notifications", notification::router())
+                .nest(
+                    "/properties",
+                    properties_service::internal_router()
+                        .with_state(PropertiesHandlerState::from_ref(&state)),
+                )
                 .layer(
                     ServiceBuilder::new()
                         .layer(axum::middleware::from_fn_with_state(

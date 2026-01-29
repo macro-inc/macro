@@ -7,7 +7,7 @@ use axum::{
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::api::context::ApiContext;
+use crate::api::context::PropertiesHandlerState;
 use model::user::UserContext;
 use models_properties::api::{CreatePropertyDefinitionRequest, PropertyDataType};
 use models_properties::service::property_definition::PropertyDefinition;
@@ -58,9 +58,9 @@ impl IntoResponse for CreatePropertyDefinitionErr {
     ),
     tags = ["Properties"]
 )]
-#[tracing::instrument(skip(context, user_context), fields(user_id = %user_context.user_id), err)]
+#[tracing::instrument(skip(state, user_context), fields(user_id = %user_context.user_id), err)]
 pub async fn create_property_definition(
-    State(context): State<ApiContext>,
+    State(state): State<PropertiesHandlerState>,
     Extension(user_context): Extension<UserContext>,
     Json(request): Json<CreatePropertyDefinitionRequest>,
 ) -> Result<(StatusCode, Json<PropertyDefinition>), CreatePropertyDefinitionErr> {
@@ -114,7 +114,7 @@ pub async fn create_property_definition(
         tracing::debug!("no options provided, using simple creation");
 
         property_definitions_insert::create_property_definition(
-            &context.db,
+            &state.db,
             request.owner.organization_id(),
             request.owner.user_id(),
             &request.display_name,
@@ -137,7 +137,7 @@ pub async fn create_property_definition(
         );
 
         property_definitions_insert::create_property_definition_with_options(
-            &context.db,
+            &state.db,
             request.owner.organization_id(),
             request.owner.user_id(),
             &request.display_name,

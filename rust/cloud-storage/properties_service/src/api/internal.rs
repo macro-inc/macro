@@ -1,10 +1,11 @@
-use crate::api::context::ApiContext;
+use crate::api::context::PropertiesHandlerState;
 use crate::api::properties::entities;
 use axum::{Router, routing::delete};
 
 /// Internal routes. All routes are authenticated via the internal_access middleware.
 /// These routes are not part of the public Swagger documentation.
-pub fn router() -> Router<ApiContext> {
+/// Works with any state type that implements `FromRef<PropertiesHandlerState>`.
+pub fn router() -> Router<PropertiesHandlerState> {
     Router::new()
         // Internal-only: Delete all properties for an entity
         .route(

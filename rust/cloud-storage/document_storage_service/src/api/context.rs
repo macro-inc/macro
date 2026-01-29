@@ -14,6 +14,7 @@ use macro_redis_cluster_client::Redis;
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
 };
+use properties_service::PropertiesHandlerState;
 use soup::{
     domain::service::SoupImpl, inbound::axum_router::SoupRouterState,
     outbound::pg_soup_repo::PgSoupRepo,
@@ -64,4 +65,19 @@ pub(crate) struct ApiContext {
 env_var! {
     #[derive(Clone)]
     pub struct DocumentStorageServiceAuthKey;
+}
+
+impl From<&ApiContext> for PropertiesHandlerState {
+    fn from(ctx: &ApiContext) -> Self {
+        PropertiesHandlerState {
+            db: ctx.db.clone(),
+            properties_service: ctx.properties_service.clone(),
+        }
+    }
+}
+
+impl FromRef<ApiContext> for PropertiesHandlerState {
+    fn from_ref(ctx: &ApiContext) -> Self {
+        PropertiesHandlerState::from(ctx)
+    }
 }

@@ -4,7 +4,7 @@ use models_properties::{EntityReference, EntityType};
 use properties::PropertiesService;
 use thiserror::Error;
 
-use crate::api::context::ApiContext;
+use crate::api::context::PropertiesHandlerState;
 
 #[derive(Debug, Error)]
 pub enum PermissionError {
@@ -33,7 +33,7 @@ impl PermissionError {
 /// For anonymous users (empty user_id), only allows access to publicly shared entities.
 #[tracing::instrument(skip(context), fields(user_id = %user_id, entity_id = %entity_ref.entity_id, entity_type = ?entity_ref.entity_type), err)]
 pub async fn check_entity_view_permission(
-    context: &ApiContext,
+    context: &PropertiesHandlerState,
     user_id: &str,
     entity_ref: &EntityReference,
 ) -> Result<(), PermissionError> {
@@ -72,7 +72,7 @@ pub async fn check_entity_view_permission(
 /// Supports: Document, Chat, Project, Thread, Channel, Macro.
 #[tracing::instrument(skip(context), fields(user_id = %user_id, entity_id = %entity_ref.entity_id, entity_type = ?entity_ref.entity_type), err)]
 pub async fn check_entity_edit_permission(
-    context: &ApiContext,
+    context: &PropertiesHandlerState,
     user_id: &str,
     entity_ref: &EntityReference,
 ) -> Result<(), PermissionError> {
@@ -90,7 +90,7 @@ pub async fn check_entity_edit_permission(
 /// properties query due to complex recursive CTEs and entity-specific permission logic.
 #[tracing::instrument(skip(context), fields(user_id = %user_id, entity_id = %entity_ref.entity_id, entity_type = ?entity_ref.entity_type), err)]
 async fn get_access_level(
-    context: &ApiContext,
+    context: &PropertiesHandlerState,
     user_id: &str,
     entity_ref: &EntityReference,
 ) -> Result<Option<AccessLevel>, PermissionError> {

@@ -7,7 +7,7 @@ use system_properties::SystemPropertyKey;
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::api::context::ApiContext;
+use crate::api::context::PropertiesHandlerState;
 use model::user::UserContext;
 use properties_db_client::{
     error::PropertiesDatabaseError,
@@ -65,16 +65,16 @@ impl IntoResponse for DeletePropertyDefinitionError {
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(context, user_context), err)]
+#[tracing::instrument(skip(state, user_context), err)]
 pub async fn delete_property_definition(
     Path(property_uuid): Path<Uuid>,
-    State(context): State<ApiContext>,
+    State(state): State<PropertiesHandlerState>,
     Extension(user_context): Extension<UserContext>,
 ) -> Result<Response, DeletePropertyDefinitionError> {
     tracing::info!("deleting property definition");
 
     // First check if property exists and if it's a system property
-    let property = property_definitions_get::get_property_definition(&context.db, property_uuid)
+    let property = property_definitions_get::get_property_definition(&state.db, property_uuid)
         .await?
         .ok_or(DeletePropertyDefinitionError::NotFound)?;
 
@@ -84,7 +84,7 @@ pub async fn delete_property_definition(
 
     // Then verify ownership
     let _property = property_definitions_get::get_property_definition_with_owner(
-        &context.db,
+        &state.db,
         property_uuid,
         &user_context.user_id,
         user_context.organization_id,
@@ -92,7 +92,7 @@ pub async fn delete_property_definition(
     .await?
     .ok_or(DeletePropertyDefinitionError::NotFound)?;
 
-    property_definitions_delete::delete_property_definition(&context.db, property_uuid).await?;
+    property_definitions_delete::delete_property_definition(&state.db, property_uuid).await?;
 
     tracing::info!("successfully deleted property definition");
 

@@ -1,4 +1,4 @@
-use crate::api::context::ApiContext;
+use crate::api::context::{ApiContext, PropertiesHandlerState};
 use anyhow::Context;
 use axum::Router;
 use tower_http::trace::TraceLayer;
@@ -6,9 +6,9 @@ use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 pub mod context;
-mod health;
-mod internal;
-mod permissions;
+pub mod health;
+pub mod internal;
+pub mod permissions;
 pub mod properties;
 pub mod swagger;
 
@@ -40,26 +40,31 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
 }
 
 fn api_router(app_state: ApiContext) -> Router {
+    let handler_state = PropertiesHandlerState::from(&app_state);
+
     Router::new()
         .nest(
             "/properties",
-            properties::router().layer(
-                tower::ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::auth::initialize_user_context::handler,
-                    ))
-                    .layer(axum::middleware::from_fn_with_state(
-                        app_state.jwt_args.clone(),
-                        macro_middleware::auth::attach_user::handler,
-                    )),
-            ),
+            properties::router()
+                .with_state(handler_state.clone())
+                .layer(
+                    tower::ServiceBuilder::new()
+                        .layer(axum::middleware::from_fn(
+                            macro_middleware::auth::initialize_user_context::handler,
+                        ))
+                        .layer(axum::middleware::from_fn_with_state(
+                            app_state.jwt_args.clone(),
+                            macro_middleware::auth::attach_user::handler,
+                        )),
+                ),
         )
         .nest(
             "/internal",
-            internal::router().layer(axum::middleware::from_fn_with_state(
-                app_state.clone(),
-                macro_middleware::auth::internal_access::handler,
-            )),
+            internal::router()
+                .with_state(handler_state)
+                .layer(axum::middleware::from_fn_with_state(
+                    app_state.clone(),
+                    macro_middleware::auth::internal_access::handler,
+                )),
         )
-        .with_state(app_state)
 }

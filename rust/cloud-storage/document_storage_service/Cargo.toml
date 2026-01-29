@@ -86,6 +86,7 @@ models_permissions = { path = "../models_permissions" }
 models_properties = { path = "../models_properties" }
 models_soup = { path = "../models_soup", features = ["schema"] }
 properties = { path = "../properties" }
+properties_service = { path = "../properties_service" }
 rayon = "1.10.0"
 redis = { workspace = true, features = [
   "aio",
