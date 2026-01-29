@@ -1,6 +1,4 @@
 import type { Entity } from '@core/types';
-import { queryClient } from '@queries/client';
-import { emailKeys } from '@queries/email/keys';
 import { useMarkThreadAsSeenMutation } from '@queries/email/thread';
 import { onMount } from 'solid-js';
 import {
