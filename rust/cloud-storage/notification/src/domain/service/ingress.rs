@@ -7,16 +7,12 @@ use crate::domain::models::queue_message::{
     APNSTargets, ConnGatewayNotification, EmailNotification, Node, NotificationChannel,
     QueueMessage,
 };
-use crate::domain::models::recipient::FilteredRecipient;
 use crate::domain::models::{
-    DeviceEndpoint, ExclusionReason, Notification, NotificationResult, RecipientExclusion,
-    SendNotificationRequest,
+    DeviceEndpoint, Notification, NotificationResult, SendNotificationRequest,
 };
 use crate::domain::ports::{NotificationQueue, NotificationRepository};
 use crate::domain::service::SendNotificationError;
-use itertools::Itertools;
 use macro_user_id::cowlike::CowLike;
-use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use rootcause::prelude::ResultExt;
 use serde::Serialize;
@@ -58,34 +54,29 @@ where
         &self,
         request: SendNotificationRequest<'a, T, U>,
     ) -> Result<Option<NotificationResult<'a>>, Report<SendNotificationError>> {
-        let recipients: Vec<_> = request.req.recipient_ids.iter().cloned().collect();
-        let (allowed, _excluded): (Vec<_>, Vec<_>) = self
-            .filter_recipients(
-                request.req.sender_id.as_ref(),
-                &recipients,
-                &request.req.notification_entity.entity_id,
-            )
+        let request = self
+            .filter_recipients(request)
             .await
-            .context(SendNotificationError::Other)?
-            .into_iter()
-            .partition_map(|r| match r {
-                FilteredRecipient::Allowed(macro_user_id_str) => {
-                    itertools::Either::Left(macro_user_id_str)
-                }
-                FilteredRecipient::Excluded(recipient_exclusion) => {
-                    itertools::Either::Right(recipient_exclusion)
-                }
-            });
+            .context(SendNotificationError::Other)?;
 
-        if allowed.is_empty() {
+        if request.req.recipient_ids.is_empty() {
             return Ok(None);
         }
 
-        // Create notification in DB
+        // Build queue messages first so we can extract the APNS collapse key
+        let mut request = request;
+        let (queue_messages, apns_collapse_key) = self.build_queue_message(&mut request).await?;
+
+        // Create notification in DB (with collapse key if APNS was built)
         let notification_id = Uuid::now_v7();
         let created = self
             .repository
-            .create_notification(&request.req, notification_id, &self.service_name, &allowed)
+            .create_notification(
+                &request.req,
+                notification_id,
+                &self.service_name,
+                apns_collapse_key.as_deref(),
+            )
             .await
             .context(SendNotificationError::Other)?;
 
@@ -97,12 +88,6 @@ where
             }));
         };
 
-        let mut req =
-            request.update_recipients(allowed.into_iter().map(CowLike::into_owned).collect());
-
-        // Build and publish QueueMessage
-        let queue_messages = self.build_queue_message(&mut req).await?;
-
         self.queue
             .publish(&queue_messages)
             .await
@@ -111,7 +96,7 @@ where
         // Return result (delivery happens async)
         Ok(Some(NotificationResult {
             notification_id,
-            notified_recipients: req.req.recipient_ids,
+            notified_recipients: request.req.recipient_ids,
         }))
     }
 }
@@ -134,64 +119,21 @@ where
     /// - Sender (sender cannot receive their own notification)
     /// - Muted notifications
     /// - Unsubscribed from item
-    async fn filter_recipients<'a>(
+    async fn filter_recipients<'a, T, U>(
         &self,
-        sender_id: Option<&MacroUserIdStr<'a>>,
-        recipient_ids: &'a [MacroUserIdStr<'a>],
-        item_id: &str,
-    ) -> Result<Vec<FilteredRecipient<'a>>, Report> {
+        req: SendNotificationRequest<'a, T, U>,
+    ) -> Result<SendNotificationRequest<'a, T, U>, Report> {
+        let recipient_ids: Vec<_> = req.req.recipient_ids.iter().map(CowLike::copied).collect();
+
         // Fetch all filter data upfront
         let (muted_users, unsubscribed_users) = tokio::try_join!(
-            self.repository.get_muted_users(recipient_ids),
+            self.repository.get_muted_users(&recipient_ids),
             self.repository
-                .get_unsubscribed_users(item_id, recipient_ids),
+                .get_unsubscribed_users(&req.req.notification_entity.entity_id, &recipient_ids),
         )?;
 
-        let recipient_is_sender = |id: FilteredRecipient<'a>| match (id, sender_id) {
-            (FilteredRecipient::Allowed(macro_user_id_str), Some(sender))
-                if sender == &macro_user_id_str =>
-            {
-                FilteredRecipient::Excluded(RecipientExclusion {
-                    user_id: macro_user_id_str,
-                    reason: ExclusionReason::IsSender,
-                })
-            }
-            (x, _) => x,
-        };
-
-        let user_muted_notifs = |id: FilteredRecipient<'a>| match id {
-            FilteredRecipient::Allowed(macro_user_id_str)
-                if muted_users.contains(&macro_user_id_str) =>
-            {
-                FilteredRecipient::Excluded(RecipientExclusion {
-                    user_id: macro_user_id_str,
-                    reason: ExclusionReason::MutedNotifications,
-                })
-            }
-            x => x,
-        };
-
-        let notif_type_is_ignored = |id: FilteredRecipient<'a>| match id {
-            FilteredRecipient::Allowed(macro_user_id_str)
-                if unsubscribed_users.contains(&macro_user_id_str) =>
-            {
-                FilteredRecipient::Excluded(RecipientExclusion {
-                    user_id: macro_user_id_str,
-                    reason: ExclusionReason::UnsubscribedFromItem,
-                })
-            }
-            x => x,
-        };
-
-        // Build exclusion reasons for excluded recipients
-        Ok(recipient_ids
-            .iter()
-            .map(CowLike::copied)
-            .map(FilteredRecipient::Allowed)
-            .map(recipient_is_sender)
-            .map(user_muted_notifs)
-            .map(notif_type_is_ignored)
-            .collect())
+        let (out, _excluded) = req.update_recipients(muted_users, unsubscribed_users);
+        Ok(out)
     }
 
     /// Build queue messages for each delivery channel.
@@ -199,13 +141,15 @@ where
     /// - `send_conn_gateway`: Creates a single message for all recipients (1:M)
     /// - `build_apns`: Creates one message per recipient with their device endpoints (1:1)
     /// - `build_email`: Creates one message per recipient (1:1)
+    /// Returns `(queue_messages, apns_collapse_key)`.
     async fn build_queue_message<'a, T: Notification + Clone, U: Serialize + Send + Sync>(
         &self,
         notification: &mut SendNotificationRequest<'a, T, U>,
-    ) -> Result<Vec<QueueMessage<'a, T, U>>, Report<SendNotificationError>> {
+    ) -> Result<(Vec<QueueMessage<'a, T, U>>, Option<String>), Report<SendNotificationError>> {
         let rate_limit = notification.req.get_rate_limit()?;
         let message_type = T::TYPE_NAME.to_string();
         let mut messages = Vec::new();
+        let mut apns_collapse_key = None;
 
         // Connection gateway: 1:M (single message for all recipients)
         if notification.send_conn_gateway {
@@ -242,6 +186,7 @@ where
 
             if !ios_endpoints.is_empty() {
                 let (apns_notif, attributes) = build_apns(notification.req.notification.clone());
+                apns_collapse_key = Some(attributes.collapse_key.clone());
                 messages.push(QueueMessage {
                     message_type: message_type.clone(),
                     rate_limit: rate_limit.clone(),
@@ -275,6 +220,6 @@ where
             }
         }
 
-        Ok(messages)
+        Ok((messages, apns_collapse_key))
     }
 }

@@ -131,12 +131,7 @@ async fn test_create_notification(pool: Pool<Postgres>) {
     };
 
     let result = pool
-        .create_notification(
-            &request,
-            notification_id,
-            "test_service",
-            &[recipient.clone()],
-        )
+        .create_notification(&request, notification_id, "test_service", None)
         .await
         .unwrap();
 

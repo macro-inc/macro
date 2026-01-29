@@ -73,7 +73,7 @@ pub trait NotificationRepository: Send + Sync + 'static {
         request: &SendNotificationRequestBuilder<'a, T>,
         notification_id: Uuid,
         service_sender: &str,
-        recipient_ids: &[MacroUserIdStr<'a>],
+        apns_collapse_key: Option<&str>,
     ) -> impl Future<Output = Result<Option<Uuid>, Report>> + Send;
 
     /// Update the sent status for users who received the notification.

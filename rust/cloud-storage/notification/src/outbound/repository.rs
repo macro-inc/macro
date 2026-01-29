@@ -72,7 +72,7 @@ pub trait NotificationDbOps: Send + Sync + 'static {
         request: &SendNotificationRequestBuilder<'a, T>,
         notification_id: Uuid,
         service_name: &str,
-        recipient_ids: &[MacroUserIdStr<'a>],
+        apns_collapse_key: Option<&str>,
     ) -> impl std::future::Future<Output = Result<Option<Uuid>, Report>> + Send;
 
     /// Update the sent status for recipients who received the notification.
@@ -187,7 +187,7 @@ impl NotificationDbOps for PgPool {
         request: &SendNotificationRequestBuilder<'a, T>,
         notification_id: Uuid,
         service_name: &str,
-        recipient_ids: &[MacroUserIdStr<'a>],
+        apns_collapse_key: Option<&str>,
     ) -> Result<Option<Uuid>, Report> {
         let entity_type: &str = request.notification_entity.entity_type.into();
         let metadata = serde_json::to_value(&request.notification).ok();
@@ -199,8 +199,8 @@ impl NotificationDbOps for PgPool {
         // Insert notification
         sqlx::query!(
             r#"
-            INSERT INTO notification (id, notification_event_type, event_item_id, event_item_type, service_sender, metadata, sender_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO notification (id, notification_event_type, event_item_id, event_item_type, service_sender, metadata, sender_id, apns_collapse_key)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             ON CONFLICT (id) DO NOTHING
             "#,
             notification_id,
@@ -209,13 +209,14 @@ impl NotificationDbOps for PgPool {
             entity_type,
             service_name,
             metadata as Option<serde_json::Value>,
-            sender_id
+            sender_id,
+            apns_collapse_key
         )
         .execute(&mut *tx)
         .await?;
 
         // Insert user notifications
-        let user_ids: Vec<String> = recipient_ids.iter().map(|id| id.to_string()).collect();
+        let user_ids: Vec<String> = request.recipient_ids.iter().map(|id| id.to_string()).collect();
 
         sqlx::query!(
             r#"
@@ -285,10 +286,10 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
         request: &SendNotificationRequestBuilder<'a, T>,
         notification_id: Uuid,
         service_name: &str,
-        recipient_ids: &[MacroUserIdStr<'a>],
+        apns_collapse_key: Option<&str>,
     ) -> Result<Option<Uuid>, Report> {
         self.db
-            .create_notification(request, notification_id, service_name, recipient_ids)
+            .create_notification(request, notification_id, service_name, apns_collapse_key)
             .await
     }
 

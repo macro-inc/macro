@@ -2,11 +2,13 @@
 
 use crate::domain::{
     models::{
-        Notification, NotificationExtEmail, NotificationExtIos, RateLimitConfig, RateLimitKey,
-        apple::APNSPushNotification, mobile::MessageAttributes, queue_message::EmailContent,
+        ExclusionReason, FilteredRecipient, Notification, NotificationExtEmail, NotificationExtIos,
+        RateLimitConfig, RateLimitKey, RecipientExclusion, apple::APNSPushNotification,
+        mobile::MessageAttributes, queue_message::EmailContent,
     },
     service::SendNotificationError,
 };
+use itertools::Itertools;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use rootcause::{Report, report};
@@ -97,10 +99,66 @@ impl<'a, T: Notification, U> SendNotificationRequest<'a, T, U> {
         self.send_conn_gateway = true;
         self
     }
+}
 
-    pub(crate) fn update_recipients(mut self, recipients: HashSet<MacroUserIdStr<'a>>) -> Self {
-        self.req.recipient_ids = recipients;
-        self
+impl<'a, T, U> SendNotificationRequest<'a, T, U> {
+    pub(crate) fn update_recipients(
+        mut self,
+        muted_users: HashSet<MacroUserIdStr<'a>>,
+        unsubscribed_users: HashSet<MacroUserIdStr<'a>>,
+    ) -> (Self, Vec<RecipientExclusion<'a>>) {
+        let recipient_is_sender = |id: FilteredRecipient<'a>| match (id, &self.req.sender_id) {
+            (FilteredRecipient::Allowed(macro_user_id_str), Some(sender))
+                if sender == &macro_user_id_str =>
+            {
+                FilteredRecipient::Excluded(RecipientExclusion {
+                    user_id: macro_user_id_str,
+                    reason: ExclusionReason::IsSender,
+                })
+            }
+            (x, _) => x,
+        };
+
+        let user_muted_notifs = |id: FilteredRecipient<'a>| match id {
+            FilteredRecipient::Allowed(macro_user_id_str)
+                if muted_users.contains(&macro_user_id_str) =>
+            {
+                FilteredRecipient::Excluded(RecipientExclusion {
+                    user_id: macro_user_id_str,
+                    reason: ExclusionReason::MutedNotifications,
+                })
+            }
+            x => x,
+        };
+
+        let notif_type_is_ignored = |id: FilteredRecipient<'a>| match id {
+            FilteredRecipient::Allowed(macro_user_id_str)
+                if unsubscribed_users.contains(&macro_user_id_str) =>
+            {
+                FilteredRecipient::Excluded(RecipientExclusion {
+                    user_id: macro_user_id_str,
+                    reason: ExclusionReason::UnsubscribedFromItem,
+                })
+            }
+            x => x,
+        };
+
+        let recipients = std::mem::take(&mut self.req.recipient_ids);
+
+        let (allowed, excluded): (HashSet<_>, Vec<_>) = recipients
+            .into_iter()
+            .map(FilteredRecipient::Allowed)
+            .map(recipient_is_sender)
+            .map(user_muted_notifs)
+            .map(notif_type_is_ignored)
+            .partition_map(|r| match r {
+                FilteredRecipient::Allowed(a) => itertools::Either::Left(a),
+                FilteredRecipient::Excluded(b) => itertools::Either::Right(b),
+            });
+
+        self.req.recipient_ids = allowed;
+
+        (self, excluded)
     }
 }
 

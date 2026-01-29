@@ -82,6 +82,7 @@ struct MockRepository {
     unsubscribed_users: HashSet<MacroUserIdStr<'static>>,
     device_endpoints: HashMap<MacroUserIdStr<'static>, Vec<DeviceEndpoint>>,
     created_notifications: Mutex<Vec<Uuid>>,
+    stored_collapse_keys: Mutex<Vec<(Uuid, Option<String>)>>,
 }
 
 impl MockRepository {
@@ -91,6 +92,7 @@ impl MockRepository {
             unsubscribed_users: HashSet::new(),
             device_endpoints: HashMap::new(),
             created_notifications: Mutex::new(Vec::new()),
+            stored_collapse_keys: Mutex::new(Vec::new()),
         }
     }
 
@@ -138,12 +140,16 @@ impl NotificationRepository for MockRepository {
         _request: &SendNotificationRequestBuilder<'a, T>,
         notification_id: Uuid,
         _service_sender: &str,
-        _recipient_ids: &[MacroUserIdStr<'a>],
+        apns_collapse_key: Option<&str>,
     ) -> Result<Option<Uuid>, Report> {
         self.created_notifications
             .lock()
             .unwrap()
             .push(notification_id);
+        self.stored_collapse_keys
+            .lock()
+            .unwrap()
+            .push((notification_id, apns_collapse_key.map(String::from)));
         Ok(Some(notification_id))
     }
 
@@ -160,6 +166,50 @@ impl NotificationRepository for MockRepository {
         _user_ids: &[MacroUserIdStr<'a>],
     ) -> Result<HashMap<MacroUserIdStr<'static>, Vec<DeviceEndpoint>>, Report> {
         Ok(self.device_endpoints.clone())
+    }
+}
+
+impl NotificationRepository for std::sync::Arc<MockRepository> {
+    async fn get_muted_users<'a>(
+        &self,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
+        (**self).get_muted_users(user_ids).await
+    }
+
+    async fn get_unsubscribed_users<'a>(
+        &self,
+        item_id: &str,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
+        (**self).get_unsubscribed_users(item_id, user_ids).await
+    }
+
+    async fn create_notification<'a, T: Notification + Send + Sync>(
+        &self,
+        request: &SendNotificationRequestBuilder<'a, T>,
+        notification_id: Uuid,
+        service_sender: &str,
+        apns_collapse_key: Option<&str>,
+    ) -> Result<Option<Uuid>, Report> {
+        (**self)
+            .create_notification(request, notification_id, service_sender, apns_collapse_key)
+            .await
+    }
+
+    async fn update_sent_status<'a>(
+        &self,
+        notification_id: Uuid,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> Result<(), Report> {
+        (**self).update_sent_status(notification_id, user_ids).await
+    }
+
+    async fn get_device_endpoints<'a>(
+        &self,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> Result<HashMap<MacroUserIdStr<'static>, Vec<DeviceEndpoint>>, Report> {
+        (**self).get_device_endpoints(user_ids).await
     }
 }
 
@@ -531,6 +581,74 @@ async fn test_apns_enqueues_correct_data_for_multiple_users() {
     assert!(
         endpoints.contains(&"arn:aws:sns:us-east-1:111:endpoint/APNS/app/charlie-device"),
         "Should include charlie's device"
+    );
+}
+
+#[tokio::test]
+async fn test_apns_collapse_key_stored_on_create() {
+    use std::sync::Arc;
+
+    let user = test_user_id("alice@example.com");
+
+    let repo = Arc::new(
+        MockRepository::new().with_device_endpoint(
+            user.clone(),
+            DeviceEndpoint::Ios("arn:aws:sns:us-east-1:111:endpoint/APNS/app/alice".to_string()),
+        ),
+    );
+    let queue = Arc::new(MockQueue::new());
+    let service = NotificationIngressService::new(repo.clone(), queue, "test_service");
+
+    let request = SendNotificationRequestBuilder {
+        notification_entity: EntityType::Document.with_entity_str("doc_1"),
+        notification: TestNotification {
+            message: "Hello".to_string(),
+        },
+        sender_id: None,
+        recipient_ids: HashSet::from([user]),
+    }
+    .into_request()
+    .with_apns();
+
+    service.send_notification(request).await.unwrap();
+
+    let collapse_keys = repo.stored_collapse_keys.lock().unwrap();
+    assert_eq!(collapse_keys.len(), 1);
+    assert_eq!(
+        collapse_keys[0].1,
+        Some("test".to_string()),
+        "APNS collapse key should be stored when creating the notification"
+    );
+}
+
+#[tokio::test]
+async fn test_no_apns_collapse_key_when_apns_not_enabled() {
+    use std::sync::Arc;
+
+    let user = test_user_id("alice@example.com");
+
+    let repo = Arc::new(MockRepository::new());
+    let queue = Arc::new(MockQueue::new());
+    let service = NotificationIngressService::new(repo.clone(), queue, "test_service");
+
+    let request = SendNotificationRequestBuilder {
+        notification_entity: EntityType::Document.with_entity_str("doc_1"),
+        notification: TestNotification {
+            message: "Hello".to_string(),
+        },
+        sender_id: None,
+        recipient_ids: HashSet::from([user]),
+    }
+    .into_request()
+    .with_conn_gateway();
+
+    service.send_notification(request).await.unwrap();
+
+    let collapse_keys = repo.stored_collapse_keys.lock().unwrap();
+    assert_eq!(collapse_keys.len(), 1);
+    assert_eq!(
+        collapse_keys[0].1, None,
+        "No APNS collapse key should be stored when APNS is not enabled"
     );
 }
 
