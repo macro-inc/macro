@@ -234,13 +234,13 @@ function TruncatedRecipientList(props: {
   return (
     <div
       use:observedSize={{ setSize: setContainerRect }}
-      class="flex items-center text-sm font-mono overflow-hidden whitespace-nowrap mt-1 min-w-0 flex-1 cursor-pointer"
+      class="flex items-center text-sm overflow-hidden whitespace-nowrap mt-1 min-w-0 flex-1 cursor-pointer"
       onclick={props.onClick}
     >
       {/* Hidden measurement element - must have same font styles */}
       <span
         ref={measureRef}
-        class="absolute invisible whitespace-nowrap text-sm font-mono"
+        class="absolute invisible whitespace-nowrap text-sm"
         aria-hidden="true"
       />
 
@@ -957,15 +957,15 @@ export function BaseInput(props: {
         >
           <div ref={setExpandedRecipientsRef} class="w-full">
             {/* Expanded FROM */}
-            <div class="flex flex-row items-baseline font-mono tracking-tight">
-              <span class="text-sm text-ink-muted min-w-8">
-                from <span>{userName()} </span>
-                <span>&lt;{userEmail()}&gt;</span>
+            <div class="flex flex-row items-baseline py-0.5">
+              <div class="text-sm text-ink-muted min-w-8">from</div>
+              <span class="text-sm text-ink-muted ml-2">
+                {userName()} &lt;{userEmail()}&gt;
               </span>
             </div>
             {/* Expanded TO */}
 
-            <div class="flex flex-row items-baseline">
+            <div class="flex flex-row items-center -mt-0.5">
               <div class="text-sm text-ink-muted min-w-8">to</div>
               <RecipientSelector<EmailRecipient['kind']>
                 inputRef={setToRef}
@@ -978,7 +978,7 @@ export function BaseInput(props: {
             </div>
             {/* Expanded CC */}
             <Show when={showCc() || form().recipients().cc.length > 0}>
-              <div class="flex flex-row items-start">
+              <div class="flex flex-row items-center -mt-1.5">
                 <div class="text-sm text-ink-muted min-w-8">cc</div>
                 <RecipientSelector<EmailRecipient['kind']>
                   inputRef={setCcRef}
@@ -992,7 +992,7 @@ export function BaseInput(props: {
             </Show>
             {/* Expanded BCC */}
             <Show when={showBcc() || form().recipients().bcc.length > 0}>
-              <div class="flex flex-row items-start">
+              <div class="flex flex-row items-center -mt-1.5">
                 <div class="text-sm text-ink-muted min-w-8">bcc</div>
                 <RecipientSelector<EmailRecipient['kind']>
                   inputRef={setBccRef}
