@@ -244,6 +244,7 @@ export function MessageContainer(props: MessageContainerProps) {
                 }
                 setFocusedMessageId={context.messages.setFocused}
                 isFirstMessageInThread={props.isFirstMessage}
+                isFocused={props.isFocused}
               />
             </Message.Body>
             {/* Image attachments */}
