@@ -9,8 +9,6 @@ pub struct Config {
     pub port: usize,
     /// The environment we are in
     pub environment: Environment,
-    /// Comms service URL for channel permission checks
-    pub comms_service_url: String,
 }
 
 impl Config {
@@ -21,14 +19,11 @@ impl Config {
             .parse::<usize>()
             .unwrap();
         let environment = Environment::new_or_prod();
-        let comms_service_url =
-            std::env::var("COMMS_SERVICE_URL").expect("COMMS_SERVICE_URL must be provided");
 
         Ok(Config {
             database_url,
             port,
             environment,
-            comms_service_url,
         })
     }
 }

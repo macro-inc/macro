@@ -42,7 +42,7 @@ pub async fn get_document_metadata_properties(
         entity_type,
     ));
 
-    // 2. Owner property
+   // 2. Owner property
     let owner = (!document_metadata.owner.is_empty())
         .then(|| EntityReference::new(document_metadata.owner, EntityType::User));
     metadata_properties.push(create_metadata_property_entity_ref(
