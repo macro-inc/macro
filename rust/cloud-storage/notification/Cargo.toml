@@ -8,6 +8,7 @@ version = "0.1.0"
 aws-sdk-sesv2 = { workspace = true }
 aws-sdk-sns = { workspace = true }
 aws-sdk-sqs = { workspace = true }
+axum = { workspace = true }
 chrono = { workspace = true }
 hex = { workspace = true }
 itertools = { workspace = true }

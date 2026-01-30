@@ -5839,6 +5839,7 @@ dependencies = [
  "aws-sdk-sesv2",
  "aws-sdk-sns",
  "aws-sdk-sqs",
+ "axum",
  "chrono",
  "hex",
  "itertools 0.14.0",
