@@ -14,7 +14,6 @@ mod channels;
 pub mod context;
 mod extractors;
 mod health;
-mod internal;
 mod mentions;
 mod middleware;
 mod preview;
@@ -36,7 +35,6 @@ pub fn service(app_state: AppState) -> Service {
             app_state.jwt_validation_args.clone(),
             middleware::decode_jwt,
         ))
-        .nest("/internal", internal::router(app_state.clone()))
         .with_state(app_state)
         .merge(health::router().layer(cors.clone()))
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))

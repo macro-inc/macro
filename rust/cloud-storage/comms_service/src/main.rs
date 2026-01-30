@@ -124,10 +124,6 @@ async fn main() -> anyhow::Result<()> {
 
     let service = api::service(AppState {
         jwt_validation_args,
-        internal_auth_key: secretsmanager_client::LocalOrRemoteSecret::Local(
-            config.internal_auth_key.clone(),
-        ),
-
         db,
         sqs_client: Arc::new(sqs_client),
         macro_notify_client: Arc::new(macro_notify_client),

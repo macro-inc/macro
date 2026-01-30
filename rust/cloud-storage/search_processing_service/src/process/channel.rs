@@ -3,8 +3,8 @@ use mention_utils::parse::{NullXmlFormatter, ParsedXmlText, XmlFormatter};
 use opensearch_client::{
     OpensearchClient, date_format::EpochSeconds, upsert::channel_message::UpsertChannelMessageArgs,
 };
-use sqs_client::search::channel::{ChannelMessageUpdate, RemoveChannelMessage};
 use sqlx::{Pool, Postgres};
+use sqs_client::search::channel::{ChannelMessageUpdate, RemoveChannelMessage};
 use uuid::Uuid;
 
 pub async fn process_channel_message_update(

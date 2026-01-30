@@ -1,8 +1,8 @@
 use ai_format::insight_context_log::InsightContextLog;
 use ai_format::util::Indent;
 use anyhow::Error;
-use comms_service_client::channels::ApiChannelWithLatest;
 use comms_service_client::CommsServiceClient;
+use comms_service_client::channels::ApiChannelWithLatest;
 use models_comms::channel::ChannelMetadata;
 use sqlx::{Pool, Postgres};
 use std::fmt::Debug;
@@ -81,10 +81,9 @@ impl ChannelClient {
             }
             None => {
                 // Use direct DB access for internal calls
-                let db = self
-                    .db
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("no database pool configured for internal access"))?;
+                let db = self.db.as_ref().ok_or_else(|| {
+                    anyhow::anyhow!("no database pool configured for internal access")
+                })?;
                 let channel =
                     comms_db_client::channels::get_channel::get_channel(db, &channel_id).await?;
                 Ok(ChannelMetadata {
@@ -133,10 +132,9 @@ impl ChannelClient {
             }
             None => {
                 // Use direct DB access for internal calls
-                let db = self
-                    .db
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("no database pool configured for internal access"))?;
+                let db = self.db.as_ref().ok_or_else(|| {
+                    anyhow::anyhow!("no database pool configured for internal access")
+                })?;
                 let transcript = format_channel_transcript(db, &channel_id, since, limit).await?;
                 Ok(transcript)
             }

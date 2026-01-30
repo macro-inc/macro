@@ -71,9 +71,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     ));
     let macro_notify_client =
         MacroNotifyClient::new("dummy_queue".into(), "dummy_service".into()).await;
-    let comms_service_client = Arc::new(CommsServiceClient::new(
-        "http://localhost".into(),
-    ));
+    let comms_service_client = Arc::new(CommsServiceClient::new("http://localhost".into()));
     let search_service_client =
         SearchServiceClient::new("dummy_auth_key".into(), "http://localhost".into());
     let lexical_client = Arc::new(LexicalClient::new(

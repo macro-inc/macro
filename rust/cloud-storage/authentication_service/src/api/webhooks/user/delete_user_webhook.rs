@@ -5,7 +5,7 @@ use axum::{
 };
 use comms_db_client::{
     channels::get_channels::get_org_channels,
-    participants::remove_participant::{remove_participant, RemoveParticipantOptions},
+    participants::remove_participant::{RemoveParticipantOptions, remove_participant},
 };
 use macro_middleware::auth::internal_access::ValidInternalKey;
 use model::{authentication::webhooks::FusionAuthUserWebhook, user::UserInfoWithMacroUserId};

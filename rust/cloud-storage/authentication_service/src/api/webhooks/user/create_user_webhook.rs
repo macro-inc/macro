@@ -6,7 +6,7 @@ use axum::{
 };
 use comms_db_client::{
     channels::get_channels::get_org_channels,
-    participants::add_participant::{add_participant, AddParticipantOptions},
+    participants::add_participant::{AddParticipantOptions, add_participant},
 };
 use macro_middleware::auth::internal_access::ValidInternalKey;
 use model::comms::ParticipantRole;
