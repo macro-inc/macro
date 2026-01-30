@@ -18,10 +18,7 @@ pub struct ChannelClient {
 impl ChannelClient {
     /// Create a new ChannelClient with a database pool for internal (non-JWT) operations
     pub fn new_with_db(client: Arc<CommsServiceClient>, db: Pool<Postgres>) -> Self {
-        Self {
-            inner: client,
-            db,
-        }
+        Self { inner: client, db }
     }
 
     /// List all channels the user has access to
@@ -55,7 +52,8 @@ impl ChannelClient {
                 .map_err(Error::from)?,
             None => {
                 let channel =
-                    comms_db_client::channels::get_channel::get_channel(&self.db, &channel_id).await?;
+                    comms_db_client::channels::get_channel::get_channel(&self.db, &channel_id)
+                        .await?;
 
                 ChannelMetadataResponse {
                     channel_name: channel.name.unwrap_or_default(),
@@ -104,7 +102,8 @@ impl ChannelClient {
             }
             None => {
                 // Use direct DB access for internal calls
-                let transcript = format_channel_transcript(&self.db, &channel_id, since, limit).await?;
+                let transcript =
+                    format_channel_transcript(&self.db, &channel_id, since, limit).await?;
                 Ok(transcript)
             }
         }
