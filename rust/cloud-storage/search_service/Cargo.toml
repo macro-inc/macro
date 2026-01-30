@@ -4,9 +4,9 @@ name = "search_service"
 publish = false
 version = "0.1.0"
 
-[[bin]]
+[lib]
 name = "search_service"
-path = "src/main.rs"
+path = "src/lib.rs"
 
 [[bin]]
 name = "search_service_openapi"

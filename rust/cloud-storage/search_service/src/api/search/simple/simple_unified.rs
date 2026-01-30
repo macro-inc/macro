@@ -2,7 +2,7 @@ use crate::api::search::simple::filter::FilterVariantToSearchArgs;
 
 use crate::api::search::simple::{simple_chat, simple_document, simple_email, simple_project};
 use crate::api::{
-    ApiContext,
+    context::SearchHandlerState,
     search::{SearchPaginationParams, simple::SearchError},
 };
 use axum::{
@@ -86,7 +86,7 @@ fn compute_next_cursor(
 /// by calling individual simple search endpoints for each entity type
 #[tracing::instrument(skip(ctx, user_context, query_params, req), err)]
 pub(in crate::api::search) async fn perform_unified_search(
-    ctx: &ApiContext,
+    ctx: &SearchHandlerState,
     user_context: &UserContext,
     query_params: SearchPaginationParams,
     req: UnifiedSearchRequest,
@@ -577,7 +577,7 @@ pub(in crate::api::search) async fn perform_unified_search(
 )]
 #[tracing::instrument(skip(ctx, user_context), fields(user_id=user_context.user_id), err)]
 pub async fn handler(
-    State(ctx): State<ApiContext>,
+    State(ctx): State<SearchHandlerState>,
     user_context: Extension<UserContext>,
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<UnifiedSearchRequest>,

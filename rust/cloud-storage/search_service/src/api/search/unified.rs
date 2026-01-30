@@ -1,6 +1,6 @@
 use super::SearchPaginationParams;
 use crate::api::{
-    ApiContext,
+    context::SearchHandlerState,
     search::{
         enrich::enrich_search_response,
         simple::{SearchError, simple_unified::perform_unified_search},
@@ -38,7 +38,7 @@ use std::cmp::Ordering;
 )]
 #[tracing::instrument(skip(ctx, user_context), fields(user_id=user_context.user_id), err)]
 pub async fn handler(
-    State(ctx): State<ApiContext>,
+    State(ctx): State<SearchHandlerState>,
     user_context: Extension<UserContext>,
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<UnifiedSearchRequest>,

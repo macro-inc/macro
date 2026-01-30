@@ -1,4 +1,4 @@
-use crate::api::ApiContext;
+use crate::api::context::SearchHandlerState;
 use crate::api::search::simple::SearchError;
 use indexmap::IndexMap;
 use models_search::chat::{
@@ -11,7 +11,7 @@ use std::collections::HashMap;
 /// Enriches chat search results with metadata
 #[tracing::instrument(skip(ctx, results), err)]
 pub(in crate::api::search) async fn enrich_chats(
-    ctx: &ApiContext,
+    ctx: &SearchHandlerState,
     user_id: &str,
     results: Vec<opensearch_client::search::model::SearchHit>,
 ) -> Result<Vec<ChatSearchResponseItemWithMetadata>, SearchError> {
