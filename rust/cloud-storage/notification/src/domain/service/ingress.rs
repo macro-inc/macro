@@ -11,8 +11,7 @@ use crate::domain::models::queue_message::{
 };
 use crate::domain::models::request::{NotificationStatus, UpdateNotificationsRequest};
 use crate::domain::models::{
-    DeviceEndpoint, Notification, NotificationResult, SendNotificationRequest,
-    UserNotificationRow,
+    DeviceEndpoint, Notification, NotificationResult, SendNotificationRequest, UserNotificationRow,
 };
 use crate::domain::ports::{NotificationQueue, NotificationRepository};
 use crate::domain::service::SendNotificationError;
@@ -21,6 +20,7 @@ use models_pagination::{CreatedAt, PaginateOn, Paginated, Query, TypeEraseCursor
 use rootcause::Report;
 use rootcause::prelude::ResultExt;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use std::collections::HashSet;
 use uuid::Uuid;
 
@@ -47,7 +47,9 @@ pub trait NotificationIngress: Send + Sync + 'static {
         user_id: &str,
         limit: Option<u32>,
         cursor: Query<Uuid, CreatedAt, ()>,
-    ) -> impl Future<Output = Result<Paginated<UserNotificationRow<T>, String>, Report<SendNotificationError>>> + Send;
+    ) -> impl Future<
+        Output = Result<Paginated<UserNotificationRow<T>, String>, Report<SendNotificationError>>,
+    > + Send;
 }
 
 /// Service for sending notifications (ingress side).
@@ -223,7 +225,7 @@ where
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn get_user_notifications<T: Notification>(
+    async fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
         user_id: &str,
         limit: Option<u32>,

@@ -21,6 +21,7 @@ use crate::domain::service::{
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use rootcause::Report;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
@@ -217,7 +218,7 @@ impl NotificationRepository for MockRepository {
         Ok(self.basic_notifications.clone())
     }
 
-    async fn get_user_notifications<T: Notification>(
+    async fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
         _user_id: &str,
         _limit: u32,
@@ -298,13 +299,15 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
         (**self).get_basic_notifications(notification_ids).await
     }
 
-    async fn get_user_notifications<T: Notification>(
+    async fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
         user_id: &str,
         limit: u32,
         cursor: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
     ) -> Result<Vec<UserNotificationRow<T>>, Report> {
-        (**self).get_user_notifications(user_id, limit, cursor).await
+        (**self)
+            .get_user_notifications(user_id, limit, cursor)
+            .await
     }
 }
 

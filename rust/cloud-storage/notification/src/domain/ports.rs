@@ -9,6 +9,7 @@ use std::future::Future;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use uuid::Uuid;
 
 use models_pagination::{CreatedAt, Query};
@@ -115,7 +116,7 @@ pub trait NotificationRepository: Send + Sync + 'static {
     /// Get a user's active (not deleted, not done) notifications with cursor-based pagination.
     ///
     /// The metadata JSON column is deserialized into `T`.
-    fn get_user_notifications<T: Notification>(
+    fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
         user_id: &str,
         limit: u32,

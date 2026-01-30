@@ -13,6 +13,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use models_pagination::{CreatedAt, Query};
 use rootcause::Report;
+use serde::de::DeserializeOwned;
 use sqlx::PgPool;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
@@ -112,7 +113,7 @@ pub trait NotificationDbOps: Send + Sync + 'static {
     /// Get a user's active (not deleted, not done) notifications with cursor-based pagination.
     ///
     /// The metadata JSON column is deserialized into `T`.
-    fn get_user_notifications<T: Notification>(
+    fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
         user_id: &str,
         limit: u32,
@@ -253,7 +254,11 @@ impl NotificationDbOps for PgPool {
         .await?;
 
         // Insert user notifications
-        let user_ids: Vec<String> = request.recipient_ids.iter().map(|id| id.to_string()).collect();
+        let user_ids: Vec<String> = request
+            .recipient_ids
+            .iter()
+            .map(|id| id.to_string())
+            .collect();
 
         sqlx::query!(
             r#"
@@ -364,7 +369,7 @@ impl NotificationDbOps for PgPool {
             .collect())
     }
 
-    async fn get_user_notifications<T: Notification>(
+    async fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
         user_id: &str,
         limit: u32,
@@ -386,7 +391,7 @@ impl NotificationDbOps for PgPool {
                 un.seen_at::timestamptz as viewed_at,
                 un.created_at::timestamptz as updated_at,
                 un.deleted_at::timestamptz,
-                n.metadata as notification_metadata,
+                n.metadata as "notification_metadata!: serde_json::Value",
                 n.notification_event_type as notification_event_type,
                 n.sender_id as sender_id
             FROM user_notification un
@@ -419,10 +424,7 @@ impl NotificationDbOps for PgPool {
                     .transpose()
                     .map_err(|e| rootcause::report!(e))?;
 
-                let notification_metadata = row
-                    .notification_metadata
-                    .map(serde_json::from_value::<T>)
-                    .transpose()
+                let notification_metadata = serde_json::from_value::<T>(row.notification_metadata)
                     .map_err(|e| rootcause::report!(e))?;
 
                 Ok(UserNotificationRow {
@@ -515,14 +517,12 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
         self.db.get_basic_notifications(notification_ids).await
     }
 
-    async fn get_user_notifications<T: Notification>(
+    async fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
         user_id: &str,
         limit: u32,
         cursor: Query<Uuid, CreatedAt, ()>,
     ) -> Result<Vec<UserNotificationRow<T>>, Report> {
-        self.db
-            .get_user_notifications(user_id, limit, cursor)
-            .await
+        self.db.get_user_notifications(user_id, limit, cursor).await
     }
 }

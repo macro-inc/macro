@@ -35,13 +35,14 @@ pub struct NotificationIdAndCollapseKey {
 ///
 /// The metadata field is generic so callers can deserialize it into
 /// whatever type they need without this crate depending on the caller's models.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct UserNotificationRow<T> {
     /// The user who owns this notification.
     pub owner_id: String,
     /// The notification ID.
     pub notification_id: uuid::Uuid,
     /// The notification event type string (e.g. "channel_mention").
+    /// TODO make this a new type
     pub notification_event_type: String,
     /// The entity the notification is about.
     pub entity: Entity<'static>,
@@ -58,9 +59,126 @@ pub struct UserNotificationRow<T> {
     /// When the notification was deleted.
     pub deleted_at: Option<DateTime<Utc>>,
     /// Deserialized notification metadata.
-    pub notification_metadata: Option<T>,
+    pub notification_metadata: T,
     /// The user who triggered the notification.
     pub sender_id: Option<MacroUserIdStr<'static>>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TaggedContent<T> {
+    tag: String,
+    content: T,
+}
+
+impl<T> UserNotificationRow<T> {
+    pub fn into_tagged(self) -> UserNotificationRow<TaggedContent<T>> {
+        let UserNotificationRow {
+            owner_id,
+            notification_id,
+            notification_event_type,
+            entity,
+            sent,
+            done,
+            created_at,
+            viewed_at,
+            updated_at,
+            deleted_at,
+            notification_metadata,
+            sender_id,
+        } = self;
+
+        UserNotificationRow {
+            owner_id,
+            notification_id,
+            entity,
+            sent,
+            done,
+            created_at,
+            viewed_at,
+            updated_at,
+            deleted_at,
+            notification_metadata: TaggedContent {
+                tag: notification_event_type.clone(),
+                content: notification_metadata,
+            },
+            notification_event_type,
+            sender_id,
+        }
+    }
+}
+
+impl<T: Serialize> UserNotificationRow<T> {
+    pub fn into_json(self) -> Result<UserNotificationRow<serde_json::Value>, serde_json::Error> {
+        let UserNotificationRow {
+            owner_id,
+            notification_id,
+            notification_event_type,
+            entity,
+            sent,
+            done,
+            created_at,
+            viewed_at,
+            updated_at,
+            deleted_at,
+            notification_metadata,
+            sender_id,
+        } = self;
+
+        let val = serde_json::to_value(notification_metadata)?;
+
+        Ok(UserNotificationRow {
+            owner_id,
+            notification_id,
+            notification_event_type,
+            entity,
+            sent,
+            done,
+            created_at,
+            viewed_at,
+            updated_at,
+            deleted_at,
+            notification_metadata: val,
+            sender_id,
+        })
+    }
+}
+
+impl UserNotificationRow<serde_json::Value> {
+    pub fn deserialize_json<T: DeserializeOwned>(
+        self,
+    ) -> Result<UserNotificationRow<T>, serde_json::Error> {
+        let UserNotificationRow {
+            owner_id,
+            notification_id,
+            notification_event_type,
+            entity,
+            sent,
+            done,
+            created_at,
+            viewed_at,
+            updated_at,
+            deleted_at,
+            notification_metadata,
+            sender_id,
+        } = self;
+
+        let val = serde_json::from_value(notification_metadata)?;
+
+        Ok(UserNotificationRow {
+            owner_id,
+            notification_id,
+            notification_event_type,
+            entity,
+            sent,
+            done,
+            created_at,
+            viewed_at,
+            updated_at,
+            deleted_at,
+            notification_metadata: val,
+            sender_id,
+        })
+    }
 }
 
 impl<T> Identify for UserNotificationRow<T> {
