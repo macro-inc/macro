@@ -1,4 +1,5 @@
 use super::chat_permissions;
+use ai::types::AiError;
 use anyhow::Result;
 use axum::extract::State;
 use axum::{
@@ -192,18 +193,14 @@ async fn handle_websocket_connection(
             if let Err(err) =
                 ensure_user_attachment_access(&ctx, user_context.clone(), attachments).await
             {
-                if let Err(send_err) =
-                    ws_send(&message_sender_clone, FromWebSocketMessage::Error(err))
-                {
-                    tracing::error!(error=?send_err, "failed to send attachment access error");
-                }
+                ws_send(&message_sender_clone, FromWebSocketMessage::Error(err)).ok();
                 continue;
             }
 
             match incoming_message {
                 ToWebSocketMessage::SendChatMessage(payload) => {
                     if let Err(e) = check_user_quota(&ctx, &user_context).await {
-                        let send_result = match e {
+                        match e {
                             UserQuotaError::InvalidMacroUserId
                             | UserQuotaError::UnableToGetUserPermissions
                             | UserQuotaError::UnableToGetUserQuota => ws_send(
@@ -222,10 +219,8 @@ async fn handle_websocket_connection(
                                     },
                                 )),
                             ),
-                        };
-                        if let Err(send_err) = send_result {
-                            tracing::error!(error=?send_err, "failed to send user quota error");
                         }
+                        .ok();
                         continue;
                     }
 
@@ -233,16 +228,15 @@ async fn handle_websocket_connection(
                     {
                         Ok(id) => Arc::new(id),
                         Err(_) => {
-                            if let Err(send_err) = ws_send(
+                            ws_send(
                                 &message_sender_clone,
                                 FromWebSocketMessage::Error(WebSocketError::StreamError(
                                     StreamError::InternalError {
                                         stream_id: payload.stream_id.clone(),
                                     },
                                 )),
-                            ) {
-                                tracing::error!(error=?send_err, "failed to send user id error");
-                            }
+                            )
+                            .ok();
                             continue;
                         }
                     };
@@ -259,25 +253,20 @@ async fn handle_websocket_connection(
                     .await
                     {
                         Err(e) => {
-                            if let Err(send_err) =
-                                ws_send(&message_sender_clone, FromWebSocketMessage::Error(e))
-                            {
-                                tracing::error!(error=?send_err, "failed to send chat access error");
-                            }
+                            ws_send(&message_sender_clone, FromWebSocketMessage::Error(e)).ok();
                             continue;
                         }
                         Ok(access) => match access {
                             AccessLevel::View | AccessLevel::Comment => {
-                                if let Err(send_err) = ws_send(
+                                ws_send(
                                     &message_sender_clone,
                                     FromWebSocketMessage::Error(WebSocketError::StreamError(
                                         StreamError::Unauthorized {
                                             stream_id: payload.stream_id,
                                         },
                                     )),
-                                ) {
-                                    tracing::error!(error=?send_err, "failed to send unauthorized error");
-                                }
+                                )
+                                .ok();
                                 continue;
                             }
                             _ => (),
@@ -296,10 +285,8 @@ async fn handle_websocket_connection(
                                 &connection_id,
                                 &jwt_token
                             )) => {
-                                if let Err(err) = result
-                                    && let Err(send_err) = ws_send(&message_sender_clone, FromWebSocketMessage::Error(err.into()))
-                                {
-                                    tracing::error!(error=?send_err, "failed to send chat message error");
+                                if let Err(err) = result {
+                                    ws_send(&message_sender_clone, FromWebSocketMessage::Error(err.into())).ok();
                                 }
                             }
                         }
@@ -310,16 +297,15 @@ async fn handle_websocket_connection(
                     {
                         Ok(id) => Arc::new(id),
                         Err(_) => {
-                            if let Err(send_err) = ws_send(
+                            ws_send(
                                 &message_sender_clone,
                                 FromWebSocketMessage::Error(WebSocketError::StreamError(
                                     StreamError::InternalError {
                                         stream_id: payload.stream_id.clone(),
                                     },
                                 )),
-                            ) {
-                                tracing::error!(error=?send_err, "failed to send user id error");
-                            }
+                            )
+                            .ok();
                             continue;
                         }
                     };
@@ -336,32 +322,27 @@ async fn handle_websocket_connection(
                     .await
                     {
                         Err(e) => {
-                            if let Err(send_err) =
-                                ws_send(&message_sender_clone, FromWebSocketMessage::Error(e))
-                            {
-                                tracing::error!(error=?send_err, "failed to send chat access error");
-                            }
+                            ws_send(&message_sender_clone, FromWebSocketMessage::Error(e)).ok();
                             continue;
                         }
                         Ok(access) => match access {
                             AccessLevel::View | AccessLevel::Comment => {
-                                if let Err(send_err) = ws_send(
+                                ws_send(
                                     &message_sender_clone,
                                     FromWebSocketMessage::Error(WebSocketError::StreamError(
                                         StreamError::Unauthorized {
                                             stream_id: payload.stream_id,
                                         },
                                     )),
-                                ) {
-                                    tracing::error!(error=?send_err, "failed to send unauthorized error");
-                                }
+                                )
+                                .ok();
                                 continue;
                             }
                             _ => (),
                         },
                     };
                     tokio::spawn(async move {
-                        let result = handle_edit_last_user_message(
+                        if let Err(err) = handle_edit_last_user_message(
                             ctx,
                             &message_sender_clone,
                             payload,
@@ -369,14 +350,13 @@ async fn handle_websocket_connection(
                             &connection_id,
                             &jwt_token,
                         )
-                        .await;
-                        if let Err(err) = result
-                            && let Err(send_err) = ws_send(
+                        .await
+                        {
+                            ws_send(
                                 &message_sender_clone,
                                 FromWebSocketMessage::Error(err.into()),
                             )
-                        {
-                            tracing::error!(error=?send_err, "failed to send edit message error");
+                            .ok();
                         }
                     });
                 }
@@ -391,10 +371,8 @@ async fn handle_websocket_connection(
                             .map_err(|err| WebSocketError::FailedToSelectModel {
                                 details: Some(err.to_string()),
                             })
-                        && let Err(send_err) =
-                            ws_send(&message_sender_clone, FromWebSocketMessage::Error(err))
                     {
-                        tracing::error!(error=?send_err, "failed to send select model error");
+                        ws_send(&message_sender_clone, FromWebSocketMessage::Error(err)).ok();
                     }
                 }
                 ToWebSocketMessage::ExtractionStatus(payload) => {
@@ -407,10 +385,8 @@ async fn handle_websocket_connection(
                     )
                     .await
                     .map_err(|_err| WebSocketError::ExtractionStatusFailed { attachment_id })
-                        && let Err(send_err) =
-                            ws_send(&message_sender_clone, FromWebSocketMessage::Error(err))
                     {
-                        tracing::error!(error=?send_err, "failed to send extraction status error");
+                        ws_send(&message_sender_clone, FromWebSocketMessage::Error(err)).ok();
                     }
                 }
                 ToWebSocketMessage::SendCompletion(payload) => {
@@ -422,10 +398,8 @@ async fn handle_websocket_connection(
                         user_id,
                     )
                     .await
-                        && let Err(send_err) =
-                            ws_send(&message_sender_clone, FromWebSocketMessage::Error(err))
                     {
-                        tracing::error!(error=?send_err, "failed to send completion error");
+                        ws_send(&message_sender_clone, FromWebSocketMessage::Error(err)).ok();
                     }
                 }
                 ToWebSocketMessage::GetSimpleCompletionStream(payload) => {
@@ -437,10 +411,8 @@ async fn handle_websocket_connection(
                         user_id,
                     )
                     .await
-                        && let Err(send_err) =
-                            ws_send(&message_sender_clone, FromWebSocketMessage::Error(err))
                     {
-                        tracing::error!(error=?send_err, "failed to send simple completion error");
+                        ws_send(&message_sender_clone, FromWebSocketMessage::Error(err)).ok();
                     }
                 }
             };
@@ -466,13 +438,24 @@ async fn handle_websocket_connection(
     CONNECTION_MAP.remove(&connection_id);
 }
 
+/// Error returned when failing to send a websocket message
+#[derive(Debug, thiserror::Error)]
+#[error("failed to send websocket message: channel closed")]
+pub struct WsSendError;
+
+impl From<WsSendError> for AiError {
+    fn from(err: WsSendError) -> Self {
+        AiError::Generic(err.into())
+    }
+}
+
+/// Sends a message over the websocket channel
+#[tracing::instrument(skip(sender), err)]
 pub fn ws_send(
     sender: &UnboundedSender<FromWebSocketMessage>,
     message: FromWebSocketMessage,
-) -> anyhow::Result<()> {
-    sender
-        .send(message)
-        .map_err(|e| anyhow::anyhow!("failed to send message to channel: {}", e))
+) -> Result<(), WsSendError> {
+    sender.send(message).map_err(|_| WsSendError)
 }
 
 /// Errors that can occur when checking the user quota

@@ -160,10 +160,7 @@ pub async fn stream_chat_response(
                     message_id: message_id.to_string(),
                     content: message_part,
                 };
-                ws_send(sender, response).map_err(|err| {
-                    tracing::error!(error=?err, "failed to send chat message response");
-                    ai::types::AiError::Generic(err)
-                })?;
+                ws_send(sender, response)?;
             }
             StreamPart::ToolCall(call) => {
                 let message_part = AssistantMessagePart::ToolCall {
@@ -178,10 +175,7 @@ pub async fn stream_chat_response(
                     message_id: message_id.to_string(),
                     content: message_part,
                 };
-                ws_send(sender, response).map_err(|err| {
-                    tracing::error!(error=?err, "failed to send tool call response");
-                    ai::types::AiError::Generic(err)
-                })?;
+                ws_send(sender, response)?;
             }
             StreamPart::Usage(usage) => {
                 tracing::debug!(record=?usage, "usage");
@@ -197,11 +191,7 @@ pub async fn stream_chat_response(
                         chat_id: chat_id.to_string(),
                         content: message_part,
                     },
-                )
-                .map_err(|err| {
-                    tracing::error!(error=?err, "failed to send tool response json");
-                    ai::types::AiError::Generic(err)
-                })?;
+                )?;
             }
             StreamPart::ToolResponse(ai::tool::types::ToolResponse::Err {
                 id,
@@ -222,11 +212,7 @@ pub async fn stream_chat_response(
                         chat_id: chat_id.to_string(),
                         content: message_part,
                     },
-                )
-                .map_err(|err| {
-                    tracing::error!(error=?err, "failed to send tool response err");
-                    ai::types::AiError::Generic(err)
-                })?;
+                )?;
             }
         }
     }
@@ -377,11 +363,8 @@ pub async fn handle_send_chat_message(
             stream_id: incoming_message.stream_id.clone(),
         },
     )
-    .map_err(|err| {
-        tracing::error!(error=?err, "failed to send stream end");
-        StreamError::InternalError {
-            stream_id: incoming_message.stream_id.clone(),
-        }
+    .map_err(|_| StreamError::InternalError {
+        stream_id: incoming_message.stream_id.clone(),
     })?;
 
     store_conversation_messages(
@@ -404,7 +387,8 @@ pub async fn handle_send_chat_message(
         && let Ok(new_name) = maybe_rename_chat(&incoming_message.chat_id, &ctx, user_id.0.as_ref())
             .await
             .inspect_err(|err| tracing::error!(error=?err, "failed to rename chat"))
-        && let Err(err) = ws_send(
+    {
+        ws_send(
             sender,
             FromWebSocketMessage::ChatRenamed {
                 chat_id: incoming_message.chat_id.clone(),
@@ -412,8 +396,7 @@ pub async fn handle_send_chat_message(
                 name: new_name,
             },
         )
-    {
-        tracing::error!(error=?err, "failed to send chat renamed");
+        .ok();
     }
     Ok(())
 }
