@@ -8,8 +8,8 @@ pub(in crate::api) mod document;
 pub(in crate::api) mod email;
 pub(in crate::api::search) mod enrich;
 pub(in crate::api) mod project;
-pub(in crate::api) mod simple;
-pub(in crate::api) mod unified;
+pub mod simple;
+pub mod unified;
 
 pub fn router() -> Router<SearchHandlerState> {
     Router::new()

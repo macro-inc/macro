@@ -5,7 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-/**
- * The time the document was deleted
- */
 export type DocumentMetadataDeletedAt = number | null;

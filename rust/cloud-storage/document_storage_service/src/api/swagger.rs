@@ -112,6 +112,33 @@ use models_soup::project::SoupProject;
 use soup::inbound::axum_router::{PostSoupRequest, SoupApiItem, SoupApiSort, SoupPage};
 use utoipa::OpenApi;
 
+// Search service types
+use models_search::channel::{
+    ChannelSearchRequest, ChannelSearchResponse, ChannelSearchResponseItem, ChannelSearchResult,
+    SimpleChannelSearchReponseItem, SimpleChannelSearchResponse,
+};
+use models_search::chat::{
+    ChatMessageSearchResult, ChatSearchRequest, ChatSearchResponse, ChatSearchResponseItem,
+    SimpleChatSearchResponse, SimpleChatSearchResponseItem,
+};
+use models_search::document::{
+    DocumentSearchRequest, DocumentSearchResponse, DocumentSearchResponseItem,
+    DocumentSearchResult, SimpleDocumentSearchResponse, SimpleDocumentSearchResponseItem,
+};
+use models_search::email::{
+    EmailSearchRequest, EmailSearchResponse, EmailSearchResponseItem, EmailSearchResult,
+    SimpleEmailSearchResponse, SimpleEmailSearchResponseItem,
+};
+use models_search::unified::{
+    SimpleUnifiedSearchResponse, SimpleUnifiedSearchResponseItem, UnifiedSearchFilters,
+    UnifiedSearchIndex, UnifiedSearchRequest, UnifiedSearchResponse, UnifiedSearchResponseItem,
+};
+use models_search::project::{
+    ProjectSearchMetadata, ProjectSearchRequest, ProjectSearchResponse, ProjectSearchResponseItem,
+    ProjectSearchResult, SimpleProjectSearchResponse, SimpleProjectSearchResponseItem,
+};
+use models_search::{MatchType, SearchHighlight, SimpleSearchResponse};
+
 #[derive(OpenApi)]
 #[openapi(
     info(
@@ -211,6 +238,10 @@ use utoipa::OpenApi;
         saved_views::delete_view_handler,
         saved_views::patch_view_handler,
         saved_views::exclude_default_view_handler,
+
+        // /search
+        search_service::api::search::unified::handler,
+        search_service::api::search::simple::simple_unified::handler,
     ),
     components(
         schemas(
@@ -346,6 +377,30 @@ use utoipa::OpenApi;
 
             CreateViewRequest,
             ExcludeDefaultViewRequest,
+
+            // Search
+            MatchType,
+            SearchHighlight,
+            // Document Search
+            DocumentSearchRequest, DocumentSearchResult, DocumentSearchResponseItem, DocumentSearchResponse,
+            // Chat Search
+            ChatSearchRequest, ChatMessageSearchResult, ChatSearchResponseItem, ChatSearchResponse,
+            // Email Search
+            EmailSearchRequest, EmailSearchResult, EmailSearchResponseItem, EmailSearchResponse,
+            // Channel Search
+            ChannelSearchRequest, ChannelSearchResponse, ChannelSearchResponseItem, ChannelSearchResult,
+            // Unified Search
+            UnifiedSearchIndex, UnifiedSearchRequest, UnifiedSearchResponseItem, UnifiedSearchResponse, UnifiedSearchFilters,
+            // Project Search
+            ProjectSearchRequest, ProjectSearchResponse, ProjectSearchResponseItem, ProjectSearchResult, ProjectSearchMetadata,
+            // Simple Search
+            SimpleSearchResponse,
+            SimpleDocumentSearchResponseItem, SimpleDocumentSearchResponse,
+            SimpleChatSearchResponseItem, SimpleChatSearchResponse,
+            SimpleEmailSearchResponseItem, SimpleEmailSearchResponse,
+            SimpleChannelSearchReponseItem, SimpleChannelSearchResponse,
+            SimpleProjectSearchResponseItem, SimpleProjectSearchResponse,
+            SimpleUnifiedSearchResponseItem, SimpleUnifiedSearchResponse,
         ),
     ),
     tags(

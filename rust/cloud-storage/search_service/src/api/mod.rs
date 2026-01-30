@@ -4,7 +4,7 @@ use context::SearchHandlerState;
 // Routes
 mod health;
 mod internal;
-mod search;
+pub mod search;
 
 // Misc
 pub mod context;

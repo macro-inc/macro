@@ -819,98 +819,15 @@ export const getUserDocumentsHandlerResponse = zod.object({
       zod.null(),
       zod.object({
         documents: zod.array(
-          zod.object({
-            branchedFromId: zod
-              .string()
-              .nullish()
-              .describe('The id of the document this document branched from'),
-            branchedFromVersionId: zod
-              .number()
-              .nullish()
-              .describe(
-                'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
-              ),
-            createdAt: zod
-              .number()
-              .describe('The time the document was created'),
-            deletedAt: zod
-              .number()
-              .nullable()
-              .describe('The time the document was deleted'),
-            documentBom: zod
-              .array(
-                zod.object({
-                  id: zod.string().describe('The uuid of the bom part'),
-                  path: zod
-                    .string()
-                    .describe('The file path of the bom part content'),
-                  sha: zod
-                    .string()
-                    .describe(
-                      'The sha of the bom part content\nThere is an index on sha for more performant queries based on it.'
-                    ),
-                })
-              )
-              .nullish()
-              .describe(
-                'If the document is a DOCX document and unzipped, the document_bom will be present'
-              ),
-            documentFamilyId: zod
-              .number()
-              .nullish()
-              .describe(
-                'The id of the document family this document belongs to'
-              ),
-            documentId: zod.string().describe('The document id'),
-            documentName: zod.string().describe('The name of the document'),
-            documentVersionId: zod
-              .number()
-              .describe(
-                'The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'
-              ),
-            fileType: zod
-              .string()
-              .nullish()
-              .describe('The file type of the document (file extension)'),
-            modificationData: zod
-              .any()
-              .optional()
-              .describe(
-                'The modification data for the document instance.\nThis is only used for PDF documents.'
-              ),
-            owner: zod.string().describe('The owner of the document'),
-            projectId: zod
-              .string()
-              .nullish()
-              .describe('The id of the project that this document belongs to'),
-            projectName: zod
-              .string()
-              .nullish()
-              .describe(
-                'The name of the project that this document belongs to'
-              ),
-            sha: zod
-              .string()
-              .nullish()
-              .describe(
-                'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
-              ),
-            subType: zod
-              .union([
-                zod.null(),
-                zod
-                  .enum(['task'])
-                  .describe(
-                    'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
-                  ),
-              ])
-              .optional(),
-            updatedAt: zod
-              .number()
-              .describe(
-                'The time the document instance / document BOM was updated'
-              ),
-          })
+          zod
+            .object({
+              created_at: zod.number(),
+              deleted_at: zod.number().nullish(),
+              project_id: zod.string().nullish(),
+              updated_at: zod.number(),
+              viewed_at: zod.number().nullish(),
+            })
+            .describe('Metadata for a document fetched from the database')
         ),
         next_offset: zod
           .number()
@@ -1440,90 +1357,15 @@ export const getDocumentParams = zod.object({
 
 export const getDocumentResponse = zod.object({
   data: zod.object({
-    documentMetadata: zod.object({
-      branchedFromId: zod
-        .string()
-        .nullish()
-        .describe('The id of the document this document branched from'),
-      branchedFromVersionId: zod
-        .number()
-        .nullish()
-        .describe(
-          'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
-        ),
-      createdAt: zod.number().describe('The time the document was created'),
-      deletedAt: zod
-        .number()
-        .nullable()
-        .describe('The time the document was deleted'),
-      documentBom: zod
-        .array(
-          zod.object({
-            id: zod.string().describe('The uuid of the bom part'),
-            path: zod
-              .string()
-              .describe('The file path of the bom part content'),
-            sha: zod
-              .string()
-              .describe(
-                'The sha of the bom part content\nThere is an index on sha for more performant queries based on it.'
-              ),
-          })
-        )
-        .nullish()
-        .describe(
-          'If the document is a DOCX document and unzipped, the document_bom will be present'
-        ),
-      documentFamilyId: zod
-        .number()
-        .nullish()
-        .describe('The id of the document family this document belongs to'),
-      documentId: zod.string().describe('The document id'),
-      documentName: zod.string().describe('The name of the document'),
-      documentVersionId: zod
-        .number()
-        .describe(
-          'The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'
-        ),
-      fileType: zod
-        .string()
-        .nullish()
-        .describe('The file type of the document (file extension)'),
-      modificationData: zod
-        .any()
-        .optional()
-        .describe(
-          'The modification data for the document instance.\nThis is only used for PDF documents.'
-        ),
-      owner: zod.string().describe('The owner of the document'),
-      projectId: zod
-        .string()
-        .nullish()
-        .describe('The id of the project that this document belongs to'),
-      projectName: zod
-        .string()
-        .nullish()
-        .describe('The name of the project that this document belongs to'),
-      sha: zod
-        .string()
-        .nullish()
-        .describe(
-          'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
-        ),
-      subType: zod
-        .union([
-          zod.null(),
-          zod
-            .enum(['task'])
-            .describe(
-              'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
-            ),
-        ])
-        .optional(),
-      updatedAt: zod
-        .number()
-        .describe('The time the document instance / document BOM was updated'),
-    }),
+    documentMetadata: zod
+      .object({
+        created_at: zod.number(),
+        deleted_at: zod.number().nullish(),
+        project_id: zod.string().nullish(),
+        updated_at: zod.number(),
+        viewed_at: zod.number().nullish(),
+      })
+      .describe('Metadata for a document fetched from the database'),
     userAccessLevel: zod
       .enum(['view', 'comment', 'edit', 'owner'])
       .describe('Ordered from least to most access top -> bottom'),
@@ -1708,90 +1550,15 @@ export const copyDocumentHandlerBody = zod.object({
 
 export const copyDocumentHandlerResponse = zod.object({
   data: zod.object({
-    documentMetadata: zod.object({
-      branchedFromId: zod
-        .string()
-        .nullish()
-        .describe('The id of the document this document branched from'),
-      branchedFromVersionId: zod
-        .number()
-        .nullish()
-        .describe(
-          'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
-        ),
-      createdAt: zod.number().describe('The time the document was created'),
-      deletedAt: zod
-        .number()
-        .nullable()
-        .describe('The time the document was deleted'),
-      documentBom: zod
-        .array(
-          zod.object({
-            id: zod.string().describe('The uuid of the bom part'),
-            path: zod
-              .string()
-              .describe('The file path of the bom part content'),
-            sha: zod
-              .string()
-              .describe(
-                'The sha of the bom part content\nThere is an index on sha for more performant queries based on it.'
-              ),
-          })
-        )
-        .nullish()
-        .describe(
-          'If the document is a DOCX document and unzipped, the document_bom will be present'
-        ),
-      documentFamilyId: zod
-        .number()
-        .nullish()
-        .describe('The id of the document family this document belongs to'),
-      documentId: zod.string().describe('The document id'),
-      documentName: zod.string().describe('The name of the document'),
-      documentVersionId: zod
-        .number()
-        .describe(
-          'The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'
-        ),
-      fileType: zod
-        .string()
-        .nullish()
-        .describe('The file type of the document (file extension)'),
-      modificationData: zod
-        .any()
-        .optional()
-        .describe(
-          'The modification data for the document instance.\nThis is only used for PDF documents.'
-        ),
-      owner: zod.string().describe('The owner of the document'),
-      projectId: zod
-        .string()
-        .nullish()
-        .describe('The id of the project that this document belongs to'),
-      projectName: zod
-        .string()
-        .nullish()
-        .describe('The name of the project that this document belongs to'),
-      sha: zod
-        .string()
-        .nullish()
-        .describe(
-          'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
-        ),
-      subType: zod
-        .union([
-          zod.null(),
-          zod
-            .enum(['task'])
-            .describe(
-              'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
-            ),
-        ])
-        .optional(),
-      updatedAt: zod
-        .number()
-        .describe('The time the document instance / document BOM was updated'),
-    }),
+    documentMetadata: zod
+      .object({
+        created_at: zod.number(),
+        deleted_at: zod.number().nullish(),
+        project_id: zod.string().nullish(),
+        updated_at: zod.number(),
+        viewed_at: zod.number().nullish(),
+      })
+      .describe('Metadata for a document fetched from the database'),
     userAccessLevel: zod
       .enum(['view', 'comment', 'edit', 'owner'])
       .describe('Ordered from least to most access top -> bottom'),
@@ -2043,90 +1810,15 @@ export const getDocumentVersionParams = zod.object({
 
 export const getDocumentVersionResponse = zod.object({
   data: zod.object({
-    documentMetadata: zod.object({
-      branchedFromId: zod
-        .string()
-        .nullish()
-        .describe('The id of the document this document branched from'),
-      branchedFromVersionId: zod
-        .number()
-        .nullish()
-        .describe(
-          'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
-        ),
-      createdAt: zod.number().describe('The time the document was created'),
-      deletedAt: zod
-        .number()
-        .nullable()
-        .describe('The time the document was deleted'),
-      documentBom: zod
-        .array(
-          zod.object({
-            id: zod.string().describe('The uuid of the bom part'),
-            path: zod
-              .string()
-              .describe('The file path of the bom part content'),
-            sha: zod
-              .string()
-              .describe(
-                'The sha of the bom part content\nThere is an index on sha for more performant queries based on it.'
-              ),
-          })
-        )
-        .nullish()
-        .describe(
-          'If the document is a DOCX document and unzipped, the document_bom will be present'
-        ),
-      documentFamilyId: zod
-        .number()
-        .nullish()
-        .describe('The id of the document family this document belongs to'),
-      documentId: zod.string().describe('The document id'),
-      documentName: zod.string().describe('The name of the document'),
-      documentVersionId: zod
-        .number()
-        .describe(
-          'The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'
-        ),
-      fileType: zod
-        .string()
-        .nullish()
-        .describe('The file type of the document (file extension)'),
-      modificationData: zod
-        .any()
-        .optional()
-        .describe(
-          'The modification data for the document instance.\nThis is only used for PDF documents.'
-        ),
-      owner: zod.string().describe('The owner of the document'),
-      projectId: zod
-        .string()
-        .nullish()
-        .describe('The id of the project that this document belongs to'),
-      projectName: zod
-        .string()
-        .nullish()
-        .describe('The name of the project that this document belongs to'),
-      sha: zod
-        .string()
-        .nullish()
-        .describe(
-          'If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'
-        ),
-      subType: zod
-        .union([
-          zod.null(),
-          zod
-            .enum(['task'])
-            .describe(
-              'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
-            ),
-        ])
-        .optional(),
-      updatedAt: zod
-        .number()
-        .describe('The time the document instance / document BOM was updated'),
-    }),
+    documentMetadata: zod
+      .object({
+        created_at: zod.number(),
+        deleted_at: zod.number().nullish(),
+        project_id: zod.string().nullish(),
+        updated_at: zod.number(),
+        viewed_at: zod.number().nullish(),
+      })
+      .describe('Metadata for a document fetched from the database'),
     userAccessLevel: zod
       .enum(['view', 'comment', 'edit', 'owner'])
       .describe('Ordered from least to most access top -> bottom'),
@@ -6024,6 +5716,1292 @@ export const patchViewHandlerParams = zod.object({
 export const patchViewHandlerBody = zod.object({
   config: zod.any().optional(),
   name: zod.string().nullish(),
+});
+
+/**
+ * @summary Perform a search through all items
+ */
+export const unifiedSearchQueryParams = zod.object({
+  page_size: zod.number().describe('The page size. Defaults to 10.'),
+  cursor: zod.string().optional().describe('Base64 encoded cursor value.'),
+});
+
+export const unifiedSearchBody = zod.object({
+  collapse: zod.boolean().nullish(),
+  disable_recency: zod
+    .boolean()
+    .optional()
+    .describe(
+      'If search_on is set to NameContent, you can disable the recency filter\nby setting to true.'
+    ),
+  filters: zod
+    .union([
+      zod.null(),
+      zod.object({
+        channel: zod
+          .union([
+            zod.null(),
+            zod
+              .object({
+                channel_ids: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Channel IDs to search within. Examples: ['general']. Empty to search all accessible channels."
+                  ),
+                mentions: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Channel user mentions to search for. Examples: ['@username']. Empty if not filtering by mentions."
+                  ),
+                org_id: zod
+                  .number()
+                  .nullish()
+                  .describe(
+                    'Channel organization ID to search within. Empty to ignore organization filtering.'
+                  ),
+                sender_ids: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Sender IDs to search within. Examples: ['user1']. Empty to search all accessible senders."
+                  ),
+                thread_ids: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Channel thread IDs to search within. Examples: ['thread123']. Empty to search all threads."
+                  ),
+              })
+              .describe(
+                'The channel message filters used to filter down what channel messages you search over.'
+              ),
+          ])
+          .optional(),
+        chat: zod
+          .union([
+            zod.null(),
+            zod
+              .object({
+                chat_ids: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Chat ids to search over. Examples: ['chat1'], ['chat1', 'chat2']. When provided, chat search will only match results on these chats. Empty to search all accessible chats."
+                  ),
+                owners: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Filter by chat owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+                  ),
+                project_ids: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "A list of project ids to search within. Examples: ['project1']. Empty to ignore project filtering."
+                  ),
+                role: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Chat message roles to search. Examples: ['user'], ['assistant']. Empty to search all roles."
+                  ),
+              })
+              .describe(
+                'The chat filters used to filter down what chats you search over.'
+              ),
+          ])
+          .optional(),
+        document: zod
+          .union([
+            zod.null(),
+            zod
+              .object({
+                document_ids: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Document ids to search over. Examples: ['doc1'], ['doc1', 'doc2']. Empty to search all accessible documents."
+                  ),
+                file_types: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Document file types to search. Examples: ['pdf'], ['md', 'txt']. Empty to search all file types."
+                  ),
+                owners: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Filter by document owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+                  ),
+                project_ids: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "A list of project ids to search within. Examples: ['project1'].\nfiltering. Empty to ignore project filtering."
+                  ),
+              })
+              .describe(
+                'The document filters used to filter down what documents you search over.'
+              ),
+          ])
+          .optional(),
+        email: zod
+          .union([
+            zod.null(),
+            zod
+              .object({
+                bcc: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Email BCC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by BCC."
+                  ),
+                cc: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Email CC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by CC."
+                  ),
+                recipients: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Email Recipient addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by Recipient."
+                  ),
+                senders: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Email sender addresses to filter by. Examples: ['user@example.com']. Empty to search all senders."
+                  ),
+              })
+              .describe(
+                'The email filters used to filter down what emails you search over.'
+              ),
+          ])
+          .optional(),
+        project: zod
+          .union([
+            zod.null(),
+            zod
+              .object({
+                owners: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Filter by project owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+                  ),
+                project_ids: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Project IDs to search within. Examples: ['project1']. Empty to search all accessible projects."
+                  ),
+              })
+              .describe(
+                'The project filters used to filter down what projects you search over.'
+              ),
+          ])
+          .optional(),
+      }),
+    ])
+    .optional(),
+  include: zod
+    .array(zod.enum(['documents', 'chats', 'emails', 'channels', 'projects']))
+    .optional()
+    .describe(
+      'Include specific entity types from search. If empty, all entity types will be searched over. If you are unsure which types to search, use an empty array to search all.'
+    ),
+  match_type: zod.enum(['exact', 'partial', 'regexp', 'query']),
+  query: zod.string().nullish(),
+  search_on: zod.enum(['name', 'content', 'name_content']).optional(),
+  terms: zod
+    .array(zod.string())
+    .nullish()
+    .describe(
+      "Multiple distinct search terms as separate strings. Use this for keyword-based searches where you want to find content containing any of these terms. Each term must be at least 3 characters (shorter terms are automatically filtered out). Examples: ['machine', 'learning', 'algorithms'], ['project', 'status', 'update']. `null` this field if searching without text terms to search all. This field matches query string against both name and content."
+    ),
+});
+
+export const unifiedSearchResponse = zod.object({
+  next_cursor: zod
+    .string()
+    .nullish()
+    .describe('The next cursor to use for paginating results'),
+  results: zod
+    .array(
+      zod.union([
+        zod
+          .object({
+            document_id: zod.string().uuid().describe('The id of the document'),
+            document_name: zod.string().describe('The name of the document'),
+            document_search_results: zod
+              .array(
+                zod
+                  .object({
+                    highlight: zod.object({
+                      bcc: zod
+                        .array(zod.string())
+                        .optional()
+                        .describe(
+                          'The highlight match on the bcc (email only)'
+                        ),
+                      cc: zod
+                        .array(zod.string())
+                        .optional()
+                        .describe('The highlight match on the cc (email only)'),
+                      content: zod
+                        .array(zod.string())
+                        .optional()
+                        .describe('The highlight match on the content field'),
+                      name: zod
+                        .string()
+                        .nullish()
+                        .describe('The highlight match on the name field'),
+                      recipients: zod
+                        .array(zod.string())
+                        .optional()
+                        .describe(
+                          'The highlight match on the recipients (email only)'
+                        ),
+                      sender: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'The highlight match on the sender (email only)'
+                        ),
+                      user_id: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'The highlight match on the user (owner) of the entity'
+                        ),
+                    }),
+                    node_id: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The node id for the document.\nThis is only useful for markdown at the moment\nThis will only be provided if the match was on content'
+                      ),
+                    raw_content: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The raw content of the document.\nThis is only included for markdown files and will be the raw json node of the match'
+                      ),
+                    score: zod
+                      .number()
+                      .nullish()
+                      .describe('The score of the result'),
+                  })
+                  .describe('A document match for a given node')
+              )
+              .describe(
+                'The search results for the document\nThis may be empty if the search result match was on the document name only'
+              ),
+            file_type: zod
+              .string()
+              .nullish()
+              .describe('The file type of the document'),
+            id: zod
+              .string()
+              .uuid()
+              .describe(
+                'Standardized fields that all item types will share.\nThese field names are being aligned across all item types\nfor consistency in our data model.'
+              ),
+            name: zod.string(),
+            owner_id: zod.string(),
+            sub_type: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum(['task'])
+                  .describe(
+                    'The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.'
+                  ),
+              ])
+              .optional(),
+          })
+          .describe(
+            'A single response item, part of the DocumentSearchResponse object'
+          )
+          .and(
+            zod.object({
+              metadata: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .object({
+                      created_at: zod.number(),
+                      deleted_at: zod.number().nullish(),
+                      project_id: zod.string().nullish(),
+                      updated_at: zod.number(),
+                      viewed_at: zod.number().nullish(),
+                    })
+                    .describe(
+                      'Metadata for a document fetched from the database'
+                    ),
+                ])
+                .optional(),
+            })
+          )
+          .describe(
+            "DocumentSearchResponseItem object with document metadata we fetch from macrodb. we don't store these\ntimestamps in opensearch as they would require us to update document page record\nevery time the document updates (specifically for updated_at and viewed_at)"
+          )
+          .and(
+            zod.object({
+              type: zod.enum(['document']),
+            })
+          ),
+        zod
+          .object({
+            chat_id: zod.string().uuid().describe('The id of the chat'),
+            chat_search_results: zod
+              .array(
+                zod
+                  .object({
+                    chat_message_id: zod
+                      .string()
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'The chat message id for the chat\nThis is only present if the search match was on the chat message content'
+                      ),
+                    highlight: zod.object({
+                      bcc: zod
+                        .array(zod.string())
+                        .optional()
+                        .describe(
+                          'The highlight match on the bcc (email only)'
+                        ),
+                      cc: zod
+                        .array(zod.string())
+                        .optional()
+                        .describe('The highlight match on the cc (email only)'),
+                      content: zod
+                        .array(zod.string())
+                        .optional()
+                        .describe('The highlight match on the content field'),
+                      name: zod
+                        .string()
+                        .nullish()
+                        .describe('The highlight match on the name field'),
+                      recipients: zod
+                        .array(zod.string())
+                        .optional()
+                        .describe(
+                          'The highlight match on the recipients (email only)'
+                        ),
+                      sender: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'The highlight match on the sender (email only)'
+                        ),
+                      user_id: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'The highlight match on the user (owner) of the entity'
+                        ),
+                    }),
+                    role: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The role of the chat message\nThis is only present if the search match was on the chat message content'
+                      ),
+                    score: zod
+                      .number()
+                      .nullish()
+                      .describe('The score of the result'),
+                  })
+                  .describe('A chat match for a given message id')
+              )
+              .describe(
+                'The search results for the chat\nThis may be empty if the search result match was on the chat title only'
+              ),
+            id: zod
+              .string()
+              .uuid()
+              .describe(
+                'Standardized fields that all item types will share.\nThese field names are being aligned across all item types\nfor consistency in our data model.'
+              ),
+            name: zod.string(),
+            owner_id: zod.string(),
+            user_id: zod.string().describe('The id of the creator of the chat'),
+          })
+          .describe(
+            'A single response item, part of the ChatSearchResponse object'
+          )
+          .and(
+            zod.object({
+              metadata: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .object({
+                      created_at: zod.number(),
+                      deleted_at: zod.number().nullish(),
+                      project_id: zod.string().nullish(),
+                      updated_at: zod.number(),
+                      viewed_at: zod.number().nullish(),
+                    })
+                    .describe('Metadata for a chat fetched from the database'),
+                ])
+                .optional(),
+            })
+          )
+          .describe(
+            "ChatSearchResponse object with channel metadata we fetch from macrodb. we don't store these\ntimestamps in opensearch as they would require us to update each chat message record for the chat\nevery time the chat updates (specifically for updated_at and viewed_at)"
+          )
+          .and(
+            zod.object({
+              type: zod.enum(['chat']),
+            })
+          ),
+        zod
+          .object({
+            email_message_search_results: zod
+              .array(
+                zod
+                  .object({
+                    bcc: zod
+                      .array(zod.string())
+                      .describe(
+                        'This is only present if the search result is on the message content'
+                      ),
+                    cc: zod
+                      .array(zod.string())
+                      .describe(
+                        'This is only present if the search result is on the message content'
+                      ),
+                    highlight: zod.object({
+                      bcc: zod
+                        .array(zod.string())
+                        .optional()
+                        .describe(
+                          'The highlight match on the bcc (email only)'
+                        ),
+                      cc: zod
+                        .array(zod.string())
+                        .optional()
+                        .describe('The highlight match on the cc (email only)'),
+                      content: zod
+                        .array(zod.string())
+                        .optional()
+                        .describe('The highlight match on the content field'),
+                      name: zod
+                        .string()
+                        .nullish()
+                        .describe('The highlight match on the name field'),
+                      recipients: zod
+                        .array(zod.string())
+                        .optional()
+                        .describe(
+                          'The highlight match on the recipients (email only)'
+                        ),
+                      sender: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'The highlight match on the sender (email only)'
+                        ),
+                      user_id: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'The highlight match on the user (owner) of the entity'
+                        ),
+                    }),
+                    labels: zod
+                      .array(zod.string())
+                      .describe(
+                        'This is only present if the search result is on the message content'
+                      ),
+                    message_id: zod
+                      .string()
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'The email message id.\nThis is only present if the search result is on the message content'
+                      ),
+                    pretty_sender: zod
+                      .string()
+                      .describe(
+                        "The pretty sender.\nIf the match is on the subject, the pretty sender is the latest sender on the thread.\nThis could be the sender's email if there is no contact name for the sender."
+                      ),
+                    recipients: zod
+                      .array(zod.string())
+                      .describe(
+                        'This is only present if the search result is on the message content'
+                      ),
+                    score: zod
+                      .number()
+                      .nullish()
+                      .describe('The score of the result'),
+                    sender: zod
+                      .string()
+                      .describe(
+                        'The sender.\nIf the match is on the subject, the sender is the latest sender on the thread.'
+                      ),
+                    sent_at: zod
+                      .number()
+                      .nullish()
+                      .describe(
+                        'When the email message was sent\nThis is only present if the search result is on the message content'
+                      ),
+                  })
+                  .describe('A email message match for a given thread id')
+              )
+              .describe(
+                'The search results for the document\nThis may be empty if the search result match was on the email subject only'
+              ),
+            id: zod
+              .string()
+              .uuid()
+              .describe(
+                'Standardized fields that all item types will share.\nThese field names are being aligned across all item types\nfor consistency in our data model.'
+              ),
+            name: zod
+              .string()
+              .nullish()
+              .describe('Subject of the email thread'),
+            owner_id: zod.string(),
+            subject: zod
+              .string()
+              .nullish()
+              .describe(
+                'The subject of the email\nThis is only present if the search result is on the message content'
+              ),
+            thread_id: zod
+              .string()
+              .uuid()
+              .describe('The id of the email thread'),
+            user_id: zod
+              .string()
+              .describe('The id of the owner of the email thread'),
+          })
+          .describe(
+            'A single response item, part of the EmailSearchResponse object'
+          )
+          .and(
+            zod.object({
+              created_at: zod.number(),
+              snippet: zod.string().nullish(),
+              updated_at: zod.number(),
+              viewed_at: zod.number().nullish(),
+            })
+          )
+          .describe(
+            "EmailSearchResponseItem object with email metadata we fetch from email service. we don't store these\ntimestamps in opensearch as they would require us to update each email message record for the thread\nevery time the thread updates (specifically for updated_at and viewed_at)"
+          )
+          .and(
+            zod.object({
+              type: zod.enum(['email']),
+            })
+          ),
+        zod
+          .object({
+            channel_id: zod.string().uuid().describe('The id of the channel'),
+            channel_message_search_results: zod
+              .array(
+                zod
+                  .object({
+                    created_at: zod
+                      .number()
+                      .nullish()
+                      .describe(
+                        'When the channel message was created\nThis is only prsent if the search result is on the message content'
+                      ),
+                    highlight: zod.object({
+                      bcc: zod
+                        .array(zod.string())
+                        .optional()
+                        .describe(
+                          'The highlight match on the bcc (email only)'
+                        ),
+                      cc: zod
+                        .array(zod.string())
+                        .optional()
+                        .describe('The highlight match on the cc (email only)'),
+                      content: zod
+                        .array(zod.string())
+                        .optional()
+                        .describe('The highlight match on the content field'),
+                      name: zod
+                        .string()
+                        .nullish()
+                        .describe('The highlight match on the name field'),
+                      recipients: zod
+                        .array(zod.string())
+                        .optional()
+                        .describe(
+                          'The highlight match on the recipients (email only)'
+                        ),
+                      sender: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'The highlight match on the sender (email only)'
+                        ),
+                      user_id: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'The highlight match on the user (owner) of the entity'
+                        ),
+                    }),
+                    message_id: zod
+                      .string()
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'The channel message id\nThis is only prsent if the search result is on the message content'
+                      ),
+                    score: zod
+                      .number()
+                      .nullish()
+                      .describe('The score of the result'),
+                    sender_id: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The sender id\nThis is only prsent if the search result is on the message content'
+                      ),
+                    thread_id: zod
+                      .string()
+                      .uuid()
+                      .nullish()
+                      .describe('The channel message thread id'),
+                    updated_at: zod
+                      .number()
+                      .nullish()
+                      .describe(
+                        'When the channel message was last updated\nThis is only prsent if the search result is on the message content'
+                      ),
+                  })
+                  .describe('A channel message match for a given channel id')
+              )
+              .describe(
+                'The search results for the channel\nThis may be empty if the search result match was not on content'
+              ),
+            channel_type: zod.string().describe('The type of channel'),
+            id: zod
+              .string()
+              .uuid()
+              .describe(
+                'Standardized fields that all item types will share.\nThese field names are being aligned across all item types\nfor consistency in our data model.'
+              ),
+            owner_id: zod
+              .string()
+              .nullish()
+              .describe(
+                "we don't store this for channels atm but keeping it here for consistency"
+              ),
+          })
+          .describe(
+            'A single response item, part of the ChannelSearchResponse object'
+          )
+          .and(
+            zod.object({
+              metadata: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .object({
+                      created_at: zod.number(),
+                      interacted_at: zod.number().nullish(),
+                      updated_at: zod.number(),
+                      viewed_at: zod.number().nullish(),
+                    })
+                    .describe(
+                      'Metadata for a channel fetched from the database'
+                    ),
+                ])
+                .optional(),
+            })
+          )
+          .describe(
+            "ChannelSearchResponseItem object with channel metadata we fetch from macrodb. we don't store these\ntimestamps in opensearch as they would require us to update each chat message record for the chat\nevery time the chat updates (specifically for updated_at and viewed_at and interacted_at)"
+          )
+          .and(
+            zod.object({
+              type: zod.enum(['channel']),
+            })
+          ),
+        zod
+          .object({
+            created_at: zod.number(),
+            id: zod
+              .string()
+              .uuid()
+              .describe(
+                'Standardized fields that all item types will share.\nThese field names are being aligned across all item types\nfor consistency in our data model.'
+              ),
+            name: zod.string(),
+            owner_id: zod.string(),
+            project_search_results: zod.array(
+              zod.object({
+                highlight: zod.object({
+                  bcc: zod
+                    .array(zod.string())
+                    .optional()
+                    .describe('The highlight match on the bcc (email only)'),
+                  cc: zod
+                    .array(zod.string())
+                    .optional()
+                    .describe('The highlight match on the cc (email only)'),
+                  content: zod
+                    .array(zod.string())
+                    .optional()
+                    .describe('The highlight match on the content field'),
+                  name: zod
+                    .string()
+                    .nullish()
+                    .describe('The highlight match on the name field'),
+                  recipients: zod
+                    .array(zod.string())
+                    .optional()
+                    .describe(
+                      'The highlight match on the recipients (email only)'
+                    ),
+                  sender: zod
+                    .string()
+                    .nullish()
+                    .describe('The highlight match on the sender (email only)'),
+                  user_id: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'The highlight match on the user (owner) of the entity'
+                    ),
+                }),
+                score: zod
+                  .number()
+                  .nullish()
+                  .describe('The score of the result'),
+              })
+            ),
+            updated_at: zod.number(),
+          })
+          .describe(
+            'A single response item, part of the ProjectSearchResponse object'
+          )
+          .and(
+            zod.object({
+              metadata: zod
+                .union([
+                  zod.null(),
+                  zod
+                    .object({
+                      created_at: zod.number(),
+                      deleted_at: zod.number().nullish(),
+                      parent_project_id: zod.string().nullish(),
+                      updated_at: zod.number(),
+                      viewed_at: zod.number().nullish(),
+                    })
+                    .describe(
+                      'Metadata for a project fetched from the database'
+                    ),
+                ])
+                .optional(),
+            })
+          )
+          .describe(
+            "ProjectSearchResponseItem object with project metadata we fetch from macrodb. we don't store these\ntimestamps in opensearch as they would require us to update the project record\nevery time the project updates (specifically for updated_at and viewed_at)"
+          )
+          .and(
+            zod.object({
+              type: zod.enum(['project']),
+            })
+          ),
+      ])
+    )
+    .describe('The search results'),
+});
+
+/**
+ * @summary Perform a search through all items.
+This is a simple search where we do not group your results by entity id.
+ */
+export const simpleUnifiedSearchQueryParams = zod.object({
+  page_size: zod.number().describe('The page size. Defaults to 10.'),
+  cursor: zod
+    .string()
+    .optional()
+    .describe('Base64 encoded cursor for pagination.'),
+});
+
+export const simpleUnifiedSearchBody = zod.object({
+  collapse: zod.boolean().nullish(),
+  disable_recency: zod
+    .boolean()
+    .optional()
+    .describe(
+      'If search_on is set to NameContent, you can disable the recency filter\nby setting to true.'
+    ),
+  filters: zod
+    .union([
+      zod.null(),
+      zod.object({
+        channel: zod
+          .union([
+            zod.null(),
+            zod
+              .object({
+                channel_ids: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Channel IDs to search within. Examples: ['general']. Empty to search all accessible channels."
+                  ),
+                mentions: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Channel user mentions to search for. Examples: ['@username']. Empty if not filtering by mentions."
+                  ),
+                org_id: zod
+                  .number()
+                  .nullish()
+                  .describe(
+                    'Channel organization ID to search within. Empty to ignore organization filtering.'
+                  ),
+                sender_ids: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Sender IDs to search within. Examples: ['user1']. Empty to search all accessible senders."
+                  ),
+                thread_ids: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Channel thread IDs to search within. Examples: ['thread123']. Empty to search all threads."
+                  ),
+              })
+              .describe(
+                'The channel message filters used to filter down what channel messages you search over.'
+              ),
+          ])
+          .optional(),
+        chat: zod
+          .union([
+            zod.null(),
+            zod
+              .object({
+                chat_ids: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Chat ids to search over. Examples: ['chat1'], ['chat1', 'chat2']. When provided, chat search will only match results on these chats. Empty to search all accessible chats."
+                  ),
+                owners: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Filter by chat owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+                  ),
+                project_ids: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "A list of project ids to search within. Examples: ['project1']. Empty to ignore project filtering."
+                  ),
+                role: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Chat message roles to search. Examples: ['user'], ['assistant']. Empty to search all roles."
+                  ),
+              })
+              .describe(
+                'The chat filters used to filter down what chats you search over.'
+              ),
+          ])
+          .optional(),
+        document: zod
+          .union([
+            zod.null(),
+            zod
+              .object({
+                document_ids: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Document ids to search over. Examples: ['doc1'], ['doc1', 'doc2']. Empty to search all accessible documents."
+                  ),
+                file_types: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Document file types to search. Examples: ['pdf'], ['md', 'txt']. Empty to search all file types."
+                  ),
+                owners: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Filter by document owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+                  ),
+                project_ids: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "A list of project ids to search within. Examples: ['project1'].\nfiltering. Empty to ignore project filtering."
+                  ),
+              })
+              .describe(
+                'The document filters used to filter down what documents you search over.'
+              ),
+          ])
+          .optional(),
+        email: zod
+          .union([
+            zod.null(),
+            zod
+              .object({
+                bcc: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Email BCC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by BCC."
+                  ),
+                cc: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Email CC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by CC."
+                  ),
+                recipients: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Email Recipient addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by Recipient."
+                  ),
+                senders: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Email sender addresses to filter by. Examples: ['user@example.com']. Empty to search all senders."
+                  ),
+              })
+              .describe(
+                'The email filters used to filter down what emails you search over.'
+              ),
+          ])
+          .optional(),
+        project: zod
+          .union([
+            zod.null(),
+            zod
+              .object({
+                owners: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Filter by project owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+                  ),
+                project_ids: zod
+                  .array(zod.string())
+                  .optional()
+                  .describe(
+                    "Project IDs to search within. Examples: ['project1']. Empty to search all accessible projects."
+                  ),
+              })
+              .describe(
+                'The project filters used to filter down what projects you search over.'
+              ),
+          ])
+          .optional(),
+      }),
+    ])
+    .optional(),
+  include: zod
+    .array(zod.enum(['documents', 'chats', 'emails', 'channels', 'projects']))
+    .optional()
+    .describe(
+      'Include specific entity types from search. If empty, all entity types will be searched over. If you are unsure which types to search, use an empty array to search all.'
+    ),
+  match_type: zod.enum(['exact', 'partial', 'regexp', 'query']),
+  query: zod.string().nullish(),
+  search_on: zod.enum(['name', 'content', 'name_content']).optional(),
+  terms: zod
+    .array(zod.string())
+    .nullish()
+    .describe(
+      "Multiple distinct search terms as separate strings. Use this for keyword-based searches where you want to find content containing any of these terms. Each term must be at least 3 characters (shorter terms are automatically filtered out). Examples: ['machine', 'learning', 'algorithms'], ['project', 'status', 'update']. `null` this field if searching without text terms to search all. This field matches query string against both name and content."
+    ),
+});
+
+export const simpleUnifiedSearchResponse = zod.object({
+  results: zod.array(
+    zod.union([
+      zod
+        .object({
+          document_id: zod.string().describe('The document id'),
+          document_name: zod.string().describe('The document name'),
+          file_type: zod.string().describe('The file type'),
+          highlight: zod.object({
+            bcc: zod
+              .array(zod.string())
+              .optional()
+              .describe('The highlight match on the bcc (email only)'),
+            cc: zod
+              .array(zod.string())
+              .optional()
+              .describe('The highlight match on the cc (email only)'),
+            content: zod
+              .array(zod.string())
+              .optional()
+              .describe('The highlight match on the content field'),
+            name: zod
+              .string()
+              .nullish()
+              .describe('The highlight match on the name field'),
+            recipients: zod
+              .array(zod.string())
+              .optional()
+              .describe('The highlight match on the recipients (email only)'),
+            sender: zod
+              .string()
+              .nullish()
+              .describe('The highlight match on the sender (email only)'),
+            user_id: zod
+              .string()
+              .nullish()
+              .describe(
+                'The highlight match on the user (owner) of the entity'
+              ),
+          }),
+          node_id: zod.string().describe('The node id'),
+          owner_id: zod.string().describe('The owner id'),
+          raw_content: zod
+            .string()
+            .nullish()
+            .describe('The raw content of the document'),
+          updated_at: zod
+            .number()
+            .describe('The time the document was last updated'),
+        })
+        .and(
+          zod.object({
+            type: zod.enum(['document']),
+          })
+        ),
+      zod
+        .object({
+          chat_id: zod.string().describe('The chat id'),
+          chat_message_id: zod.string().describe('The chat message id'),
+          highlight: zod.object({
+            bcc: zod
+              .array(zod.string())
+              .optional()
+              .describe('The highlight match on the bcc (email only)'),
+            cc: zod
+              .array(zod.string())
+              .optional()
+              .describe('The highlight match on the cc (email only)'),
+            content: zod
+              .array(zod.string())
+              .optional()
+              .describe('The highlight match on the content field'),
+            name: zod
+              .string()
+              .nullish()
+              .describe('The highlight match on the name field'),
+            recipients: zod
+              .array(zod.string())
+              .optional()
+              .describe('The highlight match on the recipients (email only)'),
+            sender: zod
+              .string()
+              .nullish()
+              .describe('The highlight match on the sender (email only)'),
+            user_id: zod
+              .string()
+              .nullish()
+              .describe(
+                'The highlight match on the user (owner) of the entity'
+              ),
+          }),
+          role: zod.string().describe('The role'),
+          title: zod.string().describe('The title'),
+          updated_at: zod
+            .number()
+            .describe('The time the chat was last updated'),
+          user_id: zod.string().describe('The user id'),
+        })
+        .and(
+          zod.object({
+            type: zod.enum(['chat']),
+          })
+        ),
+      zod
+        .object({
+          bcc: zod.array(zod.string()).describe('The bcc'),
+          cc: zod.array(zod.string()).describe('The cc'),
+          highlight: zod.object({
+            bcc: zod
+              .array(zod.string())
+              .optional()
+              .describe('The highlight match on the bcc (email only)'),
+            cc: zod
+              .array(zod.string())
+              .optional()
+              .describe('The highlight match on the cc (email only)'),
+            content: zod
+              .array(zod.string())
+              .optional()
+              .describe('The highlight match on the content field'),
+            name: zod
+              .string()
+              .nullish()
+              .describe('The highlight match on the name field'),
+            recipients: zod
+              .array(zod.string())
+              .optional()
+              .describe('The highlight match on the recipients (email only)'),
+            sender: zod
+              .string()
+              .nullish()
+              .describe('The highlight match on the sender (email only)'),
+            user_id: zod
+              .string()
+              .nullish()
+              .describe(
+                'The highlight match on the user (owner) of the entity'
+              ),
+          }),
+          labels: zod.array(zod.string()).describe('The labels'),
+          link_id: zod.string().describe('The link id'),
+          message_id: zod.string().describe('The message id'),
+          recipients: zod.array(zod.string()).describe('The recipients'),
+          sender: zod.string().describe('The sender'),
+          sent_at: zod
+            .union([zod.null(), zod.number()])
+            .optional()
+            .describe('The time the email was sent'),
+          subject: zod.string().nullish().describe('The subject'),
+          thread_id: zod.string().describe('The thread id'),
+          updated_at: zod
+            .number()
+            .describe('The time the email was last updated'),
+          user_id: zod.string().describe('The user id'),
+        })
+        .and(
+          zod.object({
+            type: zod.enum(['email']),
+          })
+        ),
+      zod
+        .object({
+          channel_id: zod.string().describe('The channel id'),
+          channel_type: zod.string().describe('The channel type'),
+          created_at: zod
+            .number()
+            .describe('The time the channel message was created'),
+          highlight: zod.object({
+            bcc: zod
+              .array(zod.string())
+              .optional()
+              .describe('The highlight match on the bcc (email only)'),
+            cc: zod
+              .array(zod.string())
+              .optional()
+              .describe('The highlight match on the cc (email only)'),
+            content: zod
+              .array(zod.string())
+              .optional()
+              .describe('The highlight match on the content field'),
+            name: zod
+              .string()
+              .nullish()
+              .describe('The highlight match on the name field'),
+            recipients: zod
+              .array(zod.string())
+              .optional()
+              .describe('The highlight match on the recipients (email only)'),
+            sender: zod
+              .string()
+              .nullish()
+              .describe('The highlight match on the sender (email only)'),
+            user_id: zod
+              .string()
+              .nullish()
+              .describe(
+                'The highlight match on the user (owner) of the entity'
+              ),
+          }),
+          mentions: zod.array(zod.string()).describe('The mentions'),
+          message_id: zod.string().describe('The message id'),
+          org_id: zod.number().nullish().describe('The org id'),
+          sender_id: zod.string().describe('The sender id'),
+          thread_id: zod.string().nullish().describe('The thread id'),
+          updated_at: zod
+            .number()
+            .describe('The time the channel message was last updated'),
+        })
+        .and(
+          zod.object({
+            type: zod.enum(['channel']),
+          })
+        ),
+      zod
+        .object({
+          created_at: zod.number().describe('The time the project was created'),
+          highlight: zod.object({
+            bcc: zod
+              .array(zod.string())
+              .optional()
+              .describe('The highlight match on the bcc (email only)'),
+            cc: zod
+              .array(zod.string())
+              .optional()
+              .describe('The highlight match on the cc (email only)'),
+            content: zod
+              .array(zod.string())
+              .optional()
+              .describe('The highlight match on the content field'),
+            name: zod
+              .string()
+              .nullish()
+              .describe('The highlight match on the name field'),
+            recipients: zod
+              .array(zod.string())
+              .optional()
+              .describe('The highlight match on the recipients (email only)'),
+            sender: zod
+              .string()
+              .nullish()
+              .describe('The highlight match on the sender (email only)'),
+            user_id: zod
+              .string()
+              .nullish()
+              .describe(
+                'The highlight match on the user (owner) of the entity'
+              ),
+          }),
+          project_id: zod.string().describe('The project id'),
+          project_name: zod.string().describe('The project name'),
+          updated_at: zod
+            .number()
+            .describe('The time the project was last updated'),
+          user_id: zod
+            .string()
+            .describe('The id of the user who created the project'),
+        })
+        .and(
+          zod.object({
+            type: zod.enum(['project']),
+          })
+        ),
+    ])
+  ),
 });
 
 /**
