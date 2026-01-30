@@ -22,21 +22,11 @@ pub struct Config {
 
     pub port: usize,
 
-    pub comms_service_auth_key: String,
-
-    pub comms_service_url: String,
-
     /// API key for sync service
     pub sync_service_auth_key: String,
 
     /// sync service URL
     pub sync_service_url: String,
-
-    /// Properties service auth key
-    pub properties_service_auth_key: String,
-
-    /// Properties service URL
-    pub properties_service_url: String,
 }
 
 impl Config {
@@ -67,23 +57,11 @@ impl Config {
             .parse::<usize>()
             .context("PORT must be a valid number")?;
 
-        let comms_service_auth_key = std::env::var("COMMS_SERVICE_AUTH_KEY")
-            .context("COMMS_SERVICE_AUTH_KEY must be provided")?;
-
-        let comms_service_url =
-            std::env::var("COMMS_SERVICE_URL").context("COMMS_SERVICE_URL must be provided")?;
-
         let sync_service_auth_key = std::env::var("SYNC_SERVICE_AUTH_KEY")
             .context("SYNC_SERVICE_AUTH_KEY must be provided")?;
 
         let sync_service_url =
             std::env::var("SYNC_SERVICE_URL").context("SYNC_SERVICE_URL must be provided")?;
-
-        let properties_service_auth_key = std::env::var("PROPERTIES_SERVICE_AUTH_KEY")
-            .context("PROPERTIES_SERVICE_AUTH_KEY must be provided")?;
-
-        let properties_service_url = std::env::var("PROPERTIES_SERVICE_URL")
-            .context("PROPERTIES_SERVICE_URL must be provided")?;
 
         Ok(Config {
             database_url,
@@ -94,12 +72,8 @@ impl Config {
             environment,
             port,
             delete_document_queue,
-            comms_service_auth_key,
-            comms_service_url,
             sync_service_auth_key,
             sync_service_url,
-            properties_service_auth_key,
-            properties_service_url,
         })
     }
 }

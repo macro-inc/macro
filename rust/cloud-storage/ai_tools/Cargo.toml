@@ -12,7 +12,6 @@ async-trait.workspace = true
 axum = { workspace = true, features = ["macros"] }
 chrono.workspace = true
 comms = { path = "../comms", features = ["outbound"] }
-comms_service_client = { path = "../comms_service_client" }
 email = { path = "../email", features = ["ai_schema", "axum", "outbound"] }
 email_service_client = { path = "../email_service_client" }
 frecency = { path = "../frecency", features = ["outbound", "postgres"] }

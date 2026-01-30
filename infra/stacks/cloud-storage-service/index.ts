@@ -104,6 +104,22 @@ export const jobUpdateHandlerLambdaName = jobUpdateHandlerLambdaArn.apply(
   }
 );
 
+const opensearchStack = new pulumi.StackReference('opensearch-stack', {
+  name: `macro-inc/opensearch/${stack}`,
+});
+
+const OPENSEARCH_URL: pulumi.Output<string> = opensearchStack
+  .getOutput('domainEndpoint')
+  .apply((domainEndpoint) => `https://${domainEndpoint}`);
+
+const OPENSEARCH_USERNAME = 'macrouser';
+const OPENSEARCH_PASSWORD = config.require('opensearch_password_key');
+const opensearchPasswordArn = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: OPENSEARCH_PASSWORD,
+  })
+  .apply((secret) => secret.arn);
+
 const cloudStorageStack = new pulumi.StackReference('cloud-storage-stack', {
   name: `macro-inc/document-storage/${stack}`,
 });
@@ -233,9 +249,22 @@ const cloudStorageService = new CloudStorageService(
       syncServiceAuthKeyArn,
       authenticationServiceSecretKeyArn,
       MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
+      opensearchPasswordArn,
     ],
     notificationQueueArn,
     containerEnvVars: [
+      {
+        name: 'OPENSEARCH_URL',
+        value: OPENSEARCH_URL,
+      },
+      {
+        name: 'OPENSEARCH_USERNAME',
+        value: OPENSEARCH_USERNAME,
+      },
+      {
+        name: 'OPENSEARCH_PASSWORD',
+        value: OPENSEARCH_PASSWORD,
+      },
       {
         name: 'DATABASE_URL',
         value: pulumi.interpolate`${DATABASE_URL}`,

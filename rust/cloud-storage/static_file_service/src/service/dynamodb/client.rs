@@ -84,8 +84,7 @@ impl DynamodbClient {
                     self.table.clone(),
                     aws_sdk_dynamodb::types::KeysAndAttributes::builder()
                         .set_keys(Some(keys))
-                        .build()
-                        .context("failed to build KeysAndAttributes")?,
+                        .build()?,
                 );
                 request_items
             };
@@ -95,8 +94,7 @@ impl DynamodbClient {
                 .batch_get_item()
                 .set_request_items(Some(request_items))
                 .send()
-                .await
-                .context("failed to batch get items from metadata table")?;
+                .await?;
 
             if let Some(responses) = response.responses()
                 && let Some(items) = responses.get(&self.table)

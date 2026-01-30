@@ -13,6 +13,8 @@ export const useBlockDocumentName = (defaultName?: string) => {
   if (!isInBlock()) {
     throw new Error('hook must be used within a block');
   }
+  // TODO: find new solution once block sigal is deprecated for good.
+  const [metadata] = blockMetadataSignal;
   const blockName = useBlockAliasedName();
   const isFileBlock = !NonDocumentBlockTypes.includes(blockName);
 
@@ -21,6 +23,8 @@ export const useBlockDocumentName = (defaultName?: string) => {
   return () => {
     const current = updatedName();
     if (current) return current;
+    const fromMeta = metadata()?.documentName;
+    if (fromMeta) return fromMeta;
     if (defaultName !== undefined) return defaultName;
     if (isFileBlock) {
       return blockNameToDefaultFile(blockName);

@@ -303,7 +303,7 @@ export async function handleBasicMention(
   const itemName = getItemName(itemEntity);
   onDocumentMention?.(item);
   if (dependencies.useSnapshotNode && supportsSnapshotNode(itemBlock)) {
-    handleSnapshotMention(item, dependencies);
+    await handleSnapshotMention(item, dependencies);
   } else {
     editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
       documentId: item.id,

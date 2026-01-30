@@ -344,7 +344,7 @@ function ChatInput(props: ChatInputInternalProps) {
           id="chat-input-text-area"
           class="text-base sm:text-sm text-ink transition-all duration-150 ease-out"
           classList={{
-            'pl-8 pr-[180px]': !isMultiline(),
+            'pl-8 pr-[130px]': !isMultiline(),
             'pl-0 pr-0 pb-8': isMultiline(),
           }}
           ref={mdRef}

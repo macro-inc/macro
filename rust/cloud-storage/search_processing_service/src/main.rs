@@ -124,11 +124,6 @@ async fn main() -> anyhow::Result<()> {
             config.email_service_url.clone(),
         );
 
-        let comms_service_client = comms_service_client::CommsServiceClient::new(
-            internal_auth_key.as_ref().to_string(),
-            config.comms_service_url.clone(),
-        );
-
         let worker = sqs_worker::SQSWorker::new(
             aws_sdk_sqs::Client::new(&aws_config),
             config.search_event_queue.clone(),
@@ -141,7 +136,6 @@ async fn main() -> anyhow::Result<()> {
             document_storage_bucket: config.document_storage_bucket.clone(),
             s3_client: Arc::new(s3_client),
             opensearch_client: Arc::new(opensearch_client.clone()),
-            comms_service_client: Arc::new(comms_service_client),
             lexical_client: Arc::new(lexical_client),
             email_client: email_service_client.into(),
         };

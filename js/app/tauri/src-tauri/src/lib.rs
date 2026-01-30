@@ -5,6 +5,7 @@ use reqwest::cookie::CookieStore;
 use reqwest::header::COOKIE;
 use rootcause::{Report, report};
 use serde::Serialize;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use tauri::http::{HeaderMap, HeaderValue};
 use tauri::{AppHandle, Emitter};
 use tauri::{Manager, Runtime};
@@ -12,6 +13,17 @@ use tauri_plugin_deep_link::{DeepLinkExt, OpenUrlEvent};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use url::Url;
+
+struct HeartbeatState {
+    alive: AtomicBool,
+    /// Incremented on each resume event so stale check threads are ignored
+    generation: AtomicU64,
+}
+
+#[tauri::command]
+fn heartbeat_response(state: tauri::State<'_, HeartbeatState>) {
+    state.alive.store(true, Ordering::SeqCst);
+}
 
 /// This module provides debuging utilities and should not be compiled in prodiction builds
 #[cfg(debug_assertions)] // do not remove this
@@ -116,6 +128,11 @@ pub fn run() {
     }
 
     builder
+        .manage(HeartbeatState {
+            alive: AtomicBool::new(true),
+            generation: AtomicU64::new(0),
+        })
+        .invoke_handler(tauri::generate_handler![heartbeat_response])
         .setup(|app| {
             #[cfg(any(target_os = "linux", all(windows, debug_assertions)))]
             {
@@ -127,6 +144,53 @@ pub fn run() {
             }
 
             app.chain(attach_deep_link_handler);
+
+            #[cfg(mobile)]
+            {
+                use tauri::ipc::Channel;
+                use tauri_plugin_app_events::AppEventsExt;
+
+                let app_handle = app.handle().clone();
+                app_handle.plugin(tauri_plugin_app_events::init())?;
+
+                let handle = app_handle.clone();
+                app_handle
+                    .app_events()
+                    .set_resume_handler(Channel::new(move |_| {
+                        tracing::info!("app resumed, sending heartbeat ping");
+
+                        let state = handle.state::<HeartbeatState>();
+                        let current_gen = state.generation.fetch_add(1, Ordering::SeqCst) + 1;
+                        state.alive.store(false, Ordering::SeqCst);
+
+                        let _ = handle.emit("heartbeat_ping", ());
+
+                        let handle = handle.clone();
+                        tokio::spawn(async move {
+                            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                            let state = handle.state::<HeartbeatState>();
+
+                            // A newer resume has superseded this one; bail out
+                            if state.generation.load(Ordering::SeqCst) != current_gen {
+                                tracing::debug!("heartbeat: stale generation {current_gen}, skipping");
+                                return;
+                            }
+
+                            if !state.alive.load(Ordering::SeqCst) {
+                                tracing::warn!(
+                                    "heartbeat: no response from JS — content process likely dead, reloading webview"
+                                );
+                                if let Some(webview) = handle.webview_windows().values().next() {
+                                    let _ = webview.reload();
+                                }
+                            } else {
+                                tracing::info!("heartbeat: JS responded, content process alive");
+                            }
+                        });
+
+                        Ok(())
+                    }))?;
+            }
 
             Ok(())
         })

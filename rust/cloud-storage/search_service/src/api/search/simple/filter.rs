@@ -7,7 +7,7 @@ use opensearch_client::search::unified::{
 };
 
 use crate::api::{
-    context::ApiContext,
+    context::SearchHandlerState,
     search::simple::{
         SearchError, simple_channel::filter_channels, simple_chat::filter_chats,
         simple_document::filter_documents, simple_project::filter_projects,
@@ -26,7 +26,7 @@ pub(super) trait FilterVariantToSearchArgs {
 
     fn filter_to_search_args(
         &self,
-        ctx: &ApiContext,
+        ctx: &SearchHandlerState,
         user_id: &str,
         user_organization_id: Option<i32>,
         should_include: bool,
@@ -38,7 +38,7 @@ impl FilterVariantToSearchArgs for item_filters::DocumentFilters {
 
     async fn filter_to_search_args(
         &self,
-        ctx: &ApiContext,
+        ctx: &SearchHandlerState,
         user_id: &str,
         _user_organization_id: Option<i32>,
         should_include: bool,
@@ -61,7 +61,7 @@ impl FilterVariantToSearchArgs for item_filters::ChannelFilters {
 
     async fn filter_to_search_args(
         &self,
-        ctx: &ApiContext,
+        ctx: &SearchHandlerState,
         user_id: &str,
         user_organization_id: Option<i32>,
         should_include: bool,
@@ -91,7 +91,7 @@ impl FilterVariantToSearchArgs for item_filters::ChatFilters {
 
     async fn filter_to_search_args(
         &self,
-        ctx: &ApiContext,
+        ctx: &SearchHandlerState,
         user_id: &str,
         _user_organization_id: Option<i32>,
         should_include: bool,
@@ -115,7 +115,7 @@ impl FilterVariantToSearchArgs for item_filters::ProjectFilters {
 
     async fn filter_to_search_args(
         &self,
-        ctx: &ApiContext,
+        ctx: &SearchHandlerState,
         user_id: &str,
         _user_organization_id: Option<i32>,
         should_include: bool,
@@ -138,7 +138,7 @@ impl FilterVariantToSearchArgs for item_filters::EmailFilters {
 
     async fn filter_to_search_args(
         &self,
-        _ctx: &ApiContext,
+        _ctx: &SearchHandlerState,
         _user_id: &str,
         _user_organization_id: Option<i32>,
         should_include: bool,

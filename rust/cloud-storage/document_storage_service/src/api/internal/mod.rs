@@ -1,5 +1,4 @@
 use super::{
-    channel,
     context::ApiContext,
     documents::{export_document, get_document_version},
     history::upsert_history,
@@ -40,11 +39,6 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         axum::middleware::from_fn_with_state(state.clone(), ensure_user_exists::handler);
 
     Router::new()
-        // Channel routes
-        .route(
-            "/channel/update_share_permission",
-            post(channel::update_channel_share_permission::handler),
-        )
         // User routes
         .route(
             "/channel/update_user_channel_permissions",

@@ -1,22 +1,16 @@
 [package]
-default-run = "properties_service"
 edition = "2024"
 name = "properties_service"
 publish = false
 version = "0.1.0"
 
-[[bin]]
+[lib]
 name = "properties_service"
-path = "src/main.rs"
-required-features = []
+path = "src/lib.rs"
 
 [[bin]]
 name = "properties_service_openapi"
 path = "src/openapi.rs"
-
-[features]
-local_auth = []
-tree_trace = []
 
 [dependencies]
 anyhow = { workspace = true }
@@ -25,7 +19,6 @@ aws-sdk-secretsmanager = { workspace = true }
 macro_aws_config = { path = "../macro_aws_config" }
 axum = { workspace = true, features = ["tower-log", "ws"] }
 chrono = { workspace = true }
-comms_service_client = { path = "../comms_service_client" }
 email_db_client = { path = "../email_db_client" }
 http-body-util = { workspace = true }
 macro_auth = { path = "../macro_auth" }

@@ -17,6 +17,7 @@ import { createRoot, createSignal } from 'solid-js';
 import type { StreamError } from './generated/schemas';
 import type { FromWebSocketMessage } from './generated/schemas/fromWebSocketMessage';
 import type { ToWebSocketMessage } from './generated/schemas/toWebSocketMessage';
+import { toast } from '@core/component/Toast/Toast';
 
 export type CognitionWebsocket = Websocket<
   ToWebSocketMessage,
@@ -161,7 +162,9 @@ export function createMessageStream(send: Send): MessageStream {
     cleanup();
   };
 
-  ws.send(send);
+  if (!ws.send(send)) {
+    toast.failure('Disconnected');
+  }
 
   return {
     close: setClosed,
@@ -175,5 +178,7 @@ export function createMessageStream(send: Send): MessageStream {
 
 /** Sends a message to the dcs websocket */
 export function sendCognitionWebsocketMessage(message: ToWebSocketMessage) {
-  ws.send(message);
+  if (!ws.send(message)) {
+    toast.failure('Disconnected');
+  }
 }

@@ -34,7 +34,6 @@ pub struct Config {
     pub search_event_queue: String,
     pub sync_service_url: String,
     pub sync_service_auth_key: String,
-    pub search_service_url: String,
     pub lexical_service_url: String,
     pub email_service_url: String,
     /// document cognition service url for scribe tool to loopback
@@ -90,9 +89,6 @@ impl Config {
         let sync_service_auth_key = std::env::var("SYNC_SERVICE_AUTH_KEY")
             .context("SYNC_SERVICE_AUTH_KEY must be provided")?;
 
-        let search_service_url =
-            std::env::var("SEARCH_SERVICE_URL").context("SEARCH_SERVICE_URL must be provided")?;
-
         let lexical_service_url =
             std::env::var("LEXICAL_SERVICE_URL").context("LEXICAL_SERVICE_URL must be provided")?;
 
@@ -124,7 +120,6 @@ impl Config {
             search_event_queue,
             sync_service_auth_key,
             sync_service_url,
-            search_service_url,
             lexical_service_url,
             email_service_url,
             document_cognition_service_url,
@@ -150,7 +145,6 @@ impl Config {
             search_event_queue: Default::default(),
             sync_service_url: Default::default(),
             sync_service_auth_key: Default::default(),
-            search_service_url: Default::default(),
             lexical_service_url: Default::default(),
             email_service_url: Default::default(),
             document_cognition_service_url: Default::default(),

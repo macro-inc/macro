@@ -4,8 +4,14 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use comms_db_client::{
+    channels::get_channels::get_org_channels,
+    participants::add_participant::{AddParticipantOptions, add_participant},
+};
 use macro_middleware::auth::internal_access::ValidInternalKey;
+use model::comms::ParticipantRole;
 use rand::Rng;
+use sqlx::{Pool, Postgres};
 
 use crate::api::context::ApiContext;
 use authentication_service::service::{
@@ -170,14 +176,12 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
     // If the user belongs to an organization,
     // we should add them to the organization's channels
     if let Some(org_id) = organization_id {
-        let comms_client = ctx.comms_client.clone();
-        tracing::trace!("dispatching request to comms service to add user to org channels");
+        let db = ctx.db.clone();
+        let user_id = user_id.clone();
+        tracing::trace!("adding user to org channels directly via db");
         tokio::spawn(async move {
-            if let Err(err) = comms_client
-                .add_user_to_org_channels(&user_id, &(org_id as i64))
-                .await
-            {
-                tracing::error!(error=?err, "failed to call comms service client to add user to org channels");
+            if let Err(err) = add_user_to_org_channels(&db, &user_id, org_id as i64).await {
+                tracing::error!(error=?err, "failed to add user to org channels");
             }
         });
     }
@@ -255,6 +259,29 @@ async fn initialize_user_experiments(
     macro_db_client::experiment_log::bulk_create_experiment_logs(db, user_id, &active_experiments)
         .await
         .context("failed to bulk create experiment logs")?;
+
+    Ok(())
+}
+
+/// Adds a user to all organization channels
+async fn add_user_to_org_channels(
+    db: &Pool<Postgres>,
+    user_id: &str,
+    org_id: i64,
+) -> anyhow::Result<()> {
+    let org_channels = get_org_channels(db, &org_id).await?;
+
+    for channel in org_channels.iter() {
+        add_participant(
+            db,
+            AddParticipantOptions {
+                channel_id: &channel.id.0,
+                user_id,
+                participant_role: Some(ParticipantRole::Member),
+            },
+        )
+        .await?;
+    }
 
     Ok(())
 }

@@ -215,6 +215,8 @@ export class StaticFileService extends pulumi.ComponentResource {
                 'dynamodb:DeleteItem',
                 'dynamodb:Query',
                 'dynamodb:Scan',
+                'dynamodb:BatchGetItem',
+                'dynamodb:BatchWriteItem',
               ],
               Resource: [
                 metadataTable.arn,

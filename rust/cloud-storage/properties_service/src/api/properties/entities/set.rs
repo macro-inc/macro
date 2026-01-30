@@ -7,7 +7,9 @@ use axum::{
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::api::{context::ApiContext, properties::entities::types::SetEntityPropertyRequest};
+use crate::api::{
+    context::PropertiesHandlerState, properties::entities::types::SetEntityPropertyRequest,
+};
 use model::user::UserContext;
 use models_properties::EntityType;
 use properties::{PropertiesErr, PropertiesService};
@@ -60,16 +62,16 @@ impl IntoResponse for SetEntityPropertyErr {
     ),
     tags = ["Properties"]
 )]
-#[tracing::instrument(skip(context, user_context), fields(entity_id = %entity_id, property_id = %property_uuid, entity_type = ?entity_type, user_id = %user_context.user_id, request = ?request), err)]
+#[tracing::instrument(skip(state, user_context), fields(entity_id = %entity_id, property_id = %property_uuid, entity_type = ?entity_type, user_id = %user_context.user_id, request = ?request), err)]
 pub async fn set_entity_property(
     Path((entity_type, entity_id, property_uuid)): Path<(EntityType, String, Uuid)>,
-    State(context): State<ApiContext>,
+    State(state): State<PropertiesHandlerState>,
     Extension(user_context): Extension<UserContext>,
     Json(request): Json<SetEntityPropertyRequest>,
 ) -> Result<StatusCode, SetEntityPropertyErr> {
     tracing::info!("setting entity property");
 
-    context
+    state
         .properties_service
         .set_entity_property(
             &user_context.user_id,

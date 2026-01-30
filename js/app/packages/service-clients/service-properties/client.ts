@@ -66,7 +66,7 @@ type GetBulkEntityPropertiesArgs = {
   body: BulkEntityPropertiesRequest;
 };
 
-const propertiesHost: string = SERVER_HOSTS['properties-service'];
+const propertiesHost: string = SERVER_HOSTS['document-storage-service'];
 
 export function propertiesFetch(
   url: string,

@@ -2,14 +2,14 @@ use crate::api::search::simple::SearchError;
 use item_filters::ChannelFilters;
 use std::collections::HashSet;
 
-use crate::api::ApiContext;
+use crate::api::context::SearchHandlerState;
 
 pub(in crate::api::search) struct FilterChannelResponse {
     pub channel_ids: Vec<sqlx::types::Uuid>,
 }
 
 pub(in crate::api::search) async fn filter_channels(
-    ctx: &ApiContext,
+    ctx: &SearchHandlerState,
     user_id: &str,
     organization_id: Option<i32>,
     filters: &ChannelFilters,

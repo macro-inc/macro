@@ -1,3 +1,28 @@
+/**
+ * Strips @media (prefers-color-scheme: ...) rules from CSS content.
+ * This prevents email dark mode styles from conflicting with our forced backgrounds.
+ */
+function stripColorSchemeMediaQueries(cssContent: string): string {
+  try {
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(cssContent);
+
+    const filteredRules: string[] = [];
+    for (const rule of Array.from(sheet.cssRules)) {
+      if (rule instanceof CSSMediaRule) {
+        if (rule.conditionText?.includes('prefers-color-scheme')) {
+          continue;
+        }
+      }
+      filteredRules.push(rule.cssText);
+    }
+    return filteredRules.join('\n');
+  } catch {
+    // Fallback if parsing fails
+    return cssContent;
+  }
+}
+
 export function trimTrailingBrs(element: Element) {
   function removeTrailingContent(): boolean {
     let removedSomething = false;
@@ -110,9 +135,14 @@ export function parseEmailContent(
 
   const hasTable = Boolean(doc.querySelector('table'));
 
-  // Extract style tags from head to preserve email styling
+  // Extract style tags from head, stripping prefers-color-scheme media queries
+  // to prevent email dark mode styles from conflicting with our forced backgrounds
   const styleTags = Array.from(doc.head?.querySelectorAll('style') ?? [])
-    .map((style) => style.outerHTML)
+    .map((style) => {
+      const filtered = stripColorSchemeMediaQueries(style.textContent ?? '');
+      return filtered ? `<style>${filtered}</style>` : '';
+    })
+    .filter(Boolean)
     .join('\n');
 
   let mainContent = doc.body?.innerHTML ?? doc.documentElement?.innerHTML;

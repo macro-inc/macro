@@ -1,5 +1,4 @@
 use anyhow::Context;
-use comms_service_client::CommsServiceClient;
 use config::{Config, Environment};
 use document_storage_service_client::DocumentStorageServiceClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -136,12 +135,6 @@ async fn main() -> anyhow::Result<()> {
     );
     tracing::trace!("initialized auth client");
 
-    let comms_client = CommsServiceClient::new(
-        config.service_internal_auth_key.clone(),
-        config.comms_service_url.clone(),
-    );
-    tracing::trace!("initialized comms client");
-
     let document_storage_service_client = DocumentStorageServiceClient::new(
         config.service_internal_auth_key.clone(),
         config.document_storage_service_url.clone(),
@@ -204,7 +197,6 @@ async fn main() -> anyhow::Result<()> {
             auth_client: Arc::new(auth_client),
             macro_cache_client: Arc::new(macro_cache_client),
             stripe_client: Arc::new(stripe_client),
-            comms_client: Arc::new(comms_client),
             document_storage_service_client: Arc::new(document_storage_service_client),
             notification_service_client: Arc::new(notification_service_client),
             ses_client: Arc::new(ses_client),

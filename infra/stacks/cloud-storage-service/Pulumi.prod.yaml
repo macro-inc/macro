@@ -11,3 +11,4 @@ config:
   cloud-storage-service:internal_api_key: document-storage-service-auth-key-prod
   cloud-storage-service:sync_service_auth_key: sync-service-key-prod
   cloud-storage-service:authentication_service_secret_key: authentication-service-internal-api-key-prod
+  cloud-storage-service:opensearch_password_key: macro-opensearch-password-prod

@@ -11,9 +11,12 @@ use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::F
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_env_var::env_var;
 use macro_redis_cluster_client::Redis;
+use opensearch_client::OpensearchClient;
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
 };
+use properties_service::PropertiesHandlerState;
+use search_service::SearchHandlerState;
 use soup::{
     domain::service::SoupImpl, inbound::axum_router::SoupRouterState,
     outbound::pg_soup_repo::PgSoupRepo,
@@ -56,6 +59,7 @@ pub(crate) struct ApiContext {
     pub sync_service_client: Arc<SyncServiceClient>,
     pub system_properties_service: Arc<SystemPropertiesService>,
     pub properties_service: Arc<PropertiesService>,
+    pub opensearch_client: Arc<OpensearchClient>,
     pub jwt_validation_args: JwtValidationArgs,
     pub config: Arc<Config>,
     pub dss_auth_key: DocumentStorageServiceAuthKey,
@@ -64,4 +68,34 @@ pub(crate) struct ApiContext {
 env_var! {
     #[derive(Clone)]
     pub struct DocumentStorageServiceAuthKey;
+}
+
+impl From<&ApiContext> for PropertiesHandlerState {
+    fn from(ctx: &ApiContext) -> Self {
+        PropertiesHandlerState {
+            db: ctx.db.clone(),
+            properties_service: ctx.properties_service.clone(),
+        }
+    }
+}
+
+impl FromRef<ApiContext> for PropertiesHandlerState {
+    fn from_ref(ctx: &ApiContext) -> Self {
+        PropertiesHandlerState::from(ctx)
+    }
+}
+
+impl From<&ApiContext> for SearchHandlerState {
+    fn from(ctx: &ApiContext) -> Self {
+        SearchHandlerState {
+            db: ctx.db.clone(),
+            opensearch_client: ctx.opensearch_client.clone(),
+        }
+    }
+}
+
+impl FromRef<ApiContext> for SearchHandlerState {
+    fn from_ref(ctx: &ApiContext) -> Self {
+        SearchHandlerState::from(ctx)
+    }
 }

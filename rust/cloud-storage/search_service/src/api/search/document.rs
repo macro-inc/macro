@@ -8,12 +8,12 @@ use opensearch_client::search::model::SearchGotoContent;
 use sqlx::types::Uuid;
 use std::collections::HashMap;
 
-use crate::api::ApiContext;
+use crate::api::context::SearchHandlerState;
 
 /// Enriches document search results with metadata
 #[tracing::instrument(skip(ctx, results), err)]
 pub(in crate::api::search) async fn enrich_documents(
-    ctx: &ApiContext,
+    ctx: &SearchHandlerState,
     user_id: &str,
     results: Vec<opensearch_client::search::model::SearchHit>,
 ) -> Result<Vec<DocumentSearchResponseItemWithMetadata>, SearchError> {

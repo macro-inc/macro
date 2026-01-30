@@ -96,7 +96,6 @@ dependencies = [
  "axum",
  "chrono",
  "comms",
- "comms_service_client",
  "cool_asserts",
  "email",
  "email_service_client",
@@ -521,7 +520,7 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "chrono",
- "comms_service_client",
+ "comms_db_client",
  "cookie",
  "cool_asserts",
  "document_storage_service_client",
@@ -688,9 +687,9 @@ dependencies = [
 
 [[package]]
 name = "aws-lc-rs"
-version = "1.15.2"
+version = "1.15.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a88aab2464f1f25453baa7a07c84c5b7684e274054ba06817f382357f77a288"
+checksum = "7b7b6141e96a8c160799cc2d5adecd5cbbe5054cb8c7c4af53da0f83bb7ad256"
 dependencies = [
  "aws-lc-sys",
  "zeroize",
@@ -698,9 +697,9 @@ dependencies = [
 
 [[package]]
 name = "aws-lc-sys"
-version = "0.35.0"
+version = "0.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b45afffdee1e7c9126814751f88dddc747f41d91da16c9551a0f1e8a11e788a1"
+checksum = "5c34dda4df7017c8db52132f0f8a2e0f8161649d15723ed63fc00c82d0f2081a"
 dependencies = [
  "cc",
  "cmake",
@@ -1929,7 +1928,6 @@ dependencies = [
  "comms",
  "comms_db_client",
  "connection_gateway",
- "document_storage_service_client",
  "doppleganger",
  "frecency",
  "futures",
@@ -1939,12 +1937,14 @@ dependencies = [
  "macro_aws_config",
  "macro_axum_utils",
  "macro_cors",
+ "macro_db_client",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
  "macro_middleware",
  "macro_notify",
  "macro_user_id",
+ "macro_uuid",
  "model",
  "model-entity",
  "model_notifications",
@@ -2491,7 +2491,7 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "chrono",
- "comms_service_client",
+ "comms_db_client",
  "futures",
  "macro_aws_config",
  "macro_cors",
@@ -2500,8 +2500,9 @@ dependencies = [
  "macro_env",
  "macro_redis_cluster_client",
  "model",
+ "models_properties",
  "openssl",
- "properties_service_client",
+ "properties_db_client",
  "redis",
  "s3_client",
  "secretsmanager_client",
@@ -2794,14 +2795,17 @@ dependencies = [
  "models_permissions",
  "models_properties",
  "models_soup",
+ "opensearch_client",
  "ordered-float",
  "properties",
+ "properties_service",
  "rayon",
  "redis",
  "regex",
  "reqwest",
  "saved_views",
  "schemars",
+ "search_service",
  "secretsmanager_client",
  "serde",
  "serde_json",
@@ -5130,7 +5134,6 @@ name = "macro_project_utils"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "comms_service_client",
  "macro_db_client",
  "macro_notify",
  "model",
@@ -5173,7 +5176,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "comms_db_client",
- "comms_service_client",
  "macro_db_client",
  "macro_user_id",
  "model",
@@ -6705,7 +6707,6 @@ dependencies = [
  "aws-sdk-secretsmanager",
  "axum",
  "chrono",
- "comms_service_client",
  "email_db_client",
  "http-body-util",
  "macro_auth",
@@ -6736,18 +6737,6 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
-]
-
-[[package]]
-name = "properties_service_client"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "macro_service_client",
- "models_properties",
- "reqwest",
- "serde",
- "tracing",
 ]
 
 [[package]]
@@ -7551,6 +7540,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "chrono",
+ "comms_db_client",
  "comms_service_client",
  "derive_builder",
  "document_cognition_service_client",
@@ -7601,7 +7591,6 @@ dependencies = [
  "axum",
  "chrono",
  "comms_db_client",
- "comms_service_client",
  "email_db_client",
  "email_service_client",
  "futures",

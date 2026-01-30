@@ -250,12 +250,6 @@ const service = new AuthenticationService('authentication-service', {
       }.macro.com`,
     },
     {
-      name: 'PROPERTIES_SERVICE_URL',
-      value: `https://properties-service${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
-    },
-    {
       name: 'NOTIFICATION_QUEUE',
       value: pulumi.interpolate`${notificationQueueName}`,
     },

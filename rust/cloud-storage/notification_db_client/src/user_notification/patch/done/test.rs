@@ -118,13 +118,3 @@ async fn test_bulk_patch_done(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
     Ok(())
 }
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../../fixtures", scripts("user_notifications"))
-)]
-async fn test_bulk_patch_done_by_event(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    bulk_patch_done_by_event(&pool, "macro|user@user.com", "test").await?;
-
-    Ok(())
-}
