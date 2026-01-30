@@ -160,7 +160,10 @@ pub async fn stream_chat_response(
                     message_id: message_id.to_string(),
                     content: message_part,
                 };
-                ws_send(sender, response);
+                ws_send(sender, response).map_err(|err| {
+                    tracing::error!(error=?err, "failed to send chat message response");
+                    ai::types::AiError::Generic(err)
+                })?;
             }
             StreamPart::ToolCall(call) => {
                 let message_part = AssistantMessagePart::ToolCall {
@@ -175,7 +178,10 @@ pub async fn stream_chat_response(
                     message_id: message_id.to_string(),
                     content: message_part,
                 };
-                ws_send(sender, response);
+                ws_send(sender, response).map_err(|err| {
+                    tracing::error!(error=?err, "failed to send tool call response");
+                    ai::types::AiError::Generic(err)
+                })?;
             }
             StreamPart::Usage(usage) => {
                 tracing::debug!(record=?usage, "usage");
@@ -192,6 +198,10 @@ pub async fn stream_chat_response(
                         content: message_part,
                     },
                 )
+                .map_err(|err| {
+                    tracing::error!(error=?err, "failed to send tool response json");
+                    ai::types::AiError::Generic(err)
+                })?;
             }
             StreamPart::ToolResponse(ai::tool::types::ToolResponse::Err {
                 id,
@@ -213,6 +223,10 @@ pub async fn stream_chat_response(
                         content: message_part,
                     },
                 )
+                .map_err(|err| {
+                    tracing::error!(error=?err, "failed to send tool response err");
+                    ai::types::AiError::Generic(err)
+                })?;
             }
         }
     }
@@ -362,7 +376,13 @@ pub async fn handle_send_chat_message(
         FromWebSocketMessage::StreamEnd {
             stream_id: incoming_message.stream_id.clone(),
         },
-    );
+    )
+    .map_err(|err| {
+        tracing::error!(error=?err, "failed to send stream end");
+        StreamError::InternalError {
+            stream_id: incoming_message.stream_id.clone(),
+        }
+    })?;
 
     store_conversation_messages(
         ctx.clone(),
@@ -380,20 +400,20 @@ pub async fn handle_send_chat_message(
     })?;
 
     // The chat is empty and we want to auto generate a name for the chat
-    if is_first_message {
-        let _ = maybe_rename_chat(&incoming_message.chat_id, &ctx, user_id.0.as_ref())
+    if is_first_message
+        && let Ok(new_name) = maybe_rename_chat(&incoming_message.chat_id, &ctx, user_id.0.as_ref())
             .await
             .inspect_err(|err| tracing::error!(error=?err, "failed to rename chat"))
-            .map(|new_name| {
-                ws_send(
-                    sender,
-                    FromWebSocketMessage::ChatRenamed {
-                        chat_id: incoming_message.chat_id.clone(),
-                        stream_id: incoming_message.stream_id.clone(),
-                        name: new_name,
-                    },
-                )
-            });
+        && let Err(err) = ws_send(
+            sender,
+            FromWebSocketMessage::ChatRenamed {
+                chat_id: incoming_message.chat_id.clone(),
+                stream_id: incoming_message.stream_id.clone(),
+                name: new_name,
+            },
+        )
+    {
+        tracing::error!(error=?err, "failed to send chat renamed");
     }
     Ok(())
 }

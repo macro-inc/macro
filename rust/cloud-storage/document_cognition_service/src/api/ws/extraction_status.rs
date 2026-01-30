@@ -84,7 +84,13 @@ pub async fn extraction_status_handler(
             attachment_id: payload.attachment_id.clone(),
             status: extraction_status.into(),
         },
-    );
+    )
+    .map_err(|err| {
+        tracing::error!(error=?err, "failed to send extraction status ack");
+        WebSocketError::ExtractionStatusFailed {
+            attachment_id: payload.attachment_id.clone(),
+        }
+    })?;
 
     if extraction_status != ExtractionStatusEnum::Incomplete {
         return Ok(());
@@ -209,13 +215,15 @@ pub fn spawn_poller() {
                     };
 
                     if extraction_status != ExtractionStatusEnum::Incomplete {
-                        ws_send(
+                        if let Err(err) = ws_send(
                             &sender,
                             FromWebSocketMessage::ExtractionStatusUpdate {
                                 attachment_id: attachment_id.clone(),
                                 status: extraction_status.into(),
                             },
-                        );
+                        ) {
+                            tracing::error!(error=?err, "failed to send extraction status update");
+                        }
                         remove_polling_connection(&attachment_id, connection_id);
                     } else {
                         if *start_time + MAX_POLL_TIME > Instant::now() {
@@ -224,12 +232,14 @@ pub fn spawn_poller() {
 
                         // We have been polling this attachment for too long, so we should stop
                         // polling it.
-                        ws_send(
+                        if let Err(err) = ws_send(
                             &sender,
                             FromWebSocketMessage::Error(WebSocketError::ExtractionStatusFailed {
                                 attachment_id: attachment_id.to_string(),
                             }),
-                        );
+                        ) {
+                            tracing::error!(error=?err, "failed to send extraction status failed error");
+                        }
                         remove_polling_connection(&attachment_id, connection_id)
                     }
                 }

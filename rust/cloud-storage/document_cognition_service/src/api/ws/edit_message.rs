@@ -62,7 +62,14 @@ pub async fn handle_edit_last_user_message(
             message_id: message_id.clone(),
             chat_id: incoming_message.chat_id.clone(),
         },
-    );
+    )
+    .map_err(|err| {
+        tracing::error!(error=?err, "failed to send chat message ack");
+        StreamWebSocketError::FailedToEditMessage {
+            reason: "failed to send message".to_string(),
+            stream_id: incoming_message.stream_id.clone(),
+        }
+    })?;
 
     // delete last messages and message after if it exists
     let mut last = chat.messages.iter().rev().take(2).collect::<Vec<_>>();
