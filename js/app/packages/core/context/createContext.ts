@@ -12,12 +12,14 @@ import {
  * @param factory - Factory function that creates the context value
  * @returns Tuple of [Provider, useContext] where useContext throws if undefined
  */
-export function createAssertedContextProvider<T>(
+export function createAssertedContextProvider<
+  T,
+  P extends ContextProviderProps = ContextProviderProps,
+>(
   name: string,
-  factory: () => T
-): [provider: ContextProvider<ContextProviderProps>, useContext: () => T] {
+  factory: (props: P) => T
+): [provider: ContextProvider<P>, useContext: () => T] {
   const [Provider, useContext] = createContextProvider(factory);
-
   const useAssertedContext = (): T => {
     const ctx = useContext();
     if (ctx === undefined) {
@@ -25,6 +27,5 @@ export function createAssertedContextProvider<T>(
     }
     return ctx;
   };
-
   return [Provider, useAssertedContext];
 }

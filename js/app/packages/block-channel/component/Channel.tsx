@@ -1,7 +1,6 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import { URL_PARAMS } from '@block-channel/constants';
-import type { ChannelData } from '@block-channel/definition';
 import {
   isDraggingOverChannelSignal,
   isValidChannelDragSignal,
@@ -10,7 +9,6 @@ import { activeThreadIdSignal } from '@block-channel/signal/threads';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
 import { withAnalytics } from '@coparse/analytics';
 import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
-import { useBlockId } from '@core/block';
 import type { EntityDragEvent } from '@macro-entity';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
@@ -32,11 +30,6 @@ import {
   useEntityHasUnreadNotifications,
 } from '@notifications';
 import { useUpdateChannelsActivityMutation } from '@queries/channel/activity';
-import { useChannelQuery } from '@queries/channel/channel';
-import {
-  getTopLevelMessages,
-  getThreadMessages,
-} from '@queries/channel/derived';
 import type { Message } from '@service-comms/generated/models';
 import { connectionGatewayClient } from '@service-connection/client';
 import { useBeforeLeave, useSearchParams } from '@solidjs/router';
@@ -62,6 +55,7 @@ import {
 } from './MessageList/MessageList';
 import { Top } from './Top';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import { useChannelContext } from '@block-channel/hooks/channel';
 
 false && fileFolderDrop;
 
@@ -83,24 +77,13 @@ function createChannelTrackingEffect(channelId: string) {
 }
 
 export function Channel(props: {
-  data: Required<ChannelData>;
+  channelId: string;
   target?: TargetMessageInfo;
 }) {
   const [_activeThreadId, setActiveThreadId] = activeThreadIdSignal;
-  const channel = useChannelQuery(
-    () => props.data.channel.id,
-    () => ({ refetchOnWindowFocus: true })
-  );
 
-  // Derive messages and threads from query data
-  const messages = () => getTopLevelMessages(channel.data);
-  const threads = () => getThreadMessages(channel.data);
-  const reactions = () => channel.data?.reactions ?? {};
-  const attachments = () => channel.data?.attachments ?? [];
-
-  const channelId = useBlockId();
-
-  const latestActivity = useChannelActivity(channelId);
+  const channelContext = useChannelContext();
+  const latestActivity = useChannelActivity(props.channelId);
 
   const [openedChannel, setOpenedChannel] = createSignal<Date>();
 
@@ -108,11 +91,17 @@ export function Channel(props: {
 
   const updateActivityOnOpen = () => {
     setOpenedChannel(new Date());
-    updateActivityMutation.mutate({ channelId, activityType: 'view' });
+    updateActivityMutation.mutate({
+      channelId: props.channelId,
+      activityType: 'view',
+    });
   };
 
   const updateActivityOnClose = () =>
-    updateActivityMutation.mutate({ channelId, activityType: 'view' });
+    updateActivityMutation.mutate({
+      channelId: props.channelId,
+      activityType: 'view',
+    });
 
   const { track } = withAnalytics();
   let containerRef!: HTMLDivElement;
@@ -178,13 +167,13 @@ export function Channel(props: {
     track(TrackingEvents.BLOCKCHANNEL.CHANNEL.OPEN);
   });
 
-  createChannelTrackingEffect(channelId);
+  createChannelTrackingEffect(props.channelId);
 
   useBeforeLeave(() => {
     updateActivityOnClose();
   });
 
-  const droppable = createDroppable('channel-input-' + channelId);
+  const droppable = createDroppable('channel-input-' + props.channelId);
 
   false && droppable;
 
@@ -194,12 +183,12 @@ export function Channel(props: {
   ];
 
   function handleAttach(attachment: InputAttachment) {
-    const list = channelInputAttachmentsStore[channelId] ?? [];
+    const list = channelInputAttachmentsStore[props.channelId] ?? [];
     if (list.find((a) => a.id === attachment.id))
       return toast.failure('Attachment already attached');
     if (list.length >= 10)
       return toast.failure('You can only attach up to 10 files at a time');
-    setChannelInputAttachmentsStore(channelId, (prev = []) => [
+    setChannelInputAttachmentsStore(props.channelId, (prev = []) => [
       ...prev,
       attachment,
     ]);
@@ -207,7 +196,7 @@ export function Channel(props: {
 
   onDragEnd((event: EntityDragEvent) => {
     if (!event.droppable) return;
-    if (event.droppable?.id !== 'channel-input-' + channelId) return;
+    if (event.droppable?.id !== 'channel-input-' + props.channelId) return;
     if (event.droppable.node === containerRef) {
       const { track, TrackingEvents } = withAnalytics();
       track(TrackingEvents.BLOCKCHANNEL.ATTACHMENT.DRAG);
@@ -331,7 +320,7 @@ export function Channel(props: {
 
   const debouncedMarkAsRead = makeDebouncedChannelNotificationReadMarker({
     notificationSource: notificationSource,
-    channelId,
+    channelId: props.channelId,
     debounceTime: 500,
   });
 
@@ -343,7 +332,7 @@ export function Channel(props: {
     (notification) => {
       if (
         !splitContext.isPanelActive() ||
-        notification.entity_id !== channelId
+        notification.entity_id !== props.channelId
       ) {
         return;
       }
@@ -354,7 +343,7 @@ export function Channel(props: {
 
   const hasNotifications = useEntityHasUnreadNotifications(notificationSource, {
     type: 'channel',
-    id: channelId,
+    id: props.channelId,
   });
 
   const splitContext = useSplitPanelOrThrow();
@@ -380,12 +369,17 @@ export function Channel(props: {
     >
       <ChannelDebouncedNotificationReadMarker
         notificationSource={notificationSource}
-        channelId={channelId}
+        channelId={props.channelId}
         debounceTime={500}
       />
       <StaticMarkdownContext>
         <Suspense>
-          <Top channelID={channelId} />
+          <Top
+            channelId={props.channelId}
+            channelType={channelContext.channelType()}
+            participants={channelContext.channel()?.participants ?? []}
+            channelName={channelContext.channelName()}
+          />
         </Suspense>
         <div
           class="h-full flex flex-col min-h-0 flex-1 relative w-full"
@@ -395,7 +389,7 @@ export function Channel(props: {
                 handleFileUpload(uploadEntries, {
                   store: channelInputAttachmentsStore,
                   setStore: setChannelInputAttachmentsStore,
-                  key: channelId,
+                  key: props.channelId,
                 })
               );
             },
@@ -414,12 +408,12 @@ export function Channel(props: {
             ref={containerRef}
           />
           <MessageList
-            channelId={channelId}
-            messages={messages()}
-            threads={threads()}
-            reactions={reactions()}
-            attachments={attachments()}
-            participants={channel.data?.participants ?? []}
+            channelId={props.channelId}
+            messages={channelContext.messages()}
+            threads={channelContext.threads()}
+            reactions={channelContext.reactions()}
+            attachments={channelContext.attachments()}
+            participants={channelContext.channel()?.participants ?? []}
             focusedMessageId={selectedMessageId}
             setFocusedMessageId={setSelectedMessageId}
             targetMessage={targetMessage}
@@ -434,12 +428,12 @@ export function Channel(props: {
             <div class="mx-auto -translate-x-1 w-full macro-message-width">
               <Suspense>
                 <ChannelInput
-                  channelId={channelId}
-                  channelName={channel.data?.channel?.name ?? ''}
-                  participants={channel.data?.participants ?? []}
+                  channelId={props.channelId}
+                  channelName={channelContext.channelName()}
+                  participants={channelContext.channel()?.participants ?? []}
                   inputAttachmentsStore={channelInputAttachmentsStore}
                   setInputAttachmentsStore={setChannelInputAttachmentsStore}
-                  inputAttachmentsKey={channelId}
+                  inputAttachmentsKey={props.channelId}
                   onFocusLeaveStart={onChannelInputFocusLeaveStart}
                   autoFocusOnMount={autoFocusOnMount()}
                   domRef={setChannelInputRef}

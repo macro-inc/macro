@@ -8,11 +8,6 @@ import { Tooltip } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
-import { useChannelQuery } from '@queries/channel/channel';
-import {
-  getTopLevelMessages,
-  getThreadMessages,
-} from '@queries/channel/derived';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import BracketLeft from '@macro-icons/macro-group-bracket-left.svg';
@@ -24,6 +19,7 @@ import type { ItemType } from '@service-storage/client';
 import { createMemo, createResource, Show, Suspense } from 'solid-js';
 import { VList } from 'virtua/solid';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
+import { useChannelContext } from '@block-channel/hooks/channel';
 
 const DRAWER_ID = 'attachments';
 
@@ -31,8 +27,7 @@ export function AttachmentsModal() {
   const drawerControl = useDrawerControl(DRAWER_ID);
   const currentBlockId = useBlockId();
   const { replaceOrInsertSplit } = useSplitLayout();
-
-  const channel = useChannelQuery(() => currentBlockId);
+  const channelContext = useChannelContext();
 
   const [mentionsResource] = createResource(() =>
     commsServiceClient.getMentions({ channel_id: currentBlockId })
@@ -55,7 +50,7 @@ export function AttachmentsModal() {
       return mentions;
     })();
 
-    const channelAttachments = channel.data?.attachments ?? [];
+    const channelAttachments = channelContext.attachments() ?? [];
     const safeAttachments = filterSafeAttachments(channelAttachments);
     const all = [...safeAttachments, ...mentions];
     return all
@@ -72,15 +67,6 @@ export function AttachmentsModal() {
   const navigateToItem = (blockName: BlockName, blockId: string) => {
     replaceOrInsertSplit({ type: blockName, id: blockId });
   };
-
-  const messageSenderMap = createMemo(() => {
-    const data = channel.data;
-    if (!data) return new Map<string, string>();
-    const topLevel = getTopLevelMessages(data);
-    const threads = getThreadMessages(data);
-    const all = [...topLevel, ...Object.values(threads).flat()];
-    return new Map(all.map((m) => [m.id, m.sender_id]));
-  });
 
   return (
     <>
@@ -121,7 +107,9 @@ export function AttachmentsModal() {
                       <AttachmentItem
                         attachment={attachment}
                         onNavigate={navigateToItem}
-                        senderId={messageSenderMap().get(attachment.message_id)}
+                        senderId={channelContext
+                          .messageSenderMap()
+                          .get(attachment.message_id)}
                       />
                     </Suspense>
                   )}
