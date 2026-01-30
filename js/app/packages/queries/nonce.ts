@@ -1,9 +1,33 @@
 /**
  * Nonce storage for optimistic update deduplication.
  *
- * When a mutation is performed optimistically, we register the nonce.
- * When a WebSocket event arrives with that nonce, we consume it and
- * skip re-applying the update (since it was already applied optimistically).
+ * ## Problem
+ * When a user performs an action (e.g., sends a message), we:
+ * 1. Apply the change optimistically to the UI
+ * 2. Send the request to the server
+ * 3. Receive a WebSocket event when the server broadcasts the change
+ *
+ * Without deduplication, step 3 would re-apply the change, causing duplicates.
+ *
+ * ## Solution: Nonce-based deduplication
+ * 1. In `onMutate`: Generate a unique nonce, register it, apply optimistic update
+ * 2. In `mutationFn`: Send the nonce with the request to the server
+ * 3. Server echoes the nonce back in the WebSocket broadcast
+ * 4. In WebSocket handler: Check if nonce is registered (our own action) → skip update
+ *    If not registered (external action from another user/tab) → apply update
+ *
+ * ## Lifecycle
+ * ```
+ * prepare() → registers nonce, stores for later retrieval
+ *     ↓
+ * use() → retrieves the nonce for the API request
+ *     ↓
+ * [WebSocket arrives] → consumeNonce() returns true, skip cache update
+ *     ↓
+ * cleanup() → removes from pending map (in onSettled)
+ * ```
+ *
+ * Nonces auto-expire after TTL to handle cases where WebSocket events are lost.
  */
 
 const NONCE_TTL_MS = 60_000; // 60 seconds - allows for slow networks
@@ -130,10 +154,19 @@ export function createMutationNonce<TVars>(
       return nonce;
     },
 
-    /** Use the prepared nonce for this mutation. Call in mutationFn. */
+    /**
+     * Retrieve the prepared nonce for this mutation. Call in mutationFn.
+     * @throws Error if prepare() was not called first (indicates a bug in mutation setup)
+     */
     use: (vars: TVars): string => {
       const key = makeKey(vars);
-      return pending.get(key) ?? crypto.randomUUID();
+      const nonce = pending.get(key);
+      if (!nonce) {
+        throw new Error(
+          `Nonce not found for key "${key}". Ensure prepare() is called in onMutate before use() is called in mutationFn.`
+        );
+      }
+      return nonce;
     },
 
     /** Remove stored nonce. Call in onSettled. */

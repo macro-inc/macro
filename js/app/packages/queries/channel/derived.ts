@@ -69,3 +69,47 @@ export function getAttachmentsByMessageId(
   );
 }
 
+/**
+ * Get a message by ID from the channel data
+ */
+export function getMessageById(
+  data: GetChannelResponse,
+  messageId: string
+): Message | undefined {
+  return data.messages.find((m) => m.id === messageId);
+}
+
+/**
+ * Get attachments for a specific message
+ */
+export function getAttachmentsForMessage(
+  attachments: Attachment[],
+  messageId: string
+): Attachment[] {
+  return attachments.filter((a) => a.message_id === messageId);
+}
+
+/**
+ * Get a participant by user ID
+ */
+export function getParticipantById(
+  data: GetChannelResponse,
+  userId: string
+) {
+  return data.participants.find((p) => p.user_id === userId);
+}
+
+/**
+ * Check if a user has reacted to a message with a specific emoji
+ */
+export function hasUserReacted(
+  reactions: GetChannelResponseReactions,
+  messageId: string,
+  userId: string,
+  emoji: string
+): boolean {
+  const messageReactions = reactions[messageId] ?? [];
+  const reaction = messageReactions.find((r) => r.emoji === emoji);
+  return reaction?.users.includes(userId) ?? false;
+}
+
