@@ -129,13 +129,13 @@ use models_search::email::{
     EmailSearchRequest, EmailSearchResponse, EmailSearchResponseItem, EmailSearchResult,
     SimpleEmailSearchResponse, SimpleEmailSearchResponseItem,
 };
-use models_search::unified::{
-    SimpleUnifiedSearchResponse, SimpleUnifiedSearchResponseItem, UnifiedSearchFilters,
-    UnifiedSearchIndex, UnifiedSearchRequest, UnifiedSearchResponse, UnifiedSearchResponseItem,
-};
 use models_search::project::{
     ProjectSearchMetadata, ProjectSearchRequest, ProjectSearchResponse, ProjectSearchResponseItem,
     ProjectSearchResult, SimpleProjectSearchResponse, SimpleProjectSearchResponseItem,
+};
+use models_search::unified::{
+    SimpleUnifiedSearchResponse, SimpleUnifiedSearchResponseItem, UnifiedSearchFilters,
+    UnifiedSearchIndex, UnifiedSearchRequest, UnifiedSearchResponse, UnifiedSearchResponseItem,
 };
 use models_search::{MatchType, SearchHighlight, SimpleSearchResponse};
 

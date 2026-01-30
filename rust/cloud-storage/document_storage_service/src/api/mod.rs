@@ -157,8 +157,7 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/search",
-            search_service::search_router()
-                .with_state(SearchHandlerState::from_ref(&state)),
+            search_service::search_router().with_state(SearchHandlerState::from_ref(&state)),
         )
         .layer(
             ServiceBuilder::new()
@@ -176,7 +175,7 @@ fn api_router(state: ApiContext) -> Router {
                 .nest("/notifications", notification::router())
                 .nest(
                     "/search",
-                    search_service::search_internal_router()
+                    search_service::search_router()
                         .with_state(SearchHandlerState::from_ref(&state)),
                 )
                 .layer(

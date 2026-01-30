@@ -1,7 +1,7 @@
 use document_sub_type::DocumentSubType;
 use utoipa::OpenApi;
 
-use crate::api::{health, search};
+use crate::api::search;
 
 use model::{document::FileType, response::EmptyResponse};
 use models_search::channel::{
@@ -38,9 +38,6 @@ use models_search::{MatchType, SearchHighlight};
                 terms_of_service = "https://macro.com/terms",
         ),
         paths(
-                /// /health
-                health::health_handler,
-
                 /// /search
                 search::unified::handler,
 

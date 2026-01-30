@@ -2,8 +2,6 @@ use axum::Router;
 use context::SearchHandlerState;
 
 // Routes
-mod health;
-mod internal;
 pub mod search;
 
 // Misc
@@ -16,12 +14,4 @@ pub mod swagger;
 /// - POST /simple - simple unified search
 pub fn router() -> Router<SearchHandlerState> {
     search::router()
-}
-
-/// Creates the internal search router.
-/// Exposes:
-/// - POST /search - internal search endpoint
-/// - GET /health - internal health check
-pub fn internal_router() -> Router<SearchHandlerState> {
-    internal::router()
 }
