@@ -31,20 +31,14 @@ function isNonceValid(
   if (Date.now() > entry.expiresAt) {
     clearTimeout(entry.timerId);
     nonceMap.delete(nonce);
-    cleanupEmptyMap(nonceMap, nonce);
+    cleanupEmptyMap(nonceMap);
     return false;
   }
 
   return true;
 }
 
-/**
- * Remove empty nonceMaps from noncesByKey to prevent memory leaks.
- */
-function cleanupEmptyMap(
-  nonceMap: Map<string, NonceEntry>,
-  _nonce: string
-): void {
+function cleanupEmptyMap(nonceMap: Map<string, NonceEntry>): void {
   if (nonceMap.size === 0) {
     for (const [key, map] of noncesByKey.entries()) {
       if (map === nonceMap) {
@@ -81,7 +75,7 @@ export function registerNonce(key: string, nonce: string): void {
     // to prevent stale closure issues
     if (noncesByKey.get(key) === currentNonceMap) {
       currentNonceMap.delete(nonce);
-      cleanupEmptyMap(currentNonceMap, nonce);
+      cleanupEmptyMap(currentNonceMap);
     }
   }, NONCE_TTL_MS);
 
@@ -111,28 +105,12 @@ export function consumeNonce(
   if (entry) {
     clearTimeout(entry.timerId);
     nonceMap.delete(nonce);
-    cleanupEmptyMap(nonceMap, nonce);
+    cleanupEmptyMap(nonceMap);
   }
 
   return true;
 }
 
-/**
- * Check if a nonce exists without consuming it.
- */
-export function hasNonce(
-  key: string,
-  nonce: string | undefined | null
-): boolean {
-  if (!nonce) return false;
-
-  const nonceMap = noncesByKey.get(key);
-  if (!nonceMap) return false;
-
-  return isNonceValid(nonceMap, nonce);
-}
-
-// Event type constants for consistency
 export const NonceKeys = {
   MESSAGE: 'comms_message',
   REACTION: 'comms_reaction',
@@ -149,7 +127,7 @@ export const NonceKeys = {
  *
  * // In mutation:
  * onMutate: (vars) => { nonce.prepare(vars); ... },
- * mutationFn: (vars) => { const n = nonce.get(vars); ... },
+ * mutationFn: (vars) => { nonce: nonce.use(vars), ... },
  * onSettled: (_, __, vars) => { nonce.cleanup(vars); ... }
  */
 export function createMutationNonce<TVars>(

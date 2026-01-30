@@ -46,9 +46,6 @@ export function isChannelAdminOrOwner(data: GetChannelResponse): boolean {
   return ['admin', 'owner'].includes(access.Access.role);
 }
 
-/**
- * Get reactions for a specific message
- */
 export function getReactionsForMessage(
   reactions: GetChannelResponseReactions,
   messageId: string
@@ -56,9 +53,6 @@ export function getReactionsForMessage(
   return reactions[messageId] ?? [];
 }
 
-/**
- * Get attachments grouped by message ID
- */
 export function getAttachmentsByMessageId(
   attachments: Attachment[]
 ): Record<string, Attachment[]> {
@@ -75,9 +69,3 @@ export function getAttachmentsByMessageId(
   );
 }
 
-/**
- * Get all attachments as a flat list (for AttachmentsModal)
- */
-export function getAllAttachments(data: GetChannelResponse): Attachment[] {
-  return data.attachments;
-}

@@ -25,7 +25,6 @@ type WithChannelId<T> = T & { channelId: string };
 type WithOptimisticId<T> = T & { optimisticId: string };
 type WithSenderId<T> = T & { senderId: string };
 
-// Context types for rollback
 export type InsertMessageContext = {
   optimisticId: string;
 };
@@ -302,13 +301,12 @@ export function rollbackUpdateChannelMessage(
 
 const { track } = withAnalytics();
 
-type WithChannelID<T> = T & { channelID: string };
-
-type SendMessageParams = WithChannelID<{
+type SendMessageParams = {
+  channelID: string;
   message: PostMessageRequest;
   optimisticId: string;
   senderId: string;
-}>;
+};
 
 type SendMessageContext = InsertMessageContext | undefined;
 

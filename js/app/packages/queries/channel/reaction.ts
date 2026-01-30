@@ -18,7 +18,6 @@ import { createMutationNonce, NonceKeys } from './nonce';
 type WithChannelId<T> = T & { channelId: string };
 type WithUserId<T> = T & { userId: string };
 
-// Context types for rollback
 export type AddReactionContext = {
   messageId: string;
   emoji: string;
