@@ -32,10 +32,7 @@ import {
   useEntityHasUnreadNotifications,
 } from '@notifications';
 import { useUpdateChannelsActivityMutation } from '@queries/channel/activity';
-import {
-  useChannelQuery,
-  invalidateChannelWithID,
-} from '@queries/channel/channel';
+import { useChannelQuery } from '@queries/channel/channel';
 import {
   getTopLevelMessages,
   getThreadMessages,
@@ -68,23 +65,19 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 
 false && fileFolderDrop;
 
-/** 10 seconds threshold */
-const THRESHOLD = 10_000;
+/** Tracks channel entity when tab regains focus (throttled to 10s) */
+function createChannelTrackingEffect(channelId: string) {
+  let lastTrackTime = Date.now();
+  const TRACK_THROTTLE_MS = 10_000;
 
-function createChannelRefetchEffect(channelId: string) {
-  let lastTime = Date.now();
-
-  /** Refetch channel data if the tab is focused */
   createTabFocusEffect((isTabFocused) => {
-    if (isTabFocused && Date.now() - lastTime > THRESHOLD) {
-      console.log('tab focused, refetching channel data');
-      invalidateChannelWithID(channelId);
+    if (isTabFocused && Date.now() - lastTrackTime > TRACK_THROTTLE_MS) {
       connectionGatewayClient.trackEntity({
         entity_type: 'channel',
         entity_id: channelId,
         action: 'open',
       });
-      lastTime = Date.now();
+      lastTrackTime = Date.now();
     }
   });
 }
@@ -94,7 +87,10 @@ export function Channel(props: {
   target?: TargetMessageInfo;
 }) {
   const [_activeThreadId, setActiveThreadId] = activeThreadIdSignal;
-  const channel = useChannelQuery(() => props.data.channel.id);
+  const channel = useChannelQuery(
+    () => props.data.channel.id,
+    () => ({ refetchOnWindowFocus: true })
+  );
 
   // Derive messages and threads from query data
   const messages = () => getTopLevelMessages(channel.data);
@@ -182,7 +178,7 @@ export function Channel(props: {
     track(TrackingEvents.BLOCKCHANNEL.CHANNEL.OPEN);
   });
 
-  createChannelRefetchEffect(channelId);
+  createChannelTrackingEffect(channelId);
 
   useBeforeLeave(() => {
     updateActivityOnClose();

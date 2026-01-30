@@ -7,3 +7,10 @@ export const channelKeys = createQueryKeys('channel', {
   activity: null,
   listChannels: null,
 });
+
+export const ChannelNonceKeys = {
+  MESSAGE: 'comms_message',
+  REACTION: 'comms_reaction',
+  TYPING: 'comms_typing',
+  ATTACHMENT: 'comms_attachment',
+} as const;

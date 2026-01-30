@@ -74,7 +74,6 @@ export function useChannelQuery(
 
 type WithChannelId<T> = T & { channelId: string };
 
-// Context type for rollback
 export type UpdateChannelNameContext = {
   previousName: string | null | undefined;
   previousUpdatedAt: string;
@@ -148,6 +147,11 @@ export function invalidateChannelWithID(channelID: string) {
   });
 }
 
+/**
+ * Marks the channel query as stale without triggering an immediate refetch.
+ * Uses `refetchType: 'inactive'` so queries only refetch when they become active again.
+ * Use this after WebSocket updates to ensure eventual consistency without redundant fetches.
+ */
 export function softInvalidateChannelWithID(channelID: string) {
   queryClient.invalidateQueries({
     queryKey: channelKeys.withID(channelID).queryKey,

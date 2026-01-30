@@ -14,13 +14,8 @@ type NonceEntry = {
   timerId: ReturnType<typeof setTimeout>;
 };
 
-// Map<eventType, Map<nonce, NonceEntry>>
 const noncesByKey = new Map<string, Map<string, NonceEntry>>();
 
-/**
- * Check if a nonce entry is valid (not expired).
- * Cleans up expired entries as a side effect.
- */
 function isNonceValid(
   nonceMap: Map<string, NonceEntry>,
   nonce: string
@@ -61,18 +56,14 @@ export function registerNonce(key: string, nonce: string): void {
     noncesByKey.set(key, nonceMap);
   }
 
-  // Clear existing timer if re-registering same nonce
   const existing = nonceMap.get(nonce);
   if (existing) {
     clearTimeout(existing.timerId);
   }
 
-  // Capture reference to current nonceMap for closure safety
   const currentNonceMap = nonceMap;
 
   const timerId = setTimeout(() => {
-    // Verify the map in noncesByKey is still the same instance
-    // to prevent stale closure issues
     if (noncesByKey.get(key) === currentNonceMap) {
       currentNonceMap.delete(nonce);
       cleanupEmptyMap(currentNonceMap);
@@ -111,19 +102,12 @@ export function consumeNonce(
   return true;
 }
 
-export const NonceKeys = {
-  MESSAGE: 'comms_message',
-  REACTION: 'comms_reaction',
-  TYPING: 'comms_typing',
-  ATTACHMENT: 'comms_attachment',
-} as const;
-
 /**
  * Creates a nonce coordinator for mutations.
  * Handles the pattern of generating nonce in onMutate and retrieving in mutationFn.
  *
  * @example
- * const nonce = createMutationNonce(NonceKeys.MESSAGE, (v) => `${v.channelId}:${v.messageId}`);
+ * const nonce = createMutationNonce('my_key', (v) => `${v.id}`);
  *
  * // In mutation:
  * onMutate: (vars) => { nonce.prepare(vars); ... },

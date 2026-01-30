@@ -18,8 +18,8 @@ import type {
 } from '@service-comms/generated/models';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
-import { channelKeys } from './keys';
-import { createMutationNonce, NonceKeys, registerNonce } from './nonce';
+import { channelKeys, ChannelNonceKeys } from './keys';
+import { createMutationNonce, registerNonce } from '../nonce';
 
 type WithChannelId<T> = T & { channelId: string };
 type WithOptimisticId<T> = T & { optimisticId: string };
@@ -212,13 +212,12 @@ export function rollbackDeleteChannelMessage(
       return {
         ...prev,
         messages: [...prev.messages, context.deletedMessage],
-        reactions:
-          context.deletedReactions.length > 0
-            ? {
-                ...prev.reactions,
-                [context.deletedMessage.id]: context.deletedReactions,
-              }
-            : prev.reactions,
+        reactions: {
+          ...prev.reactions,
+          ...(context.deletedReactions.length > 0 && {
+            [context.deletedMessage.id]: context.deletedReactions,
+          }),
+        },
         attachments: [...prev.attachments, ...context.deletedAttachments],
       };
     }
@@ -338,7 +337,7 @@ export function useSendMessageMutation(
       {
         onMutate: (vars) => {
           // Register nonce for deduplication when WebSocket event arrives
-          registerNonce(NonceKeys.MESSAGE, vars.optimisticId);
+          registerNonce(ChannelNonceKeys.MESSAGE, vars.optimisticId);
           return optimisticInsertChannelMessage({
             channelId: vars.channelID,
             optimisticId: vars.optimisticId,
@@ -380,7 +379,7 @@ type DeleteMessageParams = { channelID: string; messageID: string };
 type DeleteMutationContext = DeleteMessageContext | undefined;
 
 const deleteNonce = createMutationNonce<DeleteMessageParams>(
-  NonceKeys.MESSAGE,
+  ChannelNonceKeys.MESSAGE,
   (v) => `delete:${v.channelID}:${v.messageID}`
 );
 
@@ -437,7 +436,7 @@ type PatchMessageParams = {
 type PatchMutationContext = UpdateMessageContext | undefined;
 
 const patchNonce = createMutationNonce<PatchMessageParams>(
-  NonceKeys.MESSAGE,
+  ChannelNonceKeys.MESSAGE,
   (v) => `patch:${v.channelID}:${v.messageID}`
 );
 

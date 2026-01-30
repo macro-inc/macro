@@ -1,7 +1,8 @@
 import { commsServiceClient } from '@service-comms/client';
 import { useMutation } from '@tanstack/solid-query';
 import { createSignal } from 'solid-js';
-import { createMutationNonce, NonceKeys } from './nonce';
+import { createMutationNonce } from '../nonce';
+import { ChannelNonceKeys } from './keys';
 
 /**
  * Websocket payload type for typing events
@@ -104,7 +105,7 @@ type PostTypingUpdateVars = {
 };
 
 const typingNonce = createMutationNonce<PostTypingUpdateVars>(
-  NonceKeys.TYPING,
+  ChannelNonceKeys.TYPING,
   (v) => `${v.channelId}:${v.action}:${v.threadId ?? 'main'}`
 );
 

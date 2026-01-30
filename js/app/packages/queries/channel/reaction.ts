@@ -12,8 +12,8 @@ import type {
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { softInvalidateChannelWithID } from './channel';
-import { channelKeys } from './keys';
-import { createMutationNonce, NonceKeys } from './nonce';
+import { channelKeys, ChannelNonceKeys } from './keys';
+import { createMutationNonce } from '../nonce';
 
 type WithChannelId<T> = T & { channelId: string };
 type WithUserId<T> = T & { userId: string };
@@ -102,7 +102,6 @@ export function rollbackAddReaction(
       if (!messageReactions) return prev;
 
       if (context.wasNewReaction) {
-        // Remove the entire reaction entry
         const updated = messageReactions.filter(
           (r) => r.emoji !== context.emoji
         );
@@ -115,7 +114,6 @@ export function rollbackAddReaction(
           reactions: { ...prev.reactions, [context.messageId]: updated },
         };
       } else {
-        // Just remove the user from the existing reaction
         const updated = messageReactions.map((r) =>
           r.emoji === context.emoji
             ? { ...r, users: r.users.filter((id) => id !== context.userId) }
@@ -199,47 +197,30 @@ export function rollbackRemoveReaction(
 
       const messageReactions = prev.reactions[context.messageId] ?? [];
 
-      if (context.wasLastUser) {
-        // Re-add the entire reaction entry
+      const existing = messageReactions.find((r) => r.emoji === context.emoji);
+
+      if (existing) {
+        const updated = messageReactions.map((r) =>
+          r.emoji === context.emoji
+            ? { ...r, users: [...r.users, context.userId] }
+            : r
+        );
         return {
           ...prev,
-          reactions: {
-            ...prev.reactions,
-            [context.messageId]: [
-              ...messageReactions,
-              { emoji: context.emoji, users: [context.userId] },
-            ],
-          },
+          reactions: { ...prev.reactions, [context.messageId]: updated },
         };
-      } else {
-        // Re-add the user to the existing reaction
-        const existing = messageReactions.find(
-          (r) => r.emoji === context.emoji
-        );
-        if (existing) {
-          const updated = messageReactions.map((r) =>
-            r.emoji === context.emoji
-              ? { ...r, users: [...r.users, context.userId] }
-              : r
-          );
-          return {
-            ...prev,
-            reactions: { ...prev.reactions, [context.messageId]: updated },
-          };
-        } else {
-          // Reaction was removed entirely, re-add it
-          return {
-            ...prev,
-            reactions: {
-              ...prev.reactions,
-              [context.messageId]: [
-                ...messageReactions,
-                { emoji: context.emoji, users: [context.userId] },
-              ],
-            },
-          };
-        }
       }
+
+      return {
+        ...prev,
+        reactions: {
+          ...prev.reactions,
+          [context.messageId]: [
+            ...messageReactions,
+            { emoji: context.emoji, users: [context.userId] },
+          ],
+        },
+      };
     }
   );
 }
@@ -255,12 +236,12 @@ type AddReactionMutationContext = AddReactionContext | undefined;
 type RemoveReactionMutationContext = RemoveReactionContext | undefined;
 
 const addReactionNonce = createMutationNonce<ReactionParams>(
-  NonceKeys.REACTION,
+  ChannelNonceKeys.REACTION,
   (v) => `add:${v.channelId}:${v.messageId}:${v.emoji}`
 );
 
 const removeReactionNonce = createMutationNonce<ReactionParams>(
-  NonceKeys.REACTION,
+  ChannelNonceKeys.REACTION,
   (v) => `remove:${v.channelId}:${v.messageId}:${v.emoji}`
 );
 

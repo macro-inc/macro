@@ -73,13 +73,13 @@ export function AttachmentsModal() {
     replaceOrInsertSplit({ type: blockName, id: blockId });
   };
 
-  // Get all messages (top-level + thread messages) for looking up sender info
-  const allMessages = createMemo(() => {
+  const messageSenderMap = createMemo(() => {
     const data = channel.data;
-    if (!data) return [];
+    if (!data) return new Map<string, string>();
     const topLevel = getTopLevelMessages(data);
     const threads = getThreadMessages(data);
-    return [...topLevel, ...Object.values(threads).flat()];
+    const all = [...topLevel, ...Object.values(threads).flat()];
+    return new Map(all.map((m) => [m.id, m.sender_id]));
   });
 
   return (
@@ -121,7 +121,7 @@ export function AttachmentsModal() {
                       <AttachmentItem
                         attachment={attachment}
                         onNavigate={navigateToItem}
-                        allMessages={allMessages()}
+                        senderId={messageSenderMap().get(attachment.message_id)}
                       />
                     </Suspense>
                   )}
@@ -152,17 +152,11 @@ function makeAttachmentFromMention(
 type AttachmentItemProps = {
   attachment: Attachment;
   onNavigate: (blockName: BlockName | BlockAlias, blockId: string) => void;
-  allMessages: { id: string; sender_id: string }[];
+  senderId: string | undefined;
 };
 
 function AttachmentItem(props: AttachmentItemProps) {
-  const message = createMemo(() => {
-    return props.allMessages.find(
-      (msg) => msg.id === props.attachment.message_id
-    );
-  });
-
-  const senderId = () => message()?.sender_id || '';
+  const senderId = () => props.senderId ?? '';
   const [userName] = useDisplayName(tryMacroId(senderId()));
 
   const [preview] = useItemPreview(() => ({

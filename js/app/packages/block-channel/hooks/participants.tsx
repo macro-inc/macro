@@ -25,7 +25,6 @@ export function useAddParticipantsToChannel(channelId: Accessor<string>) {
       return;
     }
 
-    // Create optimistic participants
     const newParticipants: ChannelParticipant[] = participants.map((p) => ({
       user_id: p,
       role: 'member',
@@ -34,7 +33,6 @@ export function useAddParticipantsToChannel(channelId: Accessor<string>) {
       channel_id: id,
     }));
 
-    // Optimistically update the query cache
     const queryKey = channelKeys.withID(id).queryKey;
     const previous = queryClient.getQueryData<GetChannelResponse>(queryKey);
 
@@ -54,14 +52,12 @@ export function useAddParticipantsToChannel(channelId: Accessor<string>) {
     if (isErr(res)) {
       toast.failure('Failed to add participants to channel');
       console.error(res);
-      // Rollback on error
       if (previous) {
         queryClient.setQueryData(queryKey, previous);
       }
       return;
     }
 
-    // Invalidate to ensure consistency
     invalidateChannelWithID(id);
 
     track(TrackingEvents.BLOCKCHANNEL.PARTICIPANT.ADD);
@@ -81,7 +77,6 @@ export function useRemoveParticipantsFromChannel(channelId: Accessor<string>) {
       return;
     }
 
-    // Optimistically update the query cache
     const queryKey = channelKeys.withID(id).queryKey;
     const previous = queryClient.getQueryData<GetChannelResponse>(queryKey);
 
@@ -103,14 +98,12 @@ export function useRemoveParticipantsFromChannel(channelId: Accessor<string>) {
     if (isErr(res)) {
       toast.failure('Failed to remove participants from channel');
       console.error(res);
-      // Rollback on error
       if (previous) {
         queryClient.setQueryData(queryKey, previous);
       }
       return;
     }
 
-    // Invalidate to ensure consistency
     invalidateChannelWithID(id);
   };
 }

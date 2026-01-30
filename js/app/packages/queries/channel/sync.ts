@@ -6,8 +6,8 @@ import type {
 } from '@service-comms/generated/models';
 import { queryClient } from '../client';
 import { softInvalidateChannelWithID } from './channel';
-import { channelKeys } from './keys';
-import { consumeNonce, NonceKeys } from './nonce';
+import { channelKeys, ChannelNonceKeys } from './keys';
+import { consumeNonce } from '../nonce';
 
 /**
  * Websocket payload types
@@ -41,7 +41,7 @@ type CommsAttachmentPayload = {
  * - Catches edge cases like server-side message modifications
  */
 export function handleCommsMessage(payload: CommsMessagePayload): void {
-  const isExternalUpdate = !consumeNonce(NonceKeys.MESSAGE, payload.nonce);
+  const isExternalUpdate = !consumeNonce(ChannelNonceKeys.MESSAGE, payload.nonce);
 
   if (isExternalUpdate) {
     try {
@@ -49,7 +49,6 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
       queryClient.setQueryData<GetChannelResponse>(queryKey, (prev) => {
         if (!prev) return prev;
 
-        // Avoid duplicate messages (e.g., from retry or race condition)
         if (prev.messages.some((m) => m.id === payload.id)) {
           return prev;
         }
@@ -74,7 +73,7 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
  * Soft invalidation ensures eventual consistency across tabs/devices.
  */
 export function handleCommsReaction(payload: CommsReactionPayload): void {
-  const isExternalUpdate = !consumeNonce(NonceKeys.REACTION, payload.nonce);
+  const isExternalUpdate = !consumeNonce(ChannelNonceKeys.REACTION, payload.nonce);
 
   if (isExternalUpdate) {
     try {
@@ -104,7 +103,7 @@ export function handleCommsReaction(payload: CommsReactionPayload): void {
  * Soft invalidation ensures eventual consistency across tabs/devices.
  */
 export function handleCommsAttachment(payload: CommsAttachmentPayload): void {
-  const isExternalUpdate = !consumeNonce(NonceKeys.ATTACHMENT, payload.nonce);
+  const isExternalUpdate = !consumeNonce(ChannelNonceKeys.ATTACHMENT, payload.nonce);
 
   if (isExternalUpdate) {
     try {
@@ -112,7 +111,6 @@ export function handleCommsAttachment(payload: CommsAttachmentPayload): void {
       queryClient.setQueryData<GetChannelResponse>(queryKey, (prev) => {
         if (!prev) return prev;
 
-        // Merge new attachments, avoiding duplicates by id
         const existingIds = new Set(prev.attachments.map((a) => a.id));
         const newAttachments = payload.attachments.filter(
           (a) => !existingIds.has(a.id)
