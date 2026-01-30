@@ -78,27 +78,12 @@ pub async fn main() -> anyhow::Result<()> {
         config.sync_service_url.clone(),
     );
 
-    let comms_service_auth_key = match config.environment {
-        Environment::Local => config.comms_service_auth_key.clone(),
-        _ => secretsmanager_client
-            .get_secret_value(&config.comms_service_auth_key)
-            .await
-            .context("unable to get secret")?
-            .to_string(),
-    };
-
-    let comms_service_client = comms_service_client::CommsServiceClient::new(
-        comms_service_auth_key,
-        config.comms_service_url.clone(),
-    );
-
     let queue_worker_context = QueueWorkerContext {
         db: db.clone(),
         worker: Arc::new(delete_document_worker),
         s3_client: Arc::new(s3_client),
         redis_client: Arc::new(redis_client),
         sync_service_client: Arc::new(sync_service_client),
-        comms_service_client: Arc::new(comms_service_client),
         config: config.clone(),
     };
 

@@ -66,13 +66,14 @@ pub async fn handle(
     }
 
     // delete entity mentions where this doc is the source
-    let _ = ctx
-        .comms_service_client
-        .delete_mentions_by_source(vec![document_id.to_string()])
-        .await
-        .inspect_err(|e| {
-            tracing::warn!(error=?e, "could not delete entity mentions for document");
-        });
+    let _ = comms_db_client::entity_mentions::delete_entity_mentions_by_source(
+        &ctx.db,
+        vec![document_id.to_string()],
+    )
+    .await
+    .inspect_err(|e| {
+        tracing::warn!(error=?e, "could not delete entity mentions for document");
+    });
 
     let user_id = user_id.context("user_id should be some")?;
 
