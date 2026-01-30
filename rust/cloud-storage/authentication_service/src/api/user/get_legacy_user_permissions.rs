@@ -116,10 +116,7 @@ pub async fn handler(
         .await
         .map_err(GetLegacyUserPermissionsError::InternalError)?;
 
-    let license_status = if user_context.organization_id.is_some() {
-        // organizations default to active license status
-        "active"
-    } else if permissions.contains(&PermissionId::ReadProfessionalFeatures.to_string()) {
+    if permissions.contains(&PermissionId::ReadProfessionalFeatures.to_string()) {
         // If the user has premium permission their license status is active
         "active"
     } else {
