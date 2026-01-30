@@ -159,14 +159,6 @@ const { notificationQueueName, notificationQueueArn } = getMacroNotify();
 
 const { searchEventQueueName, searchEventQueueArn } = getSearchEventQueue();
 
-const searchServiceStack = new pulumi.StackReference('search-service-stack', {
-  name: `macro-inc/search-service/${stack}`,
-});
-
-const searchServiceUrl: pulumi.Output<string> = searchServiceStack
-  .getOutput('searchServiceUrl')
-  .apply((arn) => arn as string);
-
 const MACRO_API_TOKENS = getMacroApiToken();
 
 // Import the search text extractor queue stack

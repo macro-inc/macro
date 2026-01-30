@@ -120,7 +120,6 @@ const opensearchPasswordArn = aws.secretsmanager
   })
   .apply((secret) => secret.arn);
 
-
 const cloudStorageStack = new pulumi.StackReference('cloud-storage-stack', {
   name: `macro-inc/document-storage/${stack}`,
 });
