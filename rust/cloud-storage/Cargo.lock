@@ -7588,7 +7588,6 @@ dependencies = [
  "axum",
  "chrono",
  "comms_db_client",
- "comms_service_client",
  "email_db_client",
  "email_service_client",
  "futures",
