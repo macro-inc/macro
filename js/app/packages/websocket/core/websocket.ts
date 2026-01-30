@@ -257,8 +257,8 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
    * @see https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/send
    * @param data to send.
    */
-  public send(rawData: Send): void {
-    if (this.closedByUser) return; // no-op if closed by user
+  public send(rawData: Send): boolean {
+    if (this.closedByUser) return false; // no-op if closed by user
 
     let data = serializeIfNeeded(rawData, this._options.serializer);
 
@@ -267,9 +267,11 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
       this._underlyingWebsocket.readyState === this._underlyingWebsocket.OPEN
     ) {
       this._underlyingWebsocket.send(data); // websocket is connected, send data
+      return true;
     } else if (this.buffer !== undefined) {
       this.buffer.add(rawData); // websocket is not connected, add data to buffer
     }
+    return false;
   }
 
   /**
