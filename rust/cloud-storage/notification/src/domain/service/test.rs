@@ -1,7 +1,7 @@
 //! Unit tests for the notification services.
 
 use crate::domain::models::apple::APNSPushNotification;
-use crate::domain::models::mobile::{MessageAttributes, PushType};
+use crate::domain::models::mobile::NotifCollapseKey;
 use crate::domain::models::queue_message::{
     ConnGatewayNotification, EmailContent, Node, NotificationChannel, QueueMessage, RawQueueMessage,
 };
@@ -49,11 +49,8 @@ impl Notification for TestNotification {
 impl NotificationExtIos for TestNotification {
     type NotifData = TestNotification;
 
-    fn message_attributes(&self) -> crate::domain::models::mobile::MessageAttributes {
-        MessageAttributes {
-            push_type: PushType::Alert,
-            collapse_key: "test".to_string(),
-        }
+    fn collapse_key(&self, _entity: &model_entity::Entity<'_>) -> NotifCollapseKey {
+        NotifCollapseKey::new("test")
     }
 
     fn into_apns<'a>(
@@ -649,7 +646,8 @@ async fn test_apns_enqueues_correct_data_for_multiple_users() {
     // Verify message attributes
     let attrs = &ios["attributes"];
     assert_eq!(attrs["push_type"], "Alert");
-    assert_eq!(attrs["collapse_key"], "test");
+    let expected_key = NotifCollapseKey::new("test").into_hashed().into_inner();
+    assert_eq!(attrs["collapse_key"], expected_key);
 
     // Verify all device endpoints from all users are included
     let endpoints: Vec<&str> = ios["ios_device_endpoints"]
@@ -712,7 +710,7 @@ async fn test_apns_collapse_key_stored_on_create() {
     assert_eq!(collapse_keys.len(), 1);
     assert_eq!(
         collapse_keys[0].1,
-        Some("test".to_string()),
+        Some(NotifCollapseKey::new("test").into_hashed().into_inner()),
         "APNS collapse key should be stored when creating the notification"
     );
 }

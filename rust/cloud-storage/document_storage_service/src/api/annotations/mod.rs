@@ -20,10 +20,11 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model::{annotations::Comment, response::ErrorResponse};
 use model_entity::EntityType;
 use macro_user_id::email::ReadEmailParts;
+use model_entity::Entity;
 use notification::domain::models::{
-    Notification, NotificationExtIos, RateLimitConfig, RateLimitKey, SendNotificationRequestBuilder,
+    Notification, NotifCollapseKey, NotificationExtIos, RateLimitConfig, RateLimitKey,
+    SendNotificationRequestBuilder,
     apple::{APNSPushNotification, AlertDictionary, Aps},
-    mobile::{MessageAttributes, PushType},
 };
 use serde::{Deserialize, Serialize};
 use tower::ServiceBuilder;
@@ -196,11 +197,9 @@ impl Notification for DocumentMentionNotification {
 impl NotificationExtIos for DocumentMentionNotification {
     type NotifData = ();
 
-    fn message_attributes(&self) -> MessageAttributes {
-        MessageAttributes {
-            push_type: PushType::Alert,
-            collapse_key: "document_mention".to_string(),
-        }
+    fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
+        let entity_type: &'static str = entity.entity_type.into();
+        NotifCollapseKey::new(entity_type).append(&entity.entity_id)
     }
 
     fn into_apns<'a>(

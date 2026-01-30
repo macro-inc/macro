@@ -3,10 +3,10 @@ use doppleganger::Doppleganger;
 use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
 use mention_utils::parse::{ParsedXmlText, XmlFormatter};
 use model_entity::EntityType;
+use model_entity::Entity;
 use notification::domain::models::{
-    NotificationExtIos,
+    NotifCollapseKey, NotificationExtIos,
     apple::{APNSPushNotification, AlertDictionary, Aps},
-    mobile::{MessageAttributes, PushType},
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use utoipa::ToSchema;
@@ -435,11 +435,9 @@ fn alert_apns(title: String, body: String) -> APNSPushNotification<()> {
 impl NotificationExtIos for ChannelInviteMetadata {
     type NotifData = ();
 
-    fn message_attributes(&self) -> MessageAttributes {
-        MessageAttributes {
-            push_type: PushType::Alert,
-            collapse_key: "channel_invite".to_string(),
-        }
+    fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
+        let entity_type: &'static str = entity.entity_type.into();
+        NotifCollapseKey::new(entity_type).append(&entity.entity_id)
     }
 
     fn into_apns<'a>(
@@ -456,11 +454,8 @@ impl NotificationExtIos for ChannelInviteMetadata {
 impl NotificationExtIos for ChannelMessageSendMetadata {
     type NotifData = ();
 
-    fn message_attributes(&self) -> MessageAttributes {
-        MessageAttributes {
-            push_type: PushType::Alert,
-            collapse_key: "channel_message_send".to_string(),
-        }
+    fn collapse_key(&self, _entity: &Entity<'_>) -> NotifCollapseKey {
+        NotifCollapseKey::new(&self.message_id)
     }
 
     fn into_apns<'a>(
@@ -485,11 +480,8 @@ impl NotificationExtIos for ChannelMessageSendMetadata {
 impl NotificationExtIos for ChannelMentionMetadata {
     type NotifData = ();
 
-    fn message_attributes(&self) -> MessageAttributes {
-        MessageAttributes {
-            push_type: PushType::Alert,
-            collapse_key: "channel_mention".to_string(),
-        }
+    fn collapse_key(&self, _entity: &Entity<'_>) -> NotifCollapseKey {
+        NotifCollapseKey::new(&self.message_id)
     }
 
     fn into_apns<'a>(
@@ -515,11 +507,8 @@ impl NotificationExtIos for ChannelMentionMetadata {
 impl NotificationExtIos for ChannelReplyMetadata {
     type NotifData = ();
 
-    fn message_attributes(&self) -> MessageAttributes {
-        MessageAttributes {
-            push_type: PushType::Alert,
-            collapse_key: "channel_message_reply".to_string(),
-        }
+    fn collapse_key(&self, _entity: &Entity<'_>) -> NotifCollapseKey {
+        NotifCollapseKey::new(&self.message_id)
     }
 
     fn into_apns<'a>(
@@ -536,11 +525,9 @@ impl NotificationExtIos for ChannelReplyMetadata {
 impl NotificationExtIos for DocumentMentionMetadata {
     type NotifData = ();
 
-    fn message_attributes(&self) -> MessageAttributes {
-        MessageAttributes {
-            push_type: PushType::Alert,
-            collapse_key: "document_mention".to_string(),
-        }
+    fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
+        let entity_type: &'static str = entity.entity_type.into();
+        NotifCollapseKey::new(entity_type).append(&entity.entity_id)
     }
 
     fn into_apns<'a>(

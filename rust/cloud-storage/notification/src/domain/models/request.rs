@@ -4,13 +4,13 @@ use crate::domain::{
     models::{
         ExclusionReason, FilteredRecipient, Notification, NotificationExtEmail, NotificationExtIos,
         RateLimitConfig, RateLimitKey, RecipientExclusion, apple::APNSPushNotification,
-        mobile::MessageAttributes, queue_message::EmailContent,
+        mobile, mobile::MessageAttributes, queue_message::EmailContent,
     },
     service::SendNotificationError,
 };
 use itertools::Itertools;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use model_entity::Entity;
+use model_entity::{Entity, as_owned::IntoOwned};
 use rootcause::{Report, report};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -73,11 +73,19 @@ impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
         } = self;
 
         let sender = req.sender_id.clone().map(CowLike::into_owned);
+        let entity = req.notification_entity.clone().into_owned();
 
         SendNotificationRequest {
             req,
             build_apns: Some(Box::new(move |notif: T| {
-                let attrs = notif.message_attributes();
+                let collapse_key = notif
+                    .collapse_key(&entity)
+                    .into_hashed()
+                    .into_inner();
+                let attrs = MessageAttributes {
+                    push_type: mobile::PushType::Alert,
+                    collapse_key,
+                };
                 let apns = notif.into_apns(sender.clone())?;
 
                 Some((apns, attrs))

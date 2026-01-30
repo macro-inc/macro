@@ -11,7 +11,7 @@ pub mod rate_limit;
 pub mod recipient;
 pub mod request;
 
-pub use mobile::DeviceEndpoint;
+pub use mobile::{DeviceEndpoint, HashedCollapseKey, NotifCollapseKey};
 pub use rate_limit::{RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimitResult};
 pub use recipient::{ExclusionReason, FilteredRecipient, RecipientExclusion};
 pub use request::{NotificationResult, SendNotificationRequest, SendNotificationRequestBuilder};
@@ -20,9 +20,7 @@ use chrono::{DateTime, Utc};
 use model_entity::Entity;
 use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
 
-use crate::domain::models::{
-    apple::APNSPushNotification, mobile::MessageAttributes, queue_message::EmailContent,
-};
+use crate::domain::models::{apple::APNSPushNotification, queue_message::EmailContent};
 
 /// Notification ID paired with its APNS collapse key, for push clearing.
 #[derive(Debug, Clone)]
@@ -105,8 +103,8 @@ pub trait NotificationExtEmail: Notification {
 pub trait NotificationExtIos: Notification {
     /// The custom data type included in the APNS push notification payload.
     type NotifData: Send;
-    /// Get the message attributes for this push notification.
-    fn message_attributes(&self) -> MessageAttributes;
+    /// Build the collapse key for this push notification.
+    fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey;
     /// Convert this notification into an APNS push notification.
     fn into_apns<'a>(
         self,

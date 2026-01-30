@@ -3,10 +3,11 @@
 use std::collections::HashSet;
 
 use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
+use model_entity::Entity;
 use notification::domain::models::{
-    Notification, NotificationExtIos, RateLimitConfig, RateLimitKey, SendNotificationRequestBuilder,
+    Notification, NotifCollapseKey, NotificationExtIos, RateLimitConfig, RateLimitKey,
+    SendNotificationRequestBuilder,
     apple::{APNSPushNotification, AlertDictionary, Aps},
-    mobile::{MessageAttributes, PushType},
 };
 use notification::domain::service::NotificationIngress;
 use serde::{Deserialize, Serialize};
@@ -41,11 +42,9 @@ impl Notification for TaskAssignedNotification {
 impl NotificationExtIos for TaskAssignedNotification {
     type NotifData = ();
 
-    fn message_attributes(&self) -> MessageAttributes {
-        MessageAttributes {
-            push_type: PushType::Alert,
-            collapse_key: "task_assigned".to_string(),
-        }
+    fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
+        let entity_type: &'static str = entity.entity_type.into();
+        NotifCollapseKey::new(entity_type).append(&entity.entity_id)
     }
 
     fn into_apns<'a>(

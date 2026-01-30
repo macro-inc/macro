@@ -1,5 +1,8 @@
 //! Mobile push notification models for SNS delivery.
 
+use std::collections::hash_map::DefaultHasher;
+use std::hash::Hasher;
+
 use serde::{Deserialize, Serialize, Serializer};
 
 use crate::domain::models::{
@@ -94,6 +97,53 @@ impl<T: Serialize> SnsTarget<'_, T> {
     /// Serialize the target to JSON for SNS.
     pub fn as_json(&self) -> Result<String, serde_json::Error> {
         self.as_payload().as_json()
+    }
+}
+
+/// Used to build up the data to construct a [`HashedCollapseKey`].
+pub struct NotifCollapseKey(DefaultHasher);
+
+/// Contains the string representation of a notification collapse key.
+/// This is used to uniquely identify notifications delivered to an iOS device.
+#[derive(Debug, Clone)]
+pub struct HashedCollapseKey(String);
+
+impl AsRef<str> for HashedCollapseKey {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl HashedCollapseKey {
+    /// Create from an already-hashed string.
+    pub fn from_hashed(s: String) -> Self {
+        Self(s)
+    }
+
+    /// Consume and return the inner string.
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl NotifCollapseKey {
+    /// Create a new collapse key seeded with the given string.
+    pub fn new(s: &str) -> Self {
+        let mut hasher = DefaultHasher::new();
+        hasher.write(s.as_bytes());
+        NotifCollapseKey(hasher)
+    }
+
+    /// Append additional data to the collapse key.
+    pub fn append(mut self, s: &str) -> Self {
+        self.0.write(s.as_bytes());
+        self
+    }
+
+    /// Finalize the key into a hashed string representation.
+    pub fn into_hashed(self) -> HashedCollapseKey {
+        let bytes = self.0.finish();
+        HashedCollapseKey::from_hashed(format!("{bytes:x}"))
     }
 }
 
