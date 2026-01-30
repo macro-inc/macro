@@ -235,11 +235,11 @@ async fn delete_message_attachments(
             nonce,
         },
     )
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "unable to notify attachments");
-            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-        })?;
+    .await
+    .map_err(|e| {
+        tracing::error!(error=?e, "unable to notify attachments");
+        (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+    })?;
 
     patch_message_attachments(&ctx.db, message_id, remaining_attachments)
         .await

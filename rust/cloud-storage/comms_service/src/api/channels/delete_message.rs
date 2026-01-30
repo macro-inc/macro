@@ -62,10 +62,7 @@ pub async fn delete_message_handler(
             "unable to delete message".to_string(),
         )
     })?;
-    let participants: Vec<_> = participants
-        .iter()
-        .map(|p| p.user_id.clone())
-        .collect();
+    let participants: Vec<_> = participants.iter().map(|p| p.user_id.clone()).collect();
 
     notify_message(
         &ctx,

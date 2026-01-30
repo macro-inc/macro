@@ -73,7 +73,10 @@ pub struct ReactionData<'a> {
     pub reactions: &'a [CountedReaction],
 }
 
-pub async fn notify_reactions(ctx: &AppState, update: WithNonce<'_, ReactionData<'_>>) -> Result<()> {
+pub async fn notify_reactions(
+    ctx: &AppState,
+    update: WithNonce<'_, ReactionData<'_>>,
+) -> Result<()> {
     let participants = get_participants(&ctx.db, update.data.channel_id).await?;
 
     ctx.connection_gateway_client
@@ -97,7 +100,10 @@ pub struct AttachmentData<'a> {
     pub attachments: &'a [Attachment],
 }
 
-pub async fn notify_attachments(ctx: &AppState, update: WithNonce<'_, AttachmentData<'_>>) -> Result<()> {
+pub async fn notify_attachments(
+    ctx: &AppState,
+    update: WithNonce<'_, AttachmentData<'_>>,
+) -> Result<()> {
     let participants = get_participants(&ctx.db, update.data.channel_id).await?;
 
     ctx.connection_gateway_client
