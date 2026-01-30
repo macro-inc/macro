@@ -23,7 +23,6 @@ pub(crate) struct ApiContext {
     pub auth_client: Arc<authentication_service::service::fusionauth_client::FusionAuthClient>,
     pub macro_cache_client: Arc<MacroCache>,
     pub stripe_client: Arc<stripe::Client>,
-    pub comms_client: Arc<comms_service_client::CommsServiceClient>,
     pub document_storage_service_client:
         Arc<document_storage_service_client::DocumentStorageServiceClient>,
     pub notification_service_client: Arc<notification_service_client::NotificationServiceClient>,
