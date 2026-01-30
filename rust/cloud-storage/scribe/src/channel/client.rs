@@ -12,22 +12,15 @@ use uuid::Uuid;
 #[derive(Clone)]
 pub struct ChannelClient {
     inner: Arc<CommsServiceClient>,
-    db: Option<Pool<Postgres>>,
+    db: Pool<Postgres>,
 }
 
 impl ChannelClient {
-    pub fn new(client: Arc<CommsServiceClient>) -> Self {
-        Self {
-            inner: client,
-            db: None,
-        }
-    }
-
     /// Create a new ChannelClient with a database pool for internal (non-JWT) operations
     pub fn new_with_db(client: Arc<CommsServiceClient>, db: Pool<Postgres>) -> Self {
         Self {
             inner: client,
-            db: Some(db),
+            db,
         }
     }
 
@@ -61,12 +54,8 @@ impl ChannelClient {
                 .await
                 .map_err(Error::from)?,
             None => {
-                let db = self.db.as_ref().ok_or_else(|| {
-                    anyhow::anyhow!("no database pool configured for internal access")
-                })?;
-
                 let channel =
-                    comms_db_client::channels::get_channel::get_channel(db, &channel_id).await?;
+                    comms_db_client::channels::get_channel::get_channel(&self.db, &channel_id).await?;
 
                 ChannelMetadataResponse {
                     channel_name: channel.name.unwrap_or_default(),
@@ -115,10 +104,7 @@ impl ChannelClient {
             }
             None => {
                 // Use direct DB access for internal calls
-                let db = self.db.as_ref().ok_or_else(|| {
-                    anyhow::anyhow!("no database pool configured for internal access")
-                })?;
-                let transcript = format_channel_transcript(db, &channel_id, since, limit).await?;
+                let transcript = format_channel_transcript(&self.db, &channel_id, since, limit).await?;
                 Ok(transcript)
             }
         }
