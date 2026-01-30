@@ -5846,6 +5846,8 @@ dependencies = [
  "macro_db_migrator",
  "macro_user_id",
  "model-entity",
+ "model-error-response",
+ "model_user",
  "models_pagination",
  "redis",
  "reqwest",
@@ -5857,6 +5859,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tracing",
+ "utoipa",
  "uuid",
 ]
 
