@@ -5,14 +5,14 @@ import type {
   Message,
 } from '@service-comms/generated/models';
 import { queryClient } from '../client';
-import { channelKeys } from './keys';
 import { softInvalidateChannelWithID } from './channel';
+import { channelKeys } from './keys';
 import { consumeNonce, NonceKeys } from './nonce';
 
 /**
  * Websocket payload types
  */
-type CommsMessagePayload = Message & { channel_id: string, nonce: string};
+type CommsMessagePayload = Message & { channel_id: string; nonce: string };
 
 type CommsReactionPayload = {
   channel_id: string;
@@ -30,20 +30,38 @@ type CommsAttachmentPayload = {
 
 /**
  * Handle incoming message from websocket.
- * Always invalidate to ensure cross-tab/cross-device sync.
+ *
+ * If the nonce was registered by this client (optimistic update), we skip the cache
+ * update since it was already applied. Otherwise, this is an external update
+ * (other user, other tab, or server-initiated) and we apply it to the cache.
+ *
+ * We always call softInvalidateChannelWithID to ensure eventual consistency:
+ * - Marks query as stale for background refetch when component remounts
+ * - Handles cross-tab sync where optimistic state may differ
+ * - Catches edge cases like server-side message modifications
  */
 export function handleCommsMessage(payload: CommsMessagePayload): void {
-  const requiresUpdate = !consumeNonce(NonceKeys.MESSAGE, payload.nonce);
+  const isExternalUpdate = !consumeNonce(NonceKeys.MESSAGE, payload.nonce);
 
-  if (requiresUpdate) {
-    const queryKey = channelKeys.withID(payload.channel_id).queryKey;
-    queryClient.setQueryData<GetChannelResponse>(queryKey, (prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        messages: [...prev.messages, payload],
-      }
-    })
+  if (isExternalUpdate) {
+    try {
+      const queryKey = channelKeys.withID(payload.channel_id).queryKey;
+      queryClient.setQueryData<GetChannelResponse>(queryKey, (prev) => {
+        if (!prev) return prev;
+
+        // Avoid duplicate messages (e.g., from retry or race condition)
+        if (prev.messages.some((m) => m.id === payload.id)) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          messages: [...prev.messages, payload],
+        };
+      });
+    } catch (error) {
+      console.error('Failed to update message cache from websocket:', error);
+    }
   }
 
   softInvalidateChannelWithID(payload.channel_id);
@@ -52,23 +70,29 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
 /**
  * Handle reaction update from websocket.
  * Updates the cache directly with the new reaction state.
+ *
+ * Soft invalidation ensures eventual consistency across tabs/devices.
  */
 export function handleCommsReaction(payload: CommsReactionPayload): void {
-  const queryKey = channelKeys.withID(payload.channel_id).queryKey;
-  const requiresUpdate = !consumeNonce(NonceKeys.REACTION, payload.nonce);
+  const isExternalUpdate = !consumeNonce(NonceKeys.REACTION, payload.nonce);
 
-  if (requiresUpdate) {
-    queryClient.setQueryData<GetChannelResponse>(queryKey, (prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        reactions: {
-          ...prev.reactions,
-          [payload.message_id]: payload.reactions,
-        },
-      };
-    });
-  };
+  if (isExternalUpdate) {
+    try {
+      const queryKey = channelKeys.withID(payload.channel_id).queryKey;
+      queryClient.setQueryData<GetChannelResponse>(queryKey, (prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          reactions: {
+            ...prev.reactions,
+            [payload.message_id]: payload.reactions,
+          },
+        };
+      });
+    } catch (error) {
+      console.error('Failed to update reaction cache from websocket:', error);
+    }
+  }
 
   softInvalidateChannelWithID(payload.channel_id);
 }
@@ -76,26 +100,32 @@ export function handleCommsReaction(payload: CommsReactionPayload): void {
 /**
  * Handle attachment update from websocket.
  * Updates the cache directly with the new attachments.
+ *
+ * Soft invalidation ensures eventual consistency across tabs/devices.
  */
 export function handleCommsAttachment(payload: CommsAttachmentPayload): void {
-  const queryKey = channelKeys.withID(payload.channel_id).queryKey;
-  const requiresUpdate = !consumeNonce(NonceKeys.ATTACHMENT, payload.nonce);
+  const isExternalUpdate = !consumeNonce(NonceKeys.ATTACHMENT, payload.nonce);
 
-  if (requiresUpdate) {
-  queryClient.setQueryData<GetChannelResponse>(queryKey, (prev) => {
-    if (!prev) return prev;
+  if (isExternalUpdate) {
+    try {
+      const queryKey = channelKeys.withID(payload.channel_id).queryKey;
+      queryClient.setQueryData<GetChannelResponse>(queryKey, (prev) => {
+        if (!prev) return prev;
 
-    // Merge new attachments, avoiding duplicates by id
-    const existingIds = new Set(prev.attachments.map((a) => a.id));
-    const newAttachments = payload.attachments.filter(
-      (a) => !existingIds.has(a.id)
-    );
+        // Merge new attachments, avoiding duplicates by id
+        const existingIds = new Set(prev.attachments.map((a) => a.id));
+        const newAttachments = payload.attachments.filter(
+          (a) => !existingIds.has(a.id)
+        );
 
-    return {
-      ...prev,
-      attachments: [...prev.attachments, ...newAttachments],
-    };
-  });
+        return {
+          ...prev,
+          attachments: [...prev.attachments, ...newAttachments],
+        };
+      });
+    } catch (error) {
+      console.error('Failed to update attachment cache from websocket:', error);
+    }
   }
 
   softInvalidateChannelWithID(payload.channel_id);

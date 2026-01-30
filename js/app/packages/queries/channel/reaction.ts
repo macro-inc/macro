@@ -13,7 +13,7 @@ import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { softInvalidateChannelWithID } from './channel';
 import { channelKeys } from './keys';
-import { NonceKeys, registerNonce } from './nonce';
+import { createMutationNonce, NonceKeys } from './nonce';
 
 type WithChannelId<T> = T & { channelId: string };
 type WithUserId<T> = T & { userId: string };
@@ -255,22 +255,25 @@ type ReactionParams = {
 type AddReactionMutationContext = AddReactionContext | undefined;
 type RemoveReactionMutationContext = RemoveReactionContext | undefined;
 
+const addReactionNonce = createMutationNonce<ReactionParams>(
+  NonceKeys.REACTION,
+  (v) => `add:${v.channelId}:${v.messageId}:${v.emoji}`
+);
+
+const removeReactionNonce = createMutationNonce<ReactionParams>(
+  NonceKeys.REACTION,
+  (v) => `remove:${v.channelId}:${v.messageId}:${v.emoji}`
+);
+
 /**
  * Mutation to add a reaction to a channel message.
  */
 export function useAddReactionMutation(
-  callbacks?: MutationCallbacks<
-    MessageResponse,
-    Error,
-    ReactionParams,
-    AddReactionMutationContext
-  >
+  callbacks?: MutationCallbacks<MessageResponse, Error, ReactionParams, AddReactionMutationContext>
 ) {
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: ReactionParams) => {
-      const nonce = crypto.randomUUID();
-      registerNonce(NonceKeys.REACTION, nonce);
       return await throwOnErr(
         async () =>
           await commsServiceClient.postReaction({
@@ -278,18 +281,14 @@ export function useAddReactionMutation(
             message_id: vars.messageId,
             emoji: vars.emoji,
             action: 'Add',
-            nonce,
+            nonce: addReactionNonce.use(vars),
           })
       );
     },
-    ...withCallbacks<
-      MessageResponse,
-      Error,
-      ReactionParams,
-      AddReactionMutationContext
-    >(
+    ...withCallbacks<MessageResponse, Error, ReactionParams, AddReactionMutationContext>(
       {
         onMutate: (vars) => {
+          addReactionNonce.prepare(vars);
           return optimisticAddReaction({
             channelId: vars.channelId,
             message_id: vars.messageId,
@@ -305,6 +304,7 @@ export function useAddReactionMutation(
           }
         },
         onSettled: (_, __, vars) => {
+          addReactionNonce.cleanup(vars);
           softInvalidateChannelWithID(vars.channelId);
         },
       },
@@ -317,18 +317,11 @@ export function useAddReactionMutation(
  * Mutation to remove a reaction from a channel message.
  */
 export function useRemoveReactionMutation(
-  callbacks?: MutationCallbacks<
-    MessageResponse,
-    Error,
-    ReactionParams,
-    RemoveReactionMutationContext
-  >
+  callbacks?: MutationCallbacks<MessageResponse, Error, ReactionParams, RemoveReactionMutationContext>
 ) {
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: ReactionParams) => {
-      const nonce = crypto.randomUUID();
-      registerNonce(NonceKeys.REACTION, nonce);
       return await throwOnErr(
         async () =>
           await commsServiceClient.postReaction({
@@ -336,18 +329,14 @@ export function useRemoveReactionMutation(
             message_id: vars.messageId,
             emoji: vars.emoji,
             action: 'Remove',
-            nonce,
+            nonce: removeReactionNonce.use(vars),
           })
       );
     },
-    ...withCallbacks<
-      MessageResponse,
-      Error,
-      ReactionParams,
-      RemoveReactionMutationContext
-    >(
+    ...withCallbacks<MessageResponse, Error, ReactionParams, RemoveReactionMutationContext>(
       {
         onMutate: (vars) => {
+          removeReactionNonce.prepare(vars);
           return optimisticRemoveReaction({
             channelId: vars.channelId,
             message_id: vars.messageId,
@@ -363,6 +352,7 @@ export function useRemoveReactionMutation(
           }
         },
         onSettled: (_, __, vars) => {
+          removeReactionNonce.cleanup(vars);
           softInvalidateChannelWithID(vars.channelId);
         },
       },

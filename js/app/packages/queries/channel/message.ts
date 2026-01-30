@@ -19,7 +19,7 @@ import type {
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { channelKeys } from './keys';
-import { NonceKeys, registerNonce } from './nonce';
+import { createMutationNonce, NonceKeys, registerNonce } from './nonce';
 
 type WithChannelId<T> = T & { channelId: string };
 type WithOptimisticId<T> = T & { optimisticId: string };
@@ -381,34 +381,33 @@ type DeleteMessageParams = { channelID: string; messageID: string };
 
 type DeleteMutationContext = DeleteMessageContext | undefined;
 
+const deleteNonce = createMutationNonce<DeleteMessageParams>(
+  NonceKeys.MESSAGE,
+  (v) => `delete:${v.channelID}:${v.messageID}`
+);
+
 /**
  * Mutation to delete a channel message
  */
 export function useDeleteMessageMutation(
-  callbacks?: MutationCallbacks<
-    void,
-    Error,
-    DeleteMessageParams,
-    DeleteMutationContext
-  >
+  callbacks?: MutationCallbacks<void, Error, DeleteMessageParams, DeleteMutationContext>
 ) {
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: DeleteMessageParams) => {
-      const nonce = crypto.randomUUID();
-      registerNonce(NonceKeys.MESSAGE, nonce);
       await throwOnErr(
         async () =>
           await commsServiceClient.deleteMessage({
             channel_id: vars.channelID,
             message_id: vars.messageID,
-            nonce,
+            nonce: deleteNonce.use(vars),
           })
       );
     },
     ...withCallbacks<void, Error, DeleteMessageParams, DeleteMutationContext>(
       {
         onMutate: (vars) => {
+          deleteNonce.prepare(vars);
           return optimisticDeleteChannelMessage({
             channelId: vars.channelID,
             message_id: vars.messageID,
@@ -421,8 +420,9 @@ export function useDeleteMessageMutation(
             rollbackDeleteChannelMessage(vars.channelID, context);
           }
         },
-        onSettled: (_data, _error, variables) => {
-          softInvalidateChannelWithID(variables.channelID);
+        onSettled: (_data, _error, vars) => {
+          deleteNonce.cleanup(vars);
+          softInvalidateChannelWithID(vars.channelID);
         },
       },
       callbacks
@@ -438,40 +438,34 @@ type PatchMessageParams = {
 
 type PatchMutationContext = UpdateMessageContext | undefined;
 
+const patchNonce = createMutationNonce<PatchMessageParams>(
+  NonceKeys.MESSAGE,
+  (v) => `patch:${v.channelID}:${v.messageID}`
+);
+
 /**
  * Mutation to patch a channel message
  */
 export function usePatchMessageMutation(
-  callbacks?: MutationCallbacks<
-    MessageResponse,
-    Error,
-    PatchMessageParams,
-    PatchMutationContext
-  >
+  callbacks?: MutationCallbacks<MessageResponse, Error, PatchMessageParams, PatchMutationContext>
 ) {
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: PatchMessageParams) => {
-      const nonce = crypto.randomUUID();
-      registerNonce(NonceKeys.MESSAGE, nonce);
       return await throwOnErr(
         async () =>
           await commsServiceClient.patchMessage({
             channel_id: vars.channelID,
             message_id: vars.messageID,
             content: vars.content,
-            nonce,
+            nonce: patchNonce.use(vars),
           })
       );
     },
-    ...withCallbacks<
-      MessageResponse,
-      Error,
-      PatchMessageParams,
-      PatchMutationContext
-    >(
+    ...withCallbacks<MessageResponse, Error, PatchMessageParams, PatchMutationContext>(
       {
         onMutate: (vars) => {
+          patchNonce.prepare(vars);
           return optimisticUpdateChannelMessage({
             channelId: vars.channelID,
             message_id: vars.messageID,
@@ -485,8 +479,9 @@ export function usePatchMessageMutation(
             rollbackUpdateChannelMessage(vars.channelID, context);
           }
         },
-        onSettled: (_data, _error, variables) => {
-          softInvalidateChannelWithID(variables.channelID);
+        onSettled: (_data, _error, vars) => {
+          patchNonce.cleanup(vars);
+          softInvalidateChannelWithID(vars.channelID);
         },
       },
       callbacks
