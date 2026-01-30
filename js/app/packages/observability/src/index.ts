@@ -20,7 +20,6 @@ const tracingHosts =
         SERVER_HOSTS['document-storage-service'],
         SERVER_HOSTS['email-service'],
         SERVER_HOSTS['notification-service'],
-        SERVER_HOSTS['search-service'],
       ]
     : Object.values(SERVER_HOSTS);
 
