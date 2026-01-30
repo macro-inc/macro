@@ -155,7 +155,7 @@ export function invalidateChannelWithID(channelID: string) {
 export function softInvalidateChannelWithID(channelID: string) {
   queryClient.invalidateQueries({
     queryKey: channelKeys.withID(channelID).queryKey,
-    refetchType: 'inactive'
+    refetchType: 'inactive',
   });
 }
 

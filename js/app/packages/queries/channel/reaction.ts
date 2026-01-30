@@ -249,7 +249,12 @@ const removeReactionNonce = createMutationNonce<ReactionParams>(
  * Mutation to add a reaction to a channel message.
  */
 export function useAddReactionMutation(
-  callbacks?: MutationCallbacks<MessageResponse, Error, ReactionParams, AddReactionMutationContext>
+  callbacks?: MutationCallbacks<
+    MessageResponse,
+    Error,
+    ReactionParams,
+    AddReactionMutationContext
+  >
 ) {
   return useMutation(() => ({
     gcTime: 0,
@@ -265,7 +270,12 @@ export function useAddReactionMutation(
           })
       );
     },
-    ...withCallbacks<MessageResponse, Error, ReactionParams, AddReactionMutationContext>(
+    ...withCallbacks<
+      MessageResponse,
+      Error,
+      ReactionParams,
+      AddReactionMutationContext
+    >(
       {
         onMutate: (vars) => {
           addReactionNonce.prepare(vars);
@@ -297,7 +307,12 @@ export function useAddReactionMutation(
  * Mutation to remove a reaction from a channel message.
  */
 export function useRemoveReactionMutation(
-  callbacks?: MutationCallbacks<MessageResponse, Error, ReactionParams, RemoveReactionMutationContext>
+  callbacks?: MutationCallbacks<
+    MessageResponse,
+    Error,
+    ReactionParams,
+    RemoveReactionMutationContext
+  >
 ) {
   return useMutation(() => ({
     gcTime: 0,
@@ -313,7 +328,12 @@ export function useRemoveReactionMutation(
           })
       );
     },
-    ...withCallbacks<MessageResponse, Error, ReactionParams, RemoveReactionMutationContext>(
+    ...withCallbacks<
+      MessageResponse,
+      Error,
+      ReactionParams,
+      RemoveReactionMutationContext
+    >(
       {
         onMutate: (vars) => {
           removeReactionNonce.prepare(vars);

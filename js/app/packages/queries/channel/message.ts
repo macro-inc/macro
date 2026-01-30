@@ -387,7 +387,12 @@ const deleteNonce = createMutationNonce<DeleteMessageParams>(
  * Mutation to delete a channel message
  */
 export function useDeleteMessageMutation(
-  callbacks?: MutationCallbacks<void, Error, DeleteMessageParams, DeleteMutationContext>
+  callbacks?: MutationCallbacks<
+    void,
+    Error,
+    DeleteMessageParams,
+    DeleteMutationContext
+  >
 ) {
   return useMutation(() => ({
     gcTime: 0,
@@ -444,7 +449,12 @@ const patchNonce = createMutationNonce<PatchMessageParams>(
  * Mutation to patch a channel message
  */
 export function usePatchMessageMutation(
-  callbacks?: MutationCallbacks<MessageResponse, Error, PatchMessageParams, PatchMutationContext>
+  callbacks?: MutationCallbacks<
+    MessageResponse,
+    Error,
+    PatchMessageParams,
+    PatchMutationContext
+  >
 ) {
   return useMutation(() => ({
     gcTime: 0,
@@ -459,7 +469,12 @@ export function usePatchMessageMutation(
           })
       );
     },
-    ...withCallbacks<MessageResponse, Error, PatchMessageParams, PatchMutationContext>(
+    ...withCallbacks<
+      MessageResponse,
+      Error,
+      PatchMessageParams,
+      PatchMutationContext
+    >(
       {
         onMutate: (vars) => {
           patchNonce.prepare(vars);

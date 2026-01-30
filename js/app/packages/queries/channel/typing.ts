@@ -123,7 +123,11 @@ export function usePostTypingUpdateMutation() {
     onMutate: (vars: PostTypingUpdateVars) => {
       typingNonce.prepare(vars);
     },
-    onSettled: (_data: unknown, _error: Error | null, vars: PostTypingUpdateVars) => {
+    onSettled: (
+      _data: unknown,
+      _error: Error | null,
+      vars: PostTypingUpdateVars
+    ) => {
       typingNonce.cleanup(vars);
     },
     onError: (error: Error) => {

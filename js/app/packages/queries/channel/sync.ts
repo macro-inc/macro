@@ -41,7 +41,10 @@ type CommsAttachmentPayload = {
  * - Catches edge cases like server-side message modifications
  */
 export function handleCommsMessage(payload: CommsMessagePayload): void {
-  const isExternalUpdate = !consumeNonce(ChannelNonceKeys.MESSAGE, payload.nonce);
+  const isExternalUpdate = !consumeNonce(
+    ChannelNonceKeys.MESSAGE,
+    payload.nonce
+  );
 
   if (isExternalUpdate) {
     try {
@@ -73,7 +76,10 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
  * Soft invalidation ensures eventual consistency across tabs/devices.
  */
 export function handleCommsReaction(payload: CommsReactionPayload): void {
-  const isExternalUpdate = !consumeNonce(ChannelNonceKeys.REACTION, payload.nonce);
+  const isExternalUpdate = !consumeNonce(
+    ChannelNonceKeys.REACTION,
+    payload.nonce
+  );
 
   if (isExternalUpdate) {
     try {
@@ -103,7 +109,10 @@ export function handleCommsReaction(payload: CommsReactionPayload): void {
  * Soft invalidation ensures eventual consistency across tabs/devices.
  */
 export function handleCommsAttachment(payload: CommsAttachmentPayload): void {
-  const isExternalUpdate = !consumeNonce(ChannelNonceKeys.ATTACHMENT, payload.nonce);
+  const isExternalUpdate = !consumeNonce(
+    ChannelNonceKeys.ATTACHMENT,
+    payload.nonce
+  );
 
   if (isExternalUpdate) {
     try {

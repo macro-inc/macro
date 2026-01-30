@@ -92,10 +92,7 @@ export function getAttachmentsForMessage(
 /**
  * Get a participant by user ID
  */
-export function getParticipantById(
-  data: GetChannelResponse,
-  userId: string
-) {
+export function getParticipantById(data: GetChannelResponse, userId: string) {
   return data.participants.find((p) => p.user_id === userId);
 }
 
@@ -112,4 +109,3 @@ export function hasUserReacted(
   const reaction = messageReactions.find((r) => r.emoji === emoji);
   return reaction?.users.includes(userId) ?? false;
 }
-
