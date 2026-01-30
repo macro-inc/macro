@@ -7538,6 +7538,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "chrono",
+ "comms_db_client",
  "comms_service_client",
  "derive_builder",
  "document_cognition_service_client",

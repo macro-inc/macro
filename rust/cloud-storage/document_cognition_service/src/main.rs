@@ -89,10 +89,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     tracing::info!("initialized dss client");
-    let comms_service_client = CommsServiceClient::new(
-        internal_auth_key.as_ref().to_string(),
-        config.comms_service_url.clone(),
-    );
+    let comms_service_client = CommsServiceClient::new(config.comms_service_url.clone());
 
     tracing::info!("initialized comms client");
     let sync_service_auth_key = match config.environment {
@@ -195,7 +192,7 @@ async fn main() -> anyhow::Result<()> {
                         .with_macro_db(db.clone())
                         .build(),
                 )
-                .with_channel_client(comms_service_client.clone())
+                .with_channel_client_and_db(comms_service_client.clone(), db.clone())
                 .with_dcs_client(document_cognition_service_client)
                 .with_email_client(email_service_client)
                 .with_static_file_client(static_file_service_client.clone()),
