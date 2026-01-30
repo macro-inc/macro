@@ -2,7 +2,7 @@ use ai_format::insight_context_log::InsightContextLog;
 use ai_format::util::Indent;
 use anyhow::Error;
 use comms_service_client::CommsServiceClient;
-use comms_service_client::channels::ApiChannelWithLatest;
+use comms_service_client::channels::{ApiChannelWithLatest, ChannelMetadataResponse};
 use models_comms::channel::ChannelMetadata;
 use sqlx::{Pool, Postgres};
 use std::fmt::Debug;
@@ -54,57 +54,40 @@ impl ChannelClient {
             .try_into()
             .map_err(|_| anyhow::anyhow!("invalid uuid"))?;
 
-        match jwt_token {
-            Some(token) => {
-                let response = self
-                    .inner
-                    .get_channel_metadata_external(&channel_id, token)
-                    .await
-                    .map_err(Error::from)?;
-                Ok(ChannelMetadata {
-                    name: response.channel_name,
-                    channel_type: match response.channel_type {
-                        model::comms::ChannelType::Public => {
-                            models_comms::channel::ChannelType::Public
-                        }
-                        model::comms::ChannelType::Organization => {
-                            models_comms::channel::ChannelType::Organization
-                        }
-                        model::comms::ChannelType::Private => {
-                            models_comms::channel::ChannelType::Private
-                        }
-                        model::comms::ChannelType::DirectMessage => {
-                            models_comms::channel::ChannelType::DirectMessage
-                        }
-                    },
-                })
-            }
+        let channel = match jwt_token {
+            Some(token) => self
+                .inner
+                .get_channel_metadata_external(&channel_id, token)
+                .await
+                .map_err(Error::from)?,
             None => {
-                // Use direct DB access for internal calls
                 let db = self.db.as_ref().ok_or_else(|| {
                     anyhow::anyhow!("no database pool configured for internal access")
                 })?;
+
                 let channel =
                     comms_db_client::channels::get_channel::get_channel(db, &channel_id).await?;
-                Ok(ChannelMetadata {
-                    name: channel.name.unwrap_or_default(),
-                    channel_type: match channel.channel_type {
-                        model::comms::ChannelType::Public => {
-                            models_comms::channel::ChannelType::Public
-                        }
-                        model::comms::ChannelType::Organization => {
-                            models_comms::channel::ChannelType::Organization
-                        }
-                        model::comms::ChannelType::Private => {
-                            models_comms::channel::ChannelType::Private
-                        }
-                        model::comms::ChannelType::DirectMessage => {
-                            models_comms::channel::ChannelType::DirectMessage
-                        }
-                    },
-                })
+
+                ChannelMetadataResponse {
+                    channel_name: channel.name.unwrap_or_default(),
+                    channel_type: channel.channel_type,
+                }
             }
-        }
+        };
+
+        Ok(ChannelMetadata {
+            name: channel.channel_name,
+            channel_type: match channel.channel_type {
+                model::comms::ChannelType::Public => models_comms::channel::ChannelType::Public,
+                model::comms::ChannelType::Organization => {
+                    models_comms::channel::ChannelType::Organization
+                }
+                model::comms::ChannelType::Private => models_comms::channel::ChannelType::Private,
+                model::comms::ChannelType::DirectMessage => {
+                    models_comms::channel::ChannelType::DirectMessage
+                }
+            },
+        })
     }
 
     /// Get channel transcript (message history) by channel ID
