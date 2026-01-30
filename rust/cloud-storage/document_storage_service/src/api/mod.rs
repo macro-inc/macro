@@ -26,7 +26,6 @@ mod middleware;
 // Routes
 mod activity;
 mod annotations;
-mod channel;
 mod documents;
 mod health;
 mod history;
