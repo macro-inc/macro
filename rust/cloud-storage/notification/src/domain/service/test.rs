@@ -9,7 +9,7 @@ use crate::domain::models::request::{NotificationStatus, UpdateNotificationsRequ
 use crate::domain::models::{
     DeviceEndpoint, Notification, NotificationExtEmail, NotificationExtIos,
     NotificationIdAndCollapseKey, RateLimitConfig, RateLimitExceeded, RateLimitKey,
-    RateLimitResult, SendNotificationRequestBuilder,
+    RateLimitResult, SendNotificationRequestBuilder, UserNotificationRow,
 };
 use crate::domain::ports::{
     EmailSender, NotificationQueue, NotificationRepository, NotificationSender, RateLimitPort,
@@ -219,6 +219,15 @@ impl NotificationRepository for MockRepository {
     ) -> Result<Vec<NotificationIdAndCollapseKey>, Report> {
         Ok(self.basic_notifications.clone())
     }
+
+    async fn get_user_notifications<T: Notification>(
+        &self,
+        _user_id: &str,
+        _limit: u32,
+        _cursor: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
+    ) -> Result<Vec<UserNotificationRow<T>>, Report> {
+        Ok(vec![])
+    }
 }
 
 impl NotificationRepository for std::sync::Arc<MockRepository> {
@@ -290,6 +299,15 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
         notification_ids: &[Uuid],
     ) -> Result<Vec<NotificationIdAndCollapseKey>, Report> {
         (**self).get_basic_notifications(notification_ids).await
+    }
+
+    async fn get_user_notifications<T: Notification>(
+        &self,
+        user_id: &str,
+        limit: u32,
+        cursor: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
+    ) -> Result<Vec<UserNotificationRow<T>>, Report> {
+        (**self).get_user_notifications(user_id, limit, cursor).await
     }
 }
 

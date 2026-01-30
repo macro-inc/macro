@@ -8,10 +8,12 @@ version = "0.1.0"
 aws-sdk-sesv2 = { workspace = true }
 aws-sdk-sns = { workspace = true }
 aws-sdk-sqs = { workspace = true }
+chrono = { workspace = true }
 hex = { workspace = true }
 itertools = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
+models_pagination = { path = "../models_pagination" }
 redis = { workspace = true, features = ["tokio-native-tls-comp"] }
 reqwest = { workspace = true }
 rootcause = { workspace = true }

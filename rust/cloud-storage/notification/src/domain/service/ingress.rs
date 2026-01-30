@@ -12,10 +12,12 @@ use crate::domain::models::queue_message::{
 use crate::domain::models::request::{NotificationStatus, UpdateNotificationsRequest};
 use crate::domain::models::{
     DeviceEndpoint, Notification, NotificationResult, SendNotificationRequest,
+    UserNotificationRow,
 };
 use crate::domain::ports::{NotificationQueue, NotificationRepository};
 use crate::domain::service::SendNotificationError;
 use macro_user_id::cowlike::CowLike;
+use models_pagination::{CreatedAt, PaginateOn, Paginated, Query, TypeEraseCursor};
 use rootcause::Report;
 use rootcause::prelude::ResultExt;
 use serde::Serialize;
@@ -35,6 +37,17 @@ pub trait NotificationIngress: Send + Sync + 'static {
         &self,
         req: UpdateNotificationsRequest,
     ) -> impl Future<Output = Result<(), Report<SendNotificationError>>> + Send;
+
+    /// Get a user's active notifications, paginated.
+    ///
+    /// Returns at most `limit` (default 20, max 500) notifications that are
+    /// not deleted and not done, ordered by creation time descending.
+    fn get_user_notifications<T: Notification>(
+        &self,
+        user_id: &str,
+        limit: Option<u32>,
+        cursor: Query<Uuid, CreatedAt, ()>,
+    ) -> impl Future<Output = Result<Paginated<UserNotificationRow<T>, String>, Report<SendNotificationError>>> + Send;
 }
 
 /// Service for sending notifications (ingress side).
@@ -207,6 +220,30 @@ where
             notification_id,
             notified_recipients: request.req.recipient_ids,
         }))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_user_notifications<T: Notification>(
+        &self,
+        user_id: &str,
+        limit: Option<u32>,
+        cursor: Query<Uuid, CreatedAt, ()>,
+    ) -> Result<Paginated<UserNotificationRow<T>, String>, Report<SendNotificationError>> {
+        let limit = limit.unwrap_or(20).min(500);
+
+        let rows = self
+            .repository
+            .get_user_notifications::<T>(user_id, limit, cursor)
+            .await
+            .context(SendNotificationError::Other)?;
+
+        let paginated = rows
+            .into_iter()
+            .paginate_on(limit as usize, CreatedAt)
+            .into_page()
+            .type_erase();
+
+        Ok(paginated)
     }
 }
 

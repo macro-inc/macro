@@ -11,9 +11,11 @@ use rootcause::Report;
 use serde::Serialize;
 use uuid::Uuid;
 
+use models_pagination::{CreatedAt, Query};
+
 use crate::domain::models::{
     DeviceEndpoint, Notification, NotificationIdAndCollapseKey, RateLimitConfig, RateLimitKey,
-    RateLimitResult, SendNotificationRequestBuilder, android::FCMMessage,
+    RateLimitResult, SendNotificationRequestBuilder, UserNotificationRow, android::FCMMessage,
     apple::APNSPushNotification, mobile::MessageAttributes,
 };
 
@@ -109,6 +111,16 @@ pub trait NotificationRepository: Send + Sync + 'static {
         &self,
         notification_ids: &[Uuid],
     ) -> impl Future<Output = Result<Vec<NotificationIdAndCollapseKey>, Report>> + Send;
+
+    /// Get a user's active (not deleted, not done) notifications with cursor-based pagination.
+    ///
+    /// The metadata JSON column is deserialized into `T`.
+    fn get_user_notifications<T: Notification>(
+        &self,
+        user_id: &str,
+        limit: u32,
+        cursor: Query<Uuid, CreatedAt, ()>,
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<T>>, Report>> + Send;
 }
 
 /// Port for WebSocket delivery via connection gateway.

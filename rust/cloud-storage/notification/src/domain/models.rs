@@ -16,6 +16,10 @@ pub use rate_limit::{RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimit
 pub use recipient::{ExclusionReason, FilteredRecipient, RecipientExclusion};
 pub use request::{NotificationResult, SendNotificationRequest, SendNotificationRequestBuilder};
 
+use chrono::{DateTime, Utc};
+use model_entity::Entity;
+use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
+
 use crate::domain::models::{
     apple::APNSPushNotification, mobile::MessageAttributes, queue_message::EmailContent,
 };
@@ -27,6 +31,57 @@ pub struct NotificationIdAndCollapseKey {
     pub id: uuid::Uuid,
     /// The APNS collapse key used to identify the push notification to clear.
     pub apns_collapse_key: String,
+}
+
+/// A row from the `user_notification` + `notification` join query.
+///
+/// The metadata field is generic so callers can deserialize it into
+/// whatever type they need without this crate depending on the caller's models.
+#[derive(Debug, Clone)]
+pub struct UserNotificationRow<T> {
+    /// The user who owns this notification.
+    pub owner_id: String,
+    /// The notification ID.
+    pub notification_id: uuid::Uuid,
+    /// The notification event type string (e.g. "channel_mention").
+    pub notification_event_type: String,
+    /// The entity the notification is about.
+    pub entity: Entity<'static>,
+    /// Whether the notification has been sent.
+    pub sent: bool,
+    /// Whether the notification is marked as done.
+    pub done: bool,
+    /// When the notification was created.
+    pub created_at: Option<DateTime<Utc>>,
+    /// When the notification was viewed/seen.
+    pub viewed_at: Option<DateTime<Utc>>,
+    /// When the notification was last updated.
+    pub updated_at: Option<DateTime<Utc>>,
+    /// When the notification was deleted.
+    pub deleted_at: Option<DateTime<Utc>>,
+    /// Deserialized notification metadata.
+    pub notification_metadata: Option<T>,
+    /// The user who triggered the notification.
+    pub sender_id: Option<MacroUserIdStr<'static>>,
+}
+
+impl<T> Identify for UserNotificationRow<T> {
+    type Id = uuid::Uuid;
+    fn id(&self) -> Self::Id {
+        self.notification_id
+    }
+}
+
+impl<T> SortOn<CreatedAt> for UserNotificationRow<T> {
+    fn sort_on(sort: CreatedAt) -> impl FnMut(&Self) -> CursorVal<CreatedAt> {
+        move |v| {
+            let last_val = v.created_at.unwrap_or(DateTime::UNIX_EPOCH);
+            CursorVal {
+                sort_type: sort,
+                last_val,
+            }
+        }
+    }
 }
 
 /// Trait that all notification types must implement.

@@ -2,6 +2,7 @@ use super::*;
 
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use model_entity::EntityType;
+use models_pagination::CreatedAt;
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Postgres};
 
@@ -274,6 +275,39 @@ async fn test_get_basic_notifications_empty(pool: Pool<Postgres>) {
     let id = uuid::Uuid::new_v4();
 
     let result = pool.get_basic_notifications(&[id]).await.unwrap();
+
+    assert!(result.is_empty());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("user_notifications"))
+)]
+async fn test_get_user_notifications(pool: Pool<Postgres>) {
+    let result: Vec<UserNotificationRow<TestNotification>> = pool
+        .get_user_notifications("macro|user@test.com", 10, Query::Sort(CreatedAt, ()))
+        .await
+        .unwrap();
+
+    assert_eq!(result.len(), 1);
+    let row = &result[0];
+    assert_eq!(row.owner_id, "macro|user@test.com");
+    assert_eq!(
+        row.notification_id,
+        uuid::Uuid::parse_str("0193b1ea-a542-7589-893b-2b4a509c1e76").unwrap()
+    );
+    assert_eq!(row.entity.entity_type, EntityType::Document);
+    assert!(!row.sent);
+    assert!(!row.done);
+    assert!(row.notification_metadata.is_none());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_get_user_notifications_empty(pool: Pool<Postgres>) {
+    let result: Vec<UserNotificationRow<TestNotification>> = pool
+        .get_user_notifications("macro|nobody@test.com", 10, Query::Sort(CreatedAt, ()))
+        .await
+        .unwrap();
 
     assert!(result.is_empty());
 }
