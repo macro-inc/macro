@@ -64,6 +64,7 @@ pub struct UserNotificationRow<T> {
     pub sender_id: Option<MacroUserIdStr<'static>>,
 }
 
+/// A notification metadata value tagged with the notification event type.
 #[derive(Debug, Serialize)]
 pub struct TaggedContent<T> {
     tag: String,
@@ -71,6 +72,7 @@ pub struct TaggedContent<T> {
 }
 
 impl<T> UserNotificationRow<T> {
+    /// Wrap the metadata in a [`TaggedContent`] using the notification event type as the tag.
     pub fn into_tagged(self) -> UserNotificationRow<TaggedContent<T>> {
         let UserNotificationRow {
             owner_id,
@@ -108,6 +110,7 @@ impl<T> UserNotificationRow<T> {
 }
 
 impl<T: Serialize> UserNotificationRow<T> {
+    /// Serialize the metadata into a [`serde_json::Value`].
     pub fn into_json(self) -> Result<UserNotificationRow<serde_json::Value>, serde_json::Error> {
         let UserNotificationRow {
             owner_id,
@@ -144,6 +147,7 @@ impl<T: Serialize> UserNotificationRow<T> {
 }
 
 impl UserNotificationRow<serde_json::Value> {
+    /// Deserialize the JSON metadata into a concrete type `T`.
     pub fn deserialize_json<T: DeserializeOwned>(
         self,
     ) -> Result<UserNotificationRow<T>, serde_json::Error> {

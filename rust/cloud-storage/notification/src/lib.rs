@@ -8,6 +8,7 @@
 /// Domain layer containing core business logic, models, and port definitions.
 pub mod domain;
 /// Inbound adapters (HTTP handlers, queue worker).
+#[cfg(feature = "axum")]
 pub mod inbound;
 /// Outbound adapters (database, queue, Redis, WebSocket gateway, SNS, SES).
 pub mod outbound;

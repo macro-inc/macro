@@ -42,7 +42,7 @@ pub trait NotificationIngress: Send + Sync + 'static {
     ///
     /// Returns at most `limit` (default 20, max 500) notifications that are
     /// not deleted and not done, ordered by creation time descending.
-    fn get_user_notifications<T: Notification>(
+    fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
         user_id: &str,
         limit: Option<u32>,

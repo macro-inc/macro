@@ -5,9 +5,6 @@ use axum::{
     extract::{Query, State},
     routing::{get, patch},
 };
-use chrono::serde::ts_seconds_option;
-use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 use model_error_response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
 use models_pagination::{CreatedAt, CursorExtractor};
@@ -18,7 +15,10 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::domain::{
-    models::{Notification, UserNotificationRow},
+    models::{
+        UserNotificationRow,
+        request::{NotificationStatus, UpdateNotificationsRequest},
+    },
     service::NotificationIngress,
 };
 
@@ -78,7 +78,25 @@ async fn list_user_notifications<S: NotificationIngress, T: Serialize + Deserial
     Query(Params { limit }): Query<Params>,
     cursor: CursorExtractor<Uuid, CreatedAt, ()>,
 ) -> Result<Json<GetAllUserNotificationsResponse<T>>, (StatusCode, Json<ErrorResponse<'static>>)> {
-    todo!()
+    let query = cursor.into_query(CreatedAt, ());
+    let result = service
+        .inner
+        .get_user_notifications::<T>(macro_user.macro_user_id.as_ref(), limit, query)
+        .await
+        .map_err(|e| {
+            tracing::error!(error=?e, "failed to get user notifications");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "failed to get notifications",
+                }),
+            )
+        })?;
+
+    Ok(Json(GetAllUserNotificationsResponse {
+        items: result.items,
+        next_cursor: result.next_cursor,
+    }))
 }
 
 /// the notification ids that we are bulk updating
@@ -94,7 +112,7 @@ async fn bulk_mark_seen<S: NotificationIngress>(
     macro_user: MacroUserExtractor,
     Json(req): Json<NotificationBulkRequest>,
 ) -> Result<Json<()>, (StatusCode, Json<ErrorResponse<'static>>)> {
-    todo!()
+    bulk_update(&service, &macro_user, &req, NotificationStatus::Seen).await
 }
 
 async fn bulk_mark_done<S: NotificationIngress>(
@@ -102,7 +120,7 @@ async fn bulk_mark_done<S: NotificationIngress>(
     macro_user: MacroUserExtractor,
     Json(req): Json<NotificationBulkRequest>,
 ) -> Result<Json<()>, (StatusCode, Json<ErrorResponse<'static>>)> {
-    todo!()
+    bulk_update(&service, &macro_user, &req, NotificationStatus::Done(true)).await
 }
 
 async fn bulk_mark_undone<S: NotificationIngress>(
@@ -110,5 +128,32 @@ async fn bulk_mark_undone<S: NotificationIngress>(
     macro_user: MacroUserExtractor,
     Json(req): Json<NotificationBulkRequest>,
 ) -> Result<Json<()>, (StatusCode, Json<ErrorResponse<'static>>)> {
-    todo!()
+    bulk_update(&service, &macro_user, &req, NotificationStatus::Done(false)).await
+}
+
+async fn bulk_update<S: NotificationIngress>(
+    service: &NotificationRouterState<S>,
+    macro_user: &MacroUserExtractor,
+    req: &NotificationBulkRequest,
+    status: NotificationStatus,
+) -> Result<Json<()>, (StatusCode, Json<ErrorResponse<'static>>)> {
+    service
+        .inner
+        .update_notifications(UpdateNotificationsRequest {
+            user_id: macro_user.macro_user_id.clone(),
+            notification_ids: &req.notification_ids,
+            status,
+        })
+        .await
+        .map_err(|e| {
+            tracing::error!(error=?e, "failed to update notifications");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "failed to update notifications",
+                }),
+            )
+        })?;
+
+    Ok(Json(()))
 }
