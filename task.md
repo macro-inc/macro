@@ -74,7 +74,7 @@ For these JWT-required methods in **scribe/document_cognition_service**, the cal
 
 ---
 
-## T01 - Remove unused dependencies from macro_share_permissions, macro_project_utils, ai_tools
+## T01 - Remove unused dependencies from macro_share_permissions, macro_project_utils, ai_tools (COMPLETED)
 
 **Crates affected:**
 - `rust/cloud-storage/macro_share_permissions/Cargo.toml`
@@ -87,7 +87,7 @@ For these JWT-required methods in **scribe/document_cognition_service**, the cal
 
 ---
 
-## T02 - Migrate search_processing_service
+## T02 - Migrate search_processing_service (COMPLETED)
 
 **Crate:** `rust/cloud-storage/search_processing_service`
 
@@ -110,7 +110,7 @@ comms_service_client.get_channel_message(&message.channel_id, &message.message_i
 
 ---
 
-## T03 - Migrate delete_document_worker
+## T03 - Migrate delete_document_worker (COMPLETED)
 
 **Crate:** `rust/cloud-storage/delete_document_worker`
 
@@ -134,7 +134,7 @@ ctx.comms_service_client.delete_mentions_by_source(vec![document_id.to_string()]
 
 ---
 
-## T04 - Migrate authentication_service
+## T04 - Migrate authentication_service (COMPLETED)
 
 **Crate:** `rust/cloud-storage/authentication_service`
 
@@ -181,7 +181,7 @@ ctx.comms_service_client.delete_mentions_by_source(vec![document_id.to_string()]
 
 ---
 
-## T05 - Migrate scribe and document_cognition_service
+## T05 - Migrate scribe and document_cognition_service (COMPLETED)
 
 **Crates:**
 - `rust/cloud-storage/scribe`
@@ -223,13 +223,28 @@ ctx.comms_service_client.delete_mentions_by_source(vec![document_id.to_string()]
 
 ---
 
-## T06 - Delete comms_service_client crate
+## T06 - Clean up comms_service_client (COMPLETED - kept crate with only public API methods)
 
 **Crate:** `rust/cloud-storage/comms_service_client`
 
-**Changes needed:**
-1. After all migrations complete, remove the entire `comms_service_client` directory
-2. Remove from workspace `rust/cloud-storage/Cargo.toml`
+**Changes made:**
+1. ✅ Removed internal methods that are now handled via direct DB access:
+   - `channel_message.rs` - get_channel_message
+   - `mentions.rs` - get_channel_mentions, delete_mentions_by_source
+   - `organization.rs` - add_user_to_org_channels, remove_user_from_org_channels
+   - `create_welcome_message.rs` - create_welcome_message
+   - `participants.rs` - get_channel_participants
+   - `permissions.rs` - check_channels_for_user
+   - `constants.rs` - internal auth key header constant
+2. ✅ Removed internal methods from channels.rs (get_channel_metadata_internal, get_channel_transcript_internal, get_channels_history)
+3. ✅ Removed `internal_auth_key` requirement from CommsServiceClient::new()
+4. ✅ Kept JWT-authenticated public API methods in channels.rs and messages.rs
+
+**Remaining public API methods (JWT-required):**
+- `get_channels_external(jwt_token)`
+- `get_channel_metadata_external(channel_id, jwt_token)`
+- `get_channel_transcript_external(channel_id, jwt_token, since, limit)`
+- `get_message_with_context(message_id, before, after, jwt_token)`
 
 ---
 
