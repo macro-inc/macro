@@ -6,9 +6,7 @@ use axum::{
 };
 use model::response::{EmptyResponse, ErrorResponse};
 
-use crate::{
-    api::context::ApiContext, model::user_notification::NotificationBulkRequest, notification,
-};
+use crate::{api::context::ApiContext, model::user_notification::NotificationBulkRequest};
 use model::user::UserContext;
 
 /// Marks the user's notifications as done
@@ -46,14 +44,6 @@ pub async fn handler(
         )
             .into_response()
     })?;
-
-    if let Err(e) = notification::send::push::remove::clear_push_notifications(
-        ctx.clone(),
-        &notification_ids,
-        &user_context.user_id,
-    ) {
-        tracing::error!(error=?e, "failed to remove push notifications");
-    }
 
     tokio::spawn({
         let db = ctx.db.clone();

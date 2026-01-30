@@ -18,39 +18,24 @@ name = "notification_service_openapi"
 path = "src/openapi.rs"
 
 [features]
-connection_gateway = ["notification_worker"]
 default = [
-  "connection_gateway",
-  "notification_worker",
-  "push_notification",
   "push_notification_event_handler",
-  "send_email_notifications",
 ]
 local_queue = []
-notification_worker = []
-push_notification = ["notification_worker"]
 push_notification_event_handler = []
-send_email_notifications = ["notification_worker"]
 
 [dependencies]
 anyhow = { workspace = true }
-authentication_service_client = { path = "../authentication_service_client" }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sesv2 = { workspace = true }
 aws-sdk-sns = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
-connection_gateway = { path = "../connection_gateway" }
-document_cognition_service_client = { path = "../document_cognition_service_client" }
-document_storage_service_client = { path = "../document_storage_service_client" }
 email_validator = { path = "../email_validator" }
 futures = { workspace = true }
 http-body-util = { workspace = true }
 macro_auth = { path = "../macro_auth" }
-macro_cache_client = { path = "../macro_cache_client", default-features = false, features = [
-  "notification_rate_limit",
-] }
 macro_cors = { path = "../macro_cors" }
 macro_aws_config = { path = "../macro_aws_config" }
 macro_entrypoint = { path = "../macro_entrypoint" }
@@ -92,4 +77,4 @@ uuid = { workspace = true }
 macro_auth = { path = "../macro_auth", features = ["testing"] }
 
 [package.metadata.cargo-machete]
-ignored = ["comms_service", "connection_gateway"]
+ignored = ["comms_service"]

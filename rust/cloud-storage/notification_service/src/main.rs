@@ -1,8 +1,6 @@
 use crate::api::context::ApiContext;
 use anyhow::Context;
 use config::Config;
-use connection_gateway_client::client::ConnectionGatewayClient;
-use document_cognition_service_client::DocumentCognitionServiceClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
@@ -13,10 +11,12 @@ use std::sync::Arc;
 
 mod api;
 mod config;
+#[allow(dead_code)]
 mod env;
 mod model;
 mod notification;
 mod push_notification_event;
+#[allow(dead_code)]
 mod templates;
 
 #[tokio::main]
@@ -59,23 +59,6 @@ pub async fn main() -> anyhow::Result<()> {
         .get_maybe_secret_value(config.environment, InternalApiSecretKey::new()?)
         .await?;
 
-    let _dcs_client = DocumentCognitionServiceClient::new(
-        internal_secret_key.as_ref().to_string(),
-        config.document_cognition_service_url.clone(),
-    );
-
-    let conn_gateway_client = ConnectionGatewayClient::new(
-        internal_secret_key.as_ref().to_string(),
-        config.connection_gateway_url.clone(),
-    );
-
-    let notification_worker = sqs_worker::SQSWorker::new(
-        aws_sdk_sqs::Client::new(&aws_config),
-        config.notification_queue.clone(),
-        config.notification_queue_max_messages,
-        config.notification_queue_wait_time_seconds,
-    );
-
     let push_notification_event_handler_worker = sqs_worker::SQSWorker::new(
         aws_sdk_sqs::Client::new(&aws_config),
         config.push_notification_event_handler_queue.clone(),
@@ -83,47 +66,7 @@ pub async fn main() -> anyhow::Result<()> {
         config.notification_queue_wait_time_seconds,
     );
 
-    let ses_client = ses_client::Ses::new(
-        aws_sdk_sesv2::Client::new(&aws_config),
-        &config.environment.to_string(),
-    );
     let sns_client = sns_client::SNS::new(aws_sdk_sns::Client::new(&aws_config));
-
-    let macro_cache_client = macro_cache_client::MacroCache::new(config.redis_uri.as_str());
-
-    #[cfg(feature = "notification_worker")]
-    {
-        use std::sync::Arc;
-
-        let auth_service_internal_key = match config.environment {
-            Environment::Local => config.auth_service_secret_key.clone(),
-            _ => secretsmanager_client
-                .get_secret_value(config.auth_service_secret_key.clone())
-                .await
-                .context("unable to get secret")?
-                .to_string(),
-        };
-
-        let auth_service_client = authentication_service_client::AuthServiceClient::new(
-            auth_service_internal_key,
-            config.auth_service_url.clone(),
-        );
-
-        let queue_worker_context = notification::context::QueueWorkerContext {
-            db: db.clone(),
-            worker: Arc::new(notification_worker),
-            conn_gateway_client: Arc::new(conn_gateway_client),
-            ses_client: Arc::new(ses_client),
-            sns_client: Arc::new(sns_client.clone()),
-            macro_cache_client: Arc::new(macro_cache_client),
-            auth_service_client: Arc::new(auth_service_client),
-        };
-
-        // Spawn the runner in a task of it's own so we don't block the main thread
-        tokio::spawn(
-            async move { notification::run_notification_worker(queue_worker_context).await },
-        );
-    }
 
     #[cfg(feature = "push_notification_event_handler")]
     {

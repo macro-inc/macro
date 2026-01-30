@@ -27,7 +27,6 @@ service = ["comms_db_client"]
 ai_format = { path = "../ai_format" }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-aws-config = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, features = ["tower-log", "ws"] }

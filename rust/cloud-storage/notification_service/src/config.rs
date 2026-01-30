@@ -6,6 +6,7 @@ use std::sync::LazyLock;
 pub static BASE_URL: LazyLock<String> = LazyLock::new(|| std::env::var("BASE_URL").unwrap());
 
 /// The apple bundle id
+#[allow(dead_code)]
 pub static APPLE_BUNDLE_ID: LazyLock<String> = LazyLock::new(|| {
     std::env::var("APPLE_BUNDLE_ID").unwrap_or_else(|_| "com.macro.app.prod".to_string())
 });
@@ -35,12 +36,6 @@ pub struct Config {
     /// The notification queue wait time seconds
     pub notification_queue_wait_time_seconds: i32,
 
-    /// The document cognition service url
-    pub document_cognition_service_url: String,
-
-    /// The connection gateway url
-    pub connection_gateway_url: String,
-
     /// The sns ios platform arn
     pub sns_apns_platform_arn: String,
 
@@ -59,14 +54,6 @@ pub struct Config {
     /// The push notification event handler queue
     pub push_notification_event_handler_queue: String,
 
-    /// The redis uri for macro cache
-    pub redis_uri: String,
-
-    /// Auth service secret key, used for internal access
-    pub auth_service_secret_key: String,
-
-    /// URL for auth service
-    pub auth_service_url: String,
 }
 
 impl Config {
@@ -100,12 +87,6 @@ impl Config {
                 .parse::<i32>()
                 .unwrap();
 
-        let document_cognition_service_url = std::env::var("DOCUMENT_COGNITION_SERVICE_URL")
-            .context("DOCUMENT_COGNITION_SERVICE_URL must be provided")?;
-
-        let connection_gateway_url = std::env::var("CONNECTION_GATEWAY_URL")
-            .context("CONNECTION_GATEWAY_URL must be provided")?;
-
         let sns_apns_platform_arn = std::env::var("SNS_APNS_PLATFORM_ARN")
             .context("SNS_APNS_PLATFORM_ARN must be provided")?;
 
@@ -127,14 +108,6 @@ impl Config {
             push_notification_event_handler_queue
         );
 
-        let redis_uri = std::env::var("REDIS_URI").context("REDIS_URI must be provided")?;
-
-        let auth_service_secret_key = std::env::var("AUTHENTICATION_SERVICE_SECRET_KEY")
-            .context("AUTHENTICATION_SERVICE_SECRET_KEY must be provided")?;
-
-        let auth_service_url = std::env::var("AUTHENTICATION_SERVICE_URL")
-            .context("AUTHENTICATION_SERVICE_URL must be provided")?;
-
         Ok(Config {
             base_url,
             database_url,
@@ -144,16 +117,11 @@ impl Config {
             notification_queue,
             notification_queue_max_messages,
             notification_queue_wait_time_seconds,
-            document_cognition_service_url,
-            connection_gateway_url,
             sns_apns_platform_arn,
             sns_fcm_platform_arn,
             sender_base_address,
             apple_bundle_id,
             push_notification_event_handler_queue,
-            redis_uri,
-            auth_service_secret_key,
-            auth_service_url,
         })
     }
 }
