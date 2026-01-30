@@ -6,6 +6,6 @@
  */
 
 /**
- * The id of the project that this document belongs to
+ * The file type of the document (file extension)
  */
-export type DocumentMetadataProjectId = string | null;
+export type DocumentMetadataFileType = string | null;

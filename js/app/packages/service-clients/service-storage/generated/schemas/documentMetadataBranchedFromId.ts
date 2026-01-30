@@ -6,6 +6,6 @@
  */
 
 /**
- * The id of the project that this document belongs to
+ * The id of the document this document branched from
  */
-export type DocumentMetadataProjectId = string | null;
+export type DocumentMetadataBranchedFromId = string | null;

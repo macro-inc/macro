@@ -4,17 +4,55 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { DocumentMetadataBranchedFromId } from './documentMetadataBranchedFromId';
+import type { DocumentMetadataBranchedFromVersionId } from './documentMetadataBranchedFromVersionId';
 import type { DocumentMetadataDeletedAt } from './documentMetadataDeletedAt';
+import type { DocumentMetadataDocumentBom } from './documentMetadataDocumentBom';
+import type { DocumentMetadataDocumentFamilyId } from './documentMetadataDocumentFamilyId';
+import type { DocumentMetadataFileType } from './documentMetadataFileType';
 import type { DocumentMetadataProjectId } from './documentMetadataProjectId';
-import type { DocumentMetadataViewedAt } from './documentMetadataViewedAt';
+import type { DocumentMetadataProjectName } from './documentMetadataProjectName';
+import type { DocumentMetadataSha } from './documentMetadataSha';
+import type { DocumentMetadataSubType } from './documentMetadataSubType';
 
-/**
- * Metadata for a document fetched from the database
- */
 export interface DocumentMetadata {
-  created_at: number;
-  deleted_at?: DocumentMetadataDeletedAt;
-  project_id?: DocumentMetadataProjectId;
-  updated_at: number;
-  viewed_at?: DocumentMetadataViewedAt;
+  /** The id of the document this document branched from */
+  branchedFromId?: DocumentMetadataBranchedFromId;
+  /** The id of the version this document branched from
+This could be either DocumentInstance or DocumentBom id depending on
+the file type */
+  branchedFromVersionId?: DocumentMetadataBranchedFromVersionId;
+  /** The time the document was created */
+  createdAt: number;
+  /** The time the document was deleted */
+  deletedAt: DocumentMetadataDeletedAt;
+  /** If the document is a DOCX document and unzipped, the document_bom will be present */
+  documentBom?: DocumentMetadataDocumentBom;
+  /** The id of the document family this document belongs to */
+  documentFamilyId?: DocumentMetadataDocumentFamilyId;
+  /** The document id */
+  documentId: string;
+  /** The name of the document */
+  documentName: string;
+  /** The version of the document
+This could be the document_instance_id or document_bom_id depending on
+the file type */
+  documentVersionId: number;
+  /** The file type of the document (file extension) */
+  fileType?: DocumentMetadataFileType;
+  /** The modification data for the document instance.
+This is only used for PDF documents. */
+  modificationData?: unknown;
+  /** The owner of the document */
+  owner: string;
+  /** The id of the project that this document belongs to */
+  projectId?: DocumentMetadataProjectId;
+  /** The name of the project that this document belongs to */
+  projectName?: DocumentMetadataProjectName;
+  /** If the document is a PDF, this is the SHA of the pdf
+If the document is a DOCX, this will not be present */
+  sha?: DocumentMetadataSha;
+  subType?: DocumentMetadataSubType;
+  /** The time the document instance / document BOM was updated */
+  updatedAt: number;
 }

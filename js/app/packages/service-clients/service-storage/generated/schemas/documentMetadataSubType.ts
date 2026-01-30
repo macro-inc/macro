@@ -4,8 +4,6 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { DocumentSubType } from './documentSubType';
 
-/**
- * The id of the project that this document belongs to
- */
-export type DocumentMetadataProjectId = string | null;
+export type DocumentMetadataSubType = null | DocumentSubType;
