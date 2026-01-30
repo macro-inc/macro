@@ -3,7 +3,6 @@ import { authServiceClient } from '@service-auth/client';
 import { invalidateUserInfo, authKeys } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
 import { createCallback } from '@solid-primitives/rootless';
-import { invalidateOrganization } from '@queries/auth';
 
 const { track, TrackingEvents } = withAnalytics();
 
@@ -26,8 +25,6 @@ export function useLogout() {
       userId: '',
       hasTrialed: false,
     });
-
-    invalidateOrganization();
 
     await authServiceClient.logout();
     invalidateUserInfo();

@@ -1,5 +1,4 @@
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { useOrganizationId } from '@core/user';
 import { MODAL_VIEWPORT_CLASSES } from '@core/util/modalUtils';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
@@ -335,11 +334,11 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
     setError(null);
 
     const bodyData = {
-          scope: 'user' as const,
-          user_id: currentUserId!,
-          display_name: newPropertyName().trim(),
-          data_type: buildDataType(),
-        };
+      scope: 'user' as const,
+      user_id: currentUserId!,
+      display_name: newPropertyName().trim(),
+      data_type: buildDataType(),
+    };
 
     createPropertyMutation.mutate({ body: bodyData });
   };
