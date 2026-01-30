@@ -145,7 +145,6 @@ impl Config {
             search_event_queue: Default::default(),
             sync_service_url: Default::default(),
             sync_service_auth_key: Default::default(),
-            search_service_url: Default::default(),
             lexical_service_url: Default::default(),
             email_service_url: Default::default(),
             document_cognition_service_url: Default::default(),
