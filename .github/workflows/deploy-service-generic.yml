@@ -28,7 +28,6 @@ on:
           - notification-service
           - organization-retention
           - search-processing-service
-          - search-service
           - search-upload
           - static-file-service
           - unfurl-service

@@ -13,7 +13,6 @@ TEST_CASES=(
   "document-storage:document-storage"
   "authentication-service:authentication-service"
   "comms-service:comms-service"
-  "search-service:search-service"
   "opensearch:opensearch"
 )
 

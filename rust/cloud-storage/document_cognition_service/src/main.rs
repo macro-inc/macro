@@ -109,7 +109,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("initialized sync service client");
     let search_service_client = SearchServiceClient::new(
         internal_auth_key.as_ref().to_string(),
-        config.search_service_url.clone(),
+        config.document_storage_service_url.clone(),
     );
 
     tracing::info!("initialized search service client");

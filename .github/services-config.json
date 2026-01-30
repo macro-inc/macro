@@ -97,12 +97,6 @@
       ],
       "stack_path": "infra/stacks/search-processing-service/**"
     },
-    "search-service": {
-      "source_paths": [
-        "rust/cloud-storage/search_service/**"
-      ],
-      "stack_path": "infra/stacks/search-service/**"
-    },
     "search-upload": {
       "source_paths": [
         "rust/cloud-storage/search_upload/**"

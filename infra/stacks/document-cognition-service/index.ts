@@ -299,10 +299,6 @@ const documentCognitionService = new DocumentCognitionService(
         value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenPublicKey}`,
       },
       {
-        name: 'SEARCH_SERVICE_URL',
-        value: pulumi.interpolate`${searchServiceUrl}`,
-      },
-      {
         name: 'PERPLEXITY_API_KEY',
         value: pulumi.interpolate`${PERPLEXITY_API_KEY}`,
       },
