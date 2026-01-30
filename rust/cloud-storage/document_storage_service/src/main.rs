@@ -19,6 +19,7 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use macro_redis_cluster_client::Redis;
+use opensearch_client::OpensearchClient;
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
 };
@@ -168,6 +169,29 @@ async fn main() -> anyhow::Result<()> {
             .to_string(),
     };
 
+    // Initialize OpenSearch client
+    let opensearch_password = match config.environment {
+        Environment::Local => config.vars.opensearch_password.as_ref().to_string(),
+        _ => secretsmanager_client
+            .get_secret_value(&config.vars.opensearch_password)
+            .await
+            .context("unable to get opensearch secret")?
+            .to_string(),
+    };
+
+    let opensearch_client = OpensearchClient::new(
+        config.vars.opensearch_url.as_ref().to_string(),
+        config.vars.opensearch_username.as_ref().to_string(),
+        opensearch_password,
+    )
+    .context("unable to create opensearch client")?;
+
+    if let Err(e) = opensearch_client.health().await {
+        tracing::error!(error=?e, "error connecting to opensearch");
+        return Err(e);
+    }
+    tracing::trace!("initialized opensearch client");
+
     let frecency_service = FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone()));
     let email_service =
         EmailServiceImpl::new(EmailPgRepo::new(db.clone()), frecency_service.clone());
@@ -218,6 +242,7 @@ async fn main() -> anyhow::Result<()> {
         sync_service_client: Arc::new(sync_service_client),
         system_properties_service: Arc::new(system_properties_service),
         properties_service: Arc::new(properties_service),
+        opensearch_client: Arc::new(opensearch_client),
         config: Arc::new(config),
         jwt_validation_args,
         dss_auth_key,

@@ -9,6 +9,7 @@ use context::InternalFlag;
 use macro_axum_utils::compose_layers;
 use model::version::{ServiceNameState, VersionedApiServiceName, validate_api_version};
 use properties_service::PropertiesHandlerState;
+use search_service::SearchHandlerState;
 use tower::ServiceBuilder;
 use tower_http::compression::CompressionLayer;
 use tower_http::trace::TraceLayer;
@@ -154,6 +155,11 @@ fn api_router(state: ApiContext) -> Router {
             properties_service::properties_router()
                 .with_state(PropertiesHandlerState::from_ref(&state)),
         )
+        .nest(
+            "/search",
+            search_service::search_router()
+                .with_state(SearchHandlerState::from_ref(&state)),
+        )
         .layer(
             ServiceBuilder::new()
                 .layer(axum::middleware::from_fn(
@@ -168,6 +174,11 @@ fn api_router(state: ApiContext) -> Router {
             "/internal",
             internal::router(state.clone())
                 .nest("/notifications", notification::router())
+                .nest(
+                    "/search",
+                    search_service::search_internal_router()
+                        .with_state(SearchHandlerState::from_ref(&state)),
+                )
                 .layer(
                     ServiceBuilder::new()
                         .layer(axum::middleware::from_fn_with_state(
