@@ -96,7 +96,6 @@ dependencies = [
  "axum",
  "chrono",
  "comms",
- "comms_service_client",
  "cool_asserts",
  "email",
  "email_service_client",
@@ -5133,7 +5132,6 @@ name = "macro_project_utils"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "comms_service_client",
  "macro_db_client",
  "macro_notify",
  "model",
@@ -5176,7 +5174,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "comms_db_client",
- "comms_service_client",
  "macro_db_client",
  "macro_user_id",
  "model",
