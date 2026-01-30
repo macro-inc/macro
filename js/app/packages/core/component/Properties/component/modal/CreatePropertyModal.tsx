@@ -193,7 +193,6 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
 
   let propertyNameInputRef!: HTMLInputElement;
 
-  const organizationId = useOrganizationId();
   const userId = useUserId();
 
   const dataTypeDropdownOptions: DropdownOption<DataTypeValue>[] =
@@ -297,7 +296,6 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
   };
 
   const handleCreateProperty = () => {
-    const orgId = organizationId();
     const currentUserId = userId();
 
     if (!newPropertyName().trim()) {
@@ -329,22 +327,14 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
     }
 
     // Validate that we have a user ID for user-scoped properties
-    if (!orgId && !currentUserId) {
+    if (!currentUserId) {
       setError(ERROR_MESSAGES.PROPERTY_CREATE);
       return;
     }
 
     setError(null);
 
-    const bodyData = orgId
-      ? {
-          scope: 'user_and_organization' as const,
-          organization_id: Number(orgId),
-          user_id: currentUserId!,
-          display_name: newPropertyName().trim(),
-          data_type: buildDataType(),
-        }
-      : {
+    const bodyData = {
           scope: 'user' as const,
           user_id: currentUserId!,
           display_name: newPropertyName().trim(),
