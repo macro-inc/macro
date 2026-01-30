@@ -70,7 +70,7 @@ fn send_heartbeat(handle: &AppHandle) {
 }
 
 /// Called from native Objective-C when the iOS app resumes from background.
-/// See `AppLifecycleObserver.mm` for the notification observer.
+/// See `main.mm` for the notification observer.
 #[cfg(target_os = "ios")]
 #[unsafe(no_mangle)]
 extern "C" fn on_app_resumed() {
