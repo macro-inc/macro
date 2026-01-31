@@ -6,11 +6,11 @@ use super::SHA_COUNT_KEY_PREFIX;
 /// Sets shas ref count in redis
 #[tracing::instrument(skip(client, items))]
 pub(in crate::service::redis) async fn set_shas(
-    client: &redis::cluster::ClusterClient,
+    client: &redis::Client,
     items: Vec<(String, i64)>,
 ) -> anyhow::Result<()> {
     let mut redis_connection = client
-        .get_async_connection()
+        .get_multiplexed_async_connection()
         .await
         .context("unable to connect to redis")?;
 

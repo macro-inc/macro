@@ -23,7 +23,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Redis handles it own connection pool internally. Each time we use redis
     // we should be using redis_client.get_connection() to grab a specific connection
-    let redis_client = redis::cluster::ClusterClient::new(vec![redis_uri.as_str()])
+    let redis_client = redis::Client::open(redis_uri.as_str())
         .context("could not connect to redis")?;
 
     if let Err(e) = redis_client.get_connection() {

@@ -6,11 +6,11 @@ use super::SHA_DELETE_BUCKET;
 /// Removes shas from the delete bucket
 #[tracing::instrument(skip(client))]
 pub(in crate::service::redis) async fn remove_shas_from_delete_bucket(
-    client: &redis::cluster::ClusterClient,
+    client: &redis::Client,
     shas: Vec<String>,
 ) -> anyhow::Result<()> {
     let mut redis_connection = client
-        .get_async_connection()
+        .get_multiplexed_async_connection()
         .await
         .context("unable to connect to redis")?;
 
