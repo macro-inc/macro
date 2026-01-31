@@ -18,7 +18,7 @@ use lambda_runtime::{
     tracing::{self},
 };
 use macro_entrypoint::MacroEntrypoint;
-use macro_redis_cluster_client::Redis;
+use macro_sha_count_client::Redis;
 use sqlx::postgres::PgPoolOptions;
 
 #[tokio::main]
@@ -52,7 +52,7 @@ async fn main() -> Result<(), Error> {
         .convert_queue(&config.convert_queue);
     tracing::trace!("initialized sqs client");
 
-    let redis_client = redis::cluster::ClusterClient::new(vec![config.redis_uri.clone()])
+    let redis_client = redis::Client::open(config.redis_uri.clone())
         .map_err(|e| anyhow::Error::msg(format!("unable to connect to redis {:?}", e)))
         .context("could not connect to redis client")?;
     if let Err(e) = redis_client.get_connection() {
