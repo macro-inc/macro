@@ -17,7 +17,7 @@ macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
 mockall = { workspace = true }
 redis = { workspace = true, features = [
-  "cluster-async",
+  "aio",
   "tokio-native-tls-comp",
 ] }
 sqlx = { workspace = true }
