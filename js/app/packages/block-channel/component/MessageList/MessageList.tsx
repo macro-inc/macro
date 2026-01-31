@@ -13,6 +13,7 @@ import {
   createMessageListContextLookup,
   type MessageListContextLookup,
 } from '@block-channel/utils/listContext';
+import { shouldResetVirtualList } from '@block-channel/utils/virtualList';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
@@ -35,6 +36,7 @@ import {
   createRenderEffect,
   createSelector,
   createSignal,
+  For,
   Match,
   mapArray,
   on,
@@ -255,6 +257,9 @@ function MessageListImpl(props: MessageListProps) {
 
   const [isNearBottom, setIsNearBottom] = createSignal(true);
   const [initialScrollComplete, setInitialScrollComplete] = createSignal(false);
+  const [virtualListResetVersion, setVirtualListResetVersion] =
+    createSignal(0);
+  let pendingScrollOffset: number | undefined;
 
   const normalizeIndex = (index: number) => {
     const length = props.orderedMessages().length;
@@ -491,11 +496,30 @@ function MessageListImpl(props: MessageListProps) {
     on(flattenedThreaded, (flat, prev) => {
       const oldFlat = prev;
       if (oldFlat !== flat) {
+        if (
+          oldFlat &&
+          shouldResetVirtualList(
+            oldFlat.map((message) => message.id),
+            flat.map((message) => message.id)
+          )
+        ) {
+          pendingScrollOffset = virtualHandle()?.scrollOffset;
+          setVirtualListResetVersion((version) => version + 1);
+        }
         props.setOrderedMessages(flat);
         computeListContext(flat);
       }
     })
   );
+  createEffect(() => {
+    const handle = virtualHandle();
+    if (!handle || pendingScrollOffset === undefined) return;
+    const offset = pendingScrollOffset;
+    pendingScrollOffset = undefined;
+    requestAnimationFrame(() => {
+      handle.scrollTo(offset);
+    });
+  });
 
   // Thread reply inputs are portaled to the correct message container. This keeps them in the correct location even as new thread replies come in, but if they are re-portaled while a user is typing, the user can momentarily lose input. To address this, we gate updates to the thread that a user is currently typing in.
   const [localTypingThreadId, setLocalTypingThreadId] = createSignal<
@@ -575,10 +599,12 @@ function MessageListImpl(props: MessageListProps) {
 
   // Indices of messages that should remain mounted even when off screen.
   // Criteria: message is last in its thread AND that thread has an active reply.
+  // NOTE: VList receives `rows` (orderedMessages reversed), so indices must be normalized.
   const keepMountedIndices = createMemo(() => {
     const list = props.orderedMessages() ?? [];
+    const length = list.length;
     const indices: number[] = [];
-    for (let i = 0; i < list.length; i++) {
+    for (let i = 0; i < length; i++) {
       const msg = list[i];
       const next = list[i + 1];
       const threadId = msg.thread_id;
@@ -600,7 +626,8 @@ function MessageListImpl(props: MessageListProps) {
         (isLastInThread && threadState?.hasActiveReply) ||
         (threadState?.hasActiveReply && isLocallyFrozenWithEmptyMessage)
       ) {
-        indices.push(i);
+        // Normalize index for VList's reversed data array (rows = orderedMessages.toReversed())
+        indices.push(length - 1 - i);
       }
     }
     return indices;
@@ -791,92 +818,98 @@ function MessageListImpl(props: MessageListProps) {
       >
         <Switch fallback={<EmptyMessageList />}>
           <Match when={props.messages.length > 0}>
-            <VList
-              ref={(handle) => {
-                if (handle) {
-                  listContext.registerVirtualHandle(handle);
-                }
-                setVirtualHandle(handle);
-              }}
-              style={{
-                'max-height': `${listHeight()}px`,
-                height: '100%',
-                contain: 'none',
-                'overflow-x': 'hidden',
-                'overflow-y': 'scroll',
-                'overflow-anchor': 'none',
-                display: 'flex',
-                'flex-direction': 'column-reverse',
-              }}
-              class="scrollbar-hidden [&>div]:mb-auto"
-              data-channel-message-list
-              data={rows() ?? []}
-              shift={isPrepend()}
-              itemSize={BASE_ITEM_SIZE}
-              bufferSize={10 * BASE_ITEM_SIZE}
-              keepMounted={keepMountedIndices()}
-              onScroll={handleScroll}
-              onScrollEnd={() => {
-                if (!initialScrollComplete()) {
-                  setInitialScrollComplete(true);
-                }
-              }}
-            >
-              {(row: { id: string; message: Message }, i) => {
-                const isParentless = () => !row.message.thread_id;
-                const isThreadExpanded = createMemo(() => {
-                  if (!row.message.thread_id) return false;
-
-                  const state = listContext.getThreadState(
-                    row.message.thread_id
-                  );
-
-                  return state?.threadExpanded === true;
-                });
-                const isThreadIndexWithinCutoff = createMemo(
-                  () =>
-                    messageListContext[row.id].threadIndex !== -1 &&
-                    messageListContext[row.id].threadIndex <=
-                      COLLAPSED_THREAD_INDEX_CUTOFF
-                );
-                return (
-                  <Show
-                    when={
-                      (isParentless() ||
-                        isThreadExpanded() ||
-                        isThreadIndexWithinCutoff()) &&
-                      virtualHandle()
+            <For each={[virtualListResetVersion()]}>
+              {() => (
+                <VList
+                  ref={(handle) => {
+                    if (handle) {
+                      listContext.registerVirtualHandle(handle);
                     }
-                    // For the last message in the channel, we display this
-                    // empty small div. This is a temporary fix for last thread elements not rendering
-                    fallback={i() === 0 ? <div class="h-[0.05px]" /> : null}
-                  >
-                    <MessageContainer
-                      message={row.message}
-                      lastViewed={lastViewed}
-                      isFocused={isFocused(row.id)}
-                      index={() => normalizeIndex(i())}
-                      orderedMessages={props.orderedMessages}
-                      threadSiblings={viewThreads[
-                        row.message.thread_id ?? ''
-                      ]?.filter(messageFilterFn)}
-                      threadChildren={viewThreads[row.message.id ?? '']?.filter(
-                        messageFilterFn
-                      )}
-                      newIndicatorShown={newIndicatorShown}
-                      setNewIndicatorShown={setNewIndicatorShown}
-                      virtualHandle={virtualHandle()!}
-                      container={containerRef()}
-                      listContext={messageListContext[row.id]}
-                      isTarget={isActiveTargetMessage(row.message.id)}
-                      channelId={() => props.channelId}
-                      attachments={props.attachments}
-                      reactions={props.reactions}
-                    />
-                  </Show>
-                );
-              }}
-            </VList>
+                    setVirtualHandle(handle);
+                  }}
+                  style={{
+                    'max-height': `${listHeight()}px`,
+                    height: '100%',
+                    contain: 'none',
+                    'overflow-x': 'hidden',
+                    'overflow-y': 'scroll',
+                    'overflow-anchor': 'none',
+                    display: 'flex',
+                    'flex-direction': 'column-reverse',
+                  }}
+                  class="scrollbar-hidden [&>div]:mb-auto"
+                  data-channel-message-list
+                  data={rows() ?? []}
+                  shift={isPrepend()}
+                  itemSize={BASE_ITEM_SIZE}
+                  bufferSize={10 * BASE_ITEM_SIZE}
+                  keepMounted={keepMountedIndices()}
+                  onScroll={handleScroll}
+                  onScrollEnd={() => {
+                    if (!initialScrollComplete()) {
+                      setInitialScrollComplete(true);
+                    }
+                  }}
+                >
+                  {(row: { id: string; message: Message }, i) => {
+                    const isParentless = () => !row.message.thread_id;
+                    const isThreadExpanded = createMemo(() => {
+                      if (!row.message.thread_id) return false;
+
+                      const state = listContext.getThreadState(
+                        row.message.thread_id
+                      );
+
+                      return state?.threadExpanded === true;
+                    });
+                    const isThreadIndexWithinCutoff = createMemo(() => {
+                      const ctx = messageListContext[row.id];
+                      if (!ctx) return false;
+                      return (
+                        ctx.threadIndex !== -1 &&
+                        ctx.threadIndex <= COLLAPSED_THREAD_INDEX_CUTOFF
+                      );
+                    });
+                    return (
+                      <Show
+                        when={
+                          (isParentless() ||
+                            isThreadExpanded() ||
+                            isThreadIndexWithinCutoff()) &&
+                          virtualHandle()
+                        }
+                        // For the last message in the channel, we display this
+                        // empty small div. This is a temporary fix for last thread elements not rendering
+                        fallback={i() === 0 ? <div class="h-[0.05px]" /> : null}
+                      >
+                        <MessageContainer
+                          message={row.message}
+                          lastViewed={lastViewed}
+                          isFocused={isFocused(row.id)}
+                          index={() => normalizeIndex(i())}
+                          orderedMessages={props.orderedMessages}
+                          threadSiblings={viewThreads[
+                            row.message.thread_id ?? ''
+                          ]?.filter(messageFilterFn)}
+                          threadChildren={viewThreads[
+                            row.message.id ?? ''
+                          ]?.filter(messageFilterFn)}
+                          newIndicatorShown={newIndicatorShown}
+                          setNewIndicatorShown={setNewIndicatorShown}
+                          virtualHandle={virtualHandle()!}
+                          container={containerRef()}
+                          listContext={messageListContext[row.id]}
+                          isTarget={isActiveTargetMessage(row.message.id)}
+                          channelId={() => props.channelId}
+                          attachments={props.attachments}
+                          reactions={props.reactions}
+                        />
+                      </Show>
+                    );
+                  }}
+                </VList>
+              )}
+            </For>
           </Match>
         </Switch>
         <Show when={showJumpToUnviewedMessages() && unviewedMessages()}>
