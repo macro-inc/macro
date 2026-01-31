@@ -31,9 +31,11 @@ const documentStorageBucketId: pulumi.Output<string> = cloudStorageStack
   .getOutput('documentStorageBucketId')
   .apply((id) => id as string);
 
-const cloudStorageCacheEndpoint: pulumi.Output<string> = cloudStorageStack
-  .getOutput('cloudStorageCacheEndpoint')
-  .apply((arn) => arn as string);
+const MACRO_CACHE = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require(`macro_cache_secret_key`),
+  })
+  .apply((secret) => secret.secretString);
 
 const cloudStorageClusterArn: pulumi.Output<string> = cloudStorageStack
   .getOutput('cloudStorageClusterArn')
@@ -103,7 +105,7 @@ const deleteDocumentWorker = new Worker(`delete-document-worker-${stack}`, {
     },
     {
       name: 'REDIS_URI',
-      value: pulumi.interpolate`rediss://${cloudStorageCacheEndpoint}`,
+      value: pulumi.interpolate`redis://${MACRO_CACHE}`,
     },
     {
       name: 'DOCUMENT_STORAGE_BUCKET',

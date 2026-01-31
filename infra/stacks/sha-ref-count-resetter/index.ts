@@ -14,9 +14,11 @@ const cloudStorageStack = new pulumi.StackReference('cloud-storage-stack', {
   name: `macro-inc/document-storage/${stack}`,
 });
 
-const cloudStorageCacheEndpoint: pulumi.Output<string> = cloudStorageStack
-  .getOutput('cloudStorageCacheEndpoint')
-  .apply((arn) => arn as string);
+const MACRO_CACHE = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require(`macro_cache_secret_key`),
+  })
+  .apply((secret) => secret.secretString);
 
 const DATABASE_URL = aws.secretsmanager
   .getSecretVersionOutput({
@@ -34,7 +36,7 @@ const shaRefCountResetterWorker = new ShaRefCountResetterWorker(
     containerEnvVars: [
       {
         name: 'REDIS_URI',
-        value: pulumi.interpolate`rediss://${cloudStorageCacheEndpoint}`,
+        value: pulumi.interpolate`redis://${MACRO_CACHE}`,
       },
       {
         name: 'DATABASE_URL',
