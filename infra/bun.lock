@@ -166,10 +166,6 @@
       "name": "cloud-storage-sha-cleanup-stack",
       "version": "0.0.0",
     },
-    "stacks/sha-ref-count-resetter": {
-      "name": "sha-ref-count-resetter-stack",
-      "version": "0.0.0",
-    },
     "stacks/static-file-service": {
       "name": "static-file-service-stack",
       "version": "0.0.0",
@@ -901,8 +897,6 @@
     "semver": ["semver@7.6.3", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-oVekP1cKtI+CTDvHWYFUcMtsK/00wmAEfyqKfNdARm8u1wNVhSgaX7A8d4UuIlUI5e84iEwOhs7ZPYRmzU9U6A=="],
 
     "service": ["service@workspace:packages/service"],
-
-    "sha-ref-count-resetter-stack": ["sha-ref-count-resetter-stack@workspace:stacks/sha-ref-count-resetter"],
 
     "shared": ["shared@workspace:packages/shared"],
 

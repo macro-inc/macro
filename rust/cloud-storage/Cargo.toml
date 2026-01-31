@@ -102,7 +102,6 @@ members = [
   "secretsmanager_client",
   "ses_client",
   "sha_cleanup_worker",
-  "sha_ref_count_resetter",
   "sns_client",
   "soup",
   "sqs_client",

@@ -7,10 +7,7 @@ use super::SHA_COUNT_KEY_PREFIX;
 
 /// Checks if a given key exists
 #[tracing::instrument(skip(client))]
-pub(crate) async fn exists(
-    client: &redis::Client,
-    key: &str,
-) -> anyhow::Result<bool> {
+pub(crate) async fn exists(client: &redis::Client, key: &str) -> anyhow::Result<bool> {
     let mut redis_connection = client
         .get_multiplexed_async_connection()
         .await
