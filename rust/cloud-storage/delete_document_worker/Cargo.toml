@@ -22,12 +22,11 @@ macro_cors = { path = "../macro_cors" }
 macro_db_client = { path = "../macro_db_client" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
-macro_redis_cluster_client = { path = "../macro_redis_cluster_client" }
+macro_sha_count_client = { path = "../macro_sha_count_client" }
 model = { path = "../model" }
 openssl = { workspace = true }
 redis = { workspace = true, features = [
   "aio",
-  "cluster-async",
   "tokio-native-tls-comp",
 ] }
 s3_client = { path = "../s3_client" }
