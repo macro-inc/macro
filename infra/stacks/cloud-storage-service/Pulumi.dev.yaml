@@ -12,3 +12,4 @@ config:
   cloud-storage-service:sync_service_auth_key: sync-service-key-dev
   cloud-storage-service:authentication_service_secret_key: authentication-service-internal-api-key-dev
   cloud-storage-service:opensearch_password_key: macro-opensearch-password-dev
+  cloud-storage-service:macro_cache_secret_key: macro-cache-dev

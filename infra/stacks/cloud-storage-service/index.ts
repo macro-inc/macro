@@ -30,6 +30,12 @@ const DATABASE_URL = aws.secretsmanager
   })
   .apply((secret) => secret.secretString);
 
+const MACRO_CACHE = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require(`macro_cache_secret_key`),
+  })
+  .apply((secret) => secret.secretString);
+
 const DATABASE_URL_PROXY = aws.secretsmanager
   .getSecretVersionOutput({
     secretId: config.require(`macro_db_proxy_secret_key`),
@@ -131,10 +137,6 @@ const documentStorageBucketArn: pulumi.Output<string> = cloudStorageStack
 const documentStorageBucketId: pulumi.Output<string> = cloudStorageStack
   .getOutput('documentStorageBucketId')
   .apply((id) => id as string);
-
-const cloudStorageCacheEndpoint: pulumi.Output<string> = cloudStorageStack
-  .getOutput('cloudStorageCacheEndpoint')
-  .apply((arn) => arn as string);
 
 const cloudStorageClusterArn: pulumi.Output<string> = cloudStorageStack
   .getOutput('cloudStorageClusterArn')
@@ -271,7 +273,7 @@ const cloudStorageService = new CloudStorageService(
       },
       {
         name: 'REDIS_URI',
-        value: pulumi.interpolate`rediss://${cloudStorageCacheEndpoint}`,
+        value: pulumi.interpolate`redis://${MACRO_CACHE}`,
       },
       {
         name: 'ENVIRONMENT',
@@ -424,7 +426,7 @@ const convertQueueArn: pulumi.Output<string> = convertServiceStack
 // ------------------------------------------- DOCX Unzip -------------------------------------------
 const docxUnzipHandlerEnvVars: DocxUnzipLambdaEnvVars = {
   DATABASE_URL: pulumi.interpolate`${DATABASE_URL_PROXY}`,
-  REDIS_URI: pulumi.interpolate`rediss://${cloudStorageCacheEndpoint}`,
+  REDIS_URI: pulumi.interpolate`redis://${MACRO_CACHE}`,
   ENVIRONMENT: stack,
   RUST_LOG: 'docx_unzip_handler=info',
   DOCUMENT_STORAGE_BUCKET: pulumi.interpolate`${documentStorageBucketId}`,
