@@ -2498,7 +2498,7 @@ dependencies = [
  "macro_db_client",
  "macro_entrypoint",
  "macro_env",
- "macro_redis_cluster_client",
+ "macro_sha_count_client",
  "model",
  "models_properties",
  "openssl",
@@ -2780,7 +2780,7 @@ dependencies = [
  "macro_middleware",
  "macro_notify",
  "macro_project_utils",
- "macro_redis_cluster_client",
+ "macro_sha_count_client",
  "macro_share_permissions",
  "macro_user_id",
  "macro_uuid",
@@ -2897,7 +2897,7 @@ dependencies = [
  "macro_db_client",
  "macro_entrypoint",
  "macro_env",
- "macro_redis_cluster_client",
+ "macro_sha_count_client",
  "macro_uuid",
  "model",
  "openssl",
@@ -5153,7 +5153,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "macro_redis_cluster_client"
+name = "macro_service_client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+]
+
+[[package]]
+name = "macro_sha_count_client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -5161,13 +5168,6 @@ dependencies = [
  "redis",
  "tokio",
  "tracing",
-]
-
-[[package]]
-name = "macro_service_client"
-version = "0.1.0"
-dependencies = [
- "anyhow",
 ]
 
 [[package]]

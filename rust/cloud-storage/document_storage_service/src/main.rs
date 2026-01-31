@@ -18,7 +18,7 @@ use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::F
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
-use macro_redis_cluster_client::Redis;
+use macro_sha_count_client::Redis;
 use opensearch_client::OpensearchClient;
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
@@ -108,7 +108,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Redis handles it own connection pool internally. Each time we use redis
     // we should be using redis_client.get_connection() to grab a specific connection
-    let redis_client = redis::cluster::ClusterClient::new(vec![config.vars.redis_uri.as_ref()])
+    let redis_client = redis::Client::open(config.vars.redis_uri.as_ref())
         .expect("could not connect to redis client");
 
     match redis_client.get_connection().is_err() {
