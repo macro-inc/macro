@@ -196,7 +196,8 @@ export function MessageList(props: MessageListProps) {
         nextOffset = targetBottom - handle.viewportSize;
         break;
       case 'center':
-        nextOffset = targetTop - (handle.viewportSize - targetBounds.height) / 2;
+        nextOffset =
+          targetTop - (handle.viewportSize - targetBounds.height) / 2;
         break;
       default:
         if (targetTop < visibleTop) {
@@ -648,7 +649,7 @@ function MessageListImpl(props: MessageListProps) {
   });
 
   createEffect(() => {
-    rows();
+    threadRows();
     setIsPrepend(false);
   });
 
@@ -932,7 +933,9 @@ function MessageListImpl(props: MessageListProps) {
                         setNewIndicatorShown={setNewIndicatorShown}
                         virtualHandle={virtualHandle()!}
                         container={containerRef()}
-                        listContext={messageListContext[row.id] ?? defaultContext}
+                        listContext={
+                          messageListContext[row.id] ?? defaultContext
+                        }
                         isTarget={isActiveTargetMessage(row.message.id)}
                         channelId={() => props.channelId}
                         attachments={props.attachments}
@@ -981,7 +984,9 @@ function MessageListImpl(props: MessageListProps) {
                                 setNewIndicatorShown={setNewIndicatorShown}
                                 virtualHandle={virtualHandle()!}
                                 container={containerRef()}
-                                listContext={childContext() ?? childDefaultContext}
+                                listContext={
+                                  childContext() ?? childDefaultContext
+                                }
                                 isTarget={isActiveTargetMessage(child.id)}
                                 channelId={() => props.channelId}
                                 attachments={props.attachments}
