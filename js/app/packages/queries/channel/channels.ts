@@ -8,6 +8,7 @@ export function useListChannelsQuery() {
   return useQuery(() => ({
     queryKey: channelKeys.listChannels.queryKey,
     queryFn: async () => await throwOnErr(commsServiceClient.getChannels),
+    initialData: [],
   }));
 }
 

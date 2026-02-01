@@ -26,9 +26,9 @@ type ChannelQueryOptions = UseBaseQueryOptions<
   getChannelResponseError
 >;
 
-function channelQueryOptions(channelId: string): ChannelQueryOptions {
+export function channelQueryOptions(channelId: string): ChannelQueryOptions {
   return {
-    gcTime: 0,
+    gcTime: 1000 * 60 * 2, // 2 minutes (avoid brief unmount GC causing suspense)
     queryKey: channelKeys.withID(channelId).queryKey,
     queryFn: async () => {
       const result = await throwOnErr(

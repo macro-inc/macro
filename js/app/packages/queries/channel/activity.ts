@@ -13,6 +13,7 @@ export function useChannelsActivityQuery() {
   return useQuery(() => ({
     queryKey: channelKeys.activity.queryKey,
     queryFn: async () => await throwOnErr(commsServiceClient.getActivity),
+    initialData: [],
   }));
 }
 
