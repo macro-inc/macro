@@ -51,6 +51,7 @@ import { type VirtualizerHandle, VList } from 'virtua/solid';
 import type { ScrollToIndexOpts } from 'virtua/unstable_core';
 import { MessageContainer } from '../Message/MessageContainer';
 import { ReplyInputsPortaler } from '../ReplyInputsPortaler';
+import type { MessageListContext } from '@block-channel/utils/listContext';
 
 false && observedSize;
 
@@ -635,7 +636,7 @@ function MessageListImpl(props: MessageListProps) {
     children: Message[];
   };
 
-  const rows = createMemo<ThreadRow[]>(() => {
+  const threadRows = createMemo<ThreadRow[]>(() => {
     const list = filteredTopLevelMessages() ?? [];
     const out: ThreadRow[] = [];
     for (let i = list.length - 1; i >= 0; i--) {
@@ -886,7 +887,7 @@ function MessageListImpl(props: MessageListProps) {
               }}
               class="scrollbar-hidden [&>div]:mb-auto"
               data-channel-message-list
-              data={rows() ?? []}
+              data={threadRows() ?? []}
               shift={isPrepend()}
               itemSize={BASE_ITEM_SIZE}
               bufferSize={10 * BASE_ITEM_SIZE}
@@ -909,6 +910,14 @@ function MessageListImpl(props: MessageListProps) {
                 const parentIndex = createMemo(
                   () => messageListContext[row.id]?.index ?? 0
                 );
+                const defaultContext: MessageListContext = {
+                  index: parentIndex(),
+                  isNewMessage: false,
+                  isParentNewMessage: false,
+                  threadIndex: -1,
+                  previousNonThreadedMessage: undefined,
+                  isInLastThread: false,
+                };
                 return (
                   <Show when={virtualHandle()}>
                     <div>
@@ -923,7 +932,7 @@ function MessageListImpl(props: MessageListProps) {
                         setNewIndicatorShown={setNewIndicatorShown}
                         virtualHandle={virtualHandle()!}
                         container={containerRef()}
-                        listContext={messageListContext[row.id]}
+                        listContext={messageListContext[row.id] ?? defaultContext}
                         isTarget={isActiveTargetMessage(row.message.id)}
                         channelId={() => props.channelId}
                         attachments={props.attachments}
@@ -938,6 +947,14 @@ function MessageListImpl(props: MessageListProps) {
                           const childIndexAccessor = createMemo(
                             () => childContext()?.index ?? 0
                           );
+                          const childDefaultContext: MessageListContext = {
+                            index: childIndexAccessor(),
+                            isNewMessage: false,
+                            isParentNewMessage: false,
+                            threadIndex: -1,
+                            previousNonThreadedMessage: undefined,
+                            isInLastThread: false,
+                          };
                           const isThreadIndexWithinCutoff = createMemo(() => {
                             const ctx = childContext();
                             if (!ctx) return false;
@@ -964,7 +981,7 @@ function MessageListImpl(props: MessageListProps) {
                                 setNewIndicatorShown={setNewIndicatorShown}
                                 virtualHandle={virtualHandle()!}
                                 container={containerRef()}
-                                listContext={childContext()!}
+                                listContext={childContext() ?? childDefaultContext}
                                 isTarget={isActiveTargetMessage(child.id)}
                                 channelId={() => props.channelId}
                                 attachments={props.attachments}

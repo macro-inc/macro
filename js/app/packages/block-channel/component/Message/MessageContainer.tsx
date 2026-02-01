@@ -111,7 +111,7 @@ type MessageProps = {
   setNewIndicatorShown: Setter<number | undefined>;
   virtualHandle: VirtualizerHandle;
   container?: HTMLDivElement;
-  listContext?: MessageListContext;
+  listContext: MessageListContext;
   setMessageContainerRef?: Setter<HTMLDivElement | undefined>;
   isTarget: boolean;
   channelId: Accessor<string>;
@@ -174,11 +174,10 @@ export function MessageContainer(props: MessageProps) {
   });
 
   // We're only checking new messages that are not part of a thread
-  const isNewMessage = () => props.listContext?.isNewMessage ?? false;
+  const isNewMessage = () => props.listContext.isNewMessage;
 
   // Works for one-level of nesting. In the future we'll need to track at which depths a message is part of a new message chain.
-  const isParentNewMessage = () =>
-    props.listContext?.isParentNewMessage ?? false;
+  const isParentNewMessage = () => props.listContext.isParentNewMessage;
 
   const previousMessage = () => {
     return props.index() > 0
@@ -187,7 +186,7 @@ export function MessageContainer(props: MessageProps) {
   };
 
   const newDayPreviousNonThreadMessage = () => {
-    const prev = props.listContext?.previousNonThreadedMessage;
+    const prev = props.listContext.previousNonThreadedMessage;
     if (!prev) return false;
     return !isSameDay(new Date(message.created_at), new Date(prev.created_at));
   };
@@ -223,10 +222,9 @@ export function MessageContainer(props: MessageProps) {
   const isLastMessage = createMemo(() => {
     return (
       props.index() === props.orderedMessages().length - 1 ||
-      ((props.listContext?.isInLastThread ?? false) &&
+      (props.listContext.isInLastThread &&
         !threadState()?.threadExpanded &&
-        (props.listContext?.threadIndex ?? -1) ===
-          COLLAPSED_THREAD_INDEX_CUTOFF)
+        props.listContext.threadIndex === COLLAPSED_THREAD_INDEX_CUTOFF)
     );
   });
 
@@ -256,8 +254,7 @@ export function MessageContainer(props: MessageProps) {
       !threadState()?.threadExpanded &&
       props.threadSiblings &&
       props.threadSiblings.length > COLLAPSED_THREAD_INDEX_CUTOFF + 1 &&
-      (props.listContext?.threadIndex ?? -1) ===
-        COLLAPSED_THREAD_INDEX_CUTOFF
+      props.listContext.threadIndex === COLLAPSED_THREAD_INDEX_CUTOFF
     );
   });
 
