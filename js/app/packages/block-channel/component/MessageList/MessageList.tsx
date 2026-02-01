@@ -13,7 +13,6 @@ import {
   createMessageListContextLookup,
   type MessageListContextLookup,
 } from '@block-channel/utils/listContext';
-import { shouldResetVirtualList } from '@block-channel/utils/virtualList';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
@@ -55,12 +54,6 @@ import { ReplyInputsPortaler } from '../ReplyInputsPortaler';
 
 false && observedSize;
 
-// Provide stable row models to VList so item instances are preserved across moves/insertions
-type RowModel = {
-  id: string;
-  message: Message;
-};
-
 // The size of a message with a profile picture and a one line message
 const BASE_ITEM_SIZE = 50;
 
@@ -70,7 +63,12 @@ type MessageListContentContextValues = {
   scrollContainerRef: Accessor<HTMLElement | undefined>;
   registerScrollContainer: (el: HTMLElement) => void;
   scrollToIndex: (index: number, alignOpts?: ScrollToIndexOpts) => void;
-  scrollToMessage: (messageID: string, index: number, focus?: boolean) => void;
+  scrollToMessage: (
+    messageID: string,
+    index: number,
+    focus?: boolean,
+    alignOpts?: ScrollToIndexOpts
+  ) => void;
   createReply: (id: string, focus?: boolean) => void;
   toggleThread: (threadID: string, value?: boolean) => void;
   closeThreadReply: (threadID: string, expanded?: boolean) => void;
@@ -142,10 +140,104 @@ export function MessageList(props: MessageListProps) {
 
   const [threadViewStore, setThreadViewStore] = createStore<ThreadViewData>({});
 
-  const normalizeIndex = (index: number) => {
-    const length = props.orderedMessages().length;
+  const topLevelMessages = createMemo(() =>
+    props.messages.filter(
+      (message) =>
+        !message.thread_id &&
+        (!message.deleted_at || (props.threads[message.id]?.length ?? 0) > 0)
+    )
+  );
 
-    return length - 1 - index;
+  const topLevelIndexByMessageId = createMemo(() => {
+    const list = topLevelMessages();
+    const map = new Map<string, number>();
+    for (let i = 0; i < list.length; i++) {
+      const parent = list[i];
+      map.set(parent.id, i);
+      const children = props.threads[parent.id] ?? [];
+      for (const child of children) {
+        map.set(child.id, i);
+      }
+    }
+    return map;
+  });
+
+  const getVirtualIndexForMessageId = (messageId: string) => {
+    const list = topLevelMessages();
+    const topLevelIndex = topLevelIndexByMessageId().get(messageId);
+    if (topLevelIndex === undefined) return undefined;
+    return list.length - 1 - topLevelIndex;
+  };
+
+  const scrollElementIntoView = (
+    targetEl: HTMLElement,
+    align: ScrollToIndexOpts['align'] = 'nearest'
+  ) => {
+    const handle = virtualHandle();
+    const container = scrollContainerRef();
+    if (!handle || !container) return;
+
+    const targetBounds = targetEl.getBoundingClientRect();
+    const containerBounds = container.getBoundingClientRect();
+    const currentOffset = handle.scrollOffset;
+    const targetTop = targetBounds.top - containerBounds.top + currentOffset;
+    const targetBottom = targetTop + targetBounds.height;
+    const visibleTop = currentOffset;
+    const visibleBottom = currentOffset + handle.viewportSize;
+
+    let nextOffset: number | undefined;
+
+    switch (align) {
+      case 'start':
+        nextOffset = targetTop;
+        break;
+      case 'end':
+        nextOffset = targetBottom - handle.viewportSize;
+        break;
+      case 'center':
+        nextOffset = targetTop - (handle.viewportSize - targetBounds.height) / 2;
+        break;
+      default:
+        if (targetTop < visibleTop) {
+          nextOffset = targetTop;
+        } else if (targetBottom > visibleBottom) {
+          nextOffset = targetBottom - handle.viewportSize;
+        }
+        break;
+    }
+
+    if (nextOffset !== undefined) {
+      handle.scrollTo(nextOffset);
+    }
+  };
+
+  const tryAlignMessageElement = (
+    messageId: string,
+    align: ScrollToIndexOpts['align'],
+    focus: boolean
+  ) => {
+    const container = scrollContainerRef();
+    if (!container) return false;
+    const targetEl = container.querySelector<HTMLElement>(
+      `[data-message-body-id="${messageId}"]`
+    );
+    if (!targetEl) return false;
+    scrollElementIntoView(targetEl, align);
+    if (focus) targetEl.focus();
+    return true;
+  };
+
+  const scheduleAlignMessageElement = (
+    messageId: string,
+    align: ScrollToIndexOpts['align'] = 'nearest',
+    focus: boolean = false
+  ) => {
+    requestAnimationFrame(() => {
+      if (tryAlignMessageElement(messageId, align, focus)) return;
+      setTimeout(() => {
+        tryAlignMessageElement(messageId, align, focus);
+      }, 0);
+    });
   };
 
   const context: MessageListContentContextValues = {
@@ -154,27 +246,25 @@ export function MessageList(props: MessageListProps) {
     scrollContainerRef,
     registerScrollContainer: setScrollContainerRef,
     scrollToIndex: function (index: number, opts?: ScrollToIndexOpts): void {
-      virtualHandle()?.scrollToIndex(normalizeIndex(index), opts);
+      const messageId = props.orderedMessages()[index]?.id;
+      if (!messageId) return;
+      const virtualIndex = getVirtualIndexForMessageId(messageId);
+      if (virtualIndex === undefined) return;
+      virtualHandle()?.scrollToIndex(virtualIndex, opts);
+      scheduleAlignMessageElement(messageId, opts?.align, false);
     },
     scrollToMessage: function (
       messageID: string,
-      index: number,
-      focus: boolean = true
+      _index: number,
+      focus: boolean = true,
+      alignOpts?: ScrollToIndexOpts
     ): void {
-      const handle = virtualHandle();
-
-      if (!handle) return;
-
-      handle.scrollToIndex(normalizeIndex(index), { align: 'end' });
-      if (!focus) return;
-      const targetEl = scrollContainerRef()?.querySelector<HTMLElement>(
-        `[data-message-body-id="${messageID}"]`
-      );
-      if (targetEl) {
-        requestAnimationFrame(() => {
-          targetEl.focus();
-        });
-      }
+      const virtualIndex = getVirtualIndexForMessageId(messageID);
+      if (virtualIndex === undefined) return;
+      virtualHandle()?.scrollToIndex(virtualIndex, {
+        align: alignOpts?.align ?? 'nearest',
+      });
+      scheduleAlignMessageElement(messageID, alignOpts?.align, focus);
     },
     createReply: function (id: string, focus = false): void {
       setThreadViewStore(id, (prev) => {
@@ -257,27 +347,15 @@ function MessageListImpl(props: MessageListProps) {
 
   const [isNearBottom, setIsNearBottom] = createSignal(true);
   const [initialScrollComplete, setInitialScrollComplete] = createSignal(false);
-  const [virtualListResetVersion, setVirtualListResetVersion] =
-    createSignal(0);
-  let pendingScrollOffset: number | undefined;
-
-  const normalizeIndex = (index: number) => {
-    const length = props.orderedMessages().length;
-
-    return length - 1 - index;
-  };
 
   // Navigation methods for keyboard navigation
   const navigateToMessage = (messageId: string): boolean => {
     const messages = props.orderedMessages();
     const index = messages.findIndex((m) => m.id === messageId);
     if (index === -1) return false;
-
-    const handle = virtualHandle();
-    if (!handle) return false;
-
-    // Scroll to the message
-    handle.scrollToIndex(normalizeIndex(index), { align: 'nearest' });
+    listContext.scrollToMessage(messageId, index, false, {
+      align: 'nearest',
+    });
 
     // Focus after scroll completes
     requestAnimationFrame(() => {
@@ -377,10 +455,7 @@ function MessageListImpl(props: MessageListProps) {
       forceBottom ||
       ((!target || delta > TARGET_MESSAGE_ACTIVE_TIME) && isNearBottom())
     ) {
-      const lastIndex = 0;
-      virtualHandle()?.scrollToIndex(lastIndex, {
-        align: 'end',
-      });
+      virtualHandle()?.scrollToIndex(0, { align: 'end' });
       return;
     }
 
@@ -426,7 +501,7 @@ function MessageListImpl(props: MessageListProps) {
     }
 
     setTargetMessageActive(true);
-    virtualHandle()?.scrollToIndex(normalizeIndex(index), {
+    listContext.scrollToMessage(targetMessageId, index, false, {
       align: 'center',
     });
     setTimeout(() => {
@@ -496,30 +571,11 @@ function MessageListImpl(props: MessageListProps) {
     on(flattenedThreaded, (flat, prev) => {
       const oldFlat = prev;
       if (oldFlat !== flat) {
-        if (
-          oldFlat &&
-          shouldResetVirtualList(
-            oldFlat.map((message) => message.id),
-            flat.map((message) => message.id)
-          )
-        ) {
-          pendingScrollOffset = virtualHandle()?.scrollOffset;
-          setVirtualListResetVersion((version) => version + 1);
-        }
         props.setOrderedMessages(flat);
         computeListContext(flat);
       }
     })
   );
-  createEffect(() => {
-    const handle = virtualHandle();
-    if (!handle || pendingScrollOffset === undefined) return;
-    const offset = pendingScrollOffset;
-    pendingScrollOffset = undefined;
-    requestAnimationFrame(() => {
-      handle.scrollTo(offset);
-    });
-  });
 
   // Thread reply inputs are portaled to the correct message container. This keeps them in the correct location even as new thread replies come in, but if they are re-portaled while a user is typing, the user can momentarily lose input. To address this, we gate updates to the thread that a user is currently typing in.
   const [localTypingThreadId, setLocalTypingThreadId] = createSignal<
@@ -573,12 +629,22 @@ function MessageListImpl(props: MessageListProps) {
     return currentTypingId;
   });
 
-  const rows = mapArray(
-    () => props.orderedMessages().toReversed(),
-    (msg) => {
-      return { id: msg.id, message: msg } as RowModel;
+  type ThreadRow = {
+    id: string;
+    message: Message;
+    children: Message[];
+  };
+
+  const rows = createMemo<ThreadRow[]>(() => {
+    const list = filteredTopLevelMessages() ?? [];
+    const out: ThreadRow[] = [];
+    for (let i = list.length - 1; i >= 0; i--) {
+      const message = list[i];
+      const children = (viewThreads[message.id] ?? []).filter(messageFilterFn);
+      out.push({ id: message.id, message, children });
     }
-  );
+    return out;
+  });
 
   createEffect(() => {
     rows();
@@ -597,36 +663,17 @@ function MessageListImpl(props: MessageListProps) {
     }
   });
 
-  // Indices of messages that should remain mounted even when off screen.
-  // Criteria: message is last in its thread AND that thread has an active reply.
-  // NOTE: VList receives `rows` (orderedMessages reversed), so indices must be normalized.
+  // Indices of top-level rows that should remain mounted even when off screen.
+  // Criteria: thread has an active reply, so keep its parent row mounted.
+  // NOTE: VList receives reversed top-level rows, so indices must be normalized.
   const keepMountedIndices = createMemo(() => {
-    const list = props.orderedMessages() ?? [];
+    const list = filteredTopLevelMessages() ?? [];
     const length = list.length;
     const indices: number[] = [];
     for (let i = 0; i < length; i++) {
       const msg = list[i];
-      const next = list[i + 1];
-      const threadId = msg.thread_id;
-
-      if (!threadId) continue;
-
-      const threadState = listContext.getThreadState(threadId);
-
-      // Since orderedMessages is a flat list: if the next message' thread id is different OR
-      // there is no next message, then this message is the last message in the thread
-      const isLastInThread =
-        (next && next.thread_id !== msg.thread_id) || !next;
-
-      // We captured this thread reply but there was no message. The user might be
-      // typing or want to type a reply
-      const isLocallyFrozenWithEmptyMessage = !viewThreads[msg.id]?.length;
-
-      if (
-        (isLastInThread && threadState?.hasActiveReply) ||
-        (threadState?.hasActiveReply && isLocallyFrozenWithEmptyMessage)
-      ) {
-        // Normalize index for VList's reversed data array (rows = orderedMessages.toReversed())
+      const threadState = listContext.getThreadState(msg.id);
+      if (threadState?.hasActiveReply) {
         indices.push(length - 1 - i);
       }
     }
@@ -773,7 +820,9 @@ function MessageListImpl(props: MessageListProps) {
         .orderedMessages()
         ?.findIndex((m) => m.id === messages[0].id);
       if (firstUnviewedIndex === undefined) return;
-      virtualHandle()?.scrollToIndex(normalizeIndex(firstUnviewedIndex), {
+      const targetMessageId = props.orderedMessages()?.[firstUnviewedIndex]?.id;
+      if (!targetMessageId) return;
+      listContext.scrollToMessage(targetMessageId, firstUnviewedIndex, false, {
         align: 'start',
       });
     }
@@ -818,98 +867,118 @@ function MessageListImpl(props: MessageListProps) {
       >
         <Switch fallback={<EmptyMessageList />}>
           <Match when={props.messages.length > 0}>
-            <For each={[virtualListResetVersion()]}>
-              {() => (
-                <VList
-                  ref={(handle) => {
-                    if (handle) {
-                      listContext.registerVirtualHandle(handle);
-                    }
-                    setVirtualHandle(handle);
-                  }}
-                  style={{
-                    'max-height': `${listHeight()}px`,
-                    height: '100%',
-                    contain: 'none',
-                    'overflow-x': 'hidden',
-                    'overflow-y': 'scroll',
-                    'overflow-anchor': 'none',
-                    display: 'flex',
-                    'flex-direction': 'column-reverse',
-                  }}
-                  class="scrollbar-hidden [&>div]:mb-auto"
-                  data-channel-message-list
-                  data={rows() ?? []}
-                  shift={isPrepend()}
-                  itemSize={BASE_ITEM_SIZE}
-                  bufferSize={10 * BASE_ITEM_SIZE}
-                  keepMounted={keepMountedIndices()}
-                  onScroll={handleScroll}
-                  onScrollEnd={() => {
-                    if (!initialScrollComplete()) {
-                      setInitialScrollComplete(true);
-                    }
-                  }}
-                >
-                  {(row: { id: string; message: Message }, i) => {
-                    const isParentless = () => !row.message.thread_id;
-                    const isThreadExpanded = createMemo(() => {
-                      if (!row.message.thread_id) return false;
-
-                      const state = listContext.getThreadState(
-                        row.message.thread_id
-                      );
-
-                      return state?.threadExpanded === true;
-                    });
-                    const isThreadIndexWithinCutoff = createMemo(() => {
-                      const ctx = messageListContext[row.id];
-                      if (!ctx) return false;
-                      return (
-                        ctx.threadIndex !== -1 &&
-                        ctx.threadIndex <= COLLAPSED_THREAD_INDEX_CUTOFF
-                      );
-                    });
-                    return (
-                      <Show
-                        when={
-                          (isParentless() ||
-                            isThreadExpanded() ||
-                            isThreadIndexWithinCutoff()) &&
-                          virtualHandle()
-                        }
-                        // For the last message in the channel, we display this
-                        // empty small div. This is a temporary fix for last thread elements not rendering
-                        fallback={i() === 0 ? <div class="h-[0.05px]" /> : null}
-                      >
-                        <MessageContainer
-                          message={row.message}
-                          lastViewed={lastViewed}
-                          isFocused={isFocused(row.id)}
-                          index={() => normalizeIndex(i())}
-                          orderedMessages={props.orderedMessages}
-                          threadSiblings={viewThreads[
-                            row.message.thread_id ?? ''
-                          ]?.filter(messageFilterFn)}
-                          threadChildren={viewThreads[
-                            row.message.id ?? ''
-                          ]?.filter(messageFilterFn)}
-                          newIndicatorShown={newIndicatorShown}
-                          setNewIndicatorShown={setNewIndicatorShown}
-                          virtualHandle={virtualHandle()!}
-                          container={containerRef()}
-                          listContext={messageListContext[row.id]}
-                          isTarget={isActiveTargetMessage(row.message.id)}
-                          channelId={() => props.channelId}
-                          attachments={props.attachments}
-                          reactions={props.reactions}
-                        />
-                      </Show>
-                    );
-                  }}
-                </VList>
-              )}
-            </For>
+            <VList
+              ref={(handle) => {
+                if (handle) {
+                  listContext.registerVirtualHandle(handle);
+                }
+                setVirtualHandle(handle);
+              }}
+              style={{
+                'max-height': `${listHeight()}px`,
+                height: '100%',
+                contain: 'none',
+                'overflow-x': 'hidden',
+                'overflow-y': 'scroll',
+                'overflow-anchor': 'none',
+                display: 'flex',
+                'flex-direction': 'column-reverse',
+              }}
+              class="scrollbar-hidden [&>div]:mb-auto"
+              data-channel-message-list
+              data={rows() ?? []}
+              shift={isPrepend()}
+              itemSize={BASE_ITEM_SIZE}
+              bufferSize={10 * BASE_ITEM_SIZE}
+              keepMounted={keepMountedIndices()}
+              onScroll={handleScroll}
+              onScrollEnd={() => {
+                if (!initialScrollComplete()) {
+                  setInitialScrollComplete(true);
+                }
+              }}
+            >
+              {(row: ThreadRow) => {
+                const threadChildren = () => row.children;
+                const threadState = createMemo(() =>
+                  listContext.getThreadState(row.message.id)
+                );
+                const isThreadExpanded = createMemo(
+                  () => threadState()?.threadExpanded === true
+                );
+                const parentIndex = createMemo(
+                  () => messageListContext[row.id]?.index ?? 0
+                );
+                return (
+                  <Show when={virtualHandle()}>
+                    <div>
+                      <MessageContainer
+                        message={row.message}
+                        lastViewed={lastViewed}
+                        isFocused={isFocused(row.id)}
+                        index={parentIndex}
+                        orderedMessages={props.orderedMessages}
+                        threadChildren={threadChildren()}
+                        newIndicatorShown={newIndicatorShown}
+                        setNewIndicatorShown={setNewIndicatorShown}
+                        virtualHandle={virtualHandle()!}
+                        container={containerRef()}
+                        listContext={messageListContext[row.id]}
+                        isTarget={isActiveTargetMessage(row.message.id)}
+                        channelId={() => props.channelId}
+                        attachments={props.attachments}
+                        reactions={props.reactions}
+                      />
+                      <For each={threadChildren()}>
+                        {(child) => {
+                          const childId = () => child.id;
+                          const childContext = createMemo(
+                            () => messageListContext[childId()]
+                          );
+                          const childIndexAccessor = createMemo(
+                            () => childContext()?.index ?? 0
+                          );
+                          const isThreadIndexWithinCutoff = createMemo(() => {
+                            const ctx = childContext();
+                            if (!ctx) return false;
+                            return (
+                              ctx.threadIndex !== -1 &&
+                              ctx.threadIndex <= COLLAPSED_THREAD_INDEX_CUTOFF
+                            );
+                          });
+                          return (
+                            <Show
+                              when={
+                                isThreadExpanded() ||
+                                isThreadIndexWithinCutoff()
+                              }
+                            >
+                              <MessageContainer
+                                message={child}
+                                lastViewed={lastViewed}
+                                isFocused={isFocused(childId())}
+                                index={childIndexAccessor}
+                                orderedMessages={props.orderedMessages}
+                                threadSiblings={threadChildren()}
+                                newIndicatorShown={newIndicatorShown}
+                                setNewIndicatorShown={setNewIndicatorShown}
+                                virtualHandle={virtualHandle()!}
+                                container={containerRef()}
+                                listContext={childContext()!}
+                                isTarget={isActiveTargetMessage(child.id)}
+                                channelId={() => props.channelId}
+                                attachments={props.attachments}
+                                reactions={props.reactions}
+                              />
+                            </Show>
+                          );
+                        }}
+                      </For>
+                    </div>
+                  </Show>
+                );
+              }}
+            </VList>
           </Match>
         </Switch>
         <Show when={showJumpToUnviewedMessages() && unviewedMessages()}>

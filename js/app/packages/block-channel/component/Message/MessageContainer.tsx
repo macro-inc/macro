@@ -111,7 +111,7 @@ type MessageProps = {
   setNewIndicatorShown: Setter<number | undefined>;
   virtualHandle: VirtualizerHandle;
   container?: HTMLDivElement;
-  listContext: MessageListContext;
+  listContext?: MessageListContext;
   setMessageContainerRef?: Setter<HTMLDivElement | undefined>;
   isTarget: boolean;
   channelId: Accessor<string>;
@@ -223,9 +223,10 @@ export function MessageContainer(props: MessageProps) {
   const isLastMessage = createMemo(() => {
     return (
       props.index() === props.orderedMessages().length - 1 ||
-      (props.listContext.isInLastThread &&
+      ((props.listContext?.isInLastThread ?? false) &&
         !threadState()?.threadExpanded &&
-        props.listContext.threadIndex === COLLAPSED_THREAD_INDEX_CUTOFF)
+        (props.listContext?.threadIndex ?? -1) ===
+          COLLAPSED_THREAD_INDEX_CUTOFF)
     );
   });
 
@@ -255,7 +256,8 @@ export function MessageContainer(props: MessageProps) {
       !threadState()?.threadExpanded &&
       props.threadSiblings &&
       props.threadSiblings.length > COLLAPSED_THREAD_INDEX_CUTOFF + 1 &&
-      props.listContext.threadIndex === COLLAPSED_THREAD_INDEX_CUTOFF
+      (props.listContext?.threadIndex ?? -1) ===
+        COLLAPSED_THREAD_INDEX_CUTOFF
     );
   });
 
