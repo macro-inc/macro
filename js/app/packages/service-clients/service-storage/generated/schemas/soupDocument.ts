@@ -6,6 +6,7 @@
  */
 import type { SoupDocumentBranchedFromId } from './soupDocumentBranchedFromId';
 import type { SoupDocumentBranchedFromVersionId } from './soupDocumentBranchedFromVersionId';
+import type { SoupDocumentDeletedAt } from './soupDocumentDeletedAt';
 import type { SoupDocumentDocumentFamilyId } from './soupDocumentDocumentFamilyId';
 import type { SoupDocumentFileType } from './soupDocumentFileType';
 import type { SoupDocumentProjectId } from './soupDocumentProjectId';
@@ -22,6 +23,8 @@ This could be either DocumentInstance or DocumentBom id depending on the file ty
   branchedFromVersionId?: SoupDocumentBranchedFromVersionId;
   /** The time the document was created */
   createdAt: number;
+  /** The time the document was deleted */
+  deletedAt: SoupDocumentDeletedAt;
   /** The id of the document family this document belongs to */
   documentFamilyId?: SoupDocumentDocumentFamilyId;
   /** The version of the document

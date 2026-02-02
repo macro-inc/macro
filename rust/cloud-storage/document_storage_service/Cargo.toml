@@ -30,7 +30,6 @@ location_check = []
 
 [dependencies]
 anyhow = { workspace = true }
-aws-config = { workspace = true }
 aws-sdk-dynamodb = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
@@ -57,6 +56,7 @@ http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }
 lazy_static = { workspace = true }
 macro_auth = { path = "../macro_auth" }
+macro_aws_config = { path = "../macro_aws_config" }
 macro_axum_utils = { path = "../macro_axum_utils" }
 macro_cors = { path = "../macro_cors" }
 macro_db_client = { path = "../macro_db_client" }
@@ -70,7 +70,7 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
 ] }
 macro_notify = { path = "../macro_notify" }
 macro_project_utils = { path = "../macro_project_utils" }
-macro_redis_cluster_client = { path = "../macro_redis_cluster_client" }
+macro_sha_count_client = { path = "../macro_sha_count_client" }
 macro_share_permissions = { path = "../macro_share_permissions" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
@@ -85,7 +85,10 @@ models_pagination = { path = "../models_pagination", features = ["axum"] }
 models_permissions = { path = "../models_permissions" }
 models_properties = { path = "../models_properties" }
 models_soup = { path = "../models_soup", features = ["schema"] }
+opensearch_client = { path = "../opensearch_client" }
 properties = { path = "../properties" }
+properties_service = { path = "../properties_service" }
+search_service = { path = "../search_service" }
 rayon = "1.10.0"
 redis = { workspace = true, features = [
   "aio",

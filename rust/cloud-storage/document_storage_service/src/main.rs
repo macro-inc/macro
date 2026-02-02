@@ -1,6 +1,8 @@
 use crate::{
     api::context::{ApiContext, DocumentStorageServiceAuthKey},
-    config::{CloudfrontSignerPrivateKeySecretName, DocumentPermissionJwtSecretKey},
+    config::{
+        DocumentPermissionJwtSecretKey, DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
+    },
     service::s3::S3,
 };
 use anyhow::Context;
@@ -15,9 +17,9 @@ use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
-use macro_env_var::env_var;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
-use macro_redis_cluster_client::Redis;
+use macro_sha_count_client::Redis;
+use opensearch_client::OpensearchClient;
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
 };
@@ -41,17 +43,17 @@ async fn main() -> anyhow::Result<()> {
     MacroEntrypoint::default().init();
     let env = Environment::new_or_prod();
 
-    let aws_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-        .region("us-east-1")
-        .load()
-        .await;
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
 
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
         aws_sdk_secretsmanager::Client::new(&aws_config),
     );
 
     let cloudfront_signer_private_key = secretsmanager_client
-        .get_maybe_secret_value(env, CloudfrontSignerPrivateKeySecretName::new()?)
+        .get_maybe_secret_value(
+            env,
+            DocumentStorageServiceCloudfrontSignerPrivateKeySecretName::new()?,
+        )
         .await?;
 
     let document_permission_jwt_secret = secretsmanager_client
@@ -86,30 +88,7 @@ async fn main() -> anyhow::Result<()> {
         "initialized db connection"
     );
 
-    // Create DynamoDB client with local endpoint for local environment
-    // If DynamoEndpointUrl is not set, use AWS DynamoDB even in local mode
-    let dynamo_db = if matches!(config.environment, Environment::Local) {
-        env_var!(
-            struct DynamoEndpointUrl;
-        );
-        match DynamoEndpointUrl::new() {
-            Ok(endpoint_url) => {
-                tracing::info!("Using local DynamoDB endpoint: {}", endpoint_url.as_ref());
-                let local_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-                    .region("us-east-1")
-                    .endpoint_url(endpoint_url.to_string())
-                    .load()
-                    .await;
-                aws_sdk_dynamodb::Client::new(&local_config)
-            }
-            Err(_) => {
-                tracing::info!("DynamoEndpointUrl not set, using AWS DynamoDB");
-                aws_sdk_dynamodb::Client::new(&aws_config)
-            }
-        }
-    } else {
-        aws_sdk_dynamodb::Client::new(&aws_config)
-    };
+    let dynamo_db = aws_sdk_dynamodb::Client::new(&aws_config);
 
     let dynamodb_client = DynamodbClient::new_from_client(
         dynamo_db.clone(),
@@ -129,7 +108,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Redis handles it own connection pool internally. Each time we use redis
     // we should be using redis_client.get_connection() to grab a specific connection
-    let redis_client = redis::cluster::ClusterClient::new(vec![config.vars.redis_uri.as_ref()])
+    let redis_client = redis::Client::open(config.vars.redis_uri.as_ref())
         .expect("could not connect to redis client");
 
     match redis_client.get_connection().is_err() {
@@ -190,6 +169,29 @@ async fn main() -> anyhow::Result<()> {
             .to_string(),
     };
 
+    // Initialize OpenSearch client
+    let opensearch_password = match config.environment {
+        Environment::Local => config.vars.opensearch_password.as_ref().to_string(),
+        _ => secretsmanager_client
+            .get_secret_value(&config.vars.opensearch_password)
+            .await
+            .context("unable to get opensearch secret")?
+            .to_string(),
+    };
+
+    let opensearch_client = OpensearchClient::new(
+        config.vars.opensearch_url.as_ref().to_string(),
+        config.vars.opensearch_username.as_ref().to_string(),
+        opensearch_password,
+    )
+    .context("unable to create opensearch client")?;
+
+    if let Err(e) = opensearch_client.health().await {
+        tracing::error!(error=?e, "error connecting to opensearch");
+        return Err(e);
+    }
+    tracing::trace!("initialized opensearch client");
+
     let frecency_service = FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone()));
     let email_service =
         EmailServiceImpl::new(EmailPgRepo::new(db.clone()), frecency_service.clone());
@@ -240,6 +242,7 @@ async fn main() -> anyhow::Result<()> {
         sync_service_client: Arc::new(sync_service_client),
         system_properties_service: Arc::new(system_properties_service),
         properties_service: Arc::new(properties_service),
+        opensearch_client: Arc::new(opensearch_client),
         config: Arc::new(config),
         jwt_validation_args,
         dss_auth_key,

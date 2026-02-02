@@ -3,7 +3,7 @@ use sqlx::types::Uuid;
 use sqlx::{Executor, Postgres};
 
 /// deletes recipients for a given message
-#[tracing::instrument(skip(executor), level = "info")]
+#[tracing::instrument(skip(executor), err)]
 pub async fn delete_message_recipients<'e, E>(executor: E, message_id: Uuid) -> anyhow::Result<()>
 where
     E: Executor<'e, Database = Postgres>,

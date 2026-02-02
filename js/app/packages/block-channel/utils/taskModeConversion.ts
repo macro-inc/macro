@@ -1,4 +1,4 @@
-import type { TaskWithProperties } from './useTaskMode';
+import type { TaskWithProperties } from '../hooks/taskmode';
 import { propertyValueToApi } from '@core/component/Properties/api/converters';
 import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { createTask } from '@core/util/create';

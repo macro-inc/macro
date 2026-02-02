@@ -491,11 +491,11 @@ const containerEnvVars = [
     value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenPublicKey}`,
   },
   {
-    name: 'PRESIGNED_URL_TTL_SECS',
+    name: 'EMAIL_SERVICE_PRESIGNED_URL_TTL_SECS',
     value: pulumi.interpolate`${PRESIGNED_URL_TTL_SECS}`,
   },
   {
-    name: 'CLOUDFRONT_SIGNER_PRIVATE_KEY',
+    name: 'EMAIL_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY',
     value: pulumi.interpolate`${CLOUDFRONT_PRIVATE_KEY}`,
   },
   {
@@ -507,11 +507,11 @@ const containerEnvVars = [
     value: emailAttachmentBucket.bucket.id,
   },
   {
-    name: 'CLOUDFRONT_DISTRIBUTION_URL',
+    name: 'EMAIL_SERVICE_CLOUDFRONT_DISTRIBUTION_URL',
     value: pulumi.interpolate`${cloudfrontDistribution.domain}`,
   },
   {
-    name: 'CLOUDFRONT_SIGNER_PUBLIC_KEY_ID',
+    name: 'EMAIL_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID',
     value: pulumi.interpolate`${cloudfrontDistribution.publicKey.id}`,
   },
 ];

@@ -35,7 +35,6 @@ send_email_notifications = ["notification_worker"]
 [dependencies]
 anyhow = { workspace = true }
 authentication_service_client = { path = "../authentication_service_client" }
-aws-config = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sesv2 = { workspace = true }
 aws-sdk-sns = { workspace = true }
@@ -53,6 +52,7 @@ macro_cache_client = { path = "../macro_cache_client", default-features = false,
   "notification_rate_limit",
 ] }
 macro_cors = { path = "../macro_cors" }
+macro_aws_config = { path = "../macro_aws_config" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env", features = ["frontend_url"] }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [

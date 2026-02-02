@@ -9,3 +9,6 @@ anyhow = { workspace = true }
 serde = { workspace = true }
 sqlx = { workspace = true }
 tracing = { workspace = true }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }

@@ -7,16 +7,14 @@ use sqlx::types::Uuid;
 
 /// Upsert methods used by contact sync process, triggered by initial backfill and daily cron.
 /// Upserts multiple contacts into the contacts table
-#[tracing::instrument(skip(pool, contacts), level = "info")]
+#[tracing::instrument(skip(pool, contacts), err)]
 pub async fn upsert_contacts(pool: &PgPool, contacts: &[Contact]) -> anyhow::Result<u64> {
     if contacts.is_empty() {
         return Ok(0);
     }
 
-    let db_contacts: Vec<db::contact::Contact> = contacts
-        .iter()
-        .map(|c| map_new_contact_to_db(c, macro_uuid::generate_uuid_v7()))
-        .collect();
+    let db_contacts: Vec<db::contact::Contact> =
+        contacts.iter().map(map_new_contact_to_db).collect();
 
     // Filter out contacts without email addresses and prepare vectors for bulk insert
     let mut ids = Vec::new();

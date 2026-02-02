@@ -84,15 +84,20 @@ export const commsServiceClient = {
       (result) => result
     );
   },
-  async postMessage(args: WithChannelId & { message: PostMessageRequest }) {
-    const { channel_id, message } = args;
+  async postMessage(
+    args: WithChannelId & { message: PostMessageRequest; nonce?: string }
+  ) {
+    const { channel_id, message, nonce } = args;
     const uniqueMentions = Array.from(new Set(message.mentions));
-    const sendMessage = { ...message, mentions: uniqueMentions };
+    const sendMessage = { ...message, mentions: uniqueMentions, nonce };
     return mapOk(
-      await commsFetch<IdResponse>(`/channels/${channel_id}/message`, {
-        method: 'POST',
-        body: JSON.stringify(sendMessage),
-      }),
+      await commsFetch<IdResponse & { nonce?: string }>(
+        `/channels/${channel_id}/message`,
+        {
+          method: 'POST',
+          body: JSON.stringify(sendMessage),
+        }
+      ),
       (result) => result ?? {}
     );
   },
@@ -105,50 +110,59 @@ export const commsServiceClient = {
       (result) => result
     );
   },
-  async postTypingUpdate(args: PostTypingRequest & WithChannelId) {
-    const { channel_id, action, thread_id } = args;
+  async postTypingUpdate(
+    args: PostTypingRequest & WithChannelId & { nonce?: string }
+  ) {
+    const { channel_id, action, thread_id, nonce } = args;
     return mapOk(
       await commsFetch<MessageResponse>(`/channels/${channel_id}/typing`, {
         method: 'POST',
-        body: JSON.stringify({ action, thread_id }),
+        body: JSON.stringify({ action, thread_id, nonce }),
       }),
       (result) => result
     );
   },
-  async postReaction(args: PostReactionRequest & WithChannelId) {
-    const { channel_id, action, emoji, message_id } = args;
+  async postReaction(
+    args: PostReactionRequest & WithChannelId & { nonce?: string }
+  ) {
+    const { channel_id, action, emoji, message_id, nonce } = args;
     return mapOk(
       await commsFetch<MessageResponse>(`/channels/${channel_id}/reaction`, {
         method: 'POST',
-        body: JSON.stringify({ action, emoji, message_id }),
+        body: JSON.stringify({ action, emoji, message_id, nonce }),
       }),
       (result) => result
     );
   },
   async patchMessage(
-    args: PatchMessageRequest & WithChannelId & WithMessageId
+    args: PatchMessageRequest &
+      WithChannelId &
+      WithMessageId & { nonce?: string }
   ) {
-    const { channel_id, content, message_id, attachment_ids_to_delete } = args;
+    const { channel_id, content, message_id, attachment_ids_to_delete, nonce } =
+      args;
     return mapOk(
       await commsFetch<MessageResponse>(
         `/channels/${channel_id}/message/${message_id}`,
         {
           method: 'PATCH',
-          body: JSON.stringify({ content, attachment_ids_to_delete }),
+          body: JSON.stringify({ content, attachment_ids_to_delete, nonce }),
         }
       ),
       (result) => result
     );
   },
-  async deleteMessage(args: WithChannelId & WithMessageId) {
-    const { channel_id, message_id } = args;
+  async deleteMessage(
+    args: WithChannelId & WithMessageId & { nonce?: string }
+  ) {
+    const { channel_id, message_id, nonce } = args;
+    const url = nonce
+      ? `/channels/${channel_id}/message/${message_id}?nonce=${encodeURIComponent(nonce)}`
+      : `/channels/${channel_id}/message/${message_id}`;
     return mapOk(
-      await commsFetch<MessageResponse>(
-        `/channels/${channel_id}/message/${message_id}`,
-        {
-          method: 'DELETE',
-        }
-      ),
+      await commsFetch<MessageResponse>(url, {
+        method: 'DELETE',
+      }),
       (result) => result
     );
   },

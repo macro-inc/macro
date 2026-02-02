@@ -77,11 +77,12 @@ pub async fn create_notification_transaction(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use macro_db_migrator::MACRO_DB_MIGRATIONS;
     use model_entity::EntityType;
     use model_notifications::NotificationEventType;
     use sqlx::{Pool, Postgres};
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
     async fn test_create_notification(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let uuid = macro_uuid::generate_uuid_v7();
         let notification = RawNotification {
@@ -101,7 +102,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
     async fn test_create_notification_transaction(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let uuid = macro_uuid::generate_uuid_v7();
         let notification = RawNotification {

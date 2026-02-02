@@ -79,23 +79,11 @@
       ],
       "stack_path": "infra/stacks/email-service/**"
     },
-    "experiment-service": {
-      "source_paths": [
-        "rust/cloud-storage/experiment_service/**"
-      ],
-      "stack_path": "infra/stacks/experiment-service/**"
-    },
     "notification-service": {
       "source_paths": [
         "rust/cloud-storage/notification_service/**"
       ],
       "stack_path": "infra/stacks/notification-service/**"
-    },
-    "organization-service": {
-      "source_paths": [
-        "rust/cloud-storage/organization_service/**"
-      ],
-      "stack_path": "infra/stacks/organization-service/**"
     },
     "organization-retention": {
       "source_paths": [
@@ -103,23 +91,11 @@
       ],
       "stack_path": "infra/stacks/organization-retention/**"
     },
-    "properties-service": {
-      "source_paths": [
-        "rust/cloud-storage/properties_service/**"
-      ],
-      "stack_path": "infra/stacks/properties-service/**"
-    },
     "search-processing-service": {
       "source_paths": [
         "rust/cloud-storage/search_processing_service/**"
       ],
       "stack_path": "infra/stacks/search-processing-service/**"
-    },
-    "search-service": {
-      "source_paths": [
-        "rust/cloud-storage/search_service/**"
-      ],
-      "stack_path": "infra/stacks/search-service/**"
     },
     "search-upload": {
       "source_paths": [

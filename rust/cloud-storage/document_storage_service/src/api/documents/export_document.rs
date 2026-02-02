@@ -200,13 +200,24 @@ async fn sign_docx_url(state: &ApiContext, key: &str) -> anyhow::Result<String> 
     let encoded_key = urlencoding::encode(key);
 
     let signed_options = get_cloudfront_signed_options(
-        &state.config.vars.cloudfront_signer_public_key_id,
-        state.config.cloudfront_signer_private_key.as_ref(),
-        state.config.presigned_url_expiry_seconds,
+        &state
+            .config
+            .vars
+            .document_storage_service_cloudfront_signer_public_key_id,
+        state
+            .config
+            .document_storage_service_cloudfront_signer_private_key
+            .as_ref(),
+        state
+            .config
+            .document_storage_service_presigned_url_expiry_seconds,
     );
 
     let signed_url = get_presigned_url(
-        &state.config.vars.cloudfront_distribution_url,
+        &state
+            .config
+            .vars
+            .document_storage_service_cloudfront_distribution_url,
         &encoded_key,
         &signed_options,
     )?;

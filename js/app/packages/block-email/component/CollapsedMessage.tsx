@@ -11,11 +11,13 @@ import {
 interface CollapsedMessageProps {
   message: MessageWithBodyReplyless;
   isFocused: boolean;
+  isFirstMessage: boolean;
   onClick: () => void;
 }
 
 export function CollapsedMessage(props: CollapsedMessageProps) {
   const [hover, setHover] = createSignal(false);
+  const [hasMouseLeft, setHasMouseLeft] = createSignal(false);
   const currentUserEmail = useEmail();
   const currentUserId = useUserId();
 
@@ -56,13 +58,21 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
       <div class="macro-message-width w-full pl-2 pr-4 sm:px-0">
         <BozzyBracket active={props.isFocused} hover={hover()} class="">
           <div
-            class="relative flex flex-row items-center w-full py-2 cursor-pointer opacity-60 hover:opacity-100 transition-all"
+            class="relative flex flex-row items-center w-full pb-2 cursor-pointer transition-all"
+            classList={{
+              'pt-1.5': !props.isFirstMessage,
+              'opacity-80': hasMouseLeft() && !hover(),
+              'opacity-100': !hasMouseLeft() || hover(),
+            }}
             data-message-body-id={props.message.db_id}
             tabIndex={0}
             onClick={props.onClick}
             onKeyDown={handleKeyDown}
             onMouseEnter={() => setHover(true)}
-            onMouseLeave={() => setHover(false)}
+            onMouseLeave={() => {
+              setHover(false);
+              setHasMouseLeft(true);
+            }}
           >
             {/* Rail line - behind avatar */}
             <div
@@ -78,7 +88,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
                 width: 'var(--user-icon-width)',
                 height: 'var(--user-icon-width)',
                 'margin-left':
-                  'calc(var(--left-of-connector) - var(--user-icon-width) / 2)',
+                  'calc(var(--left-of-connector) - var(--user-icon-width) / 2 + 1px)',
               }}
             >
               <UserIcon
@@ -98,13 +108,13 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
                   'calc(var(--left-of-connector) - var(--user-icon-width) / 2)',
               }}
             >
-              <span class="text-ink-muted w-16 shrink-0 truncate">
+              <span class="text-ink w-16 shrink-0 truncate text-sm">
                 {senderDisplay()}
               </span>
-              <span class="text-ink-extra-muted truncate">{snippet()}</span>
+              <span class="text-ink truncate">{snippet()}</span>
             </div>
             {/* Date */}
-            <div class="text-xs touch:mobile-width:text-sm text-ink-muted shrink-0 ml-4 pr-2">
+            <div class="text-xs touch:mobile-width:text-sm text-ink shrink-0 ml-4 pr-2">
               {props.message.internal_date_ts &&
                 new Date(props.message.internal_date_ts).toLocaleDateString(
                   'en-US',

@@ -41,3 +41,39 @@ impl From<MetadataObject> for FileMetadata {
         }
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct BulkDeleteRequest {
+    /// List of file IDs to delete
+    pub file_ids: Vec<String>,
+}
+
+impl BulkDeleteRequest {
+    /// Maximum number of files that can be deleted in a single bulk request
+    /// Set to 100 as that's the Dynamo Get Item limit we use to fetch metadata
+    pub fn max_file_ids(&self) -> usize {
+        100
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct DeleteResult {
+    /// File ID that was attempted to delete
+    pub file_id: String,
+    /// Whether the deletion was successful
+    pub success: bool,
+    /// Error message if deletion failed
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct BulkDeleteResponse {
+    /// Total number of files attempted
+    pub total: usize,
+    /// Number of successful deletions
+    pub succeeded: usize,
+    /// Number of failed deletions
+    pub failed: usize,
+    /// Individual results for each file
+    pub results: Vec<DeleteResult>,
+}

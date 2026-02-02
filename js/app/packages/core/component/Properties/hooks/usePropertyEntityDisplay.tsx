@@ -7,7 +7,7 @@ import {
   type PreviewItem,
   type PreviewItemAccess,
   useItemPreview,
-} from '@core/signal/preview';
+} from '@queries/preview';
 import { tryMacroId, useDisplayName } from '@core/user';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { type Accessor, createMemo, type JSX } from 'solid-js';
@@ -77,10 +77,10 @@ export function usePropertyEntityDisplay(
     const eType = entityType();
     const pType = previewType();
     if (isPreviewable(eType)) {
-      return useItemPreview({
+      return useItemPreview(() => ({
         id: entityId(),
         type: pType,
-      })[0];
+      }))[0];
     }
   };
   const preview = createMemo(() => previewWrapper()?.());

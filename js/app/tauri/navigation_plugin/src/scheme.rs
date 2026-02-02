@@ -21,7 +21,7 @@ impl MacroScheme {
     }
     /// turn a http(s) url into a macro scheme url
     #[tracing::instrument(err, ret)]
-    pub(crate) fn from_url(url: &Url) -> Result<Self, SchemeError> {
+    pub fn from_url(url: &Url) -> Result<Self, SchemeError> {
         let ("http" | "https" | "tauri") = url.scheme() else {
             return Err(SchemeError::InvalidScheme {
                 expected: "http(s) or tauri".to_string(),
@@ -29,11 +29,15 @@ impl MacroScheme {
             });
         };
 
-        let rest = url.fragment().unwrap_or(url.path()).trim_start_matches('/');
+        let mut rest = url.fragment().unwrap_or(url.path()).trim_start_matches('/');
+        // Mobile router uses '/' as base, so strip the 'app/' prefix from universal links
+        if rest.starts_with("app/") {
+            rest = &rest[4..];
+        }
         let query = url.query();
         let inner = match query {
-            Some(q) => format!("macro://{rest}?{q}"),
-            None => format!("macro://{rest}"),
+            Some(q) => format!("macro:///{rest}?{q}"),
+            None => format!("macro:///{rest}"),
         }
         .parse::<Url>()?;
         Ok(MacroScheme(inner))

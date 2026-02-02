@@ -2,14 +2,23 @@ import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
 import { useInlineEditor } from '../../hooks';
 import { formatNumber } from '../../utils';
-import { EmptyValue, type PropertyValueProps } from './ValueComponents';
+import {
+  EmptyValue,
+  stubSaveHandler,
+  type PropertyValueProps,
+} from './ValueComponents';
 
 /**
  * Display component for number properties with inline editing
  * Numbers are formatted to 4 decimal places
  */
 export const NumberValue: Component<PropertyValueProps> = (props) => {
-  const editor = useInlineEditor(props.property, props.onRefresh);
+  const saveHandler = () => props.saveHandler ?? stubSaveHandler;
+  const editor = useInlineEditor(
+    props.property,
+    saveHandler(),
+    props.onRefresh
+  );
 
   const supportsInline = () =>
     props.canEdit &&

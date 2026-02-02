@@ -74,4 +74,11 @@ pub trait PropertiesService: Send + Sync + 'static {
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
     ) -> impl Future<Output = Result<(), PropertiesErr>> + Send;
+
+    /// Gets the owner of the entity and whether it's deleted
+    fn get_owner_and_deleted(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<(String, bool), PropertiesErr>> + Send;
 }

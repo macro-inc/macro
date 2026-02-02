@@ -1,66 +1,16 @@
 import type { ChannelData } from '@block-channel/definition';
-import { withAnalytics } from '@coparse/analytics';
-import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
-import { createBlockMemo, createBlockStore } from '@core/block';
-import { invalidateListChannels } from '@queries/channel/channels';
 import {
   type InputAttachment,
   isStaticAttachmentType,
 } from '@core/store/cacheChannelInput';
-import { isErr } from '@core/util/maybeResult';
 import { getImageDimensions, getVideoDimensions } from '@core/util/media';
 import { useSendMessageMutation } from '@queries/channel/message';
-import { commsServiceClient } from '@service-comms/client';
+import { invalidateListChannels } from '@queries/channel/channels';
 import type { NewAttachment } from '@service-comms/generated/models';
-import type { Attachment } from '@service-comms/generated/models/attachment';
-import type { Channel } from '@service-comms/generated/models/channel';
-import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
-import type { Message } from '@service-comms/generated/models/message';
-import type { ParticipantAccess } from '@service-comms/generated/models/participantAccess';
 import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
-import { createConnectionBlockWebsocketEffect } from '@service-connection/websocket';
 import { useUserId } from '@core/context/user';
 import { blockNameToItemType } from '@service-storage/client';
-import { createCallback } from '@solid-primitives/rootless';
-import { toast } from 'core/component/Toast/Toast';
 import type { Accessor } from 'solid-js';
-import { updateActivityOnMessageReceived } from './activity';
-import { initializeAttachments, messageAttachmentsStore } from './attachment';
-import { messageToReactionStore } from './reactions';
-import {
-  type MessageWithThreadId,
-  type ThreadStoreData,
-  threadsStore,
-  upsertInThread,
-} from './threads';
-
-const { track } = withAnalytics();
-
-type ChannelStoreData = {
-  messages: Message[];
-  channel: Channel | undefined;
-  participants: ChannelParticipant[];
-  id: string | undefined;
-  access: ParticipantAccess | undefined;
-};
-
-export const channelStore = createBlockStore<ChannelStoreData>({
-  messages: [],
-  channel: undefined,
-  participants: [],
-  id: undefined,
-  access: undefined,
-});
-
-export const isChannelAdminOrOwnerMemo = createBlockMemo(() => {
-  const channel = channelStore.get;
-  if (!channel) return false;
-  return (
-    channel.access &&
-    channel.access !== 'NoAccess' &&
-    ['admin', 'owner'].includes(channel.access.Access.role)
-  );
-});
 
 export function isValidChannelData(
   data: ChannelData
@@ -81,119 +31,6 @@ export function doesChannelRequireJoin(
   );
 }
 
-export async function refetchChannelData(channelId: string) {
-  const initialize = createCallback(initializeChannelData);
-
-  let res = await commsServiceClient.getChannel({
-    channel_id: channelId,
-  });
-
-  const [_, data] = res;
-
-  if (isErr(res) || !data || !isValidChannelData(data)) {
-    toast.alert('Failed to refetch channel');
-    return;
-  }
-
-  initialize(data);
-}
-
-/** Initializes all of the channel signals / stores
- * based on the block data passed in */
-export function initializeChannelData(data: Required<ChannelData>) {
-  const setChannelStore = channelStore.set;
-  const setThreadsStore = threadsStore.set;
-  const setMessageToReaction = messageToReactionStore.set;
-
-  setChannelStore('id', data.channel.id);
-  setChannelStore('participants', data.participants ?? []);
-  setChannelStore('channel', data.channel);
-  setChannelStore('access', data.access);
-
-  const initialMessages = data.messages ?? [];
-
-  // messages that are not a part of a thread
-  const messages = initialMessages.filter((m: Message) => !m.thread_id);
-  // All of the messages that are a part of the thread
-  let messagesInThreads: MessageWithThreadId[] = initialMessages.filter(
-    (m: Message) => !!m.thread_id
-  ) as MessageWithThreadId[];
-
-  let threads: ThreadStoreData = {};
-
-  // correlate each message to the thread it belongs to
-  for (let message of messagesInThreads) {
-    let prevChildren = threads[message.thread_id] ?? [];
-    threads[message.thread_id] = [...prevChildren, message];
-  }
-
-  setChannelStore('messages', messages);
-  // Initialize map of message id -> reactions
-  setMessageToReaction(data.reactions ?? {});
-  setThreadsStore(threads);
-
-  initializeAttachments(data.attachments ?? []);
-
-  commsServiceClient.postActivity({
-    activity_type: 'view',
-    channel_id: data.channel.id,
-  });
-}
-
-function upsertMessage(message: Message) {
-  let [channel, setChannel] = channelStore;
-
-  let messages = channel.messages;
-  let index = messages.findIndex((m) => m.id === message.id);
-  if (index === -1) {
-    setChannel('messages', (prev) => [...prev, message]);
-  } else {
-    setChannel('messages', index, message);
-  }
-}
-
-function upsertAttachment(messageId: string, attachments: Attachment[]) {
-  let attachmentStore = messageAttachmentsStore.get;
-  let messageAttachments = attachmentStore[messageId];
-  if (!messageAttachments) {
-    console.error('message attachments not found', messageId);
-    return;
-  }
-  messageAttachmentsStore.set(messageId, attachments);
-}
-
-function optimisticChannelMessage({
-  channelId,
-  messageId,
-  content,
-  threadId,
-  senderId,
-}: {
-  channelId: string;
-  messageId: string;
-  threadId?: string;
-  content: string;
-  senderId: string;
-}) {
-  const now = new Date().toISOString();
-
-  const message: Message = {
-    id: messageId,
-    channel_id: channelId,
-    content,
-    sender_id: senderId,
-    created_at: now,
-    updated_at: now,
-    thread_id: threadId,
-  };
-
-  if (threadId) {
-    upsertInThread(message as MessageWithThreadId);
-  } else {
-    upsertMessage(message);
-  }
-}
-
 function isMessageSendable(
   content: string | undefined,
   attachments: InputAttachment[]
@@ -209,21 +46,11 @@ export type SendMessageArgs = {
 };
 
 export function useSendChannelMessageAction(channelID: Accessor<string>) {
-  const optimisticSend = createCallback(optimisticChannelMessage);
   const userId = useUserId();
 
   const mutation = useSendMessageMutation({
     onSettled() {
       invalidateListChannels();
-    },
-    onSuccess(_, variables) {
-      const message = variables.message;
-      track(TrackingEvents.BLOCKCHANNEL.MESSAGE.SEND, {
-        channelId: variables.channelID,
-        contentLength: message.content?.length ?? 0,
-        attachmentsLength: message.attachments.length,
-        inThread: message.thread_id !== undefined,
-      });
     },
   });
 
@@ -237,6 +64,8 @@ export function useSendChannelMessageAction(channelID: Accessor<string>) {
     if (!isMessageSendable(content, attachments)) return;
 
     const channelId = channelID();
+    const senderId = userId()!;
+    const optimisticId = crypto.randomUUID();
 
     const attachmentsToSend = await Promise.allSettled(
       attachments.map(async (a) => {
@@ -276,8 +105,10 @@ export function useSendChannelMessageAction(channelID: Accessor<string>) {
       .map((r) => (r.status === 'fulfilled' ? r.value : undefined))
       .filter((r) => r !== undefined);
 
-    const data = await mutation.mutateAsync({
+    await mutation.mutateAsync({
       channelID: channelId,
+      optimisticId,
+      senderId,
       message: {
         attachments: filteredAttachements,
         content: content ?? '',
@@ -285,51 +116,5 @@ export function useSendChannelMessageAction(channelID: Accessor<string>) {
         mentions: mentions ?? [],
       },
     });
-
-    optimisticSend({
-      channelId,
-      messageId: data.id,
-      content: content ?? '',
-      threadId,
-      senderId: userId()!,
-    });
   };
 }
-
-createConnectionBlockWebsocketEffect((msg) => {
-  const channel = channelStore.get;
-  const upsert = createCallback(upsertMessage);
-  const upsertThread = createCallback(upsertInThread);
-  const updateActivity = createCallback(updateActivityOnMessageReceived);
-  const channelId = channel?.channel?.id;
-  if (!channelId) return;
-  if (msg.type === 'comms_message') {
-    //TODO: make this better, once things are more fleshed out
-    let value = JSON.parse(msg.data as any);
-    updateActivity(value.channel_id);
-    if (value.channel_id !== channelId) {
-      return;
-    }
-    if (!value.thread_id) {
-      upsert(value);
-    } else {
-      upsertThread(value);
-    }
-  }
-});
-
-// Update on attachment deletion
-createConnectionBlockWebsocketEffect((msg) => {
-  const channel = channelStore.get;
-  const updateActivity = createCallback(updateActivityOnMessageReceived);
-  const channelId = channel?.channel?.id;
-  if (!channelId) return;
-  if (msg.type === 'comms_attachment') {
-    let value = JSON.parse(msg.data as any);
-    updateActivity(value.channel_id);
-    if (value.channel_id !== channelId) {
-      return;
-    }
-    upsertAttachment(value.message_id, value.attachments);
-  }
-});

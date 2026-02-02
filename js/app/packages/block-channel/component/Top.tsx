@@ -116,7 +116,12 @@ export function Top(props: { channelID: string }) {
           />
           <AttachmentsModal />
           <Show when={channelType() !== 'direct_message'}>
-            <ParticipantManager participantCount={participantCount()} />
+            <ParticipantManager
+              channelId={props.channelID}
+              channelType={channelType()}
+              participants={participants()}
+              participantCount={participantCount()}
+            />
           </Show>
         </div>
       </SplitToolbarRight>

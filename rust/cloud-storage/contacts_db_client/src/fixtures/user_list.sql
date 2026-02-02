@@ -1,4 +1,4 @@
-INSERT INTO connections (user1, user2) VALUES
+INSERT INTO contacts_connections (user1, user2) VALUES
 -- user 51's connections
 (
 	'1AF59C26-C5B3-480C-9AD1-B87C2A69E72C',

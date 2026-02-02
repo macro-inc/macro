@@ -5,7 +5,7 @@ use axum::{
 };
 use thiserror::Error;
 
-use crate::api::context::ApiContext;
+use crate::api::context::PropertiesHandlerState;
 use models_properties::{EntityReference, EntityType};
 use properties_db_client::{
     entity_properties::delete as entity_properties_delete, error::PropertiesDatabaseError,
@@ -55,16 +55,16 @@ impl IntoResponse for DeleteEntityErr {
     ),
     tag = "Internal"
 )]
-#[tracing::instrument(skip(context), err)]
+#[tracing::instrument(skip(state), err)]
 pub async fn delete_entity(
     Path((entity_type, entity_id)): Path<(EntityType, String)>,
-    State(context): State<ApiContext>,
+    State(state): State<PropertiesHandlerState>,
 ) -> Result<StatusCode, DeleteEntityErr> {
     tracing::info!("deleting all properties for entity");
 
     let entity_reference = EntityReference::new(entity_id.clone(), entity_type);
 
-    entity_properties_delete::delete_entity(&context.db, &entity_reference)
+    entity_properties_delete::delete_entity(&state.db, &entity_reference)
         .await
         .inspect_err(|e| {
             tracing::error!(

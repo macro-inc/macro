@@ -1499,53 +1499,6 @@
       }
     },
     "/email/sync": {
-      "post": {
-        "tags": ["Sync"],
-        "summary": "Enables inbox syncing for user.",
-        "operationId": "enable_sync",
-        "responses": {
-          "201": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmptyResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
       "delete": {
         "tags": ["Sync"],
         "summary": "Disables inbox syncing for user.",
@@ -2050,6 +2003,7 @@
         "type": "object",
         "description": "Thread object exposed to the FE in Get Threads Call",
         "required": [
+          "db_id",
           "link_id",
           "inbox_visible",
           "is_read",
@@ -2067,7 +2021,7 @@
             "format": "date-time"
           },
           "db_id": {
-            "type": ["string", "null"],
+            "type": "string",
             "format": "uuid"
           },
           "inbox_visible": {
@@ -2185,27 +2139,6 @@
           }
         }
       },
-      "ApiAttachmentMacro": {
-        "type": "object",
-        "required": ["dbId", "messageId", "itemId", "itemType"],
-        "properties": {
-          "dbId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "itemId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "itemType": {
-            "type": "string"
-          },
-          "messageId": {
-            "type": "string",
-            "format": "uuid"
-          }
-        }
-      },
       "ApiContact": {
         "type": "object",
         "required": ["id", "linkId"],
@@ -2310,13 +2243,7 @@
           },
           {
             "type": "object",
-            "required": [
-              "attachments",
-              "macroAttachments",
-              "contacts",
-              "labels",
-              "metadata"
-            ],
+            "required": ["attachments", "contacts", "labels", "metadata"],
             "properties": {
               "attachments": {
                 "type": "array",
@@ -2338,12 +2265,6 @@
                 "type": "array",
                 "items": {
                   "$ref": "#/components/schemas/ApiLabel"
-                }
-              },
-              "macroAttachments": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/ApiAttachmentMacro"
                 }
               },
               "metadata": {
@@ -2435,6 +2356,7 @@
       "Attachment": {
         "type": "object",
         "description": "Attachments of a message, as sent to us by the provider.",
+        "required": ["db_id"],
         "properties": {
           "content_id": {
             "type": ["string", "null"]
@@ -2443,7 +2365,7 @@
             "type": ["string", "null"]
           },
           "db_id": {
-            "type": ["string", "null"],
+            "type": "string",
             "format": "uuid"
           },
           "filename": {
@@ -2507,28 +2429,6 @@
             "type": "integer",
             "format": "int32",
             "description": "File size in bytes."
-          }
-        }
-      },
-      "AttachmentMacro": {
-        "type": "object",
-        "description": "Attachments of a message created when sending a message/draft through Macro FE. references\na macro item (document, canvas, etc). These don't actually get sent to the provider when\nsending a message, but we store them so we can display the pills for the Macro objects in the FE\nwhen displaying the message.",
-        "required": ["item_id", "item_type"],
-        "properties": {
-          "db_id": {
-            "type": ["string", "null"],
-            "format": "uuid"
-          },
-          "item_id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "item_type": {
-            "type": "string"
-          },
-          "message_id": {
-            "type": ["string", "null"],
-            "format": "uuid"
           }
         }
       },
@@ -2617,13 +2517,13 @@
       },
       "Contact": {
         "type": "object",
-        "required": ["link_id"],
+        "required": ["id", "link_id"],
         "properties": {
           "email_address": {
             "type": ["string", "null"]
           },
           "id": {
-            "type": ["string", "null"],
+            "type": "string",
             "format": "uuid"
           },
           "link_id": {
@@ -3025,6 +2925,8 @@
       "Message": {
         "type": "object",
         "required": [
+          "db_id",
+          "thread_db_id",
           "link_id",
           "is_read",
           "is_starred",
@@ -3036,7 +2938,6 @@
           "bcc",
           "labels",
           "attachments",
-          "attachments_macro",
           "attachments_draft",
           "created_at",
           "updated_at"
@@ -3054,12 +2955,6 @@
               "$ref": "#/components/schemas/AttachmentDraft"
             },
             "description": "Uploaded file attachments for the message, if it is a draft"
-          },
-          "attachments_macro": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AttachmentMacro"
-            }
           },
           "bcc": {
             "type": "array",
@@ -3087,7 +2982,7 @@
             "format": "date-time"
           },
           "db_id": {
-            "type": ["string", "null"],
+            "type": "string",
             "format": "uuid"
           },
           "from": {
@@ -3175,7 +3070,7 @@
             "type": ["string", "null"]
           },
           "thread_db_id": {
-            "type": ["string", "null"],
+            "type": "string",
             "format": "uuid"
           },
           "to": {
@@ -3202,12 +3097,6 @@
             "type": ["array", "null"],
             "items": {
               "$ref": "#/components/schemas/AttachmentToSend"
-            }
-          },
-          "attachments_macro": {
-            "type": ["array", "null"],
-            "items": {
-              "$ref": "#/components/schemas/AttachmentMacro"
             }
           },
           "bcc": {
@@ -3444,6 +3333,7 @@
       "Thread": {
         "type": "object",
         "required": [
+          "db_id",
           "link_id",
           "inbox_visible",
           "is_read",
@@ -3457,7 +3347,7 @@
             "format": "date-time"
           },
           "db_id": {
-            "type": ["string", "null"],
+            "type": "string",
             "format": "uuid"
           },
           "inbox_visible": {
@@ -3523,7 +3413,6 @@
           "isDraft",
           "isImportant",
           "attachments",
-          "attachmentsMacro",
           "participants",
           "sortTs",
           "createdAt",
@@ -3535,12 +3424,6 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Attachment"
-            }
-          },
-          "attachmentsMacro": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AttachmentMacro"
             }
           },
           "createdAt": {

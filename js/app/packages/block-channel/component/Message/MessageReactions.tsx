@@ -1,17 +1,14 @@
-import {
-  messageToReactionStore,
-  reactToMessage,
-} from '@block-channel/signal/reactions';
+import { useReactToMessage } from '@block-channel/hooks/reactions';
 import { EmojiButton } from '@core/component/Emoji/EmojiButton';
 import { resolveEmojiFromUnicode } from '@core/component/Emoji/emojis';
 import clickOutside from '@core/directive/clickOutside';
 import { touchHandler } from '@core/directive/touchHandler';
 import { idToDisplayName } from '@core/user';
 import Tooltip from '@corvu/tooltip';
+import type { GetChannelResponseReactions } from '@service-comms/generated/models';
 
 import { useUserId } from '@core/context/user';
-import { createCallback } from '@solid-primitives/rootless';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal, For, Show, type Accessor } from 'solid-js';
 import { ReactionSelector } from '../ReactionSelector';
 
 false && clickOutside;
@@ -19,23 +16,23 @@ false && touchHandler;
 
 type MessageReactionsProps = {
   messageId: string;
+  channelId: Accessor<string>;
+  reactions: Accessor<GetChannelResponseReactions>;
 };
 
 export function MessageReactions(props: MessageReactionsProps) {
   const userId = useUserId();
 
-  const messageToReaction = messageToReactionStore.get;
+  const reactionsForMessage = createMemo(() => {
+    return props.reactions()?.[props.messageId] ?? [];
+  });
 
-  const reactionsForMessage = () => {
-    return messageToReaction?.[props.messageId];
-  };
+  const reactToMessage = useReactToMessage(props.channelId, props.reactions);
 
-  const react = createCallback((emoji: string) =>
-    reactToMessage(emoji, props.messageId)
-  );
+  const react = (emoji: string) => reactToMessage(emoji, props.messageId);
 
   return (
-    <Show when={reactionsForMessage() && reactionsForMessage().length > 0}>
+    <Show when={reactionsForMessage().length > 0}>
       <div class="flex flex-row flex-wrap items-center gap-2 mt-0.5 mb-1">
         <For each={reactionsForMessage().slice(0, 10)}>
           {(reaction) => {
@@ -72,7 +69,7 @@ export function MessageReactions(props: MessageReactionsProps) {
                             didCurrentUserReact
                               ? 'text-accent-ink border border-accent'
                               : 'hover:bg-hover transition-transform border border-edge-muted transition-none hover:transition hover:scale-105'
-                          } 
+                          }
                           cursor-default h-8
                         `}
                     onClick={() => react(reaction.emoji)}

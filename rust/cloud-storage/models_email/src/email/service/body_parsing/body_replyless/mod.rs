@@ -89,10 +89,10 @@ mod tests {
     fn test_email_extraction(full_email: &str, expected_reply: &str, test_name: &str) {
         // Create a message with HTML content
         let message = service::message::Message {
-            db_id: None,
+            db_id: uuid::Uuid::default(),
             provider_id: None,
             global_id: None,
-            thread_db_id: None,
+            thread_db_id: uuid::Uuid::default(),
             provider_thread_id: None,
             replying_to_id: None,
             link_id: Default::default(),
@@ -115,7 +115,6 @@ mod tests {
             body_html_sanitized: Some(full_email.to_string()),
             body_text: None,
             attachments: vec![],
-            attachments_macro: vec![],
             attachments_draft: vec![],
             headers_json: None,
             created_at: Default::default(),

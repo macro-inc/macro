@@ -32,10 +32,7 @@ async fn main() -> Result<(), Error> {
         std::env::var("CHAT_DELETE_QUEUE").context("CHAT_DELETE_QUEUE must be provided")?;
 
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(
-        &aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .region("us-east-1")
-            .load()
-            .await,
+        &macro_aws_config::get_macro_aws_config().await,
     ))
     .document_delete_queue(&document_delete_queue)
     .chat_delete_queue(&chat_delete_queue);

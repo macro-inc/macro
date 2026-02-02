@@ -4,6 +4,7 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ChannelReplyMetadataAllOfThreadParentSenderId } from './channelReplyMetadataAllOfThreadParentSenderId';
 
 export type ChannelReplyMetadataAllOf = {
   /** The message content */
@@ -12,6 +13,8 @@ export type ChannelReplyMetadataAllOf = {
   messageId: string;
   /** The id of the thread that has the reply */
   threadId: string;
+  /** The user who sent the root message of the thread */
+  threadParentSenderId?: ChannelReplyMetadataAllOfThreadParentSenderId;
   /** The sender id of the reply */
   userId: string;
 };

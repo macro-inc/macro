@@ -92,7 +92,7 @@ pub async fn parse_and_upsert_message_contacts(
 }
 
 /// inserts email addresses into the database in a batch
-#[tracing::instrument(skip(pool, contacts))]
+#[tracing::instrument(skip(pool, contacts), err)]
 async fn upsert_message_contacts(
     pool: &PgPool,
     contacts: Vec<ContactPhotoless>,

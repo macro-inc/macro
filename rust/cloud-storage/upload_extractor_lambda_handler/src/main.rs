@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
-use aws_config::meta::region::RegionProviderChain;
 use aws_lambda_events::{event::sqs::SqsEvent, sqs::SqsMessage};
-use aws_sdk_s3::{Client as S3Client, config::Region, primitives::ByteStream};
+use aws_sdk_s3::{Client as S3Client, primitives::ByteStream};
 use connection_gateway_client::client::ConnectionGatewayClient;
 use document_storage_service_client::DocumentStorageServiceClient;
 use dynamodb_client::DynamodbClient;
@@ -585,8 +584,7 @@ async fn main() -> Result<(), Error> {
     let connection_gateway_url =
         std::env::var("CONNECTION_GATEWAY_URL").context("CONNECTION_GATEWAY_URL must be set")?;
 
-    let region_provider = RegionProviderChain::default_provider().or_else(Region::new("us-east-1"));
-    let config = aws_config::from_env().region(region_provider).load().await;
+    let config = macro_aws_config::get_macro_aws_config().await;
     let s3_client = S3Client::new(&config);
 
     let dss_client = DocumentStorageServiceClient::new(internal_api_secret_key.clone(), dss_url);

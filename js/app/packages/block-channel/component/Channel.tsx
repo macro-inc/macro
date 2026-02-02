@@ -3,18 +3,9 @@ import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import { URL_PARAMS } from '@block-channel/constants';
 import type { ChannelData } from '@block-channel/definition';
 import {
-  latestActivitySignal,
-  updateActivityOnChannelClose,
-  updateActivityOnChannelOpen,
-} from '@block-channel/signal/activity';
-import {
   isDraggingOverChannelSignal,
   isValidChannelDragSignal,
 } from '@block-channel/signal/attachment';
-import {
-  channelStore,
-  refetchChannelData,
-} from '@block-channel/signal/channel';
 import { activeThreadIdSignal } from '@block-channel/signal/threads';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
 import { withAnalytics } from '@coparse/analytics';
@@ -23,6 +14,7 @@ import { useBlockId } from '@core/block';
 import type { EntityDragEvent } from '@macro-entity';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { useChannelActivity } from '@core/context/channels';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
 import {
@@ -39,10 +31,14 @@ import {
   createEffectOnEntityTypeNotification,
   useEntityHasUnreadNotifications,
 } from '@notifications';
+import { useUpdateChannelsActivityMutation } from '@queries/channel/activity';
 import { useChannelQuery } from '@queries/channel/channel';
+import {
+  getTopLevelMessages,
+  getThreadMessages,
+} from '@queries/channel/derived';
 import type { Message } from '@service-comms/generated/models';
 import { connectionGatewayClient } from '@service-connection/client';
-import { createCallback } from '@solid-primitives/rootless';
 import { useBeforeLeave, useSearchParams } from '@solidjs/router';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { toast } from 'core/component/Toast/Toast';
@@ -53,36 +49,35 @@ import {
   createRenderEffect,
   createSignal,
   on,
-  onCleanup,
   onMount,
   Suspense,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { type FocusableElement, tabbable } from 'tabbable';
 import { ChannelInput } from './ChannelInput';
-import { MessageList, type TargetMessageInfo } from './MessageList/MessageList';
+import {
+  MessageList,
+  type MessageListNavigation,
+  type TargetMessageInfo,
+} from './MessageList/MessageList';
 import { Top } from './Top';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 
 false && fileFolderDrop;
 
-/** 10 seconds threshold */
-const THRESHOLD = 10_000;
+/** Tracks channel entity when tab regains focus (throttled to 10s) */
+function createChannelTrackingEffect(channelId: string) {
+  let lastTrackTime = Date.now();
+  const TRACK_THROTTLE_MS = 10_000;
 
-export function createChannelRefetchEffect(channelId: string) {
-  let lastTime = Date.now();
-
-  /** Refetch channel data if the tab is focused */
   createTabFocusEffect((isTabFocused) => {
-    if (isTabFocused && Date.now() - lastTime > THRESHOLD) {
-      console.log('tab focused, refetching channel data');
-      refetchChannelData(channelId);
+    if (isTabFocused && Date.now() - lastTrackTime > TRACK_THROTTLE_MS) {
       connectionGatewayClient.trackEntity({
         entity_type: 'channel',
         entity_id: channelId,
         action: 'open',
       });
-      lastTime = Date.now();
+      lastTrackTime = Date.now();
     }
   });
 }
@@ -91,14 +86,34 @@ export function Channel(props: {
   data: Required<ChannelData>;
   target?: TargetMessageInfo;
 }) {
-  const channelStoreData = channelStore.get;
-  const channel = useChannelQuery(() => props.data.channel.id);
-
   const [_activeThreadId, setActiveThreadId] = activeThreadIdSignal;
-  const latestActivity = latestActivitySignal.get;
-  const updateActivityOnOpen = createCallback(updateActivityOnChannelOpen);
-  const updateActivityOnClose = createCallback(updateActivityOnChannelClose);
+  const channel = useChannelQuery(
+    () => props.data.channel.id,
+    () => ({ refetchOnWindowFocus: true })
+  );
+
+  // Derive messages and threads from query data
+  const messages = () => getTopLevelMessages(channel.data);
+  const threads = () => getThreadMessages(channel.data);
+  const reactions = () => channel.data?.reactions ?? {};
+  const attachments = () => channel.data?.attachments ?? [];
+
   const channelId = useBlockId();
+
+  const latestActivity = useChannelActivity(channelId);
+
+  const [openedChannel, setOpenedChannel] = createSignal<Date>();
+
+  const updateActivityMutation = useUpdateChannelsActivityMutation();
+
+  const updateActivityOnOpen = () => {
+    setOpenedChannel(new Date());
+    updateActivityMutation.mutate({ channelId, activityType: 'view' });
+  };
+
+  const updateActivityOnClose = () =>
+    updateActivityMutation.mutate({ channelId, activityType: 'view' });
+
   const { track } = withAnalytics();
   let containerRef!: HTMLDivElement;
   const [searchParams] = useSearchParams();
@@ -135,9 +150,9 @@ export function Channel(props: {
   >(initialTargetMessage());
 
   createMethodRegistration(blockHandle, {
-    goToLocationFromParams: async (params: Record<string, any>) => {
-      const threadId = params[URL_PARAMS.thread];
-      const messageId = params[URL_PARAMS.message];
+    goToLocationFromParams: async (params: Record<string, unknown>) => {
+      const threadId = params[URL_PARAMS.thread] as string | undefined;
+      const messageId = params[URL_PARAMS.message] as string | undefined;
       if (threadId) {
         setActiveThreadId(threadId);
       }
@@ -150,9 +165,12 @@ export function Channel(props: {
     },
   });
 
-  const [focusedMessageId, setFocusedMessageId] = createSignal<
+  const [selectedMessageId, setSelectedMessageId] = createSignal<
     string | undefined
   >(undefined);
+
+  const [messageListNav, setMessageListNav] =
+    createSignal<MessageListNavigation>();
 
   onMount(() => {
     updateActivityOnOpen();
@@ -160,7 +178,7 @@ export function Channel(props: {
     track(TrackingEvents.BLOCKCHANNEL.CHANNEL.OPEN);
   });
 
-  createChannelRefetchEffect(channelId);
+  createChannelTrackingEffect(channelId);
 
   useBeforeLeave(() => {
     updateActivityOnClose();
@@ -210,28 +228,54 @@ export function Channel(props: {
     });
   });
 
-  const focusPrevious = () => {
-    const tabbableEls = tabbable(blockRef()!);
-    const fromEl = document.activeElement;
+  /**
+   * Hybrid navigation: tries DOM-based tabbable navigation first,
+   * falls back to message ID navigation if element was unmounted (which can happen if you're moving rapidly with virtualization)
+   */
+  const navigateChannel = (direction: 'previous' | 'next') => {
+    const block = blockRef();
+    if (!block) return false;
 
-    const fromElIndex = tabbableEls.indexOf(fromEl as FocusableElement);
-    if (fromElIndex !== -1) {
-      const prevIndex = fromElIndex - 1;
-      if (prevIndex < 0) return false;
-      const prevEl = tabbableEls[prevIndex];
-      if (!prevEl) return false;
-      prevEl.focus();
-      return true;
-    } else {
-      tabbableEls.at(-1)?.focus();
-      return true;
+    const tabbableEls = tabbable(block);
+    let activeEl = document.activeElement;
+
+    const selectedMessageEl = block.querySelector(
+      `[data-message-id="${selectedMessageId()}"]`
+    );
+
+    if (selectedMessageEl && !selectedMessageEl?.contains(activeEl)) {
+      // Selected message gets set on hover without actually becoming focused. If the active element is not inside the selected message, it is probably because the user has hovered over a new message, and so we should proceed as if the selected message were the active element.
+      activeEl = selectedMessageEl;
+    }
+
+    const activeElIndex = tabbableEls.indexOf(activeEl as FocusableElement);
+
+    // DOM-based navigation: element is in tabbable list
+    if (activeElIndex !== -1) {
+      const targetIndex =
+        direction === 'previous' ? activeElIndex - 1 : activeElIndex + 1;
+
+      if (targetIndex >= 0 && targetIndex < tabbableEls.length) {
+        const targetEl = tabbableEls[targetIndex];
+        targetEl?.focus();
+        return;
+      }
+    }
+
+    // Fallback: element not in tabbable list (this can happen if moving too quickly thru the virtualized list)
+    // Use message ID-based navigation
+    const nav = messageListNav();
+    if (nav) {
+      return direction === 'previous'
+        ? nav.navigatePrevious()
+        : nav.navigateNext();
     }
   };
 
   const onChannelInputFocusLeaveStart = (e: KeyboardEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    return focusPrevious();
+    return navigateChannel('previous');
   };
 
   registerHotkey({
@@ -254,7 +298,8 @@ export function Channel(props: {
     scopeId: scopeId(),
     description: 'Focus previous',
     keyDownHandler: () => {
-      return focusPrevious();
+      navigateChannel('previous');
+      return true;
     },
     hotkeyToken: TOKENS.channel.focusPreviousMessage,
     hide: true,
@@ -265,26 +310,13 @@ export function Channel(props: {
     scopeId: scopeId(),
     description: 'Focus next',
     keyDownHandler: () => {
-      const tabbableEls = tabbable(blockRef()!);
-      const activeEl = document.activeElement;
-      const activeElIndex = tabbableEls.indexOf(activeEl as FocusableElement);
-      if (activeElIndex !== -1) {
-        const nextIndex = activeElIndex + 1;
-        if (nextIndex >= tabbableEls.length) return false;
-        const nextEl = tabbableEls[nextIndex];
-        if (!nextEl) return false;
-        nextEl.focus();
-        return true;
-      }
-      return false;
+      navigateChannel('next');
+      return true;
     },
     hotkeyToken: TOKENS.channel.focusNextMessage,
     hide: true,
   });
   const [channelInputRef, setChannelInputRef] = createSignal<
-    HTMLDivElement | undefined
-  >();
-  const [lastMessageRef, setLastMessageRef] = createSignal<
     HTMLDivElement | undefined
   >();
   const [autoFocusOnMount, setAutoFocusOnMount] = createSignal(true);
@@ -296,32 +328,6 @@ export function Channel(props: {
       setAutoFocusOnMount(false);
     }
   });
-
-  let initialFocusSet = false;
-  createEffect(
-    on(lastMessageRef, () => {
-      if (autoFocusOnMount()) return;
-      if (!navigatedFromJK()) return;
-      if (initialFocusSet) return;
-
-      const lastMessage = lastMessageRef();
-      if (!lastMessage) return;
-      // Using Resize Observer here so that we only focus when the lastMessageRef
-      // is actually connected to DOM
-      const resizeObserver = new ResizeObserver(() => {
-        const lastMessageId = lastMessage?.getAttribute('data-message-body-id');
-        if (!lastMessageId) return;
-        setTimeout(() => lastMessage.focus(), 0);
-        setFocusedMessageId(lastMessageId);
-        initialFocusSet = true;
-      });
-      resizeObserver.observe(lastMessage);
-
-      onCleanup(() => {
-        resizeObserver.disconnect();
-      });
-    })
-  );
 
   const debouncedMarkAsRead = makeDebouncedChannelNotificationReadMarker({
     notificationSource: notificationSource,
@@ -409,21 +415,28 @@ export function Channel(props: {
           />
           <MessageList
             channelId={channelId}
-            messages={channelStoreData.messages}
-            focusedMessageId={focusedMessageId}
-            setFocusedMessageId={setFocusedMessageId}
+            messages={messages()}
+            threads={threads()}
+            reactions={reactions()}
+            attachments={attachments()}
+            participants={channel.data?.participants ?? []}
+            focusedMessageId={selectedMessageId}
+            setFocusedMessageId={setSelectedMessageId}
             targetMessage={targetMessage}
             latestActivity={latestActivity()}
+            openedChannel={openedChannel()}
             orderedMessages={orderedMessages}
             setOrderedMessages={setOrderedMessages}
-            setLastMessageRef={setLastMessageRef}
+            onNavigationReady={setMessageListNav}
           />
           <div class="shrink-0 w-full px-4 pb-2">
             {/* seamus: note this element is below the scroll so we translate it back to account for the scroll above */}
             <div class="mx-auto -translate-x-1 w-full macro-message-width">
               <Suspense>
                 <ChannelInput
+                  channelId={channelId}
                   channelName={channel.data?.channel?.name ?? ''}
+                  participants={channel.data?.participants ?? []}
                   inputAttachmentsStore={channelInputAttachmentsStore}
                   setInputAttachmentsStore={setChannelInputAttachmentsStore}
                   inputAttachmentsKey={channelId}

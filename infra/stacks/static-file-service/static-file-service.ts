@@ -215,6 +215,8 @@ export class StaticFileService extends pulumi.ComponentResource {
                 'dynamodb:DeleteItem',
                 'dynamodb:Query',
                 'dynamodb:Scan',
+                'dynamodb:BatchGetItem',
+                'dynamodb:BatchWriteItem',
               ],
               Resource: [
                 metadataTable.arn,
@@ -436,9 +438,18 @@ export class StaticFileService extends pulumi.ComponentResource {
               cpu: 256,
               memory: 512,
               environment: [
-                { name: `DYNAMODB_TABLE_NAME`, value: args.dynamoDbTableName },
-                { name: `S3_BUCKET_URL`, value: STORAGE_LOCATION },
-                { name: 'S3_EVENT_QUEUE_URL', value: queueQueue.url },
+                {
+                  name: `STATIC_FILE_SERVICE_DYNAMODB_TABLE_NAME`,
+                  value: args.dynamoDbTableName,
+                },
+                {
+                  name: `STATIC_FILE_SERVICE_S3_BUCKET_URL`,
+                  value: STORAGE_LOCATION,
+                },
+                {
+                  name: 'STATIC_FILE_SERVICE_S3_EVENT_QUEUE_URL',
+                  value: queueQueue.url,
+                },
                 ...(args.containerEnvVars ?? []),
               ],
               logConfiguration: {

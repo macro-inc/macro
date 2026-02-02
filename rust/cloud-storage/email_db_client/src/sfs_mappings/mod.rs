@@ -3,7 +3,7 @@ use sqlx::PgPool;
 use std::collections::{HashMap, HashSet};
 
 /// Fetches a single mapping from source URL to destination URL
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn fetch_sfs_mapping(pool: &PgPool, source: &str) -> anyhow::Result<Option<String>> {
     let record = sqlx::query!(
         r#"
@@ -21,7 +21,7 @@ pub async fn fetch_sfs_mapping(pool: &PgPool, source: &str) -> anyhow::Result<Op
 }
 
 /// Fetches mappings from source URLs to destination URLs
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn fetch_sfs_mappings(
     pool: &PgPool,
     sources: &HashSet<String>,
@@ -54,7 +54,7 @@ pub async fn fetch_sfs_mappings(
 }
 
 /// Inserts multiple source to destination URL mappings into the email_sfs_mappings table
-#[tracing::instrument(skip(pool, mappings), level = "info")]
+#[tracing::instrument(skip(pool, mappings), err)]
 pub async fn insert_sfs_mappings(
     pool: &PgPool,
     mappings: &HashMap<String, String>,

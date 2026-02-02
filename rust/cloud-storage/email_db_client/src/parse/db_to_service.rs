@@ -71,7 +71,7 @@ pub fn map_db_attachment_to_service(
     db_att: db::attachment::Attachment,
 ) -> service::attachment::Attachment {
     service::attachment::Attachment {
-        db_id: Some(db_att.id),
+        db_id: db_att.id,
         provider_id: db_att.provider_attachment_id,
         data_url: None,
         filename: db_att.filename,
@@ -82,38 +82,13 @@ pub fn map_db_attachment_to_service(
     }
 }
 
-#[tracing::instrument]
-pub fn map_db_macro_attachments_to_service(
-    db_attachments: Vec<attachment::AttachmentMacro>,
-) -> Vec<service::attachment::AttachmentMacro> {
-    db_attachments
-        .into_iter()
-        .map(map_db_macro_attachment_to_service)
-        .collect()
-}
-
-#[tracing::instrument]
-pub fn map_db_macro_attachment_to_service(
-    db_att: db::attachment::AttachmentMacro,
-) -> service::attachment::AttachmentMacro {
-    service::attachment::AttachmentMacro {
-        db_id: Some(db_att.id),
-        message_id: Some(db_att.message_id),
-        item_type: db_att.item_type,
-        item_id: db_att.item_id,
-    }
-}
-
 #[tracing::instrument(skip_all)]
 pub fn map_db_message_attachments_to_service(
     mut service_message: message::Message,
     attachments_res: Vec<db::attachment::Attachment>,
-    macro_attachments_res: Vec<db::attachment::AttachmentMacro>,
     draft_attachments_res: Vec<db::attachment::AttachmentDraft>,
 ) -> anyhow::Result<message::Message> {
     service_message.attachments = map_db_attachments_to_service(attachments_res);
-
-    service_message.attachments_macro = map_db_macro_attachments_to_service(macro_attachments_res);
 
     service_message.attachments_draft = draft_attachments_res
         .into_iter()
@@ -158,7 +133,6 @@ pub fn map_db_message_to_message_to_send(
         body_macro: db_message.body_macro,
         // we don't currently support sending attachments - they get converted to macro.com links on the FE before sending
         attachments: None,
-        attachments_macro: None,
         headers_json: db_message.headers_jsonb,
         send_time: None,
     }
@@ -180,10 +154,10 @@ pub fn map_attachmentless_db_message_to_service(
     let labels_list = labels_res.into_iter().map(Into::into).collect();
 
     message::Message {
-        db_id: Some(db_message.id),
+        db_id: db_message.id,
         provider_id: db_message.provider_id,
         provider_thread_id: db_message.provider_thread_id,
-        thread_db_id: Some(db_message.thread_id),
+        thread_db_id: db_message.thread_id,
         replying_to_id: db_message.replying_to_id,
         global_id: db_message.global_id,
         link_id: db_message.link_id,
@@ -208,7 +182,6 @@ pub fn map_attachmentless_db_message_to_service(
         body_html_sanitized: db_message.body_html_sanitized,
         body_macro: db_message.body_macro,
         attachments: Vec::new(),
-        attachments_macro: Vec::new(),
         attachments_draft: Vec::new(),
         headers_json: db_message.headers_jsonb,
         created_at: db_message.created_at,
@@ -254,7 +227,7 @@ pub fn map_db_thread_to_service(
     messages: Vec<message::Message>,
 ) -> thread::Thread {
     thread::Thread {
-        db_id: Some(db_thread.id),
+        db_id: db_thread.id,
         provider_id: db_thread.provider_id,
         link_id: db_thread.link_id,
         inbox_visible: db_thread.inbox_visible,

@@ -26,6 +26,8 @@ impl IntoResponse for UserExtractorErr {
     }
 }
 
+/// Extractor that requires an authenticated user.
+/// Fails with `UserContextEmpty` if the user_id is empty.
 #[non_exhaustive]
 #[derive(Clone)]
 pub struct MacroUserExtractor {
@@ -52,6 +54,42 @@ where
 
         Ok(MacroUserExtractor {
             macro_user_id,
+            user_context: ext.0,
+        })
+    }
+}
+
+/// Extractor that succeeds even for unauthenticated users.
+/// Returns `None` for `macro_user_id` if the user_id is empty.
+#[non_exhaustive]
+#[derive(Clone)]
+pub struct OptionalMacroUserExtractor {
+    pub macro_user_id: Option<MacroUserIdStr<'static>>,
+    pub user_context: UserContext,
+}
+
+#[axum::async_trait]
+impl<S> FromRequestParts<S> for OptionalMacroUserExtractor
+where
+    S: Send + Sync,
+{
+    type Rejection = UserExtractorErr;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let ext: Extension<UserContext> = parts.extract_with_state(state).await?;
+
+        if ext.0.user_id.is_empty() {
+            return Ok(OptionalMacroUserExtractor {
+                macro_user_id: None,
+                user_context: ext.0,
+            });
+        }
+
+        let macro_user_id =
+            MacroUserIdStr::parse_from_str(&ext.0.user_id).map(CowLike::into_owned)?;
+
+        Ok(OptionalMacroUserExtractor {
+            macro_user_id: Some(macro_user_id),
             user_context: ext.0,
         })
     }

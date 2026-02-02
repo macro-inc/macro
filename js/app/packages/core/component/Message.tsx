@@ -35,6 +35,7 @@ export type MessageRootProps = {
   isFirstMessage: boolean;
   isLastMessage: boolean;
   isConsecutive?: boolean;
+  timestamp?: string;
   hoverActions?: JSX.Element;
   shouldHover?: boolean;
   threadDepth?: number;
@@ -128,8 +129,8 @@ const TopBar: Component<MessageTopBarProps> = (props) => {
             <span class="truncate">{local.tagLabel}</span>
           </div>
         </Show>
-        {/* Date */}
-        <Show when={local.timestamp}>
+        {/* Date - hidden when hovering since it shows above hover actions */}
+        <Show when={local.timestamp && !context.hover()}>
           <div class="text-xs touch:mobile-width:text-sm text-ink-muted">
             {local.timestamp &&
               formatDate(new Date(local.timestamp).getTime() / 1000)}
@@ -243,7 +244,7 @@ const Root: Component<MessageRootProps> = (props) => {
               ? `${replyHeight()}px`
               : '0px',
           }}
-          hover={props.shouldHover || hover()}
+          hover={props.shouldHover}
         >
           {/* Message Wrapper w/ Main Connector Line */}
           <div
@@ -263,12 +264,12 @@ const Root: Component<MessageRootProps> = (props) => {
                 'border-l': !props.hideConnectors,
                 'border-accent': props.isNewMessage ?? false,
                 'border-edge-muted': !props.isNewMessage,
-                'pt-4': !(
+                'pt-1.5': !(
                   props.isConsecutive ||
                   props.isFirstMessage ||
                   props.isFirstInThread
                 ),
-                'pb-2': props.isLastMessage && !props.isLastInThread,
+                'pb-2': !props.isLastMessage,
                 'pb-4': props.hasThreadChildren ?? false,
               }}
               style={{
@@ -276,7 +277,7 @@ const Root: Component<MessageRootProps> = (props) => {
               }}
             >
               {/* User Icon */}
-              <div class="absolute -left-[.5px] -translate-x-1/2">
+              <div class="absolute left-0 -translate-x-1/2">
                 <Show when={!props.isConsecutive}>
                   <div class="relative">
                     <Show when={props.isFirstInThread}>
@@ -333,15 +334,23 @@ const Root: Component<MessageRootProps> = (props) => {
         </BozzyBracket>
         <Show when={props.hoverActions && !isTouchDevice()}>
           <div
-            class="absolute right-2 -top-2 border border-edge bg-panel"
+            class="absolute right-0 -top-2 flex flex-col items-end z-tool-tip"
             classList={{
-              block: hover() || !!props.shouldHover,
-              hidden: !(hover() || !!props.shouldHover),
+              block: props.focused || !!props.shouldHover,
+              hidden: !(props.focused || !!props.shouldHover),
             }}
             onMouseEnter={() => setHover(true)}
             onMouseLeave={() => setHover(false)}
+            data-message-id={props.id}
           >
-            {props.hoverActions}
+            <Show when={props.timestamp}>
+              <div class="absolute top-0 translate-y-[-100%] bg-panel pl-2 pt-2 text-xs text-ink-muted font-mono mb-0.5 select-text cursor-default">
+                {formatDate(new Date(props.timestamp!).getTime() / 1000, {
+                  showTime: true,
+                })}
+              </div>
+            </Show>
+            <div class="border border-edge bg-panel">{props.hoverActions}</div>
           </div>
         </Show>
         <Show when={props.isLastInThread}>

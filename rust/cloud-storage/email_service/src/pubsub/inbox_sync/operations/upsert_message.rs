@@ -1,3 +1,4 @@
+use crate::convert::{map_message_resource_to_service, map_thread_resources_to_service};
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::inbox_sync::operations::shared::notify_search;
 use crate::pubsub::inbox_sync::process;
@@ -42,9 +43,9 @@ pub async fn upsert_message(
     )
     .await?;
 
-    let message = match ctx
+    let message_resource = match ctx
         .gmail_client
-        .get_message(&gmail_access_token, &payload.provider_message_id, link.id)
+        .get_message(&gmail_access_token, &payload.provider_message_id)
         .await
         .map_err(|e| {
             // retryable because we don't return an error if message doesn't exist, so this means
@@ -61,12 +62,26 @@ pub async fn upsert_message(
             return Ok(());
         }
     };
+
+    // Map Gmail resource to service model (IDs are generated in the parse function)
+    let message = map_message_resource_to_service(message_resource, link.id).map_err(|e| {
+        ProcessingError::NonRetryable(DetailedError {
+            reason: FailureReason::GmailApiFailed,
+            source: e.context("Failed to map message resource to service".to_string()),
+        })
+    })?;
     let message_attachment_count = message.attachments.len();
 
     // will always exist because we just fetched it
     let provider_thread_id = message.provider_thread_id.clone().unwrap();
 
     let is_sent = message.is_sent;
+
+    let sender_email = message
+        .from
+        .as_ref()
+        .map(|from| from.email.clone())
+        .filter(|e| !email_utils::is_generic_email(e));
 
     // deduped list of all non-generic emails the message was sent to
     let recipient_emails = dedupe_emails(
@@ -165,8 +180,8 @@ pub async fn upsert_message(
         ctx,
         link,
         &recipient_emails,
+        sender_email.as_deref(),
         is_sent,
-        &payload.provider_message_id,
     )
     .await?;
 
@@ -294,34 +309,42 @@ async fn handle_attachment_upload(
     Ok(())
 }
 
-#[tracing::instrument(skip(ctx, link, recipient_emails))]
+#[tracing::instrument(skip(ctx, link, recipient_emails, sender_email))]
 async fn handle_contacts_sync(
     ctx: &PubSubContext,
     link: &link::Link,
     recipient_emails: &[String],
+    sender_email: Option<&str>,
     is_sent: bool,
-    provider_message_id: &str,
 ) -> result::Result<(), ProcessingError> {
-    // if the user sent the message, upsert contacts for its recipients in contacts-service.
-    if cfg!(not(feature = "contacts_sync")) || !is_sent || recipient_emails.is_empty() {
+    if cfg!(not(feature = "contacts_sync")) {
         return Ok(());
     }
 
-    // Create users list starting with the sender, then all recipients
+    // Determine which emails to create connections to based on message direction
+    let connection_emails: Vec<&str> = if is_sent {
+        recipient_emails.iter().map(String::as_str).collect()
+    } else {
+        sender_email.into_iter().collect()
+    };
+
+    if connection_emails.is_empty() {
+        return Ok(());
+    }
+
+    // Build users list: current user at index 0, connection targets after
     let mut users = vec![link.macro_id.to_string()];
     users.extend(
-        recipient_emails
+        connection_emails
             .iter()
-            .map(|email| format!("macro|{}", email)),
+            .map(|email| format!("macro|{email}")),
     );
 
-    // Create connections from sender (index 0) to each recipient
-    let connections = (1..users.len()).map(|i| (0, i)).collect::<Vec<_>>();
-
-    let connections_message = ConnectionsMessage { users, connections };
+    // Create connections from current user (index 0) to each other user
+    let connections = (1..users.len()).map(|i| (0, i)).collect();
 
     ctx.sqs_client
-        .enqueue_contacts_add_connection(connections_message)
+        .enqueue_contacts_add_connection(ConnectionsMessage { users, connections })
         .await
         .map_err(|e| {
             ProcessingError::NonRetryable(DetailedError {
@@ -355,18 +378,24 @@ async fn fetch_and_insert_thread(
     .await
     .map_err(anyhow::Error::from)?;
 
-    let mut threads = ctx
+    let thread_resources = ctx
         .gmail_client
-        .get_threads(
-            link_id,
-            gmail_access_token,
-            &vec![provider_thread_id.to_string()],
-        )
+        .get_threads(gmail_access_token, &vec![provider_thread_id.to_string()])
         .await
         .map_err(|e| {
             ProcessingError::NonRetryable(DetailedError {
                 reason: FailureReason::GmailApiFailed,
                 source: e.context("Failed to get threads from gmail api".to_string()),
+            })
+        })?;
+
+    // Map Gmail resources to service models (IDs are generated in the parse functions)
+    let mut threads = map_thread_resources_to_service(thread_resources, link_id)
+        .await
+        .map_err(|e| {
+            ProcessingError::NonRetryable(DetailedError {
+                reason: FailureReason::GmailApiFailed,
+                source: anyhow::anyhow!("Failed to map thread resources: {}", e),
             })
         })?;
 

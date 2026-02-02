@@ -4,10 +4,7 @@ import {
   fileTypeToBlockName,
   isBlockAlias,
 } from '@core/constant/allBlocks';
-import {
-  USE_PIXEL_BLOCK_ICONS,
-  USE_WIDE_ICONS,
-} from '@core/constant/featureFlags';
+import { USE_WIDE_ICONS } from '@core/constant/featureFlags';
 import Building from '@icon/duotone/building-duotone.svg';
 import Chat from '@icon/duotone/chat-duotone.svg';
 import FileCode from '@icon/duotone/code-duotone.svg';
@@ -28,24 +25,6 @@ import Users from '@icon/duotone/users-duotone.svg';
 import Folder from '@icon/fill/folder-simple-fill.svg';
 import FolderUser from '@icon/fill/folder-user-fill.svg';
 import Check from '@icon/regular/check-fat.svg';
-import PixelChat from '@macro-icons/pixel/ai.svg';
-import PixelBuilding from '@macro-icons/pixel/building.svg';
-import PixelCanvas from '@macro-icons/pixel/canvas.svg';
-import PixelChannel from '@macro-icons/pixel/channel.svg';
-import PixelCode from '@macro-icons/pixel/code.svg';
-import PixelEmail from '@macro-icons/pixel/email.svg';
-import PixelEmailRead from '@macro-icons/pixel/email-read.svg';
-import PixelFile from '@macro-icons/pixel/file.svg';
-import PixelFolder from '@macro-icons/pixel/folder-alt.svg';
-import PixelHtml from '@macro-icons/pixel/html.svg';
-import PixelImage from '@macro-icons/pixel/image.svg';
-import PixelMd from '@macro-icons/pixel/notes.svg';
-import PixelPdf from '@macro-icons/pixel/pdf.svg';
-import PixelUnknown from '@macro-icons/pixel/unknown.svg';
-import PixelUser from '@macro-icons/pixel/user.svg';
-import PixelUsers from '@macro-icons/pixel/users.svg';
-import PixelVideo from '@macro-icons/pixel/video.svg';
-import PixelWord from '@macro-icons/pixel/write.svg';
 import WideBook from '@macro-icons/wide/book.svg';
 import WideChannel from '@macro-icons/wide/channel.svg';
 import WideChat from '@macro-icons/wide/chat.svg';
@@ -258,32 +237,6 @@ function validateEntity(entity: string): EntityWithValidIcon {
   }
 }
 
-export const PIXEL_ICONS: Record<EntityWithValidIcon, Component> = {
-  canvas: PixelCanvas,
-  html: PixelHtml,
-  channel: PixelChannel,
-  company: PixelBuilding,
-  email: PixelEmail,
-  code: PixelCode,
-  csv: PixelCode,
-  pdf: PixelPdf,
-  md: PixelMd,
-  image: PixelImage,
-  write: PixelWord,
-  chat: PixelChat,
-  project: PixelFolder,
-  sharedProject: PixelFolder,
-  unknown: PixelUnknown,
-  archive: PixelUnknown,
-  video: PixelVideo,
-  contact: PixelUser,
-  default: PixelFile,
-  directMessage: PixelUsers,
-  user: PixelUser,
-  emailRead: PixelEmailRead,
-  task: Check,
-};
-
 export const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
   canvas: WideDiagram,
   html: WideFileCode,
@@ -372,9 +325,7 @@ export function EntityIcon(props: EntityIconProps) {
 
   const config = () => ENTITY_ICON_CONFIGS[getName()];
   const icon = () => {
-    if (USE_PIXEL_BLOCK_ICONS) {
-      return PIXEL_ICONS[getName()];
-    } else if (USE_WIDE_ICONS) {
+    if (USE_WIDE_ICONS) {
       return WIDE_ICONS[getName()];
     } else {
       return config().icon;
@@ -430,9 +381,7 @@ export function getIconConfig(
 ) {
   const key = validateEntity(targetType);
   const config = { ...ENTITY_ICON_CONFIGS[key] };
-  if (USE_PIXEL_BLOCK_ICONS) {
-    config.icon = PIXEL_ICONS[key];
-  } else if (USE_WIDE_ICONS) {
+  if (USE_WIDE_ICONS) {
     config.icon = WIDE_ICONS[key];
   }
   return config;

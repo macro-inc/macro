@@ -1,8 +1,14 @@
-import { type EntityData, isTaskEntity } from '@macro-entity';
+import { useUserId } from '@core/context/user';
+import {
+  type EntityData,
+  isTaskEntity,
+  type TaskEntityWithProperties,
+} from '@macro-entity';
 import type { APIEmailThreadPreviewMetadata } from '@service-email/generated/schemas';
 import type { SoupEmailThreadPreviewMetadata } from '@service-storage/generated/schemas';
 import { makePersisted } from '@solid-primitives/storage';
 import { createMemo, createSignal } from 'solid-js';
+import { isSignalTask } from './Soup/utils/filterHelpers';
 import type { ClientFilter } from './ViewConfig';
 
 type SignalConfig<T extends string> = {
@@ -253,6 +259,14 @@ const hasRecentlyViewed = (entity: EntityData) => {
   return seconds < oneDayOfSeconds;
 };
 
+const getCurrentUserId = () => {
+  try {
+    return useUserId()();
+  } catch {
+    return undefined;
+  }
+};
+
 export const signalFilter: ClientFilter = {
   id: 'signal',
   predicate: (entity, _ctx) => {
@@ -265,8 +279,11 @@ export const signalFilter: ClientFilter = {
       }
       case 'document': {
         if (isTaskEntity(entity)) {
-          // TODO (seamus) : filter on isCompleted
-          return true;
+          const currentUserId = getCurrentUserId();
+          return isSignalTask(
+            entity as TaskEntityWithProperties,
+            currentUserId
+          );
         }
         return hasRecentlyViewed(entity);
       }

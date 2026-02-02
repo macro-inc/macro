@@ -10,6 +10,7 @@ import {
   useMaybeBlockAliasedName,
 } from '@core/block';
 import { IS_MAC } from '@core/constant/isMac';
+import { ENABLE_MARKDOWN_AI_GENERATE } from '@core/constant/featureFlags';
 import type { EntityDragEvent } from '@macro-entity';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
@@ -1023,12 +1024,14 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
           <TableActionMenu anchorElem={editorContainerRef} cellMerge={true} />
         </Show>
 
-        <GenerateMenu
-          generateCallback={_generateContentCallback}
-          menuOpen={generateMenuSignal}
-          completionSignal={completionSignal[0]}
-          editor={editor}
-        />
+        <Show when={ENABLE_MARKDOWN_AI_GENERATE}>
+          <GenerateMenu
+            generateCallback={_generateContentCallback}
+            menuOpen={generateMenuSignal}
+            completionSignal={completionSignal[0]}
+            editor={editor}
+          />
+        </Show>
 
         <Show when={DEBUG}>
           <Show when={state()}>

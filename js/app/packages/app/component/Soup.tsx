@@ -3,7 +3,6 @@ import {
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
-import { playSound } from '@app/util/sound';
 import { useIsAuthenticated } from '@core/context/user';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
@@ -38,6 +37,7 @@ import { invalidateEntityNotifications } from '@queries/notification/user-notifi
 import { storageServiceClient } from '@service-storage/client';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Navigate } from '@solidjs/router';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { useMutation, useQueryClient } from '@tanstack/solid-query';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import {
@@ -81,6 +81,7 @@ import {
   ShortcutLabel,
 } from './Soup/components/FilterButton';
 import { SortDropdown } from './Soup/components/SortDropdown';
+import { isMobile } from '@core/mobile/isMobile';
 
 false && fileFolderDrop;
 
@@ -399,7 +400,6 @@ function EntityTypeIconFilter() {
               'text-ink-muted hover:text-accent hover:bg-accent/20': !preview(),
             }}
             onClick={() => {
-              playSound('open');
               setPreview((prev) => !prev);
             }}
           >
@@ -616,6 +616,13 @@ const ViewWithSearch: Component<{
 export function Soup() {
   const isAuthenticated = useIsAuthenticated();
 
+  // NOTE: if trying to access a split in which we are looking at a document, we shouldn't redirect away.
+  const hasDocumentSplit = createMemo(() => {
+    const manager = globalSplitManager();
+    if (!manager) return false;
+    return manager.splits().some((split) => split.content.type !== 'component');
+  });
+
   const splitPanelContext = useSplitPanelOrThrow();
   const {
     handle,
@@ -650,7 +657,6 @@ export function Soup() {
       description: 'Toggle Preview',
       hotkeyToken: TOKENS.unifiedList.togglePreview,
       keyDownHandler: () => {
-        playSound('open');
         setPreview((prev) => !prev);
         return true;
       },
@@ -707,7 +713,10 @@ export function Soup() {
   });
 
   return (
-    <Show when={isAuthenticated() !== false} fallback={<Navigate href="/" />}>
+    <Show
+      when={isAuthenticated() !== false || hasDocumentSplit()}
+      fallback={<Navigate href="/" />}
+    >
       <div
         class="relative flex flex-col bg-panel size-full"
         use:fileFolderDrop={{
@@ -770,7 +779,7 @@ export function Soup() {
             />
           </Show>
         </div>
-        <Show when={ENABLE_UNIFIED_LIST_AI_INPUT}>
+        <Show when={ENABLE_UNIFIED_LIST_AI_INPUT && !isMobile()}>
           <SoupChatInput />
         </Show>
       </div>

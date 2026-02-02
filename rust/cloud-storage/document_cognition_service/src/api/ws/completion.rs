@@ -183,7 +183,7 @@ async fn stream_completion(
                 done: false,
             };
 
-            ws_send(sender, response);
+            ws_send(sender, response)?;
         }
     }
 
@@ -194,7 +194,7 @@ async fn stream_completion(
             content: response_message,
             done: true,
         },
-    );
+    )?;
 
     Ok(())
 }

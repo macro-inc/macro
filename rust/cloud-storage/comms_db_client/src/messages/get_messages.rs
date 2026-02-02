@@ -24,11 +24,15 @@ pub async fn get_messages(
             thread_id,
             edited_at as "edited_at: chrono::DateTime<chrono::Utc>",
             deleted_at as "deleted_at: chrono::DateTime<chrono::Utc>"
-        FROM comms_messages
-        WHERE channel_id = $1
-        AND ($2::timestamptz IS NULL OR created_at >= $2)
+        FROM (
+            SELECT *
+            FROM comms_messages
+            WHERE channel_id = $1
+            AND ($2::timestamptz IS NULL OR created_at >= $2)
+            ORDER BY created_at DESC
+            LIMIT $3
+        ) AS latest_messages
         ORDER BY created_at ASC
-        LIMIT $3
         "#,
         channel_id,
         since,

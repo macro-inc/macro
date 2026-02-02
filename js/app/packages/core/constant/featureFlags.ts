@@ -19,17 +19,9 @@ export const DEV_MODE_ENV = import.meta.env.MODE === 'development';
  */
 export const PROD_MODE_ENV = import.meta.env.MODE === 'production';
 
-export const ENABLE_FORM_EDITING = false;
-
 export const ENABLE_PDF_MODIFICATION_DATA_AUTOSAVE = true;
 
 export const ENABLE_PDF_LOCATION_AUTOSAVE = true;
-
-// TODO: fix highlights when pane pins are enabled
-// See HighlightCard component for more details
-export const ENABLE_PINS = false;
-
-export const ENABLE_THUMBNAIL_VIEWER = false;
 
 export const ENABLE_PDF_TABS = true;
 
@@ -50,10 +42,6 @@ export const ENABLE_CANVAS_FILES = true;
 
 export const ENABLE_CANVAS_TEXT = true;
 
-export const ENABLE_ORG_SETTING_DEFAULT_SHARE = false;
-
-export const ENABLE_NAME_IN_LOGIN = false;
-
 export const ENABLE_LIVE_INDICATORS = true;
 
 export const ENABLE_CONTACTS = true;
@@ -71,13 +59,13 @@ export const ENABLE_EMAIL = true;
 
 export const ENABLE_BLOCK_IN_BLOCK = true;
 
-export const EDITABLE_SMART_INSIGHTS = false;
-
 export const ENABLE_SEARCH_SERVICE = true;
 
 export const ENABLE_MARKDOWN_DIFF = true;
 
-export const ENABLE_HISTORY_COMPONENT = true;
+// TODO (seamus): markdown history is causing a quiet crash on some documents.
+// once I have a document that can consistently repro, i can debug and fix.
+export const ENABLE_HISTORY_COMPONENT = false;
 
 export const ENABLE_BEARER_TOKEN_AUTH = false;
 
@@ -106,8 +94,6 @@ export const ENABLE_WEBSOCKET_DEBUGGER = false;
 
 export const ENABLE_SVG_PREVIEW = true;
 
-export const USE_PIXEL_BLOCK_ICONS = false;
-
 export const USE_WIDE_ICONS = true;
 
 export const ENABLE_PROPERTY_DISPLAY = DEV_MODE_ENV;
@@ -123,21 +109,17 @@ export const ENABLE_PROJECT_VIEW_PREVIEW = true;
 export const ENABLE_DOCK_NOTITIFCATIONS = DEV_MODE_ENV;
 export const ENABLE_TTFT = DEV_MODE_ENV;
 
-export const ENABLE_SOUND = false;
-export const ENABLE_JACK_IN = false;
-
-export const ENABLE_WHICHKEY_OVERLAY = false;
-
-// pure css based custom cursor
-export const ENABLE_CUSTOM_CURSOR = false;
-// uses javascript to detect selectable text to switch to "text" cursor type (ibeam)
-export const ENABLE_CUSTOM_CURSOR_TEXT_GLYPH_DETECTION = true;
-
 export const ENABLE_CREATE_TASK = true;
 export const ENABLE_TASKS_TABS = true;
 
 export const ENABLE_EMAIL_SHARING = true;
 
-export const ENABLE_FRECENCY = false;
+// Auto expand stand-alone mentions to richer previews in channels
+export const ENABLE_STATIC_DOCUMENT_CARDS = false;
 
-export const ENABLE_UNIFIED_LIST_AI_INPUT = false;
+export const ENABLE_MARKDOWN_AI_GENERATE = false;
+
+export const ENABLE_UNIFIED_LIST_AI_INPUT = true;
+
+// snapshot mention content inline for AI chat
+export const ENABLE_SNAPSHOT_NODE = true;

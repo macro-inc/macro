@@ -15,7 +15,12 @@ import { isErr } from '@core/util/maybeResult';
 import { getScrollParent } from '@core/util/scrollParent';
 import { scrollToKeepGap } from '@core/util/scrollToKeepGap';
 import { waitForFrames } from '@core/util/sleep';
-import { type EntityData, isSearchEntity, isTaskEntity } from '@macro-entity';
+import {
+  type EntityData,
+  isSearchEntity,
+  isTaskEntity,
+  type TaskEntityWithProperties,
+} from '@macro-entity';
 import { entityHasUnreadNotifications } from '@notifications';
 import type { PreviewViewStandardLabel } from '@service-email/generated/schemas';
 import type { PropertiesEntityType } from '@service-properties/client';
@@ -46,7 +51,6 @@ import {
 import { ENTITY_HEIGHT } from '../../macro-entity/src/components/EntityWithEverything';
 import { useUserId } from '../../macro-entity/src/queries/auth';
 import { createBulkCopyDssEntityMutation } from '../../macro-entity/src/queries/dss';
-import { playSound } from '../util/sound';
 import { openBulkEditModal } from './bulk-edit-entity/BulkEditEntityModal';
 import {
   resetCommandCategoryIndex,
@@ -62,6 +66,10 @@ import {
 } from './command/state';
 import { useGlobalNotificationSource } from './GlobalAppState';
 import { openEntityInSplitFromUnifiedList } from './soupContextHelpers';
+import {
+  isCurrentUserAssigned,
+  isTaskClosed,
+} from './Soup/utils/filterHelpers';
 import type { SplitHandle } from './split-layout/layoutManager';
 import { globalRemoveFromSplitHistory } from './split-layout/layoutUtils';
 import {
@@ -525,7 +533,23 @@ export function createNavigationEntityListShortcut({
         if (entity.type === 'email' || entity.type === 'channel') return true;
 
         // property status complete (tasks have type 'document' with subType 'task')
-        if (isTaskEntity(entity)) return true;
+        if (isTaskEntity(entity)) {
+          // Check if current user is assigned to the task
+          const currentUserId = userId();
+          if (
+            !isCurrentUserAssigned(
+              entity as TaskEntityWithProperties,
+              currentUserId
+            )
+          ) {
+            return false;
+          }
+          // Check if task is not already closed
+          if (isTaskClosed(entity as TaskEntityWithProperties)) {
+            return false;
+          }
+          return true;
+        }
         if (['document', 'project'].includes(entity.type)) return true;
 
         if (entityHasUnreadNotifications(notificationSource, entity)) {
@@ -554,9 +578,13 @@ export function createNavigationEntityListShortcut({
 
       return true;
     },
-    canExecuteKeyDownHandler: () =>
-      canAccessEntityList() &&
-      actionRegistry.isActionEnabled('mark_as_done', plainSelectedEntities()),
+    canExecuteKeyDownHandler: () => {
+      if (!canAccessEntityList()) return false;
+      return actionRegistry.isActionEnabled(
+        'mark_as_done',
+        plainSelectedEntities()
+      );
+    },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
   });
@@ -1174,7 +1202,6 @@ export function createNavigationEntityListShortcut({
   });
 
   function stepDown() {
-    playSound('down');
     navigateThroughList({ axis: 'end', mode: 'step' });
     return true;
   }
@@ -1214,7 +1241,6 @@ export function createNavigationEntityListShortcut({
   });
 
   function stepUp() {
-    playSound('up');
     navigateThroughList({ axis: 'start', mode: 'step' });
     return true;
   }

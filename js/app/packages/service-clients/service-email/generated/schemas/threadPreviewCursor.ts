@@ -5,7 +5,6 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Attachment } from './attachment';
-import type { AttachmentMacro } from './attachmentMacro';
 import type { Contact } from './contact';
 import type { ThreadPreviewCursorName } from './threadPreviewCursorName';
 import type { ThreadPreviewCursorProviderId } from './threadPreviewCursorProviderId';
@@ -20,7 +19,6 @@ import type { ThreadPreviewCursorViewedAt } from './threadPreviewCursorViewedAt'
  */
 export interface ThreadPreviewCursor {
   attachments: Attachment[];
-  attachmentsMacro: AttachmentMacro[];
   createdAt: number;
   id: string;
   inboxVisible: boolean;

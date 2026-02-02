@@ -5,6 +5,7 @@ import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { useBuildChatSendRequest } from '@core/component/AI/component/input/buildRequest';
 import { useChatInput } from '@core/component/AI/component/input/useChatInput';
 import { ChatMessages } from '@core/component/AI/component/message/ChatMessages';
+import { useEntityDropAttachment } from '@core/component/AI/hook/useEntityDropAttachment';
 import { getPendingSend } from '@core/component/AI/signal/pendingSend';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
 import type {
@@ -51,7 +52,7 @@ import {
   cognitionWebsocketServiceClient,
 } from '@service-cognition/client';
 import { createCognitionWebsocketEffect } from '@service-cognition/websocket';
-import { invalidateHistory, useHistoryQuery } from '@queries/history/history';
+import { refetchHistory, useHistoryQuery } from '@queries/history/history';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
 import type { LexicalEditor } from 'lexical';
 import {
@@ -69,6 +70,7 @@ import {
 import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
 import { Button } from '@ui/components/Button';
 import { Hotkey } from '@core/component/Hotkey';
+import { setPreviewData } from '@queries/preview';
 
 type ChatData = {
   messages: ChatMessageWithAttachments[];
@@ -309,6 +311,13 @@ export function Rightbar(props: {
     uploadQueue,
   } = useChatInput({ initialValue: props.initialState?.text });
 
+  // Entity drag-and-drop support
+  const { droppable, isDraggingOver } = useEntityDropAttachment(
+    'rightbar-chat-input',
+    attachments
+  );
+  false && droppable;
+
   createEffect(() => {
     setChatId(props.chatId);
     if (!props.initialState) return;
@@ -369,8 +378,10 @@ export function Rightbar(props: {
     <DragDropWrapper
       class="relative flex flex-col size-full select-none"
       uploadQueue={uploadQueue}
+      isEntityDraggingOver={isDraggingOver}
     >
-      <div class="overflow-hidden size-full flex flex-col items-center">
+      <div class="overflow-hidden size-full flex flex-col items-center relative">
+        <div class="absolute inset-0 pointer-events-none" use:droppable />
         <TopBar
           chatId={props.chatId}
           setChatId={props.setState.setChatId}
@@ -543,9 +554,15 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
       // TODO: move this into a separate resource so we don't have to refetch history
       // refetch history immediately to have the new chat id
       // then rename again when the server provides a default name
-      invalidateHistory();
-      waitChatRename(newChatId).then((_name) => {
-        invalidateHistory();
+      refetchHistory();
+      waitChatRename(newChatId).then((name) => {
+        refetchHistory();
+        if (name) {
+          setPreviewData(newChatId, (prev) => ({
+            ...prev,
+            name,
+          }));
+        }
       });
       return await onSend(response);
     } else if (request.type === 'send') {

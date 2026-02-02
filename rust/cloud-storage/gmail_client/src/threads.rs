@@ -1,8 +1,6 @@
 use crate::GmailClient;
-use crate::parse::map_thread_resources_to_service;
 use anyhow::{Context, anyhow};
-use models_email::email::service::thread;
-use models_email::email::service::thread::ThreadList;
+use models_email::email::service::thread::{ThreadList, ThreadSummary};
 use models_email::gmail::error::GmailError;
 use models_email::gmail::error::GmailError::{
     ApiError, BodyReadError, MultipartParse, RateLimitExceeded,
@@ -13,7 +11,6 @@ use std::cmp::min;
 use std::collections::HashMap;
 use std::thread::sleep;
 use std::time::Duration;
-use uuid::Uuid;
 
 // 500 is max allowed by gmail api
 pub const LIST_THREADS_BATCH_SIZE: u32 = 500;
@@ -70,7 +67,7 @@ pub(crate) async fn list_threads(
         .threads
         .unwrap_or_default()
         .into_iter()
-        .map(|api_thread| thread::ThreadSummary {
+        .map(|api_thread| ThreadSummary {
             provider_id: api_thread.id,
         })
         .collect();
@@ -88,17 +85,16 @@ pub(crate) async fn list_threads(
 #[tracing::instrument(skip(client, access_token, thread_ids), level = "info")]
 pub async fn get_threads_with_retry(
     client: &GmailClient,
-    link_id: Uuid,
     access_token: &str,
     thread_ids: &[String],
     mut batch_size: usize,
-) -> anyhow::Result<Vec<thread::Thread>> {
+) -> anyhow::Result<Vec<ThreadResource>> {
     let mut last_error: Option<GmailError> = None;
     let mut current_delay = Duration::from_millis(INITIAL_RETRY_DELAY_MS);
 
     for attempt in 0..MAX_RETRY_ATTEMPTS {
         // Call the actual get_threads function
-        match get_threads(client, link_id, access_token, thread_ids, batch_size).await {
+        match get_threads(client, access_token, thread_ids, batch_size).await {
             Ok(results) => {
                 return Ok(results);
             }
@@ -108,10 +104,8 @@ pub async fn get_threads_with_retry(
                         last_error = Some(RateLimitExceeded); // Store the error type
                         if attempt == MAX_RETRY_ATTEMPTS - 1 {
                             // Return the specific error wrapped in anyhow with additional context
-                            return Err(anyhow!(RateLimitExceeded).context(format!(
-                                "link_id: {}, thread_ids: {:?}",
-                                link_id, thread_ids
-                            )));
+                            return Err(anyhow!(RateLimitExceeded)
+                                .context(format!("thread_ids: {:?}", thread_ids)));
                         }
 
                         // Reduce batch size for next attempt
@@ -120,7 +114,6 @@ pub async fn get_threads_with_retry(
                             attempt = attempt + 1,
                             next_batch_size = batch_size,
                             delay_ms = current_delay.as_millis(),
-                            link_id = %link_id,
                             thread_ids = ?thread_ids,
                             "Rate limit hit. Reducing batch size and retrying after delay."
                         );
@@ -130,10 +123,9 @@ pub async fn get_threads_with_retry(
                         current_delay *= 2;
                     }
                     other_error => {
-                        return Err(anyhow!(other_error).context(format!(
-                            "link_id: {}, thread_ids: {:?}",
-                            link_id, thread_ids
-                        )));
+                        return Err(
+                            anyhow!(other_error).context(format!("thread_ids: {:?}", thread_ids))
+                        );
                     }
                 }
             }
@@ -153,14 +145,13 @@ pub async fn get_threads_with_retry(
 /// The Gmail batch API accepts a multipart/mixed request containing multiple individual requests consolidated into one.
 /// It returns a multipart/mixed response that needs to be parsed into individual thread responses.
 #[tracing::instrument(skip(client, access_token, thread_ids),
-    fields(link_id = %link_id, thread_ids = ?thread_ids, batch_size = batch_size))]
+    fields(thread_ids = ?thread_ids, batch_size = batch_size))]
 pub(crate) async fn get_threads(
     client: &GmailClient,
-    link_id: Uuid,
     access_token: &str,
     thread_ids: &[String],
     batch_size: usize,
-) -> Result<Vec<thread::Thread>, GmailError> {
+) -> Result<Vec<ThreadResource>, GmailError> {
     let mut unordered_responses = Vec::new();
 
     // variable batch size so we can decrease it if we get rate limited
@@ -226,16 +217,7 @@ pub(crate) async fn get_threads(
         }
     }
 
-    let service_threads = map_thread_resources_to_service(ordered_responses, link_id)
-        .await
-        .map_err(|e| {
-            GmailError::GenericError(format!(
-                "Error while mapping thread resources to service: {}",
-                e
-            ))
-        })?;
-
-    Ok(service_threads)
+    Ok(ordered_responses)
 }
 
 /// Gets all message IDs for a specific thread using the minimal format

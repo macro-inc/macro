@@ -32,9 +32,13 @@ pub async fn get_user_unsubscribes(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use macro_db_migrator::MACRO_DB_MIGRATIONS;
     use sqlx::{Pool, Postgres};
 
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_unsubscribes")))]
+    #[sqlx::test(
+        migrator = "MACRO_DB_MIGRATIONS",
+        fixtures(path = "../../fixtures", scripts("user_unsubscribes"))
+    )]
     async fn test_get_user_unsubscribes(pool: Pool<Postgres>) {
         let result = get_user_unsubscribes(&pool, "no-user").await.unwrap();
         assert_eq!(result.len(), 0);

@@ -17,13 +17,12 @@ import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
 import { canNestBlock, createBlockInstance } from '@core/orchestrator';
 import {
   isAccessiblePreviewItem,
-  isLoadingPreviewItem,
   type PreviewChannelAccess,
   type PreviewDocumentAccess,
   type PreviewItemAccess,
   type PreviewProjectAccess,
   useItemPreview,
-} from '@core/signal/preview';
+} from '@queries/preview';
 import { matches } from '@core/util/match';
 import TrashSimple from '@icon/duotone/trash-simple-duotone.svg';
 import Minimize from '@icon/regular/arrows-in.svg';
@@ -62,6 +61,7 @@ import {
   onCleanup,
   runWithOwner,
   Show,
+  Suspense,
   Switch,
   useContext,
 } from 'solid-js';
@@ -82,6 +82,14 @@ const stringifyPreviewBox = ([width, height]: PreviewBox): [string, string] => {
 };
 
 export function DocumentCard(props: DocumentCardDecoratorProps) {
+  return (
+    <Suspense>
+      <DocumentCardInner {...props} />
+    </Suspense>
+  );
+}
+
+function DocumentCardInner(props: DocumentCardDecoratorProps) {
   const wrapper = useContext(LexicalWrapperContext);
   const editor = () => wrapper?.editor;
   const selection = () => wrapper?.selection;
@@ -91,10 +99,10 @@ export function DocumentCard(props: DocumentCardDecoratorProps) {
   const previewType = () =>
     blockNameToItemType(verifyBlockName(props.blockName));
 
-  const [item] = useItemPreview({
+  const [item] = useItemPreview(() => ({
     id: props.documentId,
     type: previewType(),
-  });
+  }));
 
   const [hasLoadedPreview, setHasLoadedPreview] = createSignal(false);
 
@@ -152,22 +160,22 @@ export function DocumentCard(props: DocumentCardDecoratorProps) {
     };
   });
 
-  const previewData = createMemo(() => {
+  const previewData = () => {
     if (props.previewData?.view) {
       return { view: props.previewData.view };
     }
     return {};
-  });
+  };
 
-  const isPreviewable = createMemo(() => {
+  const isPreviewable = () => {
     if (!ENABLE_BLOCK_IN_BLOCK) return false;
     const i = item();
     if (!i) return false;
-    if (isLoadingPreviewItem(i)) return false;
+    if (i.loading) return false;
     if (!isAccessiblePreviewItem(i)) return false;
     const blockName = resolveBlockAlias(verifyBlockName(props.blockName));
     return canNestBlock(blockName, currentBlockName);
-  });
+  };
 
   const [previewComponent, setPreviewComponent] = createSignal<
     Component | undefined
@@ -333,7 +341,7 @@ export function DocumentCard(props: DocumentCardDecoratorProps) {
   }) => {
     return (
       <div class="p-2">
-        <div class="flex center gap-2 items-center">
+        <div class="flex center gap-2 items-center h-4">
           <div class="flex-shrink-0">
             <Show
               when={props.item.type === 'channel'}
@@ -406,7 +414,7 @@ export function DocumentCard(props: DocumentCardDecoratorProps) {
           </Show>
           <Show when={props.item.updatedAt}>
             {(updatedAt) => (
-              <div class="flex items-center text-xs text-ink-muted">
+              <div class="flex items-center text-xs text-ink-muted/60 mr-2">
                 <ClockIcon class="w-3 h-3 mr-1" />
                 <span>{formatDate(updatedAt())}</span>
               </div>
@@ -424,7 +432,7 @@ export function DocumentCard(props: DocumentCardDecoratorProps) {
         setPreviewBoxRef(el);
       }}
       contentEditable={false}
-      class="relative my-2 rounded-lg border border-edge no-select-children select-none overflow-hidden flex flex-col"
+      class="relative my-2 rounded border border-edge-muted no-select-children select-none overflow-hidden flex flex-col"
       classList={{
         'bg-active outline-edge outline-4': isSelectedAsNode(),
         'resize-y shrink-0 min-h-[100px]': isPreviewable(),
@@ -438,7 +446,7 @@ export function DocumentCard(props: DocumentCardDecoratorProps) {
       }}
     >
       <Switch>
-        <Match when={matches(item(), isLoadingPreviewItem)}>
+        <Match when={item().loading}>
           <div class="flex items-center justify-center p-4 text-ink-muted">
             <LoadingSpinner class="w-6 h-6 animate-spin" />
           </div>

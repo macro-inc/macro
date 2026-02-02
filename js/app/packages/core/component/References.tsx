@@ -5,10 +5,9 @@ import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import {
   isAccessiblePreviewItem,
-  isDocumentPreviewItem,
   type PreviewItem,
   useItemPreview,
-} from '@core/signal/preview';
+} from '@queries/preview';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
@@ -105,7 +104,7 @@ export function References(props: ReferenceProps) {
   };
 
   const navigateToGenericReference = (item: PreviewItem) => {
-    if (isAccessiblePreviewItem(item) && isDocumentPreviewItem(item)) {
+    if (isAccessiblePreviewItem(item) && item.type === 'document') {
       const blockId = item.id;
       const blockType = fileTypeToBlockName(item.fileType);
       navigateToItem(blockType, blockId);
@@ -210,10 +209,10 @@ export function References(props: ReferenceProps) {
             if (isGenericReference(ref)) {
               const userId = ref.user_id!;
               const [userName] = useDisplayName(tryMacroId(userId));
-              const [item] = useItemPreview({
+              const [item] = useItemPreview(() => ({
                 id: ref.source_entity_id,
-                type: ref.source_entity_type as any,
-              });
+                type: ref.source_entity_type as ItemType,
+              }));
 
               const navHandlers = useSplitNavigationHandler(() =>
                 navigateToGenericReference(item())

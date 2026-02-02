@@ -1,5 +1,4 @@
 use crate::GmailClient;
-use crate::parse::map_message_resource_to_service;
 use anyhow::Context;
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
@@ -9,15 +8,13 @@ use models_email::email::service::message;
 use models_email::gmail::{
     MessageResource, MinimalMessageResource, SendMessagePayload, SentMessageResource,
 };
-use uuid::Uuid;
 
 #[tracing::instrument(skip(client, access_token))]
 pub(crate) async fn get_message(
     client: &GmailClient,
     access_token: &str,
     message_provider_id: &str,
-    link_id: Uuid,
-) -> anyhow::Result<Option<message::Message>> {
+) -> anyhow::Result<Option<MessageResource>> {
     let url = format!(
         "{}/users/me/messages/{}",
         client.base_url, message_provider_id
@@ -30,29 +27,31 @@ pub(crate) async fn get_message(
         .bearer_auth(access_token)
         .send()
         .await
-        .with_context(|| format!("Failed to send request to Gmail API (get message) for message_provider_id: {}, link_id: {}",
-                                 message_provider_id, link_id))?;
+        .with_context(|| {
+            format!(
+                "Failed to send request to Gmail API (get message) for message_provider_id: {}",
+                message_provider_id
+            )
+        })?;
 
     if response.status() == reqwest::StatusCode::NOT_FOUND {
         return Ok(None);
     }
 
-    let response = response
-        .error_for_status()
-        .with_context(|| format!("Gmail API returned an error status (get message) for message_provider_id: {}, link_id: {}",
-                                 message_provider_id, link_id))?;
+    let response = response.error_for_status().with_context(|| {
+        format!(
+            "Gmail API returned an error status (get message) for message_provider_id: {}",
+            message_provider_id
+        )
+    })?;
 
     let message_response = response
         .json::<MessageResource>()
         .await
-        .with_context(|| format!("Failed to parse JSON response from Gmail API (get message) for message_provider_id: {}, link_id: {}",
-                                 message_provider_id, link_id))?;
+        .with_context(|| format!("Failed to parse JSON response from Gmail API (get message) for message_provider_id: {}",
+                                 message_provider_id))?;
 
-    let message = map_message_resource_to_service(message_response, link_id)
-        .with_context(|| format!("Failed to map Gmail message response to service message for message_provider_id: {}, link_id: {}",
-                                 message_provider_id, link_id))?;
-
-    Ok(Some(message))
+    Ok(Some(message_response))
 }
 
 // gets a message without the body using ?format=minimal in the gmail api call
@@ -61,7 +60,6 @@ pub(crate) async fn get_message_thread_id(
     client: &GmailClient,
     access_token: &str,
     message_provider_id: &str,
-    link_id: Uuid,
 ) -> anyhow::Result<Option<String>> {
     let url = format!(
         "{}/users/me/messages/{}?format=minimal",
@@ -75,22 +73,28 @@ pub(crate) async fn get_message_thread_id(
         .bearer_auth(access_token)
         .send()
         .await
-        .with_context(|| format!("Failed to send request to Gmail API (get message) for message_provider_id: {}, link_id: {}",
-                                 message_provider_id, link_id))?;
+        .with_context(|| {
+            format!(
+                "Failed to send request to Gmail API (get message) for message_provider_id: {}",
+                message_provider_id
+            )
+        })?;
 
     if response.status() == reqwest::StatusCode::NOT_FOUND {
         return Ok(None);
     }
 
-    let response = response
-        .error_for_status()
-        .with_context(|| format!("Gmail API returned an error status (get message) for message_provider_id: {}, link_id: {}",
-                                 message_provider_id, link_id))?;
+    let response = response.error_for_status().with_context(|| {
+        format!(
+            "Gmail API returned an error status (get message) for message_provider_id: {}",
+            message_provider_id
+        )
+    })?;
 
     let message_response = response
         .json::<MinimalMessageResource>()
         .await
-        .with_context(|| format!("Failed to parse JSON response from Gmail API (get message) for message_provider_id: {}, link_id: {}", message_provider_id, link_id))?;
+        .with_context(|| format!("Failed to parse JSON response from Gmail API (get message) for message_provider_id: {}", message_provider_id))?;
 
     Ok(Some(message_response.thread_id))
 }
@@ -101,7 +105,6 @@ pub(crate) async fn get_message_label_ids(
     client: &GmailClient,
     access_token: &str,
     message_provider_id: &str,
-    link_id: Uuid,
 ) -> anyhow::Result<Option<Vec<String>>> {
     let url = format!(
         "{}/users/me/messages/{}?format=minimal",
@@ -115,22 +118,28 @@ pub(crate) async fn get_message_label_ids(
         .bearer_auth(access_token)
         .send()
         .await
-        .with_context(|| format!("Failed to send request to Gmail API (get message) for message_provider_id: {}, link_id: {}",
-                                 message_provider_id, link_id))?;
+        .with_context(|| {
+            format!(
+                "Failed to send request to Gmail API (get message) for message_provider_id: {}",
+                message_provider_id
+            )
+        })?;
 
     if response.status() == reqwest::StatusCode::NOT_FOUND {
         return Ok(None);
     }
 
-    let response = response
-        .error_for_status()
-        .with_context(|| format!("Gmail API returned an error status (get message) for message_provider_id: {}, link_id: {}",
-                                 message_provider_id, link_id))?;
+    let response = response.error_for_status().with_context(|| {
+        format!(
+            "Gmail API returned an error status (get message) for message_provider_id: {}",
+            message_provider_id
+        )
+    })?;
 
     let message_response = response
         .json::<MinimalMessageResource>()
         .await
-        .with_context(|| format!("Failed to parse JSON response from Gmail API (get message) for message_provider_id: {}, link_id: {}", message_provider_id, link_id))?;
+        .with_context(|| format!("Failed to parse JSON response from Gmail API (get message) for message_provider_id: {}", message_provider_id))?;
 
     Ok(Some(message_response.label_ids))
 }

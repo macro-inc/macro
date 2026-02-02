@@ -5,7 +5,7 @@ use model::item::{ShareableItem, ShareableItemType, UserAccessibleItem};
 use opensearch_client::search::model::{Highlight, SearchHit};
 use sqlx::{Pool, Postgres, types::Uuid};
 
-use crate::api::ApiContext;
+use crate::api::context::SearchHandlerState;
 
 #[derive(Debug)]
 pub(in crate::api::search) struct FilterDocumentResponse {
@@ -14,7 +14,7 @@ pub(in crate::api::search) struct FilterDocumentResponse {
 }
 
 pub(in crate::api::search) async fn filter_documents(
-    ctx: &ApiContext,
+    ctx: &SearchHandlerState,
     user_id: &str,
     filters: &DocumentFilters,
 ) -> Result<FilterDocumentResponse, SearchError> {

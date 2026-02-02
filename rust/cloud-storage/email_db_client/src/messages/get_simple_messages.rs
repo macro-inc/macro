@@ -110,7 +110,7 @@ pub async fn get_simple_message(
 }
 
 /// Returns a vector of SimpleMessage objects for all found messages
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_simple_messages_batch(
     pool: &PgPool,
     message_ids: &Vec<Uuid>,
@@ -156,7 +156,7 @@ pub async fn get_simple_messages_batch(
 }
 
 // returns SimpleMessage objects for each message in the passed thread. ordered by date desc nulls last
-#[tracing::instrument(skip(executor), level = "info")]
+#[tracing::instrument(skip(executor), err)]
 pub async fn get_simple_messages_for_thread<'e, E>(
     executor: E,
     thread_id: Uuid,

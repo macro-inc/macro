@@ -1,6 +1,6 @@
 use anyhow::Context;
 use document_storage_service_client::DocumentStorageServiceClient;
-use email_service::config::{CloudfrontSignerPrivateKey, Config};
+use email_service::config::{Config, EmailServiceCloudfrontSignerPrivateKey};
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
@@ -16,11 +16,7 @@ async fn main() -> anyhow::Result<()> {
     MacroEntrypoint::default().init();
     let env = Environment::new_or_prod();
 
-    // new
-    let aws_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-        .region("us-east-1")
-        .load()
-        .await;
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
 
     let s3_client = s3_client::S3::new(aws_sdk_s3::Client::new(&aws_config));
 
@@ -29,7 +25,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let cloudfront_signer_private_key = secretsmanager_client
-        .get_maybe_secret_value(env, CloudfrontSignerPrivateKey::new()?)
+        .get_maybe_secret_value(env, EmailServiceCloudfrontSignerPrivateKey::new()?)
         .await?;
 
     // Parse our configuration from the environment.
@@ -73,18 +69,7 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("could not connect to backfill db")?;
 
-    let gmail_queue_aws_config = if cfg!(feature = "local_queue") {
-        aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .region("us-east-1")
-            .endpoint_url(&config.gmail_inbox_sync_queue)
-            .load()
-            .await
-    } else {
-        aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .region("us-east-1")
-            .load()
-            .await
-    };
+    let gmail_queue_aws_config = macro_aws_config::get_macro_aws_config().await;
 
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&gmail_queue_aws_config))
         .gmail_inbox_sync_queue(&config.gmail_inbox_sync_queue)

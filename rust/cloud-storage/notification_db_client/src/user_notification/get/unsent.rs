@@ -65,6 +65,7 @@ pub async fn get_unsent_notifications_for_users(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use macro_db_migrator::MACRO_DB_MIGRATIONS;
     use sqlx::{Pool, Postgres};
 
     async fn populate_notifications(pool: &Pool<Postgres>) -> anyhow::Result<()> {
@@ -164,7 +165,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
     async fn test_get_unsent_notifications_for_users(pool: Pool<Postgres>) -> anyhow::Result<()> {
         populate_notifications(&pool).await?;
 

@@ -8,7 +8,7 @@ use system_properties::SystemPropertyKey;
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::api::context::ApiContext;
+use crate::api::context::PropertiesHandlerState;
 use model::user::UserContext;
 use properties_db_client::{
     entity_properties::{delete as entity_properties_delete, get::lookup_entity_property},
@@ -66,16 +66,16 @@ impl IntoResponse for DeleteEntityPropertyErr {
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(context, user_context), fields(entity_property_id = %entity_property_uuid, user_id = %user_context.user_id), err)]
+#[tracing::instrument(skip(state, user_context), fields(entity_property_id = %entity_property_uuid, user_id = %user_context.user_id), err)]
 pub async fn delete_entity_property(
     Path(entity_property_uuid): Path<Uuid>,
-    State(context): State<ApiContext>,
+    State(state): State<PropertiesHandlerState>,
     Extension(user_context): Extension<UserContext>,
 ) -> Result<StatusCode, DeleteEntityPropertyErr> {
     tracing::info!("removing entity property");
 
     // Lookup entity property
-    let property_info = lookup_entity_property(&context.db, entity_property_uuid)
+    let property_info = lookup_entity_property(&state.db, entity_property_uuid)
         .await
         .inspect_err(|e| {
             tracing::error!(
@@ -108,13 +108,13 @@ pub async fn delete_entity_property(
     let entity_ref = EntityReference::new(property_info.entity_id, property_info.entity_type);
 
     crate::api::permissions::check_entity_edit_permission(
-        &context,
+        &state,
         &user_context.user_id,
         &entity_ref,
     )
     .await?;
 
-    entity_properties_delete::delete_entity_property(&context.db, entity_property_uuid)
+    entity_properties_delete::delete_entity_property(&state.db, entity_property_uuid)
         .await
         .inspect_err(|e| {
             tracing::error!(

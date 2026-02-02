@@ -6,6 +6,7 @@ import type {
 import type {
   SoupEmailThreadPreviewMetadata,
   SoupLabel,
+  SoupProperty,
 } from '@service-storage/generated/schemas';
 import type { JSX } from 'solid-js';
 
@@ -132,6 +133,12 @@ export const isPureDocumentEntity = (
 export type EntityType = EntityData['type'];
 
 export type ExpandedEntityType = EntityType | 'task';
+
+export type EntityWithProperties<T extends EntityData> = T & {
+  properties?: SoupProperty[];
+};
+
+export type TaskEntityWithProperties = EntityWithProperties<TaskEntity>;
 
 export type EntityOf<K extends EntityType> = Extract<EntityData, { type: K }>;
 

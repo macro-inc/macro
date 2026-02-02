@@ -1,4 +1,5 @@
 use super::chat_permissions;
+use ai::types::AiError;
 use anyhow::Result;
 use axum::extract::State;
 use axum::{
@@ -74,7 +75,7 @@ async fn process_incoming_message(
         Message::Text(text) => {
             // Handle heartbeat ping messages
             if text == "ping" {
-                ws_send(message_sender, FromWebSocketMessage::Pong);
+                ws_send(message_sender, FromWebSocketMessage::Pong)?;
                 return Ok(None);
             }
 
@@ -192,7 +193,7 @@ async fn handle_websocket_connection(
             if let Err(err) =
                 ensure_user_attachment_access(&ctx, user_context.clone(), attachments).await
             {
-                ws_send(&message_sender_clone, FromWebSocketMessage::Error(err));
+                ws_send(&message_sender_clone, FromWebSocketMessage::Error(err)).ok();
                 continue;
             }
 
@@ -202,27 +203,24 @@ async fn handle_websocket_connection(
                         match e {
                             UserQuotaError::InvalidMacroUserId
                             | UserQuotaError::UnableToGetUserPermissions
-                            | UserQuotaError::UnableToGetUserQuota => {
-                                ws_send(
-                                    &message_sender_clone,
-                                    FromWebSocketMessage::Error(WebSocketError::StreamError(
-                                        StreamError::InternalError {
-                                            stream_id: payload.stream_id,
-                                        },
-                                    )),
-                                );
-                            }
-                            UserQuotaError::ExceededMaxChatMessages => {
-                                ws_send(
-                                    &message_sender_clone,
-                                    FromWebSocketMessage::Error(WebSocketError::StreamError(
-                                        StreamError::PaymentRequired {
-                                            stream_id: payload.stream_id,
-                                        },
-                                    )),
-                                );
-                            }
+                            | UserQuotaError::UnableToGetUserQuota => ws_send(
+                                &message_sender_clone,
+                                FromWebSocketMessage::Error(WebSocketError::StreamError(
+                                    StreamError::InternalError {
+                                        stream_id: payload.stream_id,
+                                    },
+                                )),
+                            ),
+                            UserQuotaError::ExceededMaxChatMessages => ws_send(
+                                &message_sender_clone,
+                                FromWebSocketMessage::Error(WebSocketError::StreamError(
+                                    StreamError::PaymentRequired {
+                                        stream_id: payload.stream_id,
+                                    },
+                                )),
+                            ),
                         }
+                        .ok();
                         continue;
                     }
 
@@ -237,7 +235,8 @@ async fn handle_websocket_connection(
                                         stream_id: payload.stream_id.clone(),
                                     },
                                 )),
-                            );
+                            )
+                            .ok();
                             continue;
                         }
                     };
@@ -254,7 +253,7 @@ async fn handle_websocket_connection(
                     .await
                     {
                         Err(e) => {
-                            ws_send(&message_sender_clone, FromWebSocketMessage::Error(e));
+                            ws_send(&message_sender_clone, FromWebSocketMessage::Error(e)).ok();
                             continue;
                         }
                         Ok(access) => match access {
@@ -266,7 +265,8 @@ async fn handle_websocket_connection(
                                             stream_id: payload.stream_id,
                                         },
                                     )),
-                                );
+                                )
+                                .ok();
                                 continue;
                             }
                             _ => (),
@@ -286,7 +286,7 @@ async fn handle_websocket_connection(
                                 &jwt_token
                             )) => {
                                 if let Err(err) = result {
-                                    ws_send(&message_sender_clone, FromWebSocketMessage::Error(err.into()))
+                                    ws_send(&message_sender_clone, FromWebSocketMessage::Error(err.into())).ok();
                                 }
                             }
                         }
@@ -304,7 +304,8 @@ async fn handle_websocket_connection(
                                         stream_id: payload.stream_id.clone(),
                                     },
                                 )),
-                            );
+                            )
+                            .ok();
                             continue;
                         }
                     };
@@ -321,7 +322,7 @@ async fn handle_websocket_connection(
                     .await
                     {
                         Err(e) => {
-                            ws_send(&message_sender_clone, FromWebSocketMessage::Error(e));
+                            ws_send(&message_sender_clone, FromWebSocketMessage::Error(e)).ok();
                             continue;
                         }
                         Ok(access) => match access {
@@ -333,14 +334,15 @@ async fn handle_websocket_connection(
                                             stream_id: payload.stream_id,
                                         },
                                     )),
-                                );
+                                )
+                                .ok();
                                 continue;
                             }
                             _ => (),
                         },
                     };
                     tokio::spawn(async move {
-                        let result = handle_edit_last_user_message(
+                        if let Err(err) = handle_edit_last_user_message(
                             ctx,
                             &message_sender_clone,
                             payload,
@@ -348,12 +350,13 @@ async fn handle_websocket_connection(
                             &connection_id,
                             &jwt_token,
                         )
-                        .await;
-                        if let Err(err) = result {
+                        .await
+                        {
                             ws_send(
                                 &message_sender_clone,
                                 FromWebSocketMessage::Error(err.into()),
                             )
+                            .ok();
                         }
                     });
                 }
@@ -369,7 +372,7 @@ async fn handle_websocket_connection(
                                 details: Some(err.to_string()),
                             })
                     {
-                        ws_send(&message_sender_clone, FromWebSocketMessage::Error(err));
+                        ws_send(&message_sender_clone, FromWebSocketMessage::Error(err)).ok();
                     }
                 }
                 ToWebSocketMessage::ExtractionStatus(payload) => {
@@ -383,7 +386,7 @@ async fn handle_websocket_connection(
                     .await
                     .map_err(|_err| WebSocketError::ExtractionStatusFailed { attachment_id })
                     {
-                        ws_send(&message_sender_clone, FromWebSocketMessage::Error(err))
+                        ws_send(&message_sender_clone, FromWebSocketMessage::Error(err)).ok();
                     }
                 }
                 ToWebSocketMessage::SendCompletion(payload) => {
@@ -396,20 +399,20 @@ async fn handle_websocket_connection(
                     )
                     .await
                     {
-                        ws_send(&message_sender_clone, FromWebSocketMessage::Error(err))
+                        ws_send(&message_sender_clone, FromWebSocketMessage::Error(err)).ok();
                     }
                 }
                 ToWebSocketMessage::GetSimpleCompletionStream(payload) => {
                     let user_id = &user_context_clone.user_id;
-                    let response = handle_simple_completion(
+                    if let Err(err) = handle_simple_completion(
                         ctx_clone.clone(),
                         &message_sender_clone,
                         &payload,
                         user_id,
                     )
-                    .await;
-                    if let Err(err) = response {
-                        ws_send(&message_sender_clone, FromWebSocketMessage::Error(err));
+                    .await
+                    {
+                        ws_send(&message_sender_clone, FromWebSocketMessage::Error(err)).ok();
                     }
                 }
             };
@@ -435,10 +438,24 @@ async fn handle_websocket_connection(
     CONNECTION_MAP.remove(&connection_id);
 }
 
-pub fn ws_send(sender: &UnboundedSender<FromWebSocketMessage>, message: FromWebSocketMessage) {
-    if let Err(e) = sender.send(message) {
-        tracing::error!(error=%e, "failed to send message to channel");
+/// Error returned when failing to send a websocket message
+#[derive(Debug, thiserror::Error)]
+#[error("failed to send websocket message: channel closed")]
+pub struct WsSendError;
+
+impl From<WsSendError> for AiError {
+    fn from(err: WsSendError) -> Self {
+        AiError::Generic(err.into())
     }
+}
+
+/// Sends a message over the websocket channel
+#[tracing::instrument(skip(sender), err)]
+pub fn ws_send(
+    sender: &UnboundedSender<FromWebSocketMessage>,
+    message: FromWebSocketMessage,
+) -> Result<(), WsSendError> {
+    sender.send(message).map_err(|_| WsSendError)
 }
 
 /// Errors that can occur when checking the user quota

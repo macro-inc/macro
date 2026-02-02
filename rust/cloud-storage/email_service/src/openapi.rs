@@ -2,6 +2,7 @@
 
 mod api;
 mod config;
+mod convert;
 mod pubsub;
 mod util;
 mod utils;

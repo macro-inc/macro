@@ -17,7 +17,6 @@ import {
 } from '../../block-theme/signals/themeSignals';
 import { applyTheme } from '../../block-theme/utils/themeUtils';
 import { globalSplitManager } from '../signal/splitLayout';
-import { playSound } from '../util/sound';
 import {
   konsoleOpen,
   resetKonsoleMode,
@@ -34,14 +33,8 @@ export default function GlobalShortcuts() {
   const { toggleSettings } = useSettingsState();
 
   const handleCommandMenu = () => {
-    const wasOpen = konsoleOpen();
     resetKonsoleMode();
     toggleKonsoleVisibility();
-    // Play sound when opening (not closing)
-    if (!wasOpen) {
-      playSound('Kick - Struct - Tight Minimal 4');
-    }
-    return;
   };
 
   const createCommandScope = registerHotkey({

@@ -183,11 +183,6 @@ pub async fn upload_single_attachment(
         return Ok("https://example.com/mock-url".to_string());
     }
 
-    // Ensure attachment has a db_id
-    let attachment_id = attachment
-        .db_id
-        .ok_or_else(|| anyhow::anyhow!("Attachment must have a db_id to generate an object key"))?;
-
     // Upload the attachment data to S3
     match state
         .s3_client
@@ -201,7 +196,7 @@ pub async fn upload_single_attachment(
                 .with_context(|| {
                     format!(
                         "Failed to generate presigned URL for attachment_id {} in bucket {} with key {}",
-                        attachment_id, bucket, object_key
+                        attachment.db_id, bucket, object_key
                     )
                 })?;
 
@@ -218,7 +213,7 @@ pub async fn upload_single_attachment(
                 "Failed to upload attachment: {} - link_id: {}, attachment_id: {}, content_length: {}, bucket: {}, key: {}",
                 e,
                 link_id,
-                attachment_id,
+                attachment.db_id,
                 attachment_data.len(),
                 bucket,
                 object_key
@@ -231,10 +226,19 @@ pub async fn upload_single_attachment(
 // get a presigned cloudfront url for the attachment
 async fn get_presigned_url(state: &ApiContext, key: &str) -> anyhow::Result<String> {
     let encoded_key = urlencoding::encode(key);
-    let presigned_url_expiry_secs = state.config.presigned_url_ttl_secs;
-    let public_key_id = state.config.cloudfront_signer_public_key_id.clone();
-    let private_key = state.config.cloudfront_signer_private_key.as_ref();
-    let url = state.config.cloudfront_distribution_url.clone();
+    let presigned_url_expiry_secs = state.config.email_service_presigned_url_ttl_secs;
+    let public_key_id = state
+        .config
+        .email_service_cloudfront_signer_public_key_id
+        .clone();
+    let private_key = state
+        .config
+        .email_service_cloudfront_signer_private_key
+        .as_ref();
+    let url = state
+        .config
+        .email_service_cloudfront_distribution_url
+        .clone();
 
     let current_unix_timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)

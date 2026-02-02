@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO notification_email_unsubscribe_code (email, code) VALUES ($1, $2)\n        ON CONFLICT (email) DO UPDATE \n        SET code = notification_email_unsubscribe_code.code\n        RETURNING notification_email_unsubscribe_code.code\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "code",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "32bc3d9fd93e31e31e94a11d286017303907af0da309f50568bda9f6fa74c22f"
+}

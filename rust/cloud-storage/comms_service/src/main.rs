@@ -17,6 +17,7 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 
 mod api;
+mod channel_permissions;
 mod config;
 mod constants;
 mod notification;
@@ -56,13 +57,11 @@ async fn main() -> anyhow::Result<()> {
         "initialized db connection"
     );
 
-    let secretsmanager_client =
-        secretsmanager_client::SecretsManager::new(aws_sdk_secretsmanager::Client::new(
-            &aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .load()
-                .await,
-        ));
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
+
+    let secretsmanager_client = secretsmanager_client::SecretsManager::new(
+        aws_sdk_secretsmanager::Client::new(&aws_config),
+    );
     tracing::trace!("initialized secretsmanager client");
 
     let macro_notify_client = macro_notify::MacroNotify::new(
@@ -72,20 +71,9 @@ async fn main() -> anyhow::Result<()> {
     .await;
     tracing::trace!("initialized macro_notify client");
 
-    let document_storage_service_client =
-        document_storage_service_client::DocumentStorageServiceClient::new(
-            config.internal_auth_key.as_ref().to_string(),
-            config.document_storage_service_url.clone(),
-        );
-
-    let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(
-        &aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .region("us-east-1")
-            .load()
-            .await,
-    ))
-    .contacts_queue(&config.contacts_queue)
-    .search_event_queue(&config.search_event_queue);
+    let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
+        .contacts_queue(&config.contacts_queue)
+        .search_event_queue(&config.search_event_queue);
 
     let macro_db = PgPoolOptions::new()
         .min_connections(1)
@@ -108,11 +96,6 @@ async fn main() -> anyhow::Result<()> {
             .context("unable to get secret")?
             .to_string(),
     };
-
-    let auth_service_client = authentication_service_client::AuthServiceClient::new(
-        auth_service_secret_key.clone(),
-        config.auth_service_url.to_string(),
-    );
 
     let permissions_token_secret = secretsmanager_client
         .get_maybe_secret_value(config.environment, DocumentPermissionJwtSecretKey::new()?)
@@ -141,15 +124,9 @@ async fn main() -> anyhow::Result<()> {
 
     let service = api::service(AppState {
         jwt_validation_args,
-        internal_auth_key: secretsmanager_client::LocalOrRemoteSecret::Local(
-            config.internal_auth_key.clone(),
-        ),
-
         db,
         sqs_client: Arc::new(sqs_client),
         macro_notify_client: Arc::new(macro_notify_client),
-        document_storage_service_client: Arc::new(document_storage_service_client),
-        auth_service_client: Arc::new(auth_service_client),
         connection_gateway_client: Arc::new(connection_gateway_client),
         permissions_token_secret,
         comms_state: CommsRouterState::new(ChannelServiceImpl::new(

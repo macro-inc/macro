@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use config::{Config, Environment};
+use connection_gateway_client::client::ConnectionGatewayClient;
 use contacts_service::queue::MessageQueue;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
@@ -39,21 +40,8 @@ async fn connect_to_database(config: &Config) -> anyhow::Result<PgPool> {
 
 async fn create_sqs_worker(config: &Config) -> SQSWorker {
     let queue_url = config.queue_url.clone();
-    let aws_config = match config.environment {
-        Environment::Local => {
-            aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .endpoint_url(&queue_url)
-                .load()
-                .await
-        }
-        _ => {
-            aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .load()
-                .await
-        }
-    };
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
+
     let sqs_client = aws_sdk_sqs::Client::new(&aws_config);
     sqs_worker::SQSWorker::new(
         sqs_client,
@@ -72,19 +60,20 @@ async fn main() -> anyhow::Result<()> {
     let db = connect_to_database(&config).await?;
     let db_clone = db.clone();
     let sqs_worker = create_sqs_worker(&config).await;
-    let mut worker = MessageQueue::new(sqs_worker, db_clone);
 
-    let secretsmanager_client =
-        secretsmanager_client::SecretsManager::new(aws_sdk_secretsmanager::Client::new(
-            &aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .load()
-                .await,
-        ));
+    let secretsmanager_client = secretsmanager_client::SecretsManager::new(
+        aws_sdk_secretsmanager::Client::new(&macro_aws_config::get_macro_aws_config().await),
+    );
 
     let internal_api_secret = secretsmanager_client
         .get_maybe_secret_value(config.environment, InternalApiSecretKey::new()?)
         .await?;
+
+    let connection_gateway_client = config.connection_gateway_url.as_ref().map(|url| {
+        ConnectionGatewayClient::new(internal_api_secret.as_ref().to_string(), url.clone())
+    });
+
+    let mut worker = MessageQueue::new(sqs_worker, db_clone, connection_gateway_client);
 
     tokio::spawn(async move {
         worker.poll().await;

@@ -1,11 +1,13 @@
 use crate::api::context::AppState;
 use comms_db_client::{
     messages::get_count::check_if_channel_has_messages,
+    messages::get_message_owner::get_message_owner,
     model::{Message, SimpleMention},
     participants::get_participants::get_channel_participants_for_thread_id,
 };
+use macro_db_client::notification::BasicCloudStorageItemMetadata;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use model::{comms::ChannelParticipant, document_storage_service_internal::DocumentMetadata};
+use model::comms::ChannelParticipant;
 use model_entity::EntityType;
 use model_notifications::{
     ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageDocumentMetadata,
@@ -21,9 +23,10 @@ pub struct ChannelMessageEvent<'a> {
     channel_metadata: &'a CommonChannelMetadata,
     channel_message_count: usize,
     user_mentions: &'a [String],
-    document_mentions: &'a [DocumentMetadata],
+    document_mentions: &'a [BasicCloudStorageItemMetadata],
     participants: &'a [ChannelParticipant],
     thread_participants: &'a [MacroUserIdStr<'static>],
+    thread_parent_sender_id: Option<MacroUserIdStr<'static>>,
 }
 
 pub struct ChannelInviteEvent<'a> {
@@ -151,6 +154,7 @@ impl ChannelMessageEvent<'_> {
                             message_id: self.message.id.to_string(),
                             user_id: self.message.sender_id.clone(),
                             message_content: self.message.content.clone(),
+                            thread_parent_sender_id: self.thread_parent_sender_id.clone(),
                             common: self.channel_metadata.clone(),
                         },
                     ));
@@ -239,22 +243,32 @@ pub async fn dispatch_notifications_for_message(
                 (users, docs)
             });
 
-    let document_mentions = api_context
-        .document_storage_service_client
-        .get_documents_metadata(document_mention_ids)
+    let document_mentions =
+        macro_db_client::notification::get_basic_cloud_storage_documents_metadata(
+            &api_context.db,
+            &document_mention_ids,
+        )
         .await
         .inspect_err(|e| {
-            tracing::error!("unable to get documents metadata: {e}");
+            tracing::error!(error=?e, "unable to get documents metadata");
         })
-        .map(|response| response.documents)
         .unwrap_or_default();
 
-    let thread_participants = if let Some(thread_id) = message.thread_id {
-        get_channel_participants_for_thread_id(&api_context.db, &thread_id)
+    let (thread_participants, thread_parent_sender_id) = if let Some(thread_id) = message.thread_id
+    {
+        let participants = get_channel_participants_for_thread_id(&api_context.db, &thread_id)
             .await
-            .unwrap_or_default()
+            .unwrap_or_default();
+        // Get the thread parent sender (author of the root message)
+        let sender_id = match get_message_owner(&api_context.db, &thread_id).await {
+            Ok(id) => MacroUserIdStr::parse_from_str(&id)
+                .ok()
+                .map(|id| id.into_owned()),
+            Err(_) => None,
+        };
+        (participants, sender_id)
     } else {
-        vec![]
+        (vec![], None)
     };
 
     let channel_message_event = ChannelMessageEvent {
@@ -266,6 +280,7 @@ pub async fn dispatch_notifications_for_message(
         document_mentions: &document_mentions,
         participants: &participants,
         thread_participants: &thread_participants,
+        thread_parent_sender_id,
     };
 
     let notifications = channel_message_event.generate_notifications();
@@ -316,8 +331,8 @@ mod tests {
         }
     }
 
-    fn doc_metadata(name: &str) -> DocumentMetadata {
-        DocumentMetadata {
+    fn doc_metadata(name: &str) -> BasicCloudStorageItemMetadata {
+        BasicCloudStorageItemMetadata {
             item_name: name.to_string(),
             item_owner: MacroUserIdStr::parse_from_str("macro|owner@test.com")
                 .unwrap()
@@ -404,6 +419,7 @@ mod tests {
             document_mentions: &[],
             participants: &participants,
             thread_participants: &[],
+            thread_parent_sender_id: None,
         };
 
         let notifications = event.generate_notifications();
@@ -450,6 +466,7 @@ mod tests {
             document_mentions: &[],
             participants: &participants,
             thread_participants: &[],
+            thread_parent_sender_id: None,
         };
 
         let notifications = event.generate_notifications();
@@ -493,6 +510,7 @@ mod tests {
             document_mentions: &[],
             participants: &participants,
             thread_participants: &[],
+            thread_parent_sender_id: None,
         };
 
         let notifications = event.generate_notifications();
@@ -541,6 +559,7 @@ mod tests {
             document_mentions: &[],
             participants: &participants,
             thread_participants: &[],
+            thread_parent_sender_id: None,
         };
 
         let notifications = event.generate_notifications();
@@ -608,6 +627,11 @@ mod tests {
             MacroUserIdStr::parse_from_str("macro|charlie@test.com").unwrap(),
         ];
 
+        let thread_parent_sender_id = Some(
+            MacroUserIdStr::parse_from_str("macro|thread_parent_sender@test.com")
+                .unwrap()
+                .into_owned(),
+        );
         let event = ChannelMessageEvent {
             channel_id: &channel_id,
             message: &msg,
@@ -617,6 +641,7 @@ mod tests {
             document_mentions: &[],
             participants: &participants,
             thread_participants: &thread_participants,
+            thread_parent_sender_id,
         };
 
         let notifications = event.generate_notifications();
@@ -675,6 +700,7 @@ mod tests {
             document_mentions: &doc_mentions,
             participants: &participants,
             thread_participants: &[],
+            thread_parent_sender_id: None,
         };
 
         let notifications = event.generate_notifications();
@@ -728,6 +754,7 @@ mod tests {
             document_mentions: &[],
             participants: &participants,
             thread_participants: &[],
+            thread_parent_sender_id: None,
         };
 
         let notifications = event.generate_notifications();

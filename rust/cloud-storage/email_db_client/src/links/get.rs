@@ -44,7 +44,7 @@ pub async fn fetch_link_by_email(
 }
 
 /// fetches email_links given a macro_id.
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn fetch_link_by_macro_id(
     pool: &PgPool,
     macro_id: &str,
@@ -74,7 +74,7 @@ pub async fn fetch_link_by_macro_id(
 }
 
 /// fetches email_links given a fusionauth_user_id. a fusionauth_user_id can have multiple email_links, each with a unique macro_id
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn fetch_links_by_fusionauth_user_id(
     pool: &PgPool,
     fusionauth_user_id: &str,
@@ -114,7 +114,7 @@ pub async fn fetch_links_by_fusionauth_user_id(
 
 /// Fetches a link by its ID.
 /// Returns None if no link with the given ID exists.
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn fetch_link_by_id(pool: &PgPool, link_id: Uuid) -> anyhow::Result<Option<link::Link>> {
     let db_link = sqlx::query_as!(
         DbLink,

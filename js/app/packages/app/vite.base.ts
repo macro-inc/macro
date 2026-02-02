@@ -85,11 +85,21 @@ export const createAppViteConfig = ({
                 entryFileNames: `assets/[name].js`,
                 chunkFileNames: `assets/[name].js`,
                 assetFileNames: `assets/[name].[ext]`,
+                manualChunks: {
+                  three: ['three'],
+                  katex: ['katex'],
+                  pdfjs: ['pdfjs-dist'],
+                },
               }
             : {
                 format: 'es',
                 chunkFileNames: '[name]-[hash].js',
                 entryFileNames: '[name]-[hash].js',
+                manualChunks: {
+                  three: ['three'],
+                  katex: ['katex'],
+                  pdfjs: ['pdfjs-dist'],
+                },
               },
         },
         assetsInlineLimit: (filePath) => {

@@ -6,7 +6,7 @@ import type {
   DocumentKeyParts,
   FileSystemFile,
 } from '@coparse/filesystem/src/file';
-import type { DocumentMetadata } from '@macro-inc/document-processing-job-types';
+import type { DocumentMetadata } from '@coparse/document-processing-types';
 
 export async function makeFileFromBlob({
   blob,

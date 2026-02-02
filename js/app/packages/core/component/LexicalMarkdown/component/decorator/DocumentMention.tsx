@@ -23,7 +23,7 @@ import {
   type PreviewItemNoAccess,
   type PreviewProjectAccess,
   useItemPreview,
-} from '@core/signal/preview';
+} from '@queries/preview';
 import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
@@ -52,6 +52,7 @@ import {
   createSignal,
   Match,
   Show,
+  Suspense,
   Switch,
   useContext,
 } from 'solid-js';
@@ -201,6 +202,14 @@ function InlinePreview(props: {
 }
 
 export function DocumentMention(props: DocumentMentionDecoratorProps) {
+  return (
+    <Suspense>
+      <DocumentMentionInner {...props} />
+    </Suspense>
+  );
+}
+
+export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
   const currentBlockId = useMaybeBlockId();
   const currentBlockName = useMaybeBlockName();
 
@@ -233,10 +242,10 @@ export function DocumentMention(props: DocumentMentionDecoratorProps) {
   const previewType = () =>
     blockNameToItemType(verifyBlockName(props.blockName));
 
-  const [item] = useItemPreview({
+  const [item] = useItemPreview(() => ({
     id: props.documentId,
     type: previewType(),
-  });
+  }));
 
   const [popupOpen, setPopupOpen] = createSignal(false);
   const debouncedSetPreviewOpen = debounce(setPopupOpen, 100);

@@ -77,7 +77,7 @@ impl Config {
             std::env::var("DATABASE_URL").context("DATABASE_URL must be provided")?;
 
         let port: usize = std::env::var("PORT")
-            .unwrap_or("8079".to_string())
+            .unwrap_or("8080".to_string())
             .parse::<usize>()
             .context("should be valid port number")?;
 

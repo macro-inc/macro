@@ -16,7 +16,7 @@ use std::collections::HashMap;
         thread_provider_id = %service_thread.provider_id.clone().unwrap_or_default(),
         link_id = %link_id
     ),
-    level = "info"
+    err
 )]
 pub async fn insert_thread_and_messages(
     pool: &PgPool,
@@ -93,7 +93,7 @@ pub async fn insert_thread_and_messages(
 }
 
 /// inserts a thread object into the database using the provided transaction
-#[tracing::instrument(skip(executor, service_thread))]
+#[tracing::instrument(skip(executor, service_thread), err)]
 pub async fn insert_thread<'e, E>(
     executor: E,
     service_thread: &thread::Thread,
@@ -102,9 +102,7 @@ pub async fn insert_thread<'e, E>(
 where
     E: Executor<'e, Database = Postgres>,
 {
-    let thread_id = macro_uuid::generate_uuid_v7();
-    let db_thread =
-        parse::service_to_db::map_service_thread_to_db(service_thread, thread_id, link_id);
+    let db_thread = parse::service_to_db::map_service_thread_to_db(service_thread, link_id);
 
     let result = sqlx::query!(
         r#"
@@ -137,7 +135,7 @@ where
 }
 
 /// inserts a thread object into the database that has no metadata or rizz
-#[tracing::instrument(skip(executor))]
+#[tracing::instrument(skip(executor), err)]
 pub async fn insert_blank_thread<'e, E>(
     executor: E,
     thread_provider_id: &str,
@@ -147,7 +145,7 @@ where
     E: Executor<'e, Database = Postgres>,
 {
     let thread = thread::Thread {
-        db_id: None,
+        db_id: macro_uuid::generate_uuid_v7(),
         provider_id: Some(thread_provider_id.to_string()),
         link_id,
         inbox_visible: false,

@@ -38,14 +38,17 @@ impl MacroEntrypoint {
 
     /// consume self, initialize this binary, and return a proof that it was initialized [InitializedEntrypoint]
     pub fn init(self) -> InitializedEntrypoint {
-        dotenv::dotenv().ok();
+        // Load .env file if it exists, but don't fail if it doesn't
+        let _ = dotenvy::dotenv();
         std::panic::set_hook(Box::new(tracing_panic::panic_hook));
 
         match (self.env, self.local) {
             (Environment::Local, LocalOptions { tree_tracing: None }) => {
                 tracing_subscriber::fmt()
                     .with_ansi(true)
-                    .with_env_filter(EnvFilter::from_default_env())
+                    // Leaving this commented out to show we explicitly don't want with_env_filter when
+                    // running locally. RUST_LOG=trace doesn't work if you use this.
+                    // .with_env_filter(EnvFilter::from_default_env())
                     .with_file(true)
                     .with_line_number(true)
                     .pretty()

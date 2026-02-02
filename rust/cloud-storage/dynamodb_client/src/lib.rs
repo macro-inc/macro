@@ -1,4 +1,4 @@
-use aws_config::SdkConfig;
+use macro_aws_config::SdkConfig;
 
 mod bulk_upload;
 
