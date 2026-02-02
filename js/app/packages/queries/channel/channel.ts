@@ -28,7 +28,6 @@ type ChannelQueryOptions = UseBaseQueryOptions<
 
 export function channelQueryOptions(channelId: string): ChannelQueryOptions {
   return {
-    gcTime: 1000 * 60 * 2, // 2 minutes (avoid brief unmount GC causing suspense)
     queryKey: channelKeys.withID(channelId).queryKey,
     queryFn: async () => {
       const result = await throwOnErr(
