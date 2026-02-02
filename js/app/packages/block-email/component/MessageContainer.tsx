@@ -134,10 +134,11 @@ export function MessageContainer(props: MessageContainerProps) {
     );
   });
 
-  const { replaceOrInsertSplit } = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
   const entityQueryClient = useQueryClient();
 
   const onClickAttachment = async (
+    event: MouseEvent,
     attachment: Attachment,
     fileType: FileType | undefined
   ) => {
@@ -178,9 +179,12 @@ export function MessageContainer(props: MessageContainerProps) {
     });
 
     const blockName = fileType ? fileTypeToBlockName(fileType) : 'unknown';
-    replaceOrInsertSplit({
-      type: blockName,
-      id: document_id,
+    openWithSplit({
+      content: {
+        type: blockName,
+        id: document_id,
+      },
+      force: event.shiftKey ? 'insert' : undefined,
     })?.activate?.();
   };
 
@@ -279,8 +283,8 @@ export function MessageContainer(props: MessageContainerProps) {
                         fileName: attachment.filename ?? '',
                         mimeType: attachment.mime_type ?? undefined,
                       }}
-                      onClick={(fileType) =>
-                        onClickAttachment(attachment, fileType)
+                      onClick={(event, fileType) =>
+                        onClickAttachment(event, attachment, fileType)
                       }
                     />
                   )}
