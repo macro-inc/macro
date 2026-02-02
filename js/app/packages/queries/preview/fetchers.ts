@@ -227,8 +227,9 @@ export async function fetchPreviewBatch(
     .filter((i) => i.type === 'document' || !i.type)
     .map((i) => i.id);
 
-  const channelItems = items.filter((i) => i.type === 'channel' || !i.type);
-  const channelIds = [...new Set(channelItems.map((i) => i.id))];
+  const channelItems = items
+    .filter((i) => i.type === 'channel' || !i.type)
+    .map((i) => i.id);
 
   const projectItems = items
     .filter((i) => i.type === 'project' || !i.type)
@@ -249,8 +250,8 @@ export async function fetchPreviewBatch(
     documentItems.length > 0
       ? fetchDocumentPreviews(documentItems)
       : Promise.resolve([]),
-    channelIds.length > 0
-      ? fetchChannelPreviews(channelIds)
+    channelItems.length > 0
+      ? fetchChannelPreviews(channelItems)
       : Promise.resolve([]),
     projectItems.length > 0
       ? fetchProjectPreviews(projectItems)
@@ -265,14 +266,10 @@ export async function fetchPreviewBatch(
   [
     ...chatResults,
     ...documentResults,
+    ...channelResults,
     ...projectResults,
     ...emailResults,
   ].forEach((result) => {
-    resultMap.set(result.id, result);
-  });
-
-  // For channels, use cache key that includes params if present
-  channelResults.forEach((result) => {
     resultMap.set(result.id, result);
   });
 
