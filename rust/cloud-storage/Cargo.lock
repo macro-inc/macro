@@ -5913,6 +5913,7 @@ dependencies = [
  "models_pagination",
  "notification",
  "notification_db_client",
+ "paste",
  "regex",
  "secretsmanager_client",
  "serde",
