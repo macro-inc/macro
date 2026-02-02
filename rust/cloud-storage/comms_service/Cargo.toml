@@ -9,11 +9,6 @@ name = "comms_service"
 path = "src/lib.rs"
 
 [[bin]]
-name = "comms_service"
-path = "src/main.rs"
-required-features = ["channel_search", "service"]
-
-[[bin]]
 name = "backfill_comms_search"
 path = "src/bin/backfill_search.rs"
 required-features = []
