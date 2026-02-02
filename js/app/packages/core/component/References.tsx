@@ -66,7 +66,7 @@ export function References(props: ReferenceProps) {
 
     return response[1].references;
   });
-  const { replaceOrInsertSplit } = useSplitLayout();
+  const { insertSplit } = useSplitLayout();
   const blockOrchestrator = useGlobalBlockOrchestrator();
 
   const messageLocation = async (
@@ -86,7 +86,7 @@ export function References(props: ReferenceProps) {
     messageId: string,
     threadId?: string
   ) => {
-    replaceOrInsertSplit({
+    insertSplit({
       type: 'channel',
       id: channelId,
     });
@@ -97,7 +97,7 @@ export function References(props: ReferenceProps) {
     blockName: BlockName | BlockAlias,
     blockId: string
   ) => {
-    replaceOrInsertSplit({
+    insertSplit({
       type: blockName,
       id: blockId,
     });
