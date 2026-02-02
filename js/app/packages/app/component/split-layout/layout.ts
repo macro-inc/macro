@@ -1,7 +1,11 @@
 import { useContext } from 'solid-js';
 import { globalSplitManager } from '../../signal/splitLayout';
 import { SplitPanelContext } from './context';
-import type { ReferredFrom, SplitContent } from './layoutManager';
+import type {
+  OpenWithSplitOptions,
+  ReferredFrom,
+  SplitContent,
+} from './layoutManager';
 import { isMobile } from '@core/mobile/isMobile';
 
 export function useSplitLayout() {
@@ -120,7 +124,18 @@ export function useSplitLayout() {
     return splitManager.splits().length;
   }
 
+  function openWithSplit(options: OpenWithSplitOptions) {
+    const splitManager = globalSplitManager();
+    if (!splitManager) {
+      console.error('No split manager found');
+      return;
+    }
+
+    return splitManager.openWithSplit(options);
+  }
+
   return {
+    openWithSplit,
     getSplitCount,
     replaceOrInsertSplit,
     replaceSplit,
