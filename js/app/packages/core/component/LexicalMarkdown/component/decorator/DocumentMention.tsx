@@ -57,7 +57,7 @@ import {
   Switch,
   useContext,
 } from 'solid-js';
-import { MentionHoverCard } from '@core/component/MentionHoverCard';
+import { HoverCard } from '@core/component/MentionHoverCard';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { autoRegister, UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';
 import { openDocument } from '../core/BlockLink';
@@ -343,7 +343,7 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
   });
 
   return (
-    <MentionHoverCard
+    <HoverCard
       trigger={
         <span class="relative">
           <span

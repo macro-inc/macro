@@ -3,7 +3,7 @@ import { useRenderState } from '@block-canvas/store/RenderState';
 import { withAnalytics } from '@coparse/analytics';
 import { type BlockName, useBlockId } from '@core/block';
 import { CircleSpinner } from '@core/component/CircleSpinner';
-import { MentionHoverCard } from '@core/component/MentionHoverCard';
+import { HoverCard } from '@core/component/MentionHoverCard';
 import { PopupPreview } from '@core/component/DocumentPreview';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { itemToBlockName } from '@core/constant/allBlocks';
@@ -199,7 +199,7 @@ export function File(props: { node: EntityMentionNode; mode: RenderMode }) {
   return (
     <Show when={blockName()}>
       {(name) => (
-        <MentionHoverCard
+        <HoverCard
           anchorRef={fileRef()}
           trigger={
             <div

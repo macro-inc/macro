@@ -17,7 +17,7 @@ const HoverCardPortalNestedPreviewOpenContext = createContext<
   NestedHoverCardContext | undefined
 >(undefined);
 
-export type MentionHoverCardProps = {
+export type HoverCardComponentProps = {
   /** The trigger content to hover over */
   trigger: JSX.Element;
   /** The content to show in the hover card */
@@ -42,7 +42,7 @@ export type MentionHoverCardProps = {
  * A hover card component that supports nested hover cards.
  * When nested hover cards are open, parent cards are force-mounted to prevent closing.
  */
-export function MentionHoverCard(props: MentionHoverCardProps) {
+export function HoverCardComponent(props: HoverCardComponentProps) {
   const parentNestedContext = useContext(
     HoverCardPortalNestedPreviewOpenContext
   );

@@ -1,5 +1,5 @@
 import { useMaybeBlockId } from '@core/block';
-import { MentionHoverCard } from '@core/component/MentionHoverCard';
+import { HoverCard } from '@core/component/MentionHoverCard';
 import { PopupPreview } from '@core/component/DocumentPreview';
 import {
   EntityIcon,
@@ -167,7 +167,7 @@ function SnapshotInner(props: SnapshotDecoratorProps) {
   };
 
   return (
-    <MentionHoverCard
+    <HoverCard
       trigger={
         <span class="relative">
           <span
