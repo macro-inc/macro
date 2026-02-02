@@ -6,9 +6,12 @@ use notification::domain::models::UserNotificationRow;
 
 /// Build a [`UserNotificationRow<serde_json::Value>`] with the given event type
 /// and raw JSON metadata, suitable for passing through [`to_typed_row`].
-fn make_row(event_type: &str, metadata: serde_json::Value) -> UserNotificationRow<serde_json::Value> {
+fn make_row(
+    event_type: &str,
+    metadata: serde_json::Value,
+) -> UserNotificationRow<serde_json::Value> {
     UserNotificationRow {
-        owner_id: "user@example.com".to_string(),
+        owner_id: MacroUserIdStr::parse_from_str("macro|user@example.com").unwrap(),
         notification_id: uuid::Uuid::nil(),
         notification_event_type: event_type.to_string(),
         entity: EntityType::Document.with_entity_string("entity-1".to_string()),
@@ -19,7 +22,11 @@ fn make_row(event_type: &str, metadata: serde_json::Value) -> UserNotificationRo
         updated_at: None,
         deleted_at: None,
         notification_metadata: metadata,
-        sender_id: Some(MacroUserIdStr::parse_from_str("macro|sender@example.com").unwrap().into_owned()),
+        sender_id: Some(
+            MacroUserIdStr::parse_from_str("macro|sender@example.com")
+                .unwrap()
+                .into_owned(),
+        ),
     }
 }
 
@@ -33,7 +40,10 @@ fn to_typed_row_channel_mention() {
     });
     let row = make_row("channel_mention", metadata);
     let typed = to_typed_row(row).expect("should deserialize channel_mention");
-    assert!(matches!(typed.notification_metadata, NotifEvent::ChannelMention(_)));
+    assert!(matches!(
+        typed.notification_metadata,
+        NotifEvent::ChannelMention(_)
+    ));
 }
 
 #[test]
@@ -44,7 +54,10 @@ fn to_typed_row_document_mention() {
     });
     let row = make_row("document_mention", metadata);
     let typed = to_typed_row(row).expect("should deserialize document_mention");
-    assert!(matches!(typed.notification_metadata, NotifEvent::DocumentMention(_)));
+    assert!(matches!(
+        typed.notification_metadata,
+        NotifEvent::DocumentMention(_)
+    ));
 }
 
 #[test]
@@ -56,7 +69,10 @@ fn to_typed_row_channel_invite() {
     });
     let row = make_row("channel_invite", metadata);
     let typed = to_typed_row(row).expect("should deserialize channel_invite");
-    assert!(matches!(typed.notification_metadata, NotifEvent::ChannelInvite(_)));
+    assert!(matches!(
+        typed.notification_metadata,
+        NotifEvent::ChannelInvite(_)
+    ));
 }
 
 #[test]
@@ -70,7 +86,10 @@ fn to_typed_row_channel_message_send() {
     });
     let row = make_row("channel_message_send", metadata);
     let typed = to_typed_row(row).expect("should deserialize channel_message_send");
-    assert!(matches!(typed.notification_metadata, NotifEvent::ChannelMessageSend(_)));
+    assert!(matches!(
+        typed.notification_metadata,
+        NotifEvent::ChannelMessageSend(_)
+    ));
 }
 
 #[test]
@@ -85,7 +104,10 @@ fn to_typed_row_channel_message_reply() {
     });
     let row = make_row("channel_message_reply", metadata);
     let typed = to_typed_row(row).expect("should deserialize channel_message_reply");
-    assert!(matches!(typed.notification_metadata, NotifEvent::ChannelMessageReply(_)));
+    assert!(matches!(
+        typed.notification_metadata,
+        NotifEvent::ChannelMessageReply(_)
+    ));
 }
 
 #[test]
@@ -99,7 +121,10 @@ fn to_typed_row_new_email() {
     });
     let row = make_row("new_email", metadata);
     let typed = to_typed_row(row).expect("should deserialize new_email");
-    assert!(matches!(typed.notification_metadata, NotifEvent::NewEmail(_)));
+    assert!(matches!(
+        typed.notification_metadata,
+        NotifEvent::NewEmail(_)
+    ));
 }
 
 #[test]
@@ -112,7 +137,10 @@ fn to_typed_row_invite_to_team() {
     });
     let row = make_row("invite_to_team", metadata);
     let typed = to_typed_row(row).expect("should deserialize invite_to_team");
-    assert!(matches!(typed.notification_metadata, NotifEvent::InviteToTeam(_)));
+    assert!(matches!(
+        typed.notification_metadata,
+        NotifEvent::InviteToTeam(_)
+    ));
 }
 
 #[test]
@@ -124,7 +152,10 @@ fn to_typed_row_task_assigned() {
     });
     let row = make_row("task_assigned", metadata);
     let typed = to_typed_row(row).expect("should deserialize task_assigned");
-    assert!(matches!(typed.notification_metadata, NotifEvent::TaskAssigned(_)));
+    assert!(matches!(
+        typed.notification_metadata,
+        NotifEvent::TaskAssigned(_)
+    ));
 }
 
 #[test]
@@ -144,7 +175,10 @@ fn to_typed_row_preserves_row_fields() {
     let row = make_row("task_assigned", metadata);
     let typed = to_typed_row(row).expect("should deserialize");
 
-    assert_eq!(typed.owner_id, "user@example.com");
+    assert_eq!(
+        typed.owner_id,
+        MacroUserIdStr::parse_from_str("macro|user@example.com").unwrap()
+    );
     assert_eq!(typed.notification_id, uuid::Uuid::nil());
     assert_eq!(typed.notification_event_type, "task_assigned");
     assert!(typed.sent);

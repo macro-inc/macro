@@ -424,11 +424,15 @@ impl NotificationDbOps for PgPool {
                     .transpose()
                     .map_err(|e| rootcause::report!(e))?;
 
+                let owner_id = MacroUserIdStr::parse_from_str(&row.owner_id)
+                    .map(CowLike::into_owned)
+                    .map_err(|e| rootcause::report!(e))?;
+
                 let notification_metadata = serde_json::from_value::<T>(row.notification_metadata)
                     .map_err(|e| rootcause::report!(e))?;
 
                 Ok(UserNotificationRow {
-                    owner_id: row.owner_id,
+                    owner_id,
                     notification_id: row.notification_id,
                     notification_event_type: row.notification_event_type,
                     entity,

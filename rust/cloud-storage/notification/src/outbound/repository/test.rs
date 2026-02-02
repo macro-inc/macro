@@ -188,8 +188,7 @@ async fn test_update_sent_status(pool: Pool<Postgres>) {
 )]
 async fn test_mark_notifications_seen(pool: Pool<Postgres>) {
     let user = test_user("user@test.com");
-    let notification_id =
-        uuid::Uuid::parse_str("0193b1ea-a542-7589-893b-2b4a509c1e76").unwrap();
+    let notification_id = uuid::Uuid::parse_str("0193b1ea-a542-7589-893b-2b4a509c1e76").unwrap();
 
     pool.mark_notifications_seen(&user, &[notification_id])
         .await
@@ -217,8 +216,7 @@ async fn test_mark_notifications_seen(pool: Pool<Postgres>) {
 async fn test_mark_notifications_seen_does_not_affect_other_users(pool: Pool<Postgres>) {
     let user = test_user("user@test.com");
     let other_user = test_user("other@test.com");
-    let notification_id =
-        uuid::Uuid::parse_str("0193b1ea-a542-7589-893b-2b4a509c1e76").unwrap();
+    let notification_id = uuid::Uuid::parse_str("0193b1ea-a542-7589-893b-2b4a509c1e76").unwrap();
 
     // Insert a user_notification for the other user
     sqlx::query!(
@@ -291,7 +289,10 @@ async fn test_get_user_notifications(pool: Pool<Postgres>) {
 
     assert_eq!(result.len(), 1);
     let row = &result[0];
-    assert_eq!(row.owner_id, "macro|user@test.com");
+    assert_eq!(
+        row.owner_id,
+        MacroUserIdStr::parse_from_str("macro|user@test.com").unwrap()
+    );
     assert_eq!(
         row.notification_id,
         uuid::Uuid::parse_str("0193b1ea-a542-7589-893b-2b4a509c1e76").unwrap()

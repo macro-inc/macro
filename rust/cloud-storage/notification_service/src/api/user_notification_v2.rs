@@ -1,10 +1,14 @@
 use ::notification::domain::models::UserNotificationRow;
+use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::Entity;
 use model_notifications::{
     ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
     ChannelReplyMetadata, DocumentMentionMetadata, InviteToTeamMetadata, NewEmailMetadata,
     TaskAssignedMetadata,
 };
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 #[cfg(test)]
 mod tests;
@@ -33,7 +37,7 @@ macro_rules! define_notif_event {
         $vis:vis enum $Name:ident {
             $(
                 $(#[$variant_meta:meta])*
-                $Variant:ident($Ty:ty),
+                $Variant:ident($(#[$field_meta:meta])* $Ty:ty),
             )+
         }
     ) => {
@@ -41,7 +45,7 @@ macro_rules! define_notif_event {
         $vis enum $Name {
             $(
                 $(#[$variant_meta])*
-                $Variant($Ty),
+                $Variant($(#[$field_meta])* $Ty),
             )+
         }
 
@@ -84,33 +88,109 @@ define_notif_event!(
     /// [`UserNotificationRow::into_json`].
     ///
     /// Only includes variants whose metadata types implement the `Notification` trait.
-    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
     #[serde(tag = "tag", content = "content", rename_all = "snake_case")]
     pub enum NotifEvent {
         /// Someone mentioned you in a channel.
+        #[schema(value_type = serde_json::Value)]
         ChannelMention(ChannelMentionMetadata),
+
         /// Someone mentioned you in a document.
+        #[schema(value_type = serde_json::Value)]
         DocumentMention(DocumentMentionMetadata),
         /// The user was invited to a channel.
+        #[schema(value_type = serde_json::Value)]
         ChannelInvite(ChannelInviteMetadata),
+
         /// A user sent a message in a channel.
+        #[schema(value_type = serde_json::Value)]
         ChannelMessageSend(ChannelMessageSendMetadata),
+
         /// Someone replied to a thread in a channel that the user is part of.
+        #[schema(value_type = serde_json::Value)]
         ChannelMessageReply(ChannelReplyMetadata),
+
         /// A new email has been sent to the user.
+        #[schema(value_type = serde_json::Value)]
         NewEmail(NewEmailMetadata),
+
         /// A user was invited to a team.
+        #[schema(value_type = serde_json::Value)]
         InviteToTeam(InviteToTeamMetadata),
+
         /// A user was assigned to a task.
+        #[schema(value_type = serde_json::Value)]
         TaskAssigned(TaskAssignedMetadata),
     }
 );
+
+#[derive(Debug, Serialize)]
+pub struct ApiUserNotification {
+    /// The user who owns this notification.
+    pub owner_id: MacroUserIdStr<'static>,
+    /// The notification ID.
+    pub notification_id: uuid::Uuid,
+    /// The notification event type string (e.g. "channel_mention").
+    /// TODO make this a new type
+    pub notification_event_type: String,
+    /// The entity the notification is about.
+    pub entity: Entity<'static>,
+    /// Whether the notification has been sent.
+    pub sent: bool,
+    /// Whether the notification is marked as done.
+    pub done: bool,
+    /// When the notification was created.
+    pub created_at: Option<DateTime<Utc>>,
+    /// When the notification was viewed/seen.
+    pub viewed_at: Option<DateTime<Utc>>,
+    /// When the notification was last updated.
+    pub updated_at: Option<DateTime<Utc>>,
+    /// When the notification was deleted.
+    pub deleted_at: Option<DateTime<Utc>>,
+    /// Deserialized notification metadata.
+    pub notification_metadata: NotifEvent,
+    /// The user who triggered the notification.
+    pub sender_id: Option<MacroUserIdStr<'static>>,
+}
+
+impl ApiUserNotification {
+    pub fn from_notification(v: UserNotificationRow<NotifEvent>) -> Self {
+        let UserNotificationRow {
+            owner_id,
+            notification_id,
+            notification_event_type,
+            entity,
+            sent,
+            done,
+            created_at,
+            viewed_at,
+            updated_at,
+            deleted_at,
+            notification_metadata,
+            sender_id,
+        } = v;
+        ApiUserNotification {
+            owner_id,
+            notification_id,
+            notification_event_type,
+            entity,
+            sent,
+            done,
+            created_at,
+            viewed_at,
+            updated_at,
+            deleted_at,
+            notification_metadata,
+            sender_id,
+        }
+    }
+}
 
 /// The strongly typed response for listing user notifications.
 #[derive(Debug, Serialize)]
 pub struct GetAllUserNotificationsResponse {
     /// The list of items returned.
-    pub items: Vec<UserNotificationRow<NotifEvent>>,
+    pub items: Vec<ApiUserNotification>,
     /// The next page cursor if it exists.
     pub next_cursor: Option<String>,
 }
@@ -170,6 +250,7 @@ async fn list_typed_notifications<S: ::notification::domain::service::Notificati
                 .inspect_err(|e| tracing::warn!(error=?e, "failed to deserialize notification row"))
                 .ok()
         })
+        .map(ApiUserNotification::from_notification)
         .collect();
 
     Ok(axum::Json(GetAllUserNotificationsResponse {
