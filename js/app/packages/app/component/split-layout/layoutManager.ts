@@ -122,6 +122,17 @@ export type CreateNewSplitOptions = {
   referredFrom: ReferredFrom;
 };
 
+export type OpenWithSplitOptions = {
+  content: SplitContent;
+  mergeHistory?: boolean;
+  activate?: boolean;
+  referredFrom?: ReferredFrom;
+  allowDuplicate?: boolean;
+  replaceAtEdge?: boolean;
+  force?: 'replace' | 'insert';
+  handle?: SplitHandle;
+};
+
 function keyOfSplitState(s: SplitState): SplitKey {
   return `${s.content.type}:${s.content.id}`;
 }
@@ -202,6 +213,8 @@ export type SplitManager = {
 
   /** Create a new split with the provided initial content and activate it */
   createNewSplit: (options: CreateNewSplitOptions) => SplitHandle;
+
+  openWithSplit: (options: OpenWithSplitOptions) => SplitHandle;
 
   /** Set a split as active by its split id  */
   activateSplit: (id: SplitId) => void;
@@ -978,6 +991,45 @@ export function createSplitLayout(
     });
   }
 
+  function openWithSplit(options: OpenWithSplitOptions) {
+    const existingSplit = getSplitByContent(
+      options.content.type,
+      options.content.id
+    );
+
+    if (!options.allowDuplicate && existingSplit) {
+      return existingSplit;
+    }
+
+    let splitHandle = options.handle;
+
+    if (!splitHandle) {
+      splitHandle = state.activeSplitId && getSplit(state.activeSplitId);
+    }
+
+    const shouldReplaceOnEdge =
+      (!options.replaceAtEdge || options.replaceAtEdge === true) &&
+      !canAppendSplit();
+
+    const shouldReplace =
+      !options.force || options.force === 'replace' || shouldReplaceOnEdge;
+
+    if (splitHandle && shouldReplace) {
+      splitHandle.replace({
+        next: options.content,
+        referredFrom: options.referredFrom ?? null,
+        mergeHistory: options.mergeHistory,
+      });
+      return splitHandle;
+    } else {
+      return createNewSplit({
+        content: options.content,
+        activate: options.activate ?? true,
+        referredFrom: options.referredFrom ?? null,
+      });
+    }
+  }
+
   return {
     splits: () => state.splits,
     activeSplitId: () => state.activeSplitId,
@@ -985,6 +1037,7 @@ export function createSplitLayout(
     events: lastEvent,
     reconcile: reconcileSplits,
     getSplit,
+    openWithSplit,
     removeSplit,
     createNewSplit,
     getUrlSegments,
