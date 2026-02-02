@@ -39,7 +39,7 @@ const createBlock = async (spec: {
   loading?: boolean;
   shouldInsert?: boolean;
 }) => {
-  const { replaceSplit, insertSplit } = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
   const { blockName, createFn, loading } = spec;
 
   setCreateMenuOpen(false, false);
@@ -50,16 +50,19 @@ const createBlock = async (spec: {
 
     const block = { type: blockName, id };
 
-    spec.shouldInsert
-      ? insertSplit(block, 'launcher')
-      : replaceSplit({ content: block, referredFrom: 'launcher' });
+    openWithSplit({
+      content: block,
+      referredFrom: 'launcher',
+      force: spec.shouldInsert ? 'insert' : undefined,
+    });
+
+    return;
   } else {
-    const split = spec.shouldInsert
-      ? insertSplit({ type: 'component', id: 'loading' }, 'launcher')
-      : replaceSplit({
-          content: { type: 'component', id: 'loading' },
-          referredFrom: 'launcher',
-        });
+    const split = openWithSplit({
+      content: { type: 'component', id: 'loading' },
+      referredFrom: 'launcher',
+      force: spec.shouldInsert ? 'insert' : undefined,
+    });
 
     const id = await createFn();
     if (!id) {
@@ -82,19 +85,17 @@ const createComponent = async (spec: {
   asPopover?: boolean;
 }) => {
   setCreateMenuOpen(false, false);
-  const { replaceSplit, insertSplit, popoverSplit } = useSplitLayout();
+  const { openWithSplit, popoverSplit } = useSplitLayout();
   if (spec.asPopover) {
     popoverSplit({ type: 'component', id: spec.componentId });
     return;
   }
-  if (spec.shouldInsert) {
-    insertSplit({ type: 'component', id: spec.componentId }, 'launcher');
-  } else {
-    replaceSplit({
-      content: { type: 'component', id: spec.componentId },
-      referredFrom: 'launcher',
-    });
-  }
+
+  openWithSplit({
+    content: { type: 'component', id: spec.componentId },
+    referredFrom: 'launcher',
+    force: spec.shouldInsert ? 'insert' : undefined,
+  });
 };
 
 type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {
