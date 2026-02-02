@@ -6,9 +6,6 @@ export const channelKeys = createQueryKeys('channel', {
   }),
   activity: null,
   listChannels: null,
-  messageContext: (messageID: string) => ({
-    queryKey: [{ messageID }],
-  }),
 });
 
 export const ChannelNonceKeys = {
