@@ -118,6 +118,17 @@ export class StaticFileService extends pulumi.ComponentResource {
         enabled: true,
         mfaDelete: false,
       },
+      lifecycleRules: [
+        {
+          enabled: true,
+          noncurrentVersionExpiration: {
+            days: 7,
+          },
+          expiration: {
+            expiredObjectDeleteMarker: true,
+          },
+        },
+      ],
       corsRules: [
         {
           allowedHeaders: ['*'],
