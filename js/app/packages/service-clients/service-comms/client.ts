@@ -92,14 +92,8 @@ export const commsServiceClient = {
     params.append('message_id', message_id);
     if (before !== undefined) params.append('before', before.toString());
     if (after !== undefined) params.append('after', after.toString());
-    return mapOk(
-      await commsFetch<GetMessageWithContextResponse>(
-        `/channels/messages/context?${params.toString()}`,
-        {
-          method: 'GET',
-        }
-      ),
-      (result) => result
+    return await commsFetch<GetMessageWithContextResponse>(
+      `/channels/messages/context?${params.toString()}`
     );
   },
   async postMessage(
