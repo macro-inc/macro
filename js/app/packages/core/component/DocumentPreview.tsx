@@ -222,6 +222,49 @@ function PopupIconButton(props: {
 }
 
 /**
+ * Metadata info component with icon and text
+ */
+function MetadataInfo(props: {
+  icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
+  children: JSX.Element;
+  align?: 'left' | 'right';
+}) {
+  return (
+    <div
+      class={`${props.align === 'right' ? 'justify-right' : 'justify-left'} mt-2 ${props.align === 'left' ? 'w-fit max-w-[66%]' : ''} text-ink-muted ${props.align === 'left' ? 'overflow-hidden whitespace-nowrap text-ellipsis' : ''}`}
+    >
+      <span class="relative text-[0.8em] text-ink-muted max-w-full">
+        <Dynamic
+          component={props.icon}
+          class="relative top-[-0.125em] size-4 inline-flex items-center mr-1"
+        />
+        {props.children}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * User info with icon and display name
+ */
+function UserInfo(props: { userId: string }) {
+  const [displayName] = useDisplayName(tryMacroId(props.userId));
+  return (
+    <div class="justify-left mt-2 w-fit max-w-[66%] text-ink-muted overflow-hidden whitespace-nowrap text-ellipsis flex items-center gap-1.5">
+      <UserIconComponent
+        id={props.userId}
+        size="xs"
+        suppressClick
+        showTooltip={false}
+      />
+      <span class="relative text-[0.8em] text-ink-muted max-w-full">
+        {displayName()}
+      </span>
+    </div>
+  );
+}
+
+/**
  * Popup preview component for document references
  */
 export function PopupPreview(props: {
@@ -489,54 +532,37 @@ export function PopupPreview(props: {
         </Show>
 
         <div class="flex justify-between items-center w-full text-sm font-medium">
-          <Show when={messageContext}>
-            {(context) => {
-              const id = context().sender_id;
-              // TODO: since UserIconComponent does this anyways for tooltip name we can deduplicate by moving the text span there
-              const [senderDisplayName] = useDisplayName(tryMacroId(id));
-              return (
-                <div class="justify-left mt-2 w-fit max-w-[66%] text-ink-muted overflow-hidden whitespace-nowrap text-ellipsis flex items-center gap-1.5">
-                  <UserIconComponent
-                    id={id}
-                    size="xs"
-                    suppressClick
-                    showTooltip={false}
-                  />
-                  <span class="relative text-[0.8em] text-ink-muted max-w-full">
-                    {senderDisplayName()}
-                  </span>
-                </div>
-              );
-            }}
+          <Show
+            when={messageContext}
+            fallback={
+              <Show when={props.item().owner}>
+                {(owner) => (
+                  <MetadataInfo icon={UserIcon} align="left">
+                    {owner().replace('macro|', '')}
+                  </MetadataInfo>
+                )}
+              </Show>
+            }
+          >
+            {(context) => <UserInfo userId={context().sender_id} />}
           </Show>
-          <Show when={!messageContext && props.item().owner}>
-            {(name) => (
-              <div class="justify-left mt-2 w-fit max-w-[66%] text-ink-muted overflow-hidden whitespace-nowrap text-ellipsis">
-                <span class="relative text-[0.8em] text-ink-muted max-w-full">
-                  <UserIcon class="relative top-[-0.125em] size-4 inline-flex items-center mr-1" />
-                  {name().replace('macro|', '')}
-                </span>
-              </div>
-            )}
-          </Show>
-          <Show when={messageContext}>
+
+          <Show
+            when={messageContext}
+            fallback={
+              <Show when={props.item().updatedAt}>
+                {(time) => (
+                  <MetadataInfo icon={ClockIcon} align="right">
+                    {formatDate(time())}
+                  </MetadataInfo>
+                )}
+              </Show>
+            }
+          >
             {(context) => (
-              <div class="justify-right mt-2">
-                <span class="relative text-[0.8em] text-ink-muted">
-                  <ClockIcon class="relative top-[-0.125em] size-4 inline-flex items-center mr-1" />
-                  {formatDate(isoToUnixTimestamp(context().created_at))}
-                </span>
-              </div>
-            )}
-          </Show>
-          <Show when={!messageContext && props.item().updatedAt}>
-            {(time) => (
-              <div class="justify-right mt-2">
-                <span class="relative text-[0.8em] text-ink-muted">
-                  <ClockIcon class="relative top-[-0.125em] size-4 inline-flex items-center mr-1" />
-                  {formatDate(time())}
-                </span>
-              </div>
+              <MetadataInfo icon={ClockIcon} align="right">
+                {formatDate(isoToUnixTimestamp(context().created_at))}
+              </MetadataInfo>
             )}
           </Show>
         </div>
