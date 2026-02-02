@@ -123,7 +123,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
             content: '',
             projectId: undefined,
           }),
-        shouldInsert: pressedKeys().has('opt'),
+        shouldInsert: pressedKeys().has('shift'),
       });
       return true;
     },
@@ -159,7 +159,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     keyDownHandler: () => {
       createComponent({
         componentId: 'email-compose',
-        shouldInsert: pressedKeys().has('opt'),
+        shouldInsert: pressedKeys().has('shift'),
       });
       return true;
     },
@@ -175,7 +175,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     keyDownHandler: () => {
       createComponent({
         componentId: 'channel-compose',
-        shouldInsert: pressedKeys().has('opt'),
+        shouldInsert: pressedKeys().has('shift'),
       });
       return true;
     },
@@ -198,7 +198,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
           }
           return result.chatId;
         },
-        shouldInsert: pressedKeys().has('opt'),
+        shouldInsert: pressedKeys().has('shift'),
       });
       return true;
     },
@@ -224,7 +224,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
           const [_, id] = ok(result.documentId);
           return id;
         },
-        shouldInsert: pressedKeys().has('opt'),
+        shouldInsert: pressedKeys().has('shift'),
       });
       return true;
     },
@@ -241,7 +241,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
       createBlock({
         blockName: 'project',
         createFn: () => createProject({ name: 'New Folder' }),
-        shouldInsert: pressedKeys().has('opt'),
+        shouldInsert: pressedKeys().has('shift'),
       });
       return true;
     },
@@ -268,7 +268,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
           const [, id] = ok(result[1]?.documentId);
           return id;
         },
-        shouldInsert: pressedKeys().has('opt'),
+        shouldInsert: pressedKeys().has('shift'),
       });
       return true;
     },
@@ -447,7 +447,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
     if (item.altHotkeyToken) {
       registerHotkey({
         hotkeyToken: item.altHotkeyToken,
-        hotkey: `opt+${item.hotkey}` as ValidHotkey,
+        hotkey: `shift+${item.hotkey}` as ValidHotkey,
         scopeId: launcherScope,
         description: `${item.description} in current split`,
         keyDownHandler: () => {
@@ -507,7 +507,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
   });
 
   registerHotkey({
-    hotkey: 'opt+enter' as ValidHotkey,
+    hotkey: 'enter' as ValidHotkey,
     scopeId: launcherScope,
     description: 'Open in current split',
     keyDownHandler: () => {
