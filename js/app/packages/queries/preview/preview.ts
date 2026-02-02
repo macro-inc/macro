@@ -11,7 +11,7 @@ import { queryReadyGate } from '@queries/gate';
 
 export function useItemPreview(item: Accessor<ItemEntity>) {
   const query = useQuery(() => ({
-    queryKey: [previewKeys.item(item().id)],
+    queryKey: previewKeys.item(item().id).queryKey,
     queryFn: () => previewDataLoader.load(item()),
     staleTime: 60 * 1000 * 60 * 24, // 24 hours
   }));
