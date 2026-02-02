@@ -156,13 +156,18 @@ pub async fn update_thread_metadata(
         .await
         .context("Failed to get messages for thread")?;
 
-    // if any message in the thread has the INBOX label, the thread is visible in the inbox
+    // if any non-sent message in the thread has the INBOX label, the thread is visible in the inbox
     let inbox_visible = messages.iter().any(|message| {
-        message
+        let has_inbox = message
             .labels
             .iter()
-            .any(|label| label.provider_label_id == service::label::system_labels::INBOX)
-            || (is_macro_draft(message))
+            .any(|label| label.provider_label_id == service::label::system_labels::INBOX);
+        let has_sent = message
+            .labels
+            .iter()
+            .any(|label| label.provider_label_id == service::label::system_labels::SENT);
+
+        (has_inbox && !has_sent) || is_macro_draft(message)
     });
 
     // if any message in the thread is unread, the thread is considered unread in the FE
