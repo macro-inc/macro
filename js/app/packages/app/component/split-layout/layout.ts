@@ -11,6 +11,16 @@ import { isMobile } from '@core/mobile/isMobile';
 export function useSplitLayout() {
   const splitPanelContext = useContext(SplitPanelContext);
 
+  function openWithSplit(options: OpenWithSplitOptions) {
+    const splitManager = globalSplitManager();
+    if (!splitManager) {
+      console.error('No split manager found');
+      return;
+    }
+
+    return splitManager.openWithSplit(options);
+  }
+
   function replaceOrInsertSplit(
     content: SplitContent,
     referredFrom: ReferredFrom = null
@@ -21,28 +31,12 @@ export function useSplitLayout() {
       return;
     }
 
-    const existingSplit = splitManager.getSplitByContent(
-      content.type,
-      content.id
-    );
-
-    if (existingSplit) {
-      return existingSplit;
-    }
-
-    if (splitPanelContext) {
-      splitPanelContext.handle.replace({
-        next: content,
-        referredFrom: referredFrom ?? null,
-      });
-      return splitPanelContext.handle;
-    } else {
-      return splitManager.createNewSplit({
-        content,
-        activate: true,
-        referredFrom,
-      });
-    }
+    return openWithSplit({
+      content,
+      referredFrom,
+      handle: splitPanelContext?.handle,
+      activate: true,
+    });
   }
 
   function replaceSplit(options: {
@@ -51,30 +45,14 @@ export function useSplitLayout() {
     referredFrom?: ReferredFrom;
   }) {
     const { content, mergeHistory, referredFrom } = options;
-    if (splitPanelContext) {
-      splitPanelContext.handle.replace({
-        next: content,
-        mergeHistory,
-        referredFrom: referredFrom ?? null,
-      });
-      return splitPanelContext.handle;
-    }
-    const splitManager = globalSplitManager();
-    if (!splitManager) {
-      console.error('No split manager found');
-      return;
-    }
 
-    const activeSplitId = splitManager.activeSplitId();
-    const activeSplit = activeSplitId && splitManager.getSplit(activeSplitId);
-    if (activeSplit) {
-      activeSplit.replace({
-        next: content,
-        mergeHistory,
-        referredFrom: referredFrom ?? null,
-      });
-      return activeSplit;
-    }
+    return openWithSplit({
+      content: content,
+      mergeHistory,
+      referredFrom,
+      handle: splitPanelContext?.handle,
+      force: 'replace',
+    });
   }
 
   function insertSplit(
@@ -86,12 +64,7 @@ export function useSplitLayout() {
       return replaceSplit({ content, referredFrom });
     }
 
-    const splitManager = globalSplitManager();
-    if (!splitManager) {
-      console.error('No split manager found');
-      return;
-    }
-    return splitManager.createNewSplit({
+    return openWithSplit({
       content,
       activate: true,
       referredFrom,
@@ -122,16 +95,6 @@ export function useSplitLayout() {
       return 0;
     }
     return splitManager.splits().length;
-  }
-
-  function openWithSplit(options: OpenWithSplitOptions) {
-    const splitManager = globalSplitManager();
-    if (!splitManager) {
-      console.error('No split manager found');
-      return;
-    }
-
-    return splitManager.openWithSplit(options);
   }
 
   return {
