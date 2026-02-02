@@ -1442,7 +1442,7 @@ export function createNavigationEntityListShortcut({
   });
 
   registerEntityHotkey({
-    hotkey: ['cmd+enter'],
+    hotkey: ['shift+enter'],
     scopeId: splitHotkeyScope,
     description: 'Focus Preview',
     keyDownHandler: () => {

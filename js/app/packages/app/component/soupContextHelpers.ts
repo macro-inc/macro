@@ -79,9 +79,10 @@ export const openEntityInSplitFromUnifiedList = async (
       : undefined;
 
   // Create or replace split based on openInNewSplit option
-  const handle = openInNewSplit
-    ? insertSplit({ type: entity.type, id: entity.id, params })
-    : replaceOrInsertSplit({ type: entity.type, id: entity.id, params });
+  const handle =
+    openInNewSplit && splitManager.canAppendSplit()
+      ? insertSplit({ type: entity.type, id: entity.id, params })
+      : replaceOrInsertSplit({ type: entity.type, id: entity.id, params });
 
   handle?.activate();
 

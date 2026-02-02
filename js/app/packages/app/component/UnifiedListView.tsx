@@ -1299,7 +1299,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     }
 
     await openEntityInSplitFromUnifiedList(entity, {
-      openInNewSplit: event.altKey,
+      openInNewSplit: event.shiftKey,
       location,
       splitHandle: splitContext.handle,
     });
@@ -1315,7 +1315,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     }
 
     await openEntityInSplitFromUnifiedList(entity, {
-      openInNewSplit: event.altKey,
+      openInNewSplit: event.shiftKey,
       location,
       splitHandle: splitContext.handle,
     });
