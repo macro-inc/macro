@@ -2,8 +2,8 @@ use crate::NotificationEventType;
 use doppleganger::Doppleganger;
 use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
 use mention_utils::parse::{ParsedXmlText, XmlFormatter};
-use model_entity::EntityType;
 use model_entity::Entity;
+use model_entity::EntityType;
 use notification::domain::models::{
     NotifCollapseKey, NotificationExtIos,
     apple::{APNSPushNotification, AlertDictionary, Aps},
@@ -294,6 +294,18 @@ impl notification::domain::models::Notification for DocumentMentionMetadata {
     }
 }
 
+impl notification::domain::models::Notification for InviteToTeamMetadata {
+    const TYPE_NAME: &'static str = "invite_to_team";
+
+    fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
+        None
+    }
+
+    fn rate_limit_key(&self) -> Option<notification::domain::models::RateLimitKey> {
+        None
+    }
+}
+
 /// Metadata for when a user is assigned to a task
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -463,9 +475,7 @@ impl NotificationExtIos for ChannelMessageSendMetadata {
         _sender_id: Option<MacroUserIdStr<'a>>,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let title = match self.common.channel_type {
-            ChannelType::DirectMessage => {
-                self.sender.email_part().local_part().to_string()
-            }
+            ChannelType::DirectMessage => self.sender.email_part().local_part().to_string(),
             _ => format!(
                 "{} <{}>",
                 self.sender.email_part().local_part(),
@@ -541,4 +551,3 @@ impl NotificationExtIos for DocumentMentionMetadata {
         Some(alert_apns(title, body))
     }
 }
-

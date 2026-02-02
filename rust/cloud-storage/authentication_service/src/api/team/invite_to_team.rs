@@ -26,7 +26,7 @@ use crate::api::{
     },
     team::TeamPathParam,
 };
-use authentication_service::notifications::InviteToTeamNotification;
+use model_notifications::InviteToTeamMetadata;
 
 use model::{response::ErrorResponse, tracking::IPContext};
 
@@ -177,7 +177,7 @@ pub(in crate::api::team) async fn notify_team_invite(
     let team_name = macro_db_client::team::get::get_team_name(db, team_id).await?;
 
     for team_invite in team_invites {
-        let notification = InviteToTeamNotification {
+        let notification = InviteToTeamMetadata {
             invited_by: invited_by.clone(),
             team_name: team_name.clone(),
             team_id: team_id.to_string(),
