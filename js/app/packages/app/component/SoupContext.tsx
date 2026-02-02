@@ -1404,7 +1404,7 @@ export function createNavigationEntityListShortcut({
     scopeId: splitHotkeyScope,
     description: 'Open',
     hide: true,
-    keyDownHandler: () => {
+    keyDownHandler: (e) => {
       const entity = getSelectedEntity()?.entity;
       if (!entity) return false;
 
@@ -1418,6 +1418,7 @@ export function createNavigationEntityListShortcut({
       openEntityInSplitFromUnifiedList(entity, {
         splitHandle,
         location,
+        openInNewSplit: e?.shiftKey,
       });
       return true;
     },
@@ -1445,7 +1446,7 @@ export function createNavigationEntityListShortcut({
     hotkey: ['shift+enter'],
     scopeId: splitHotkeyScope,
     description: 'Focus Preview',
-    keyDownHandler: () => {
+    keyDownHandler: (e) => {
       const [preview] = previewState;
 
       const entity = getSelectedEntity()?.entity;
@@ -1487,6 +1488,7 @@ export function createNavigationEntityListShortcut({
 
       openEntityInSplitFromUnifiedList(entity, {
         splitHandle,
+        openInNewSplit: e?.shiftKey,
       });
       return true;
     },
