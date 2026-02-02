@@ -30,6 +30,8 @@ import { EmailFormContextProvider } from './EmailFormContext';
 import { MessageList } from './MessageList';
 import { TopBar } from './TopBar';
 import { EmailCompose } from '@block-email/component/Compose';
+import { EmailInput } from '@block-email/component/EmailInput';
+import { FloatingInputLoader } from '@core/component/FloatingInputLoader';
 
 const TARGET_MESSAGE_HIGHLIGHT_MS = 800;
 const SCROLL_ANIMATION_MS = 1000;
@@ -488,6 +490,33 @@ function EmailContent(props: EmailViewProps) {
                   scrollContainer={context.messagesListRef}
                 />
               </div>
+              <Show
+                when={
+                  context.permissions().isOwner &&
+                  context.drafts.initialDraftsSettled() &&
+                  emailReplyInfo()
+                }
+              >
+                {(info) => {
+                  return (
+                    <div class="shrink-0 w-full px-4 pb-2">
+                      <div class="relative w-full flex flex-row justify-center bg-panel macro-message-width mx-auto">
+                        <FloatingInputLoader
+                          isLoading={context.query.isFetching}
+                          loadingText="Loading messages"
+                        />
+                        <EmailInput
+                          replyingTo={() => info().replyingTo}
+                          draft={info().draft}
+                          markdownDomRef={(el) => {
+                            markdownDomRef = el;
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                }}
+              </Show>
             </div>
           </EmailFormContextProvider>
         </Match>
