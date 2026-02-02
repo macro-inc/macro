@@ -1,11 +1,11 @@
-use crate::api::context::{AppState, DocumentPermissionJwtSecretKey};
 use anyhow::Context;
 use comms::{
     domain::service::ChannelServiceImpl,
     inbound::CommsRouterState,
     outbound::{http::user_repo::UserRepoImpl, postgres::comms_repo::PgCommsRepo},
 };
-use config::{Config, Environment};
+use comms_service::config::{Config, Environment};
+use comms_service::{CommsHandlerState, DocumentPermissionJwtSecretKey};
 use connection_gateway_client::ConnectionGatewayClient;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -15,14 +15,6 @@ use secretsmanager_client::{LocalOrRemoteSecret, SecretManager};
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 use tokio::net::TcpListener;
-
-mod api;
-mod channel_permissions;
-mod config;
-mod constants;
-mod notification;
-mod service;
-mod utils;
 
 env_var! {
     struct MacroDbUrl;
@@ -122,7 +114,7 @@ async fn main() -> anyhow::Result<()> {
 
     let frecency_storage = FrecencyPgStorage::new(macro_db.clone());
 
-    let service = api::service(AppState {
+    let service = comms_service::api::service(CommsHandlerState {
         jwt_validation_args,
         db,
         sqs_client: Arc::new(sqs_client),

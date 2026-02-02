@@ -1,9 +1,12 @@
 [package]
-default-run = "comms_service"
 edition = "2024"
 name = "comms_service"
 publish = false
 version = "0.1.0"
+
+[lib]
+name = "comms_service"
+path = "src/lib.rs"
 
 [[bin]]
 name = "comms_service"

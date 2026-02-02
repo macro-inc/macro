@@ -55,7 +55,7 @@ impl CommsServiceClient {
         &self,
         jwt_token: &str,
     ) -> Result<Vec<ApiChannelWithLatest>, ClientError> {
-        let url = format!("{}/channels", self.url);
+        let url = format!("{}/comms/channels", self.url);
         let response = self
             .client
             .get(&url)
@@ -85,7 +85,7 @@ impl CommsServiceClient {
         channel_id: &Uuid,
         jwt_token: &str,
     ) -> Result<ChannelMetadataResponse, ClientError> {
-        let url = format!("{}/channels/{}/metadata", self.url, channel_id);
+        let url = format!("{}/comms/channels/{}/metadata", self.url, channel_id);
         let response = self
             .client
             .get(&url)
@@ -117,7 +117,7 @@ impl CommsServiceClient {
         since: Option<chrono::DateTime<chrono::Utc>>,
         limit: Option<i64>,
     ) -> Result<ChannelTranscriptResponse, ClientError> {
-        let mut url = format!("{}/channels/{}/transcript", self.url, channel_id);
+        let mut url = format!("{}/comms/channels/{}/transcript", self.url, channel_id);
         let mut query_params = vec![];
         if let Some(since) = since {
             query_params.push(format!(

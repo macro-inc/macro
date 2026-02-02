@@ -130,12 +130,6 @@ const deleteDocumentWorker = new Worker(`delete-document-worker-${stack}`, {
       value: COMMS_SERVICE_AUTH_KEY,
     },
     {
-      name: 'COMMS_SERVICE_URL',
-      value: `https://comms-service${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
-    },
-    {
       name: 'PROPERTIES_SERVICE_AUTH_KEY',
       value: PROPERTIES_SERVICE_AUTH_KEY,
     },

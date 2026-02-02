@@ -1,7 +1,6 @@
 //! Properties Service Library - exposes API routes for integration into other services
 
 pub mod api;
-pub mod config;
 pub mod constants;
 
 // Re-exports for consumers

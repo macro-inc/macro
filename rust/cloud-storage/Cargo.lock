@@ -2738,6 +2738,7 @@ dependencies = [
  "cloudfront_sign",
  "comms",
  "comms_db_client",
+ "comms_service",
  "connection_gateway",
  "cool_asserts",
  "document_sub_type",

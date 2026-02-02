@@ -124,6 +124,7 @@ utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
 zip = { workspace = true }
 comms_db_client = { path = "../comms_db_client" }
+comms_service = { path = "../comms_service" }
 
 [dev-dependencies]
 cool_asserts = "2"
