@@ -10,13 +10,13 @@ import type { ItemEntity, PreviewItem } from './types';
 import { queryReadyGate } from '@queries/gate';
 
 export function useItemPreview(item: Accessor<ItemEntity>) {
-  const query = useQuery(() => ({
+  const previewQuery = useQuery(() => ({
     queryKey: previewKeys.item(item().id).queryKey,
     queryFn: () => previewDataLoader.load(item()),
     staleTime: 60 * 1000 * 60 * 24, // 24 hours
   }));
 
-  const channelMessageQuery = useQuery(() => {
+  const maybeChannelMessageQuery = useQuery(() => {
     const item_ = item();
     const messageId = item_.type === 'channel' ? item_.messageId : undefined;
     return {
@@ -24,14 +24,14 @@ export function useItemPreview(item: Accessor<ItemEntity>) {
         .queryKey,
       queryFn: () => fetchMessageContext(messageId!),
       staleTime: 60 * 1000 * 60 * 24, // 24 hours
-      enabled: !!messageId && query.isSuccess,
+      enabled: !!messageId && previewQuery.isSuccess,
     };
   });
 
   const preview = createMemo(() => {
-    const data = queryReadyGate(query) ? query.data : undefined;
-    const channelMessageData = queryReadyGate(channelMessageQuery)
-      ? channelMessageQuery.data
+    const data = queryReadyGate(previewQuery) ? previewQuery.data : undefined;
+    const channelMessageData = queryReadyGate(maybeChannelMessageQuery)
+      ? maybeChannelMessageQuery.data
       : undefined;
 
     if (!data) {
