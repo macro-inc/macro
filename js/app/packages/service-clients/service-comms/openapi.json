@@ -2515,6 +2515,9 @@
           },
           "content": {
             "type": ["string", "null"]
+          },
+          "nonce": {
+            "type": ["string", "null"]
           }
         }
       },
@@ -2549,6 +2552,9 @@
               "$ref": "#/components/schemas/SimpleMention"
             }
           },
+          "nonce": {
+            "type": ["string", "null"]
+          },
           "thread_id": {
             "type": ["string", "null"],
             "format": "uuid"
@@ -2561,6 +2567,9 @@
         "properties": {
           "id": {
             "type": "string"
+          },
+          "nonce": {
+            "type": ["string", "null"]
           }
         }
       },
@@ -2576,6 +2585,9 @@
           },
           "message_id": {
             "type": "string"
+          },
+          "nonce": {
+            "type": ["string", "null"]
           }
         }
       },
@@ -2585,6 +2597,9 @@
         "properties": {
           "action": {
             "$ref": "#/components/schemas/TypingAction"
+          },
+          "nonce": {
+            "type": ["string", "null"]
           },
           "thread_id": {
             "type": ["string", "null"]

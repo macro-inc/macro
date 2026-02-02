@@ -13,7 +13,7 @@ on:
       services:
         type: string
         required: true
-        description: 'Comma-separated list of services to deploy (e.g., "document-cognition-service,search-service,static-file-service")'
+        description: 'Comma-separated list of services to deploy (e.g., "document-cognition-service,static-file-service")'
 
 concurrency:
   group: deploy-batch-${{ inputs.environment }}-${{ github.run_id }}

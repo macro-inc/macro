@@ -1,14 +1,12 @@
-import { ENABLE_DOCK_NOTITIFCATIONS, ENABLE_JACK_IN } from '@core/constant/featureFlags';
+import { ENABLE_DOCK_NOTITIFCATIONS } from '@core/constant/featureFlags';
 import { GlobalNotificationBell } from '@core/component/GlobalNotificationBell';
-import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import { isRightPanelOpen, useToggleRightPanel } from '@core/signal/layout';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useGlobalNotificationSource } from '../GlobalAppState';
-import IconPower from '@phosphor-icons/core/regular/power.svg';
 import MacroCreateIcon from '@macro-icons/macro-create-b.svg';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { ClippedPanel } from '@core/component/ClippedPanel';
-import { PresentModeGlitch } from './PresentModeGlitch';
 import { withAnalytics } from '@coparse/analytics';
 import SplitIcon from '@macro-icons/new-split.svg';
 import IconAI from '@macro-icons/wide/star.svg';
@@ -19,18 +17,13 @@ import { setKonsoleOpen } from '../command/state';
 import { Hotkey } from '@core/component/Hotkey';
 import { setCreateMenuOpen } from '../Launcher';
 import { useHasPaidAccess } from '@core/auth';
-import { isTauri } from '@core/util/platform';
 import { TOKENS } from '@core/hotkey/tokens';
-import { playSound } from '@app/util/sound';
 import { QuickAccess } from './QuickAccess';
 import { Button } from '@ui/components/Button';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import { isMobile } from '@core/mobile/isMobile';
 
 export function Dock() {
-  const activeSplitId = createMemo(() => globalSplitManager()?.activeSplitId());
-  const [showGlitchEffect, setShowGlitchEffect] = createSignal(false);
-  const [isPresentMode, setIsPresentMode] = createSignal(false);
   const notificationSource = useGlobalNotificationSource();
   const isRightPanelCollapsed = () => !isRightPanelOpen();
   // const [debugOpen, setDebugOpen] = createSignal(false);
@@ -38,72 +31,6 @@ export function Dock() {
   const toggleRightPanel = useToggleRightPanel();
   const { settingsOpen, toggleSettings } = useSettingsState();
   const hasPaid = useHasPaidAccess();
-
-  async function enterPresentMode() {
-    try {
-      playSound('Stab_Destruct');
-      const element = document.documentElement;
-      if (element.requestFullscreen) { await element.requestFullscreen() }
-      else if ((element as any).webkitRequestFullscreen) { await (element as any).webkitRequestFullscreen() }// Safari
-      else if ((element as any).mozRequestFullScreen) { await (element as any).mozRequestFullScreen() }// Firefox
-      else if ((element as any).msRequestFullscreen) { await (element as any).msRequestFullscreen() }// IE/Edge
-      focusActiveSplit();
-    }
-    catch (error) {
-      console.error('Error entering present mode:', error);
-    }
-  };
-
-  async function exitPresentMode() {
-    try {
-      if (document.exitFullscreen) { await document.exitFullscreen() }
-      else if ((document as any).webkitExitFullscreen) { await (document as any).webkitExitFullscreen() }// Safari
-      else if ((document as any).mozCancelFullScreen) { await (document as any).mozCancelFullScreen() }// Firefox
-      else if ((document as any).msExitFullscreen) { await (document as any).msExitFullscreen() }// IE/Edge
-      focusActiveSplit();
-    }
-    catch (error) {
-      console.error('Error exiting present mode:', error);
-    }
-  };
-
-  async function focusActiveSplit() {
-    const id = activeSplitId();
-    if (!id) return null;
-    const splitEl = document.querySelector(`[data-split-id="${id}"]`) as HTMLElement;
-    splitEl?.focus();
-  };
-
-  function togglePresentMode() {
-    if (isPresentMode()) {
-      exitPresentMode();
-      setShowGlitchEffect(false);
-    }
-    else {
-      setShowGlitchEffect(true); // Show glitch effect before entering fullscreen
-      setTimeout(() => { enterPresentMode() }, 200); // Enter fullscreen after a brief delay to let glitch start
-    }
-  };
-
-  // Check if we're in fullscreen
-  function checkFullscreen() {
-    const isFullscreen = document.fullscreenElement || (document as any).webkitFullscreenElement || (document as any).mozFullScreenElement || (document as any).msFullscreenElement;
-    setIsPresentMode(!!isFullscreen);
-  };
-
-  // Listen for fullscreen changes
-  onMount(() => {
-    const events = ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'];
-
-    events.forEach((event) => { document.addEventListener(event, checkFullscreen) });
-    const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape' && isPresentMode()) { exitPresentMode() } };
-    document.addEventListener('keydown', handleKeyDown);
-
-    onCleanup(() => {
-      events.forEach((event) => { document.removeEventListener(event, checkFullscreen) });
-      document.removeEventListener('keydown', handleKeyDown);
-    });
-  });
 
   return (
     <>
@@ -304,19 +231,6 @@ export function Dock() {
               </Button>
               </div>
 
-              <Show when={ENABLE_JACK_IN && !isTauri()}>
-                <Button
-                  tooltip={isPresentMode() ? 'Exit Present Mode' : 'Enter Present Mode'}
-                  onClick={togglePresentMode}
-                  class="p-1 size-6"
-                  classList={{
-                    "bg-accent/20 text-accent": isPresentMode(),
-                  }}
-                >
-                  <IconPower />
-                </Button>
-              </Show>
-
               <Button
                 tooltip={<LabelAndHotKey label={settingsOpen() ? 'Close Settings' : 'Open Settings'} hotkeyToken={TOKENS.global.toggleSettings} />}
                 onClick={() => { toggleSettings() }}
@@ -331,14 +245,6 @@ export function Dock() {
           </div>
         </ClippedPanel>
       </div>
-
-      <Show when={ENABLE_JACK_IN}>
-
-        <PresentModeGlitch
-          show={showGlitchEffect()}
-          onComplete={() => setShowGlitchEffect(false)}
-        />
-      </Show>
 
       {/*<Show when={DEV_MODE_ENV}>
         <Debug/>

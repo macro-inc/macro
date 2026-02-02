@@ -2003,6 +2003,7 @@
         "type": "object",
         "description": "Thread object exposed to the FE in Get Threads Call",
         "required": [
+          "db_id",
           "link_id",
           "inbox_visible",
           "is_read",
@@ -2020,7 +2021,7 @@
             "format": "date-time"
           },
           "db_id": {
-            "type": ["string", "null"],
+            "type": "string",
             "format": "uuid"
           },
           "inbox_visible": {
@@ -2355,6 +2356,7 @@
       "Attachment": {
         "type": "object",
         "description": "Attachments of a message, as sent to us by the provider.",
+        "required": ["db_id"],
         "properties": {
           "content_id": {
             "type": ["string", "null"]
@@ -2363,7 +2365,7 @@
             "type": ["string", "null"]
           },
           "db_id": {
-            "type": ["string", "null"],
+            "type": "string",
             "format": "uuid"
           },
           "filename": {
@@ -2515,13 +2517,13 @@
       },
       "Contact": {
         "type": "object",
-        "required": ["link_id"],
+        "required": ["id", "link_id"],
         "properties": {
           "email_address": {
             "type": ["string", "null"]
           },
           "id": {
-            "type": ["string", "null"],
+            "type": "string",
             "format": "uuid"
           },
           "link_id": {
@@ -2923,6 +2925,8 @@
       "Message": {
         "type": "object",
         "required": [
+          "db_id",
+          "thread_db_id",
           "link_id",
           "is_read",
           "is_starred",
@@ -2978,7 +2982,7 @@
             "format": "date-time"
           },
           "db_id": {
-            "type": ["string", "null"],
+            "type": "string",
             "format": "uuid"
           },
           "from": {
@@ -3066,7 +3070,7 @@
             "type": ["string", "null"]
           },
           "thread_db_id": {
-            "type": ["string", "null"],
+            "type": "string",
             "format": "uuid"
           },
           "to": {
@@ -3329,6 +3333,7 @@
       "Thread": {
         "type": "object",
         "required": [
+          "db_id",
           "link_id",
           "inbox_visible",
           "is_read",
@@ -3342,7 +3347,7 @@
             "format": "date-time"
           },
           "db_id": {
-            "type": ["string", "null"],
+            "type": "string",
             "format": "uuid"
           },
           "inbox_visible": {

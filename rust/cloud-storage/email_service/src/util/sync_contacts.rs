@@ -1,3 +1,4 @@
+use crate::convert::map_person_to_contact;
 use anyhow::{Context, anyhow};
 use futures::{StreamExt, stream};
 use gmail_client::GmailClient;
@@ -74,12 +75,10 @@ async fn fetch_new_contacts_from_google(
     let mut new_contacts_token = None;
     let mut new_other_contacts_token = None;
 
-    match gmail_client
-        .get_self_contact(gmail_access_token, link.id)
-        .await
-    {
-        Ok(response) => {
-            all_new_contacts.push(response);
+    match gmail_client.get_self_contact(gmail_access_token).await {
+        Ok(person_resource) => {
+            let contact = map_person_to_contact(link.id, person_resource);
+            all_new_contacts.push(contact);
         }
         Err(e) => {
             tracing::error!(error = ?e, link_id = %link.id, "Failed to get own contact");
@@ -87,12 +86,15 @@ async fn fetch_new_contacts_from_google(
     };
 
     match gmail_client
-        .get_contacts(gmail_access_token, link.id, contacts_sync_token.as_deref())
+        .get_contacts(gmail_access_token, contacts_sync_token.as_deref())
         .await
     {
-        Ok(response) => {
-            new_contacts_token = Some(response.next_sync_token);
-            all_new_contacts.extend(response.contacts);
+        Ok((person_resources, sync_token)) => {
+            new_contacts_token = Some(sync_token);
+            let contacts = person_resources
+                .into_iter()
+                .map(|p| map_person_to_contact(link.id, p));
+            all_new_contacts.extend(contacts);
         }
         Err(e) => {
             tracing::debug!(error = ?e, link_id = %link.id, "Failed to get primary contacts");
@@ -100,16 +102,15 @@ async fn fetch_new_contacts_from_google(
     };
 
     match gmail_client
-        .get_other_contacts(
-            gmail_access_token,
-            link.id,
-            other_contacts_sync_token.as_deref(),
-        )
+        .get_other_contacts(gmail_access_token, other_contacts_sync_token.as_deref())
         .await
     {
-        Ok(response) => {
-            new_other_contacts_token = Some(response.next_sync_token);
-            all_new_contacts.extend(response.contacts);
+        Ok((person_resources, sync_token)) => {
+            new_other_contacts_token = Some(sync_token);
+            let contacts = person_resources
+                .into_iter()
+                .map(|p| map_person_to_contact(link.id, p));
+            all_new_contacts.extend(contacts);
         }
         Err(e) => {
             tracing::debug!(error = ?e, link_id = %link.id, "Failed to get other contacts");

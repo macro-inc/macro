@@ -1,4 +1,10 @@
-import { createEffect, createSignal, onCleanup, onMount } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  onMount,
+} from 'solid-js';
 import * as THREE from 'three';
 import isWebGL2Available from 'three/addons/capabilities/WebGL.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -6,9 +12,9 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { createThemeEffect } from '../../../block-theme/signals/themeReactive';
 import modelM from './model-m.glb?inline';
 import {
-  colorAccent,
-  colorBase,
-  colorContrast,
+  colorAccentRgb,
+  colorBaseRgb,
+  colorContrastRgb,
   pixelation,
   rafSpeed,
   setColor,
@@ -42,6 +48,40 @@ export default function ThreeWireframe(props: ThreeWireframeProps) {
   ); // Make wireframe reactive
   let onPointerMove: (event: PointerEvent) => void;
   let pointerRelease: () => void;
+
+  // Convert RGB tuples to THREE.Color objects
+  const colorContrast = createMemo(() => {
+    const rgb = colorContrastRgb();
+    if (!rgb) return undefined;
+    return new THREE.Color().setRGB(
+      rgb[0],
+      rgb[1],
+      rgb[2],
+      THREE.SRGBColorSpace
+    );
+  });
+
+  const colorAccent = createMemo(() => {
+    const rgb = colorAccentRgb();
+    if (!rgb) return undefined;
+    return new THREE.Color().setRGB(
+      rgb[0],
+      rgb[1],
+      rgb[2],
+      THREE.SRGBColorSpace
+    );
+  });
+
+  const colorBase = createMemo(() => {
+    const rgb = colorBaseRgb();
+    if (!rgb) return undefined;
+    return new THREE.Color().setRGB(
+      rgb[0],
+      rgb[1],
+      rgb[2],
+      THREE.SRGBColorSpace
+    );
+  });
 
   onMount(async () => {
     if (!isWebGL2Available) {
@@ -154,12 +194,16 @@ export default function ThreeWireframe(props: ThreeWireframeProps) {
         const distanceToPointer = pointerWorldPosition.distanceTo(vertex);
         const normalizedDistance = Math.min(distanceToPointer / maxDistance, 1);
 
-        const mixedColor = new THREE.Color().lerpColors(
-          colorAccent()!,
-          colorContrast()!,
-          normalizedDistance
-        );
-        colors.setXYZ(i, mixedColor.r, mixedColor.g, mixedColor.b);
+        const accent = colorAccent();
+        const contrast = colorContrast();
+        if (accent && contrast) {
+          const mixedColor = new THREE.Color().lerpColors(
+            accent,
+            contrast,
+            normalizedDistance
+          );
+          colors.setXYZ(i, mixedColor.r, mixedColor.g, mixedColor.b);
+        }
       }
       colors.needsUpdate = true;
     }
@@ -192,7 +236,10 @@ export default function ThreeWireframe(props: ThreeWireframeProps) {
         : Math.exp(speed() * rafSpeed * 0.5);
     });
     createEffect(() => {
-      scene.fog = new THREE.Fog(colorBase()!, 8, 13);
+      const base = colorBase();
+      if (base) {
+        scene.fog = new THREE.Fog(base, 8, 13);
+      }
     });
     createEffect(() => {
       renderer.setPixelRatio(Math.pow(pixelation(), 6));

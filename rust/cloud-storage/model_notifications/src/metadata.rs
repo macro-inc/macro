@@ -172,6 +172,11 @@ pub struct ChannelReplyMetadata {
     /// The message content
     #[serde(alias = "message_content")]
     pub message_content: String,
+    /// The user who sent the root message of the thread
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(alias = "thread_parent_sender_id")]
+    #[schema(value_type = Option<String>)]
+    pub thread_parent_sender_id: Option<MacroUserIdStr<'static>>,
     #[serde(flatten)]
     pub common: CommonChannelMetadata,
 }

@@ -44,6 +44,7 @@ import {
 import type { PortalScope } from '@core/component/ScopedPortal';
 import { shortcutBadgeStyles } from '@core/component/Themes';
 import { toast } from '@core/component/Toast/Toast';
+import { ENABLE_SNAPSHOT_NODE } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { getPrettyHotkeyStringByToken } from '@core/hotkey/utils';
 import { isMobile } from '@core/mobile/isMobile';
@@ -234,32 +235,9 @@ function MarkdownArea(
 ) {
   const { editor, plugins, cleanup } = props.lexicalWrapper;
 
-  // TODO: ask peter what do
-  // const hotkeyScope = blockHotkeyScopeSignal.get;
   const isActiveElementInBlock = () => {
     return false;
-    // const blockElement = blockElementSignal.get();
-    // const currentActiveElement = activeElement();
-
-    // if (!blockElement || !currentActiveElement) {
-    //   return false;
-    // }
-
-    // return blockElement.contains(currentActiveElement);
   };
-
-  // onMount(() => {
-  //   registerHotkey({
-  //     hotkeyToken: 'chat-input-focus',
-  //     scopeId: 'TODO-chatimus', // TODO
-  //     description: 'Focus chat input',
-  //     hotkey: 't',
-  //     keyDownHandler: () => {
-  //       editor.focus();
-  //       return true;
-  //     },
-  //   });
-  // });
 
   const focusShortcut = getPrettyHotkeyStringByToken(TOKENS.chat.input.focus);
 
@@ -457,6 +435,7 @@ function MarkdownArea(
           block={'chat'}
           useBlockBoundary={true}
           portalScope={props.portalScope}
+          useSnapshotForDocuments={ENABLE_SNAPSHOT_NODE}
         />
         <FloatingMenuGroup>
           <FloatingLinkMenu />

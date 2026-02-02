@@ -28,6 +28,18 @@ mod testing_harness {
         .map_err(|err| VarNameErr { var_name: s, err })
     }
 
+    pub fn maybe_read_env(s: &'static str) -> Option<String> {
+        let cur_getter = MOCK_VAR_GETTER.replace(None);
+        match cur_getter {
+            Some(mock) => {
+                let out = mock(s).ok();
+                MOCK_VAR_GETTER.replace(Some(mock));
+                out
+            }
+            None => std::env::var(s).ok(),
+        }
+    }
+
     pub(crate) fn with_mock_env<F, Cb, U>(f: F, cb: Cb) -> U
     where
         F: Fn(&'static str) -> Result<String, std::env::VarError> + 'static,
@@ -41,11 +53,19 @@ mod testing_harness {
 }
 
 #[cfg(test)]
+pub use testing_harness::maybe_read_env;
+#[cfg(test)]
 pub use testing_harness::read_env;
 
 #[cfg(not(test))]
 pub fn read_env(s: &'static str) -> Result<String, VarNameErr> {
     std::env::var(s).map_err(|err| VarNameErr { var_name: s, err })
+}
+
+/// Read an environment variable, returning `None` if it is not present.
+#[cfg(not(test))]
+pub fn maybe_read_env(s: &'static str) -> Option<String> {
+    std::env::var(s).ok()
 }
 
 /// The type of error that is produced by this crate
@@ -205,6 +225,162 @@ macro_rules! env_var {
                 }
 
                 #[doc = "Create a new instance of self with all the internal env vals set at compile time. Will fail to compile if any value is not set at compile time"]
+                #[allow(dead_code)]
+                $v const fn new_comptime() -> Self {
+                    Self {
+                        $(
+                            [<$field_name:snake>]: $field_name::new_comptime(),
+                        )*
+                    }
+                }
+            }
+        }
+    };
+}
+
+/// A macro for defining optional environment variables that return `Option` instead of `Result`.
+///
+/// Use this when an environment variable is optional and its absence is expected behavior,
+/// not an error condition.
+///
+/// # Example
+///
+/// ```
+/// maybe_env_var! {
+///     pub struct OptionalApiKey;
+/// }
+///
+/// // Returns None if OPTIONAL_API_KEY is not set
+/// let key: Option<OptionalApiKey> = OptionalApiKey::new();
+/// ```
+#[macro_export]
+macro_rules! maybe_env_var {
+    (
+        $(#[$attr:meta])*
+        $v:vis struct $n:ident;
+    ) => {
+        $crate::paste::paste! {
+            #[doc = "struct which represents the optional `" $n:snake:upper "` environment variable.
+            This returns `Option<Self>` when the variable may or may not be present.
+            See [`" $n "`::new] for usage methods"]
+            $(#[$attr])*
+            $v enum $n {
+                #[doc = "This environment var is allocated and read at runtime"]
+                Runtime(std::sync::Arc<str>),
+                #[doc = "This environment var was present at compile time. It may or may not currently exist at runtime."]
+                Comptime(&'static str)
+            }
+
+            impl $n {
+                #[doc = "Attempt to create a new instance of [Self] by reading `" $n:snake:upper "` from the environment variables.
+                     Returns `None` if the variable is not set."]
+                #[allow(dead_code)]
+                $v fn new() -> Option<Self> {
+                    let res = $crate::maybe_read_env($crate::paste::paste! { stringify!([<$n:snake:upper>]) })?;
+                    Some(Self::Runtime(std::sync::Arc::from(res)))
+                }
+
+                #[doc = "Returns the value at compile time if present, otherwise `None`"]
+                #[allow(dead_code)]
+                $v const fn new_comptime() -> Option<Self> {
+                    match std::option_env!($crate::paste::paste! { stringify!([<$n:snake:upper>]) }) {
+                        Some(val) => Some(Self::Comptime(val)),
+                        None => None,
+                    }
+                }
+
+                #[doc = "Function used for testing purposes. Allows the caller to create a new Self via a static str"]
+                #[cfg(test)]
+                #[allow(dead_code)]
+                $v const fn new_testing(s: &'static str) -> Self {
+                    Self::Comptime(s)
+                }
+
+                #[allow(dead_code)]
+                #[doc = "Get a reference to the internal [std::sync::Arc] if this is a runtime allocated env var"]
+                $v fn runtime_inner(&self) -> Option<&std::sync::Arc<str>> {
+                    match self {
+                        Self::Runtime(i) => Some(i),
+                        Self::Comptime(_) => None
+                    }
+                }
+
+                #[allow(dead_code)]
+                #[doc = "Get a reference to the static string slice that was present at compile time"]
+                $v fn comptime_inner(&self) -> Option<&'static str> {
+                    match self {
+                        Self::Comptime(i) => Some(i),
+                        Self::Runtime(_) => None
+                    }
+                }
+
+                #[allow(dead_code)]
+                #[doc = "Returns an Arc<str> of the contained value"]
+                $v fn as_arc(&self) -> std::sync::Arc<str> {
+                    match self {
+                        Self::Comptime(i) => std::sync::Arc::from(*i),
+                        Self::Runtime(i) => i.clone()
+                    }
+                }
+            }
+
+            impl std::ops::Deref for $n {
+                type Target = str;
+
+                fn deref(&self) -> &Self::Target {
+                    match self {
+                        Self::Runtime(i) => &*i,
+                        Self::Comptime(i) => i
+                    }
+                }
+            }
+
+            impl std::convert::AsRef<str> for $n {
+                fn as_ref(&self) -> &str {
+                    match self {
+                        Self::Runtime(i) => &*i,
+                        Self::Comptime(i) => i
+                    }
+                }
+            }
+        }
+    };
+    (
+        $(#[$attr:meta])*
+        $v:vis struct $n:ident {
+            $(
+                $(#[$field_attr:meta])*
+                $field_vis:vis $field_name:ident
+            ),* $(,)?
+        }
+    ) => {
+        $crate::paste::paste! {
+            $(
+                $crate::maybe_env_var!(
+                    $(#[$field_attr])*
+                    $field_vis struct $field_name;
+                );
+            )*
+
+            $(#[$attr])*
+            pub struct $n {
+                $(
+                    pub [<$field_name:snake>]: Option<$field_name>,
+                )*
+            }
+
+            impl $n {
+                #[doc = "Create a new instance of self with all the internal env vals retrieved. Each field is `Option<T>` since values may not be set."]
+                #[allow(dead_code)]
+                $v fn new() -> Self {
+                    Self {
+                        $(
+                            [<$field_name:snake>]: $field_name::new(),
+                        )*
+                    }
+                }
+
+                #[doc = "Create a new instance of self with all the internal env vals set at compile time. Each field is `Option<T>`."]
                 #[allow(dead_code)]
                 $v const fn new_comptime() -> Self {
                     Self {

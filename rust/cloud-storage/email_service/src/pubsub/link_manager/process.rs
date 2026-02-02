@@ -12,6 +12,7 @@ use sqs_client::search::SearchQueueMessage;
 use sqs_client::search::email::EmailLinkMessage;
 use sqs_worker::cleanup_message;
 
+#[tracing::instrument(skip(ctx, message), err)]
 pub async fn process_message(
     ctx: LinkManagerContext,
     message: &aws_sdk_sqs::types::Message,
@@ -63,6 +64,7 @@ pub async fn process_message(
 }
 
 /// Handles the Refresh operation: renews Gmail watch subscription and syncs contacts.
+#[tracing::instrument(skip(ctx, gmail_access_token), fields(link = ?link), err)]
 async fn handle_refresh(
     ctx: &LinkManagerContext,
     link: &Link,
@@ -73,7 +75,7 @@ async fn handle_refresh(
     renew_gmail_watch(ctx, gmail_access_token, link)
         .await
         .inspect_err(|e| {
-            tracing::error!(error=?e, link_id=%link.id, "Failed to renew Gmail watch");
+            tracing::error!(error=?e, "Failed to renew Gmail watch");
         })
         .ok();
 
@@ -89,7 +91,6 @@ async fn handle_refresh(
     {
         tracing::error!(
             error = ?e,
-            link_id = %link.id,
             "Failed to sync contacts"
         );
     }
@@ -100,12 +101,13 @@ async fn handle_refresh(
 }
 
 /// notifies downstream dependencies of link deletion, and deletes link (and all data) from database
+#[tracing::instrument(skip(ctx, gmail_access_token), fields(link = ?link), err)]
 async fn handle_delete(
     ctx: &LinkManagerContext,
     link: &Link,
     gmail_access_token: Option<&str>,
 ) -> anyhow::Result<()> {
-    tracing::info!(link=?link, "Deleting link");
+    tracing::info!("Deleting link");
     // set sync status to false so any future inbox updates get ignored
     email_db_client::links::update::update_link_sync_status(&ctx.db, link.id, false)
         .await
@@ -115,7 +117,7 @@ async fn handle_delete(
     email_db_client::backfill::job::update::cancel_active_jobs_by_link_id(&ctx.db, link.id)
         .await
         .inspect_err(|e| {
-            tracing::error!(error=?e, link_id=?link.id, "Failed to update backfill job statuses");
+            tracing::error!(error=?e, "Failed to update backfill job statuses");
         })
         .ok();
 
@@ -136,10 +138,10 @@ async fn handle_delete(
     // that we may be deleting their link in the first place)
     if let Some(token) = gmail_access_token {
         if let Err(e) = ctx.gmail_client.stop_watch(token).await {
-            tracing::warn!(error=?e, link_id=?link.id, "Gmail call to stop watch failed");
+            tracing::warn!(error=?e, "Gmail call to stop watch failed");
         }
     } else {
-        tracing::debug!(link_id=?link.id, "Skipping Gmail stop_watch - no access token available");
+        tracing::debug!("Skipping Gmail stop_watch - no access token available");
     }
 
     // remove google fusionauth link with gmail inbox permissions
@@ -172,7 +174,7 @@ async fn handle_delete(
         .await
         .context("Failed to delete link in background task")?;
 
-    tracing::info!(link_id=?link.id, "Successfully deleted link");
+    tracing::info!("Successfully deleted link");
 
     Ok(())
 }

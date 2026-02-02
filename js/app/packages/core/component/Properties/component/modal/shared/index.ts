@@ -2,7 +2,7 @@ export type { DropdownOption } from './Dropdown';
 export { Dropdown } from './Dropdown';
 export {
   type CombinedEntity,
-  ENTITY_SEARCH_CONFIG,
+  createEntitySearchConfig,
   entityMapper,
   getEntityName,
   getEntitySearchText,

@@ -13,11 +13,6 @@ test-no-alarm: setup worker_build_setup
     worker-build --release --no-default-features --features create-default-state,bebop-owned-all
     npx vitest
 
-# run qa-env pointing to local worker
-debug: setup
-  npx wrangler dev &
-  cd ./qa-env && npm install && npm run dev
-
 setup:
     npm install && cd bebop/ && npx bebopc build
 
@@ -34,6 +29,10 @@ clean:
 
 deploy-dev:
   npx wrangler deploy --env dev
+
+  
+deploy-dev-dry:
+  npx wrangler deploy --env dev --dry-run
 
 deploy-prod:
   npx wrangler deploy --env prod

@@ -11,7 +11,7 @@ use crate::{
         context::AppState,
         extractors::{ChannelId, ChannelMember},
     },
-    service::sender::notify::{ReactionUpdate, notify_reactions},
+    service::sender::notify::{ReactionData, WithNonce, notify_reactions},
 };
 
 use comms_db_client::{
@@ -37,6 +37,9 @@ pub struct PostReactionRequest {
     pub message_id: String,
     // wether we are adding or removing the reaction
     pub action: ReactionAction,
+
+    // nonce to help optimistic updating on the frontend
+    pub nonce: Option<String>,
 }
 
 #[utoipa::path(
@@ -48,7 +51,7 @@ pub struct PostReactionRequest {
             ("channel_id" = String, Path, description = "id of the channel")
         ),
         responses(
-            (status = 201, body=String),
+         (status = 201, body=String),
             (status = 401, body=String),
             (status = 404, body=String),
             (status = 500, body=String),
@@ -66,7 +69,7 @@ pub async fn post_reaction_handler(
         (StatusCode::BAD_REQUEST, err.to_string())
     })?;
 
-    let req = match req.action {
+    let req_action = match req.action {
         ReactionAction::Add => {
             add_reaction(
                 &ctx.db,
@@ -96,17 +99,20 @@ pub async fn post_reaction_handler(
 
     let counted_reactions = group_reactions(reactions);
 
-    req.map_err(|err| {
-        tracing::error!(error=?err, "unable to add reaction");
+    req_action.map_err(|err| {
+        tracing::error!(error=?err, "unable to process reaction");
         (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
     })?;
 
     notify_reactions(
         &ctx,
-        ReactionUpdate {
-            channel_id,
-            message_id,
-            reactions: counted_reactions,
+        WithNonce {
+            data: ReactionData {
+                channel_id: &channel_id,
+                message_id: &message_id,
+                reactions: &counted_reactions,
+            },
+            nonce: req.nonce.as_deref(),
         },
     )
     .await

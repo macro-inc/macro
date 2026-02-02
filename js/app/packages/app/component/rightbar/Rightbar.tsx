@@ -52,7 +52,7 @@ import {
   cognitionWebsocketServiceClient,
 } from '@service-cognition/client';
 import { createCognitionWebsocketEffect } from '@service-cognition/websocket';
-import { invalidateHistory, useHistoryQuery } from '@queries/history/history';
+import { refetchHistory, useHistoryQuery } from '@queries/history/history';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
 import type { LexicalEditor } from 'lexical';
 import {
@@ -70,6 +70,7 @@ import {
 import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
 import { Button } from '@ui/components/Button';
 import { Hotkey } from '@core/component/Hotkey';
+import { setPreviewData } from '@queries/preview';
 
 type ChatData = {
   messages: ChatMessageWithAttachments[];
@@ -553,9 +554,15 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
       // TODO: move this into a separate resource so we don't have to refetch history
       // refetch history immediately to have the new chat id
       // then rename again when the server provides a default name
-      invalidateHistory();
-      waitChatRename(newChatId).then((_name) => {
-        invalidateHistory();
+      refetchHistory();
+      waitChatRename(newChatId).then((name) => {
+        refetchHistory();
+        if (name) {
+          setPreviewData(newChatId, (prev) => ({
+            ...prev,
+            name,
+          }));
+        }
       });
       return await onSend(response);
     } else if (request.type === 'send') {

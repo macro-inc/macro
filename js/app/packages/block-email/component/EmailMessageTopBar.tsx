@@ -153,8 +153,10 @@ function CollapsedHeader(props: {
   return (
     <div class="flex flex-row w-full items-center justify-between">
       <div class="flex flex-row items-center gap-1 text-sm min-w-0">
-        <span class="text-ink-muted truncate">
-          {props.senderName} to {props.recipientSummary}
+        <span class="text-ink truncate">
+          {props.senderName}
+          <span style={{ padding: '0 0.375em' }}>to</span>
+          {props.recipientSummary}
         </span>
         <div
           class="transition-opacity"
@@ -185,7 +187,7 @@ function CollapsedHeader(props: {
           hiddenActions={props.hiddenActions}
         />
         <Show when={props.message.internal_date_ts}>
-          <div class="text-xs text-ink-muted">
+          <div class="text-xs touch:mobile-width:text-sm text-ink">
             {formatShortDate(props.message.internal_date_ts!)}
           </div>
         </Show>
@@ -231,7 +233,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
 
   return (
     <div
-      class="pr-2 font-mono"
+      class="pr-2 pt-1"
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
       onClick={handleClick}

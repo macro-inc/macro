@@ -51,11 +51,11 @@ pub struct ParsedSearchMessage {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Message {
     // the uuid we generated for the message in our database
-    pub db_id: Option<Uuid>,
+    pub db_id: Uuid,
     // the id the user's provider (i.e. gmail) uses to identify the message
     pub provider_id: Option<String>,
     // the uuid we generated for the message's thread in the database
-    pub thread_db_id: Option<Uuid>,
+    pub thread_db_id: Uuid,
     // the id the user's provider (i.e. gmail) uses to identify the thread
     pub provider_thread_id: Option<String>,
     // the db id of the specific message this message is replying to (if any)
@@ -114,9 +114,9 @@ impl From<MessageWithBodyReplyless> for ParsedMessage {
     fn from(msg: MessageWithBodyReplyless) -> Self {
         Self {
             body_parsed: get_body_parsed_for_message(&msg),
-            db_id: msg.inner.db_id.unwrap_or_default(),
+            db_id: msg.inner.db_id,
             link_id: msg.inner.link_id,
-            thread_db_id: msg.inner.thread_db_id.unwrap_or_default(),
+            thread_db_id: msg.inner.thread_db_id,
             subject: msg.inner.subject,
             from: msg.inner.from,
             to: msg.inner.to,
@@ -140,9 +140,9 @@ impl From<MessageWithBodyReplyless> for ParsedSearchMessage {
     fn from(msg: MessageWithBodyReplyless) -> Self {
         Self {
             body_parsed_linkless: get_body_parsed_linkless_for_message(&msg),
-            db_id: msg.inner.db_id.unwrap_or_default(),
+            db_id: msg.inner.db_id,
             link_id: msg.inner.link_id,
-            thread_db_id: msg.inner.thread_db_id.unwrap_or_default(),
+            thread_db_id: msg.inner.thread_db_id,
             subject: msg.inner.subject,
             from: msg.inner.from,
             to: msg.inner.to,

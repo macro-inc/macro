@@ -1,6 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { Database, Queue } from '../../packages/resources';
+import { Queue } from '../../packages/resources';
 import { config, getMacroApiToken, stack } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { PushNotificationEventHandler } from './push';
@@ -21,12 +21,6 @@ const INTERNAL_API_SECRET_KEY = config.require(`internal_api_key`);
 const internalApiKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: INTERNAL_API_SECRET_KEY })
   .apply((secret) => secret.arn);
-
-const password = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.require('db-password-secret-key'),
-  })
-  .apply((secret) => secret.secretString);
 
 const fusionauthClientIdSecretKey = config.require(`fusionauth_client_id`);
 const AUDIENCE = aws.secretsmanager
@@ -89,27 +83,11 @@ const cloudStorageClusterName: pulumi.Output<string> = cloudStorageStack
   .getOutput('cloudStorageClusterName')
   .apply((arn) => arn as string);
 
-// Create notification db
-// Create notification service
-const notificationDb = new Database('notification-db', {
-  publiclyAccessible: stack !== 'prod', // Lock down prod db only
-  tags,
-  vpc: coparse_api_vpc,
-  dbArgs: {
-    dbName: 'notificationdb',
-    instanceClass: stack === 'prod' ? 'db.t4g.large' : 'db.t4g.micro',
-    password,
-    allocatedStorage: 25,
-  },
-});
-
-export const notificationDatabaseEndpoint = notificationDb.endpoint;
-
-const DATABASE_URL = pulumi.all([notificationDatabaseEndpoint, password]).apply(
-  // eslint-disable-next-line @typescript-eslint/no-shadow
-  ([endpoint, password]) =>
-    `postgresql://macrouser:${password}@${endpoint}/notificationdb`
-);
+const DATABASE_URL = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require(`macro_db_secret_key`),
+  })
+  .apply((secret) => secret.secretString);
 
 const notificationQueue = new Queue('notification', {
   tags,

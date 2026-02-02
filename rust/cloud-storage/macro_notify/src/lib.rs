@@ -26,18 +26,7 @@ pub struct MacroNotifyClient {
 
 impl MacroNotifyClient {
     pub async fn new(notification_queue: String, service: String) -> Self {
-        let config = if cfg!(feature = "local_queue") {
-            aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .endpoint_url(&notification_queue)
-                .load()
-                .await
-        } else {
-            aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .load()
-                .await
-        };
+        let config = macro_aws_config::get_macro_aws_config().await;
 
         Self {
             inner: aws_sdk_sqs::Client::new(&config),

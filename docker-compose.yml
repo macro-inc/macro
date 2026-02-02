@@ -1,6 +1,7 @@
 # Services
 include:
   - docker-compose-databases.yml
+  - infra/stacks/fusionauth-instance/docker-compose.yml
 
 x-common-env: &common-env
   env_file:
@@ -20,8 +21,10 @@ services:
     ports:
       - "8080:8080"
     depends_on:
+      - fusionauth
       - redis
     networks:
+      - auth
       - databases
       - services
     healthcheck:
@@ -92,8 +95,6 @@ services:
       target: contacts_service
     ports:
       - "8083:8080"
-    environment:
-      - DATABASE_URL=${CONTACTSDB_URL}
     networks:
       - databases
       - services
@@ -109,6 +110,8 @@ services:
   # Document format conversion - requires LibreOffice
   # ============================================================================
   convert_service:
+    profiles:
+      - processors 
     <<: *common-env
     build:
       context: ./rust/cloud-storage
@@ -141,7 +144,6 @@ services:
     depends_on:
       - comms_service
       - document_storage_service
-      - search_service
       - email_service
       - static_file_service
     networks:
@@ -209,28 +211,6 @@ services:
       start_period: 10s
 
   # ============================================================================
-  # experiment_service (Port 8088)
-  # Feature flags and experiments
-  # ============================================================================
-  experiment_service:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: experiment_service
-    ports:
-      - "8088:8080"
-    networks:
-      - databases
-      - services
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  # ============================================================================
   # notification_service (Port 8089)
   # User notifications - NotificationDB
   # ============================================================================
@@ -242,9 +222,6 @@ services:
       target: notification_service
     ports:
       - "8089:8080"
-    environment:
-      # Explicitly override as this is a unique databas
-      - DATABASE_URL=${NOTIFICATIONDB_URL}
     depends_on:
       - redis
       - document_cognition_service
@@ -262,60 +239,12 @@ services:
       start_period: 10s
 
   # ============================================================================
-  # organization_service (Port 8090)
-  # Organization and team management
-  # ============================================================================
-  organization_service:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: organization_service
-    ports:
-      - "8090:8080"
-    depends_on:
-      - redis
-      - document_storage_service
-      - authentication_service
-    networks:
-      - databases
-      - services
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  # ============================================================================
-  # properties_service (Port 8091)
-  # User/document properties
-  # ============================================================================
-  properties_service:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: properties_service
-    ports:
-      - "8091:8080"
-    depends_on:
-      - comms_service
-    networks:
-      - databases
-      - services
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  # ============================================================================
   # search_processing_service (Port 8092)
   # Search indexing worker
   # ============================================================================
   search_processing_service:
+    profiles:
+      - processors
     <<: *common-env
     build:
       context: ./rust/cloud-storage
@@ -325,32 +254,6 @@ services:
     depends_on:
       - email_service
       - comms_service
-    networks:
-      - databases
-      - services
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  # ============================================================================
-  # search_service (Port 8093)
-  # Search API
-  # ============================================================================
-  search_service:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: search_service
-    ports:
-      - "8093:8080"
-    depends_on:
-      - comms_service
-      - email_service
-      - document_storage_service
     networks:
       - databases
       - services
@@ -404,8 +307,74 @@ services:
       retries: 3
       start_period: 10s
 
+  # ============================================================================
+  # websocket_service (Port 6969)
+  # Simple WebSocket service - responds with "ping" to all messages
+  # ============================================================================
+  websocket_service:
+    build:
+      context: ./js/websocket-service
+      dockerfile: Dockerfile
+    ports:
+      - "6969:6969"
+    networks:
+      - services
+
+  # ============================================================================
+  # sync_service (Port 8787)
+  # Document sync service using Cloudflare Workers/Durable Objects (via miniflare)
+  # ============================================================================
+  sync_service:
+    <<: *common-env
+    build:
+      context: ./rust/sync-service
+      dockerfile: Dockerfile
+    ports:
+      - "8787:8787"
+    environment:
+      - INTERNAL_API_SECRET_KEY=${INTERNAL_API_SECRET_KEY}
+    networks:
+      - services
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8787/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ============================================================================
+  # lexical_service (Port 8096)
+  # Lexical document conversion service - converts Lexical JSON to various formats
+  # ============================================================================
+  lexical_service:
+    <<: *common-env
+    build:
+      context: ./js/lexical-service
+      dockerfile: Dockerfile
+      args:
+        GITHUB_PACKAGES_TOKEN: ${GITHUB_PACKAGES_TOKEN}
+    ports:
+      - "8096:8096"
+    depends_on:
+      - sync_service
+    environment:
+      - PORT=8096
+      - INTERNAL_AUTH_KEY=${INTERNAL_API_SECRET_KEY}
+      - SYNC_SERVICE_AUTH_KEY=${INTERNAL_API_SECRET_KEY}
+      - SYNC_SERVICE_URL=http://sync_service:8787
+    networks:
+      - services
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:8096/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
 networks:
   services:
     driver: bridge
   databases:
+    external: true
+  auth:
     external: true

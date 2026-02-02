@@ -24,7 +24,6 @@ const serviceToCrate: Record<string, string> = {
   'email-service': 'email_service',
   'search-service': 'search_service',
   'properties-service': 'properties_service',
-  'organization-service': 'organization_service',
 };
 
 const getRustCloudStorageDir = () => path.resolve(import.meta.dirname, '../../../rust/cloud-storage');
@@ -174,7 +173,15 @@ async function main() {
     });
     process.exit(1);
   }
-  await $`bunx biome check --write --unsafe packages/service-clients/`;
+  // On NixOS, the npm-installed biome binary doesn't work due to dynamic linking issues.
+  // We detect NixOS and use the system biome instead.
+  const isNixOS = process.env.NIX_PATH !== undefined || (await Bun.file("/etc/os-release").exists() && (await Bun.file("/etc/os-release").text()).includes("NixOS"));
+  if (isNixOS) {
+    const systemBiomePath = await $`bash -c 'PATH=$(echo "$PATH" | tr ":" "\n" | grep -v node_modules | tr "\n" ":") which biome'`.text();
+    await $`${systemBiomePath.trim()} check --write --unsafe packages/service-clients/`;
+  } else {
+    await $`biome check --write --unsafe packages/service-clients/`;
+  }
 
   // In check mode, verify no uncommitted changes
   if (checkMode) {

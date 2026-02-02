@@ -25,7 +25,6 @@ import {
   fileTypeToBlockName,
 } from '@core/constant/allBlocks';
 import {
-  ENABLE_FRECENCY,
   ENABLE_PROPERTY_DISPLAY,
   ENABLE_PROPERTY_FILTER,
   ENABLE_SOUP_FROM_FILTER,
@@ -62,13 +61,13 @@ import {
   type SearchLocation,
   type SortOption,
   sortByCreatedAt,
-  sortByFrecencyScore,
   sortByUpdatedAt,
   sortByViewedAt,
   unreadFilterFn,
   type WithNotification,
   type WithSearch,
 } from '@macro-entity';
+import { usePropertyEditorHotkeys } from '../component/property-edit-modal/hooks/usePropertyEditorHotkeys';
 import {
   isChannelMention,
   isChannelMessageReply,
@@ -195,15 +194,6 @@ const sortOptions = [
     label: 'Created',
     sortFn: sortByCreatedAt,
   },
-  ...(ENABLE_FRECENCY
-    ? [
-        {
-          value: 'frecency' as const,
-          label: 'Frecency',
-          sortFn: sortByFrecencyScore,
-        },
-      ]
-    : []),
 ] satisfies SortOption<EntityData, SystemSortOption>[];
 
 export type UnifiedListViewProps = {
@@ -1031,12 +1021,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       limit: props.defaultDisplayOptions?.limit ?? 100,
       emailView: importantFilter()
         ? 'important'
-        : focusFilters()?.includes('signal') ||
-            entityTypeFilter().includes('email')
-          ? 'all'
-          : view().id === VIEWCONFIG_DEFAULTS_IDS_ENUM.email
-            ? emailView()
-            : undefined,
+        : view().id === VIEWCONFIG_DEFAULTS_IDS_ENUM.email
+          ? emailView()
+          : 'all',
 
       sort_method: sortType(),
     })
@@ -1358,6 +1345,16 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     () => view()?.multiSelectEntities,
     (a: string, b: EntityData[]) => b.find((e) => e.id === a) !== undefined
   );
+
+  // Add property editor hotkeys
+  usePropertyEditorHotkeys({
+    scopeId: splitContext.splitHotkeyScope,
+    getSelectedEntities: () => {
+      const multi = view().multiSelectEntities;
+      if (multi.length > 0) return multi;
+      return selectedEntity() ? [selectedEntity()!] : [];
+    },
+  });
 
   const saveViewMutation = useUpsertSavedViewMutation();
 

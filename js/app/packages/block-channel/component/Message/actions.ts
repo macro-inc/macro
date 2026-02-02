@@ -1,4 +1,4 @@
-import { getUrlToMessage } from '@block-channel/state/link';
+import { getUrlToMessage } from '@block-channel/utils/link';
 import { useBlockId } from '@core/block';
 import { logger } from '@observability';
 import ReplyIcon from '@phosphor-icons/core/regular/arrow-bend-up-left.svg?component-solid';

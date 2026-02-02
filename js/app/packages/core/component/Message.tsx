@@ -244,7 +244,7 @@ const Root: Component<MessageRootProps> = (props) => {
               ? `${replyHeight()}px`
               : '0px',
           }}
-          hover={props.shouldHover || hover()}
+          hover={props.shouldHover}
         >
           {/* Message Wrapper w/ Main Connector Line */}
           <div
@@ -264,12 +264,12 @@ const Root: Component<MessageRootProps> = (props) => {
                 'border-l': !props.hideConnectors,
                 'border-accent': props.isNewMessage ?? false,
                 'border-edge-muted': !props.isNewMessage,
-                'pt-4': !(
+                'pt-1.5': !(
                   props.isConsecutive ||
                   props.isFirstMessage ||
                   props.isFirstInThread
                 ),
-                'pb-2': props.isLastMessage && !props.isLastInThread,
+                'pb-2': !props.isLastMessage,
                 'pb-4': props.hasThreadChildren ?? false,
               }}
               style={{
@@ -277,7 +277,7 @@ const Root: Component<MessageRootProps> = (props) => {
               }}
             >
               {/* User Icon */}
-              <div class="absolute -left-[.5px] -translate-x-1/2">
+              <div class="absolute left-0 -translate-x-1/2">
                 <Show when={!props.isConsecutive}>
                   <div class="relative">
                     <Show when={props.isFirstInThread}>
@@ -336,11 +336,12 @@ const Root: Component<MessageRootProps> = (props) => {
           <div
             class="absolute right-0 -top-2 flex flex-col items-end z-tool-tip"
             classList={{
-              block: hover() || !!props.shouldHover,
-              hidden: !(hover() || !!props.shouldHover),
+              block: props.focused || !!props.shouldHover,
+              hidden: !(props.focused || !!props.shouldHover),
             }}
             onMouseEnter={() => setHover(true)}
             onMouseLeave={() => setHover(false)}
+            data-message-id={props.id}
           >
             <Show when={props.timestamp}>
               <div class="absolute top-0 translate-y-[-100%] bg-panel pl-2 pt-2 text-xs text-ink-muted font-mono mb-0.5 select-text cursor-default">

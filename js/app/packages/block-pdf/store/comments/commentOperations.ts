@@ -3,11 +3,8 @@ import { commentsStore } from '@block-pdf/store/comments/commentStore';
 import type { PdfRootLayout } from '@block-pdf/type/comments';
 import { withAnalytics } from '@coparse/analytics';
 import { useBlockId } from '@core/block';
-import {
-  type DeleteCommentInfo,
-  isRoot,
-} from '@core/collab/comments/commentType';
-import { threadMeasureContainerId } from '@core/collab/comments/Thread';
+import { type DeleteCommentInfo, isRoot } from '@core/comments/commentType';
+import { threadMeasureContainerId } from '@core/comments/Thread';
 import { blockElementSignal } from '@core/signal/blockElement';
 import type {
   CreateCommentRequest,

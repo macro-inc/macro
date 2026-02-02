@@ -1,8 +1,7 @@
-import { channelStore } from '@block-channel/signal/channel';
 import {
   useAddParticipantsToChannel,
   useRemoveParticipantsFromChannel,
-} from '@block-channel/signal/participants';
+} from '@block-channel/hooks/participants';
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
@@ -29,9 +28,15 @@ import { VList } from 'virtua/solid';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
 import { UserItem } from './UserItem';
 
-export function ParticipantManager(props: { participantCount: number }) {
-  const channel = channelStore.get;
-  const channelType = () => channel?.channel?.channel_type ?? 'private';
+type ParticipantManagerProps = {
+  channelId: string;
+  channelType?: string;
+  participants: ChannelParticipant[];
+  participantCount: number;
+};
+
+export function ParticipantManager(props: ParticipantManagerProps) {
+  const channelType = () => props.channelType ?? 'private';
   const users = useContacts();
   const userId = useUserId();
   const [usersToInvite, setUsersToInvite] = createSignal<
@@ -39,7 +44,9 @@ export function ParticipantManager(props: { participantCount: number }) {
   >([]);
   const canManageParticipants = () =>
     channelType() !== ChannelType.organization;
-  const addParticipantsToChannel = useAddParticipantsToChannel();
+  const addParticipantsToChannel = useAddParticipantsToChannel(
+    () => props.channelId
+  );
 
   function handleAddParticipants() {
     const destination = getDestinationFromOptions(usersToInvite());
@@ -56,7 +63,7 @@ export function ParticipantManager(props: { participantCount: number }) {
   const options = () =>
     users()
       ?.filter((user) => {
-        return !channel?.participants.find(
+        return !props.participants.find(
           (participant) => participant.user_id === user.id
         );
       })
@@ -128,8 +135,9 @@ export function ParticipantManager(props: { participantCount: number }) {
 
               <div class="flex flex-col">
                 <ParticipantList
+                  channelId={props.channelId}
                   editable={editable()}
-                  participants={channel.participants}
+                  participants={props.participants}
                   userId={userId()!}
                 />
               </div>
@@ -155,6 +163,7 @@ function EmptyParticipantList(props: { query: string }) {
 }
 
 export function ParticipantList(props: {
+  channelId: string;
   participants: ChannelParticipant[];
   userId: string;
   editable: boolean;
@@ -162,7 +171,9 @@ export function ParticipantList(props: {
   let ref!: HTMLDivElement;
 
   const [searchQuery, setSearchQuery] = createSignal('');
-  const removeParticipants = useRemoveParticipantsFromChannel();
+  const removeParticipants = useRemoveParticipantsFromChannel(
+    () => props.channelId
+  );
 
   const filteredParticipants = createMemo(() => {
     if (searchQuery().trim().length === 0) return props.participants;

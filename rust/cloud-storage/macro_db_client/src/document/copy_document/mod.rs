@@ -145,6 +145,7 @@ pub(in crate::document) async fn copy_docx_document(
         created_at: document.created_at,
         updated_at: document.updated_at,
         sub_type: None,
+        deleted_at: None,
     })
 }
 
@@ -266,13 +267,13 @@ pub(in crate::document) async fn copy_non_docx_document(
         created_at: document.created_at,
         updated_at: document.updated_at,
         sub_type: original_document.sub_type,
+        deleted_at: None,
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use models_permissions::share_permission::access_level::AccessLevel;
     use sqlx::{Pool, Postgres};
 
     #[sqlx::test(fixtures(path = "../../../fixtures", scripts("basic_user_with_documents")))]

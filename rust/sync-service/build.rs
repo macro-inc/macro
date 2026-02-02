@@ -17,20 +17,13 @@ fn include_git_in_env() {
             if o.status.success() {
                 String::from_utf8_lossy(&o.stdout).trim().to_string()
             } else {
-                let msg = format!(
-                    "Running `git describe --tags --always` failed.
-stout: {}
-stderr: {}",
-                    String::from_utf8_lossy(&o.stdout),
-                    String::from_utf8_lossy(&o.stderr)
-                );
-                eprintln!("{msg}");
-                panic!("{msg}")
+                // Fallback for Docker builds without .git directory
+                "docker".to_string()
             }
         }
-        Err(e) => {
-            eprintln!("Running `git describe --tags --always` failed. Error: {e}");
-            panic!("Running `git describe --tags --always` failed. Error: {e}")
+        Err(_) => {
+            // Fallback when git command is not available
+            "unknown".to_string()
         }
     };
     println!("cargo:rustc-env=GIT_DESCRIBE={}", git_vers);

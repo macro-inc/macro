@@ -1,5 +1,8 @@
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { EntityIcon } from '@core/component/EntityIcon';
+import {
+  EntityIcon,
+  type EntityWithValidIcon,
+} from '@core/component/EntityIcon';
 import { OldMenu } from '@core/component/OldMenu';
 import { blockAcceptedFileExtensionSet } from '@core/constant/allBlocks';
 import { onKeyDownClick, onKeyUpClick } from '@core/util/click';
@@ -47,7 +50,7 @@ function ItemOption(props: { file: FileItem; type: ItemType }) {
       tabIndex={0}
     >
       <EntityIcon
-        targetType={props.file.type ?? (props.type as 'chat')}
+        targetType={props.file.type ?? (props.type as EntityWithValidIcon)}
         size={'sm'}
       />
       <div class="ml-2 line-clamp-1 text-ellipsis">{props.file.name}</div>

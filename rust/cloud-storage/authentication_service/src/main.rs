@@ -1,5 +1,4 @@
 use anyhow::Context;
-use comms_service_client::CommsServiceClient;
 use config::{Config, Environment};
 use document_storage_service_client::DocumentStorageServiceClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -38,13 +37,9 @@ async fn main() -> anyhow::Result<()> {
     MacroEntrypoint::default().init();
     let env = Environment::new_or_prod();
 
-    let secretsmanager_client =
-        secretsmanager_client::SecretsManager::new(aws_sdk_secretsmanager::Client::new(
-            &aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .load()
-                .await,
-        ));
+    let secretsmanager_client = secretsmanager_client::SecretsManager::new(
+        aws_sdk_secretsmanager::Client::new(&macro_aws_config::get_macro_aws_config().await),
+    );
 
     let internal_api_key = secretsmanager_client
         .get_maybe_secret_value(env, InternalApiSecretKey::new()?)
@@ -140,12 +135,6 @@ async fn main() -> anyhow::Result<()> {
     );
     tracing::trace!("initialized auth client");
 
-    let comms_client = CommsServiceClient::new(
-        config.service_internal_auth_key.clone(),
-        config.comms_service_url.clone(),
-    );
-    tracing::trace!("initialized comms client");
-
     let document_storage_service_client = DocumentStorageServiceClient::new(
         config.service_internal_auth_key.clone(),
         config.document_storage_service_url.clone(),
@@ -165,12 +154,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::trace!("initialized stripe client");
 
     let ses_client = ses_client::Ses::new(
-        aws_sdk_sesv2::Client::new(
-            &aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .load()
-                .await,
-        ),
+        aws_sdk_sesv2::Client::new(&macro_aws_config::get_macro_aws_config().await),
         &config.environment.to_string(),
     );
 
@@ -186,10 +170,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::trace!("initialized macro_notify client");
 
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(
-        &aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .region("us-east-1")
-            .load()
-            .await,
+        &macro_aws_config::get_macro_aws_config().await,
     ))
     .search_event_queue(&config.search_event_queue);
     tracing::trace!("initialized sqs client");
@@ -216,7 +197,6 @@ async fn main() -> anyhow::Result<()> {
             auth_client: Arc::new(auth_client),
             macro_cache_client: Arc::new(macro_cache_client),
             stripe_client: Arc::new(stripe_client),
-            comms_client: Arc::new(comms_client),
             document_storage_service_client: Arc::new(document_storage_service_client),
             notification_service_client: Arc::new(notification_service_client),
             ses_client: Arc::new(ses_client),

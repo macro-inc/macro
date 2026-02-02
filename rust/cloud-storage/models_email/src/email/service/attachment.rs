@@ -11,8 +11,8 @@ use uuid::Uuid;
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct Attachment {
-    #[schemars(with = "Option<String>")]
-    pub db_id: Option<Uuid>,
+    #[schemars(with = "String")]
+    pub db_id: Uuid,
     // a different value is returned by the gmail API for this each time you fetch a message -
     // don't make the mistake of using it to uniquely identify an attachment
     pub provider_id: Option<String>,

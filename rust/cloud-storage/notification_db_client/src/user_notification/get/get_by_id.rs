@@ -74,9 +74,13 @@ pub async fn get_user_notification_by_id(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use macro_db_migrator::MACRO_DB_MIGRATIONS;
     use sqlx::{Pool, Postgres};
 
-    #[sqlx::test(fixtures(path = "../../../fixtures", scripts("user_notifications")))]
+    #[sqlx::test(
+        migrator = "MACRO_DB_MIGRATIONS",
+        fixtures(path = "../../../fixtures", scripts("user_notifications"))
+    )]
     async fn test_get_user_notification_by_id_found(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let notification_id = "0193b1ea-a542-7589-893b-2b4a509c1e76".parse::<Uuid>()?;
 
@@ -97,7 +101,10 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures(path = "../../../fixtures", scripts("user_notifications")))]
+    #[sqlx::test(
+        migrator = "MACRO_DB_MIGRATIONS",
+        fixtures(path = "../../../fixtures", scripts("user_notifications"))
+    )]
     async fn test_get_user_notification_by_id_wrong_user(
         pool: Pool<Postgres>,
     ) -> anyhow::Result<()> {
@@ -111,7 +118,10 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures(path = "../../../fixtures", scripts("user_notifications")))]
+    #[sqlx::test(
+        migrator = "MACRO_DB_MIGRATIONS",
+        fixtures(path = "../../../fixtures", scripts("user_notifications"))
+    )]
     async fn test_get_user_notification_by_id_ignores_deleted(
         pool: Pool<Postgres>,
     ) -> anyhow::Result<()> {

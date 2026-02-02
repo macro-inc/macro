@@ -5,10 +5,8 @@ use axum::{
     extract::{FromRef, FromRequest, FromRequestParts, Request},
     http::request::Parts,
 };
-use model::{
-    project::BasicProject,
-    user::{UserContext, axum_extractor::MacroUserExtractor},
-};
+use model::{project::BasicProject, user::UserContext};
+use model_user::axum_extractor::MacroUserExtractor;
 use models_permissions::share_permission::access_level::AccessLevel;
 use serde::{Deserialize, de::DeserializeOwned};
 use sqlx::PgPool;

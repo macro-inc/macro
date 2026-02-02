@@ -49,6 +49,9 @@ env_var! {
         pub SyncServiceAuthKey,
         pub AuthenticationServiceUrl,
         pub AuthenticationServiceSecretKey,
+        pub OpensearchUrl,
+        pub OpensearchUsername,
+        pub OpensearchPassword,
     }
 }
 

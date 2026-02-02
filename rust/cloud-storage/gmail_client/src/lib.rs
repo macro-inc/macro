@@ -4,9 +4,7 @@ pub(crate) mod contacts;
 pub(crate) mod history;
 pub(crate) mod labels;
 pub(crate) mod messages;
-pub(crate) mod parse;
 pub(crate) mod profile;
-pub(crate) mod sanitizer;
 mod settings;
 pub(crate) mod threads;
 pub(crate) mod watch;
@@ -21,13 +19,14 @@ use crate::threads::{DEFAULT_BATCH_SIZE, get_threads_with_retry};
 use mockall::automock;
 use models_email::email::service;
 use models_email::email::service::address::ContactInfo;
-use models_email::email::service::{message, thread};
+use models_email::email::service::message;
+use models_email::email::service::thread::ThreadList as ServiceThreadList;
+use models_email::gmail::contacts::PersonResource;
 pub use models_email::gmail::error::GmailError;
-use models_email::gmail::history::InboxChanges;
 use models_email::gmail::inbox_sync::{
     GoogleJwtClaims, GooglePublicKeys, JwtVerificationError, KeyMap,
 };
-use models_email::service::contact::{Contact, ContactList};
+use models_email::gmail::{HistoryListResponse, MessageResource, ThreadResource};
 use uuid::Uuid;
 
 #[derive(Clone, Debug)]
@@ -68,7 +67,7 @@ impl GmailClient {
         access_token: &str,
         num_threads: u32,
         next_page_token: Option<&str>,
-    ) -> anyhow::Result<thread::ThreadList> {
+    ) -> anyhow::Result<ServiceThreadList> {
         threads::list_threads(self, access_token, num_threads, next_page_token).await
     }
 
@@ -82,24 +81,25 @@ impl GmailClient {
         threads::get_message_ids_for_thread(self, access_token, thread_id).await
     }
 
-    /// Fetches the threads and messages for the given thread_ids
+    /// Fetches the threads and messages for the given thread_ids.
+    /// Returns raw Gmail ThreadResource objects - callers should map to service layer structs.
     #[tracing::instrument(skip(self, access_token))]
     pub async fn get_threads(
         &self,
-        link_id: Uuid,
         access_token: &str,
         thread_ids: &Vec<String>,
-    ) -> anyhow::Result<Vec<thread::Thread>> {
-        get_threads_with_retry(self, link_id, access_token, thread_ids, DEFAULT_BATCH_SIZE).await
+    ) -> anyhow::Result<Vec<ThreadResource>> {
+        get_threads_with_retry(self, access_token, thread_ids, DEFAULT_BATCH_SIZE).await
     }
 
-    /// Gets the changes to a user's inbox that have occurred since start_history_id
+    /// Gets the changes to a user's inbox that have occurred since start_history_id.
+    /// Returns raw HistoryListResponse - callers should map to InboxChanges using convert module.
     #[tracing::instrument(skip(self, access_token))]
     pub async fn get_history(
         &self,
         access_token: &str,
         start_history_id: &str,
-    ) -> anyhow::Result<InboxChanges> {
+    ) -> anyhow::Result<HistoryListResponse> {
         history::get_history(self, access_token, start_history_id).await
     }
 
@@ -189,15 +189,15 @@ impl GmailClient {
         .await
     }
 
-    /// Fetches a specific message from Gmail by its provider ID
+    /// Fetches a specific message from Gmail by its provider ID.
+    /// Returns raw Gmail MessageResource - callers should map to service layer structs.
     #[tracing::instrument(skip(self, access_token))]
     pub async fn get_message(
         &self,
         access_token: &str,
         message_provider_id: &str,
-        link_id: Uuid,
-    ) -> anyhow::Result<Option<message::Message>> {
-        get_message(self, access_token, message_provider_id, link_id).await
+    ) -> anyhow::Result<Option<MessageResource>> {
+        get_message(self, access_token, message_provider_id).await
     }
 
     /// Fetches a specific message's thread ID from Gmail by its provider ID
@@ -206,9 +206,8 @@ impl GmailClient {
         &self,
         access_token: &str,
         message_provider_id: &str,
-        link_id: Uuid,
     ) -> anyhow::Result<Option<String>> {
-        get_message_thread_id(self, access_token, message_provider_id, link_id).await
+        get_message_thread_id(self, access_token, message_provider_id).await
     }
 
     #[tracing::instrument(skip(self, access_token))]
@@ -216,9 +215,8 @@ impl GmailClient {
         &self,
         access_token: &str,
         message_provider_id: &str,
-        link_id: Uuid,
     ) -> anyhow::Result<Option<Vec<String>>> {
-        get_message_label_ids(self, access_token, message_provider_id, link_id).await
+        get_message_label_ids(self, access_token, message_provider_id).await
     }
 
     /// Sends a new email message
@@ -285,38 +283,36 @@ impl GmailClient {
         delete_gmail_label(self, access_token, label_id).await
     }
 
-    /// Fetches the user's own contact information
+    /// Fetches the user's own contact information.
+    /// Returns raw Gmail PersonResource - callers should map to service layer Contact.
     #[tracing::instrument(skip(self, access_token))]
-    pub async fn get_self_contact(
-        &self,
-        access_token: &str,
-        link_id: Uuid,
-    ) -> anyhow::Result<Contact> {
-        get_self_connection(self, access_token, link_id).await
+    pub async fn get_self_contact(&self, access_token: &str) -> anyhow::Result<PersonResource> {
+        get_self_connection(self, access_token).await
     }
 
     /// Fetches all of the user's main contacts, handling pagination.
-    /// Returns a list of contacts and a sync token for future incremental updates.
+    /// Returns raw Gmail PersonResource objects and a sync token for future incremental updates.
+    /// Callers should map PersonResource to service layer Contact.
     #[tracing::instrument(skip(self, access_token, sync_token))]
     pub async fn get_contacts(
         &self,
         access_token: &str,
-        link_id: Uuid,
         sync_token: Option<&str>,
-    ) -> anyhow::Result<ContactList> {
-        contacts::list_connections(self, access_token, link_id, sync_token).await
+    ) -> anyhow::Result<(Vec<PersonResource>, String)> {
+        contacts::list_connections(self, access_token, sync_token).await
     }
 
     /// Fetches all of the user's "Other Contacts", handling pagination.
     /// These are typically contacts auto-created from interactions.
+    /// Returns raw Gmail PersonResource objects and a sync token.
+    /// Callers should map PersonResource to service layer Contact.
     #[tracing::instrument(skip(self, access_token, sync_token))]
     pub async fn get_other_contacts(
         &self,
         access_token: &str,
-        link_id: Uuid,
         sync_token: Option<&str>,
-    ) -> anyhow::Result<ContactList> {
-        contacts::list_other_contacts(self, access_token, link_id, sync_token).await
+    ) -> anyhow::Result<(Vec<PersonResource>, String)> {
+        contacts::list_other_contacts(self, access_token, sync_token).await
     }
 
     /// Gets the email signature for a specific email address

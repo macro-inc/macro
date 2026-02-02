@@ -10,25 +10,6 @@
     "version": "0.1.0"
   },
   "paths": {
-    "/health": {
-      "get": {
-        "tags": ["health"],
-        "summary": "Health check",
-        "operationId": "health_handler",
-        "responses": {
-          "200": {
-            "description": "health",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmptyResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/search": {
       "post": {
         "tags": ["search::unified"],

@@ -3,14 +3,21 @@ import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import type { CreateAndSend, Send } from '@core/component/AI/types';
 import { isErr } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
-import { Show } from 'solid-js';
+import { useHotkeyDOMScope } from 'core/hotkey/hotkeys';
+import { onMount, Show } from 'solid-js';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
 export function SoupChatInput() {
+  let containerRef!: HTMLDivElement;
   const splitPanelContext = useSplitPanelOrThrow();
   const [preview] = splitPanelContext.previewState;
 
   const { ChatInput } = useChatInput();
+  const [attachHotkeys] = useHotkeyDOMScope('soup.chatInput');
+
+  onMount(() => {
+    attachHotkeys(containerRef);
+  });
 
   const handleSend = async (request: Send | CreateAndSend) => {
     if (request.type !== 'createAndSend') return;
@@ -40,13 +47,21 @@ export function SoupChatInput() {
 
   return (
     <Show when={!preview()}>
-      <div class="absolute bottom-2 left-1/2 -translate-x-1/2 w-full max-w-3xl z-10 pointer-events-none">
-        <div class="pointer-events-auto">
-          <ChatInput
-            onSend={handleSend}
-            isPersistent={true}
-            autoFocusOnMount={false}
-          />
+      <div
+        ref={containerRef}
+        class="absolute z-10 bottom-0 pb-2 px-2 flex justify-center w-full pointer-events-none"
+        style={{
+          'background-image': `linear-gradient(transparent, var(--color-panel) 85%)`,
+        }}
+      >
+        <div class="w-full max-w-3xl">
+          <div class="pointer-events-auto">
+            <ChatInput
+              onSend={handleSend}
+              isPersistent={true}
+              autoFocusOnMount={false}
+            />
+          </div>
         </div>
       </div>
     </Show>

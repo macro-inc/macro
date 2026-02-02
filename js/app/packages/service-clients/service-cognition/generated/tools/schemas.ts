@@ -287,154 +287,64 @@ export const SearchToolResponse = z.object({
   ),
 });
 
-export const ListChannels = z
-  .object({ unused: z.null().default(null) })
-  .strict();
-
-export const ListChannelsResponse = z.object({
-  channels: z.array(
-    z.object({
-      channelType: z.enum([
-        'public',
-        'organization',
-        'private',
-        'direct_message',
-      ]),
-      id: z.string().uuid(),
-      name: z.union([z.string(), z.null()]).optional(),
-    })
-  ),
-  total: z.number().int().gte(0),
-});
-
-export const ListDocuments = z
+export const ListEntities = z
   .object({
-    exhaustiveSearch: z.boolean().default(false),
-    fileTypes: z.union([z.array(z.string()), z.null()]),
-    minAccessLevel: z.union([
-      z.literal('view'),
-      z.literal('comment'),
-      z.literal('edit'),
-      z.literal('owner'),
-      z.literal(null),
+    includeTypes: z.union([
+      z.array(z.enum(['document', 'ai_chat', 'project', 'email', 'channel'])),
+      z.null(),
     ]),
-    pageOffset: z.number().int().default(0),
-    pageSize: z.number().int().default(50),
+    sortBy: z.enum(['recently_viewed', 'recently_updated', 'recently_created']),
   })
   .strict();
 
-export const ListDocumentsResponse = z.object({
-  results: z.array(
-    z.object({
-      access_level: z.enum(['view', 'comment', 'edit', 'owner']),
-      created_at: z.string().datetime({ offset: true }),
-      deleted_at: z
-        .union([z.string().datetime({ offset: true }), z.null()])
-        .optional(),
-      document_id: z.string(),
-      document_name: z.string(),
-      file_type: z.union([z.string(), z.null()]).optional(),
-      owner: z.string(),
-      project_id: z.union([z.string(), z.null()]).optional(),
-      updated_at: z.string().datetime({ offset: true }),
-    })
-  ),
-  resultsReturned: z.number().int().gte(0),
-  totalResults: z.number().int().gte(0),
-});
-
-export const ListEmails = z
-  .object({
-    cursor: z.union([z.string(), z.null()]).default(null),
-    limit: z.number().int().default(20),
-    sortMethod: z
-      .enum(['viewed_at', 'updated_at', 'created_at', 'viewed_updated'])
-      .default('viewed_at'),
-    view: z
-      .object({
-        standardLabel: z.union([
-          z.literal('Inbox'),
-          z.literal('Sent'),
-          z.literal('Drafts'),
-          z.literal('Starred'),
-          z.literal('All'),
-          z.literal('Important'),
-          z.literal('Other'),
-          z.literal(null),
-        ]),
-        userLabel: z.union([z.string(), z.null()]),
-      })
-      .strict()
-      .default({ standardLabel: null, userLabel: null }),
-  })
-  .strict();
-
-export const ApiPaginatedThreadCursor = z.object({
+export const ListEntitiesResponse = z.object({
   items: z.array(
-    z.object({
-      attachments: z.array(
+    z.any().superRefine((x, ctx) => {
+      const schemas = [
         z.object({
-          contentId: z.union([z.string(), z.null()]).optional(),
-          createdAt: z.number().int(),
-          filename: z.union([z.string(), z.null()]).optional(),
           id: z.string().uuid(),
-          messageId: z.string().uuid(),
-          mimeType: z.union([z.string(), z.null()]).optional(),
-          providerAttachmentId: z.union([z.string(), z.null()]).optional(),
-          sizeBytes: z.union([z.number().int(), z.null()]).optional(),
-        })
-      ),
-      contacts: z.array(
-        z.object({
-          emailAddress: z.union([z.string(), z.null()]).optional(),
-          id: z.string().uuid(),
-          linkId: z.string().uuid(),
-          name: z.union([z.string(), z.null()]).optional(),
-          sfsPhotoUrl: z.union([z.string(), z.null()]).optional(),
-        })
-      ),
-      createdAt: z.number().int(),
-      frecencyScore: z.union([z.number(), z.null()]).optional(),
-      id: z.string().uuid(),
-      inboxVisible: z.boolean(),
-      isDraft: z.boolean(),
-      isImportant: z.boolean(),
-      isRead: z.boolean(),
-      labels: z.array(
-        z.object({
-          createdAt: z.string().datetime({ offset: true }),
-          id: z.string().uuid(),
-          labelListVisibility: z.enum([
-            'LabelShow',
-            'LabelShowIfUnread',
-            'LabelHide',
-          ]),
-          linkId: z.string().uuid(),
-          messageListVisibility: z.enum(['Show', 'Hide']),
           name: z.string(),
-          providerLabelId: z.string(),
-          type: z.enum(['System', 'User']),
-        })
-      ),
-      metadata: z.object({
-        calendar_invite: z.boolean(),
-        generic_sender: z.boolean(),
-        known_sender: z.boolean(),
-        tabular: z.boolean(),
-      }),
-      name: z.union([z.string(), z.null()]).optional(),
-      ownerId: z.string(),
-      providerId: z.union([z.string(), z.null()]).optional(),
-      senderEmail: z.union([z.string(), z.null()]).optional(),
-      senderName: z.union([z.string(), z.null()]).optional(),
-      senderPhotoUrl: z.union([z.string(), z.null()]).optional(),
-      snippet: z.union([z.string(), z.null()]).optional(),
-      sortTs: z.number().int(),
-      updatedAt: z.number().int(),
-      viewedAt: z.union([z.number().int(), z.null()]).optional(),
+          type: z.literal('document'),
+        }),
+        z.object({
+          id: z.string().uuid(),
+          name: z.string(),
+          type: z.literal('aiChat'),
+        }),
+        z.object({
+          id: z.string().uuid(),
+          name: z.string(),
+          type: z.literal('project'),
+        }),
+        z.object({
+          id: z.string().uuid(),
+          subject: z.union([z.string(), z.null()]).optional(),
+          type: z.literal('email'),
+        }),
+        z.object({
+          id: z.string().uuid(),
+          name: z.union([z.string(), z.null()]).optional(),
+          type: z.literal('channel'),
+        }),
+      ];
+      const errors = schemas.reduce<z.ZodError[]>(
+        (errors, schema) =>
+          ((result) => (result.error ? [...errors, result.error] : errors))(
+            schema.safeParse(x)
+          ),
+        []
+      );
+      if (schemas.length - errors.length !== 1) {
+        ctx.addIssue({
+          path: ctx.path,
+          code: 'invalid_union',
+          unionErrors: errors,
+          message: 'Invalid input: Should pass single schema',
+        });
+      }
     })
   ),
-  next_cursor: z.union([z.string(), z.null()]).optional(),
+  summary: z.string(),
 });
 
 export const NameSearch = z

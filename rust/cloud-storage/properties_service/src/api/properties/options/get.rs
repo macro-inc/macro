@@ -7,12 +7,12 @@ use axum::{
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::api::context::ApiContext;
 use model::user::UserContext;
 use models_properties::service::property_option::PropertyOption;
 use properties_db_client::{
     error::PropertiesDatabaseError, property_options::get as property_options_get,
 };
+use sqlx::PgPool;
 
 #[derive(Debug, Error)]
 pub enum GetPropertyOptionsErr {
@@ -56,15 +56,15 @@ impl IntoResponse for GetPropertyOptionsErr {
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(context, _user_context), err)]
+#[tracing::instrument(skip(db, _user_context), err)]
 pub async fn get_property_options(
     Path(property_uuid): Path<Uuid>,
-    State(context): State<ApiContext>,
+    State(db): State<PgPool>,
     Extension(_user_context): Extension<UserContext>,
 ) -> Result<Json<Vec<PropertyOption>>, GetPropertyOptionsErr> {
     tracing::info!("retrieving property options");
 
-    let options = property_options_get::get_property_options(&context.db, property_uuid)
+    let options = property_options_get::get_property_options(&db, property_uuid)
         .await
         .inspect_err(|e| {
             tracing::error!(

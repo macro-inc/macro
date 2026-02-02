@@ -1,4 +1,3 @@
-import { ENABLE_PINS } from '@core/constant/featureFlags';
 import {
   zPopupViewer,
   zViewerDefinitionLookup,
@@ -10,9 +9,6 @@ import {
   offset,
   shift,
 } from '@floating-ui/dom';
-// import TiPin from '@icon/filled/push-pin.svg';
-// import TiPinOutline from '@icon/regular/push-pin.svg';
-import TiDeleteOutline from '@icon/regular/x-circle.svg';
 import { createEffect, createMemo, type JSX, onCleanup, Show } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
 import { styled } from 'solid-styled-components';
@@ -37,12 +33,6 @@ import { parseDefinitionMetadata } from './shared';
 // } from '../../context/WidgetContext';
 // import { ILocation } from '../../models/Location';
 // import SectionPreview from '../SectionPreview';
-
-const iconStyles: JSX.CSSProperties = {
-  'margin-right': '8px',
-  'margin-top': '8px',
-  cursor: 'var(--cursor-pointer)',
-};
 
 const DefinitionLabelWrapper = styled.div`
   margin-right: auto;
@@ -286,94 +276,6 @@ export function DefinitionLookup(props: IProps) {
               >
                 Uses
               </TabButton>
-              <div>
-                {ENABLE_PINS && (
-                  // biome-ignore lint/complexity/noUselessFragments: fix later
-                  <>
-                    {props.isPinsWindow ? (
-                      // <Tooltip
-                      //   placement={'bottom'}
-                      //   label={'Unpin this term'}
-                      //   small={true}
-                      // >
-                      <span class="flex">
-                        <TiDeleteOutline
-                          // onClick={() => {
-                          //   doEdit(
-                          //     widgetDispatch({
-                          //       type: 'REMOVE_PINNED_TERM',
-                          //       term: props.term,
-                          //     })
-                          //   );
-                          // }}
-                          style={{
-                            ...iconStyles,
-                            width: '20px',
-                            height: '20px',
-                          }}
-                        />
-                      </span>
-                      // </Tooltip>
-                    ) : (
-                      <div>
-                        {/* {pinnedTerms
-                            .map((t) => t.name)
-                            .includes(props.term.name) ? (
-                            // <Tooltip
-                            //   placement={'bottom'}
-                            //   label={'Unpin this definition'}
-                            //   small={true}
-                            // >
-                            <span class="flex">
-                              <TiPin
-                                width="1.5em"
-                                height="1.5em"
-                                style={iconStyles}
-                                class="text-success"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  doEdit(
-                                    widgetDispatch({
-                                      type: 'REMOVE_PINNED_TERM',
-                                      term: props.term,
-                                    })
-                                  );
-                                }}
-                              />
-                            </span>
-                            // </Tooltip>
-                          ) : (
-                            // <Tooltip
-                            //   placement={'bottom'}
-                            //   label={'Pin this definition'}
-                            //   small={true}
-                            // >
-                            <span class="flex">
-                              <TiPinOutline
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  doEdit(
-                                    widgetDispatch({
-                                      type: 'ADD_PINNED_TERM',
-                                      term: props.term,
-                                      index: null,
-                                    })
-                                  );
-                                }}
-                                style={{
-                                  ...iconStyles,
-                                  width: '1.5em',
-                                  height: '1.5em',
-                                }}
-                              />
-                            </span>
-                            // </Tooltip>
-                          )} */}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
             </div>
           </div>
           {state.activeTab === 'DEFINITION_TAB' ? (

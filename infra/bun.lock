@@ -115,10 +115,6 @@
       "name": "email-suppression-stack",
       "version": "0.0.0",
     },
-    "stacks/experiment-service": {
-      "name": "experiment-service-stack",
-      "version": "0.0.0",
-    },
     "stacks/fusion-auth": {
       "name": "fusion-auth",
       "version": "0.0.0",
@@ -146,14 +142,6 @@
       "name": "organization-retention-stack",
       "version": "0.0.0",
     },
-    "stacks/organization-service": {
-      "name": "organization-service-stack",
-      "version": "0.0.0",
-    },
-    "stacks/properties-service": {
-      "name": "properties-service-stack",
-      "version": "0.0.0",
-    },
     "stacks/search-event-queue": {
       "name": "search-event-queue-stack",
       "version": "0.0.0",
@@ -176,10 +164,6 @@
     },
     "stacks/sha-cleanup": {
       "name": "cloud-storage-sha-cleanup-stack",
-      "version": "0.0.0",
-    },
-    "stacks/sha-ref-count-resetter": {
-      "name": "sha-ref-count-resetter-stack",
       "version": "0.0.0",
     },
     "stacks/static-file-service": {
@@ -654,8 +638,6 @@
 
     "execa": ["execa@5.1.1", "", { "dependencies": { "cross-spawn": "^7.0.3", "get-stream": "^6.0.0", "human-signals": "^2.1.0", "is-stream": "^2.0.0", "merge-stream": "^2.0.0", "npm-run-path": "^4.0.1", "onetime": "^5.1.2", "signal-exit": "^3.0.3", "strip-final-newline": "^2.0.0" } }, "sha512-8uSpZZocAZRBAPIEINJj3Lo9HyGitllczc27Eh5YYojjMFMn8yHMDMaUHE2Jqfq05D/wucwI4JGURyXt1vchyg=="],
 
-    "experiment-service-stack": ["experiment-service-stack@workspace:stacks/experiment-service"],
-
     "exponential-backoff": ["exponential-backoff@3.1.1", "", {}, "sha512-dX7e/LHVJ6W3DE1MHWi9S1EYzDESENfLrYohG2G++ovZrYOkm4Knwa0mc1cn84xJOR4KEU0WSchhLbd0UklbHw=="],
 
     "fast-xml-parser": ["fast-xml-parser@4.4.1", "", { "dependencies": { "strnum": "^1.0.5" }, "bin": { "fxparser": "src/cli/cli.js" } }, "sha512-xkjOecfnKGkSsOwtZ5Pz7Us/T6mrbPQrq0nh+aCO5V9nk5NLWmasAHumTKjiPJPWANe+kAZ84Jc8ooJkzZ88Sw=="],
@@ -832,8 +814,6 @@
 
     "organization-retention-stack": ["organization-retention-stack@workspace:stacks/organization-retention"],
 
-    "organization-service-stack": ["organization-service-stack@workspace:stacks/organization-service"],
-
     "p-cancelable": ["p-cancelable@2.1.1", "", {}, "sha512-BZOr3nRQHOntUjTrH8+Lh54smKHoHyur8We1V8DSMVrl5A2malOOwuJRnKRDjSnkoeBh4at6BwEnb5I7Jl31wg=="],
 
     "p-limit": ["p-limit@4.0.0", "", { "dependencies": { "yocto-queue": "^1.0.0" } }, "sha512-5b0R4txpzjPWVw/cXXUResoD4hb6U/x9BH08L7nw+GN1sezDzPdxeRvpc9c433fZhBan/wusjbCsqwqm4EIBIQ=="],
@@ -873,8 +853,6 @@
     "promise-inflight": ["promise-inflight@1.0.1", "", {}, "sha512-6zWPyEOFaQBJYcGMHBKTKJ3u6TBsnMFOIZSa6ce1e/ZrrsOlnHRHbabMjLiBYKp+n44X9eUI6VUPaukCXHuG4g=="],
 
     "promise-retry": ["promise-retry@2.0.1", "", { "dependencies": { "err-code": "^2.0.2", "retry": "^0.12.0" } }, "sha512-y+WKFlBR8BGXnsNlIHFGPZmyDf3DFMoLhaflAnyZgV6rG6xu+JwesTo2Q9R6XwYmtmwAFCkAk3e35jEdoeh/3g=="],
-
-    "properties-service-stack": ["properties-service-stack@workspace:stacks/properties-service"],
 
     "protobufjs": ["protobufjs@7.4.0", "", { "dependencies": { "@protobufjs/aspromise": "^1.1.2", "@protobufjs/base64": "^1.1.2", "@protobufjs/codegen": "^2.0.4", "@protobufjs/eventemitter": "^1.1.0", "@protobufjs/fetch": "^1.1.0", "@protobufjs/float": "^1.0.2", "@protobufjs/inquire": "^1.1.0", "@protobufjs/path": "^1.1.2", "@protobufjs/pool": "^1.1.0", "@protobufjs/utf8": "^1.1.0", "@types/node": ">=13.7.0", "long": "^5.0.0" } }, "sha512-mRUWCc3KUU4w1jU8sGxICXH/gNS94DvI1gxqDvBzhj1JpcsimQkYiOJfwsPUykUI5ZaspFbSgmBLER8IrQ3tqw=="],
 
@@ -919,8 +897,6 @@
     "semver": ["semver@7.6.3", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-oVekP1cKtI+CTDvHWYFUcMtsK/00wmAEfyqKfNdARm8u1wNVhSgaX7A8d4UuIlUI5e84iEwOhs7ZPYRmzU9U6A=="],
 
     "service": ["service@workspace:packages/service"],
-
-    "sha-ref-count-resetter-stack": ["sha-ref-count-resetter-stack@workspace:stacks/sha-ref-count-resetter"],
 
     "shared": ["shared@workspace:packages/shared"],
 

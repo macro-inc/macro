@@ -833,6 +833,10 @@ export const getUserDocumentsHandlerResponse = zod.object({
             createdAt: zod
               .number()
               .describe('The time the document was created'),
+            deletedAt: zod
+              .number()
+              .nullable()
+              .describe('The time the document was deleted'),
             documentBom: zod
               .array(
                 zod.object({
@@ -1448,6 +1452,10 @@ export const getDocumentResponse = zod.object({
           'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
         ),
       createdAt: zod.number().describe('The time the document was created'),
+      deletedAt: zod
+        .number()
+        .nullable()
+        .describe('The time the document was deleted'),
       documentBom: zod
         .array(
           zod.object({
@@ -1712,6 +1720,10 @@ export const copyDocumentHandlerResponse = zod.object({
           'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
         ),
       createdAt: zod.number().describe('The time the document was created'),
+      deletedAt: zod
+        .number()
+        .nullable()
+        .describe('The time the document was deleted'),
       documentBom: zod
         .array(
           zod.object({
@@ -2043,6 +2055,10 @@ export const getDocumentVersionResponse = zod.object({
           'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
         ),
       createdAt: zod.number().describe('The time the document was created'),
+      deletedAt: zod
+        .number()
+        .nullable()
+        .describe('The time the document was deleted'),
       documentBom: zod
         .array(
           zod.object({
@@ -2334,6 +2350,10 @@ export const getItemsSoupResponse = zod.object({
             createdAt: zod
               .number()
               .describe('The time the document was created'),
+            deletedAt: zod
+              .number()
+              .nullable()
+              .describe('The time the document was deleted'),
             documentFamilyId: zod
               .number()
               .nullish()
@@ -2617,6 +2637,10 @@ export const getItemsSoupResponse = zod.object({
         zod.object({
           data: zod.object({
             createdAt: zod.number().describe('The time the chat was created'),
+            deletedAt: zod
+              .number()
+              .nullable()
+              .describe('The time the chat was deleted'),
             id: zod.string().uuid().describe('The chat uuid'),
             isPersistent: zod
               .boolean()
@@ -2864,6 +2888,10 @@ export const getItemsSoupResponse = zod.object({
             createdAt: zod
               .number()
               .describe('The time the project was created'),
+            deletedAt: zod
+              .number()
+              .nullable()
+              .describe('The time the project was deleted'),
             id: zod.string().uuid().describe('The id of the project'),
             name: zod.string().describe('The name of the project'),
             ownerId: zod
@@ -3711,6 +3739,10 @@ export const postItemsSoupResponse = zod.object({
             createdAt: zod
               .number()
               .describe('The time the document was created'),
+            deletedAt: zod
+              .number()
+              .nullable()
+              .describe('The time the document was deleted'),
             documentFamilyId: zod
               .number()
               .nullish()
@@ -3994,6 +4026,10 @@ export const postItemsSoupResponse = zod.object({
         zod.object({
           data: zod.object({
             createdAt: zod.number().describe('The time the chat was created'),
+            deletedAt: zod
+              .number()
+              .nullable()
+              .describe('The time the chat was deleted'),
             id: zod.string().uuid().describe('The chat uuid'),
             isPersistent: zod
               .boolean()
@@ -4241,6 +4277,10 @@ export const postItemsSoupResponse = zod.object({
             createdAt: zod
               .number()
               .describe('The time the project was created'),
+            deletedAt: zod
+              .number()
+              .nullable()
+              .describe('The time the project was deleted'),
             id: zod.string().uuid().describe('The id of the project'),
             name: zod.string().describe('The name of the project'),
             ownerId: zod

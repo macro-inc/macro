@@ -1,5 +1,6 @@
 use crate::api::context::AppState;
 use crate::api::extractors::{ChannelId, ChannelMember, ChannelTypeExtractor};
+use crate::channel_permissions;
 use anyhow::Result;
 use axum::extract::Json;
 use axum::{extract::State, http::StatusCode};
@@ -7,8 +8,6 @@ use axum_extra::extract::Cached;
 use comms_db_client::participants::remove_participant::{
     RemoveParticipantOptions, remove_participant,
 };
-use model::document_storage_service_internal::UpdateUserChannelPermissionsRequest;
-use models_permissions::share_permission::channel_share_permission::UpdateOperation;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -68,20 +67,19 @@ pub async fn handler(
     }
 
     let start = std::time::Instant::now();
-    ctx.document_storage_service_client
-        .update_user_channel_permissions(UpdateUserChannelPermissionsRequest {
-            user_ids: req.participants.clone(),
-            channel_id: channel_id.to_string(),
-            operation: UpdateOperation::Remove,
-        })
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "unable to remove permissions for channel items");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "unable to remove participant from channel".to_string(),
-            )
-        })?;
+    channel_permissions::remove_permissions_for_channel_users(
+        &ctx.db,
+        &channel_id.to_string(),
+        &req.participants,
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!(error=?e, "unable to remove permissions for channel items");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "unable to remove permissions for channel items".to_string(),
+        )
+    })?;
     tracing::info!(elapsed=?start.elapsed(), "removed user channel permissions");
 
     Ok(StatusCode::OK)

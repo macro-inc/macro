@@ -7,7 +7,7 @@ use axum::{
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::api::context::ApiContext;
+use crate::api::context::PropertiesHandlerState;
 use model::user::UserContext;
 use models_properties::api::AddPropertyOptionRequest;
 use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
@@ -70,17 +70,17 @@ impl IntoResponse for AddPropertyOptionErr {
     ),
     tags = ["Properties"]
 )]
-#[tracing::instrument(skip(context, user_context), fields(property_id = %property_uuid, request = ?request), err)]
+#[tracing::instrument(skip(state, user_context), fields(property_id = %property_uuid, request = ?request), err)]
 pub async fn add_property_option(
     Path(property_uuid): Path<Uuid>,
-    State(context): State<ApiContext>,
+    State(state): State<PropertiesHandlerState>,
     Extension(user_context): Extension<UserContext>,
     Json(request): Json<AddPropertyOptionRequest>,
 ) -> Result<(StatusCode, Json<PropertyOption>), AddPropertyOptionErr> {
     tracing::info!("adding property option");
 
     // First check if property exists and if it's a system property
-    let property = property_definitions_get::get_property_definition(&context.db, property_uuid)
+    let property = property_definitions_get::get_property_definition(&state.db, property_uuid)
         .await
         .inspect_err(|e| {
             tracing::error!(
@@ -96,7 +96,7 @@ pub async fn add_property_option(
 
     // Then verify ownership
     let property_definition = property_definitions_get::get_property_definition_with_owner(
-        &context.db,
+        &state.db,
         property_uuid,
         &user_context.user_id,
         user_context.organization_id,
@@ -140,7 +140,7 @@ pub async fn add_property_option(
     };
 
     let option = property_options_insert::create_property_option(
-        &context.db,
+        &state.db,
         property_uuid,
         display_order,
         option_value,

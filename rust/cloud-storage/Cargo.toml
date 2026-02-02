@@ -32,20 +32,21 @@ members = [
   "email_db_client",
   "email_refresh_handler",
   "email_scheduled_handler",
-  "email_sfs_delete_handler",
   "email_service",
   "email_service_client",
+  "email_sfs_delete_handler",
   "email_suppression_handler",
   "email_utils",
   "email_validator",
   "entity_access",
-  "experiment_service",
   "frecency",
   "gmail_client",
   "integration_tests/*",
   "lambda_client",
   "lexical_client",
+  "local_stream_processor",
   "macro_auth",
+  "macro_aws_config",
   "macro_cache_client",
   "macro_client_errors",
   "macro_cors",
@@ -56,7 +57,7 @@ members = [
   "macro_notify",
   "macro_project_utils",
   "macro_redis",
-  "macro_redis_cluster_client",
+  "macro_sha_count_client",
   "macro_service_client",
   "macro_share_permissions",
   "macro_uuid",
@@ -77,19 +78,17 @@ members = [
   "models_team",
   "name_search",
   "non_empty",
+  "notification",
   "notification_db_client",
   "notification_service",
   "notification_service_client",
   "opensearch_client",
   "organization_retention_handler",
   "organization_retention_trigger",
-  "organization_service",
-  "organization_service_client",
   "permission",
   "properties",
   "properties_db_client",
   "properties_service",
-  "properties_service_client",
   "roles_and_permissions",
   "rpc/axum_rpc",
   "rpc/axum_rpc_emit",
@@ -103,7 +102,6 @@ members = [
   "secretsmanager_client",
   "ses_client",
   "sha_cleanup_worker",
-  "sha_ref_count_resetter",
   "sns_client",
   "soup",
   "sqs_client",
@@ -147,13 +145,14 @@ clap = { version = "4.5.20", features = ["derive"] }
 cloudfront_sign = "0.3.0"
 cookie = "0.18.1"
 dashmap = "6.1.0"
-dotenv = "0.15.0"
+dotenvy = "0.15.7"
 ego-tree = "0.6.2"
 either = "1"
 futures = "0.3.31"
 hex = "0.4.3"
 http = "1"
 http-body-util = "0.1.2"
+itertools = "0.14"
 jsonwebtoken = "9.3.1"
 lambda_runtime = "0.13.0"
 lazy_static = "1.5.0"
@@ -170,6 +169,7 @@ redis = "0.29.0"
 regex = "1.11.1"
 reqwest = { version = "0.12.12", features = ["json"] }
 reqwest-middleware = { git = "https://github.com/seanaye/reqwest-middleware" }
+rootcause = "0.11"
 schemars = { version = "1.0.4", features = ["chrono04", "uuid1"] }
 serde = { version = "1.0.214", features = ["derive"] }
 serde_dynamo = { version = "4", features = ["aws-sdk-dynamodb+1"] }

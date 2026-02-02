@@ -9,7 +9,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-pub const MAX_MESSAGES: i64 = 300;
+pub const MAX_MESSAGES: i64 = 150;
 
 #[derive(Debug, JsonSchema, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -100,7 +100,7 @@ impl From<ParsedMessage> for EmailMessage {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     description = "Read content by ID(s). Supports reading documents, channels, chats, and emails by their respective IDs. Use this tool when you need to retrieve the full content of a specific item(s).
-    Channel transcripts only include 300 messages. Use 'messages_since' to see messages in a different time window.",
+    Channel transcripts only include the latest 150 messages. Use 'messages_since' to see messages in a different time window.",
     title = "Read"
 )]
 pub struct Read {

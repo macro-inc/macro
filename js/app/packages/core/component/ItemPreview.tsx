@@ -1,6 +1,7 @@
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { isAccessiblePreviewItem, useItemPreview } from '@core/signal/preview';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { truncateString } from '@core/util/string';
@@ -21,8 +22,10 @@ import {
   insertProjectIntoHistory,
   postNewHistoryItem,
 } from '@queries/history/history';
-import { Match, Switch } from 'solid-js';
+import { debounce } from '@solid-primitives/scheduled';
+import { createSignal, Match, Show, Switch, Suspense } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { PopupPreview } from './DocumentPreview';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
 import { DeprecatedTextButton } from './DeprecatedTextButton';
 import {
@@ -38,10 +41,10 @@ type ItemPreviewProps = {
 };
 
 function useItemPreviewData(props: ItemPreviewProps) {
-  const [item] = useItemPreview({
+  const [item] = useItemPreview(() => ({
     id: props.itemId,
     type: props.itemType,
-  });
+  }));
 
   const { replaceOrInsertSplit, insertSplit } = useSplitLayout();
 
@@ -197,8 +200,21 @@ function InlineLoading() {
 }
 
 export function ItemPreview(props: ItemPreviewProps) {
+  return (
+    <Suspense>
+      <ItemPreviewInner {...props} />
+    </Suspense>
+  );
+}
+
+function ItemPreviewInner(props: ItemPreviewProps) {
   const { item, name, onPreviewClick, className, channelTypeIcon } =
     useItemPreviewData(props);
+
+  const [previewOpen, setPreviewOpen] = createSignal(false);
+  const debouncedSetPreviewOpen = debounce(setPreviewOpen, 100);
+
+  let buttonRef!: HTMLButtonElement;
 
   return (
     <Switch>
@@ -215,6 +231,9 @@ export function ItemPreview(props: ItemPreviewProps) {
                 const subType = itemData.subType?.type as
                   | NamedSubType
                   | undefined;
+                const blockName = fileTypeToBlockName(
+                  subType ?? fileType ?? itemData.type
+                );
                 const navHandlers =
                   useSplitNavigationHandler<HTMLButtonElement>((e) =>
                     onPreviewClick(
@@ -226,33 +245,65 @@ export function ItemPreview(props: ItemPreviewProps) {
                     )
                   );
                 return (
-                  <DeprecatedTextButton
-                    theme="base"
-                    icon={() => {
-                      if (itemData.type === 'channel') {
-                        return (
+                  <>
+                    <button
+                      ref={buttonRef}
+                      class="text-ink-base text-sm ring-1 ring-edge-muted rounded-xs hover:bg-panel-hover flex flex-row h-6 px-2 justify-center items-center cursor-pointer"
+                      onMouseEnter={() => {
+                        if (!isTouchDevice()) {
+                          debouncedSetPreviewOpen(true);
+                        }
+                      }}
+                      onMouseLeave={() => {
+                        if (!isTouchDevice()) {
+                          debouncedSetPreviewOpen.clear();
+                          debouncedSetPreviewOpen(false);
+                        }
+                      }}
+                      {...navHandlers}
+                    >
+                      <div class="flex justify-start items-center h-3.5 mr-2">
+                        {itemData.type === 'channel' ? (
                           <div class={className()}>
                             <Dynamic
                               component={channelTypeIcon(itemData.channelType)}
                             />
                           </div>
-                        );
-                      }
-                      return (
-                        <EntityIcon
-                          targetType={
-                            itemData.type === 'document'
-                              ? (subType ?? fileType)
-                              : itemData.type
-                          }
-                          size="xs"
-                        />
-                      );
-                    }}
-                    {...navHandlers}
-                    text={truncateString(name(), 80)}
-                    width="min-w-0"
-                  />
+                        ) : (
+                          <EntityIcon
+                            targetType={
+                              itemData.type === 'document'
+                                ? (subType ?? fileType)
+                                : itemData.type
+                            }
+                            size="fill"
+                          />
+                        )}
+                      </div>
+                      <div class="flex-1 text-left leading-5 min-w-0 truncate">
+                        {truncateString(name(), 80)}
+                      </div>
+                    </button>
+                    <Show when={previewOpen() && blockName}>
+                      <PopupPreview
+                        item={item}
+                        floatRef={buttonRef}
+                        mouseEnter={() => {
+                          debouncedSetPreviewOpen(true);
+                        }}
+                        mouseLeave={() => {
+                          debouncedSetPreviewOpen.clear();
+                          debouncedSetPreviewOpen(false);
+                        }}
+                        documentInfo={{
+                          id: itemData.id,
+                          type: blockName as BlockName,
+                          params: {},
+                          isOpenable: true,
+                        }}
+                      />
+                    </Show>
+                  </>
                 );
               }}
             </Match>

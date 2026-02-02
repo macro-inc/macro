@@ -4,12 +4,12 @@ import {
   editorStateAsMarkdown,
   getSaveState,
 } from '@core/component/LexicalMarkdown/utils';
+import { renameItem } from '@core/component/FileList/itemOperations';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { isErr } from '@core/util/maybeResult';
 import { utf8Encode } from '@core/util/string';
 import { storageServiceClient } from '@service-storage/client';
 import { refetchHistory } from '@queries/history/history';
-import { refetchResources } from '@service-storage/util/refetchResources';
 import { createCallback } from '@solid-primitives/rootless';
 import { createMemo } from 'solid-js';
 import { mdStore } from './markdownBlockData';
@@ -47,13 +47,11 @@ export function useRenameMarkdownDocument() {
   const documentId = useBlockId();
 
   return createCallback(async (documentName: string) => {
-    const result = await storageServiceClient.editDocument({
-      documentId,
-      documentName,
+    await renameItem({
+      itemType: 'document',
+      id: documentId,
+      newName: documentName,
     });
-    if (isErr(result)) return;
-
-    refetchResources();
   });
 }
 

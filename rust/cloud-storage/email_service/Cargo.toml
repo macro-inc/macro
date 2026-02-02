@@ -30,6 +30,18 @@ name = "pubsub_workers"
 path = "src/bin/pubsub_workers/pubsub_workers.rs"
 
 [[bin]]
+name = "find_used_sfs_ids"
+path = "src/bin/find_used_sfs_ids/find_used_sfs_ids.rs"
+
+[[bin]]
+name = "find_unused_sfs_ids"
+path = "src/bin/find_unused_sfs_ids/find_unused_sfs_ids.rs"
+
+[[bin]]
+name = "cleanup_unused_sfs"
+path = "src/bin/cleanup_unused_sfs/cleanup_unused_sfs.rs"
+
+[[bin]]
 name = "email_service_openapi"
 path = "src/openapi.rs"
 
@@ -51,9 +63,10 @@ sfs_map = []
 sfs_delete = []
 
 [dependencies]
+ammonia = "4.1.0"
 anyhow = { workspace = true }
 authentication_service_client = { path = "../authentication_service_client" }
-aws-config = { workspace = true }
+macro_aws_config = { path = "../macro_aws_config" }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
@@ -81,6 +94,7 @@ macro_auth = { path = "../macro_auth" }
 macro_cors = { path = "../macro_cors" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
+mailparse = "0.16.1"
 macro_env_var = { path = "../macro_env_var" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
   "auth",
@@ -97,11 +111,13 @@ models_email = { path = "../models_email" }
 models_opensearch = { path = "../models_opensearch" }
 models_pagination = { path = "../models_pagination", features = ["axum"] }
 models_permissions = { path = "../models_permissions" }
+once_cell = { workspace = true }
 models_properties = { path = "../models_properties" }
 redis = { workspace = true, features = [
   "cluster-async",
   "tokio-native-tls-comp",
 ] }
+regex = { workspace = true }
 reqwest = { workspace = true, features = ["stream"] }
 s3_client = { path = "../s3_client" }
 schemars = { workspace = true }

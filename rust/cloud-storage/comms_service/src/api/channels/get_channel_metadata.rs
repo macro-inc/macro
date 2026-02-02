@@ -4,7 +4,7 @@ use crate::api::{
 };
 use anyhow::Result;
 use axum::{
-    extract::{Path, Query, State},
+    extract::State,
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
@@ -21,11 +21,6 @@ use utoipa::ToSchema;
 pub struct ChannelMetadataResponse {
     pub channel_name: String,
     pub channel_type: model::comms::ChannelType,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct UserIdQuery {
-    pub user_id: MacroUserIdStr<'static>,
 }
 
 #[tracing::instrument(skip(db))]
@@ -110,33 +105,6 @@ pub async fn handler_external(
         )
             .into_response()
     })?;
-
-    let response = ChannelMetadataResponse {
-        channel_name,
-        channel_type,
-    };
-
-    Ok((StatusCode::OK, Json(response)).into_response())
-}
-
-/// Internal handler without authentication
-#[tracing::instrument(skip(ctx))]
-pub async fn handler_internal(
-    State(ctx): State<AppState>,
-    Path(channel_id): Path<models_comms::channel::ChannelId>,
-    Query(query): Query<UserIdQuery>,
-) -> Result<Response, Response> {
-    let (channel_name, channel_type) =
-        get_channel_name_and_type(&ctx.db, &channel_id, query.user_id)
-            .await
-            .map_err(|e| {
-                tracing::error!(error=?e, "unable to get channel metadata");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "unable to get channel metadata",
-                )
-                    .into_response()
-            })?;
 
     let response = ChannelMetadataResponse {
         channel_name,

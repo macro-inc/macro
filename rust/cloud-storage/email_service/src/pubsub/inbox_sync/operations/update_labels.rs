@@ -95,7 +95,7 @@ pub async fn update_labels(
 
     let gmail_message_labels = match ctx
         .gmail_client
-        .get_message_label_ids(&gmail_access_token, &payload.provider_message_id, link.id)
+        .get_message_label_ids(&gmail_access_token, &payload.provider_message_id)
         .await
         .map_err(|e| {
             ProcessingError::Retryable(DetailedError {

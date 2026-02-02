@@ -30,11 +30,10 @@ pub fn addresses_from_message<T: HasContactInfo>(message: &T) -> address::Parsed
 #[tracing::instrument(skip(service_thread))]
 pub fn map_service_thread_to_db(
     service_thread: &thread::Thread,
-    id: Uuid,
     link_id: Uuid,
 ) -> db::thread::Thread {
     db::thread::Thread {
-        id,
+        id: service_thread.db_id,
         provider_id: service_thread.provider_id.clone(),
         link_id,
         inbox_visible: service_thread.inbox_visible,
@@ -50,12 +49,11 @@ pub fn map_service_thread_to_db(
 #[tracing::instrument]
 pub fn map_service_message_to_db(
     service_msg: &mut message::Message,
-    id: Uuid,
     thread_id: Uuid,
     from_contact_id: Option<Uuid>,
 ) -> db::message::Message {
     db::message::Message {
-        id,
+        id: service_msg.db_id,
         provider_id: service_msg.provider_id.clone(),
         global_id: service_msg.global_id.clone(),
         thread_id,
@@ -138,7 +136,7 @@ pub fn map_service_attachments_to_db(
             });
 
             attachment::Attachment {
-                id: macro_uuid::generate_uuid_v7(),
+                id: service_attachment.db_id,
                 message_id: message_db_id,
                 provider_attachment_id: service_attachment.provider_id.clone(),
                 filename,
@@ -152,14 +150,14 @@ pub fn map_service_attachments_to_db(
         .collect()
 }
 
-pub fn map_new_contact_to_db(service_msg: &Contact, id: Uuid) -> db::contact::Contact {
+pub fn map_new_contact_to_db(service_contact: &Contact) -> db::contact::Contact {
     db::contact::Contact {
-        id,
-        link_id: service_msg.link_id,
-        name: service_msg.name.clone(),
-        email_address: service_msg.email_address.clone(),
-        original_photo_url: service_msg.original_photo_url.clone(),
-        sfs_photo_url: service_msg.sfs_photo_url.clone(),
+        id: service_contact.id,
+        link_id: service_contact.link_id,
+        name: service_contact.name.clone(),
+        email_address: service_contact.email_address.clone(),
+        original_photo_url: service_contact.original_photo_url.clone(),
+        sfs_photo_url: service_contact.sfs_photo_url.clone(),
         created_at: Utc::now(),
         updated_at: Utc::now(),
     }

@@ -43,10 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     // Configure AWS SDK for local DynamoDB
-    let config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-        .region(aws_config::Region::new("us-east-1"))
-        .load()
-        .await;
+    let config = macro_aws_config::get_macro_aws_config().await;
 
     let dynamodb_client = aws_sdk_dynamodb::Client::new(&config);
     let streams_client = aws_sdk_dynamodbstreams::Client::new(&config);

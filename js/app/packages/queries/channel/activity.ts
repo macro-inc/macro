@@ -29,6 +29,7 @@ export function useUpdateChannelsActivityMutation(
   >
 ) {
   return useMutation(() => ({
+    gcTime: 0,
     mutationFn: async (vars: UpdateChannelActivityMutationVars) =>
       await throwOnErr(
         async () =>

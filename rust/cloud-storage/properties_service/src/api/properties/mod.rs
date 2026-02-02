@@ -1,4 +1,4 @@
-use crate::api::context::ApiContext;
+use crate::api::context::PropertiesHandlerState;
 use axum::{
     Router,
     routing::{delete, get, patch, post, put},
@@ -9,7 +9,8 @@ pub mod entities;
 pub mod metadata;
 pub mod options;
 
-pub fn router() -> Router<ApiContext> {
+/// Creates the properties router. Works with any state type that implements `FromRef<PropertiesHandlerState>`.
+pub fn router() -> Router<PropertiesHandlerState> {
     let ensure_user_exists =
         axum::middleware::from_fn(macro_middleware::auth::ensure_user_exists::handler);
 

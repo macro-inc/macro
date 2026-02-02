@@ -1,4 +1,5 @@
 use crate::config::Config;
+use ai_tools::ToolSoupService;
 use axum::extract::FromRef;
 use document_storage_service_client::DocumentStorageServiceClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -28,6 +29,7 @@ pub struct ApiContext {
     pub jwt_args: JwtValidationArgs,
     pub config: Arc<Config>,
     pub internal_auth_key: LocalOrRemoteSecret<InternalApiSecretKey>,
+    pub soup_service: Arc<ToolSoupService>,
 }
 
 pub static GLOBAL_CONTEXT: OnceLock<ApiContext> = OnceLock::new();
@@ -35,14 +37,23 @@ pub static GLOBAL_CONTEXT: OnceLock<ApiContext> = OnceLock::new();
 #[cfg(test)]
 pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Arc<ApiContext> {
     use aws_sdk_sqs;
+    use comms::domain::service::ChannelServiceImpl;
+    use comms::outbound::http::user_repo::UserRepoImpl;
+    use comms::outbound::postgres::comms_repo::PgCommsRepo;
     use comms_service_client::CommsServiceClient;
     use document_cognition_service_client::DocumentCognitionServiceClient;
     use document_storage_service_client::DocumentStorageServiceClient;
+    use email::domain::service::EmailServiceImpl;
+    use email::outbound::EmailPgRepo;
     use email_service_client::{EmailServiceClient, EmailServiceClientExternal};
+    use frecency::domain::services::FrecencyQueryServiceImpl;
+    use frecency::outbound::postgres::FrecencyPgStorage;
     use lexical_client::LexicalClient;
     use macro_notify::MacroNotifyClient;
     use scribe::ScribeClient;
     use search_service_client::SearchServiceClient;
+    use soup::domain::service::SoupImpl;
+    use soup::outbound::pg_soup_repo::PgSoupRepo;
     use sqs_client::SQS;
     use static_file_service_client::StaticFileServiceClient;
     use std::sync::Arc;
@@ -60,10 +71,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     ));
     let macro_notify_client =
         MacroNotifyClient::new("dummy_queue".into(), "dummy_service".into()).await;
-    let comms_service_client = Arc::new(CommsServiceClient::new(
-        "dummy_auth_key".into(),
-        "http://localhost".into(),
-    ));
+    let comms_service_client = Arc::new(CommsServiceClient::new("http://localhost".into()));
     let search_service_client =
         SearchServiceClient::new("dummy_auth_key".into(), "http://localhost".into());
     let lexical_client = Arc::new(LexicalClient::new(
@@ -100,10 +108,28 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 .with_macro_db(pool.clone())
                 .build(),
         )
-        .with_channel_client(comms_service_client.clone())
+        .with_channel_client_and_db(comms_service_client.clone(), pool.clone())
         .with_dcs_client(document_cognition_service_client)
         .with_email_client(email_service_client)
         .with_static_file_client(static_file_service_client.clone());
+
+    // Build soup service dependencies
+    let frecency_storage = FrecencyPgStorage::new(pool.clone());
+    let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
+    let email_service =
+        EmailServiceImpl::new(EmailPgRepo::new(pool.clone()), frecency_service.clone());
+    let user_repo = UserRepoImpl::new("dummy_auth_key".into(), "http://localhost".parse().unwrap());
+    let channels_service = ChannelServiceImpl::new(
+        PgCommsRepo { pool: pool.clone() },
+        user_repo,
+        frecency_storage,
+    );
+    let soup_service = Arc::new(SoupImpl::new(
+        PgSoupRepo::new(pool.clone()),
+        frecency_service,
+        email_service,
+        channels_service,
+    ));
 
     let api_context = ApiContext {
         db: pool.clone(),
@@ -117,6 +143,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         jwt_args: JwtValidationArgs::new_testing(),
         config: Arc::new(Config::new_empty_for_test()),
         internal_auth_key: LocalOrRemoteSecret::Local(InternalApiSecretKey::Comptime("testing")),
+        soup_service,
     };
     Arc::new(api_context)
 }

@@ -4,7 +4,6 @@ use futures::StreamExt;
 use notification_db_client::notification::get::DbBasicNotification;
 use serde::Serialize;
 use sns_client::{APNSPushNotification, MessageAttributes, PushType, SnsTarget};
-use std::borrow::Cow;
 
 /// Clears out push notifications for a user in bulk
 #[tracing::instrument(skip(ctx))]
@@ -110,41 +109,6 @@ pub async fn clear_push_notification(
         })
         .collect::<Vec<_>>()
         .await;
-
-    Ok(())
-}
-
-/// Clears out push notifications for a user by notification event
-#[tracing::instrument(err, skip(ctx))]
-pub async fn clear_push_notifications_basic(
-    ctx: ApiContext,
-    user_id: Cow<'_, str>,
-    notification: DbBasicNotification<Option<String>>,
-) -> anyhow::Result<()> {
-    tracing::trace!("clearing potential push notifications");
-    let db = ctx.db.clone();
-    let sns_client = ctx.sns_client.clone();
-    let user_id = user_id.to_string();
-    tracing::trace!("removing push notifications");
-
-    let device_endpoints = notification_db_client::device::get_user_device_endpoints(&db, &user_id)
-        .await
-        .inspect_err(|e| {
-            tracing::error!(error=?e, "failed to get device endpoints");
-        })
-        .unwrap_or(Vec::new());
-
-    if device_endpoints.is_empty() {
-        tracing::trace!("user has no device endpoints, skipping push notification clearing");
-        return Ok(());
-    }
-
-    let Some(basic_notification) = notification.transpose() else {
-        tracing::trace!("cannot clear a notification that is missing a collapse key");
-        return Ok(());
-    };
-
-    let _ = clear_push_notification(&sns_client, &device_endpoints, basic_notification).await;
 
     Ok(())
 }

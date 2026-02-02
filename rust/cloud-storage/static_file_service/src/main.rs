@@ -15,13 +15,10 @@ async fn main() -> anyhow::Result<()> {
 
     let config = config::Config::from_env().context("missing environment variables")?;
 
-    let secretsmanager_client =
-        secretsmanager_client::SecretsManager::new(aws_sdk_secretsmanager::Client::new(
-            &aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .load()
-                .await,
-        ));
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
+    let secretsmanager_client = secretsmanager_client::SecretsManager::new(
+        aws_sdk_secretsmanager::Client::new(&aws_config),
+    );
 
     let internal_api_secret = secretsmanager_client
         .get_maybe_secret_value(config.environment, InternalApiSecretKey::new()?)

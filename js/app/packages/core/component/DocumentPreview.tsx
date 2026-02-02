@@ -10,6 +10,8 @@ import {
   useMaybeBlockId,
   useMaybeBlockName,
 } from '@core/block';
+// Components
+import { ClippedPanel } from '@core/component/ClippedPanel';
 import { toast } from '@core/component/Toast/Toast';
 import {
   isAccessiblePreviewItem,
@@ -20,10 +22,9 @@ import {
   type PreviewItemAccess,
   type PreviewItemNoAccess,
   type PreviewProjectAccess,
-} from '@core/signal/preview';
+} from '@queries/preview';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { matches } from '@core/util/match';
-
 // Icon imports
 import CollapseInlinePreview from '@icon/regular/arrows-in-line-horizontal.svg';
 import OpenIcon from '@icon/regular/arrows-out.svg';
@@ -40,20 +41,17 @@ import LoadingSpinner from '@icon/regular/spinner.svg';
 import TrashSimple from '@icon/regular/trash-simple.svg';
 import UserIcon from '@icon/regular/user.svg';
 import MacroEmbed from '@macro-icons/macro-embed.svg';
-
-// Components
-import { ClippedPanel } from '@core/component/ClippedPanel';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { UserIcon as UserIconComponent } from '@core/component/UserIcon';
-import { beveledCorners } from '../../block-theme/signals/themeSignals';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
 import { globalSplitManager } from 'app/signal/splitLayout';
 import type { Component, ComponentProps, JSX } from 'solid-js';
 import { type Accessor, Match, Show, Switch } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
-import { formatDate } from '../util/date';
+import { Dynamic, Portal } from 'solid-js/web';
+import { beveledCorners } from '../../block-theme/signals/themeSignals';
+import { formatDate, isoToUnixTimestamp } from '../util/date';
 import NotFound from './AccessErrorViews/NotFound';
 import Unauthorized from './AccessErrorViews/Unauthorized';
 import { EntityIcon } from './EntityIcon';
@@ -312,6 +310,10 @@ export function PopupPreview(props: {
     showPreview: boolean;
     isPreviewable: boolean;
     handlePreviewToggle: () => void;
+  };
+  snapshotInfo?: {
+    date: string;
+    characterCount?: number;
   };
 }) {
   // Hooks
@@ -662,6 +664,23 @@ export function PopupPreview(props: {
 
                     {/* Document metadata */}
                     {renderDocumentMetadata(accessibleItem())}
+
+                    {/* Snapshot info */}
+                    <Show when={props.snapshotInfo}>
+                      {(snapshot) => (
+                        <div class="mt-3 pt-2 border-t border-edge">
+                          <div class="flex items-center gap-1.5 text-ink-muted">
+                            <ClockIcon class="size-4" />
+                            <span class="text-xs font-medium">
+                              Snapshot from{' '}
+                              {formatDate(isoToUnixTimestamp(snapshot().date), {
+                                showTime: true,
+                              })}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </Show>
                   </div>
                 );
               }}

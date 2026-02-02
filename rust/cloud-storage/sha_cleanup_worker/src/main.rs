@@ -12,20 +12,14 @@ async fn main() -> Result<(), anyhow::Error> {
     let config = Config::from_env().context("all necessary env vars should be available")?;
 
     let s3_client = service::s3::S3::new(
-        aws_sdk_s3::Client::new(
-            &aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .load()
-                .await,
-        ),
+        aws_sdk_s3::Client::new(&macro_aws_config::get_macro_aws_config().await),
         &config.document_storage_bucket,
     );
 
     tracing::trace!("initialized s3 client");
 
     let redis_client = service::redis::Redis::new(
-        redis::cluster::ClusterClient::new(vec![config.redis_uri.as_str()])
-            .expect("could not connect to redis client"),
+        redis::Client::open(config.redis_uri.as_str()).expect("could not connect to redis client"),
     );
     redis_client.ping().context("able to ping redis")?;
 

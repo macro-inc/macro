@@ -17,8 +17,6 @@ function processSvg(svg: string, color: string) {
 
 /**
  * Return a data url for the macro logo svg filled with the given color.
- * @param color
- * @returns
  */
 export function getFaviconUrl(color: string) {
   return processSvg(FaviconSvg, color);
@@ -27,8 +25,6 @@ export function getFaviconUrl(color: string) {
 /**
  * Update the site's live favicon with a new color, and optionally a notification
  * badge with its own color.
- * @param color
- * @returns
  */
 export function updateFavicon(
   faviconColor: string,

@@ -1,6 +1,7 @@
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { PropertyOption } from '@service-properties/generated/schemas/propertyOption';
-import type { PropertyDefinitionDomain, ValueType } from '../types';
+import type { Property, PropertyDefinitionDomain, ValueType } from '../types';
+import { nanoid } from 'nanoid';
 
 /**
  * Transforms a backend PropertyDefinition (snake_case) to the frontend
@@ -28,5 +29,25 @@ export function toPropertyDefinitionDomain(
     options,
     createdAt: definition.created_at,
     updatedAt: definition.updated_at,
+  };
+}
+
+export function propertyDefinitionDomainToProperty(
+  propertyDefinition: PropertyDefinitionDomain
+): Property {
+  return {
+    propertyId: nanoid(8),
+    propertyDefinitionId: propertyDefinition.id,
+    displayName: propertyDefinition.displayName,
+    isMultiSelect: propertyDefinition.isMultiSelect,
+    isMetadata: propertyDefinition.isMetadata,
+    isSystemProperty: propertyDefinition.isSystem,
+    options: propertyDefinition.options,
+    owner: propertyDefinition.owner,
+    specificEntityType: propertyDefinition.specificEntityType,
+    createdAt: propertyDefinition.createdAt,
+    updatedAt: propertyDefinition.updatedAt,
+    valueType: propertyDefinition.valueType,
+    value: null,
   };
 }

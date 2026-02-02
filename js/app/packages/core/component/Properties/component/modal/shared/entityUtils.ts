@@ -2,6 +2,8 @@ import type { ChannelWithParticipants, IUser } from '@core/user';
 import type { EmailEntity } from '@macro-entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Item } from '@service-storage/generated/schemas/item';
+import type { Accessor } from 'solid-js';
+import type { FreshSortConfig, TimestampedItem } from '@core/util/freshSort';
 
 /** Combined entity type for unified handling across entity selectors */
 export type CombinedEntity =
@@ -83,8 +85,31 @@ export function getEntityType(entity: CombinedEntity): EntityType {
   }
 }
 
-/** Search config for createFreshSearch (consistent across entity selectors) */
-export const ENTITY_SEARCH_CONFIG = {
-  timeWeight: 0.1,
-  brevityWeight: 0.3,
-} as const;
+/**
+ * Creates search config for entity searches with same-domain boost.
+ * Uses the same preset as MentionsMenu and RecipientSelector for consistency.
+ */
+export function createEntitySearchConfig(
+  currentUserDomain: Accessor<string | undefined>
+): FreshSortConfig {
+  const boostFn = <T extends TimestampedItem>(item: T): number => {
+    const userDomain = currentUserDomain();
+    if (!userDomain) return 0;
+
+    // Check if this looks like a CombinedEntity with user data
+    if (item?.kind === 'user' && item?.data?.email) {
+      const email = item.data.email as string;
+      const itemDomain = email.split('@')[1];
+      return itemDomain === userDomain ? 0.5 : 0;
+    }
+
+    return 0;
+  };
+
+  return {
+    fuzzyWeight: 0.5,
+    timeWeight: 0.4,
+    brevityWeight: 0.1,
+    boostFn,
+  };
+}

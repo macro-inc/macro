@@ -11,7 +11,7 @@ pub async fn create_connections(
     transaction: &mut Transaction<'_, Postgres>,
     connections: Vec<(String, String)>,
 ) -> Result<(), sqlx::Error> {
-    let mut query = "INSERT INTO connections(user1, user2) VALUES ".to_string();
+    let mut query = "INSERT INTO contacts_connections(user1, user2) VALUES ".to_string();
     let mut values: Vec<String> = Vec::new();
     let mut parameters: Vec<String> = Vec::new();
 
@@ -44,9 +44,12 @@ pub async fn create_connections(
 /// Retreives a connection from a row id
 #[cfg(test)]
 async fn get_connection(db: &Pool<Postgres>, id: i32) -> Result<(String, String)> {
-    let result = sqlx::query!("SELECT user1, user2 FROM connections WHERE id = $1", id)
-        .fetch_one(db)
-        .await?;
+    let result = sqlx::query!(
+        "SELECT user1, user2 FROM contacts_connections WHERE id = $1",
+        id
+    )
+    .fetch_one(db)
+    .await?;
 
     let user1 = result.user1.to_string();
     let user2 = result.user2.to_string();
@@ -58,9 +61,9 @@ async fn get_connection(db: &Pool<Postgres>, id: i32) -> Result<(String, String)
 pub async fn get_contacts(db: &Pool<Postgres>, user: &str) -> Result<Vec<String>> {
     let result = sqlx::query!(
         "
-        SELECT user1 AS contact FROM connections WHERE user2 = $1
+        SELECT user1 AS contact FROM contacts_connections WHERE user2 = $1
         UNION
-        SELECT user2 AS contact from connections WHERE user1 = $1
+        SELECT user2 AS contact from contacts_connections WHERE user1 = $1
     ",
         &user
     )
@@ -78,10 +81,11 @@ pub async fn get_contacts(db: &Pool<Postgres>, user: &str) -> Result<Vec<String>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use macro_db_migrator::MACRO_DB_MIGRATIONS;
     use sqlx::PgPool;
     use std::collections::HashSet;
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
     async fn test_storage_basic(pool: PgPool) -> sqlx::Result<()> {
         let user1 = "05E6766A-7972-4116-8BAD-2038E57D5ADF";
         let user2 = "CD7230E3-7718-4692-9C32-7C76BD70C076";
@@ -94,7 +98,7 @@ mod tests {
         create_connections(&mut transaction, connections).await?;
         transaction.commit().await?;
 
-        let pair = sqlx::query!("SELECT user1, user2 FROM connections LIMIT 1")
+        let pair = sqlx::query!("SELECT user1, user2 FROM contacts_connections LIMIT 1")
             .fetch_one(&pool)
             .await?;
 
@@ -104,7 +108,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
     async fn test_storage_ordering(pool: PgPool) -> sqlx::Result<()> {
         let user1 = "05E6766A-7972-4116-8BAD-2038E57D5ADF".to_string();
         let user2 = "CD7230E3-7718-4692-9C32-7C76BD70C076".to_string();
@@ -116,7 +120,7 @@ mod tests {
         create_connections(&mut transaction, connections).await?;
         transaction.commit().await?;
 
-        let pair = sqlx::query!("SELECT user1, user2 FROM connections LIMIT 1")
+        let pair = sqlx::query!("SELECT user1, user2 FROM contacts_connections LIMIT 1")
             .fetch_one(&pool)
             .await?;
 
@@ -126,7 +130,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures("user_list"))]
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS", fixtures("user_list"))]
     async fn test_get_contacts(pool: PgPool) -> sqlx::Result<()> {
         let user = "51028BDA-67F0-44DF-AA21-5853963524F1".to_string();
 
@@ -146,7 +150,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
     async fn test_create_connections(pool: PgPool) -> sqlx::Result<()> {
         let connections: Vec<(String, String)> = [
             (
@@ -190,7 +194,7 @@ mod tests {
         create_connections(&mut transaction, connections).await?;
         transaction.commit().await?;
 
-        let result = sqlx::query!("SELECT count(*) as count FROM connections; ")
+        let result = sqlx::query!("SELECT count(*) as count FROM contacts_connections; ")
             .fetch_one(&pool)
             .await?;
 

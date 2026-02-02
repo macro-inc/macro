@@ -11,7 +11,7 @@ pub async fn get_device_endpoint(
     let result = sqlx::query!(
         r#"
         SELECT d.device_endpoint
-        FROM user_device_registration d
+        FROM notification_user_device_registration d
         WHERE d.device_token = $1
         LIMIT 1
         "#,
@@ -36,7 +36,7 @@ pub async fn upsert_user_device(
     let id = macro_uuid::generate_uuid_v7();
     sqlx::query!(
         r#"
-        INSERT INTO user_device_registration (id, user_id, device_token, device_endpoint, device_type)
+        INSERT INTO notification_user_device_registration (id, user_id, device_token, device_endpoint, device_type)
         VALUES ($1, $2, $3, $4, $5)
         ON CONFLICT (device_endpoint) DO UPDATE SET user_id = $2, device_token = $3, device_type = $5, updated_at = NOW()
         "#,
@@ -72,7 +72,7 @@ pub async fn get_users_device_endpoints(
         SELECT d.device_endpoint,
         d.user_id,
         d.device_type as "device_type: DeviceType"
-        FROM user_device_registration d
+        FROM notification_user_device_registration d
         WHERE d.user_id = ANY($1)
         "#,
         ids.as_slice()
@@ -103,7 +103,7 @@ pub async fn get_user_device_endpoints(
     let result: Vec<String> = sqlx::query!(
         r#"
         SELECT d.device_endpoint
-        FROM user_device_registration d
+        FROM notification_user_device_registration d
         WHERE d.user_id = $1
         "#,
         user_id
@@ -124,7 +124,7 @@ pub async fn delete_user_device_token(
 ) -> anyhow::Result<String> {
     let result = sqlx::query!(
         r#"
-        DELETE FROM user_device_registration
+        DELETE FROM notification_user_device_registration
         WHERE device_token = $1 AND device_type = $2
         RETURNING device_endpoint
         "#,
@@ -144,7 +144,7 @@ pub async fn delete_user_device_by_endpoint(
 ) -> anyhow::Result<()> {
     sqlx::query!(
         r#"
-        DELETE FROM user_device_registration
+        DELETE FROM notification_user_device_registration
         WHERE device_endpoint = $1
         "#,
         device_endpoint
@@ -158,9 +158,10 @@ pub async fn delete_user_device_by_endpoint(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use macro_db_migrator::MACRO_DB_MIGRATIONS;
     use sqlx::{Pool, Postgres};
 
-    #[sqlx::test]
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
     async fn test_upsert_new_user_device(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let user_id = "macro|tester@macro-test.com";
         let device_token = "test_token_47295";
@@ -172,7 +173,7 @@ mod tests {
         let result = sqlx::query!(
             r#"
             SELECT id, user_id, device_token, device_endpoint, device_type as "device_type:DeviceType" 
-            FROM user_device_registration 
+            FROM notification_user_device_registration 
             WHERE device_endpoint = $1
             "#,
             device_endpoint
@@ -187,13 +188,16 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_devices")))]
+    #[sqlx::test(
+        migrator = "MACRO_DB_MIGRATIONS",
+        fixtures(path = "../../fixtures", scripts("user_devices"))
+    )]
     async fn test_upsert_existing_user_device(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let new_token = "new_token_123";
         let result = sqlx::query!(
             r#"
             SELECT id, user_id, device_token, device_endpoint, device_type as "device_type:DeviceType" 
-            FROM user_device_registration 
+            FROM notification_user_device_registration 
             WHERE id = '017d85a8-c7c6-7c40-b4f3-a6c1b3c0d1e2'
             "#
         )
@@ -219,7 +223,7 @@ mod tests {
         let result = sqlx::query!(
             r#"
             SELECT id, user_id, device_token, device_endpoint, device_type as "device_type:DeviceType" 
-            FROM user_device_registration 
+            FROM notification_user_device_registration 
             WHERE id = '017d85a8-c7c6-7c40-b4f3-a6c1b3c0d1e2'
             "#
         )
@@ -230,12 +234,15 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_devices")))]
+    #[sqlx::test(
+        migrator = "MACRO_DB_MIGRATIONS",
+        fixtures(path = "../../fixtures", scripts("user_devices"))
+    )]
     async fn test_delete_user_device(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let result = sqlx::query!(
             r#"
             SELECT id, user_id, device_token, device_endpoint, device_type as "device_type:DeviceType" 
-            FROM user_device_registration 
+            FROM notification_user_device_registration 
             WHERE id = '017d85a8-c7c6-7c40-b4f3-a6c1b3c0d1e4'
             "#
         )
@@ -254,7 +261,7 @@ mod tests {
         let result = sqlx::query!(
             r#"
             SELECT id, user_id, device_token, device_endpoint, device_type as "device_type:DeviceType" 
-            FROM user_device_registration 
+            FROM notification_user_device_registration 
             WHERE device_token = $1 AND device_type = $2
             "#,
             result.as_ref().unwrap().device_token,

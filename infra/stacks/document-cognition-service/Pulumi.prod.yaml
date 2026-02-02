@@ -14,3 +14,4 @@ config:
   document-cognition:open-router-api-key: open-router-api-key-prod-v2
   document-cognition:sync_service_auth_key: sync-service-key-prod
   document-cognition:perplexity-api-key: perplexity-api-key
+  document-cognition:authentication_service_internal_api_key: authentication-service-internal-api-key-prod
