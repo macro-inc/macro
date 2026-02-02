@@ -24,7 +24,7 @@ export type UserTooltipProps = {
 
 export function UserTooltip(props: UserTooltipProps) {
   const currentUserId = useUserId();
-  const { replaceOrInsertSplit } = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
 
   const openDM = async (e: PointerEvent | MouseEvent) => {
     e.preventDefault();
@@ -36,9 +36,12 @@ export function UserTooltip(props: UserTooltipProps) {
         });
         const channelId = isOk(result) && result[1]?.channel_id;
         if (channelId) {
-          replaceOrInsertSplit({
-            type: 'channel',
-            id: channelId,
+          openWithSplit({
+            content: {
+              type: 'channel',
+              id: channelId,
+            },
+            force: e.shiftKey ? 'insert' : undefined,
           });
         } else {
           toast.failure('Failed to open direct message');
