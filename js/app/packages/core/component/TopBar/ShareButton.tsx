@@ -6,6 +6,7 @@ import {
   type BlockName,
   createBlockEffect,
   createBlockResource,
+  isInBlock,
   useBlockAliasedName,
   useBlockId,
   useBlockName,
@@ -105,7 +106,7 @@ createBlockEffect(() => {
 });
 
 const accessLevelText = (accessLevel?: AccessLevel | null) => {
-  const blockName = useBlockName();
+  const blockName = isInBlock() ? useBlockName() : undefined;
   switch (accessLevel) {
     case 'comment':
       if (blockName === 'md' && !ENABLE_MARKDOWN_COMMENTS) {
@@ -147,7 +148,35 @@ interface ShareModalProps {
 export function ShareModal(props: ShareModalProps) {
   const navigate = useNavigate();
   const { track } = withAnalytics();
-  const [permissionsResource, { refetch }] = permissionsBlockResource;
+  const isBlockContext = isInBlock();
+  const [fallbackPermissionsResource, { refetch: refetchFallback }] =
+    createResource(
+      () => {
+        if (isBlockContext || !props.id) return;
+        return { id: props.id, itemType: props.itemType };
+      },
+      async (source) => {
+        if (!source) return;
+        const { id, itemType } = source;
+        if (itemType === 'chat') {
+          return cognitionApiServiceClient.getChatPermissions({ id });
+        } else if (itemType === 'document') {
+          return storageServiceClient.getDocumentPermissions({ document_id: id });
+        } else if (itemType === 'project') {
+          if (id === 'trash') {
+            return;
+          }
+          return storageServiceClient.projects.getPermissions({ id });
+        }
+      },
+      { initialValue: undefined }
+    );
+  const permissionsResource = isBlockContext
+    ? permissionsBlockResource[0]
+    : fallbackPermissionsResource;
+  const refetch = isBlockContext
+    ? permissionsBlockResource[1].refetch
+    : refetchFallback;
   const userId = useUserId();
 
   const copyPublicLink = createCallback(() => {
@@ -631,13 +660,40 @@ interface ShareButtonProps {
 
 export function ShareButton(props: ShareButtonProps) {
   const [isSharePermOpen, setIsSharePermOpen] = createSignal(false);
-  const [permissionsResource] = permissionsBlockResource;
+  const isBlockContext = isInBlock();
+  const [fallbackPermissionsResource] = createResource(
+    () => {
+      if (isBlockContext || !props.id) return;
+      return { id: props.id, itemType: props.itemType };
+    },
+    async (source) => {
+      if (!source) return;
+      const { id, itemType } = source;
+      if (itemType === 'chat') {
+        return cognitionApiServiceClient.getChatPermissions({ id });
+      } else if (itemType === 'document') {
+        return storageServiceClient.getDocumentPermissions({ document_id: id });
+      } else if (itemType === 'project') {
+        if (id === 'trash') {
+          return;
+        }
+        return storageServiceClient.projects.getPermissions({ id });
+      }
+    },
+    { initialValue: undefined }
+  );
+  const permissionsResource = isBlockContext
+    ? permissionsBlockResource[0]
+    : fallbackPermissionsResource;
   const blockScopeId = blockHotkeyScopeSignal.get;
   const isAuthenticated = useIsAuthenticated();
-  const blockType = useBlockAliasedName();
-  const blockId = useBlockId();
+  const blockType = isBlockContext
+    ? useBlockAliasedName()
+    : (props.itemType as BlockName | BlockAlias);
+  const blockId = isBlockContext ? useBlockId() : props.id;
 
   onMount(() => {
+    if (!isBlockContext) return;
     registerHotkey({
       keyDownHandler: () => {
         if (!isAuthenticated()) {
@@ -787,7 +843,7 @@ export function ShareOptions(props: {
   disabled?: boolean;
 }) {
   const editPermissionEnabled = blockEditPermissionEnabledSignal();
-  const blockName = useBlockName();
+  const blockName = isInBlock() ? useBlockName() : undefined;
 
   const options = createMemo(() => {
     const optionsList: { value: string; label: string }[] = [];
