@@ -14,7 +14,6 @@ import { z } from 'zod';
 import type {
   BulkGetUserNotificationsByEventItemIdRequest,
   GetAllUserNotificationsResponse,
-  GetUserNotificationParams,
 } from './generated/schemas';
 import type { DeviceRequest } from './generated/schemas/deviceRequest';
 import type { NotificationBulkRequest } from './generated/schemas/notificationBulkRequest';
@@ -90,8 +89,10 @@ export const documentMentionMetadata = z.object({
     .optional(),
 });
 
+type NotificationParams = { cursor?: string, limit?: number };
+
 export const notificationServiceClient = {
-  async userNotifications(args: GetUserNotificationParams) {
+  async userNotifications(args: NotificationParams) {
     const { limit, cursor } = args;
     return mapOk(
       await notificationFetch<GetAllUserNotificationsResponse>(
@@ -115,7 +116,7 @@ export const notificationServiceClient = {
     );
   },
   async bulkGetUserNotificationsByEventItemId(
-    args: GetUserNotificationParams &
+    args: NotificationParams &
       BulkGetUserNotificationsByEventItemIdRequest
   ) {
     const { limit, cursor } = args;
