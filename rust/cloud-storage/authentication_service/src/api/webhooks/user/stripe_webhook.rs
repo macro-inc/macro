@@ -154,7 +154,8 @@ async fn handle_customer_subscription_event(
     list_subscriptions.customer = Some(customer_id.clone());
     list_subscriptions.limit = Some(10);
 
-    let all_subscriptions = stripe::Subscription::list(&ctx.stripe_client, &list_subscriptions).await?;
+    let all_subscriptions =
+        stripe::Subscription::list(&ctx.stripe_client, &list_subscriptions).await?;
 
     let active_subscriptions: Vec<_> = all_subscriptions
         .data
@@ -187,7 +188,12 @@ async fn handle_customer_subscription_event(
             );
 
             let sub_id: stripe::SubscriptionId = subscription_id.parse()?;
-            stripe::Subscription::cancel(&ctx.stripe_client, &sub_id, stripe::CancelSubscription::default()).await?;
+            stripe::Subscription::cancel(
+                &ctx.stripe_client,
+                &sub_id,
+                stripe::CancelSubscription::default(),
+            )
+            .await?;
 
             // Return early - don't update permissions for a cancelled duplicate
             return Ok(());
