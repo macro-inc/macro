@@ -202,16 +202,14 @@ async fn handle_customer_subscription_event(
 
     // If subscription is being deleted/canceled, check if there's another active subscription
     // before revoking permissions
-    if subscription_status == "canceled" {
-        if !active_subscriptions.is_empty() {
-            tracing::info!(
-                customer_id = %customer_id,
-                subscription_id = subscription_id,
-                remaining_active = active_subscriptions.len(),
-                "Subscription deleted but user still has active subscription(s) - not revoking permissions"
-            );
-            return Ok(());
-        }
+    if subscription_status == "canceled" && !active_subscriptions.is_empty() {
+        tracing::info!(
+            customer_id = %customer_id,
+            subscription_id = subscription_id,
+            remaining_active = active_subscriptions.len(),
+            "Subscription deleted but user still has active subscription(s) - not revoking permissions"
+        );
+        return Ok(());
     }
 
     if subscription_status == "trialing" {
