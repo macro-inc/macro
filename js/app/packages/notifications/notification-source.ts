@@ -27,7 +27,6 @@ import {
   notificationEntity,
   type UnifiedNotification,
 } from './types';
-import { queryReadyGate } from '@queries/gate';
 
 type NotificationsByEntity = Record<CompositeEntity, UnifiedNotification[]>;
 

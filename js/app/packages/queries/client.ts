@@ -26,8 +26,7 @@ setupQueryPersistence({
         key: createPersistenceKey('channels', 0),
       }),
       maxAgeMs: 1000 * 60 * 60 * 24 * 7,
-      shouldDehydrateQuery: (q) =>
-        queryKeyHasPrefix(q.queryKey, ['channel']),
+      shouldDehydrateQuery: (q) => queryKeyHasPrefix(q.queryKey, ['channel']),
     },
     {
       persister: createIDBPersister({
