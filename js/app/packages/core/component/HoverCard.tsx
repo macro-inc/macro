@@ -1,4 +1,7 @@
-import { HoverCard as KobalteHoverCard } from '@kobalte/core/hover-card';
+import {
+  type HoverCardRootProps,
+  HoverCard as KobalteHoverCard,
+} from '@kobalte/core/hover-card';
 import type { JSX, Setter } from 'solid-js';
 import {
   createContext,
@@ -36,6 +39,8 @@ export type HoverCardComponentProps = {
   disabled?: boolean;
   /** Callback when open state changes */
   onOpenChange?: (open: boolean) => void;
+  /** Placement of the hover card */
+  placement?: HoverCardRootProps['placement'];
 };
 
 /**
@@ -72,6 +77,7 @@ export function HoverCard(props: HoverCardComponentProps) {
           return props.anchorRef?.getBoundingClientRect();
         })
       }
+      placement={props.placement ?? 'bottom-start'}
       openDelay={props.openDelay ?? 100}
       closeDelay={props.closeDelay ?? 150}
       gutter={props.gutter ?? 8}
