@@ -458,7 +458,7 @@
             "name": "before",
             "in": "query",
             "description": "Number of messages to fetch before the target message (defaults to 0)",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "integer",
               "format": "int64"
@@ -468,7 +468,7 @@
             "name": "after",
             "in": "query",
             "description": "Number of messages to fetch after the target message (defaults to 0)",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "integer",
               "format": "int64"

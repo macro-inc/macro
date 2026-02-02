@@ -12,5 +12,6 @@ export type {
   PreviewDocumentAccess,
   PreviewChannelAccess,
   ItemEntity,
+  MessageContext,
 } from './types';
-export { isAccessiblePreviewItem } from './types';
+export { isAccessiblePreviewItem, isChannelPreviewItem } from './types';

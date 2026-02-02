@@ -26,6 +26,8 @@ import type { GetAttachmentReferencesResponse } from './generated/models/getAtta
 import type { GetBatchChannelPreviewRequest } from './generated/models/getBatchChannelPreviewRequest';
 import type { GetBatchChannelPreviewResponse } from './generated/models/getBatchChannelPreviewResponse';
 import type { GetChannelResponse } from './generated/models/getChannelResponse';
+import type { GetMessageWithContextParams } from './generated/models/getMessageWithContextParams';
+import type { GetMessageWithContextResponse } from './generated/models/getMessageWithContextResponse';
 import type { GetOrCreateDmRequest } from './generated/models/getOrCreateDmRequest';
 import type { GetOrCreateDmResponse } from './generated/models/getOrCreateDmResponse';
 import type { GetOrCreatePrivateRequest } from './generated/models/getOrCreatePrivateRequest';
@@ -82,6 +84,16 @@ export const commsServiceClient = {
         method: 'GET',
       }),
       (result) => result
+    );
+  },
+  async getMessageWithContext(args: GetMessageWithContextParams) {
+    const { message_id, before, after } = args;
+    const params = new URLSearchParams();
+    params.append('message_id', message_id);
+    if (before !== undefined) params.append('before', before.toString());
+    if (after !== undefined) params.append('after', after.toString());
+    return await commsFetch<GetMessageWithContextResponse>(
+      `/channels/messages/context?${params.toString()}`
     );
   },
   async postMessage(
