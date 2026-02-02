@@ -302,39 +302,42 @@ export function MarkdownPopup(props: {
       setPopupVisible(false);
     });
 
-    const handleEditInMarkdown = createCallback(async () => {
-      setIsLoading(true);
-      const content = completion()?.content;
-      if (!content) {
-        return;
-      }
+    const handleEditInMarkdown = createCallback(
+      async (event: KeyboardEvent) => {
+        setIsLoading(true);
+        const content = completion()?.content;
+        if (!content) {
+          return;
+        }
 
-      const title: string | undefined = await generateTitleForMarkdown(content);
-      const maybeDoc = await createFromMarkdownText({
-        markdown: content,
-        title:
-          title ?? `${blockMetadataSignal()?.documentName} - AI Explanation`,
-        preserveNewLines: false,
-      });
+        const title: string | undefined =
+          await generateTitleForMarkdown(content);
+        const maybeDoc = await createFromMarkdownText({
+          markdown: content,
+          title:
+            title ?? `${blockMetadataSignal()?.documentName} - AI Explanation`,
+          preserveNewLines: false,
+        });
 
-      if ('error' in maybeDoc) {
-        console.error('Error opening AI message in Notes', maybeDoc.error);
+        if ('error' in maybeDoc) {
+          console.error('Error opening AI message in Notes', maybeDoc.error);
+          setIsLoading(false);
+          return;
+        }
+
+        const documentId = maybeDoc.documentId;
+        if (!documentId) {
+          setIsLoading(false);
+          return;
+        }
+
+        replaceOrInsertSplit({
+          type: 'md',
+          id: documentId,
+        });
         setIsLoading(false);
-        return;
       }
-
-      const documentId = maybeDoc.documentId;
-      if (!documentId) {
-        setIsLoading(false);
-        return;
-      }
-
-      replaceOrInsertSplit({
-        type: 'md',
-        id: documentId,
-      });
-      setIsLoading(false);
-    });
+    );
 
     const handleConvertToTasks = () => {
       const currentSelection = selection();
@@ -597,8 +600,8 @@ export function MarkdownPopup(props: {
                     <div class="w-fit mr-2">
                       <button
                         class="flex flex-row items-center space-x-1 hover:bg-hover hover-transition-bg rounded-md p-1 text-xs font-sans"
-                        onClick={() => {
-                          !isLoading() && handleEditInMarkdown();
+                        onClick={(event) => {
+                          !isLoading() && handleEditInMarkdown(event);
                         }}
                       >
                         <Show
