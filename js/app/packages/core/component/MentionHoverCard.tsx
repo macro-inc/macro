@@ -39,7 +39,7 @@ export type MentionHoverCardProps = {
 };
 
 /**
- * A hover card component for document/entity mentions that supports nested hover cards.
+ * A hover card component that supports nested hover cards.
  * When nested hover cards are open, parent cards are force-mounted to prevent closing.
  */
 export function MentionHoverCard(props: MentionHoverCardProps) {
