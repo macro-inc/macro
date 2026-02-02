@@ -507,10 +507,10 @@ export function PopupPreview(props: {
 
     return (
       <>
-        <div class="text-sm font-semibold">
+        <div class="text-sm font-semibold select-text">
           {accessibleItem.name}
           {accessories && (
-            <div class="relative text-[0.8em] text-current/60 rounded-md mt-1.5">
+            <div class="relative text-[0.8em] text-current/60 rounded-md mt-1.5 select-none">
               {`${accessories.note} `}
               {getMentionsIcon(accessories.icon)}
             </div>
