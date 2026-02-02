@@ -124,13 +124,13 @@ anyhow = "1.0.93"
 async-openai = { version = "0.28.3", features = ["byot"] }
 async-stream = "0.3.6"
 async-trait = "0.1.86"
-aws-config = { version = "1.5.17", features = ["behavior-version-latest"] }
+aws-config = { version = "1.8.12", features = ["behavior-version-latest"] }
 aws-sdk-dynamodb = "1.98.0"
 aws-sdk-lambda = "1.104.0"
-aws-sdk-s3 = "1.119.0"
+aws-sdk-s3 = "1.121.0"
 aws-sdk-secretsmanager = "1.93.0"
 aws-sdk-sesv2 = "1.103.0"
-aws-sdk-sns = "1.61.0"
+aws-sdk-sns = "1.90.0"
 aws-sdk-sqs = "1.91.0"
 aws-smithy-types = "1.2.13"
 aws_lambda_events = { version = "0.16.0", default-features = false }
