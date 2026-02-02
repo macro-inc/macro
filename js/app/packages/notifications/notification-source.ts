@@ -27,6 +27,7 @@ import {
   notificationEntity,
   type UnifiedNotification,
 } from './types';
+import { queryReadyGate } from '@queries/gate';
 
 type NotificationsByEntity = Record<CompositeEntity, UnifiedNotification[]>;
 
@@ -86,7 +87,9 @@ export function createNotificationSource(
   const markNotificationsAsSeenMutation = useMarkNotificationsAsSeenMutation();
   const markNotificationsAsDoneMutation = useMarkNotificationsAsDoneMutation();
 
-  const notifications = createMemo(() => notificationsQuery.data ?? []);
+  const notifications = createMemo(() =>
+    notificationsQuery.isSuccess ? notificationsQuery.data : []
+  );
 
   const notificationsByEntity = createMemo(() => {
     const data = notifications();

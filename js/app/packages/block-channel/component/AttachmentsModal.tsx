@@ -9,14 +9,13 @@ import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { tryMacroId, useDisplayName } from '@core/user';
-import { isErr } from '@core/util/maybeResult';
 import BracketLeft from '@macro-icons/macro-group-bracket-left.svg';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
-import { commsServiceClient } from '@service-comms/client';
 import type { MessageMention } from '@service-comms/generated/models';
 import type { Attachment } from '@service-comms/generated/models/attachment';
 import type { ItemType } from '@service-storage/client';
-import { createMemo, createResource, Show, Suspense } from 'solid-js';
+import { useMentionsQuery } from '@queries/channel/mentions';
+import { createMemo, Show, Suspense } from 'solid-js';
 import { VList } from 'virtua/solid';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
 import { useChannelContext } from '@block-channel/hooks/channel';
@@ -29,21 +28,15 @@ export function AttachmentsModal() {
   const { replaceOrInsertSplit } = useSplitLayout();
   const channelContext = useChannelContext();
 
-  const [mentionsResource] = createResource(() =>
-    commsServiceClient.getMentions({ channel_id: currentBlockId })
-  );
+  const mentionsQuery = useMentionsQuery(() => currentBlockId, () => ({
+    enabled: drawerControl.isOpen() && Boolean(currentBlockId),
+  }));
 
   const attachments = createMemo(() => {
-    if (mentionsResource.loading || mentionsResource.error) return [];
-
     const mentions: Attachment[] = (() => {
-      let res = mentionsResource();
-      if (!res || isErr(res)) {
-        console.error('failed to get mentions', res);
-        return [];
-      }
+      if (mentionsQuery.isLoading || mentionsQuery.isError) return [];
 
-      const mentions = (res[1] ?? { mentions: [] }).mentions.map((m) =>
+      const mentions = (mentionsQuery.data?.mentions ?? []).map((m) =>
         makeAttachmentFromMention(m, currentBlockId)
       );
 

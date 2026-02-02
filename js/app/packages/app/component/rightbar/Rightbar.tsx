@@ -65,6 +65,7 @@ import {
   onCleanup,
   type Setter,
   Show,
+  Suspense,
   untrack,
 } from 'solid-js';
 import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
@@ -723,25 +724,27 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
             setSpotlight={setBigChatOpen}
             tr={!bigChatOpen() && !settingsOpen()}
           >
-            <Rightbar
-              chatId={chatId()}
-              chatName={chatName()}
-              messages={messages}
-              onUnmount={getChatInputState}
-              initialState={initialChatState()}
-              onSend={onSend}
-              stream={stream}
-              stopGenerating={stopGenerating}
-              setState={{
-                setChatId,
-                setModel,
-                setAttachments,
-                setText,
-                setMessages,
-                setStream,
-              }}
-              isBig={bigChatOpen()}
-            />
+            <Suspense>
+              <Rightbar
+                chatId={chatId()}
+                chatName={chatName()}
+                messages={messages}
+                onUnmount={getChatInputState}
+                initialState={initialChatState()}
+                onSend={onSend}
+                stream={stream}
+                stopGenerating={stopGenerating}
+                setState={{
+                  setChatId,
+                  setModel,
+                  setAttachments,
+                  setText,
+                  setMessages,
+                  setStream,
+                }}
+                isBig={bigChatOpen()}
+              />
+            </Suspense>
           </SplitlikeContainer>
         </div>
       </Resize.Panel>
