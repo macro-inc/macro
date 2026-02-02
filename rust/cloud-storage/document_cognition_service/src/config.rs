@@ -29,8 +29,6 @@ pub struct Config {
     pub chat_delete_queue: String,
     /// The sqs queue to send notifications to
     pub notification_queue: String,
-    /// comms service url
-    pub comms_service_url: String,
     pub search_event_queue: String,
     pub sync_service_url: String,
     pub sync_service_auth_key: String,
@@ -77,9 +75,6 @@ impl Config {
         let document_storage_service_url = std::env::var("DOCUMENT_STORAGE_SERVICE_URL")
             .context("DOCUMENT_STORAGE_SERVICE_URL must be provided")?;
 
-        let comms_service_url =
-            std::env::var("COMMS_SERVICE_URL").context("COMMS_SERVICE_URL must be provided")?;
-
         let search_event_queue =
             std::env::var("SEARCH_EVENT_QUEUE").context("SEARCH_EVENT_QUEUE must be provided")?;
 
@@ -116,7 +111,6 @@ impl Config {
             document_text_extractor_queue,
             chat_delete_queue,
             notification_queue,
-            comms_service_url,
             search_event_queue,
             sync_service_auth_key,
             sync_service_url,
@@ -141,7 +135,6 @@ impl Config {
             document_text_extractor_queue: Default::default(),
             chat_delete_queue: Default::default(),
             notification_queue: Default::default(),
-            comms_service_url: Default::default(),
             search_event_queue: Default::default(),
             sync_service_url: Default::default(),
             sync_service_auth_key: Default::default(),

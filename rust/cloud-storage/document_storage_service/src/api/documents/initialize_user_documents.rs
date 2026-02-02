@@ -245,18 +245,6 @@ pub async fn handler(
             .into_response()
     })?;
 
-    // Flagging this off for now until we have a dedicated "onboarding" user
-    // let _ = ctx
-    //     .comms_service_client
-    //     .create_welcome_message(CreateWelcomeMessageRequest {
-    //         welcome_user_id: "macro|mary@macro.com".to_string(),
-    //         to_user_id: user_context.user_id.clone(),
-    //     })
-    //     .await
-    //     .inspect_err(|e| {
-    //         tracing::error!(error=?e, "unable to create welcome message");
-    //     });
-
     Ok((StatusCode::OK, Json(GenericSuccessResponse::default())).into_response())
 }
 
