@@ -22,10 +22,10 @@ import {
   insertProjectIntoHistory,
   postNewHistoryItem,
 } from '@queries/history/history';
-import { debounce } from '@solid-primitives/scheduled';
-import { createSignal, Match, Show, Switch, Suspense } from 'solid-js';
+import { Match, Switch, Suspense } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { PopupPreview } from './DocumentPreview';
+import { HoverCard } from './HoverCard';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
 import { DeprecatedTextButton } from './DeprecatedTextButton';
 import {
@@ -211,9 +211,6 @@ function ItemPreviewInner(props: ItemPreviewProps) {
   const { item, name, onPreviewClick, className, channelTypeIcon } =
     useItemPreviewData(props);
 
-  const [previewOpen, setPreviewOpen] = createSignal(false);
-  const debouncedSetPreviewOpen = debounce(setPreviewOpen, 100);
-
   return (
     <Switch>
       <Match when={item().loading}>
@@ -243,54 +240,43 @@ function ItemPreviewInner(props: ItemPreviewProps) {
                     )
                   );
                 return (
-                  <>
-                    <button
-                      class="text-ink-base text-sm ring-1 ring-edge-muted rounded-xs hover:bg-panel-hover flex flex-row h-6 px-2 justify-center items-center cursor-pointer"
-                      onMouseEnter={() => {
-                        if (!isTouchDevice()) {
-                          debouncedSetPreviewOpen(true);
-                        }
-                      }}
-                      onMouseLeave={() => {
-                        if (!isTouchDevice()) {
-                          debouncedSetPreviewOpen.clear();
-                          debouncedSetPreviewOpen(false);
-                        }
-                      }}
-                      {...navHandlers}
-                    >
-                      <div class="flex justify-start items-center h-3.5 mr-2">
-                        {itemData.type === 'channel' ? (
-                          <div class={className()}>
-                            <Dynamic
-                              component={channelTypeIcon(itemData.channelType)}
+                  <HoverCard
+                    disabled={isTouchDevice() || !blockName}
+                    trigger={
+                      <button
+                        class="text-ink-base text-sm ring-1 ring-edge-muted rounded-xs hover:bg-panel-hover flex flex-row h-6 px-2 justify-center items-center"
+                        {...navHandlers}
+                      >
+                        <div class="flex justify-start items-center h-3.5 mr-2">
+                          {itemData.type === 'channel' ? (
+                            <div class={className()}>
+                              <Dynamic
+                                component={channelTypeIcon(
+                                  itemData.channelType
+                                )}
+                              />
+                            </div>
+                          ) : (
+                            <EntityIcon
+                              targetType={
+                                itemData.type === 'document'
+                                  ? (subType ?? fileType)
+                                  : itemData.type
+                              }
+                              size="fill"
                             />
-                          </div>
-                        ) : (
-                          <EntityIcon
-                            targetType={
-                              itemData.type === 'document'
-                                ? (subType ?? fileType)
-                                : itemData.type
-                            }
-                            size="fill"
-                          />
-                        )}
-                      </div>
-                      <div class="flex-1 text-left leading-5 min-w-0 truncate">
-                        {truncateString(name(), 80)}
-                      </div>
-                    </button>
-                    <Show when={previewOpen() && blockName}>
+                          )}
+                        </div>
+                        <div class="flex-1 text-left leading-5 min-w-0 truncate">
+                          {truncateString(name(), 80)}
+                        </div>
+                      </button>
+                    }
+                    content={
                       <PopupPreview
                         item={item}
-                        mouseEnter={() => {
-                          debouncedSetPreviewOpen(true);
-                        }}
-                        mouseLeave={() => {
-                          debouncedSetPreviewOpen.clear();
-                          debouncedSetPreviewOpen(false);
-                        }}
+                        mouseEnter={() => {}}
+                        mouseLeave={() => {}}
                         documentInfo={{
                           id: itemData.id,
                           type: blockName as BlockName,
@@ -298,8 +284,8 @@ function ItemPreviewInner(props: ItemPreviewProps) {
                           isOpenable: true,
                         }}
                       />
-                    </Show>
-                  </>
+                    }
+                  />
                 );
               }}
             </Match>
