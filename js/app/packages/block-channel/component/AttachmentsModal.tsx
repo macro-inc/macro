@@ -28,12 +28,7 @@ export function AttachmentsModal() {
   const { replaceOrInsertSplit } = useSplitLayout();
   const channelContext = useChannelContext();
 
-  const mentionsQuery = useMentionsQuery(
-    () => currentBlockId,
-    () => ({
-      enabled: drawerControl.isOpen() && Boolean(currentBlockId),
-    })
-  );
+  const mentionsQuery = useMentionsQuery(() => currentBlockId);
 
   const attachments = createMemo(() => {
     const mentions: Attachment[] = (() => {
