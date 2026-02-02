@@ -62,16 +62,12 @@ export function MentionHoverCard(props: MentionHoverCardProps) {
     props.onOpenChange?.(open);
   };
 
-  if (props.disabled) {
-    return <>{props.trigger}</>;
-  }
-
   return (
     <HoverCard
       openDelay={props.openDelay ?? 100}
       closeDelay={props.closeDelay ?? 150}
       gutter={props.gutter ?? 8}
-      open={isHoverCardOpen()}
+      open={props.disabled ? false : isHoverCardOpen()}
       onOpenChange={handleOpenChange}
       forceMount={nestedOpenCount() > 0}
     >
