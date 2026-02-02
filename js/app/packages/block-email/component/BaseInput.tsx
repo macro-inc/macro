@@ -112,6 +112,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { stickyGate } from '@core/util/debounce';
+import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
 
 false && fileFolderDrop;
 false && fileSelector;
@@ -1351,10 +1352,12 @@ export function BaseInput(props: {
                 </div>
               </KToggleButton>
             </Tooltip>
-            <EmailDateSelector
-              sendTime={form().sendTime() ?? null}
-              onSendTimeChange={handleSendTimeChange}
-            />
+            <Show when={ENABLE_EMAIL_SCHEDULED_SEND}>
+              <EmailDateSelector
+                sendTime={form().sendTime() ?? null}
+                onSendTimeChange={handleSendTimeChange}
+              />
+            </Show>
             <Show when={savedDraftId()}>
               <Button
                 onclick={deleteDraftAndReset}

@@ -36,6 +36,7 @@ import { plural } from '@core/util/string';
 import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
 import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
 import { EmailDateSelector } from '@block-email/component/email-date-selector';
+import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
 
 false && fileFolderDrop;
 
@@ -307,10 +308,12 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
               setShowFormatRibbon(!showFormatRibbon());
             }}
           />
-          <EmailDateSelector
-            sendTime={props.sendTime}
-            onSendTimeChange={props.onSendTimeChange}
-          />
+          <Show when={ENABLE_EMAIL_SCHEDULED_SEND}>
+            <EmailDateSelector
+              sendTime={props.sendTime}
+              onSendTimeChange={props.onSendTimeChange}
+            />
+          </Show>
           <Show when={props.hasDraft}>
             <Button
               onclick={props.onDraftDeletePress}
