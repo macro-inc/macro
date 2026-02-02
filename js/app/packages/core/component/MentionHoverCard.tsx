@@ -67,11 +67,13 @@ export function MentionHoverCard(props: MentionHoverCardProps) {
       openDelay={props.openDelay ?? 100}
       closeDelay={props.closeDelay ?? 150}
       gutter={props.gutter ?? 8}
-      open={props.disabled ? false : isHoverCardOpen()}
+      open={isHoverCardOpen()}
       onOpenChange={handleOpenChange}
       forceMount={nestedOpenCount() > 0}
     >
-      <HoverCard.Trigger as="span">{props.trigger}</HoverCard.Trigger>
+      <HoverCard.Trigger as="span" disabled={props.disabled}>
+        {props.trigger}
+      </HoverCard.Trigger>
 
       <HoverCard.Portal>
         <HoverCard.Content class={props.contentClass}>
