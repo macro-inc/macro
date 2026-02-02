@@ -73,7 +73,7 @@ import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
 import { Button } from '@ui/components/Button';
 import { Hotkey } from '@core/component/Hotkey';
 import { setPreviewData } from '@queries/preview';
-import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
+import { AccessLevel } from '@service-cognition/generated/schemas/accessLevel';
 
 type ChatData = {
   messages: ChatMessageWithAttachments[];
@@ -225,44 +225,47 @@ function TopBar(props: {
         <PlusIcon />
       </Button>
       <div class="grow" />
-      <Show when={ENABLE_REFERENCES_MODAL && props.chatId}>
-        <ReferencesModal
-          documentId={props.chatId!}
-          documentName={props.chatName ?? 'New Chat'}
+      <div class="flex items-center gap-1">
+        <Show when={ENABLE_REFERENCES_MODAL && props.chatId}>
+          <ReferencesModal
+            documentId={props.chatId!}
+            documentName={props.chatName ?? 'New Chat'}
+            entityType="chat"
+          />
+        </Show>
+        <Show when={props.chatId}>
+          <ShareButton
+            id={props.chatId!}
+            name={props.chatName ?? 'New Chat'}
+            userPermissions={props.userPermissions()}
+            itemType="chat"
+          />
+        </Show>
+        <DeprecatedIconButton
+          size="sm"
+          icon={NotepadIcon}
+          tooltip={{ label: 'Edit AI Instructions' }}
+          theme="current"
+          onClick={() => {
+            openInstructions();
+          }}
         />
-      </Show>
-      <Show when={props.chatId}>
-        <ShareButton
-          id={props.chatId!}
-          name={props.chatName ?? 'New Chat'}
-          userPermissions={props.userPermissions()}
-          itemType="chat"
+        <PersistentChatHistoryButton setChatId={props.setChatId} />
+        <DeprecatedIconButton
+          size="sm"
+          icon={bigChatOpen() ? ContractIcon : ExpandIcon}
+          tooltip={{
+            label: bigChatOpen()
+              ? 'Minimize Assistant Panel'
+              : 'Spotlight Assistant Panel',
+            hotkeyToken: TOKENS.global.toggleBigChat,
+          }}
+          theme="current"
+          onClick={() => {
+            setBigChatOpen((v) => !v);
+          }}
         />
-      </Show>
-      <DeprecatedIconButton
-        size="sm"
-        icon={NotepadIcon}
-        tooltip={{ label: 'Edit AI Instructions' }}
-        theme="current"
-        onClick={() => {
-          openInstructions();
-        }}
-      />
-      <PersistentChatHistoryButton setChatId={props.setChatId} />
-      <DeprecatedIconButton
-        size="sm"
-        icon={bigChatOpen() ? ContractIcon : ExpandIcon}
-        tooltip={{
-          label: bigChatOpen()
-            ? 'Minimize Assistant Panel'
-            : 'Spotlight Assistant Panel',
-          hotkeyToken: TOKENS.global.toggleBigChat,
-        }}
-        theme="current"
-        onClick={() => {
-          setBigChatOpen((v) => !v);
-        }}
-      />
+      </div>
     </div>
   );
 }

@@ -23,6 +23,7 @@ import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 
 export type ReferenceProps = {
   documentId: string;
+  entityType?: ItemType;
 };
 
 function isChannelReference(ref: EntityReference): ref is EntityReference & {
@@ -54,8 +55,9 @@ function isGenericReference(
 
 export function References(props: ReferenceProps) {
   const [references] = createResource(async () => {
+    const entityType = props.entityType ?? 'document';
     const response = await commsServiceClient.attachmentReferences({
-      entity_type: 'document',
+      entity_type: entityType,
       entity_id: props.documentId,
     });
 

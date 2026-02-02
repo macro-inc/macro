@@ -91,6 +91,7 @@ export function TopBar() {
             documentId={blockId}
             documentName={chatName()}
             buttonSize="sm"
+            entityType="chat"
           />
           <div class="flex items-center">
             <SplitPermissionsBadge />

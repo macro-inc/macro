@@ -685,7 +685,6 @@ export function ShareButton(props: ShareButtonProps) {
   const permissionsResource = isBlockContext
     ? permissionsBlockResource[0]
     : fallbackPermissionsResource;
-  const blockScopeId = blockHotkeyScopeSignal.get;
   const isAuthenticated = useIsAuthenticated();
   const blockType = isBlockContext
     ? useBlockAliasedName()
@@ -694,6 +693,7 @@ export function ShareButton(props: ShareButtonProps) {
 
   onMount(() => {
     if (!isBlockContext) return;
+    const blockScopeId = blockHotkeyScopeSignal.get;
     registerHotkey({
       keyDownHandler: () => {
         if (!isAuthenticated()) {
@@ -842,7 +842,9 @@ export function ShareOptions(props: {
   label?: string | '';
   disabled?: boolean;
 }) {
-  const editPermissionEnabled = blockEditPermissionEnabledSignal();
+  const editPermissionEnabled = isInBlock()
+    ? blockEditPermissionEnabledSignal()
+    : true;
   const blockName = isInBlock() ? useBlockName() : undefined;
 
   const options = createMemo(() => {
