@@ -67,7 +67,7 @@ export function References(props: ReferenceProps) {
 
     return response[1].references;
   });
-  const { insertSplit, replaceSplit } = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
   const blockOrchestrator = useGlobalBlockOrchestrator();
 
   const messageLocation = async (
@@ -82,14 +82,6 @@ export function References(props: ReferenceProps) {
     });
   };
 
-  const shouldReplaceSplit = (event?: KeyboardEvent | MouseEvent) => {
-    const splitManager = globalSplitManager();
-
-    if (!splitManager) return false;
-
-    return !splitManager.canAppendSplit() || event?.shiftKey === true;
-  };
-
   const navigateToItem = ({
     event,
     blockId,
@@ -99,17 +91,12 @@ export function References(props: ReferenceProps) {
     blockName: BlockName | BlockAlias;
     blockId: string;
   }) => {
-    if (shouldReplaceSplit(event)) {
-      replaceSplit({
-        content: { id: blockId, type: blockName },
-      });
-
-      return;
-    }
-
-    insertSplit({
-      type: blockName,
-      id: blockId,
+    openWithSplit({
+      content: {
+        type: blockName,
+        id: blockId,
+      },
+      force: event?.shiftKey === true ? 'replace' : undefined,
     });
   };
 
