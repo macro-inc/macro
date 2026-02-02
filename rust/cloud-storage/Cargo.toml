@@ -165,7 +165,7 @@ pdfium-render = { version = "0.8.28" }
 quote = "1"
 rand = "0.9.0"
 recursion = "0.5.4"
-redis = "0.29.0"
+redis = "1.0.3"
 regex = "1.11.1"
 reqwest = { version = "0.12.12", features = ["json"] }
 reqwest-middleware = { git = "https://github.com/seanaye/reqwest-middleware" }
