@@ -15,6 +15,7 @@ import { ClippedPanel } from '@core/component/ClippedPanel';
 import { toast } from '@core/component/Toast/Toast';
 import {
   isAccessiblePreviewItem,
+  isChannelPreviewItem,
   type PreviewChannelAccess,
   type PreviewDocumentAccess,
   type PreviewItem,
@@ -22,6 +23,7 @@ import {
   type PreviewItemNoAccess,
   type PreviewProjectAccess,
 } from '@queries/preview';
+import { tryMacroId, useDisplayName } from '@core/user';
 import { matches } from '@core/util/match';
 // Icon imports
 import CollapseInlinePreview from '@icon/regular/arrows-in-line-horizontal.svg';
@@ -39,60 +41,21 @@ import LoadingSpinner from '@icon/regular/spinner.svg';
 import TrashSimple from '@icon/regular/trash-simple.svg';
 import UserIcon from '@icon/regular/user.svg';
 import MacroEmbed from '@macro-icons/macro-embed.svg';
+import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { channelTheme } from '@core/component/LexicalMarkdown/theme';
+import { UserIcon as UserIconComponent } from '@core/component/UserIcon';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
 import { globalSplitManager } from 'app/signal/splitLayout';
-import type { Component, ComponentProps, JSX } from 'solid-js';
+import type { Component, JSX } from 'solid-js';
 import { type Accessor, Match, Show, Switch } from 'solid-js';
-import { Dynamic, Portal } from 'solid-js/web';
+import { Dynamic } from 'solid-js/web';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
 import { formatDate, isoToUnixTimestamp } from '../util/date';
 import NotFound from './AccessErrorViews/NotFound';
 import Unauthorized from './AccessErrorViews/Unauthorized';
 import { EntityIcon } from './EntityIcon';
 import { Tooltip } from './Tooltip';
-
-const CustomEmbedIcon: Component<ComponentProps<'svg'>> = (props) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" {...props}>
-    {/* Background (invisible) */}
-    <rect width="256" height="256" fill="none" />
-    {/* Top line */}
-    <line
-      x1="40"
-      y1="60"
-      x2="216"
-      y2="60"
-      fill="none"
-      stroke="currentColor"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      stroke-width="16"
-    />
-    {/* Box */}
-    <rect
-      x="72"
-      y="96"
-      width="112"
-      height="48"
-      rx="8"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="16"
-    />
-    {/* Bottom line */}
-    <line
-      x1="40"
-      y1="176"
-      x2="216"
-      y2="176"
-      fill="none"
-      stroke="currentColor"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      stroke-width="16"
-    />
-  </svg>
-);
 
 /**
  * Container for displaying mentions with optional collapsing
@@ -255,29 +218,6 @@ function PopupIconButton(props: {
         </div>
       </button>
     </Tooltip>
-  );
-}
-
-function _PopupTextButton(props: {
-  tooltip: string;
-  onClick: () => void;
-  icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
-  text: string;
-}) {
-  return (
-    <div class="w-fit h-full">
-      <Tooltip tooltip={props.tooltip}>
-        <button
-          onClick={props.onClick}
-          class="rounded-md py-1 hover:bg-hover transition flex items-center gap-1.5"
-        >
-          <div class="w-fit flex justify-right items-center pl-0.5 mx-1.5 my-0.5 text-xs font-normal text-current/90">
-            {props.text}
-            {props.icon && <PopupIcon icon={props.icon} />}
-          </div>
-        </button>
-      </Tooltip>
-    </div>
   );
 }
 
@@ -518,6 +458,10 @@ export function PopupPreview(props: {
       props.documentInfo.params
     );
 
+    const messageContext = isChannelPreviewItem(accessibleItem)
+      ? accessibleItem.messageContext
+      : undefined;
+
     return (
       <>
         <div class="text-sm font-semibold">
@@ -530,8 +474,42 @@ export function PopupPreview(props: {
           )}
         </div>
 
+        <Show when={messageContext}>
+          {(context) => (
+            <div class="mt-2 mb-1 text-sm text-ink-muted border-l-2 border-edge pl-3 py-1">
+              <div class="line-clamp-3 break-words">
+                <StaticMarkdown
+                  markdown={context().content}
+                  theme={channelTheme}
+                  target="internal"
+                />
+              </div>
+            </div>
+          )}
+        </Show>
+
         <div class="flex justify-between items-center w-full text-sm font-medium">
-          <Show when={props.item().owner}>
+          <Show when={messageContext}>
+            {(context) => {
+              const id = context().sender_id;
+              // TODO: since UserIconComponent does this anyways for tooltip name we can deduplicate by moving the text span there
+              const [senderDisplayName] = useDisplayName(tryMacroId(id));
+              return (
+                <div class="justify-left mt-2 w-fit max-w-[66%] text-ink-muted overflow-hidden whitespace-nowrap text-ellipsis flex items-center gap-1.5">
+                  <UserIconComponent
+                    id={id}
+                    size="xs"
+                    suppressClick
+                    showTooltip={false}
+                  />
+                  <span class="relative text-[0.8em] text-ink-muted max-w-full">
+                    {senderDisplayName()}
+                  </span>
+                </div>
+              );
+            }}
+          </Show>
+          <Show when={!messageContext && props.item().owner}>
             {(name) => (
               <div class="justify-left mt-2 w-fit max-w-[66%] text-ink-muted overflow-hidden whitespace-nowrap text-ellipsis">
                 <span class="relative text-[0.8em] text-ink-muted max-w-full">
@@ -541,7 +519,17 @@ export function PopupPreview(props: {
               </div>
             )}
           </Show>
-          <Show when={props.item().updatedAt}>
+          <Show when={messageContext}>
+            {(context) => (
+              <div class="justify-right mt-2">
+                <span class="relative text-[0.8em] text-ink-muted">
+                  <ClockIcon class="relative top-[-0.125em] size-4 inline-flex items-center mr-1" />
+                  {formatDate(isoToUnixTimestamp(context().created_at))}
+                </span>
+              </div>
+            )}
+          </Show>
+          <Show when={!messageContext && props.item().updatedAt}>
             {(time) => (
               <div class="justify-right mt-2">
                 <span class="relative text-[0.8em] text-ink-muted">

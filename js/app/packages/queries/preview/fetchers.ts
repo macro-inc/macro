@@ -3,14 +3,16 @@ import { isErr } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { commsServiceClient } from '@service-comms/client';
 import { emailClient } from '@service-email/client';
-import { type ItemType, storageServiceClient } from '@service-storage/client';
+import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { syncServiceClient } from '@service-sync/client';
-import type { PreviewItem } from './types';
+import type { ItemEntity, MessageContext, PreviewItem } from './types';
 
-async function fetchChannelPreviews(ids: string[]): Promise<PreviewItem[]> {
+async function fetchChannelPreviews(
+  channelIds: string[]
+): Promise<PreviewItem[]> {
   const result = await commsServiceClient.getBatchChannelPreviews({
-    channel_ids: ids,
+    channel_ids: channelIds,
   });
 
   if (isErr(result)) {
@@ -43,6 +45,29 @@ async function fetchChannelPreviews(ids: string[]): Promise<PreviewItem[]> {
         };
     }
   });
+}
+
+export async function fetchMessageContext(
+  messageId: string
+): Promise<MessageContext | null> {
+  const msgResult = await commsServiceClient.getMessageWithContext({
+    message_id: messageId,
+    before: 0,
+    after: 0,
+  });
+
+  if (isErr(msgResult)) {
+    return null;
+  }
+
+  const [, msgData] = msgResult;
+  const message = msgData.messages[0];
+
+  if (!message) {
+    return null;
+  }
+
+  return message;
 }
 
 async function fetchDocumentPreviews(ids: string[]): Promise<PreviewItem[]> {
@@ -194,7 +219,7 @@ async function fetchEmailPreviews(threadIds: string[]): Promise<PreviewItem[]> {
 }
 
 export async function fetchPreviewBatch(
-  items: Array<{ id: string; type?: ItemType }>
+  items: ItemEntity[]
 ): Promise<Map<string, PreviewItem>> {
   const chatItems = items
     .filter((i) => i.type === 'chat' || !i.type)
@@ -204,9 +229,8 @@ export async function fetchPreviewBatch(
     .filter((i) => i.type === 'document' || !i.type)
     .map((i) => i.id);
 
-  const channelItems = items
-    .filter((i) => i.type === 'channel' || !i.type)
-    .map((i) => i.id);
+  const channelItems = items.filter((i) => i.type === 'channel' || !i.type);
+  const channelIds = [...new Set(channelItems.map((i) => i.id))];
 
   const projectItems = items
     .filter((i) => i.type === 'project' || !i.type)
@@ -227,8 +251,8 @@ export async function fetchPreviewBatch(
     documentItems.length > 0
       ? fetchDocumentPreviews(documentItems)
       : Promise.resolve([]),
-    channelItems.length > 0
-      ? fetchChannelPreviews(channelItems)
+    channelIds.length > 0
+      ? fetchChannelPreviews(channelIds)
       : Promise.resolve([]),
     projectItems.length > 0
       ? fetchProjectPreviews(projectItems)
@@ -243,10 +267,14 @@ export async function fetchPreviewBatch(
   [
     ...chatResults,
     ...documentResults,
-    ...channelResults,
     ...projectResults,
     ...emailResults,
   ].forEach((result) => {
+    resultMap.set(result.id, result);
+  });
+
+  // For channels, use cache key that includes params if present
+  channelResults.forEach((result) => {
     resultMap.set(result.id, result);
   });
 

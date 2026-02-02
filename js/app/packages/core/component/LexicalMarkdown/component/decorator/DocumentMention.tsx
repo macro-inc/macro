@@ -13,6 +13,7 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { resolveBlockAlias, verifyBlockName } from '@core/constant/allBlocks';
 import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import { canNestBlock } from '@core/orchestrator';
 import {
   isAccessiblePreviewItem,
@@ -23,6 +24,7 @@ import {
   type PreviewItemNoAccess,
   type PreviewProjectAccess,
   useItemPreview,
+  type ItemEntity,
 } from '@queries/preview';
 import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
@@ -239,10 +241,25 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
   const previewType = () =>
     blockNameToItemType(verifyBlockName(props.blockName));
 
-  const [item] = useItemPreview(() => ({
-    id: props.documentId,
-    type: previewType(),
-  }));
+  const itemEntity = (): ItemEntity => {
+    const baseEntity = {
+      id: props.documentId,
+      type: previewType(),
+    };
+    if (
+      previewType() === 'channel' &&
+      props.blockParams &&
+      CHANNEL_URL_PARAMS.message in props.blockParams
+    ) {
+      return {
+        ...baseEntity,
+        messageId: props.blockParams[CHANNEL_URL_PARAMS.message],
+      };
+    }
+    return baseEntity;
+  };
+
+  const [item] = useItemPreview(itemEntity);
 
   const isSelectedAsNode = createMemo(() => {
     const sel = selection();
