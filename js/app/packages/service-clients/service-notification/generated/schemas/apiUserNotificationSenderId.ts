@@ -6,6 +6,6 @@
  */
 
 /**
- * The next page cursor if it exists.
+ * The user who triggered the notification.
  */
-export type GetAllUserNotificationsResponseNextCursor = string | null;
+export type ApiUserNotificationSenderId = string | null;

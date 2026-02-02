@@ -5,6 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './apiUserNotification';
+export * from './apiUserNotificationSenderId';
 export * from './bulkGetUserNotificationsByEventItemIdParams';
 export * from './bulkGetUserNotificationsByEventItemIdRequest';
 export * from './channelInviteMetadata';
@@ -33,7 +35,6 @@ export * from './entityType';
 export * from './errorResponse';
 export * from './getAllUserNotificationsResponse';
 export * from './getAllUserNotificationsResponseNextCursor';
-export * from './getUserNotificationParams';
 export * from './getUserNotificationsByEventItemIdParams';
 export * from './inviteToTeamMetadata';
 export * from './inviteToTeamMetadataRole';
@@ -43,8 +44,26 @@ export * from './itemSharedMetadataPermissionLevel';
 export * from './itemSharedOrganizationMetadata';
 export * from './itemSharedOrganizationMetadataItemName';
 export * from './itemSharedOrganizationMetadataPermissionLevel';
+export * from './listTypedNotificationsParams';
 export * from './newEmailMetadata';
 export * from './newEmailMetadataSender';
+export * from './notifEvent';
+export * from './notifEventOneOf';
+export * from './notifEventOneOfFive';
+export * from './notifEventOneOfFiveTag';
+export * from './notifEventOneOfNine';
+export * from './notifEventOneOfNineTag';
+export * from './notifEventOneOfOnefive';
+export * from './notifEventOneOfOnefiveTag';
+export * from './notifEventOneOfOneone';
+export * from './notifEventOneOfOneoneTag';
+export * from './notifEventOneOfOnethree';
+export * from './notifEventOneOfOnethreeTag';
+export * from './notifEventOneOfSeven';
+export * from './notifEventOneOfSevenTag';
+export * from './notifEventOneOfTag';
+export * from './notifEventOneOfThree';
+export * from './notifEventOneOfThreeTag';
 export * from './notification';
 export * from './notificationAllOf';
 export * from './notificationAllOfSenderId';

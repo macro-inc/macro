@@ -1,13 +1,13 @@
 use ::notification::domain::models::UserNotificationRow;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Utc, serde::ts_seconds_option};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
+use model_error_response::ErrorResponse;
 use model_notifications::{
     ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
     ChannelReplyMetadata, DocumentMentionMetadata, InviteToTeamMetadata, NewEmailMetadata,
     TaskAssignedMetadata,
 };
-use model_error_response::ErrorResponse;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -126,11 +126,13 @@ define_notif_event!(
 );
 
 #[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct ApiUserNotification {
     /// The user who owns this notification.
     #[schema(value_type = String)]
     pub owner_id: MacroUserIdStr<'static>,
     /// The notification ID.
+    #[serde(rename = "id")]
     pub notification_id: uuid::Uuid,
     /// The notification event type string (e.g. "channel_mention").
     /// TODO make this a new type
@@ -142,12 +144,20 @@ pub struct ApiUserNotification {
     /// Whether the notification is marked as done.
     pub done: bool,
     /// When the notification was created.
+    #[serde(with = "ts_seconds_option")]
+    #[schema(value_type = i64, nullable = false)]
     pub created_at: Option<DateTime<Utc>>,
     /// When the notification was viewed/seen.
+    #[serde(with = "ts_seconds_option")]
+    #[schema(value_type = i64, nullable = false)]
     pub viewed_at: Option<DateTime<Utc>>,
     /// When the notification was last updated.
+    #[serde(with = "ts_seconds_option")]
+    #[schema(value_type = i64, nullable = false)]
     pub updated_at: Option<DateTime<Utc>>,
     /// When the notification was deleted.
+    #[serde(with = "ts_seconds_option")]
+    #[schema(value_type = i64, nullable = false)]
     pub deleted_at: Option<DateTime<Utc>>,
     /// Deserialized notification metadata.
     pub notification_metadata: NotifEvent,
