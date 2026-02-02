@@ -151,7 +151,10 @@ mod tests {
     use macro_db_migrator::MACRO_DB_MIGRATIONS;
     use sqlx::{Pool, Postgres};
 
-    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS", fixtures(path = "../../fixtures", scripts("chat_example")))]
+    #[sqlx::test(
+        migrator = "MACRO_DB_MIGRATIONS",
+        fixtures(path = "../../fixtures", scripts("chat_example"))
+    )]
     /// chat three has 2 messages,
     /// it has 0 active attachments
     /// but message-one has 3 message attachments
