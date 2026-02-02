@@ -214,6 +214,8 @@ export type SplitManager = {
 
   getOrchestrator: () => BlockOrchestrator;
 
+  canAppendSplit: () => boolean;
+
   /**
    * Reconcile the splits with the provided list of splits.
    * Useful for when the url changes.
@@ -400,6 +402,10 @@ export function createSplitLayout(
   });
 
   const [resizeContext, setResizeContext] = createSignal<ResizeZoneCtx>();
+
+  const canAppendSplit = createMemo(
+    () => resizeContext()?.canFit({ minSize: 400 }) ?? true
+  );
 
   const [splitNamesById, setSplitNamesById] = createStore<{
     [id: SplitId]: string;
@@ -998,5 +1004,6 @@ export function createSplitLayout(
     getActivePopovers,
     closeAllPopovers,
     popovers: () => state.popovers,
+    canAppendSplit,
   };
 }
