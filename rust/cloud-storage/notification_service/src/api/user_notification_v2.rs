@@ -7,6 +7,7 @@ use model_notifications::{
     ChannelReplyMetadata, DocumentMentionMetadata, InviteToTeamMetadata, NewEmailMetadata,
     TaskAssignedMetadata,
 };
+use model_error_response::ErrorResponse;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -124,9 +125,10 @@ define_notif_event!(
     }
 );
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ApiUserNotification {
     /// The user who owns this notification.
+    #[schema(value_type = String)]
     pub owner_id: MacroUserIdStr<'static>,
     /// The notification ID.
     pub notification_id: uuid::Uuid,
@@ -150,6 +152,7 @@ pub struct ApiUserNotification {
     /// Deserialized notification metadata.
     pub notification_metadata: NotifEvent,
     /// The user who triggered the notification.
+    #[schema(value_type = Option<String>)]
     pub sender_id: Option<MacroUserIdStr<'static>>,
 }
 
@@ -187,7 +190,7 @@ impl ApiUserNotification {
 }
 
 /// The strongly typed response for listing user notifications.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct GetAllUserNotificationsResponse {
     /// The list of items returned.
     pub items: Vec<ApiUserNotification>,
@@ -224,6 +227,21 @@ pub fn router<
 /// then converts each row to [`UserNotificationRow<NotifEvent>`].
 ///
 /// Rows that fail to deserialize are dropped with a warning log.
+#[utoipa::path(
+    get,
+    operation_id = "list_typed_notifications",
+    path = "/v2/user_notifications",
+    params(
+        ("limit" = Option<u32>, Query, description = "Size limit per page."),
+        ("cursor" = Option<String>, Query, description = "Cursor value. Base64 encoded timestamp and item id."),
+    ),
+    responses(
+        (status = 200, body = GetAllUserNotificationsResponse),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
 async fn list_typed_notifications<S: ::notification::domain::service::NotificationIngress>(
     state: axum::extract::State<::notification::inbound::http::NotificationRouterState<S>>,
     macro_user: model_user::axum_extractor::MacroUserExtractor,

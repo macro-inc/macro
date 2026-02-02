@@ -109,7 +109,20 @@ pub struct NotificationBulkRequest {
     pub notification_ids: Vec<uuid::Uuid>,
 }
 
-async fn bulk_mark_seen<S: NotificationIngress>(
+/// Mark notifications as seen.
+#[utoipa::path(
+    patch,
+    operation_id = "bulk_mark_notifications_seen",
+    path = "/v2/user_notifications/bulk/seen",
+    request_body = NotificationBulkRequest,
+    responses(
+        (status = 200),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn bulk_mark_seen<S: NotificationIngress>(
     State(service): State<NotificationRouterState<S>>,
     macro_user: MacroUserExtractor,
     Json(req): Json<NotificationBulkRequest>,
@@ -117,7 +130,20 @@ async fn bulk_mark_seen<S: NotificationIngress>(
     bulk_update(&service, &macro_user, &req, NotificationStatus::Seen).await
 }
 
-async fn bulk_mark_done<S: NotificationIngress>(
+/// Mark notifications as done.
+#[utoipa::path(
+    patch,
+    operation_id = "bulk_mark_notifications_done",
+    path = "/v2/user_notifications/bulk/done",
+    request_body = NotificationBulkRequest,
+    responses(
+        (status = 200),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn bulk_mark_done<S: NotificationIngress>(
     State(service): State<NotificationRouterState<S>>,
     macro_user: MacroUserExtractor,
     Json(req): Json<NotificationBulkRequest>,
@@ -125,7 +151,20 @@ async fn bulk_mark_done<S: NotificationIngress>(
     bulk_update(&service, &macro_user, &req, NotificationStatus::Done(true)).await
 }
 
-async fn bulk_mark_undone<S: NotificationIngress>(
+/// Mark notifications as not done.
+#[utoipa::path(
+    patch,
+    operation_id = "bulk_mark_notifications_undone",
+    path = "/v2/user_notifications/bulk/undone",
+    request_body = NotificationBulkRequest,
+    responses(
+        (status = 200),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn bulk_mark_undone<S: NotificationIngress>(
     State(service): State<NotificationRouterState<S>>,
     macro_user: MacroUserExtractor,
     Json(req): Json<NotificationBulkRequest>,

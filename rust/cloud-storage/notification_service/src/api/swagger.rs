@@ -1,3 +1,5 @@
+extern crate notification as notification_crate;
+
 use crate::notification::send::push::PushNotificationData;
 use model::{
     response::{EmptyResponse, ErrorResponse},
@@ -19,6 +21,7 @@ use crate::{
             self,
             get_user_notifications_by_event_item_id::GetAllUserNotificationsResponse,
         },
+        user_notification_v2,
     },
     model::{
         device::DeviceRequest, notification::CreateNotification,
@@ -48,6 +51,12 @@ use crate::{
                 user_notification::bulk_delete_user_notification::handler,
                 user_notification::get_user_notifications_by_event_item_id::handler,
                 user_notification::bulk_get_user_notifications_by_event_item_id::handler,
+
+                /// /v2/user_notifications
+                user_notification_v2::list_typed_notifications,
+                notification_crate::inbound::http::bulk_mark_seen,
+                notification_crate::inbound::http::bulk_mark_done,
+                notification_crate::inbound::http::bulk_mark_undone,
 
                 /// /unsubscribe
                 unsubscribe::get_unsubscribes::handler,
@@ -86,6 +95,11 @@ use crate::{
                         ChannelMentionMetadata,
                         ChannelReplyMetadata,
                         DocumentMentionMetadata,
+
+                        // v2 typed notifications
+                        user_notification_v2::NotifEvent,
+                        user_notification_v2::ApiUserNotification,
+                        user_notification_v2::GetAllUserNotificationsResponse,
                 ),
         ),
         tags(
