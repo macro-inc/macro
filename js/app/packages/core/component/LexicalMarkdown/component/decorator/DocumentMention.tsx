@@ -46,33 +46,22 @@ import {
   type EditorThemeClasses,
   KEY_ENTER_COMMAND,
 } from 'lexical';
-import type { JSX, Setter } from 'solid-js';
+import type { JSX } from 'solid-js';
 import {
-  createContext,
   createEffect,
   createMemo,
   createSignal,
   Match,
-  onCleanup,
   Show,
   Suspense,
   Switch,
   useContext,
 } from 'solid-js';
-import { HoverCard } from '@kobalte/core/hover-card';
+import { MentionHoverCard } from '@core/component/MentionHoverCard';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { autoRegister, UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';
 import { openDocument } from '../core/BlockLink';
 import { MentionTooltip } from './MentionTooltip';
-
-type NestedHoverCardContext = {
-  count: () => number;
-  setCount: Setter<number>;
-};
-
-const HoverCardPortalNestedPreviewOpenContext = createContext<
-  NestedHoverCardContext | undefined
->(undefined);
 
 function MentionContainer(props: {
   icon: JSX.Element;
@@ -227,27 +216,11 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
   const editor = lexicalWrapper?.editor;
   const selection = () => lexicalWrapper?.selection;
 
-  const parentNestedContext = useContext(
-    HoverCardPortalNestedPreviewOpenContext
-  );
-
   let inlinePreviewRef!: HTMLSpanElement;
 
   const [isCollapsed, setIsCollapsed] = createSignal<boolean>(
     props.collapsed ?? false
   );
-
-  const [nestedOpenCount, setNestedOpenCount] = createSignal(0);
-  const [isHoverCardOpen, setIsHoverCardOpen] = createSignal(false);
-
-  createEffect(() => {
-    if (isHoverCardOpen()) {
-      parentNestedContext?.setCount((c) => c + 1);
-      onCleanup(() => {
-        parentNestedContext?.setCount((c) => c - 1);
-      });
-    }
-  });
 
   const isCollapsable = createMemo(() => {
     return lexicalWrapper?.isInteractable() ?? false;
@@ -372,98 +345,87 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
   });
 
   return (
-    <HoverCard
-      openDelay={100}
-      closeDelay={150}
-      gutter={8}
-      open={isHoverCardOpen()}
-      onOpenChange={setIsHoverCardOpen}
-      forceMount={nestedOpenCount() > 0}
-    >
-      <span class="relative">
-        <HoverCard.Trigger
-          as="span"
-          class="w-full h-full py-0.5 cursor-default rounded-xs hover:bg-hover focus:bg-active"
-          classList={{
-            'bg-active text-ink bracket bracket-offset-2': isSelectedAsNode(),
-          }}
-          style={{
-            'user-select': 'inherit',
-          }}
-          ref={inlinePreviewRef}
-          ontouchstart={(e: TouchEvent) => {
-            if (isTouchDevice()) {
-              e.preventDefault();
-            }
-          }}
-          ontouchend={(e: TouchEvent) => {
-            if (isTouchDevice()) {
-              e.preventDefault();
-              if (matches(item(), (i) => !i.loading && i.access === 'access')) {
-                open(null);
+    <MentionHoverCard
+      trigger={
+        <span class="relative">
+          <span
+            class="w-full h-full py-0.5 cursor-default rounded-xs hover:bg-hover focus:bg-active"
+            classList={{
+              'bg-active text-ink bracket bracket-offset-2': isSelectedAsNode(),
+            }}
+            style={{
+              'user-select': 'inherit',
+            }}
+            ref={inlinePreviewRef}
+            ontouchstart={(e: TouchEvent) => {
+              if (isTouchDevice()) {
+                e.preventDefault();
               }
-            }
-          }}
-          {...navHandlers}
-        >
-          <Switch>
-            <Match when={item().loading}>
-              <Loading collapsed={isCollapsed()} />
-            </Match>
-            <Match when={item()}>
-              <InlinePreview
-                item={item}
-                blockName={verifyBlockName(props.blockName)}
-                blockParams={props.blockParams || {}}
-                theme={props.theme}
-                collapsed={isCollapsed()}
-              />
-            </Match>
-          </Switch>
-        </HoverCard.Trigger>
-        <MentionTooltip show={isSelectedAsNode()} text="Open" />
-      </span>
-
-      <HoverCard.Portal>
-        <HoverCard.Content class="z-toast-region">
-          <HoverCardPortalNestedPreviewOpenContext.Provider
-            value={{ count: nestedOpenCount, setCount: setNestedOpenCount }}
+            }}
+            ontouchend={(e: TouchEvent) => {
+              if (isTouchDevice()) {
+                e.preventDefault();
+                if (
+                  matches(item(), (i) => !i.loading && i.access === 'access')
+                ) {
+                  open(null);
+                }
+              }
+            }}
+            {...navHandlers}
           >
-            <PopupPreview
-              item={item}
-              floatRef={inlinePreviewRef}
-              mouseEnter={() => {}}
-              mouseLeave={() => {}}
-              delete={editor?.isEditable() ? deleteMention : undefined}
-              collapseInfo={{
-                isCollapsed: isCollapsed(),
-                isCollapsable: isCollapsable(),
-                handleCollapse: () => {
-                  const state = !isCollapsed();
-                  setIsCollapsed(state);
-                  editor?.update(() => {
-                    const node = $getNodeByKey(props.key);
-                    if ($isDocumentMentionNode(node)) {
-                      node.setCollapsed(state);
-                    }
-                  });
-                },
-              }}
-              documentInfo={{
-                id: props.documentId,
-                type: verifyBlockName(props.blockName),
-                params: props.blockParams ?? {},
-                isOpenable: currentBlockId !== props.documentId,
-              }}
-              previewInfo={{
-                isPreviewable: isEmbeddable(),
-                showPreview: showEmbedOption(),
-                handlePreviewToggle: convertToCard,
-              }}
-            />
-          </HoverCardPortalNestedPreviewOpenContext.Provider>
-        </HoverCard.Content>
-      </HoverCard.Portal>
-    </HoverCard>
+            <Switch>
+              <Match when={item().loading}>
+                <Loading collapsed={isCollapsed()} />
+              </Match>
+              <Match when={item()}>
+                <InlinePreview
+                  item={item}
+                  blockName={verifyBlockName(props.blockName)}
+                  blockParams={props.blockParams || {}}
+                  theme={props.theme}
+                  collapsed={isCollapsed()}
+                />
+              </Match>
+            </Switch>
+          </span>
+          <MentionTooltip show={isSelectedAsNode()} text="Open" />
+        </span>
+      }
+      content={
+        <PopupPreview
+          item={item}
+          floatRef={inlinePreviewRef}
+          mouseEnter={() => {}}
+          mouseLeave={() => {}}
+          delete={editor?.isEditable() ? deleteMention : undefined}
+          collapseInfo={{
+            isCollapsed: isCollapsed(),
+            isCollapsable: isCollapsable(),
+            handleCollapse: () => {
+              const state = !isCollapsed();
+              setIsCollapsed(state);
+              editor?.update(() => {
+                const node = $getNodeByKey(props.key);
+                if ($isDocumentMentionNode(node)) {
+                  node.setCollapsed(state);
+                }
+              });
+            },
+          }}
+          documentInfo={{
+            id: props.documentId,
+            type: verifyBlockName(props.blockName),
+            params: props.blockParams ?? {},
+            isOpenable: currentBlockId !== props.documentId,
+          }}
+          previewInfo={{
+            isPreviewable: isEmbeddable(),
+            showPreview: showEmbedOption(),
+            handlePreviewToggle: convertToCard,
+          }}
+        />
+      }
+    />
   );
 }

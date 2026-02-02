@@ -3,6 +3,7 @@ import { useRenderState } from '@block-canvas/store/RenderState';
 import { withAnalytics } from '@coparse/analytics';
 import { type BlockName, useBlockId } from '@core/block';
 import { CircleSpinner } from '@core/component/CircleSpinner';
+import { MentionHoverCard } from '@core/component/MentionHoverCard';
 import { PopupPreview } from '@core/component/DocumentPreview';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { itemToBlockName } from '@core/constant/allBlocks';
@@ -19,7 +20,6 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { HoverCard } from '@kobalte/core/hover-card';
 import { useSplitLayout } from 'app/component/split-layout/layout';
 import { DRAG_THRESHOLD, type RenderMode, Tools } from '../../constants';
 import type { EntityMentionNode } from '../../model/CanvasModel';
@@ -280,29 +280,27 @@ export function File(props: { node: EntityMentionNode; mode: RenderMode }) {
   );
 
   return (
-    <Show when={!hoverDisabled()} fallback={triggerContent}>
-      <HoverCard openDelay={100} closeDelay={150} gutter={8}>
-        <HoverCard.Trigger as="div">{triggerContent}</HoverCard.Trigger>
-
-        <Show when={blockName()}>
-          <HoverCard.Portal>
-            <HoverCard.Content class="z-toast-region">
-              <PopupPreview
-                item={item}
-                floatRef={fileRef}
-                mouseEnter={() => {}}
-                mouseLeave={() => {}}
-                documentInfo={{
-                  id: props.node.file,
-                  type: blockName() as BlockName,
-                  params: {},
-                  isOpenable: blockId !== props.node.file,
-                }}
-              />
-            </HoverCard.Content>
-          </HoverCard.Portal>
-        </Show>
-      </HoverCard>
+    <Show when={blockName()}>
+      {(name) => (
+        <MentionHoverCard
+          trigger={triggerContent}
+          content={
+            <PopupPreview
+              item={item}
+              floatRef={fileRef}
+              mouseEnter={() => {}}
+              mouseLeave={() => {}}
+              documentInfo={{
+                id: props.node.file,
+                type: name() as BlockName,
+                params: {},
+                isOpenable: blockId !== props.node.file,
+              }}
+            />
+          }
+          disabled={hoverDisabled()}
+        />
+      )}
     </Show>
   );
 }
