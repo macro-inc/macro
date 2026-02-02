@@ -6,6 +6,9 @@ use model_notifications::{
 };
 use serde::{Deserialize, Serialize};
 
+#[cfg(test)]
+mod tests;
+
 /// Defines a notification event enum with compile-time safety guarantees.
 ///
 /// The `tag` field in the database row is the `Notification::TYPE_NAME` of the
