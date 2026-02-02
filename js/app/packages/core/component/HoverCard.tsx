@@ -1,4 +1,4 @@
-import { HoverCard } from '@kobalte/core/hover-card';
+import { HoverCard as KobalteHoverCard } from '@kobalte/core/hover-card';
 import type { JSX, Setter } from 'solid-js';
 import {
   createContext,
@@ -42,7 +42,7 @@ export type HoverCardComponentProps = {
  * A hover card component that supports nested hover cards.
  * When nested hover cards are open, parent cards are force-mounted to prevent closing.
  */
-export function HoverCardComponent(props: HoverCardComponentProps) {
+export function HoverCard(props: HoverCardComponentProps) {
   const parentNestedContext = useContext(
     HoverCardPortalNestedPreviewOpenContext
   );
@@ -65,7 +65,7 @@ export function HoverCardComponent(props: HoverCardComponentProps) {
   };
 
   return (
-    <HoverCard
+    <KobalteHoverCard
       getAnchorRect={
         props.anchorRef &&
         ((_triggerAnchor) => {
@@ -79,19 +79,19 @@ export function HoverCardComponent(props: HoverCardComponentProps) {
       onOpenChange={handleOpenChange}
       forceMount={nestedOpenCount() > 0}
     >
-      <HoverCard.Trigger as="span" disabled={props.disabled}>
+      <KobalteHoverCard.Trigger as="span" disabled={props.disabled}>
         {props.trigger}
-      </HoverCard.Trigger>
+      </KobalteHoverCard.Trigger>
 
-      <HoverCard.Portal>
-        <HoverCard.Content class={props.contentClass}>
+      <KobalteHoverCard.Portal>
+        <KobalteHoverCard.Content class={props.contentClass}>
           <HoverCardPortalNestedPreviewOpenContext.Provider
             value={{ count: nestedOpenCount, setCount: setNestedOpenCount }}
           >
             {props.content}
           </HoverCardPortalNestedPreviewOpenContext.Provider>
-        </HoverCard.Content>
-      </HoverCard.Portal>
-    </HoverCard>
+        </KobalteHoverCard.Content>
+      </KobalteHoverCard.Portal>
+    </KobalteHoverCard>
   );
 }
