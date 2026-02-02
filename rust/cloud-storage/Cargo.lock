@@ -5911,6 +5911,7 @@ dependencies = [
  "model_notifications",
  "models_comms",
  "models_pagination",
+ "notification",
  "notification_db_client",
  "regex",
  "secretsmanager_client",

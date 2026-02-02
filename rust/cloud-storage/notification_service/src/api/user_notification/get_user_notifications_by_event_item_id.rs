@@ -1,6 +1,4 @@
-use crate::api::{
-    context::ApiContext, user_notification::get_user_notification::GetAllUserNotificationsResponse,
-};
+use crate::api::context::ApiContext;
 use axum::{
     Extension, Json,
     extract::{Path, Query, State},
@@ -10,7 +8,15 @@ use model::response::ErrorResponse;
 use model::user::UserContext;
 use model_notifications::UserNotification;
 use models_pagination::{CreatedAt, CursorExtractor, PaginateOn, Paginated, TypeEraseCursor};
+use serde::Serialize;
 use sqlx::types::Uuid;
+use utoipa::ToSchema;
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct GetAllUserNotificationsResponse {
+    pub items: Vec<UserNotification>,
+    pub next_cursor: Option<String>,
+}
 
 #[derive(serde::Deserialize)]
 pub struct PathParams {

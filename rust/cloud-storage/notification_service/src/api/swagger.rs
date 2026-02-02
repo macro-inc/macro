@@ -15,7 +15,10 @@ use crate::{
     api::{
         device, health, notification,
         unsubscribe::{self, unsubscribe_item::UnsubscribeItemPathParams},
-        user_notification::{self, get_user_notification::GetAllUserNotificationsResponse},
+        user_notification::{
+            self,
+            get_user_notifications_by_event_item_id::GetAllUserNotificationsResponse,
+        },
     },
     model::{
         device::DeviceRequest, notification::CreateNotification,
@@ -40,15 +43,11 @@ use crate::{
                 notification::create_notification::handler,
 
                 /// /user_notifications
-                user_notification::get_user_notification::handler,
                 user_notification::get_user_notification_by_id::handler,
                 user_notification::delete_user_notification::handler,
                 user_notification::bulk_delete_user_notification::handler,
-                user_notification::bulk_mark_user_notification_seen::handler,
-                user_notification::bulk_mark_user_notification_done::handler,
                 user_notification::get_user_notifications_by_event_item_id::handler,
                 user_notification::bulk_get_user_notifications_by_event_item_id::handler,
-                user_notification::bulk_mark_user_notification_undone::handler,
 
                 /// /unsubscribe
                 unsubscribe::get_unsubscribes::handler,

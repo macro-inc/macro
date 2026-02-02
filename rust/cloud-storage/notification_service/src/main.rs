@@ -88,13 +88,30 @@ pub async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
 
-    api::setup_and_serve(ApiContext {
-        db,
-        sns_client: Arc::new(sns_client),
-        config: Arc::new(config),
-        jwt_args,
-        internal_secret_key,
-    })
+    let notification_repository =
+        ::notification::outbound::repository::DbNotificationRepository::new(db.clone());
+    let notification_queue = ::notification::outbound::queue::SqsNotificationQueue::new(
+        aws_sdk_sqs::Client::new(&aws_config),
+        config.push_notification_event_handler_queue.clone(),
+    );
+    let ingress_service = ::notification::domain::service::NotificationIngressService::new(
+        notification_repository,
+        notification_queue,
+        "notification_service",
+    );
+    let ingress_state =
+        ::notification::inbound::http::NotificationRouterState::new(ingress_service);
+
+    api::setup_and_serve(
+        ApiContext {
+            db,
+            sns_client: Arc::new(sns_client),
+            config: Arc::new(config),
+            jwt_args,
+            internal_secret_key,
+        },
+        ingress_state,
+    )
     .await?;
 
     Ok(())

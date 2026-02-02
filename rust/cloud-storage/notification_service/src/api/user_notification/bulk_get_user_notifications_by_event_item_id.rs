@@ -11,7 +11,8 @@ use models_pagination::{
 use sqlx::types::Uuid;
 
 use crate::api::{
-    context::ApiContext, user_notification::get_user_notification::GetAllUserNotificationsResponse,
+    context::ApiContext,
+    user_notification::get_user_notifications_by_event_item_id::GetAllUserNotificationsResponse,
 };
 
 use model::user::UserContext;
