@@ -269,7 +269,6 @@ function UserInfo(props: { userId: string }) {
  */
 export function PopupPreview(props: {
   item: Accessor<PreviewItem>;
-  floatRef: HTMLElement;
   mouseEnter: () => void;
   mouseLeave: () => void;
   delete?: () => void;

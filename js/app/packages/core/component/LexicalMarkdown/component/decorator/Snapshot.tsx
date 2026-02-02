@@ -69,8 +69,6 @@ function SnapshotInner(props: SnapshotDecoratorProps) {
   const editor = lexicalWrapper?.editor;
   const selection = () => lexicalWrapper?.selection;
 
-  let inlinePreviewRef!: HTMLSpanElement;
-
   const previewType = () =>
     blockNameToItemType(verifyBlockName(props.blockName));
 
@@ -180,7 +178,6 @@ function SnapshotInner(props: SnapshotDecoratorProps) {
             style={{
               'user-select': 'inherit',
             }}
-            ref={inlinePreviewRef}
             ontouchstart={(e) => {
               if (isTouchDevice()) {
                 e.preventDefault();
@@ -206,7 +203,6 @@ function SnapshotInner(props: SnapshotDecoratorProps) {
       content={
         <PopupPreview
           item={item}
-          floatRef={inlinePreviewRef}
           mouseEnter={() => {}}
           mouseLeave={() => {}}
           delete={editor?.isEditable() ? deleteSnapshot : undefined}

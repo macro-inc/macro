@@ -216,8 +216,6 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
   const editor = lexicalWrapper?.editor;
   const selection = () => lexicalWrapper?.selection;
 
-  let inlinePreviewRef!: HTMLSpanElement;
-
   const [isCollapsed, setIsCollapsed] = createSignal<boolean>(
     props.collapsed ?? false
   );
@@ -356,7 +354,6 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
             style={{
               'user-select': 'inherit',
             }}
-            ref={inlinePreviewRef}
             ontouchstart={(e: TouchEvent) => {
               if (isTouchDevice()) {
                 e.preventDefault();
@@ -395,7 +392,6 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
       content={
         <PopupPreview
           item={item}
-          floatRef={inlinePreviewRef}
           mouseEnter={() => {}}
           mouseLeave={() => {}}
           delete={editor?.isEditable() ? deleteMention : undefined}

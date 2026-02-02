@@ -214,8 +214,6 @@ function ItemPreviewInner(props: ItemPreviewProps) {
   const [previewOpen, setPreviewOpen] = createSignal(false);
   const debouncedSetPreviewOpen = debounce(setPreviewOpen, 100);
 
-  let buttonRef!: HTMLButtonElement;
-
   return (
     <Switch>
       <Match when={item().loading}>
@@ -247,7 +245,6 @@ function ItemPreviewInner(props: ItemPreviewProps) {
                 return (
                   <>
                     <button
-                      ref={buttonRef}
                       class="text-ink-base text-sm ring-1 ring-edge-muted rounded-xs hover:bg-panel-hover flex flex-row h-6 px-2 justify-center items-center cursor-pointer"
                       onMouseEnter={() => {
                         if (!isTouchDevice()) {
@@ -287,7 +284,6 @@ function ItemPreviewInner(props: ItemPreviewProps) {
                     <Show when={previewOpen() && blockName}>
                       <PopupPreview
                         item={item}
-                        floatRef={buttonRef}
                         mouseEnter={() => {
                           debouncedSetPreviewOpen(true);
                         }}
