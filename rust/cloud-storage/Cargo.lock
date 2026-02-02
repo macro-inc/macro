@@ -2665,6 +2665,7 @@ dependencies = [
  "macro_aws_config",
  "macro_cors",
  "macro_db_client",
+ "macro_db_migrator",
  "macro_entrypoint",
  "macro_env",
  "macro_middleware",
