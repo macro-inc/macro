@@ -204,7 +204,9 @@ export async function fetchPreviewBatch(
     .filter((i) => i.type === 'document' || !i.type)
     .map((i) => i.id);
 
-  const channelItems = items.filter((i) => i.type === 'channel' || !i.type);
+  const channelItems = items
+    .filter((i) => i.type === 'channel' || !i.type)
+    .map((i) => i.id);
 
   const projectItems = items
     .filter((i) => i.type === 'project' || !i.type)

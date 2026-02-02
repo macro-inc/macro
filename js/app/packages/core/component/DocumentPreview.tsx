@@ -15,7 +15,6 @@ import { ClippedPanel } from '@core/component/ClippedPanel';
 import { toast } from '@core/component/Toast/Toast';
 import {
   isAccessiblePreviewItem,
-  isChannelPreviewItem,
   type PreviewChannelAccess,
   type PreviewDocumentAccess,
   type PreviewItem,
@@ -23,7 +22,6 @@ import {
   type PreviewItemNoAccess,
   type PreviewProjectAccess,
 } from '@queries/preview';
-import { tryMacroId, useDisplayName } from '@core/user';
 import { matches } from '@core/util/match';
 // Icon imports
 import CollapseInlinePreview from '@icon/regular/arrows-in-line-horizontal.svg';
@@ -41,9 +39,6 @@ import LoadingSpinner from '@icon/regular/spinner.svg';
 import TrashSimple from '@icon/regular/trash-simple.svg';
 import UserIcon from '@icon/regular/user.svg';
 import MacroEmbed from '@macro-icons/macro-embed.svg';
-import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { channelTheme } from '@core/component/LexicalMarkdown/theme';
-import { UserIcon as UserIconComponent } from '@core/component/UserIcon';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
 import { globalSplitManager } from 'app/signal/splitLayout';
@@ -523,14 +518,6 @@ export function PopupPreview(props: {
       props.documentInfo.params
     );
 
-    const messageContext = isChannelPreviewItem(accessibleItem)
-      ? accessibleItem.messageContext
-      : undefined;
-
-    const [senderDisplayName] = messageContext
-      ? useDisplayName(tryMacroId(messageContext.senderId))
-      : [() => ''];
-
     return (
       <>
         <div class="text-sm font-semibold">
@@ -543,37 +530,8 @@ export function PopupPreview(props: {
           )}
         </div>
 
-        <Show when={messageContext}>
-          {(context) => (
-            <div class="mt-2 mb-1 text-sm text-ink-muted border-l-2 border-edge pl-3 py-1">
-              <div class="line-clamp-3 break-words">
-                <StaticMarkdown
-                  markdown={context().content}
-                  theme={channelTheme}
-                  target="internal"
-                />
-              </div>
-            </div>
-          )}
-        </Show>
-
         <div class="flex justify-between items-center w-full text-sm font-medium">
-          <Show when={messageContext}>
-            {(context) => (
-              <div class="justify-left mt-2 w-fit max-w-[66%] text-ink-muted overflow-hidden whitespace-nowrap text-ellipsis flex items-center gap-1.5">
-                <UserIconComponent
-                  id={context().senderId}
-                  size="xs"
-                  suppressClick
-                  showTooltip={false}
-                />
-                <span class="relative text-[0.8em] text-ink-muted max-w-full">
-                  {senderDisplayName()}
-                </span>
-              </div>
-            )}
-          </Show>
-          <Show when={!messageContext && props.item().owner}>
+          <Show when={props.item().owner}>
             {(name) => (
               <div class="justify-left mt-2 w-fit max-w-[66%] text-ink-muted overflow-hidden whitespace-nowrap text-ellipsis">
                 <span class="relative text-[0.8em] text-ink-muted max-w-full">
@@ -583,17 +541,7 @@ export function PopupPreview(props: {
               </div>
             )}
           </Show>
-          <Show when={messageContext}>
-            {(context) => (
-              <div class="justify-right mt-2">
-                <span class="relative text-[0.8em] text-ink-muted">
-                  <ClockIcon class="relative top-[-0.125em] size-4 inline-flex items-center mr-1" />
-                  {formatDate(new Date(context().createdAt).getTime())}
-                </span>
-              </div>
-            )}
-          </Show>
-          <Show when={!messageContext && props.item().updatedAt}>
+          <Show when={props.item().updatedAt}>
             {(time) => (
               <div class="justify-right mt-2">
                 <span class="relative text-[0.8em] text-ink-muted">
