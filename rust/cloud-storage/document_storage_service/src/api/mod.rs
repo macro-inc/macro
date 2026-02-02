@@ -184,11 +184,6 @@ fn api_router(state: ApiContext) -> Router {
                     search_service::search_router()
                         .with_state(SearchHandlerState::from_ref(&state)),
                 )
-                .nest(
-                    "/comms",
-                    comms_service::comms_router(&CommsHandlerState::from_ref(&state))
-                        .with_state(CommsHandlerState::from_ref(&state)),
-                )
                 .layer(
                     ServiceBuilder::new()
                         .layer(axum::middleware::from_fn_with_state(
