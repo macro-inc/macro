@@ -52,8 +52,6 @@ export async function fetchMessageContext(
 ): Promise<MessageContext | null> {
   const msgResult = await commsServiceClient.getMessageWithContext({
     message_id: messageId,
-    before: 0,
-    after: 0,
   });
 
   if (isErr(msgResult)) {
