@@ -4,6 +4,8 @@ use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
 use mention_utils::parse::{ParsedXmlText, XmlFormatter};
 use model_entity::Entity;
 use model_entity::EntityType;
+use notification::domain::models::RateLimitConfig;
+use notification::domain::models::RateLimitKey;
 use notification::domain::models::{
     NotifCollapseKey, NotificationExtIos,
     apple::{APNSPushNotification, AlertDictionary, Aps},
@@ -549,5 +551,51 @@ impl NotificationExtIos for DocumentMentionMetadata {
         let title = sender.0.email_part().email_str().to_string();
         let body = format!("You were mentioned in {}.{}", self.document_name, file_type);
         Some(alert_apns(title, body))
+    }
+}
+
+impl notification::domain::models::Notification for TaskAssignedMetadata {
+    const TYPE_NAME: &'static str = "task_assigned";
+
+    fn rate_limit_config() -> Option<RateLimitConfig> {
+        None
+    }
+
+    fn rate_limit_key(&self) -> Option<RateLimitKey> {
+        None
+    }
+}
+
+impl NotificationExtIos for TaskAssignedMetadata {
+    type NotifData = ();
+
+    fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
+        let entity_type: &'static str = entity.entity_type.into();
+        NotifCollapseKey::new(entity_type).append(&entity.entity_id)
+    }
+
+    fn into_apns<'a>(
+        self,
+        _sender_id: Option<MacroUserIdStr<'a>>,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        let title = self.assigned_by.email_part().email_str().to_string();
+        let body = if let Some(ref task_name) = self.task_name {
+            format!("assigned you to {}", task_name)
+        } else {
+            "assigned you a task".to_string()
+        };
+        Some(APNSPushNotification {
+            aps: Aps {
+                alert: Some(notification::domain::models::apple::Alert::Dictionary(
+                    AlertDictionary {
+                        title: Some(title),
+                        body: Some(body),
+                        ..Default::default()
+                    },
+                )),
+                ..Default::default()
+            },
+            push_notification_data: (),
+        })
     }
 }
