@@ -78,7 +78,7 @@ export function MentionHoverCard(props: MentionHoverCardProps) {
       <HoverCard.Trigger as="span">{props.trigger}</HoverCard.Trigger>
 
       <HoverCard.Portal>
-        <HoverCard.Content class={props.contentClass ?? 'z-toast-region'}>
+        <HoverCard.Content class={props.contentClass}>
           <HoverCardPortalNestedPreviewOpenContext.Provider
             value={{ count: nestedOpenCount, setCount: setNestedOpenCount }}
           >
