@@ -22,6 +22,8 @@ export type MentionHoverCardProps = {
   trigger: JSX.Element;
   /** The content to show in the hover card */
   content: JSX.Element;
+  /** Additional class for content */
+  anchorRef?: HTMLElement;
   /** Open delay in ms (default: 100) */
   openDelay?: number;
   /** Close delay in ms (default: 150) */
@@ -64,6 +66,12 @@ export function MentionHoverCard(props: MentionHoverCardProps) {
 
   return (
     <HoverCard
+      getAnchorRect={
+        props.anchorRef &&
+        ((_triggerAnchor) => {
+          return props.anchorRef?.getBoundingClientRect();
+        })
+      }
       openDelay={props.openDelay ?? 100}
       closeDelay={props.closeDelay ?? 150}
       gutter={props.gutter ?? 8}
