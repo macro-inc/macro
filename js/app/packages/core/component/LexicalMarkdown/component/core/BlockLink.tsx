@@ -37,7 +37,7 @@ export function openDocument(
   inNewSplit?: boolean
 ) {
   const currentBlockId = useMaybeBlockId();
-  const { replaceOrInsertSplit, insertSplit } = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
 
   const targetBlock = fileTypeToBlockName(blockOrFileType);
   if (!targetBlock) return;
@@ -53,19 +53,15 @@ export function openDocument(
     return;
   }
 
-  if (inNewSplit) {
-    const handle = insertSplit({
+  const handle = openWithSplit({
+    content: {
       type: targetBlock,
       id,
-    });
-    handle?.activate();
-  } else {
-    const handle = replaceOrInsertSplit({
-      type: targetBlock,
-      id,
-    });
-    handle?.activate();
-  }
+    },
+    force: inNewSplit ? 'insert' : undefined,
+  });
+
+  handle?.activate();
 
   if (isBlockNameWithLocation(targetBlock)) {
     openLocation(targetBlock, id, params);

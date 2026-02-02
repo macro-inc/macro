@@ -19,7 +19,7 @@ export function ContactMention(props: ContactMentionDecoratorProps) {
   const editor = lexicalWrapper?.editor;
   const selection = () => lexicalWrapper?.selection;
 
-  const { replaceOrInsertSplit, insertSplit } = useSplitLayout()!;
+  const { openWithSplit } = useSplitLayout()!;
 
   const [popupOpen, setPopupOpen] = createSignal(false);
   let mentionRef!: HTMLSpanElement;
@@ -34,17 +34,13 @@ export function ContactMention(props: ContactMentionDecoratorProps) {
     // The contactId is the email or @domain
     const contactId = encodeURIComponent(props.emailOrDomain);
     const inNewSplit = openInNewSplitForMention(e?.altKey, e != null);
-    if (inNewSplit) {
-      insertSplit({
+    openWithSplit({
+      content: {
         type: 'contact',
         id: contactId,
-      });
-    } else {
-      replaceOrInsertSplit({
-        type: 'contact',
-        id: contactId,
-      });
-    }
+      },
+      force: inNewSplit ? 'insert' : undefined,
+    });
   };
 
   const displayName = () => {
