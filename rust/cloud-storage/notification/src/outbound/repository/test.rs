@@ -299,7 +299,7 @@ async fn test_get_user_notifications(pool: Pool<Postgres>) {
     assert_eq!(row.entity.entity_type, EntityType::Document);
     assert!(!row.sent);
     assert!(!row.done);
-    assert!(row.notification_metadata.is_none());
+    assert_eq!(row.notification_metadata.message, "hello");
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

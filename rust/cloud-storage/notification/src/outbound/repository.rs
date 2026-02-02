@@ -391,7 +391,7 @@ impl NotificationDbOps for PgPool {
                 un.seen_at::timestamptz as viewed_at,
                 un.created_at::timestamptz as updated_at,
                 un.deleted_at::timestamptz,
-                n.metadata as "notification_metadata!: serde_json::Value",
+                n.metadata as "notification_metadata: serde_json::Value",
                 n.notification_event_type as notification_event_type,
                 n.sender_id as sender_id
             FROM user_notification un
