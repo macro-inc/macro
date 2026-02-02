@@ -1,5 +1,5 @@
 import { useMaybeBlockId } from '@core/block';
-import { HoverCard } from '@core/component/MentionHoverCard';
+import { HoverCard } from '@core/component/HoverCard';
 import { PopupPreview } from '@core/component/DocumentPreview';
 import {
   EntityIcon,

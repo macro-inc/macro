@@ -57,7 +57,7 @@ import {
   Switch,
   useContext,
 } from 'solid-js';
-import { HoverCard } from '@core/component/MentionHoverCard';
+import { HoverCard } from '@core/component/HoverCard';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { autoRegister, UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';
 import { openDocument } from '../core/BlockLink';
