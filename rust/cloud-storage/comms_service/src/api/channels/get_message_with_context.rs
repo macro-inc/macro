@@ -24,7 +24,7 @@ pub struct GetMessageWithContextParams {
 
 #[utoipa::path(
     get,
-    path = "/channels/messages/context",
+    path = "/comms/channels/messages/context",
     tag = "channels",
     operation_id = "get_message_with_context",
     params(

@@ -59,7 +59,60 @@
             }
           }
         }
-      },
+      }
+    },
+    "/channels": {
+      "get": {
+        "tags": ["channels"],
+        "operationId": "get_channels",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ApiChannelWithLatest"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/comms/activity": {
       "post": {
         "tags": ["activity"],
         "operationId": "post_activity",
@@ -117,7 +170,7 @@
         }
       }
     },
-    "/attachments/{entity_type}/{entity_id}/references": {
+    "/comms/attachments/{entity_type}/{entity_id}/references": {
       "get": {
         "tags": ["attachments"],
         "operationId": "get_attachment_references",
@@ -185,56 +238,7 @@
         }
       }
     },
-    "/channels": {
-      "get": {
-        "tags": ["channels"],
-        "operationId": "get_channels",
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ApiChannelWithLatest"
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      },
+    "/comms/channels": {
       "post": {
         "tags": ["channels"],
         "operationId": "create_channel",
@@ -302,7 +306,7 @@
         }
       }
     },
-    "/channels/get_or_create_dm": {
+    "/comms/channels/get_or_create_dm": {
       "post": {
         "tags": ["channels"],
         "description": "given a user and a recipient, either finds or creates a direct message channel",
@@ -371,7 +375,7 @@
         }
       }
     },
-    "/channels/get_or_create_private": {
+    "/comms/channels/get_or_create_private": {
       "post": {
         "tags": ["channels"],
         "description": "given a list of partiicpants, either fetch an existing private channel with the permtation or create a new one",
@@ -440,7 +444,7 @@
         }
       }
     },
-    "/channels/messages/context": {
+    "/comms/channels/messages/context": {
       "get": {
         "tags": ["channels"],
         "operationId": "get_message_with_context",
@@ -519,7 +523,7 @@
         }
       }
     },
-    "/channels/{channel_id}": {
+    "/comms/channels/{channel_id}": {
       "get": {
         "tags": ["channels"],
         "operationId": "get_channel",
@@ -701,7 +705,7 @@
         }
       }
     },
-    "/channels/{channel_id}/join": {
+    "/comms/channels/{channel_id}/join": {
       "post": {
         "tags": ["channels"],
         "description": "allows a user to attempt to join a channel",
@@ -754,7 +758,7 @@
         }
       }
     },
-    "/channels/{channel_id}/leave": {
+    "/comms/channels/{channel_id}/leave": {
       "post": {
         "tags": ["channels"],
         "description": "allows a user to attempt to leave a channel",
@@ -807,7 +811,7 @@
         }
       }
     },
-    "/channels/{channel_id}/mentions": {
+    "/comms/channels/{channel_id}/mentions": {
       "get": {
         "tags": ["channels"],
         "operationId": "get_mentions_for_channel",
@@ -866,7 +870,7 @@
         }
       }
     },
-    "/channels/{channel_id}/message": {
+    "/comms/channels/{channel_id}/message": {
       "post": {
         "tags": ["channels"],
         "operationId": "post_message",
@@ -935,7 +939,7 @@
         }
       }
     },
-    "/channels/{channel_id}/message/{message_id}": {
+    "/comms/channels/{channel_id}/message/{message_id}": {
       "delete": {
         "tags": ["channels"],
         "operationId": "delete_message",
@@ -1079,7 +1083,7 @@
         }
       }
     },
-    "/channels/{channel_id}/participants": {
+    "/comms/channels/{channel_id}/participants": {
       "post": {
         "tags": ["channels"],
         "description": "adds a list of participants to the channel, user must be a participant",
@@ -1203,7 +1207,7 @@
         }
       }
     },
-    "/channels/{channel_id}/reaction": {
+    "/comms/channels/{channel_id}/reaction": {
       "post": {
         "tags": ["channels"],
         "operationId": "post_reaction",
@@ -1272,7 +1276,7 @@
         }
       }
     },
-    "/channels/{channel_id}/typing": {
+    "/comms/channels/{channel_id}/typing": {
       "post": {
         "tags": ["channels"],
         "operationId": "post_typing",
@@ -1341,7 +1345,7 @@
         }
       }
     },
-    "/mentions": {
+    "/comms/mentions": {
       "post": {
         "tags": ["mentions"],
         "operationId": "create_mention_handler",
@@ -1375,7 +1379,7 @@
         }
       }
     },
-    "/mentions/{mention_id}": {
+    "/comms/mentions/{mention_id}": {
       "delete": {
         "tags": ["mentions"],
         "operationId": "delete_mention_handler",
@@ -1416,7 +1420,7 @@
         }
       }
     },
-    "/preview": {
+    "/comms/preview": {
       "post": {
         "tags": ["preview"],
         "operationId": "get_batch_channel_preview",

@@ -49,7 +49,8 @@ type PropertiesService =
     PropertiesServiceImpl<PropertiesPgRepo, PermissionServiceImpl, NotificationServiceImpl>;
 
 /// Type alias for the ChannelServiceImpl used by comms
-pub(crate) type CommsChannelService = ChannelServiceImpl<PgCommsRepo, UserRepoImpl, FrecencyPgStorage>;
+pub(crate) type CommsChannelService =
+    ChannelServiceImpl<PgCommsRepo, UserRepoImpl, FrecencyPgStorage>;
 
 /// Type alias for the CommsRouterState
 pub(crate) type CommsState = CommsRouterState<CommsChannelService>;

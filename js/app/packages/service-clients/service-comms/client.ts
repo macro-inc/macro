@@ -127,10 +127,13 @@ export const commsServiceClient = {
   ) {
     const { channel_id, action, thread_id, nonce } = args;
     return mapOk(
-      await commsFetch<MessageResponse>(`/comms/channels/${channel_id}/typing`, {
-        method: 'POST',
-        body: JSON.stringify({ action, thread_id, nonce }),
-      }),
+      await commsFetch<MessageResponse>(
+        `/comms/channels/${channel_id}/typing`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ action, thread_id, nonce }),
+        }
+      ),
       (result) => result
     );
   },
@@ -139,10 +142,13 @@ export const commsServiceClient = {
   ) {
     const { channel_id, action, emoji, message_id, nonce } = args;
     return mapOk(
-      await commsFetch<MessageResponse>(`/comms/channels/${channel_id}/reaction`, {
-        method: 'POST',
-        body: JSON.stringify({ action, emoji, message_id, nonce }),
-      }),
+      await commsFetch<MessageResponse>(
+        `/comms/channels/${channel_id}/reaction`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ action, emoji, message_id, nonce }),
+        }
+      ),
       (result) => result
     );
   },
@@ -240,10 +246,13 @@ export const commsServiceClient = {
   async getOrCreateDirectMessage(args: GetOrCreateDmRequest) {
     const { recipient_id } = args;
     return mapOk(
-      await commsFetch<GetOrCreateDmResponse>(`/comms/channels/get_or_create_dm`, {
-        method: 'POST',
-        body: JSON.stringify({ recipient_id }),
-      }),
+      await commsFetch<GetOrCreateDmResponse>(
+        `/comms/channels/get_or_create_dm`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ recipient_id }),
+        }
+      ),
       (result) => result
     );
   },

@@ -53,7 +53,7 @@ pub struct PostMessageResponse {
         post,
         tag = "channels",
         operation_id = "post_message",
-        path = "/channels/{channel_id}/message",
+        path = "/comms/channels/{channel_id}/message",
         params(
             ("channel_id" = String, Path, description = "id of the channel")
         ),

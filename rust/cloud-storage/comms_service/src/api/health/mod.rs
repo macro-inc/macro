@@ -3,7 +3,7 @@ use axum::{Router, routing::get};
 /// Health check
 #[utoipa::path(
         get,
-        path = "/health",
+        path = "/comms/health",
         responses(
             (status = 200, description = "health", body = String),
         )
