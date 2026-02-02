@@ -122,12 +122,55 @@ pub fn to_typed_row(
         .deserialize_json::<NotifEvent>()
 }
 
-/// Build the strongly typed router that wraps the notification crate's generic router.
+/// Build the strongly typed v2 router.
+///
+/// Instantiates the notification crate's generic router, then overwrites the
+/// GET `/` route with a wrapper that deserializes each row into [`NotifEvent`].
 pub fn router<
     S: ::notification::domain::service::NotificationIngress,
     O: Clone + Send + Sync + 'static,
 >(
     state: ::notification::inbound::http::NotificationRouterState<S>,
 ) -> axum::Router<O> {
-    ::notification::inbound::http::router::<S, serde_json::Value, O>(state)
+    ::notification::inbound::http::router::<S, serde_json::Value>()
+        .route("/", axum::routing::get(list_typed_notifications::<S>))
+        .with_state(state)
+}
+
+/// Wrapper handler that calls the inner generic list handler with `serde_json::Value`,
+/// then converts each row to [`UserNotificationRow<NotifEvent>`].
+///
+/// Rows that fail to deserialize are dropped with a warning log.
+async fn list_typed_notifications<S: ::notification::domain::service::NotificationIngress>(
+    state: axum::extract::State<::notification::inbound::http::NotificationRouterState<S>>,
+    macro_user: model_user::axum_extractor::MacroUserExtractor,
+    query: axum::extract::Query<::notification::inbound::http::Params>,
+    cursor: models_pagination::CursorExtractor<uuid::Uuid, models_pagination::CreatedAt, ()>,
+) -> Result<
+    axum::Json<GetAllUserNotificationsResponse>,
+    (
+        axum::http::StatusCode,
+        axum::Json<model_error_response::ErrorResponse<'static>>,
+    ),
+> {
+    let axum::Json(response) = ::notification::inbound::http::list_user_notifications::<
+        S,
+        serde_json::Value,
+    >(state, macro_user, query, cursor)
+    .await?;
+
+    let items = response
+        .items
+        .into_iter()
+        .filter_map(|row| {
+            to_typed_row(row)
+                .inspect_err(|e| tracing::warn!(error=?e, "failed to deserialize notification row"))
+                .ok()
+        })
+        .collect();
+
+    Ok(axum::Json(GetAllUserNotificationsResponse {
+        items,
+        next_cursor: response.next_cursor,
+    }))
 }

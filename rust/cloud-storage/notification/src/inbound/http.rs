@@ -45,15 +45,13 @@ impl<S: NotificationIngress> NotificationRouterState<S> {
 }
 
 /// construct the router
-pub fn router<S: NotificationIngress, T: Serialize + DeserializeOwned + Send + 'static, O>(
-    state: NotificationRouterState<S>,
-) -> Router<O> {
+pub fn router<S: NotificationIngress, T: Serialize + DeserializeOwned + Send + 'static>()
+-> Router<NotificationRouterState<S>> {
     Router::new()
         .route("/", get(list_user_notifications::<S, T>))
         .route("/bulk/seen", patch(bulk_mark_seen))
         .route("/bulk/done", patch(bulk_mark_done))
         .route("/bulk/undone", patch(bulk_mark_undone))
-        .with_state(state)
 }
 
 /// the params for pagination
@@ -72,7 +70,11 @@ pub struct GetAllUserNotificationsResponse<T> {
     pub next_cursor: Option<String>,
 }
 
-async fn list_user_notifications<S: NotificationIngress, T: Serialize + DeserializeOwned + Send>(
+/// List user notifications with generic metadata type `T`.
+pub async fn list_user_notifications<
+    S: NotificationIngress,
+    T: Serialize + DeserializeOwned + Send,
+>(
     State(service): State<NotificationRouterState<S>>,
     macro_user: MacroUserExtractor,
     Query(Params { limit }): Query<Params>,
