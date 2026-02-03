@@ -58,6 +58,16 @@ false && observedSize;
 // The size of a message with a profile picture and a one line message
 const BASE_ITEM_SIZE = 50;
 
+const createDefaultMessageListContext = (index: Accessor<number>) =>
+  createMemo<MessageListContext>(() => ({
+    index: index(),
+    isNewMessage: false,
+    isParentNewMessage: false,
+    threadIndex: -1,
+    previousNonThreadedMessage: undefined,
+    isInLastThread: false,
+  }));
+
 type MessageListContentContextValues = {
   setFocusedMessageId: Setter<string | undefined>;
   registerVirtualHandle: (handle: VirtualizerHandle) => void;
@@ -637,6 +647,16 @@ function MessageListImpl(props: MessageListProps) {
     children: Message[];
   };
 
+  type MessageListItemProps = {
+    message: Message;
+    index: Accessor<number>;
+    listContext: MessageListContext;
+    isFocused: boolean;
+    isTarget: boolean;
+    threadChildren?: Message[];
+    threadSiblings?: Message[];
+  };
+
   const threadRows = createMemo<ThreadRow[]>(() => {
     const list = filteredTopLevelMessages() ?? [];
     const out: ThreadRow[] = [];
@@ -842,6 +862,92 @@ function MessageListImpl(props: MessageListProps) {
 
   const listHeight = createMemo(() => size()?.height ?? 0);
 
+  const MessageListItem = (params: MessageListItemProps) => (
+    <MessageContainer
+      message={params.message}
+      lastViewed={lastViewed}
+      isFocused={params.isFocused}
+      index={params.index}
+      orderedMessages={props.orderedMessages}
+      threadChildren={params.threadChildren}
+      threadSiblings={params.threadSiblings}
+      newIndicatorShown={newIndicatorShown}
+      setNewIndicatorShown={setNewIndicatorShown}
+      virtualHandle={virtualHandle()!}
+      container={containerRef()}
+      listContext={params.listContext}
+      isTarget={params.isTarget}
+      channelId={() => props.channelId}
+      attachments={props.attachments}
+      reactions={props.reactions}
+    />
+  );
+
+  const ThreadRowItem = (rowProps: { row: ThreadRow }) => {
+    const row = () => rowProps.row;
+    const threadChildren = () => row().children;
+    const threadState = createMemo(() =>
+      listContext.getThreadState(row().message.id)
+    );
+    const isThreadExpanded = createMemo(
+      () => threadState()?.threadExpanded === true
+    );
+    const parentIndex = createMemo(
+      () => messageListContext[row().id]?.index ?? 0
+    );
+    const parentDefaultContext = createDefaultMessageListContext(parentIndex);
+    const parentContext = createMemo(
+      () => messageListContext[row().id] ?? parentDefaultContext()
+    );
+
+    const renderThreadChild = (child: Message) => {
+      const childId = () => child.id;
+      const childContext = () => messageListContext[childId()];
+      const childIndexAccessor = () => childContext()?.index ?? 0;
+      const childDefaultContext =
+        createDefaultMessageListContext(childIndexAccessor);
+      const resolvedChildContext = () =>
+        childContext() ?? childDefaultContext();
+      const isThreadIndexWithinCutoff = createMemo(() => {
+        const ctx = childContext();
+        if (!ctx) return false;
+        return (
+          ctx.threadIndex !== -1 &&
+          ctx.threadIndex <= COLLAPSED_THREAD_INDEX_CUTOFF
+        );
+      });
+
+      return (
+        <Show when={isThreadExpanded() || isThreadIndexWithinCutoff()}>
+          <MessageListItem
+            message={child}
+            isFocused={isFocused(childId())}
+            index={childIndexAccessor}
+            threadSiblings={threadChildren()}
+            listContext={resolvedChildContext()}
+            isTarget={isActiveTargetMessage(child.id)}
+          />
+        </Show>
+      );
+    };
+
+    return (
+      <Show when={virtualHandle()}>
+        <div>
+          <MessageListItem
+            message={row().message}
+            isFocused={isFocused(row().id)}
+            index={parentIndex}
+            threadChildren={threadChildren()}
+            listContext={parentContext()}
+            isTarget={isActiveTargetMessage(row().message.id)}
+          />
+          <For each={threadChildren()}>{renderThreadChild}</For>
+        </div>
+      </Show>
+    );
+  };
+
   return (
     <div
       class="flex-1 overflow-y-hidden suppress-css-brackets"
@@ -900,106 +1006,7 @@ function MessageListImpl(props: MessageListProps) {
                 }
               }}
             >
-              {(row: ThreadRow) => {
-                const threadChildren = () => row.children;
-                const threadState = createMemo(() =>
-                  listContext.getThreadState(row.message.id)
-                );
-                const isThreadExpanded = createMemo(
-                  () => threadState()?.threadExpanded === true
-                );
-                const parentIndex = createMemo(
-                  () => messageListContext[row.id]?.index ?? 0
-                );
-                const defaultContext: MessageListContext = {
-                  index: parentIndex(),
-                  isNewMessage: false,
-                  isParentNewMessage: false,
-                  threadIndex: -1,
-                  previousNonThreadedMessage: undefined,
-                  isInLastThread: false,
-                };
-                return (
-                  <Show when={virtualHandle()}>
-                    <div>
-                      <MessageContainer
-                        message={row.message}
-                        lastViewed={lastViewed}
-                        isFocused={isFocused(row.id)}
-                        index={parentIndex}
-                        orderedMessages={props.orderedMessages}
-                        threadChildren={threadChildren()}
-                        newIndicatorShown={newIndicatorShown}
-                        setNewIndicatorShown={setNewIndicatorShown}
-                        virtualHandle={virtualHandle()!}
-                        container={containerRef()}
-                        listContext={
-                          messageListContext[row.id] ?? defaultContext
-                        }
-                        isTarget={isActiveTargetMessage(row.message.id)}
-                        channelId={() => props.channelId}
-                        attachments={props.attachments}
-                        reactions={props.reactions}
-                      />
-                      <For each={threadChildren()}>
-                        {(child) => {
-                          const childId = () => child.id;
-                          const childContext = createMemo(
-                            () => messageListContext[childId()]
-                          );
-                          const childIndexAccessor = createMemo(
-                            () => childContext()?.index ?? 0
-                          );
-                          const childDefaultContext: MessageListContext = {
-                            index: childIndexAccessor(),
-                            isNewMessage: false,
-                            isParentNewMessage: false,
-                            threadIndex: -1,
-                            previousNonThreadedMessage: undefined,
-                            isInLastThread: false,
-                          };
-                          const isThreadIndexWithinCutoff = createMemo(() => {
-                            const ctx = childContext();
-                            if (!ctx) return false;
-                            return (
-                              ctx.threadIndex !== -1 &&
-                              ctx.threadIndex <= COLLAPSED_THREAD_INDEX_CUTOFF
-                            );
-                          });
-                          return (
-                            <Show
-                              when={
-                                isThreadExpanded() ||
-                                isThreadIndexWithinCutoff()
-                              }
-                            >
-                              <MessageContainer
-                                message={child}
-                                lastViewed={lastViewed}
-                                isFocused={isFocused(childId())}
-                                index={childIndexAccessor}
-                                orderedMessages={props.orderedMessages}
-                                threadSiblings={threadChildren()}
-                                newIndicatorShown={newIndicatorShown}
-                                setNewIndicatorShown={setNewIndicatorShown}
-                                virtualHandle={virtualHandle()!}
-                                container={containerRef()}
-                                listContext={
-                                  childContext() ?? childDefaultContext
-                                }
-                                isTarget={isActiveTargetMessage(child.id)}
-                                channelId={() => props.channelId}
-                                attachments={props.attachments}
-                                reactions={props.reactions}
-                              />
-                            </Show>
-                          );
-                        }}
-                      </For>
-                    </div>
-                  </Show>
-                );
-              }}
+              {(row: ThreadRow) => <ThreadRowItem row={row} />}
             </VList>
           </Match>
         </Switch>
