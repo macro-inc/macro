@@ -1,5 +1,30 @@
+/**
+ * Undo/redo support for mutations.
+ *
+ * @example
+ * // 1. Wrap your app with the provider
+ * <MutationUndoProvider>
+ *   <App />
+ * </MutationUndoProvider>
+ *
+ * // 2. Use undoable mutations
+ * const updateItem = useUndoableMutation(() => ({
+ *   mutationFn: (data) => api.update(data.id, data.value),
+ *   undoFn: (variables) => api.update(variables.id, variables.previousValue),
+ *   redoFn: (variables) => api.update(variables.id, variables.value),
+ * }));
+ *
+ * // 3. Trigger undo/redo with callbacks
+ * const { undo, redo, canUndo, canRedo } = useMutationUndoContext();
+ * await undo({
+ *   onSuccess: () => toast.success('Undone'),
+ *   onError: (err) => toast.error(err.message),
+ * });
+ */
+
 import { type MutationOptions, useMutation } from '@tanstack/solid-query';
 import { createSignal } from 'solid-js';
+import { createAssertedContextProvider } from '@core/context/createContext';
 
 type UndoHandler<TVariables, TContext> = (
   variables: TVariables,
@@ -12,50 +37,84 @@ type UndoEntry = {
   label?: string;
 };
 
-const [undoStack, setUndoStack] = createSignal<UndoEntry[]>([]);
-const [redoStack, setRedoStack] = createSignal<UndoEntry[]>([]);
+type UndoCallbacks = {
+  onSuccess?: () => void;
+  onError?: (error: Error) => void;
+  onSettled?: () => void;
+};
 
-export function pushUndo(entry: UndoEntry): void {
-  setUndoStack((prev) => [...prev, entry]);
-  setRedoStack([]);
-}
+type MutationUndoContextValue = {
+  pushUndo: (entry: UndoEntry) => void;
+  canUndo: () => boolean;
+  canRedo: () => boolean;
+  clear: () => void;
+  undo: (callbacks?: UndoCallbacks) => Promise<void>;
+  redo: (callbacks?: UndoCallbacks) => Promise<void>;
+};
 
-export function canUndo(): boolean {
-  return undoStack().length > 0;
-}
+export const [MutationUndoProvider, useMutationUndoContext] =
+  createAssertedContextProvider(
+    'MutationUndo',
+    (): MutationUndoContextValue => {
+      const [undoStack, setUndoStack] = createSignal<UndoEntry[]>([]);
+      const [redoStack, setRedoStack] = createSignal<UndoEntry[]>([]);
 
-export function canRedo(): boolean {
-  return redoStack().length > 0;
-}
+      return {
+        pushUndo: (entry) => {
+          setUndoStack((prev) => [...prev, entry]);
+          setRedoStack([]);
+        },
 
-export function clearUndoHistory(): void {
-  setUndoStack([]);
-  setRedoStack([]);
-}
+        canUndo: () => undoStack().length > 0,
+        canRedo: () => redoStack().length > 0,
 
-export async function undo(): Promise<void> {
-  const stack = undoStack();
-  const entry = stack.at(-1);
-  if (!entry) return;
+        clear: () => {
+          setUndoStack([]);
+          setRedoStack([]);
+        },
 
-  setUndoStack(stack.slice(0, -1));
-  await entry.undo();
-  if (entry.redo) {
-    setRedoStack((prev) => [...prev, entry]);
-  }
-}
+        undo: async (callbacks?: UndoCallbacks) => {
+          const stack = undoStack();
+          const entry = stack.at(-1);
+          if (!entry) return;
 
-export async function redo(): Promise<void> {
-  const stack = redoStack();
-  const entry = stack.at(-1);
-  if (!entry) return;
+          setUndoStack(stack.slice(0, -1));
+          try {
+            await entry.undo();
+            if (entry.redo) {
+              setRedoStack((prev) => [...prev, entry]);
+            }
+            callbacks?.onSuccess?.();
+          } catch (err) {
+            setUndoStack((prev) => [...prev, entry]);
+            callbacks?.onError?.(err instanceof Error ? err : new Error(String(err)));
+          } finally {
+            callbacks?.onSettled?.();
+          }
+        },
 
-  setRedoStack(stack.slice(0, -1));
-  if (entry.redo) {
-    await entry.redo();
-  }
-  setUndoStack((prev) => [...prev, entry]);
-}
+        redo: async (callbacks?: UndoCallbacks) => {
+          const stack = redoStack();
+          const entry = stack.at(-1);
+          if (!entry) return;
+
+          setRedoStack(stack.slice(0, -1));
+          try {
+            if (entry.redo) {
+              await entry.redo();
+            }
+            setUndoStack((prev) => [...prev, entry]);
+            callbacks?.onSuccess?.();
+          } catch (err) {
+            setRedoStack((prev) => [...prev, entry]);
+            callbacks?.onError?.(err instanceof Error ? err : new Error(String(err)));
+          } finally {
+            callbacks?.onSettled?.();
+          }
+        },
+      };
+    }
+  );
 
 export function useUndoableMutation<
   TData = unknown,
@@ -69,6 +128,8 @@ export function useUndoableMutation<
     undoLabel?: string;
   }
 ) {
+  const { pushUndo } = useMutationUndoContext();
+
   return useMutation(() => {
     const { undoFn, redoFn, undoLabel, onSuccess, ...opts } = options();
     return {
