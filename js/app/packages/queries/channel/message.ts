@@ -147,6 +147,11 @@ export function replaceOptimisticMessage(
       return {
         ...prev,
         messages: updatedMessages,
+        attachments: prev.attachments.map((a) =>
+          a.message_id === vars.optimisticId
+            ? { ...a, message_id: vars.realId }
+            : a
+        ),
       };
     }
   );
