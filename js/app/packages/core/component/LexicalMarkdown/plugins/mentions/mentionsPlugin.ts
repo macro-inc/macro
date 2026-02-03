@@ -31,7 +31,7 @@ import {
   InlineSearchNode,
   InlineSearchNodesType,
   type SnapshotNodeInfo,
-  type ThemeV1,
+  type ThemeMentionInfo,
   type UserMentionInfo,
   UserMentionNode,
   validTriggerPosition,
@@ -104,7 +104,7 @@ export const INSERT_USER_MENTION_COMMAND: LexicalCommand<UserMentionInfo> =
 export const INSERT_GROUP_MENTION_COMMAND: LexicalCommand<GroupMentionInfo> =
   createCommand('INSERT_GROUP_MENTION_COMMAND');
 
-export const INSERT_THEME_MENTION_COMMAND: LexicalCommand<ThemeV1> =
+export const INSERT_THEME_MENTION_COMMAND: LexicalCommand<ThemeMentionInfo> =
   createCommand('INSERT_THEME_MENTION_COMMAND');
 
 export type ItemMention = {
@@ -470,7 +470,10 @@ function registerMentionsPlugin(
       (payload) => {
         editor.update(() => {
           const selection = $getSelection();
-          const mentionNode = $createThemeMentionNode(payload);
+          const mentionNode = $createThemeMentionNode(
+            payload.name,
+            payload.data
+          );
 
           if ($isRangeSelection(selection) && !selection.isCollapsed()) {
             $collapseSelection(selection);

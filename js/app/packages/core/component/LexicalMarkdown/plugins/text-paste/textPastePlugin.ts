@@ -1,6 +1,6 @@
 import type { BlockAlias, BlockName } from '@core/block';
 import { mergeRegister } from '@lexical/utils';
-import { isThemeV1Json } from '@lexical-core';
+import { parseThemeV1Json } from '@block-theme/utils/themeValidation';
 import {
   $getSelection,
   $isRangeSelection,
@@ -137,14 +137,17 @@ function registerTextPastePlugin(editor: LexicalEditor) {
             event.clipboardData?.getData('text/plain') || '';
 
           // Check for theme JSON before checking for Macro URL
-          const themeV1 = isThemeV1Json(pastedText);
+          const themeV1 = parseThemeV1Json(pastedText);
           if (themeV1) {
             const selection = $getSelection();
             if ($isRangeSelection(selection) && !selection.isCollapsed())
               return false;
 
             event.preventDefault();
-            editor.dispatchCommand(INSERT_THEME_MENTION_COMMAND, themeV1);
+            editor.dispatchCommand(INSERT_THEME_MENTION_COMMAND, {
+              name: themeV1.name,
+              data: themeV1,
+            });
             return true;
           }
 

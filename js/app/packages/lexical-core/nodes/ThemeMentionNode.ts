@@ -16,74 +16,9 @@ import { $applyIdFromSerialized } from '../plugins/nodeIdPlugin';
 
 const VERSION = 1;
 
-const THEME_V1_TOKEN_KEYS = [
-  'a0',
-  'a1',
-  'a2',
-  'a3',
-  'a4',
-  'b0',
-  'b1',
-  'b2',
-  'b3',
-  'b4',
-  'c0',
-  'c1',
-  'c2',
-  'c3',
-  'c4',
-] as const;
-
-type ThemeV1TokenKey = (typeof THEME_V1_TOKEN_KEYS)[number];
-
-type ThemeV1TokenValue = { l: number; c: number; h: number };
-
-type ThemeV1Tokens = Record<ThemeV1TokenKey, ThemeV1TokenValue>;
-
-export type ThemeV1 = {
-  id: string;
-  name: string;
-  version: number;
-  tokens: ThemeV1Tokens;
-};
-
-function isThemeV1TokenValue(val: unknown): val is ThemeV1TokenValue {
-  if (typeof val !== 'object' || val === null) return false;
-  const obj = val as Record<string, unknown>;
-  return (
-    typeof obj.l === 'number' &&
-    typeof obj.c === 'number' &&
-    typeof obj.h === 'number'
-  );
-}
-
-export function isThemeV1Json(text: string): ThemeV1 | null {
-  try {
-    const parsed: unknown = JSON.parse(text);
-    if (typeof parsed !== 'object' || parsed === null) return null;
-    const obj = parsed as Record<string, unknown>;
-
-    if (typeof obj.id !== 'string') return null;
-    if (typeof obj.name !== 'string') return null;
-    if (typeof obj.version !== 'number') return null;
-    if (typeof obj.tokens !== 'object' || obj.tokens === null) return null;
-
-    const tokens = obj.tokens as Record<string, unknown>;
-    for (const key of THEME_V1_TOKEN_KEYS) {
-      if (!isThemeV1TokenValue(tokens[key])) return null;
-    }
-
-    return parsed as ThemeV1;
-  } catch {
-    return null;
-  }
-}
-
 export type ThemeMentionInfo = {
-  id: string;
   name: string;
-  version: number;
-  tokens: ThemeV1Tokens;
+  data: Record<string, unknown>;
 };
 
 export type SerializedThemeMentionNode = Spread<
@@ -99,10 +34,8 @@ export type ThemeMentionDecoratorProps = ThemeMentionInfo & {
 export class ThemeMentionNode extends DecoratorNode<
   DecoratorComponent<ThemeMentionDecoratorProps> | undefined
 > {
-  __themeId: string;
-  __themeName: string;
-  __version: number;
-  __tokens: ThemeV1Tokens;
+  __name: string;
+  __data: Record<string, unknown>;
 
   static getType() {
     return 'theme-mention';
@@ -117,36 +50,20 @@ export class ThemeMentionNode extends DecoratorNode<
   }
 
   static clone(node: ThemeMentionNode) {
-    return new ThemeMentionNode(
-      node.__themeId,
-      node.__themeName,
-      node.__version,
-      node.__tokens,
-      node.__key
-    );
+    return new ThemeMentionNode(node.__name, node.__data, node.__key);
   }
 
-  constructor(
-    themeId: string,
-    themeName: string,
-    version: number,
-    tokens: ThemeV1Tokens,
-    key?: NodeKey
-  ) {
+  constructor(name: string, data: Record<string, unknown>, key?: NodeKey) {
     super(key);
-    this.__themeId = themeId;
-    this.__themeName = themeName;
-    this.__version = version;
-    this.__tokens = tokens;
+    this.__name = name;
+    this.__data = data;
   }
 
   static importJSON(serializedNode: SerializedThemeMentionNode) {
-    const node = $createThemeMentionNode({
-      id: serializedNode.id,
-      name: serializedNode.name,
-      version: serializedNode.version,
-      tokens: serializedNode.tokens,
-    });
+    const node = $createThemeMentionNode(
+      serializedNode.name,
+      serializedNode.data
+    );
     $applyIdFromSerialized(node, serializedNode);
     return node;
   }
@@ -154,9 +71,8 @@ export class ThemeMentionNode extends DecoratorNode<
   exportJSON(): SerializedThemeMentionNode {
     return {
       ...super.exportJSON(),
-      id: this.__themeId,
-      name: this.__themeName,
-      tokens: this.__tokens,
+      name: this.__name,
+      data: this.__data,
       type: ThemeMentionNode.getType(),
       version: VERSION,
     };
@@ -164,10 +80,8 @@ export class ThemeMentionNode extends DecoratorNode<
 
   exportComponentProps(): ThemeMentionInfo {
     return {
-      id: this.__themeId,
-      name: this.__themeName,
-      version: this.__version,
-      tokens: this.__tokens,
+      name: this.__name,
+      data: this.__data,
     };
   }
 
@@ -186,11 +100,20 @@ export class ThemeMentionNode extends DecoratorNode<
       const themeJson = domNode.getAttribute('data-theme-json');
       if (!themeJson) return null;
 
-      const theme = isThemeV1Json(themeJson);
-      if (!theme) return null;
+      try {
+        const parsed: unknown = JSON.parse(themeJson);
+        if (typeof parsed !== 'object' || parsed === null) return null;
+        const obj = parsed as Record<string, unknown>;
+        if (typeof obj.name !== 'string') return null;
 
-      const node = $createThemeMentionNode(theme);
-      return { node };
+        const node = $createThemeMentionNode(
+          obj.name,
+          obj as Record<string, unknown>
+        );
+        return { node };
+      } catch {
+        return null;
+      }
     };
 
     const wrapInCheck = (conversion: DOMConversion) => {
@@ -206,46 +129,21 @@ export class ThemeMentionNode extends DecoratorNode<
   exportDOM() {
     const element = document.createElement('span');
     element.setAttribute('data-theme-mention', 'true');
-    element.setAttribute(
-      'data-theme-json',
-      JSON.stringify({
-        id: this.__themeId,
-        name: this.__themeName,
-        version: this.__version,
-        tokens: this.__tokens,
-      })
-    );
-    element.textContent = this.__themeName;
+    element.setAttribute('data-theme-json', JSON.stringify(this.__data));
+    element.textContent = this.__name;
     return { element };
   }
 
   getTextContent(): string {
-    return this.__themeName;
-  }
-
-  getThemeId(): string {
-    return this.__themeId;
+    return this.__name;
   }
 
   getThemeName(): string {
-    return this.__themeName;
+    return this.__name;
   }
 
-  getVersion(): number {
-    return this.__version;
-  }
-
-  getTokens(): ThemeV1Tokens {
-    return this.__tokens;
-  }
-
-  getThemeV1(): ThemeV1 {
-    return {
-      id: this.__themeId,
-      name: this.__themeName,
-      version: this.__version,
-      tokens: this.__tokens,
-    };
+  getThemeData(): Record<string, unknown> {
+    return this.__data;
   }
 
   decorate(_: LexicalEditor, config: EditorConfig) {
@@ -253,10 +151,8 @@ export class ThemeMentionNode extends DecoratorNode<
     if (decorator) {
       return () =>
         decorator({
-          id: this.__themeId,
-          name: this.__themeName,
-          version: this.__version,
-          tokens: this.__tokens,
+          name: this.__name,
+          data: this.__data,
           key: this.getKey(),
           theme: config.theme,
         });
@@ -264,13 +160,11 @@ export class ThemeMentionNode extends DecoratorNode<
   }
 }
 
-export function $createThemeMentionNode(theme: ThemeV1): ThemeMentionNode {
-  const node = new ThemeMentionNode(
-    theme.id,
-    theme.name,
-    theme.version,
-    theme.tokens
-  );
+export function $createThemeMentionNode(
+  name: string,
+  data: Record<string, unknown>
+): ThemeMentionNode {
+  const node = new ThemeMentionNode(name, data);
   return $applyNodeReplacement(node);
 }
 

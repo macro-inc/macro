@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { isThemeV1Json } from '../nodes/ThemeMentionNode';
+import {
+  isThemeV1,
+  parseThemeV1Json,
+} from '@block-theme/utils/themeValidation';
 
 const validThemeJson = JSON.stringify({
   id: 'test-theme-id',
@@ -24,9 +27,9 @@ const validThemeJson = JSON.stringify({
   },
 });
 
-describe('isThemeV1Json', () => {
+describe('parseThemeV1Json', () => {
   it('returns parsed ThemeV1 for valid theme JSON', () => {
-    const result = isThemeV1Json(validThemeJson);
+    const result = parseThemeV1Json(validThemeJson);
     expect(result).not.toBeNull();
     expect(result!.id).toBe('test-theme-id');
     expect(result!.name).toBe('dryblood');
@@ -35,64 +38,85 @@ describe('isThemeV1Json', () => {
   });
 
   it('returns null for invalid JSON', () => {
-    expect(isThemeV1Json('not json')).toBeNull();
+    expect(parseThemeV1Json('not json')).toBeNull();
   });
 
   it('returns null for JSON missing id', () => {
     const json = JSON.parse(validThemeJson);
     delete json.id;
-    expect(isThemeV1Json(JSON.stringify(json))).toBeNull();
+    expect(parseThemeV1Json(JSON.stringify(json))).toBeNull();
   });
 
   it('returns null for JSON missing name', () => {
     const json = JSON.parse(validThemeJson);
     delete json.name;
-    expect(isThemeV1Json(JSON.stringify(json))).toBeNull();
+    expect(parseThemeV1Json(JSON.stringify(json))).toBeNull();
   });
 
   it('returns null for JSON missing version', () => {
     const json = JSON.parse(validThemeJson);
     delete json.version;
-    expect(isThemeV1Json(JSON.stringify(json))).toBeNull();
+    expect(parseThemeV1Json(JSON.stringify(json))).toBeNull();
   });
 
   it('returns null for JSON missing tokens', () => {
     const json = JSON.parse(validThemeJson);
     delete json.tokens;
-    expect(isThemeV1Json(JSON.stringify(json))).toBeNull();
+    expect(parseThemeV1Json(JSON.stringify(json))).toBeNull();
   });
 
   it('returns null for JSON with incomplete tokens (missing a token key)', () => {
     const json = JSON.parse(validThemeJson);
     delete json.tokens.c4;
-    expect(isThemeV1Json(JSON.stringify(json))).toBeNull();
+    expect(parseThemeV1Json(JSON.stringify(json))).toBeNull();
   });
 
   it('returns null for JSON with invalid token value (missing l)', () => {
     const json = JSON.parse(validThemeJson);
     json.tokens.a0 = { c: 0.15, h: 30 };
-    expect(isThemeV1Json(JSON.stringify(json))).toBeNull();
+    expect(parseThemeV1Json(JSON.stringify(json))).toBeNull();
   });
 
   it('returns null for JSON with non-number token value', () => {
     const json = JSON.parse(validThemeJson);
     json.tokens.a0 = { l: 'not a number', c: 0.15, h: 30 };
-    expect(isThemeV1Json(JSON.stringify(json))).toBeNull();
+    expect(parseThemeV1Json(JSON.stringify(json))).toBeNull();
   });
 
   it('returns null for empty string', () => {
-    expect(isThemeV1Json('')).toBeNull();
+    expect(parseThemeV1Json('')).toBeNull();
   });
 
   it('returns null for a plain URL', () => {
-    expect(isThemeV1Json('https://example.com')).toBeNull();
+    expect(parseThemeV1Json('https://example.com')).toBeNull();
   });
 
   it('returns null for an array', () => {
-    expect(isThemeV1Json('[]')).toBeNull();
+    expect(parseThemeV1Json('[]')).toBeNull();
   });
 
   it('returns null for null', () => {
-    expect(isThemeV1Json('null')).toBeNull();
+    expect(parseThemeV1Json('null')).toBeNull();
+  });
+});
+
+describe('isThemeV1', () => {
+  it('returns true for a valid ThemeV1 object', () => {
+    const data = JSON.parse(validThemeJson);
+    expect(isThemeV1(data)).toBe(true);
+  });
+
+  it('returns false for null', () => {
+    expect(isThemeV1(null)).toBe(false);
+  });
+
+  it('returns false for a string', () => {
+    expect(isThemeV1('not an object')).toBe(false);
+  });
+
+  it('returns false for an object missing tokens', () => {
+    const data = JSON.parse(validThemeJson);
+    delete data.tokens;
+    expect(isThemeV1(data)).toBe(false);
   });
 });

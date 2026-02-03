@@ -8,7 +8,7 @@ import { DateMentionNode } from '../nodes/DateMentionNode';
 import { DocumentCardNode } from '../nodes/DocumentCardNode';
 import { DocumentMentionNode } from '../nodes/DocumentMentionNode';
 import { GroupMentionNode } from '../nodes/GroupMentionNode';
-import { ThemeMentionNode, isThemeV1Json } from '../nodes/ThemeMentionNode';
+import { ThemeMentionNode } from '../nodes/ThemeMentionNode';
 import { UserMentionNode } from '../nodes/UserMentionNode';
 
 // NOTE: If you are changing this file, you may need to update the `mention_utils` crate in `macro-api` as well. Please notify @hutch should you update this file.
@@ -369,19 +369,22 @@ export const I_THEME_MENTION: TextMatchTransformer = {
   importRegExp: /<m-theme-mention>(.*?)<\/m-theme-mention>/,
   export: (node) => {
     if (!(node instanceof ThemeMentionNode)) return null;
-    const data = JSON.stringify(node.getThemeV1());
+    const data = JSON.stringify({
+      name: node.getThemeName(),
+      data: node.getThemeData(),
+    });
     return `<m-theme-mention>${data}</m-theme-mention>`;
   },
   replace: (node: TextNode, match: RegExpMatchArray) => {
     try {
-      const theme = isThemeV1Json(match[1]);
-      if (!theme) throw new Error('Invalid theme JSON');
-      const themeMentionNode = new ThemeMentionNode(
-        theme.id,
-        theme.name,
-        theme.version,
-        theme.tokens
-      );
+      const parsed = JSON.parse(match[1]);
+      if (
+        typeof parsed !== 'object' ||
+        parsed === null ||
+        typeof parsed.name !== 'string'
+      )
+        throw new Error('Invalid theme mention JSON');
+      const themeMentionNode = new ThemeMentionNode(parsed.name, parsed.data);
       node.replace(themeMentionNode);
     } catch (e) {
       console.error('Error in I_THEME_MENTION replace:', e);

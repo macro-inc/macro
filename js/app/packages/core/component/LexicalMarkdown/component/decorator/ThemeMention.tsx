@@ -1,4 +1,6 @@
-import type { ThemeMentionDecoratorProps, ThemeV1 } from '@lexical-core';
+import type { ThemeMentionDecoratorProps } from '@lexical-core';
+import type { ThemeV1 } from '@block-theme/types/themeTypes';
+import { isThemeV1 } from '@block-theme/utils/themeValidation';
 import { setUserThemes, userThemes } from '@block-theme/signals/themeSignals';
 import { applyTheme } from '@block-theme/utils/themeUtils';
 import { useSettingsState } from '@core/constant/SettingsState';
@@ -6,27 +8,30 @@ import { useSettingsState } from '@core/constant/SettingsState';
 export function ThemeMention(props: ThemeMentionDecoratorProps) {
   const { openSettings } = useSettingsState();
 
-  const a0 = () => props.tokens.a0;
-  const b0 = () => props.tokens.b0;
-  const c0 = () => props.tokens.c0;
+  const theme = (): ThemeV1 | null => {
+    if (isThemeV1(props.data)) return props.data;
+    return null;
+  };
 
-  const oklch = (token: { l: number; c: number; h: number }) =>
-    `oklch(${token.l} ${token.c} ${token.h}deg)`;
+  const a0 = () => theme()?.tokens.a0;
+  const b0 = () => theme()?.tokens.b0;
+  const c0 = () => theme()?.tokens.c0;
+
+  const oklch = (token: { l: number; c: number; h: number } | undefined) => {
+    if (!token) return 'transparent';
+    return `oklch(${token.l} ${token.c} ${token.h}deg)`;
+  };
 
   const handleClick = () => {
-    const theme = {
-      id: props.id,
-      name: props.name,
-      version: props.version,
-      tokens: props.tokens,
-    };
+    const t = theme();
+    if (!t) return;
 
-    const existing = userThemes().find((t: ThemeV1) => t.id === theme.id);
+    const existing = userThemes().find((ut: ThemeV1) => ut.id === t.id);
     if (!existing) {
-      setUserThemes([...userThemes(), theme]);
+      setUserThemes([...userThemes(), t]);
     }
 
-    applyTheme(theme.id);
+    applyTheme(t.id);
     openSettings('Appearance');
   };
 
@@ -85,7 +90,7 @@ export function ThemeMention(props: ThemeMentionDecoratorProps) {
             }}
           />
         </span>
-        <span style={{ 'margin-left': '2px', 'font-size': '0.9em' }}>
+        <span style={{ 'margin-inline': '2px', cursor: 'default' }}>
           {props.name}
         </span>
       </span>
