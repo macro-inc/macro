@@ -1,7 +1,6 @@
 #![allow(unused)]
 
 mod api;
-mod config;
 mod constants;
 
 use utoipa::OpenApi;

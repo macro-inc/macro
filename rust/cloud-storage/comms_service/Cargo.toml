@@ -1,14 +1,12 @@
 [package]
-default-run = "comms_service"
 edition = "2024"
 name = "comms_service"
 publish = false
 version = "0.1.0"
 
-[[bin]]
+[lib]
 name = "comms_service"
-path = "src/main.rs"
-required-features = ["channel_search", "service"]
+path = "src/lib.rs"
 
 [[bin]]
 name = "backfill_comms_search"

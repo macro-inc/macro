@@ -9,7 +9,6 @@ on:
         options:
           - authentication-service
           - bulk-upload
-          - comms-service
           - connection-gateway
           - contacts-service
           - convert-service

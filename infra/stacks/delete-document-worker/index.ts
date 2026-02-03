@@ -66,18 +66,6 @@ const syncServiceAuthKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: SYNC_SERVICE_AUTH_KEY })
   .apply((secret) => secret.arn);
 
-const COMMS_SERVICE_AUTH_KEY = config.require(`comms_service_auth_key`);
-const commsServiceAuthKeyArn: pulumi.Output<string> = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: COMMS_SERVICE_AUTH_KEY })
-  .apply((secret) => secret.arn);
-
-const PROPERTIES_SERVICE_AUTH_KEY = config.require(
-  `properties_service_auth_key`
-);
-const propertiesServiceAuthKeyArn: pulumi.Output<string> = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: PROPERTIES_SERVICE_AUTH_KEY })
-  .apply((secret) => secret.arn);
-
 // ------------------------------------------- Delete Document Worker -------------------------------------------
 const deleteDocumentWorker = new Worker(`delete-document-worker-${stack}`, {
   ecsClusterArn: cloudStorageClusterArn,
@@ -125,29 +113,11 @@ const deleteDocumentWorker = new Worker(`delete-document-worker-${stack}`, {
         stack === 'prod' ? '' : `-${stack === 'dev' ? 'dev3' : stack}`
       }.macroverse.workers.dev`,
     },
-    {
-      name: 'COMMS_SERVICE_AUTH_KEY',
-      value: COMMS_SERVICE_AUTH_KEY,
-    },
-    {
-      name: 'COMMS_SERVICE_URL',
-      value: `https://comms-service${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
-    },
-    {
-      name: 'PROPERTIES_SERVICE_AUTH_KEY',
-      value: PROPERTIES_SERVICE_AUTH_KEY,
-    },
   ],
   cloudStorageClusterName: cloudStorageClusterName,
   deleteDocumentQueueArn: deleteDocumentQueueArn,
   tags,
-  secretKeyArns: [
-    syncServiceAuthKeyArn,
-    commsServiceAuthKeyArn,
-    propertiesServiceAuthKeyArn,
-  ],
+  secretKeyArns: [syncServiceAuthKeyArn],
 });
 
 export const deleteDocumentWorkerRoleArn = deleteDocumentWorker.role.arn;

@@ -1,6 +1,7 @@
 use anyhow::Context;
 use chrono::Utc;
 use email_service_client::EmailServiceClient;
+use models_email::service::label::system_labels;
 use opensearch_client::{
     OpensearchClient, date_format::EpochSeconds, upsert::email::UpsertEmailArgs,
 };
@@ -15,6 +16,13 @@ pub async fn process_upsert_message(
         .get_search_message_by_id_internal(&upsert_email_message.message_id)
         .await
         .context("failed to get message info")?;
+
+    // don't insert spam or trash messages
+    if message_info.labels.iter().any(|label| {
+        label.provider_id == system_labels::SPAM || label.provider_id == system_labels::TRASH
+    }) {
+        return Ok(());
+    }
 
     let content = if let Some(content) = message_info.body_parsed_linkless {
         content
@@ -106,6 +114,14 @@ pub async fn process_upsert_thread_message(
         let mut upsert_email_message_args = Vec::new();
 
         for message in messages {
+            // don't insert spam or trash messages
+            if message.labels.iter().any(|label| {
+                label.provider_id == system_labels::SPAM
+                    || label.provider_id == system_labels::TRASH
+            }) {
+                continue;
+            }
+
             if let Some(content) = message.body_parsed_linkless {
                 let sent_at = message
                     .internal_date_ts

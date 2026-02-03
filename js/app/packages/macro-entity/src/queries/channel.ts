@@ -16,7 +16,7 @@ const fetchChannels = async ({ apiToken }: { apiToken?: string }) => {
   const Authorization = `Bearer ${apiToken}`;
 
   const response = await platformFetch(
-    `${SERVER_HOSTS['comms-service']}/channels`,
+    `${SERVER_HOSTS['document-storage-service']}/comms/channels`,
     {
       headers: { Authorization },
     }

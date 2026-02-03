@@ -9,7 +9,6 @@ COPY . .
 # Build ALL standard service binaries at once
 RUN cargo build --release \
     --bin authentication_service \
-    --bin comms_service \
     --bin connection_gateway_service \
     --bin contacts_service \
     --bin document_cognition_service \
@@ -32,11 +31,6 @@ EXPOSE 8080
 # Individual service targets
 FROM base AS authentication_service
 COPY --from=builder /app/target/release/authentication_service /app/svc
-RUN chmod +x /app/svc
-ENTRYPOINT ["dumb-init", "./svc"]
-
-FROM base AS comms_service
-COPY --from=builder /app/target/release/comms_service /app/svc
 RUN chmod +x /app/svc
 ENTRYPOINT ["dumb-init", "./svc"]
 

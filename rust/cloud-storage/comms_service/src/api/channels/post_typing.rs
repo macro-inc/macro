@@ -25,7 +25,7 @@ pub struct PostTypingRequest {
         post,
         tag = "channels",
         operation_id = "post_typing",
-        path = "/channels/{channel_id}/typing",
+        path = "/comms/channels/{channel_id}/typing",
         params(
             ("channel_id" = String, Path, description = "id of the channel")
         ),

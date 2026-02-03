@@ -35,31 +35,6 @@ services:
       start_period: 10s
 
   # ============================================================================
-  # comms_service (Port 8081)
-  # Communications/messaging service
-  # ============================================================================
-  comms_service:
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.dev
-      target: comms_service
-    ports:
-      - "8081:8080"
-    depends_on:
-      - authentication_service
-      - connection_gateway
-    networks:
-      - databases
-      - services
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  # ============================================================================
   # connection_gateway (Port 8082)
   # WebSocket gateway - Redis only
   # ============================================================================
@@ -142,7 +117,6 @@ services:
     ports:
       - "8085:8080"
     depends_on:
-      - comms_service
       - document_storage_service
       - email_service
       - static_file_service
@@ -253,7 +227,6 @@ services:
       - "8092:8080"
     depends_on:
       - email_service
-      - comms_service
     networks:
       - databases
       - services

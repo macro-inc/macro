@@ -38,7 +38,7 @@ pub struct CreateEntityMentionResponse {
 
 #[utoipa::path(
     post,
-    path = "/mentions",
+    path = "/comms/mentions",
     request_body = CreateEntityMentionRequest,
     responses(
         (status = 201, description = "Entity mention created successfully", body = CreateEntityMentionResponse),

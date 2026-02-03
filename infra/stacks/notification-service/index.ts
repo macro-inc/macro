@@ -209,12 +209,6 @@ const notificationService = new NotificationService('notification-service', {
       }.macro.com`,
     },
     {
-      name: 'COMMS_SERVICE_URL',
-      value: `https://comms-service${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
-    },
-    {
       name: 'CONNECTION_GATEWAY_URL',
       value: `https://connection-gateway${
         stack === 'prod' ? '' : `-${stack}`

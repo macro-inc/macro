@@ -5,6 +5,7 @@ use axum::extract::FromRef;
 use axum::extract::Request;
 use axum::http::Method;
 use axum::middleware::Next;
+use comms_service::CommsHandlerState;
 use context::InternalFlag;
 use macro_axum_utils::compose_layers;
 use model::version::{ServiceNameState, VersionedApiServiceName, validate_api_version};
@@ -158,6 +159,11 @@ fn api_router(state: ApiContext) -> Router {
         .nest(
             "/search",
             search_service::search_router().with_state(SearchHandlerState::from_ref(&state)),
+        )
+        .nest(
+            "/comms",
+            comms_service::comms_router(&CommsHandlerState::from_ref(&state))
+                .with_state(CommsHandlerState::from_ref(&state)),
         )
         .layer(
             ServiceBuilder::new()

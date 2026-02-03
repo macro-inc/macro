@@ -48,39 +48,8 @@ stop-local:
 stop-databases:
   docker-compose -f docker-compose-databases.yml down
 
-# Start LocalStack for local AWS emulation
-start_localstack:
-  docker run -d --name localstack \
-    --network databases \
-    -p 4566:4566 \
-    -e SERVICES=sqs \
-    localstack/localstack 2>/dev/null || true
-  echo "LocalStack started"
-
-# Create SQS queues in LocalStack
-create_local_queues:
-  aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name notification-queue || true
-  aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name push-delivery-queue || true
-  aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name email-service-backfill-queue || true
-  aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name delete-chat-handler-queue || true
-  aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name contacts-queue || true
-  aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name convert-service-queue || true
-  aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name delete-document-handler-queue || true
-  aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name document-text-extractor-lambda-queue || true
-  aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name email-service-scheduled-queue || true
-  aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name email-service-gmail-inbox-sync-queue || true
-  aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name email-service-gmail-inbox-retry-queue || true
-  aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name email-service-refresh-queue || true
-  aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name search-event-queue || true
-  aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name email-sfs-delete-queue || true
-  aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name email-service-sfs-mapper-queue || true
-  echo "SQS queues created"
-
-# Full LocalStack setup
-setup_localstack:
-  just start_localstack
-  sleep 2
-  just create_local_queues
+# Import LocalStack recipes
+import 'local_stack.just'
 
 # Sets up local database
 # Assumes postgres is running locally via `just run_dbs`

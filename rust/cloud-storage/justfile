@@ -83,6 +83,5 @@ setup_test_envs:
 setup_macrodb:
     just macro_db_client/create_db
     just macro_db_client/migrate_db
-    just document_cognition_service/prepare-test
 
 initialize_dbs: setup_macrodb

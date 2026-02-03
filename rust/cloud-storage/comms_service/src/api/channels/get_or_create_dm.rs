@@ -32,7 +32,7 @@ pub struct GetOrCreateDmRequest {
     tag = "channels",
     operation_id = "get_or_create_dm",
     description = "given a user and a recipient, either finds or creates a direct message channel",
-    path = "/channels/get_or_create_dm",
+    path = "/comms/channels/get_or_create_dm",
     responses(
         (status = 200, body=GetOrCreateDmResponse),
         (status = 400, body=String),

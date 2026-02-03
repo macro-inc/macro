@@ -35,7 +35,7 @@ pub struct GetOrCreatePrivateRequest {
     tag = "channels",
     operation_id = "get_or_create_private",
     description = "given a list of partiicpants, either fetch an existing private channel with the permtation or create a new one",
-    path = "/channels/get_or_create_private",
+    path = "/comms/channels/get_or_create_private",
     responses(
         (status = 200, body=GetOrCreatePrivateResponse),
         (status = 400, body=String),

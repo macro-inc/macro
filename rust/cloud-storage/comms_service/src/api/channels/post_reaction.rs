@@ -46,7 +46,7 @@ pub struct PostReactionRequest {
         post,
         tag = "channels",
         operation_id = "post_reaction",
-        path = "/channels/{channel_id}/reaction",
+        path = "/comms/channels/{channel_id}/reaction",
         params(
             ("channel_id" = String, Path, description = "id of the channel")
         ),
