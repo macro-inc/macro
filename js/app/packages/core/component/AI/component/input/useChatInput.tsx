@@ -37,6 +37,7 @@ import {
   type UseChatMarkdown,
   useChatMarkdownArea,
 } from './useChatMarkdownArea';
+import { cn } from '@ui/utils/classname';
 
 const { track, TrackingEvents } = withAnalytics();
 
@@ -282,7 +283,7 @@ function ChatInput(props: ChatInputInternalProps) {
         <div class="flex flex-row gap-1 items-center shrink-0">
           <Show when={!generating()}>
             <Button onClick={() => sendMessage('claude-opus-4-5')}>
-              <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center">
+              <div class="group hover:bg-accent transition ease-in-out size-6 p-[2px] border border-accent rounded-full flex items-center justify-center">
                 <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
               </div>
             </Button>
@@ -342,16 +343,20 @@ function ChatInput(props: ChatInputInternalProps) {
       <div class="relative px-2 py-1.5">
         <div
           id="chat-input-text-area"
-          class="text-base sm:text-sm text-ink transition-all duration-150 ease-out"
+          class={cn(
+            'text-sm sm:text-sm text-ink transition-all duration-150 ease-out'
+          )}
           classList={{
-            'pl-8 pr-[130px]': !isMultiline(),
+            'pl-8': !isMultiline(),
+            'pr-[48px]': !isMultiline() && isTouchDevice(),
+            'pr-[130px]': !isMultiline() && !isTouchDevice(),
             'pl-0 pr-0 pb-8': isMultiline(),
           }}
           ref={mdRef}
         >
           <props.markdown.MarkdownArea
             onEnter={handleEnter}
-            placeholder="Ask AI - @mention anything"
+            placeholder="Ask AI, @mention anything"
             history={availableAttachments}
             dontFocusOnMount={
               isTouchDevice() || props.autoFocusOnMount === false
