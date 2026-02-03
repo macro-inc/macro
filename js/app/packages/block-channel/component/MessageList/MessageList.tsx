@@ -482,7 +482,7 @@ function MessageListImpl(props: MessageListProps) {
       forceBottom ||
       ((!target || delta > TARGET_MESSAGE_ACTIVE_TIME) && isNearBottom())
     ) {
-      virtualHandle()?.scrollToIndex(0, { align: 'end' });
+      virtualHandle()?.scrollTo(0);
       return;
     }
 

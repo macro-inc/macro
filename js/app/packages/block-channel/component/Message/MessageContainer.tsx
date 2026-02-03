@@ -329,7 +329,7 @@ export function MessageContainer(props: MessageProps) {
   const onCreateReply = () => {
     listContext.createReply(message.id, true);
     listContext.scrollToIndex(props.index(), {
-      align: 'end',
+      align: 'nearest',
     });
   };
 
