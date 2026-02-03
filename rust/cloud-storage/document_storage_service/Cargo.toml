@@ -107,6 +107,7 @@ sqlx = { workspace = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = [
   "document",
   "search",
+  "contacts",
 ] }
 sync_service_client = { path = "../sync_service_client" }
 system_properties = { path = "../system_properties" }
