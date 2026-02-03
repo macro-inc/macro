@@ -29,18 +29,19 @@ pub struct Config {
     pub chat_delete_queue: String,
     /// The sqs queue to send notifications to
     pub notification_queue: String,
-    /// comms service url
-    pub comms_service_url: String,
     pub search_event_queue: String,
     pub sync_service_url: String,
     pub sync_service_auth_key: String,
-    pub search_service_url: String,
     pub lexical_service_url: String,
     pub email_service_url: String,
     /// document cognition service url for scribe tool to loopback
     pub document_cognition_service_url: String,
     /// static file service url
     pub static_file_service_url: String,
+    /// authentication service url (for soup service)
+    pub authentication_service_url: String,
+    /// authentication service secret key (for soup service)
+    pub authentication_service_secret_key: String,
 }
 
 impl Config {
@@ -74,19 +75,14 @@ impl Config {
         let document_storage_service_url = std::env::var("DOCUMENT_STORAGE_SERVICE_URL")
             .context("DOCUMENT_STORAGE_SERVICE_URL must be provided")?;
 
-        let comms_service_url =
-            std::env::var("COMMS_SERVICE_URL").context("COMMS_SERVICE_URL must be provided")?;
-
         let search_event_queue =
             std::env::var("SEARCH_EVENT_QUEUE").context("SEARCH_EVENT_QUEUE must be provided")?;
 
         let sync_service_url =
             std::env::var("SYNC_SERVICE_URL").context("SYNC_SERVICE_URL must be provided")?;
+
         let sync_service_auth_key = std::env::var("SYNC_SERVICE_AUTH_KEY")
             .context("SYNC_SERVICE_AUTH_KEY must be provided")?;
-
-        let search_service_url =
-            std::env::var("SEARCH_SERVICE_URL").context("SEARCH_SERVICE_URL must be provided")?;
 
         let lexical_service_url =
             std::env::var("LEXICAL_SERVICE_URL").context("LEXICAL_SERVICE_URL must be provided")?;
@@ -99,6 +95,12 @@ impl Config {
         let static_file_service_url = std::env::var("STATIC_FILE_SERVICE_URL")
             .context("STATIC_FILE_SERVICE_URL must be provided")?;
 
+        let authentication_service_url = std::env::var("AUTHENTICATION_SERVICE_URL")
+            .context("AUTHENTICATION_SERVICE_URL must be provided")?;
+
+        let authentication_service_secret_key = std::env::var("AUTHENTICATION_SERVICE_SECRET_KEY")
+            .context("AUTHENTICATION_SERVICE_SECRET_KEY must be provided")?;
+
         Ok(Config {
             database_url,
             port,
@@ -109,15 +111,15 @@ impl Config {
             document_text_extractor_queue,
             chat_delete_queue,
             notification_queue,
-            comms_service_url,
             search_event_queue,
             sync_service_auth_key,
             sync_service_url,
-            search_service_url,
             lexical_service_url,
             email_service_url,
             document_cognition_service_url,
             static_file_service_url,
+            authentication_service_url,
+            authentication_service_secret_key,
         })
     }
 
@@ -133,15 +135,15 @@ impl Config {
             document_text_extractor_queue: Default::default(),
             chat_delete_queue: Default::default(),
             notification_queue: Default::default(),
-            comms_service_url: Default::default(),
             search_event_queue: Default::default(),
             sync_service_url: Default::default(),
             sync_service_auth_key: Default::default(),
-            search_service_url: Default::default(),
             lexical_service_url: Default::default(),
             email_service_url: Default::default(),
             document_cognition_service_url: Default::default(),
             static_file_service_url: Default::default(),
+            authentication_service_url: Default::default(),
+            authentication_service_secret_key: Default::default(),
         }
     }
 }

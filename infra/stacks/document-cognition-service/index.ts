@@ -87,6 +87,17 @@ const PERPLEXITY_API_KEY = aws.secretsmanager
   })
   .apply((secret) => secret.secretString);
 
+const AUTHENTICATION_SERVICE_INTERNAL_API_KEY_SECRET_NAME = config.require(
+  'authentication_service_internal_api_key'
+);
+
+const authenticationServiceInternalApiKeyArn: pulumi.Output<string> =
+  aws.secretsmanager
+    .getSecretVersionOutput({
+      secretId: AUTHENTICATION_SERVICE_INTERNAL_API_KEY_SECRET_NAME,
+    })
+    .apply((secret) => secret.arn);
+
 export const coparse_api_vpc = get_coparse_api_vpc();
 
 const cloudStorageStack = new pulumi.StackReference('cloud-storage-stack', {
@@ -148,14 +159,6 @@ const { notificationQueueName, notificationQueueArn } = getMacroNotify();
 
 const { searchEventQueueName, searchEventQueueArn } = getSearchEventQueue();
 
-const searchServiceStack = new pulumi.StackReference('search-service-stack', {
-  name: `macro-inc/search-service/${stack}`,
-});
-
-const searchServiceUrl: pulumi.Output<string> = searchServiceStack
-  .getOutput('searchServiceUrl')
-  .apply((arn) => arn as string);
-
 const MACRO_API_TOKENS = getMacroApiToken();
 
 // Import the search text extractor queue stack
@@ -173,6 +176,7 @@ const documentCognitionService = new DocumentCognitionService(
       jwtSecretKeyArn,
       syncServiceAuthKeyArn,
       MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
+      authenticationServiceInternalApiKeyArn,
     ],
     serviceContainerPort: 8080,
     healthCheckPath: '/health',
@@ -255,12 +259,6 @@ const documentCognitionService = new DocumentCognitionService(
         }.macro.com`,
       },
       {
-        name: 'COMMS_SERVICE_URL',
-        value: `https://comms-service${
-          stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
-      },
-      {
         name: 'CONNECTION_GATEWAY_URL',
         value: `https://connection-gateway${
           stack === 'prod' ? '' : `-${stack}`
@@ -287,10 +285,6 @@ const documentCognitionService = new DocumentCognitionService(
         value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenPublicKey}`,
       },
       {
-        name: 'SEARCH_SERVICE_URL',
-        value: pulumi.interpolate`${searchServiceUrl}`,
-      },
-      {
         name: 'PERPLEXITY_API_KEY',
         value: pulumi.interpolate`${PERPLEXITY_API_KEY}`,
       },
@@ -307,6 +301,16 @@ const documentCognitionService = new DocumentCognitionService(
       {
         name: 'STATIC_FILE_SERVICE_URL',
         value: `https://static-file-service${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
+      },
+      {
+        name: 'AUTHENTICATION_SERVICE_URL',
+        value: `https://auth-service${
+          stack === 'prod' ? '' : `-${stack}`
+        }.macro.com`,
+      },
+      {
+        name: 'AUTHENTICATION_SERVICE_SECRET_KEY',
+        value: AUTHENTICATION_SERVICE_INTERNAL_API_KEY_SECRET_NAME,
       },
     ],
     isPrivate: false,

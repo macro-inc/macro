@@ -81,6 +81,7 @@ import {
   ShortcutLabel,
 } from './Soup/components/FilterButton';
 import { SortDropdown } from './Soup/components/SortDropdown';
+import { isMobile } from '@core/mobile/isMobile';
 
 false && fileFolderDrop;
 
@@ -638,6 +639,10 @@ export function Soup() {
   const [preview, setPreview] = previewState();
   const selectedEntity = () => view().selectedEntity;
 
+  createEffect(() => {
+    handle.setDisplayName('');
+  });
+
   // Sync selected view to split metadata
   createEffect(() => {
     handle.updateMeta?.({ viewId: selectedView() });
@@ -778,7 +783,7 @@ export function Soup() {
             />
           </Show>
         </div>
-        <Show when={ENABLE_UNIFIED_LIST_AI_INPUT}>
+        <Show when={ENABLE_UNIFIED_LIST_AI_INPUT && !isMobile()}>
           <SoupChatInput />
         </Show>
       </div>

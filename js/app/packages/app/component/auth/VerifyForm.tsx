@@ -12,6 +12,8 @@ import {
 } from 'solid-js';
 import { sendEmailCode, useResetEmailCode } from './EmailForm';
 import { ErrorMsg, Input, identifyUser, Stage } from './Shared';
+import { cn } from '@ui/utils/classname';
+import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 
 const verifyCode = action(async (formData: FormData) => {
   const code = formData.get('one-time-code');
@@ -103,7 +105,12 @@ export function VerifyForm(props: { setStage: Setter<Stage> }) {
   return (
     <div>
       <form ref={formEl} action={verifyCode} method="post" class="mt-1">
-        <div class="grid items-center justify-center pt-5 pr-10 pb-5 pl-10 border border-dashed border-ink border-t-0">
+        <div
+          class={cn(
+            'grid items-center justify-center pt-5 pr-10 pb-5 pl-10 border border-dashed border-ink border-t-0 max-w-full',
+            virtualKeyboardVisible() && 'border-t'
+          )}
+        >
           <label for="one-time-code" class="block text-sm font-medium text-ink">
             A 6-digit code has been sent to
             <br />

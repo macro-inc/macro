@@ -33,14 +33,6 @@ export const services: Service[] = [
     orvalKey: "authService",
   },
   {
-    name: "comms-service",
-    dev: "https://comms-service-dev.macro.com/api-doc/openapi.json",
-    prod: "https://comms-service.macro.com/api-doc/openapi.json",
-    local: "http://localhost:8081/api-doc/openapi.json",
-    output: "../packages/service-clients/service-comms/",
-    orvalKey: "commsService",
-  },
-  {
     name: "notification-service",
     dev: "https://notifications-dev.macro.com/api-doc/openapi.json",
     prod: "https://notifications.macro.com/api-doc/openapi.json",
@@ -95,14 +87,6 @@ export const services: Service[] = [
     local: "http://localhost:8093/api-doc/openapi.json",
     output: "../packages/service-clients/service-search/",
     orvalKey: "searchService",
-  },
-  {
-    name: "properties-service",
-    dev: "https://properties-service-dev.macro.com/api-doc/openapi.json",
-    prod: "https://properties-service.macro.com/api-doc/openapi.json",
-    local: "http://localhost:8091/api-doc/openapi.json",
-    output: "../packages/service-clients/service-properties/",
-    orvalKey: "propertiesService",
   },
 ];
 

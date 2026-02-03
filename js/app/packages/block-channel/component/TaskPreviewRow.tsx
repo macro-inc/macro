@@ -1,4 +1,4 @@
-import type { TaskWithProperties } from '@block-channel/utils/useTaskMode';
+import type { TaskWithProperties } from '@block-channel/hooks/taskmode';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { propertyApiValuesToNormalized } from '@core/component/Properties/api/converters';
 import { Modals } from '@core/component/Properties/component/modal';

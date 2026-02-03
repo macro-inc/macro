@@ -1,15 +1,28 @@
 //! Database repository adapter for notifications.
 
-use std::collections::{HashMap, HashSet};
+#[cfg(test)]
+mod test;
 
+use crate::domain::models::{DeviceEndpoint, Notification, SendNotificationRequestBuilder};
+use crate::domain::ports::NotificationRepository;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use sqlx::PgPool;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
-use crate::domain::models::{DeviceEndpoint, Notification, SendNotificationRequestBuilder};
-use crate::domain::ports::NotificationRepository;
+/// Local representation of the `notification_device_type_option` Postgres enum
+/// for compile-time checked sqlx queries.
+#[derive(Debug, sqlx::Type)]
+#[sqlx(
+    type_name = "notification_device_type_option",
+    rename_all = "lowercase"
+)]
+enum DbDeviceType {
+    Ios,
+    Android,
+}
 
 /// Database-backed implementation of the notification repository port.
 ///
@@ -77,13 +90,13 @@ impl NotificationDbOps for PgPool {
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
         let ids: Vec<String> = user_ids.iter().map(|id| id.to_string()).collect();
 
-        let muted_users: Vec<String> = sqlx::query_scalar(
+        let muted_users: Vec<String> = sqlx::query_scalar!(
             r#"
             SELECT user_id FROM user_mute_notification
             WHERE user_id = ANY($1)
             "#,
+            &ids
         )
-        .bind(&ids)
         .fetch_all(self)
         .await?;
 
@@ -107,14 +120,14 @@ impl NotificationDbOps for PgPool {
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
         let ids: Vec<String> = user_ids.iter().map(|id| id.to_string()).collect();
 
-        let unsubscribed: Vec<String> = sqlx::query_scalar(
+        let unsubscribed: Vec<String> = sqlx::query_scalar!(
             r#"
             SELECT user_id FROM user_notification_item_unsubscribe
             WHERE item_id = $1 AND user_id = ANY($2)
             "#,
+            item_id,
+            &ids
         )
-        .bind(item_id)
-        .bind(&ids)
         .fetch_all(self)
         .await?;
 
@@ -137,28 +150,27 @@ impl NotificationDbOps for PgPool {
     ) -> Result<HashMap<MacroUserIdStr<'static>, Vec<DeviceEndpoint>>, Report> {
         let ids: Vec<String> = user_ids.iter().map(|id| id.to_string()).collect();
 
-        let rows: Vec<(String, String, String)> = sqlx::query_as(
+        let rows = sqlx::query!(
             r#"
-            SELECT user_id, device_endpoint, device_type
-            FROM user_device_registration
+            SELECT user_id, device_endpoint, device_type as "device_type: DbDeviceType"
+            FROM notification_user_device_registration
             WHERE user_id = ANY($1)
             "#,
+            &ids
         )
-        .bind(&ids)
         .fetch_all(self)
         .await?;
 
         let mut result: HashMap<MacroUserIdStr<'static>, Vec<DeviceEndpoint>> = HashMap::new();
 
-        for (user_id, endpoint, device_type) in rows {
-            let Ok(parsed_id) = MacroUserIdStr::parse_from_str(&user_id) else {
+        for row in rows {
+            let Ok(parsed_id) = MacroUserIdStr::parse_from_str(&row.user_id) else {
                 continue;
             };
 
-            let device = match device_type.as_str() {
-                "ios" => DeviceEndpoint::Ios(endpoint),
-                "android" => DeviceEndpoint::Android(endpoint),
-                _ => continue,
+            let device = match row.device_type {
+                DbDeviceType::Ios => DeviceEndpoint::Ios(row.device_endpoint),
+                DbDeviceType::Android => DeviceEndpoint::Android(row.device_endpoint),
             };
 
             result
@@ -182,36 +194,38 @@ impl NotificationDbOps for PgPool {
 
         let mut tx = self.begin().await?;
 
+        let sender_id = request.sender_id.as_ref().map(|id| id.to_string());
+
         // Insert notification
-        sqlx::query(
+        sqlx::query!(
             r#"
             INSERT INTO notification (id, notification_event_type, event_item_id, event_item_type, service_sender, metadata, sender_id)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             ON CONFLICT (id) DO NOTHING
             "#,
+            notification_id,
+            T::TYPE_NAME,
+            request.notification_entity.entity_id.as_ref(),
+            entity_type,
+            service_name,
+            metadata as Option<serde_json::Value>,
+            sender_id
         )
-        .bind(notification_id)
-        .bind(T::TYPE_NAME)
-        .bind(request.notification_entity.entity_id.as_ref())
-        .bind(entity_type)
-        .bind(service_name)
-        .bind(&metadata)
-        .bind(request.sender_id.as_ref().map(|id| id.to_string()))
         .execute(&mut *tx)
         .await?;
 
         // Insert user notifications
         let user_ids: Vec<String> = recipient_ids.iter().map(|id| id.to_string()).collect();
 
-        sqlx::query(
+        sqlx::query!(
             r#"
             INSERT INTO user_notification (notification_id, user_id)
             SELECT $1, user_id
             FROM UNNEST($2::text[]) as user_id
             "#,
+            notification_id,
+            &user_ids
         )
-        .bind(notification_id)
-        .bind(&user_ids)
         .execute(&mut *tx)
         .await?;
 
@@ -227,15 +241,15 @@ impl NotificationDbOps for PgPool {
     ) -> Result<(), Report> {
         let ids: Vec<String> = user_ids.iter().map(|id| id.to_string()).collect();
 
-        sqlx::query(
+        sqlx::query!(
             r#"
             UPDATE user_notification
             SET sent = true
             WHERE notification_id = $1 AND user_id = ANY($2)
             "#,
+            notification_id,
+            &ids
         )
-        .bind(notification_id)
-        .bind(&ids)
         .execute(self)
         .await?;
 

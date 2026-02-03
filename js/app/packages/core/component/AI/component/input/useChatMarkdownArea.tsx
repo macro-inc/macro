@@ -404,7 +404,7 @@ function MarkdownArea(
               }
               fallback={
                 <p class="py-1.5 p-0 text-ink-extra-muted">
-                  {props.placeholder ?? 'Ask AI @mention anything'}
+                  {props.placeholder ?? 'Ask AI, @mention anything'}
                 </p>
               }
             >

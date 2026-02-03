@@ -11,6 +11,43 @@ export function exportTheme(){
   navigator.clipboard.writeText(theme);
 }
 
+export async function importTheme(): Promise<void>{
+  try {
+    const text = await navigator.clipboard.readText();
+    const parsed: unknown = JSON.parse(text);
+    if(!isThemeV1(parsed)){
+      toast.alert('Clipboard does not contain a valid theme.');
+      return;
+    }
+    const id = crypto.randomUUID();
+    const newTheme: ThemeV1 = {
+      id,
+      name: parsed.name,
+      version: parsed.version,
+      tokens: parsed.tokens,
+    };
+    setUserThemes([...userThemes(), newTheme]);
+    applyTheme(id);
+  } catch(e) {
+    console.error('Failed to import theme:', e);
+    toast.alert('Failed to import theme from clipboard.');
+  }
+}
+
+function isThemeV1(value: unknown): value is ThemeV1 {
+  if(typeof value !== 'object' || value === null){return false}
+  const v = value as Record<string, unknown>;
+  if(typeof v.name !== 'string' || typeof v.version !== 'number' || typeof v.tokens !== 'object' || v.tokens === null){return false}
+  const tokenKeys: Array<keyof ThemeV1Tokens> = ['a0','a1','a2','a3','a4','b0','b1','b2','b3','b4','c0','c1','c2','c3','c4'];
+  const tokens = v.tokens as Record<string, unknown>;
+  return tokenKeys.every((key) => {
+    const t = tokens[key];
+    if(typeof t !== 'object' || t === null){return false}
+    const tok = t as Record<string, unknown>;
+    return typeof tok.l === 'number' && typeof tok.c === 'number' && typeof tok.h === 'number';
+  });
+}
+
 export function systemThemeEffect(){
   createEffect(
     on(

@@ -19,7 +19,7 @@ type IconButton = ComponentProps<'button'> & {
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   iconSize?: number;
   theme?: Theme;
-  size?: 'sm' | 'base' | 'lg' | 'xs';
+  size?: 'sm' | 'base' | 'lg' | 'xs' | 'xxs';
   showChevron?: boolean;
   onClick?: JSX.EventHandler<HTMLButtonElement, MouseEvent | KeyboardEvent>;
   border?: boolean;
@@ -124,6 +124,8 @@ export function DeprecatedIconButton(props: IconButtonProps) {
 
   const sizeClasses = createMemo(() => {
     switch (local.size ?? 'base') {
+      case 'xxs':
+        return 'h-4 w-4';
       case 'xs':
         return 'h-5 w-5';
       case 'sm':
@@ -137,6 +139,8 @@ export function DeprecatedIconButton(props: IconButtonProps) {
 
   const defaultIconSize = createMemo(() => {
     switch (local.size ?? 'base') {
+      case 'xxs':
+        return 12;
       case 'xs':
         return 12;
       case 'sm':

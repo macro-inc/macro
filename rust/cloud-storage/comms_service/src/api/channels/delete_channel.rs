@@ -13,7 +13,7 @@ use comms_db_client::channels::delete_channel::delete_channel;
         delete,
         tag = "channels",
         operation_id = "delete_channel",
-        path = "/channels/{channel_id}",
+        path = "/comms/channels/{channel_id}",
         params(
             ("channel_id" = String, Path, description = "id of the channel"),
         ),

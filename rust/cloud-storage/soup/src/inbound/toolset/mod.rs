@@ -12,12 +12,12 @@ use std::sync::Arc;
 pub use list_entities::{EntityItem, ItemType, ListEntities, ListEntitiesResponse, SortBy};
 
 /// Service context for soup AI tools
-pub struct SoupToolContext<T> {
+pub struct SoupToolContext<T: SoupService> {
     /// The soup service instance
     pub service: Arc<T>,
 }
 
-impl<T> Clone for SoupToolContext<T> {
+impl<T: SoupService> Clone for SoupToolContext<T> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
@@ -25,7 +25,7 @@ impl<T> Clone for SoupToolContext<T> {
     }
 }
 
-impl<T> SoupToolContext<T> {
+impl<T: SoupService> SoupToolContext<T> {
     /// Create a new soup tool context
     pub fn new(service: T) -> Self {
         Self {

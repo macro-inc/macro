@@ -61,6 +61,7 @@ import {
   onCleanup,
   runWithOwner,
   Show,
+  Suspense,
   Switch,
   useContext,
 } from 'solid-js';
@@ -81,6 +82,14 @@ const stringifyPreviewBox = ([width, height]: PreviewBox): [string, string] => {
 };
 
 export function DocumentCard(props: DocumentCardDecoratorProps) {
+  return (
+    <Suspense>
+      <DocumentCardInner {...props} />
+    </Suspense>
+  );
+}
+
+function DocumentCardInner(props: DocumentCardDecoratorProps) {
   const wrapper = useContext(LexicalWrapperContext);
   const editor = () => wrapper?.editor;
   const selection = () => wrapper?.selection;
@@ -151,14 +160,14 @@ export function DocumentCard(props: DocumentCardDecoratorProps) {
     };
   });
 
-  const previewData = createMemo(() => {
+  const previewData = () => {
     if (props.previewData?.view) {
       return { view: props.previewData.view };
     }
     return {};
-  });
+  };
 
-  const isPreviewable = createMemo(() => {
+  const isPreviewable = () => {
     if (!ENABLE_BLOCK_IN_BLOCK) return false;
     const i = item();
     if (!i) return false;
@@ -166,7 +175,7 @@ export function DocumentCard(props: DocumentCardDecoratorProps) {
     if (!isAccessiblePreviewItem(i)) return false;
     const blockName = resolveBlockAlias(verifyBlockName(props.blockName));
     return canNestBlock(blockName, currentBlockName);
-  });
+  };
 
   const [previewComponent, setPreviewComponent] = createSignal<
     Component | undefined

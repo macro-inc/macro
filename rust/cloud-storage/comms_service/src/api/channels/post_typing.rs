@@ -3,7 +3,7 @@ use crate::{
         context::AppState,
         extractors::{ChannelId, ChannelMember},
     },
-    service::sender::notify::{TypingUpdate, notify_typing},
+    service::sender::notify::{TypingData, WithNonce, notify_typing},
 };
 
 use anyhow::Result;
@@ -18,13 +18,14 @@ use uuid::Uuid;
 pub struct PostTypingRequest {
     pub action: TypingAction,
     pub thread_id: Option<String>,
+    pub nonce: Option<String>,
 }
 
 #[utoipa::path(
         post,
         tag = "channels",
         operation_id = "post_typing",
-        path = "/channels/{channel_id}/typing",
+        path = "/comms/channels/{channel_id}/typing",
         params(
             ("channel_id" = String, Path, description = "id of the channel")
         ),
@@ -54,11 +55,14 @@ pub async fn post_typing_handler(
 
     notify_typing(
         &app_state,
-        TypingUpdate {
-            channel_id,
-            user_id: channel_member.context.user_id.clone(),
-            action: req.action,
-            thread_id,
+        WithNonce {
+            data: TypingData {
+                channel_id: &channel_id,
+                user_id: &channel_member.context.user_id,
+                action: req.action,
+                thread_id: thread_id.as_ref(),
+            },
+            nonce: req.nonce.as_deref(),
         },
     )
     .await

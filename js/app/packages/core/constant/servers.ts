@@ -6,14 +6,11 @@ const serverHostLocal: Servers = {
   'cognition-service': 'http://localhost:8085',
   'cognition-websocket-service': 'ws://localhost:8085',
   'connection-gateway': 'ws://localhost:8082',
-  'comms-service': `http://localhost:8081`,
   'notification-service': 'http://localhost:8089',
   'static-file': 'http://localhost:8094',
   'unfurl-service': 'http://localhost:8095',
   contacts: 'http://localhost:8083',
   'email-service': 'http://localhost:8087',
-  'search-service': 'http://localhost:8093',
-  'properties-service': 'http://localhost:8091',
 } as const;
 
 const devServerSuffix = import.meta.env.MODE === 'development' ? '-dev' : '';
@@ -26,14 +23,11 @@ const serverHostRemote = {
   'cognition-service': `https://document-cognition${devServerSuffix}.macro.com`,
   'cognition-websocket-service': `wss://document-cognition${devServerSuffix}.macro.com`,
   'connection-gateway': `wss://connection-gateway${devServerSuffix}.macro.com`,
-  'comms-service': `https://comms-service${devServerSuffix}.macro.com`,
   'notification-service': `https://notifications${devServerSuffix}.macro.com`,
   'static-file': `https://static-file-service${devServerSuffix}.macro.com`,
   'unfurl-service': `https://unfurl-service${devServerSuffix}.macro.com`,
   contacts: `https://contacts${devServerSuffix}.macro.com`,
   'email-service': `https://email-service${devServerSuffix}.macro.com`,
-  'search-service': `https://search-service${devServerSuffix}.macro.com`,
-  'properties-service': `https://properties-service${devServerSuffix}.macro.com`,
 } as const;
 
 type Servers = Record<keyof typeof serverHostRemote, string>;

@@ -29,7 +29,7 @@ pub struct DeleteEntityMentionResponse {
 
 #[utoipa::path(
     delete,
-    path = "/mentions/{mention_id}",
+    path = "/comms/mentions/{mention_id}",
     params(
         ("mention_id" = String, Path, description = "UUID of the entity mention to delete")
     ),

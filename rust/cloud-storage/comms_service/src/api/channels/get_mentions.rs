@@ -15,7 +15,7 @@ pub struct GetMentionsResponse {
 
 #[utoipa::path(
         get,
-        path = "/channels/{channel_id}/mentions",
+        path = "/comms/channels/{channel_id}/mentions",
         tag = "channels",
         operation_id = "get_mentions_for_channel",
         params(

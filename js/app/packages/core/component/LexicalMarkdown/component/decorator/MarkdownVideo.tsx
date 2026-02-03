@@ -19,6 +19,7 @@ import {
 import {
   createEffect,
   createSignal,
+  on,
   onCleanup,
   onMount,
   Show,
@@ -231,14 +232,16 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
   });
 
   const debouncedScale = debouncedDependent(scale, 60);
-  createEffect(() => {
-    editor()?.update(() => {
-      const node = $getNodeByKey(props.key);
-      if (node && $isVideoNode(node)) {
-        node.setScale(debouncedScale(), false);
-      }
-    });
-  });
+  createEffect(
+    on(debouncedScale, (value) => {
+      editor()?.update(() => {
+        const node = $getNodeByKey(props.key);
+        if (node && $isVideoNode(node)) {
+          node.setScale(value, false);
+        }
+      });
+    })
+  );
 
   const debouncedSetHover = debounce((state: boolean) => {
     setVideoHover(state);

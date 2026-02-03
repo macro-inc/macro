@@ -140,12 +140,6 @@ const searchProcessingService = new SearchProcessingService(
         }.macro.com`,
       },
       {
-        name: 'COMMS_SERVICE_URL',
-        value: `https://comms-service${
-          stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
-      },
-      {
         name: 'WORKER_COUNT',
         value: '3', // 3 workers per instance
       },

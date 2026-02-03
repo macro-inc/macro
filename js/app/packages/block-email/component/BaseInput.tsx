@@ -30,7 +30,7 @@ import ReplyAll from '@icon/regular/arrow-bend-double-up-left.svg';
 import Reply from '@icon/regular/arrow-bend-up-left.svg';
 import Forward from '@icon/regular/arrow-bend-up-right.svg';
 import Plus from '@icon/regular/plus.svg';
-import Quotes from '@icon/regular/quotes.svg';
+import Quotes from '@icon/bold/quotes-bold.svg';
 import TextAa from '@icon/regular/text-aa.svg';
 import Trash from '@icon/regular/trash.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
@@ -234,13 +234,13 @@ function TruncatedRecipientList(props: {
   return (
     <div
       use:observedSize={{ setSize: setContainerRect }}
-      class="flex items-center text-sm font-mono overflow-hidden whitespace-nowrap mt-1 min-w-0 flex-1 cursor-pointer"
+      class="flex items-center text-sm overflow-hidden whitespace-nowrap mt-1 min-w-0 flex-1 cursor-pointer"
       onclick={props.onClick}
     >
       {/* Hidden measurement element - must have same font styles */}
       <span
         ref={measureRef}
-        class="absolute invisible whitespace-nowrap text-sm font-mono"
+        class="absolute invisible whitespace-nowrap text-sm"
         aria-hidden="true"
       />
 
@@ -955,18 +955,21 @@ export function BaseInput(props: {
             />
           }
         >
-          <div ref={setExpandedRecipientsRef} class="w-full">
+          <div
+            ref={setExpandedRecipientsRef}
+            class="w-full text-sm text-ink-muted"
+          >
             {/* Expanded FROM */}
-            <div class="flex flex-row items-baseline font-mono">
-              <span class="text-sm text-ink-muted min-w-8">
-                from <span>{userName()} </span>
-                <span>&lt;{userEmail()}&gt;</span>
+            <div class="flex flex-row items-baseline py-0.5">
+              <div class="min-w-8">from</div>
+              <span class="ml-2">
+                {userName()} &lt;{userEmail()}&gt;
               </span>
             </div>
             {/* Expanded TO */}
 
-            <div class="flex flex-row items-baseline">
-              <div class="text-sm text-ink-muted min-w-8">to</div>
+            <div class="flex flex-row items-center -mt-0.5">
+              <div class="min-w-8">to</div>
               <RecipientSelector<EmailRecipient['kind']>
                 inputRef={setToRef}
                 options={ctx.recipientOptions}
@@ -978,8 +981,8 @@ export function BaseInput(props: {
             </div>
             {/* Expanded CC */}
             <Show when={showCc() || form().recipients().cc.length > 0}>
-              <div class="flex flex-row items-start">
-                <div class="text-sm text-ink-muted min-w-8">cc</div>
+              <div class="flex flex-row items-center -mt-1.5">
+                <div class="min-w-8">cc</div>
                 <RecipientSelector<EmailRecipient['kind']>
                   inputRef={setCcRef}
                   options={ctx.recipientOptions}
@@ -992,8 +995,8 @@ export function BaseInput(props: {
             </Show>
             {/* Expanded BCC */}
             <Show when={showBcc() || form().recipients().bcc.length > 0}>
-              <div class="flex flex-row items-start">
-                <div class="text-sm text-ink-muted min-w-8">bcc</div>
+              <div class="flex flex-row items-center -mt-1.5">
+                <div class="min-w-8">bcc</div>
                 <RecipientSelector<EmailRecipient['kind']>
                   inputRef={setBccRef}
                   options={ctx.recipientOptions}

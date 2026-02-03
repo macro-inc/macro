@@ -31,14 +31,12 @@ type CreateCloudStorageServiceServiceArgs = {
   platform: { family: string; architecture: 'amd64' | 'arm64' };
   documentStorageBucketArn: pulumi.Output<string> | string;
   docxUploadBucketArn: pulumi.Output<string> | string;
-  deleteDocumentQueueArn: pulumi.Output<string> | string;
   serviceContainerPort: number;
   isPrivate?: boolean;
   containerEnvVars?: { name: string; value: pulumi.Output<string> | string }[];
   healthCheckPath: string;
   secretKeyArns: (pulumi.Output<string> | string)[];
-  notificationQueueArn: pulumi.Output<string> | string;
-  searchEventQueueArn: pulumi.Output<string> | string;
+  queueArns: (pulumi.Output<string> | string)[];
   tags: { [key: string]: string };
 };
 
@@ -68,10 +66,8 @@ export class CloudStorageService extends pulumi.ComponentResource {
       isPrivate,
       containerEnvVars,
       cloudStorageClusterName,
-      deleteDocumentQueueArn,
       secretKeyArns,
-      notificationQueueArn,
-      searchEventQueueArn,
+      queueArns,
       tags,
     }: CreateCloudStorageServiceServiceArgs,
     opts?: pulumi.ComponentResourceOptions
@@ -147,11 +143,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
           Statement: [
             {
               Action: ['sqs:SendMessage'],
-              Resource: [
-                pulumi.interpolate`${notificationQueueArn}`,
-                pulumi.interpolate`${searchEventQueueArn}`,
-                pulumi.interpolate`${deleteDocumentQueueArn}`,
-              ],
+              Resource: queueArns,
               Effect: 'Allow',
             },
           ],

@@ -269,6 +269,7 @@ export const attachPolicyToBucket = ({
           's3:GetInventoryConfiguration',
           's3:PutReplicationConfiguration',
           's3:PutBucketNotification',
+          's3:PutLifecycleConfiguration',
         ],
         Resource: [
           pulumi.interpolate`${bucket.arn}`,
@@ -310,6 +311,7 @@ export const attachPolicyToBucket = ({
           's3:GetInventoryConfiguration',
           's3:PutReplicationConfiguration',
           's3:PutBucketNotification',
+          's3:PutLifecycleConfiguration',
         ],
         Resource: [
           pulumi.interpolate`${bucket.arn}`,

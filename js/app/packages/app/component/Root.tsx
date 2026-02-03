@@ -3,7 +3,8 @@ import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { withAnalytics } from '@coparse/analytics';
 import { ChannelsContextProvider } from '@core/context/channels';
-import { UserContextProvider } from '@core/context/user';
+import { UserContextProvider, useUserId } from '@core/context/user';
+import { QuerySyncProvider } from '@queries/sync/SyncProvider';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
@@ -76,6 +77,7 @@ import { SuspenseContextComp } from './SuspenseContext';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 import Visor from './Visor';
 import { ReactiveFavicon } from './ReactiveFavicon';
+import { ROUTER_BASE } from '@app/constants/routerBase';
 
 const { track, identify, TrackingEvents } = withAnalytics();
 
@@ -174,8 +176,10 @@ function BasePathComponent() {
   return (
     <Switch>
       <Match when={userInfoQuery.isLoading}>{null}</Match>
-      <Match when={userInfoQuery.data?.authenticated === false}>
-        <Navigate href="/signup" />
+      <Match
+        when={!userInfoQuery.isLoading && !userInfoQuery.data?.authenticated}
+      >
+        <Navigate href={isNativeMobilePlatform() ? '/login' : '/signup'} />
       </Match>
       <Match when={userInfoQuery.data?.authenticated}>
         <Navigate href={redirectPath} />
@@ -244,11 +248,7 @@ const ROUTES: RouteDefinition[] = [
   },
   {
     path: '/login',
-    component: () => (
-      <div class="flex w-full h-dvh overflow-y-hidden">
-        <Login />
-      </div>
-    ),
+    component: () => <Login />,
   },
   {
     path: '/onboarding',
@@ -338,6 +338,11 @@ const clearBodyInlineStyleColor = () => {
   document.body.style.backgroundColor = '';
 };
 
+function QuerySyncProviderWithUserId() {
+  const userId = useUserId();
+  return <QuerySyncProvider userId={userId} />;
+}
+
 export function Root() {
   setHotkeyRoot(useHotKeyRoot());
 
@@ -364,7 +369,6 @@ export function Root() {
 
   const [tabInfo] = tabTitleSignal;
   const tabTitle = () => formatTabTitle(tabInfo());
-  const routerBase = isTauri() ? '/' : '/app';
 
   let runRootWarningLog = false;
   const RootSuspenseFallback = () => {
@@ -389,6 +393,7 @@ export function Root() {
       <MetaProvider>
         <EntityProvider>
           <UserContextProvider>
+            <QuerySyncProviderWithUserId />
             <UserInfoSideEffects />
             <ConfiguredGlobalAppStateProvider>
               <ChannelsContextProvider>
@@ -401,7 +406,7 @@ export function Root() {
                     transformUrl={transformShortIdInUrlPathname}
                     root={Layout}
                     rootPreload={rootPreload}
-                    base={routerBase}
+                    base={ROUTER_BASE}
                   >
                     {{
                       path: '/',

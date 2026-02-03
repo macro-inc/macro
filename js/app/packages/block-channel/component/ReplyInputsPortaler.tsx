@@ -1,11 +1,9 @@
 import { useMessageListContext } from '@block-channel/component/MessageList/MessageList';
 import {
-  channelStore,
   type SendMessageArgs,
-  useSendChannelMessageAction,
-} from '@block-channel/signal/channel';
-import type { ThreadStoreData } from '@block-channel/signal/threads';
-import { postTypingUpdate } from '@block-channel/signal/typing';
+  useSendChannelMessage,
+} from '@block-channel/hooks/message';
+import type { MessageWithThreadId } from '@block-channel/signal/threads';
 import {
   clearDraftMessage,
   loadDraftMessage,
@@ -14,7 +12,8 @@ import {
 import { blockElementSignal } from '@core/signal/blockElement';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
 import { channelParticipantInfo } from '@core/user/util';
-import { createCallback } from '@solid-primitives/rootless';
+import { usePostTypingUpdateMutation } from '@queries/channel/typing';
+import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
 import {
   createEffect,
   createMemo,
@@ -26,6 +25,8 @@ import type { SetStoreFunction } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
 import { BaseInput } from './BaseInput';
 
+export type ThreadStoreData = Record<string, MessageWithThreadId[]>;
+
 export type ReplyInputsPortalerProps = {
   channelId: string;
   threads: ThreadStoreData;
@@ -34,27 +35,32 @@ export type ReplyInputsPortalerProps = {
     Record<string, InputAttachment[]>
   >;
   setLocalTypingThreadId?: Setter<string | undefined>;
+  participants: ChannelParticipant[];
 };
 
 export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
   const listContext = useMessageListContext();
-  const sendMessage = useSendChannelMessageAction(() => props.channelId);
+  const sendMessage = useSendChannelMessage(() => props.channelId);
+  const typingMutation = usePostTypingUpdateMutation();
 
-  const postTypingUpdate_ = createCallback(postTypingUpdate);
   const blockRef = blockElementSignal.get;
 
-  const channel = channelStore.get;
-  const channelUsers = createMemo(() => {
-    const participants = channel.participants ?? [];
-    return participants.map(channelParticipantInfo);
-  });
+  const channelUsers = () => props.participants.map(channelParticipantInfo);
 
   const [focusedReplyInputThreadId, setFocusedReplyInputThreadId] =
     createSignal<string>();
 
   const onSend = (threadId: string) => async (args: SendMessageArgs) => {
     clearDraftMessage(props.channelId, threadId);
-    await sendMessage({ ...args, threadId });
+    listContext.closeThreadReply(threadId, true);
+
+    try {
+      await sendMessage({ ...args, threadId });
+    } catch {
+      listContext.createReply(threadId, true);
+      return;
+    }
+
     // After sending, focus the message immediately after the current one in the
     // flattened list.
     // Use a timeout to ensure the new message mounts in the DOM first.
@@ -78,10 +84,6 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
         el?.focus();
       }, 0);
     }, 100);
-  };
-
-  const onAfterSend = (threadId: string) => () => {
-    listContext.closeThreadReply(threadId, true);
   };
 
   const closeDraft = (threadId: string) => () => {
@@ -136,7 +138,6 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
             >
               <BaseInput
                 onSend={onSend(threadId)}
-                afterSend={onAfterSend(threadId)}
                 placeholder={`Send a reply`}
                 autoFocusOnMount={false}
                 shouldFocus={threadState()?.replyInputShouldFocus}
@@ -152,8 +153,20 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
                     setFocusedReplyInputThreadId(undefined);
                   }, 100);
                 }}
-                onStartTyping={() => postTypingUpdate_('start', threadId)}
-                onStopTyping={() => postTypingUpdate_('stop', threadId)}
+                onStartTyping={() =>
+                  typingMutation.mutate({
+                    channelId: props.channelId,
+                    action: 'start',
+                    threadId,
+                  })
+                }
+                onStopTyping={() =>
+                  typingMutation.mutate({
+                    channelId: props.channelId,
+                    action: 'stop',
+                    threadId,
+                  })
+                }
                 inputAttachments={{
                   store: props.threadInputAttachmentsStore,
                   setStore: props.setThreadInputAttachmentsStore,

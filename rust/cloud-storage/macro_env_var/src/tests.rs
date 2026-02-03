@@ -82,3 +82,86 @@ fn test_struct_with_fields_mock() {
 fn it_should_panic() {
     Config::unwrap_new();
 }
+
+// Tests for maybe_env_var! macro
+
+maybe_env_var! {
+    #[derive(Debug, Clone)]
+    pub struct MaybeTestVar;
+}
+
+#[test]
+fn maybe_env_var_returns_none_when_not_set() {
+    let result = MaybeTestVar::new();
+    assert!(result.is_none());
+}
+
+fn mock_maybe_test_var(k: &'static str) -> Result<String, std::env::VarError> {
+    (k == "MAYBE_TEST_VAR")
+        .then(|| "optional_value".to_string())
+        .ok_or(std::env::VarError::NotPresent)
+}
+
+#[test]
+fn maybe_env_var_returns_some_when_set() {
+    let v = with_mock_env(mock_maybe_test_var, MaybeTestVar::new);
+    assert!(v.is_some());
+    assert_eq!(&*v.unwrap(), "optional_value");
+}
+
+#[test]
+fn maybe_env_var_can_be_arced() {
+    let v = with_mock_env(mock_maybe_test_var, || MaybeTestVar::new().unwrap());
+    let next = v.runtime_inner().unwrap().clone();
+    let third = next.clone();
+    assert_eq!(Arc::strong_count(&third), 3);
+}
+
+maybe_env_var! {
+    #[derive(Debug, Clone)]
+    pub struct MaybeConfig {
+        #[derive(Debug, Clone)]
+        pub MaybeDbUrl,
+        #[derive(Debug, Clone)]
+        pub MaybeApiSecret,
+    }
+}
+
+#[test]
+fn maybe_struct_with_fields_all_none() {
+    let config = MaybeConfig::new();
+    assert!(config.maybe_db_url.is_none());
+    assert!(config.maybe_api_secret.is_none());
+}
+
+fn mock_partial_config(k: &'static str) -> Result<String, std::env::VarError> {
+    match k {
+        "MAYBE_DB_URL" => Ok("postgres://localhost/test".to_string()),
+        _ => Err(std::env::VarError::NotPresent),
+    }
+}
+
+#[test]
+fn maybe_struct_with_fields_partial() {
+    let config = with_mock_env(mock_partial_config, MaybeConfig::new);
+    assert!(config.maybe_db_url.is_some());
+    assert_eq!(&*config.maybe_db_url.unwrap(), "postgres://localhost/test");
+    assert!(config.maybe_api_secret.is_none());
+}
+
+fn mock_full_config(k: &'static str) -> Result<String, std::env::VarError> {
+    match k {
+        "MAYBE_DB_URL" => Ok("postgres://localhost/test".to_string()),
+        "MAYBE_API_SECRET" => Ok("secret456".to_string()),
+        _ => Err(std::env::VarError::NotPresent),
+    }
+}
+
+#[test]
+fn maybe_struct_with_fields_all_set() {
+    let config = with_mock_env(mock_full_config, MaybeConfig::new);
+    assert!(config.maybe_db_url.is_some());
+    assert!(config.maybe_api_secret.is_some());
+    assert_eq!(&*config.maybe_db_url.unwrap(), "postgres://localhost/test");
+    assert_eq!(&*config.maybe_api_secret.unwrap(), "secret456");
+}

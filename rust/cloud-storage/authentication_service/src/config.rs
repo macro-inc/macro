@@ -47,9 +47,6 @@ pub struct Config {
     /// The environment we are in
     pub environment: Environment,
 
-    /// The comms service url
-    pub comms_service_url: String,
-
     /// The internal auth key used by other services
     pub service_internal_auth_key: String,
 
@@ -106,8 +103,6 @@ impl Config {
             .context("should be valid port number")?;
 
         let environment = Environment::new_or_prod();
-        let comms_service_url =
-            std::env::var("COMMS_SERVICE_URL").context("COMMS_SERVICE_URL must be provided")?;
 
         let document_storage_service_url = std::env::var("DOCUMENT_STORAGE_SERVICE_URL")
             .context("DOCUMENT_STORAGE_SERVICE_URL must be provided")?;
@@ -138,7 +133,6 @@ impl Config {
             google_client_secret_key,
             stripe_secret_key,
             port,
-            comms_service_url,
             service_internal_auth_key,
             document_storage_service_url,
             notification_service_url,

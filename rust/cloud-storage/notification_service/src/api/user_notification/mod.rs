@@ -7,9 +7,7 @@ use axum::{
 pub(in crate::api) mod bulk_delete_user_notification;
 pub(in crate::api) mod bulk_get_user_notifications_by_event_item_id;
 pub(in crate::api) mod bulk_mark_user_notification_done;
-pub(in crate::api) mod bulk_mark_user_notification_done_by_event;
 pub(in crate::api) mod bulk_mark_user_notification_seen;
-pub(in crate::api) mod bulk_mark_user_notification_seen_by_event;
 pub(in crate::api) mod bulk_mark_user_notification_undone;
 pub(in crate::api) mod delete_user_notification;
 pub(in crate::api) mod get_user_notification;
@@ -43,13 +41,5 @@ pub fn router() -> Router<ApiContext> {
         .route(
             "/bulk/undone",
             patch(bulk_mark_user_notification_undone::handler),
-        )
-        .route(
-            "/item/:event_item_id/seen",
-            patch(bulk_mark_user_notification_seen_by_event::handler),
-        )
-        .route(
-            "/item/:event_item_id/done",
-            patch(bulk_mark_user_notification_done_by_event::handler),
         )
 }

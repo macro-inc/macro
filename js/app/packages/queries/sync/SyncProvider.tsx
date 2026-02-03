@@ -1,16 +1,42 @@
 import { invalidateContacts } from '@queries/contacts/contacts';
+import {
+  handleCommsAttachment,
+  handleCommsMessage,
+  handleCommsReaction,
+} from '@queries/channel/sync';
+import { handleCommsTyping } from '@queries/channel/typing';
 import { createConnectionWebsocketEffect } from '@service-connection/websocket';
-import type { ParentProps } from 'solid-js';
+import type { Accessor, ParentProps } from 'solid-js';
 import { match } from 'ts-pattern';
 
-// NOTE: This is a POC.
-// Needs to be fleshed out more. Also ideally the Provider from macto-entity should be
-// moved into the queries package first.
-export function QuerySyncProvider(props: ParentProps) {
+type SyncProviderProps = ParentProps<{
+  userId: Accessor<string | undefined>;
+}>;
+
+export function QuerySyncProvider(props: SyncProviderProps) {
   createConnectionWebsocketEffect((data) => {
-    match(data).with({ type: 'contacts_invalidation' }, () => {
-      invalidateContacts();
-    });
+    const payload =
+      typeof data.data === 'string' ? JSON.parse(data.data) : data.data;
+
+    match(data)
+      .with({ type: 'contacts_invalidation' }, () => {
+        invalidateContacts();
+      })
+      .with({ type: 'comms_message' }, () => {
+        handleCommsMessage(payload);
+      })
+      .with({ type: 'comms_reaction' }, () => {
+        handleCommsReaction(payload);
+      })
+      .with({ type: 'comms_attachment' }, () => {
+        handleCommsAttachment(payload);
+      })
+      .with({ type: 'comms_typing' }, () => {
+        const userId = props.userId();
+        if (!userId) return;
+        handleCommsTyping(payload, userId);
+      })
+      .otherwise(() => {});
   });
 
   return props.children;

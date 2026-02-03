@@ -8,7 +8,7 @@ import {
   processEmailColors,
   type ThemeColorParams,
 } from '@core/email';
-import DotsThree from '@icon/regular/dots-three.svg';
+import DotsThree from '@icon/light/dots-three-light.svg';
 import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
 import { useEmail } from '@core/context/user';
 import {
@@ -30,6 +30,7 @@ interface EmailMessageBodyProps {
   setExpandedMessageBody: (id: string) => void;
   setFocusedMessageId: (messageID: string | undefined) => void;
   isFirstMessageInThread: boolean;
+  isFocused: boolean;
 }
 
 export function EmailMessageBody(props: EmailMessageBodyProps) {
@@ -248,12 +249,14 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
           <Match when={true}>{host()}</Match>
         </Switch>
         <Show when={!showFullHTML() && hasHiddenReplyStructure()}>
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 mt-2">
             <DeprecatedIconButton
               theme="clear"
               icon={DotsThree}
               onclick={() => setShowFullHTML(true)}
-              iconSize={12}
+              iconSize={15}
+              size="xxs"
+              class={`${props.isFocused ? 'hover:bg-panel' : 'hover:bg-active'}`}
             />
           </div>
         </Show>

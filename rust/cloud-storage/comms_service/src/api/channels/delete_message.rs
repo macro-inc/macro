@@ -3,11 +3,14 @@ use crate::{
         context::AppState,
         extractors::{ChannelParticipants, MessageId, MessageSenderOrAdmin},
     },
-    service::{self, sender::notify::notify_message},
+    service::{
+        self,
+        sender::notify::{WithNonce, notify_message},
+    },
 };
 use anyhow::Result;
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
 };
 use comms_db_client::messages::delete_message::delete_message;
@@ -20,11 +23,16 @@ pub struct DeleteMessageParams {
     pub message_id: String,
 }
 
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct DeleteMessageQuery {
+    pub nonce: Option<String>,
+}
+
 #[utoipa::path(
         delete,
         tag = "channels",
         operation_id = "delete_message",
-        path = "/channels/{channel_id}/message/{message_id}",
+        path = "/comms/channels/{channel_id}/message/{message_id}",
         params(
             ("channel_id" = String, Path, description = "id of the channel"),
             ("message_id" = String, Path, description = "id of the message")
@@ -43,31 +51,35 @@ pub async fn delete_message_handler(
     ChannelParticipants(participants): ChannelParticipants,
     MessageId(message_id): MessageId,
     Path(params): Path<DeleteMessageParams>,
+    Query(query): Query<DeleteMessageQuery>,
 ) -> Result<(StatusCode, String), (StatusCode, String)> {
     tracing::info!("delete_message");
 
     let message = delete_message(&ctx.db, message_id).await.map_err(|e| {
-        tracing::error!(error=?e, "unable to patch message");
+        tracing::error!(error=?e, "unable to delete message");
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            "unable to patch message".to_string(),
+            "unable to delete message".to_string(),
         )
     })?;
-    let participants: Vec<_> = participants
-        .clone()
-        .iter()
-        .map(|p| p.user_id.clone())
-        .collect();
+    let participants: Vec<_> = participants.iter().map(|p| p.user_id.clone()).collect();
 
-    notify_message(&ctx, message, &participants)
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "unable to notify message");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "failed to deliver message".to_string(),
-            )
-        })?;
+    notify_message(
+        &ctx,
+        WithNonce {
+            data: &message,
+            nonce: query.nonce.as_deref(),
+        },
+        &participants,
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!(error=?e, "unable to notify message");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "failed to deliver message".to_string(),
+        )
+    })?;
 
     service::search::send_remove_channel_message_to_search_extractor_queue(
         &ctx.sqs_client,

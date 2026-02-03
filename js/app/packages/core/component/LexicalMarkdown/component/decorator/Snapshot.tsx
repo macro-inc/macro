@@ -1,4 +1,5 @@
 import { useMaybeBlockId } from '@core/block';
+import { HoverCard } from '@core/component/HoverCard';
 import { PopupPreview } from '@core/component/DocumentPreview';
 import {
   EntityIcon,
@@ -16,14 +17,13 @@ import LoadingSpinner from '@icon/regular/spinner.svg';
 import { $isSnapshotNode, type SnapshotDecoratorProps } from '@lexical-core';
 import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
-import { debounce } from '@solid-primitives/scheduled';
 import {
   $getNodeByKey,
   COMMAND_PRIORITY_NORMAL,
   KEY_ENTER_COMMAND,
 } from 'lexical';
 import type { JSX } from 'solid-js';
-import { createMemo, createSignal, Show, useContext } from 'solid-js';
+import { createMemo, Suspense, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { autoRegister } from '../../plugins';
 import { openDocument } from '../core/BlockLink';
@@ -55,13 +55,19 @@ function Loading() {
 }
 
 export function Snapshot(props: SnapshotDecoratorProps) {
+  return (
+    <Suspense>
+      <SnapshotInner {...props} />
+    </Suspense>
+  );
+}
+
+function SnapshotInner(props: SnapshotDecoratorProps) {
   const currentBlockId = useMaybeBlockId();
 
   const lexicalWrapper = useContext(LexicalWrapperContext);
   const editor = lexicalWrapper?.editor;
   const selection = () => lexicalWrapper?.selection;
-
-  let inlinePreviewRef!: HTMLSpanElement;
 
   const previewType = () =>
     blockNameToItemType(verifyBlockName(props.blockName));
@@ -70,9 +76,6 @@ export function Snapshot(props: SnapshotDecoratorProps) {
     id: props.documentId,
     type: previewType(),
   }));
-
-  const [popupOpen, setPopupOpen] = createSignal(false);
-  const debouncedSetPreviewOpen = debounce(setPopupOpen, 100);
 
   const isSelectedAsNode = createMemo(() => {
     const sel = selection();
@@ -164,59 +167,44 @@ export function Snapshot(props: SnapshotDecoratorProps) {
   };
 
   return (
-    <>
-      <span class="relative">
-        <span
-          class="w-full h-full py-0.5 cursor-default rounded-xs hover:bg-hover focus:bg-active"
-          classList={{
-            'bg-active text-ink bracket bracket-offset-2': isSelectedAsNode(),
-          }}
-          style={{
-            'user-select': 'inherit',
-          }}
-          ref={inlinePreviewRef}
-          onMouseEnter={() => {
-            if (!isTouchDevice()) {
-              debouncedSetPreviewOpen(true);
-            }
-          }}
-          onMouseLeave={() => {
-            if (!isTouchDevice()) {
-              debouncedSetPreviewOpen.clear();
-              debouncedSetPreviewOpen(false);
-            }
-          }}
-          ontouchstart={(e) => {
-            if (isTouchDevice()) {
-              e.preventDefault();
-            }
-          }}
-          ontouchend={(e) => {
-            if (isTouchDevice()) {
-              e.preventDefault();
-              if (matches(item(), (i) => !i.loading && i.access === 'access')) {
-                open(null);
+    <HoverCard
+      trigger={
+        <span class="relative">
+          <span
+            class="w-full h-full py-0.5 cursor-default rounded-xs hover:bg-hover focus:bg-active"
+            classList={{
+              'bg-active text-ink bracket bracket-offset-2': isSelectedAsNode(),
+            }}
+            style={{
+              'user-select': 'inherit',
+            }}
+            ontouchstart={(e) => {
+              if (isTouchDevice()) {
+                e.preventDefault();
               }
-            }
-          }}
-          {...navHandlers}
-        >
-          {renderContent()}
+            }}
+            ontouchend={(e) => {
+              if (isTouchDevice()) {
+                e.preventDefault();
+                if (
+                  matches(item(), (i) => !i.loading && i.access === 'access')
+                ) {
+                  open(null);
+                }
+              }
+            }}
+            {...navHandlers}
+          >
+            {renderContent()}
+          </span>
+          <MentionTooltip show={isSelectedAsNode()} text="Open" />
         </span>
-        <MentionTooltip show={isSelectedAsNode()} text="Open" />
-      </span>
-
-      <Show when={popupOpen()}>
+      }
+      content={
         <PopupPreview
           item={item}
-          floatRef={inlinePreviewRef}
-          mouseEnter={() => {
-            debouncedSetPreviewOpen(true);
-          }}
-          mouseLeave={() => {
-            debouncedSetPreviewOpen.clear();
-            debouncedSetPreviewOpen(false);
-          }}
+          mouseEnter={() => {}}
+          mouseLeave={() => {}}
           delete={editor?.isEditable() ? deleteSnapshot : undefined}
           documentInfo={{
             id: props.documentId,
@@ -229,7 +217,7 @@ export function Snapshot(props: SnapshotDecoratorProps) {
             characterCount: props.content.length,
           }}
         />
-      </Show>
-    </>
+      }
+    />
   );
 }

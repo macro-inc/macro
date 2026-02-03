@@ -44,7 +44,9 @@ members = [
   "integration_tests/*",
   "lambda_client",
   "lexical_client",
+  "local_stream_processor",
   "macro_auth",
+  "macro_aws_config",
   "macro_cache_client",
   "macro_client_errors",
   "macro_cors",
@@ -55,7 +57,7 @@ members = [
   "macro_notify",
   "macro_project_utils",
   "macro_redis",
-  "macro_redis_cluster_client",
+  "macro_sha_count_client",
   "macro_service_client",
   "macro_share_permissions",
   "macro_uuid",
@@ -87,7 +89,6 @@ members = [
   "properties",
   "properties_db_client",
   "properties_service",
-  "properties_service_client",
   "roles_and_permissions",
   "rpc/axum_rpc",
   "rpc/axum_rpc_emit",
@@ -101,7 +102,6 @@ members = [
   "secretsmanager_client",
   "ses_client",
   "sha_cleanup_worker",
-  "sha_ref_count_resetter",
   "sns_client",
   "soup",
   "sqs_client",
@@ -124,13 +124,13 @@ anyhow = "1.0.93"
 async-openai = { version = "0.28.3", features = ["byot"] }
 async-stream = "0.3.6"
 async-trait = "0.1.86"
-aws-config = { version = "1.5.17", features = ["behavior-version-latest"] }
+aws-config = { version = "1.8.12", features = ["behavior-version-latest"] }
 aws-sdk-dynamodb = "1.98.0"
 aws-sdk-lambda = "1.104.0"
-aws-sdk-s3 = "1.119.0"
+aws-sdk-s3 = "1.121.0"
 aws-sdk-secretsmanager = "1.93.0"
 aws-sdk-sesv2 = "1.103.0"
-aws-sdk-sns = "1.61.0"
+aws-sdk-sns = "1.90.0"
 aws-sdk-sqs = "1.91.0"
 aws-smithy-types = "1.2.13"
 aws_lambda_events = { version = "0.16.0", default-features = false }
@@ -145,7 +145,7 @@ clap = { version = "4.5.20", features = ["derive"] }
 cloudfront_sign = "0.3.0"
 cookie = "0.18.1"
 dashmap = "6.1.0"
-dotenv = "0.15.0"
+dotenvy = "0.15.7"
 ego-tree = "0.6.2"
 either = "1"
 futures = "0.3.31"

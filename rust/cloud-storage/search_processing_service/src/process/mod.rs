@@ -36,12 +36,8 @@ pub async fn process_message(
             user::remove_user_profile(&ctx.opensearch_client, &user_profile_id).await?;
         }
         SearchQueueMessage::ChannelMessageUpdate(message) => {
-            channel::process_channel_message_update(
-                &ctx.opensearch_client,
-                &ctx.comms_service_client,
-                &message,
-            )
-            .await?;
+            channel::process_channel_message_update(&ctx.opensearch_client, &ctx.db, &message)
+                .await?;
         }
         SearchQueueMessage::RemoveChannelMessage(message) => {
             channel::process_remove_channel_message(&ctx.opensearch_client, &message).await?;

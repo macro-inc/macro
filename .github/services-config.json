@@ -13,12 +13,6 @@
       ],
       "stack_path": "infra/stacks/bulk-upload/**"
     },
-    "comms-service": {
-      "source_paths": [
-        "rust/cloud-storage/comms_service/**"
-      ],
-      "stack_path": "infra/stacks/comms-service/**"
-    },
     "connection-gateway": {
       "source_paths": [
         "rust/cloud-storage/connection_gateway/**"
@@ -91,23 +85,11 @@
       ],
       "stack_path": "infra/stacks/organization-retention/**"
     },
-    "properties-service": {
-      "source_paths": [
-        "rust/cloud-storage/properties_service/**"
-      ],
-      "stack_path": "infra/stacks/properties-service/**"
-    },
     "search-processing-service": {
       "source_paths": [
         "rust/cloud-storage/search_processing_service/**"
       ],
       "stack_path": "infra/stacks/search-processing-service/**"
-    },
-    "search-service": {
-      "source_paths": [
-        "rust/cloud-storage/search_service/**"
-      ],
-      "stack_path": "infra/stacks/search-service/**"
     },
     "search-upload": {
       "source_paths": [

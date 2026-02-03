@@ -1,4 +1,5 @@
 import { useIsAuthenticated } from '@core/auth';
+import { cn } from '@ui/utils/classname';
 import { setActiveModal } from '@core/signal/activeModal';
 import type { RedirectLocation } from '@core/util/authRedirect';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
@@ -21,6 +22,7 @@ import { EmailForm } from './EmailForm';
 import { LoginOptions } from './LoginOptions';
 import { identifyUser, Stage } from './Shared';
 import { VerifyForm } from './VerifyForm';
+import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 
 // Lazy load ThreeWireframe to keep three.js out of main bundle
 const ThreeWireframe = lazy(() => import('./ThreeWireframe'));
@@ -95,9 +97,14 @@ export function Login() {
 
   return (
     <Show when={!authenticated()} fallback={<Navigate href="/" />}>
-      <div class="grid w-full h-[100dvh] items-center justify-center font-mono text-[15px]">
-        <div class="grid w-min bg-[var(--color-surface)]">
-          <div class="border border-dashed border-[var(--color-ink)] box-border w-[350px]">
+      <div class="grid w-full h-full items-center justify-center font-mono text-[15px]">
+        <div class="grid w-min">
+          <div
+            class={cn(
+              'border border-dashed border-[var(--color-ink)] box-border w-[350px]',
+              virtualKeyboardVisible() && 'hidden'
+            )}
+          >
             <Suspense
               fallback={
                 <div
@@ -111,17 +118,19 @@ export function Login() {
               <ThreeWireframe src="m" scale={9.5} clockwise={false} />
             </Suspense>
           </div>
-          <Switch>
-            <Match when={stage() === Stage.None}>
-              <LoginOptions setStage={setStage} />
-            </Match>
-            <Match when={stage() === Stage.Email}>
-              <EmailForm setStage={setStage} />
-            </Match>
-            <Match when={stage() === Stage.Verify}>
-              <VerifyForm setStage={setStage} />
-            </Match>
-          </Switch>
+          <div class="w-[350px]">
+            <Switch>
+              <Match when={stage() === Stage.None}>
+                <LoginOptions setStage={setStage} />
+              </Match>
+              <Match when={stage() === Stage.Email}>
+                <EmailForm setStage={setStage} />
+              </Match>
+              <Match when={stage() === Stage.Verify}>
+                <VerifyForm setStage={setStage} />
+              </Match>
+            </Switch>
+          </div>
         </div>
       </div>
     </Show>

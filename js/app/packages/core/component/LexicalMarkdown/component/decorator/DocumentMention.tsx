@@ -13,6 +13,7 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { resolveBlockAlias, verifyBlockName } from '@core/constant/allBlocks';
 import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import { canNestBlock } from '@core/orchestrator';
 import {
   isAccessiblePreviewItem,
@@ -23,6 +24,7 @@ import {
   type PreviewItemNoAccess,
   type PreviewProjectAccess,
   useItemPreview,
+  type ItemEntity,
 } from '@queries/preview';
 import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
@@ -38,7 +40,6 @@ import {
 } from '@lexical-core';
 import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
-import { debounce } from '@solid-primitives/scheduled';
 import {
   $getNodeByKey,
   COMMAND_PRIORITY_NORMAL,
@@ -56,13 +57,11 @@ import {
   Switch,
   useContext,
 } from 'solid-js';
+import { HoverCard } from '@core/component/HoverCard';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
-import { floatWithElement } from '../../directive/floatWithElement';
 import { autoRegister, UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';
 import { openDocument } from '../core/BlockLink';
 import { MentionTooltip } from './MentionTooltip';
-
-false && floatWithElement;
 
 function MentionContainer(props: {
   icon: JSX.Element;
@@ -217,8 +216,6 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
   const editor = lexicalWrapper?.editor;
   const selection = () => lexicalWrapper?.selection;
 
-  let inlinePreviewRef!: HTMLSpanElement;
-
   const [isCollapsed, setIsCollapsed] = createSignal<boolean>(
     props.collapsed ?? false
   );
@@ -242,13 +239,25 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
   const previewType = () =>
     blockNameToItemType(verifyBlockName(props.blockName));
 
-  const [item] = useItemPreview(() => ({
-    id: props.documentId,
-    type: previewType(),
-  }));
+  const itemEntity = (): ItemEntity => {
+    const baseEntity = {
+      id: props.documentId,
+      type: previewType(),
+    };
+    if (
+      previewType() === 'channel' &&
+      props.blockParams &&
+      CHANNEL_URL_PARAMS.message in props.blockParams
+    ) {
+      return {
+        ...baseEntity,
+        messageId: props.blockParams[CHANNEL_URL_PARAMS.message],
+      };
+    }
+    return baseEntity;
+  };
 
-  const [popupOpen, setPopupOpen] = createSignal(false);
-  const debouncedSetPreviewOpen = debounce(setPopupOpen, 100);
+  const [item] = useItemPreview(itemEntity);
 
   const isSelectedAsNode = createMemo(() => {
     const sel = selection();
@@ -334,72 +343,57 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
   });
 
   return (
-    <>
-      <span class="relative">
-        <span
-          class="w-full h-full py-0.5 cursor-default rounded-xs hover:bg-hover focus:bg-active"
-          classList={{
-            'bg-active text-ink bracket bracket-offset-2': isSelectedAsNode(),
-          }}
-          style={{
-            'user-select': 'inherit',
-          }}
-          ref={inlinePreviewRef}
-          onMouseEnter={() => {
-            if (!isTouchDevice()) {
-              debouncedSetPreviewOpen(true);
-            }
-          }}
-          onMouseLeave={() => {
-            if (!isTouchDevice()) {
-              debouncedSetPreviewOpen.clear();
-              debouncedSetPreviewOpen(false);
-            }
-          }}
-          ontouchstart={(e) => {
-            if (isTouchDevice()) {
-              e.preventDefault();
-            }
-          }}
-          ontouchend={(e) => {
-            if (isTouchDevice()) {
-              e.preventDefault();
-              if (matches(item(), (i) => !i.loading && i.access === 'access')) {
-                open(null);
+    <HoverCard
+      trigger={
+        <span class="relative">
+          <span
+            class="w-full h-full py-0.5 cursor-default rounded-xs hover:bg-hover focus:bg-active"
+            classList={{
+              'bg-active text-ink bracket bracket-offset-2': isSelectedAsNode(),
+            }}
+            style={{
+              'user-select': 'inherit',
+            }}
+            ontouchstart={(e: TouchEvent) => {
+              if (isTouchDevice()) {
+                e.preventDefault();
               }
-            }
-          }}
-          {...navHandlers}
-        >
-          <Switch>
-            <Match when={item().loading}>
-              <Loading collapsed={isCollapsed()} />
-            </Match>
-            <Match when={item()}>
-              <InlinePreview
-                item={item}
-                blockName={verifyBlockName(props.blockName)}
-                blockParams={props.blockParams || {}}
-                theme={props.theme}
-                collapsed={isCollapsed()}
-              />
-            </Match>
-          </Switch>
+            }}
+            ontouchend={(e: TouchEvent) => {
+              if (isTouchDevice()) {
+                e.preventDefault();
+                if (
+                  matches(item(), (i) => !i.loading && i.access === 'access')
+                ) {
+                  open(null);
+                }
+              }
+            }}
+            {...navHandlers}
+          >
+            <Switch>
+              <Match when={item().loading}>
+                <Loading collapsed={isCollapsed()} />
+              </Match>
+              <Match when={item()}>
+                <InlinePreview
+                  item={item}
+                  blockName={verifyBlockName(props.blockName)}
+                  blockParams={props.blockParams || {}}
+                  theme={props.theme}
+                  collapsed={isCollapsed()}
+                />
+              </Match>
+            </Switch>
+          </span>
+          <MentionTooltip show={isSelectedAsNode()} text="Open" />
         </span>
-        <MentionTooltip show={isSelectedAsNode()} text="Open" />
-      </span>
-
-      <Show when={popupOpen()}>
+      }
+      content={
         <PopupPreview
           item={item}
-          floatRef={inlinePreviewRef}
-          mouseEnter={() => {
-            debouncedSetPreviewOpen(true);
-          }}
-          mouseLeave={() => {
-            debouncedSetPreviewOpen.clear();
-            debouncedSetPreviewOpen(false);
-          }}
+          mouseEnter={() => {}}
+          mouseLeave={() => {}}
           delete={editor?.isEditable() ? deleteMention : undefined}
           collapseInfo={{
             isCollapsed: isCollapsed(),
@@ -427,7 +421,7 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
             handlePreviewToggle: convertToCard,
           }}
         />
-      </Show>
-    </>
+      }
+    />
   );
 }

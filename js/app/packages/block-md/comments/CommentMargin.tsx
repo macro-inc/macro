@@ -7,12 +7,12 @@ import {
   threadStore,
 } from '@block-md/comments/commentStore';
 import { useBlockId } from '@core/block';
-import { MinimizedThread } from '@core/collab/comments/MinimizedThreads';
+import { MinimizedThread } from '@core/comments/MinimizedThreads';
 import {
   CommentsContext,
   type CommentsContextType,
   Thread,
-} from '@core/collab/comments/Thread';
+} from '@core/comments/Thread';
 import { useCanComment, useIsDocumentOwner } from '@core/signal/permissions';
 import { autoUpdate, computePosition } from '@floating-ui/dom';
 import { useUserId } from '@core/context/user';

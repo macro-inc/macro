@@ -7,10 +7,8 @@ import { usePermissions } from '@core/context/user';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import ContractIcon from '@icon/regular/arrows-in.svg';
-import Organization from './Organization/Organization';
 import ExpandIcon from '@icon/regular/arrows-out.svg';
 import { withAnalytics } from '@coparse/analytics';
-import { useOrganizationName } from '@core/user';
 import { Subscription } from './Subscription';
 import { Appearance } from './Appearance';
 import { Tabs } from '@kobalte/core/tabs';
@@ -32,7 +30,6 @@ type SettingsPanelProps = {
 export function SettingsPanel(props: SettingsPanelProps) {
   const { settingsOpen, closeSettings, activeTabId, setActiveTabId } = useSettingsState();
   const permissions = usePermissions();
-  const orgName = useOrganizationName();
   const [spotlight, setSpotlight] = createSignal(false);
 
   // Set up hotkey scope for settings panel
@@ -126,8 +123,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
       {value: 'Shortcuts', label: 'Shortcuts'}
     ];
 
-    if(!orgName() && !isNativeMobilePlatform()){tabs.push({value: 'Subscription', label: 'Subscription'})}
-    if(orgName() && permissions()?.includes('WriteItPanel')){tabs.push({value: 'Organization', label: 'Organization'})}
+    if(permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()){tabs.push({value: 'Subscription', label: 'Subscription'})}
     if(isNativeMobilePlatform() && DEV_MODE_ENV){tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' })}
     if(DEV_MODE_ENV){tabs.push({ value: 'Inbox', label: 'Inbox' })}
 
@@ -229,7 +225,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
             <Tabs
               value={activeTabId()}
               onChange={(value: string | undefined) => {
-                if(value && (value === 'Account' || value === 'Subscription' || value === 'Organization' || value === 'Appearance' || value === 'Mobile' || value === 'AI Memory' || value === 'Inbox' || value === 'Shortcuts')){
+                if(value && (value === 'Account' || value === 'Subscription' || value === 'Appearance' || value === 'Mobile' || value === 'AI Memory' || value === 'Inbox' || value === 'Shortcuts')){
                   setActiveTabId(value as SettingsTab);
                   track(TrackingEvents.SETTINGS.CHANGETAB, { tab: value });
                 }
@@ -341,14 +337,9 @@ export function SettingsPanel(props: SettingsPanelProps) {
                     <Account />
                   </Suspense>
                 </Tabs.Content>
-                <Show when={!orgName() && !isNativeMobilePlatform()}>
+                <Show when={permissions()?.includes('write:stripe_subscription') && !isNativeMobilePlatform()}>
                   <Tabs.Content value="Subscription" class="absolute inset-0">
                     <Subscription />
-                  </Tabs.Content>
-                </Show>
-                <Show when={ orgName() && permissions()?.includes('WriteItPanel')}>
-                  <Tabs.Content value="Organization" class="absolute inset-0">
-                    <Organization />
                   </Tabs.Content>
                 </Show>
                 <Tabs.Content value="Appearance" class="absolute inset-0">

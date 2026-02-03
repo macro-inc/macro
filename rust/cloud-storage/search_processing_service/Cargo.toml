@@ -22,19 +22,18 @@ required-features = ["processing", "service"]
 
 [dependencies]
 anyhow = { workspace = true }
-aws-config = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
-comms_db_client = { path = "../comms_db_client", optional = true }
-comms_service_client = { path = "../comms_service_client" }
+comms_db_client = { path = "../comms_db_client" }
 email_db_client = { path = "../email_db_client", optional = true }
 email_service_client = { path = "../email_service_client" }
 futures = { workspace = true }
 http-body-util = { workspace = true }
 lexical_client = { path = "../lexical_client" }
+macro_aws_config = { path = "../macro_aws_config" }
 macro_cors = { path = "../macro_cors" }
 macro_db_client = { path = "../macro_db_client", optional = true } # Make this optional
 macro_entrypoint = { path = "../macro_entrypoint" }
@@ -46,6 +45,7 @@ macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 mention_utils = { path = "../mention_utils" }
 model = { path = "../model" }
+models_email = { path = "../models_email" }
 model_file_type = { path = "../model_file_type" }
 models_opensearch = { path = "../models_opensearch" }
 models_search = { path = "../models_search" }

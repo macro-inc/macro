@@ -5,7 +5,7 @@ use models_search::unified::UnifiedSearchResponseItem;
 use opensearch_client::search::model::SearchHit;
 
 use crate::api::{
-    context::ApiContext,
+    context::SearchHandlerState,
     search::{
         channel::enrich_channels, chat::enrich_chats, document::enrich_documents,
         email::enrich_emails, project::enrich_projects, simple::SearchError,
@@ -14,7 +14,7 @@ use crate::api::{
 
 /// Enriches search results with metadat and converts to UnifiedSearchResponseItem
 pub async fn enrich_search_response(
-    ctx: &ApiContext,
+    ctx: &SearchHandlerState,
     user_id: &str,
     results: Vec<SearchHit>,
     entity_type: SearchEntityType,

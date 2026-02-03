@@ -14,6 +14,7 @@ import {
   useContext,
 } from 'solid-js';
 import { getInsets, type Insets } from 'tauri-plugin-safe-area-insets';
+import { listenForHeartbeat } from './heartbeat';
 import { useTauriNavigationEffect } from './navigation';
 import { MaybePushNotificationRegistration } from './PushNotification';
 
@@ -40,6 +41,8 @@ function TauriProvider(props: { children: JSX.Element }) {
   };
 
   onMount(() => {
+    listenForHeartbeat();
+
     if (value.os === 'android') {
       getInsets().then((insets) => {
         setInsets(insets);

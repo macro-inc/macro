@@ -264,12 +264,12 @@ const Root: Component<MessageRootProps> = (props) => {
                 'border-l': !props.hideConnectors,
                 'border-accent': props.isNewMessage ?? false,
                 'border-edge-muted': !props.isNewMessage,
-                'pt-4': !(
+                'pt-1.5': !(
                   props.isConsecutive ||
                   props.isFirstMessage ||
                   props.isFirstInThread
                 ),
-                'pb-2': props.isLastMessage && !props.isLastInThread,
+                'pb-2': !props.isLastMessage,
                 'pb-4': props.hasThreadChildren ?? false,
               }}
               style={{
@@ -277,7 +277,7 @@ const Root: Component<MessageRootProps> = (props) => {
               }}
             >
               {/* User Icon */}
-              <div class="absolute -left-[.5px] -translate-x-1/2">
+              <div class="absolute left-0 -translate-x-1/2">
                 <Show when={!props.isConsecutive}>
                   <div class="relative">
                     <Show when={props.isFirstInThread}>

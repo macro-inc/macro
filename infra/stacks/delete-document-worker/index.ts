@@ -31,9 +31,11 @@ const documentStorageBucketId: pulumi.Output<string> = cloudStorageStack
   .getOutput('documentStorageBucketId')
   .apply((id) => id as string);
 
-const cloudStorageCacheEndpoint: pulumi.Output<string> = cloudStorageStack
-  .getOutput('cloudStorageCacheEndpoint')
-  .apply((arn) => arn as string);
+const MACRO_CACHE = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require(`macro_cache_secret_key`),
+  })
+  .apply((secret) => secret.secretString);
 
 const cloudStorageClusterArn: pulumi.Output<string> = cloudStorageStack
   .getOutput('cloudStorageClusterArn')
@@ -64,18 +66,6 @@ const syncServiceAuthKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: SYNC_SERVICE_AUTH_KEY })
   .apply((secret) => secret.arn);
 
-const COMMS_SERVICE_AUTH_KEY = config.require(`comms_service_auth_key`);
-const commsServiceAuthKeyArn: pulumi.Output<string> = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: COMMS_SERVICE_AUTH_KEY })
-  .apply((secret) => secret.arn);
-
-const PROPERTIES_SERVICE_AUTH_KEY = config.require(
-  `properties_service_auth_key`
-);
-const propertiesServiceAuthKeyArn: pulumi.Output<string> = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: PROPERTIES_SERVICE_AUTH_KEY })
-  .apply((secret) => secret.arn);
-
 // ------------------------------------------- Delete Document Worker -------------------------------------------
 const deleteDocumentWorker = new Worker(`delete-document-worker-${stack}`, {
   ecsClusterArn: cloudStorageClusterArn,
@@ -103,7 +93,7 @@ const deleteDocumentWorker = new Worker(`delete-document-worker-${stack}`, {
     },
     {
       name: 'REDIS_URI',
-      value: pulumi.interpolate`rediss://${cloudStorageCacheEndpoint}`,
+      value: pulumi.interpolate`redis://${MACRO_CACHE}`,
     },
     {
       name: 'DOCUMENT_STORAGE_BUCKET',
@@ -123,43 +113,11 @@ const deleteDocumentWorker = new Worker(`delete-document-worker-${stack}`, {
         stack === 'prod' ? '' : `-${stack === 'dev' ? 'dev3' : stack}`
       }.macroverse.workers.dev`,
     },
-    {
-      name: 'COMMS_SERVICE_AUTH_KEY',
-      value: COMMS_SERVICE_AUTH_KEY,
-    },
-    {
-      name: 'COMMS_SERVICE_URL',
-      value: `https://comms-service${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
-    },
-    {
-      name: 'PROPERTIES_SERVICE_AUTH_KEY',
-      value: PROPERTIES_SERVICE_AUTH_KEY,
-    },
-    {
-      name: 'PROPERTIES_SERVICE_URL',
-      value: `https://properties-service${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
-    },
-    // {
-    //   name: 'QUEUE_MAX_MESSAGES',
-    //   value: '10',
-    // },
-    // {
-    //   name: 'QUEUE_WAIT_TIME_SECONDS',
-    //   value: '4',
-    // },
   ],
   cloudStorageClusterName: cloudStorageClusterName,
   deleteDocumentQueueArn: deleteDocumentQueueArn,
   tags,
-  secretKeyArns: [
-    syncServiceAuthKeyArn,
-    commsServiceAuthKeyArn,
-    propertiesServiceAuthKeyArn,
-  ],
+  secretKeyArns: [syncServiceAuthKeyArn],
 });
 
 export const deleteDocumentWorkerRoleArn = deleteDocumentWorker.role.arn;

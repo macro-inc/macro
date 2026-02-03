@@ -49,6 +49,10 @@ env_var! {
         pub SyncServiceAuthKey,
         pub AuthenticationServiceUrl,
         pub AuthenticationServiceSecretKey,
+        pub OpensearchUrl,
+        pub OpensearchUsername,
+        pub OpensearchPassword,
+        pub ContactsQueue,
     }
 }
 
@@ -57,7 +61,10 @@ env_var! { struct DocumentLimit; }
 env_var! { struct DocumentStorageServicePresignedUrlExpirySeconds; }
 env_var! { struct DocumentStorageServicePresignedUrlBrowserCacheExpirySeconds; }
 env_var! { pub struct DocumentStorageServiceCloudfrontSignerPrivateKeySecretName; }
-env_var! { pub struct DocumentPermissionJwtSecretKey; }
+env_var! {
+    #[derive(Clone)]
+    pub struct DocumentPermissionJwtSecretKey;
+}
 
 impl Config {
     pub fn from_env(

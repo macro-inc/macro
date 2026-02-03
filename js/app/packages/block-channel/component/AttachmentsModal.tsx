@@ -1,8 +1,6 @@
 import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
-import { messageAttachmentsStore } from '@block-channel/signal/attachment';
-import { channelStore } from '@block-channel/signal/channel';
-import { threadsStore } from '@block-channel/signal/threads';
+import { filterSafeAttachments } from '@block-channel/utils/attachments';
 import { type BlockAlias, type BlockName, useBlockId } from '@core/block';
 import { InlineItemPreview } from '@core/component/ItemPreview';
 import { toast } from '@core/component/Toast/Toast';
@@ -11,16 +9,16 @@ import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { tryMacroId, useDisplayName } from '@core/user';
-import { isErr } from '@core/util/maybeResult';
 import BracketLeft from '@macro-icons/macro-group-bracket-left.svg';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
-import { commsServiceClient } from '@service-comms/client';
 import type { MessageMention } from '@service-comms/generated/models';
 import type { Attachment } from '@service-comms/generated/models/attachment';
 import type { ItemType } from '@service-storage/client';
-import { createMemo, createResource, Show, Suspense } from 'solid-js';
+import { useMentionsQuery } from '@queries/channel/mentions';
+import { createMemo, Show, Suspense } from 'solid-js';
 import { VList } from 'virtua/solid';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
+import { useChannelContext } from '@block-channel/hooks/channel';
 
 const DRAWER_ID = 'attachments';
 
@@ -28,29 +26,20 @@ export function AttachmentsModal() {
   const drawerControl = useDrawerControl(DRAWER_ID);
   const currentBlockId = useBlockId();
   const { replaceOrInsertSplit } = useSplitLayout();
+  const channelContext = useChannelContext();
 
-  const [mentionsResource] = createResource(() =>
-    commsServiceClient.getMentions({ channel_id: currentBlockId })
-  );
+  const mentionsQuery = useMentionsQuery(() => currentBlockId);
 
   const attachments = createMemo(() => {
-    if (mentionsResource.loading || mentionsResource.error) return [];
+    const mentions: Attachment[] = !mentionsQuery.isSuccess
+      ? []
+      : (mentionsQuery.data?.mentions ?? []).map((m) =>
+          makeAttachmentFromMention(m, currentBlockId)
+        );
 
-    const mentions: Attachment[] = (() => {
-      let res = mentionsResource();
-      if (!res || isErr(res)) {
-        console.error('failed to get mentions', res);
-        return [];
-      }
-
-      const mentions = (res[1] ?? { mentions: [] }).mentions.map((m) =>
-        makeAttachmentFromMention(m, currentBlockId)
-      );
-
-      return mentions;
-    })();
-
-    const all = [...(messageAttachmentsStore.get.all || []), ...mentions];
+    const channelAttachments = channelContext.attachments() ?? [];
+    const safeAttachments = filterSafeAttachments(channelAttachments);
+    const all = [...safeAttachments, ...mentions];
     return all
       .filter(
         (a) => !a.entity_type.startsWith('static/') && a.entity_type !== 'user'
@@ -105,6 +94,9 @@ export function AttachmentsModal() {
                       <AttachmentItem
                         attachment={attachment}
                         onNavigate={navigateToItem}
+                        senderId={channelContext
+                          .messageSenderMap()
+                          .get(attachment.message_id)}
                       />
                     </Suspense>
                   )}
@@ -135,20 +127,11 @@ function makeAttachmentFromMention(
 type AttachmentItemProps = {
   attachment: Attachment;
   onNavigate: (blockName: BlockName | BlockAlias, blockId: string) => void;
+  senderId: string | undefined;
 };
 
 function AttachmentItem(props: AttachmentItemProps) {
-  const message = createMemo(() => {
-    const channel = channelStore.get;
-    const threads = threadsStore.get;
-    const allMessages = [
-      ...(channel.messages || []),
-      ...Object.values(threads || {}).flat(),
-    ];
-    return allMessages.find((msg) => msg.id === props.attachment.message_id);
-  });
-
-  const senderId = () => message()?.sender_id || '';
+  const senderId = () => props.senderId ?? '';
   const [userName] = useDisplayName(tryMacroId(senderId()));
 
   const [preview] = useItemPreview(() => ({
@@ -185,7 +168,7 @@ function AttachmentItem(props: AttachmentItemProps) {
         <span class="text-ink-extra-muted">attached</span>
         <InlineItemPreview
           itemId={props.attachment.entity_id}
-          itemType={props.attachment.entity_type as any}
+          itemType={props.attachment.entity_type as ItemType}
         />
       </span>
     </button>

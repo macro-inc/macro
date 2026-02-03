@@ -9,12 +9,11 @@ import { handleFolderSelect } from '@core/util/upload';
 import { createMemo, Match, Show, Switch } from 'solid-js';
 import Arcanum001 from '@macro-icons/arcanum/arcanum-001.svg';
 import Arcanum002 from '@macro-icons/arcanum/arcanum-002.svg';
-import Arcanum003 from '@macro-icons/arcanum/arcanum-003.svg';
 import Arcanum004 from '@macro-icons/arcanum/arcanum-004.svg';
 import Arcanum005 from '@macro-icons/arcanum/arcanum-005.svg';
 import Arcanum006 from '@macro-icons/arcanum/arcanum-006.svg';
 import Arcanum007 from '@macro-icons/arcanum/arcanum-007.svg';
-import Arcanum0010 from '@macro-icons/arcanum/arcanum-010.svg';
+import Arcanum009 from '@macro-icons/arcanum/arcanum-009.svg';
 
 false && fileSelector;
 false && folderSelector;
@@ -22,16 +21,15 @@ false && folderSelector;
 const DEFAULT_EMPTY_MESSAGE = 'No items to show.';
 
 function getRandomArcanumGraphic() {
-  const graphicStyle = 'h-72 m-8 mt-32 opacity-60';
+  const graphicStyle = 'h-72 m-8 mt-32 @max-sm:mt-20 opacity-60';
   const arcanumGraphics = [
     <Arcanum001 class={graphicStyle} />,
     <Arcanum002 class={graphicStyle} />,
-    <Arcanum003 class={graphicStyle} />,
     <Arcanum004 class={graphicStyle} />,
     <Arcanum005 class={graphicStyle} />,
     <Arcanum006 class={graphicStyle} />,
     <Arcanum007 class={graphicStyle} />,
-    <Arcanum0010 class={graphicStyle} />,
+    <Arcanum009 class={graphicStyle} />,
   ];
   const randomIndex = Math.floor(Math.random() * arcanumGraphics.length);
   return arcanumGraphics[randomIndex];

@@ -5,7 +5,6 @@ use super::model::DeleteError;
 use super::model::MetadataObject;
 use super::put_item;
 use anyhow::{Context, Result, format_err};
-use aws_config::Region;
 use aws_sdk_dynamodb::Client;
 use aws_sdk_dynamodb::types::AttributeValue;
 use serde_dynamo::{Item, from_item, to_item};
@@ -18,13 +17,9 @@ pub struct DynamodbClient {
 }
 
 impl DynamodbClient {
-    pub async fn new(region: Region, table: String) -> Self {
-        let client = Client::new(
-            &aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region(region)
-                .load()
-                .await,
-        );
+    /// Create a new DynamodbClient with the given AWS config and table name.
+    pub fn new(aws_config: &macro_aws_config::SdkConfig, table: String) -> Self {
+        let client = Client::new(aws_config);
         DynamodbClient { client, table }
     }
 
@@ -89,8 +84,7 @@ impl DynamodbClient {
                     self.table.clone(),
                     aws_sdk_dynamodb::types::KeysAndAttributes::builder()
                         .set_keys(Some(keys))
-                        .build()
-                        .context("failed to build KeysAndAttributes")?,
+                        .build()?,
                 );
                 request_items
             };
@@ -100,8 +94,7 @@ impl DynamodbClient {
                 .batch_get_item()
                 .set_request_items(Some(request_items))
                 .send()
-                .await
-                .context("failed to batch get items from metadata table")?;
+                .await?;
 
             if let Some(responses) = response.responses()
                 && let Some(items) = responses.get(&self.table)

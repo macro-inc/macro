@@ -32,6 +32,8 @@ pub enum StripeOperationError {
     PromoCodeNotFound,
     #[error("Internal server error")]
     UnexpectedStripeResponse,
+    #[error("User already has an active subscription")]
+    AlreadySubscribed,
 }
 
 impl IntoResponse for StripeOperationError {
@@ -44,6 +46,7 @@ impl IntoResponse for StripeOperationError {
             StripeOperationError::StripeErr(_) => StatusCode::INTERNAL_SERVER_ERROR,
             StripeOperationError::PromoCodeNotFound => StatusCode::NOT_FOUND,
             StripeOperationError::UnexpectedStripeResponse => StatusCode::INTERNAL_SERVER_ERROR,
+            StripeOperationError::AlreadySubscribed => StatusCode::CONFLICT,
         };
         (status, self.to_string()).into_response()
     }
@@ -99,6 +102,7 @@ pub struct CreatePortalSessionRequest {
         (status = 200, body = StripeSessionResponse),
         (status = 400, body = String),
         (status = 404, body = String),
+        (status = 409, body = String),
         (status = 500, body = String),
     )
 )]
@@ -118,6 +122,28 @@ pub async fn create_checkout_session(
             .ok_or(StripeOperationError::MissingStripeId)?;
 
     let customer_id: stripe::CustomerId = stripe_customer_id.parse()?;
+
+    // Check if user already has an active subscription
+    let mut list_subscriptions = stripe::ListSubscriptions::new();
+    list_subscriptions.customer = Some(customer_id.clone());
+    list_subscriptions.limit = Some(10);
+
+    let subscriptions = stripe::Subscription::list(&ctx.stripe_client, &list_subscriptions).await?;
+
+    let has_active_subscription = subscriptions.data.iter().any(|sub| {
+        matches!(
+            sub.status,
+            stripe::SubscriptionStatus::Active | stripe::SubscriptionStatus::Trialing
+        )
+    });
+
+    if has_active_subscription {
+        tracing::warn!(
+            customer_id = %customer_id,
+            "User attempted to create checkout session but already has an active subscription"
+        );
+        return Err(StripeOperationError::AlreadySubscribed);
+    }
 
     // If a discount code is provided, look up the promotion code ID
     let promo_code_id = if let Some(ref discount) = req.discount {

@@ -4,12 +4,12 @@ use redis::AsyncCommands;
 /// Increments the value of a key by the given amount
 #[tracing::instrument(skip(client))]
 pub(in crate::service::redis) async fn increment(
-    client: &redis::cluster::ClusterClient,
+    client: &redis::Client,
     key: &str,
     value: i64,
 ) -> anyhow::Result<()> {
     let mut redis_connection = client
-        .get_async_connection()
+        .get_multiplexed_async_connection()
         .await
         .context("unable to connect to redis")?;
 

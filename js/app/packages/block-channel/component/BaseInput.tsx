@@ -2,7 +2,6 @@ import {
   isDraggingOverChannelSignal,
   isValidChannelDragSignal,
 } from '@block-channel/signal/attachment';
-import type { SendMessageArgs } from '@block-channel/signal/channel';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
 import {
   $convertSingleMentionToCard,
@@ -13,7 +12,7 @@ import {
   createTasksFromPotential,
   replaceCheckboxesWithMentions,
 } from '@block-channel/utils/taskModeConversion';
-import { useTaskMode } from '@block-channel/utils/useTaskMode';
+import { useTaskMode } from '@block-channel/hooks/taskmode';
 import { isInBlock } from '@core/block';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
@@ -45,7 +44,6 @@ import { $getRoot } from 'lexical';
 import { logger } from '@observability';
 import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
 import { staticFileClient } from '@service-static-files/client';
-import { createCallback } from '@solid-primitives/rootless';
 import { leading, throttle } from '@solid-primitives/scheduled';
 import { Button } from '@ui/components/Button';
 import { activeElement } from 'app/signal/focus';
@@ -54,7 +52,6 @@ import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   type Accessor,
   createEffect,
-  createMemo,
   createRenderEffect,
   createSignal,
   For,
@@ -73,6 +70,7 @@ import { TaskPreviewPanel } from './TaskPreviewPanel';
 import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { ENABLE_STATIC_DOCUMENT_CARDS } from '@core/constant/featureFlags';
+import type { SendMessageArgs } from '@block-channel/hooks/message';
 
 false && fileFolderDrop;
 
@@ -131,7 +129,6 @@ export function BaseInput(props: BaseInputProps) {
   const key = props.inputAttachments.key;
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(false);
   const [isDraggedOver, setIsDraggedOver] = createSignal(false);
-  const [isPendingSend, setIsPendingSend] = createSignal(false);
   const [isValidChannelDrag] = isInBlock()
     ? isValidChannelDragSignal
     : createSignal(false);
@@ -140,11 +137,10 @@ export function BaseInput(props: BaseInputProps) {
     ? isDraggingOverChannelSignal
     : createSignal(false);
 
-  const attachments = createMemo(() => props.inputAttachments.store[key] ?? []);
+  const attachments = () => props.inputAttachments.store[key] ?? [];
 
-  const hasPendingAttachments = createMemo(() =>
-    attachments().some((item) => item.pending)
-  );
+  const hasPendingAttachments = () =>
+    attachments().some((item) => item.pending);
 
   const [typing, setTyping] = createSignal(false);
   let remoteInactivityTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -190,13 +186,13 @@ export function BaseInput(props: BaseInputProps) {
 
   const startTyping = leading(
     throttle,
-    createCallback(() => {
+    () => {
       if (!typing()) {
         setTyping(true);
         props.onStartTyping();
       }
       props.setLocalTyping?.(true);
-    }),
+    },
     1000
   );
 
@@ -366,9 +362,6 @@ export function BaseInput(props: BaseInputProps) {
   }
 
   async function handleSend() {
-    if (isPendingSend()) return false;
-    setIsPendingSend(true);
-
     const statePromise = pendingEditorState(editor);
     editor.update(
       () => {
@@ -422,9 +415,6 @@ export function BaseInput(props: BaseInputProps) {
           });
         }
         focusMarkdownArea();
-      })
-      .finally(() => {
-        setIsPendingSend(false);
       });
 
     return true;
@@ -524,7 +514,7 @@ export function BaseInput(props: BaseInputProps) {
             isMobile()
               ? (_e) => false
               : (_e) => {
-                  if (hasPendingAttachments() || isPendingSend()) {
+                  if (hasPendingAttachments()) {
                     return true;
                   }
                   handleSend();
@@ -658,7 +648,7 @@ export function BaseInput(props: BaseInputProps) {
           class="group transition ease-in-out hover:bg-transparent"
         >
           <Show
-            when={!hasPendingAttachments() && !isPendingSend()}
+            when={!hasPendingAttachments()}
             fallback={<Spinner class="size-6 animate-spin cursor-disabled" />}
           >
             <div class="group-hover:scale-115 group-hover:bg-accent transition ease-in-out size-6 touch:size-8 border border-accent rounded-full flex items-center justify-center">

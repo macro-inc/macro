@@ -47,13 +47,21 @@ export function registerSplitHotkeys(args: {
   registerHotkey({
     scopeId: splitHotkeyScope,
     hotkey: 'cmd+escape',
-    condition: () => getSplitCount() > 1,
-    description: `Close split`,
+    condition: () => getSplitCount() > 1 || isNotUnifiedList(),
+    description: () => (getSplitCount() > 1 ? 'Close split' : 'Go home'),
     keyDownHandler: () => {
-      closeSplit();
+      if (getSplitCount() > 1) {
+        closeSplit();
+      } else {
+        replaceSplit({
+          content: { type: 'component', id: 'unified-list' },
+          referredFrom: 'hotkey',
+        });
+      }
       return true;
     },
     hotkeyToken: TOKENS.split.close,
+    runWithInputFocused: true,
   });
 
   // Spotlight (maximize split) - legacy binding.

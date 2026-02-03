@@ -3,14 +3,16 @@ import { isErr } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { commsServiceClient } from '@service-comms/client';
 import { emailClient } from '@service-email/client';
-import { type ItemType, storageServiceClient } from '@service-storage/client';
+import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { syncServiceClient } from '@service-sync/client';
-import type { PreviewItem } from './types';
+import type { ItemEntity, MessageContext, PreviewItem } from './types';
 
-async function fetchChannelPreviews(ids: string[]): Promise<PreviewItem[]> {
+async function fetchChannelPreviews(
+  channelIds: string[]
+): Promise<PreviewItem[]> {
   const result = await commsServiceClient.getBatchChannelPreviews({
-    channel_ids: ids,
+    channel_ids: channelIds,
   });
 
   if (isErr(result)) {
@@ -43,6 +45,27 @@ async function fetchChannelPreviews(ids: string[]): Promise<PreviewItem[]> {
         };
     }
   });
+}
+
+export async function fetchMessageContext(
+  messageId: string
+): Promise<MessageContext | null> {
+  const msgResult = await commsServiceClient.getMessageWithContext({
+    message_id: messageId,
+  });
+
+  if (isErr(msgResult)) {
+    return null;
+  }
+
+  const [, msgData] = msgResult;
+  const message = msgData.messages[0];
+
+  if (!message) {
+    return null;
+  }
+
+  return message;
 }
 
 async function fetchDocumentPreviews(ids: string[]): Promise<PreviewItem[]> {
@@ -194,7 +217,7 @@ async function fetchEmailPreviews(threadIds: string[]): Promise<PreviewItem[]> {
 }
 
 export async function fetchPreviewBatch(
-  items: Array<{ id: string; type?: ItemType }>
+  items: ItemEntity[]
 ): Promise<Map<string, PreviewItem>> {
   const chatItems = items
     .filter((i) => i.type === 'chat' || !i.type)

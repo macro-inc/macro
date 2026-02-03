@@ -180,10 +180,6 @@ const commsService = new CommsService(`comms-service-${stack}`, {
       value: pulumi.interpolate`${notificationQueueName}`,
     },
     {
-      name: 'DOCUMENT_STORAGE_SERVICE_URL',
-      value: `https://cloud-storage${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
-    },
-    {
       name: 'CONTACTS_QUEUE',
       value: pulumi.interpolate`${contactsQueueName}`,
     },

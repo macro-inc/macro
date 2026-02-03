@@ -5,6 +5,7 @@ import { isErr } from '@core/util/maybeResult';
 import Quotes from '@icon/regular/quotes.svg';
 import BracketLeft from '@macro-icons/macro-group-bracket-left.svg';
 import { commsServiceClient } from '@service-comms/client';
+import type { ItemType } from '@service-storage/client';
 import { createResource, Suspense } from 'solid-js';
 import { References } from './References';
 import { Tooltip } from './Tooltip';
@@ -16,6 +17,7 @@ export type ReferencesModalProps = {
   documentId: string;
   documentName?: string;
   buttonSize?: 'sm';
+  entityType?: ItemType;
 };
 
 export function ReferencesModal(props: ReferencesModalProps) {
@@ -23,8 +25,9 @@ export function ReferencesModal(props: ReferencesModalProps) {
   const [referenceCount] = createResource(
     () => props.documentId,
     async (id) => {
+      const entityType = props.entityType ?? 'document';
       const response = await commsServiceClient.attachmentReferences({
-        entity_type: 'document',
+        entity_type: entityType,
         entity_id: id,
       });
 
@@ -74,7 +77,10 @@ export function ReferencesModal(props: ReferencesModalProps) {
             </div>
           }
         >
-          <References documentId={props.documentId} />
+          <References
+            documentId={props.documentId}
+            entityType={props.entityType}
+          />
         </Suspense>
       </SplitDrawer>
     </>

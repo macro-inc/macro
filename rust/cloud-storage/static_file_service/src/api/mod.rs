@@ -9,7 +9,6 @@ use super::service::dynamodb::client::DynamodbClient;
 use super::service::s3::client::S3Client;
 use crate::api::context::AppState;
 use anyhow::Context;
-use aws_config::Region;
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -30,16 +29,10 @@ pub async fn setup_and_serve(
 ) -> anyhow::Result<()> {
     let cors = macro_cors::cors_layer();
 
-    let metadata_client = DynamodbClient::new(
-        Region::from_static("us-east-1"),
-        config.dynamodb_table.clone(),
-    )
-    .await;
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
 
-    let aws_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-        .region("us-east-1")
-        .load()
-        .await;
+    let metadata_client = DynamodbClient::new(&aws_config, config.dynamodb_table.clone());
+
     let sqs_client = aws_sdk_sqs::Client::new(&aws_config);
     let inner_client = aws_sdk_s3::Client::new(&aws_config);
     let storage_client = S3Client::new(inner_client, config.storage_bucket_name.clone());

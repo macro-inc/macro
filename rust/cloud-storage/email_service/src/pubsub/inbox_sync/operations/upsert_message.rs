@@ -19,7 +19,7 @@ use models_email::email::service::message::SimpleMessage;
 use models_email::gmail::inbox_sync::{InboxSyncOperation, UpsertMessagePayload};
 use models_email::gmail::operations::GmailApiOperation;
 use models_email::service::attachment::{AttachmentUploadArgs, AttachmentUploadDestination};
-use models_email::service::message::Message;
+use models_email::service::message::{Message, is_spam_or_trash};
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use std::collections::HashSet;
 use std::result;
@@ -76,6 +76,7 @@ pub async fn upsert_message(
     let provider_thread_id = message.provider_thread_id.clone().unwrap();
 
     let is_sent = message.is_sent;
+    let is_spam_or_trash = is_spam_or_trash(&message);
 
     let sender_email = message
         .from
@@ -185,7 +186,7 @@ pub async fn upsert_message(
     )
     .await?;
 
-    notify_search(ctx, link, message_db_id).await?;
+    notify_search(ctx, link, message_db_id, is_spam_or_trash).await?;
 
     // trigger FE inbox refresh
     cg_refresh_email(

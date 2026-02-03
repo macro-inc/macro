@@ -2,7 +2,7 @@ use crate::api::search::simple::SearchError;
 use indexmap::IndexMap;
 use std::collections::HashMap;
 
-use crate::api::ApiContext;
+use crate::api::context::SearchHandlerState;
 use model::comms::ChannelHistoryInfo;
 use models_search::channel::{
     ChannelSearchResponseItem, ChannelSearchResponseItemWithMetadata, ChannelSearchResult,
@@ -13,7 +13,7 @@ use sqlx::types::Uuid;
 /// Enriches channel message search results with metadata
 #[tracing::instrument(skip(ctx, results), err)]
 pub(in crate::api::search) async fn enrich_channels(
-    ctx: &ApiContext,
+    ctx: &SearchHandlerState,
     user_id: &str,
     results: Vec<opensearch_client::search::model::SearchHit>,
 ) -> Result<Vec<ChannelSearchResponseItemWithMetadata>, SearchError> {

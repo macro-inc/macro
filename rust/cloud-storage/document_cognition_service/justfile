@@ -36,9 +36,6 @@ create-queue:
 purge-queue:
     AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue --queue-url http://localhost:4566/000000000000/my-test-queue
 
-prepare-test:
-	rm -rf ./migrations && cp -r ../macro_db_client/migrations ./
-
 init_local_db *user_id:
     bash scripts/init-local-dcs.sh "{{ user_id }}"
 

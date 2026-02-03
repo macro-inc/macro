@@ -45,11 +45,7 @@ pub async fn main() -> anyhow::Result<()> {
         "initialized db connection"
     );
 
-    // Normal config for non-local stack items
-    let aws_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-        .region("us-east-1")
-        .load()
-        .await;
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
 
     let ses_client = ses_client::Ses::new(
         aws_sdk_sesv2::Client::new(&aws_config),
