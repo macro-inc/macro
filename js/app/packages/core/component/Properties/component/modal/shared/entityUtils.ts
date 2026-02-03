@@ -89,16 +89,16 @@ export function getEntityType(entity: CombinedEntity): EntityType {
  * Creates search config for entity searches with same-domain boost.
  * Uses the same preset as MentionsMenu and RecipientSelector for consistency.
  */
-export function createEntitySearchConfig(
+export function createEntitySearchConfig<T extends CombinedEntity>(
   currentUserDomain: Accessor<string | undefined>
-): FreshSortConfig {
-  const boostFn = <T extends TimestampedItem>(item: T): number => {
+): FreshSortConfig<T> {
+  const boostFn = (item: T): number => {
     const userDomain = currentUserDomain();
     if (!userDomain) return 0;
 
     // Check if this looks like a CombinedEntity with user data
-    if (item?.kind === 'user' && item?.data?.email) {
-      const email = item.data.email as string;
+    if (item.kind === 'user' && item.data.email) {
+      const email = item.data.email;
       const itemDomain = email.split('@')[1];
       return itemDomain === userDomain ? 0.5 : 0;
     }
