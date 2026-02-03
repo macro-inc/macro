@@ -3,16 +3,15 @@ import { useRenderState } from '@block-canvas/store/RenderState';
 import { withAnalytics } from '@coparse/analytics';
 import { type BlockName, useBlockId } from '@core/block';
 import { CircleSpinner } from '@core/component/CircleSpinner';
+import { HoverCard } from '@core/component/HoverCard';
 import { PopupPreview } from '@core/component/DocumentPreview';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { floatWithElement } from '@core/component/LexicalMarkdown/directive/floatWithElement';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type PreviewItemNoAccess, useItemPreview } from '@queries/preview';
 import { matches } from '@core/util/match';
 import LockKey from '@phosphor-icons/core/regular/lock-key.svg';
 import Question from '@phosphor-icons/core/regular/question.svg';
-import { debounce } from '@solid-primitives/scheduled';
 import {
   createEffect,
   createMemo,
@@ -27,8 +26,6 @@ import type { EntityMentionNode } from '../../model/CanvasModel';
 import { fileWidth } from '../../operation/file';
 import { type Vector2, vec2 } from '../../util/vector2';
 import { BaseCanvasRectangle } from './BaseCanvasRectangle';
-
-false && floatWithElement;
 
 const { track, TrackingEvents } = withAnalytics();
 
@@ -90,16 +87,13 @@ function ErrorMessage(props: {
 }
 
 export function File(props: { node: EntityMentionNode; mode: RenderMode }) {
-  let fileRef!: HTMLDivElement;
+  const [fileRef, setFileRef] = createSignal<HTMLDivElement>();
 
   const [error, setError] = createSignal<
     'UNAUTHORIZED' | 'MISSING' | 'INVALID' | 'LOADING' | undefined
   >('LOADING');
 
   const blockId = useBlockId();
-
-  const [previewOpen, setPreviewOpen] = createSignal(false);
-  const debouncedSetPreviewOpen = debounce(setPreviewOpen, 100);
 
   const { replaceOrInsertSplit } = useSplitLayout();
 
@@ -197,120 +191,128 @@ export function File(props: { node: EntityMentionNode; mode: RenderMode }) {
   });
 
   const { selectedTool, mouseIsDown, activeTool } = useToolManager();
+
+  const hoverDisabled = createMemo(
+    () => isTouchDevice() || mouseIsDown() || selectedTool() === Tools.Line
+  );
+
   return (
-    <div
-      class="document-mention internal-link"
-      onMouseEnter={() => {
-        if (
-          !isTouchDevice() &&
-          !mouseIsDown() &&
-          selectedTool() !== Tools.Line
-        ) {
-          debouncedSetPreviewOpen(true);
-        }
-      }}
-      onMouseLeave={() => {
-        if (!isTouchDevice()) {
-          debouncedSetPreviewOpen.clear();
-          debouncedSetPreviewOpen(false);
-        }
-      }}
-      ontouchstart={(e) => {
-        if (isTouchDevice()) {
-          e.preventDefault();
-        }
-      }}
-      ontouchend={(e) => {
-        if (isTouchDevice()) {
-          e.preventDefault();
-          if (matches(item(), (i) => !i.loading && i.access === 'access')) {
-            replaceOrInsertSplit({
-              type: blockName() as BlockName,
-              id: props.node.file,
-            });
-            track(TrackingEvents.BLOCKCANVAS.FILES.OPENFILESIDE);
-          }
-        }
-      }}
-      on:pointerdown={(e) => {
-        setSelfMouseDownPosition(vec2(e.pageX, e.pageY));
-      }}
-      on:click={(e) => {
-        if (activeTool() !== Tools.Select && activeTool() !== Tools.Grab) {
-          return;
-        }
-        const pos = selfMouseDownPosition();
-        if (pos && pos.distance(vec2(e.pageX, e.pageY)) > DRAG_THRESHOLD) {
-          return;
-        }
-        e.stopPropagation();
-        if (matches(item(), (i) => !i.loading && i.access === 'access')) {
-          replaceOrInsertSplit({
-            type: blockName() as BlockName,
-            id: props.node.file,
-          });
-          track(TrackingEvents.BLOCKCANVAS.FILES.OPENFILESIDE);
-        }
-      }}
-    >
-      <BaseCanvasRectangle
-        node={props.node}
-        mode={props.mode}
-        clickable={true}
-        useSimpleSelectionBox={true}
-      >
-        <Show
-          when={!error()}
-          fallback={<ErrorMessage error={error()} node={props.node} />}
-        >
-          <div
-            ref={fileRef}
-            class={`w-full h-full bg-panel rounded-lg shadow-md flex items-center`}
-          >
-            <div class="flex flex-row p-2 truncate">
-              <div
-                class="font-semibold text-sm"
-                style={{
-                  'font-size': 12 * (props.node.width / fileWidth) + 'px',
-                }}
-              >
-                <div class="flex flex-row items-center">
-                  <div
-                    style={{
-                      'margin-left': 2 * (props.node.width / fileWidth) + 'px',
-                      'margin-right': 2 * (props.node.width / fileWidth) + 'px',
-                      width: 18 * (props.node.width / fileWidth) + 'px',
-                      height: 18 * (props.node.width / fileWidth) + 'px',
-                    }}
-                  >
-                    <EntityIcon targetType={iconType()} size={'fill'} />
-                  </div>
-                  {fileName()}
-                </div>
-                <Show when={previewOpen() && blockName()}>
-                  <PopupPreview
-                    item={item}
-                    floatRef={fileRef}
-                    mouseEnter={() => {
-                      debouncedSetPreviewOpen(true);
-                    }}
-                    mouseLeave={() => {
-                      debouncedSetPreviewOpen.clear();
-                      debouncedSetPreviewOpen(false);
-                    }}
-                    documentInfo={{
-                      id: props.node.file,
+    <Show when={blockName()}>
+      {(name) => (
+        <HoverCard
+          anchorRef={fileRef()}
+          trigger={
+            <div
+              class="document-mention internal-link"
+              ontouchstart={(e) => {
+                if (isTouchDevice()) {
+                  e.preventDefault();
+                }
+              }}
+              ontouchend={(e) => {
+                if (isTouchDevice()) {
+                  e.preventDefault();
+                  if (
+                    matches(item(), (i) => !i.loading && i.access === 'access')
+                  ) {
+                    replaceOrInsertSplit({
                       type: blockName() as BlockName,
-                      params: {},
-                      isOpenable: blockId !== props.node.file,
-                    }}
-                  />
+                      id: props.node.file,
+                    });
+                    track(TrackingEvents.BLOCKCANVAS.FILES.OPENFILESIDE);
+                  }
+                }
+              }}
+              on:pointerdown={(e) => {
+                setSelfMouseDownPosition(vec2(e.pageX, e.pageY));
+              }}
+              on:click={(e) => {
+                if (
+                  activeTool() !== Tools.Select &&
+                  activeTool() !== Tools.Grab
+                ) {
+                  return;
+                }
+                const pos = selfMouseDownPosition();
+                if (
+                  pos &&
+                  pos.distance(vec2(e.pageX, e.pageY)) > DRAG_THRESHOLD
+                ) {
+                  return;
+                }
+                e.stopPropagation();
+                if (
+                  matches(item(), (i) => !i.loading && i.access === 'access')
+                ) {
+                  replaceOrInsertSplit({
+                    type: blockName() as BlockName,
+                    id: props.node.file,
+                  });
+                  track(TrackingEvents.BLOCKCANVAS.FILES.OPENFILESIDE);
+                }
+              }}
+            >
+              <BaseCanvasRectangle
+                node={props.node}
+                mode={props.mode}
+                clickable={true}
+                useSimpleSelectionBox={true}
+              >
+                <Show
+                  when={!error()}
+                  fallback={<ErrorMessage error={error()} node={props.node} />}
+                >
+                  <div
+                    ref={setFileRef}
+                    class={`w-full h-full bg-panel rounded-lg shadow-md flex items-center`}
+                  >
+                    <div class="flex flex-row p-2 truncate">
+                      <div
+                        class="font-semibold text-sm"
+                        style={{
+                          'font-size':
+                            12 * (props.node.width / fileWidth) + 'px',
+                        }}
+                      >
+                        <div class="flex flex-row items-center">
+                          <div
+                            style={{
+                              'margin-left':
+                                2 * (props.node.width / fileWidth) + 'px',
+                              'margin-right':
+                                2 * (props.node.width / fileWidth) + 'px',
+                              width: 18 * (props.node.width / fileWidth) + 'px',
+                              height:
+                                18 * (props.node.width / fileWidth) + 'px',
+                            }}
+                          >
+                            <EntityIcon targetType={iconType()} size={'fill'} />
+                          </div>
+                          {fileName()}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </Show>
-              </div>
+              </BaseCanvasRectangle>
             </div>
-          </div>
-        </Show>
-      </BaseCanvasRectangle>
-    </div>
+          }
+          content={
+            <PopupPreview
+              item={item}
+              mouseEnter={() => {}}
+              mouseLeave={() => {}}
+              documentInfo={{
+                id: props.node.file,
+                type: name() as BlockName,
+                params: {},
+                isOpenable: blockId !== props.node.file,
+              }}
+            />
+          }
+          disabled={hoverDisabled()}
+        />
+      )}
+    </Show>
   );
 }

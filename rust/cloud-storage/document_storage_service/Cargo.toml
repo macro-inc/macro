@@ -70,7 +70,7 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
 ] }
 macro_notify = { path = "../macro_notify" }
 macro_project_utils = { path = "../macro_project_utils" }
-macro_redis_cluster_client = { path = "../macro_redis_cluster_client" }
+macro_sha_count_client = { path = "../macro_sha_count_client" }
 macro_share_permissions = { path = "../macro_share_permissions" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
@@ -107,6 +107,7 @@ sqlx = { workspace = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = [
   "document",
   "search",
+  "contacts",
 ] }
 sync_service_client = { path = "../sync_service_client" }
 system_properties = { path = "../system_properties" }
@@ -124,6 +125,7 @@ utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
 zip = { workspace = true }
 comms_db_client = { path = "../comms_db_client" }
+comms_service = { path = "../comms_service" }
 
 [dev-dependencies]
 cool_asserts = "2"

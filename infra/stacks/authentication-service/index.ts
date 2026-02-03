@@ -232,12 +232,6 @@ const service = new AuthenticationService('authentication-service', {
       value: pulumi.interpolate`${SERVICE_INTERNAL_AUTH_KEY}`,
     },
     {
-      name: 'COMMS_SERVICE_URL',
-      value: `https://comms-service${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
-    },
-    {
       name: 'DOCUMENT_STORAGE_SERVICE_URL',
       value: `https://cloud-storage${
         stack === 'prod' ? '' : `-${stack}`

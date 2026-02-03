@@ -51,7 +51,7 @@ pub struct GetChannelQuery {
 
 #[utoipa::path(
         get,
-        path = "/channels/{channel_id}",
+        path = "/comms/channels/{channel_id}",
         tag = "channels",
         operation_id = "get_channel",
         params(

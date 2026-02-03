@@ -4,12 +4,12 @@ use tracing::instrument;
 
 #[instrument(skip(client, set, key))]
 pub(in crate::service::redis) async fn remove_set_member(
-    client: &redis::cluster::ClusterClient,
+    client: &redis::Client,
     set: &str,
     key: &str,
 ) -> Result<(), anyhow::Error> {
     let mut redis_connection = client
-        .get_async_connection()
+        .get_multiplexed_async_connection()
         .await
         .context("unable to connect to redis")?;
 
@@ -26,12 +26,12 @@ pub(in crate::service::redis) async fn remove_set_member(
 
 #[instrument(skip(client, set, keys))]
 pub(in crate::service::redis) async fn remove_set_members(
-    client: &redis::cluster::ClusterClient,
+    client: &redis::Client,
     set: &str,
     keys: Vec<String>,
 ) -> Result<(), anyhow::Error> {
     let mut redis_connection = client
-        .get_async_connection()
+        .get_multiplexed_async_connection()
         .await
         .context("unable to connect to redis")?;
 
@@ -53,9 +53,9 @@ mod tests {
     use redis::Commands;
 
     #[tokio::test]
-    #[ignore = "Redis cluster doesn't exist in CI"]
+    #[ignore = "Redis doesn't exist in CI"]
     async fn test_remove_set_member() -> Result<(), anyhow::Error> {
-        let redis_client = redis::cluster::ClusterClient::new(vec!["redis://localhost:6369"])
+        let redis_client = redis::Client::open("redis://localhost:6379")
             .expect("could not connect to redis client");
 
         let mut conn = redis_client
@@ -91,9 +91,9 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "Redis cluster doesn't exist in CI"]
+    #[ignore = "Redis doesn't exist in CI"]
     async fn test_remove_set_members() -> Result<(), anyhow::Error> {
-        let redis_client = redis::cluster::ClusterClient::new(vec!["redis://localhost:6369"])
+        let redis_client = redis::Client::open("redis://localhost:6379")
             .expect("could not connect to redis client");
 
         let mut conn = redis_client

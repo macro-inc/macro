@@ -2,7 +2,6 @@ import * as aws from '@pulumi/aws';
 import { createBucket } from '../../packages/resources';
 import { stack } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
-import { getRedisInstance } from './cloud-storage-cache';
 import { setupReplicationBucket } from './replication-bucket';
 
 // ------------------------------------------- VPC -------------------------------------------
@@ -30,6 +29,13 @@ const documentStorageBucket = createBucket({
       enabled: true,
       expiration: {
         expiredObjectDeleteMarker: true,
+      },
+    },
+    {
+      id: `noncurrent-version-cleanup-${stack}`,
+      enabled: true,
+      noncurrentVersionExpiration: {
+        days: 30,
       },
     },
   ],
@@ -74,10 +80,6 @@ export const documentStorageBucketReplicationRoleArn = replication.role.arn;
 export const documentStorageBucketId = documentStorageBucket.id;
 export const documentStorageBucketArn = documentStorageBucket.arn;
 export const documentStorageBucketName = documentStorageBucket.id;
-
-// ------------------------------------------- Redis -------------------------------------------
-const cloudStorageCache = getRedisInstance(coparse_api_vpc);
-export const cloudStorageCacheEndpoint = cloudStorageCache.redisEndpoint;
 
 // ------------------------------------------- SERVICE -------------------------------------------
 const cluster = new aws.ecs.Cluster(`document-storage-cluster-${stack}`, {

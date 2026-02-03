@@ -12,7 +12,6 @@
     "haptics:allow-notification-feedback",
     "haptics:allow-selection-feedback",
     "haptics:allow-vibrate",
-    "log:default",
-    "app-events:default"
+    "log:default"
   ]
 }

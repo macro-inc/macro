@@ -34,7 +34,7 @@ pub fn to_lowercase(strings: &[String]) -> Vec<String> {
 #[utoipa::path(
         post,
         tag = "channels",
-        path = "/channels",
+        path = "/comms/channels",
         operation_id = "create_channel",
         responses(
             (status = 201, body=CreateChannelResponse),

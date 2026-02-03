@@ -7,12 +7,9 @@ use super::SHA_COUNT_KEY_PREFIX;
 
 /// Checks if a given key exists
 #[tracing::instrument(skip(client))]
-pub(crate) async fn exists(
-    client: &redis::cluster::ClusterClient,
-    key: &str,
-) -> anyhow::Result<bool> {
+pub(crate) async fn exists(client: &redis::Client, key: &str) -> anyhow::Result<bool> {
     let mut redis_connection = client
-        .get_async_connection()
+        .get_multiplexed_async_connection()
         .await
         .context("unable to connect to redis")?;
 
@@ -23,11 +20,11 @@ pub(crate) async fn exists(
 
 #[tracing::instrument(skip(client))]
 pub(crate) async fn find_non_existing_shas(
-    client: &redis::cluster::ClusterClient,
+    client: &redis::Client,
     bom_parts: &Vec<SaveBomPart>,
 ) -> anyhow::Result<Vec<SaveBomPart>> {
     let mut redis_connection = client
-        .get_async_connection()
+        .get_multiplexed_async_connection()
         .await
         .context("unable to connect to redis")?;
 
@@ -51,11 +48,11 @@ pub(crate) async fn find_non_existing_shas(
 /// Adds the sha to the result list if it is NOT present in the cache
 #[tracing::instrument(skip(client))]
 pub(crate) async fn find_non_existing_shas_string(
-    client: &redis::cluster::ClusterClient,
+    client: &redis::Client,
     shas: Vec<String>,
 ) -> anyhow::Result<Vec<String>> {
     let mut redis_connection = client
-        .get_async_connection()
+        .get_multiplexed_async_connection()
         .await
         .context("unable to connect to redis")?;
 
@@ -77,15 +74,15 @@ pub(crate) async fn find_non_existing_shas_string(
 }
 
 #[cfg(test)]
-#[cfg(feature = "redis_cluster_test")]
+#[cfg(feature = "redis_test")]
 mod tests {
     use super::*;
     use redis::Commands;
 
     #[tokio::test]
-    #[ignore = "Redis cluster doesn't exist in CI"]
+    #[ignore = "Redis doesn't exist in CI"]
     async fn test_exists() {
-        let redis_client = redis::cluster::ClusterClient::new(vec!["redis://localhost:6369"])
+        let redis_client = redis::Client::open("redis://localhost:6379")
             .expect("could not connect to redis client");
 
         let mut conn = redis_client
@@ -107,9 +104,9 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "Redis cluster doesn't exist in CI"]
+    #[ignore = "Redis doesn't exist in CI"]
     async fn test_find_non_existing_shas() {
-        let redis_client = redis::cluster::ClusterClient::new(vec!["redis://localhost:6369"])
+        let redis_client = redis::Client::open("redis://localhost:6379")
             .expect("could not connect to redis client");
 
         let mut conn = redis_client

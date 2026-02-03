@@ -353,27 +353,40 @@ export function Rightbar(props: {
     }
   };
 
-  createEffect(() => {
-    if (props.isBig) {
-      borrowedFocus = document.activeElement;
-      editor()?.focus();
-    } else {
-      if (untrack(isRightPanelOpen)) {
-        return;
-      } else {
-        returnFocus();
-      }
-    }
-  });
+  // Defering these effects so that they don't trigger on first load
+  createEffect(
+    on(
+      () => props.isBig,
+      (isBig) => {
+        if (isBig) {
+          borrowedFocus = document.activeElement;
+          editor()?.focus();
+        } else {
+          if (untrack(isRightPanelOpen)) {
+            return;
+          } else {
+            returnFocus();
+          }
+        }
+      },
+      { defer: true }
+    )
+  );
 
-  createEffect(() => {
-    if (isRightPanelOpen()) {
-      borrowedFocus = document.activeElement;
-      editor()?.focus();
-    } else {
-      returnFocus();
-    }
-  });
+  createEffect(
+    on(
+      isRightPanelOpen,
+      (isOpen) => {
+        if (isOpen) {
+          borrowedFocus = document.activeElement;
+          editor()?.focus();
+        } else {
+          returnFocus();
+        }
+      },
+      { defer: true }
+    )
+  );
 
   return (
     <DragDropWrapper

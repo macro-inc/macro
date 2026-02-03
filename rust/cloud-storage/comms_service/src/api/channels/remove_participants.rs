@@ -21,7 +21,7 @@ pub struct RemoveParticipantsRequest {
     tag = "channels",
     operation_id = "remove_participants",
     description = "removes a list of participants from the channel, user must be a participant",
-    path = "/channels/{channel_id}/participants",
+    path = "/comms/channels/{channel_id}/participants",
     params(
         ("channel_id" = String, Path, description = "channel id"),
     ),

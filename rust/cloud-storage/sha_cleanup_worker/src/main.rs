@@ -19,8 +19,7 @@ async fn main() -> Result<(), anyhow::Error> {
     tracing::trace!("initialized s3 client");
 
     let redis_client = service::redis::Redis::new(
-        redis::cluster::ClusterClient::new(vec![config.redis_uri.as_str()])
-            .expect("could not connect to redis client"),
+        redis::Client::open(config.redis_uri.as_str()).expect("could not connect to redis client"),
     );
     redis_client.ping().context("able to ping redis")?;
 

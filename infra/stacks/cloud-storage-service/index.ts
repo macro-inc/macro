@@ -30,6 +30,12 @@ const DATABASE_URL = aws.secretsmanager
   })
   .apply((secret) => secret.secretString);
 
+const MACRO_CACHE = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require(`macro_cache_secret_key`),
+  })
+  .apply((secret) => secret.secretString);
+
 const DATABASE_URL_PROXY = aws.secretsmanager
   .getSecretVersionOutput({
     secretId: config.require(`macro_db_proxy_secret_key`),
@@ -132,10 +138,6 @@ const documentStorageBucketId: pulumi.Output<string> = cloudStorageStack
   .getOutput('documentStorageBucketId')
   .apply((id) => id as string);
 
-const cloudStorageCacheEndpoint: pulumi.Output<string> = cloudStorageStack
-  .getOutput('cloudStorageCacheEndpoint')
-  .apply((arn) => arn as string);
-
 const cloudStorageClusterArn: pulumi.Output<string> = cloudStorageStack
   .getOutput('cloudStorageClusterArn')
   .apply((arn) => arn as string);
@@ -155,6 +157,23 @@ const cloudfronDistributionUrl: pulumi.Output<string> = linksharingStack
 const cloudfronSignerPublicKeyId: pulumi.Output<string> = linksharingStack
   .getOutput('cloudfrontDistributionPublicKeyId')
   .apply((key) => key as string);
+
+// Retrieve name of queue used Contacts Service
+const contactsServiceStack: pulumi.StackReference = new pulumi.StackReference(
+  'contacts-service-stack',
+  {
+    name: `macro-inc/contacts-service/${stack}`,
+  }
+);
+
+const contactsQueueName: pulumi.Output<string> = contactsServiceStack
+  .getOutput('contactsQueueName')
+  .apply((arn) => arn as string);
+
+// Get ARN to allow sending messages to contacts Queue
+const contactsQueueArn: pulumi.Output<string> = contactsServiceStack
+  .getOutput('contactsQueueArn')
+  .apply((arn) => arn as string);
 
 const { notificationQueueName, notificationQueueArn } = getMacroNotify();
 
@@ -230,7 +249,12 @@ const cloudStorageService = new CloudStorageService(
   {
     ecsClusterArn: cloudStorageClusterArn,
     cloudStorageClusterName: cloudStorageClusterName,
-    searchEventQueueArn,
+    queueArns: [
+      searchEventQueueArn,
+      deleteDocumentHandler.queue.arn,
+      notificationQueueArn,
+      contactsQueueArn,
+    ],
     vpc: coparse_api_vpc,
     platform: {
       family: 'linux',
@@ -240,7 +264,6 @@ const cloudStorageService = new CloudStorageService(
     docxUploadBucketArn,
     serviceContainerPort: 8080,
     healthCheckPath: '/health',
-    deleteDocumentQueueArn: deleteDocumentHandler.queue.arn,
     secretKeyArns: [
       jwtSecretKeyArn,
       documentStoragePermissionsKeyArn,
@@ -251,7 +274,6 @@ const cloudStorageService = new CloudStorageService(
       MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
       opensearchPasswordArn,
     ],
-    notificationQueueArn,
     containerEnvVars: [
       {
         name: 'OPENSEARCH_URL',
@@ -271,7 +293,7 @@ const cloudStorageService = new CloudStorageService(
       },
       {
         name: 'REDIS_URI',
-        value: pulumi.interpolate`rediss://${cloudStorageCacheEndpoint}`,
+        value: pulumi.interpolate`redis://${MACRO_CACHE}`,
       },
       {
         name: 'ENVIRONMENT',
@@ -394,6 +416,10 @@ const cloudStorageService = new CloudStorageService(
         name: 'FRECENCY_TABLE_NAME',
         value: `frecency-${stack}`,
       },
+      {
+        name: 'CONTACTS_QUEUE',
+        value: pulumi.interpolate`${contactsQueueName}`,
+      },
     ],
     isPrivate: false,
     tags,
@@ -424,7 +450,7 @@ const convertQueueArn: pulumi.Output<string> = convertServiceStack
 // ------------------------------------------- DOCX Unzip -------------------------------------------
 const docxUnzipHandlerEnvVars: DocxUnzipLambdaEnvVars = {
   DATABASE_URL: pulumi.interpolate`${DATABASE_URL_PROXY}`,
-  REDIS_URI: pulumi.interpolate`rediss://${cloudStorageCacheEndpoint}`,
+  REDIS_URI: pulumi.interpolate`redis://${MACRO_CACHE}`,
   ENVIRONMENT: stack,
   RUST_LOG: 'docx_unzip_handler=info',
   DOCUMENT_STORAGE_BUCKET: pulumi.interpolate`${documentStorageBucketId}`,

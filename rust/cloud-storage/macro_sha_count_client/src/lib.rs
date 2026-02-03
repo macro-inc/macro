@@ -6,7 +6,7 @@ use model::document::SaveBomPart;
 
 #[derive(Clone)]
 pub struct Redis {
-    inner: redis::cluster::ClusterClient,
+    inner: redis::Client,
 }
 
 // Key prefixes
@@ -14,7 +14,7 @@ static SHA_COUNT_KEY_PREFIX: &str = "sha:";
 static SHA_DELETE_BUCKET: &str = "bucket:sha-delete";
 
 impl Redis {
-    pub fn new(inner: redis::cluster::ClusterClient) -> Self {
+    pub fn new(inner: redis::Client) -> Self {
         Self { inner }
     }
 

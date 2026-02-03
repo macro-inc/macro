@@ -39,19 +39,17 @@ export async function getMacroApiToken() {
     return apiToken;
   }
 
-  if (!macroApiTokenPromise) {
-    macroApiTokenPromise = new Promise((resolve, reject) =>
-      authServiceClient.macroApiToken().then(([err, result]) => {
-        if (err) {
-          reject(err);
-        } else if (result) {
-          resolve(result.macro_api_token);
-        } else {
-          reject(new Error('No result from macroApiToken'));
-        }
-      })
-    );
-  }
+  macroApiTokenPromise = new Promise((resolve, reject) =>
+    authServiceClient.macroApiToken().then(([err, result]) => {
+      if (err) {
+        reject(err);
+      } else if (result) {
+        resolve(result.macro_api_token);
+      } else {
+        reject(new Error('No result from macroApiToken'));
+      }
+    })
+  );
   return macroApiTokenPromise;
 }
 

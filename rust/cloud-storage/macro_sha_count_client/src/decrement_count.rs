@@ -6,12 +6,12 @@ use super::SHA_COUNT_KEY_PREFIX;
 /// Decrements the count of given shas
 /// If the count of a sha hits 0 it will also place the sha into a shas-to-delete set
 pub(crate) async fn decrement_counts(
-    client: &redis::cluster::ClusterClient,
+    client: &redis::Client,
     delete_bucket: &str,
     shas: &Vec<(String, i64)>,
 ) -> anyhow::Result<()> {
     let mut redis_connection = client
-        .get_async_connection()
+        .get_multiplexed_async_connection()
         .await
         .context("unable to connect to redis")?;
 
@@ -49,15 +49,15 @@ pub(crate) async fn decrement_counts(
 }
 
 #[cfg(test)]
-#[cfg(feature = "redis_cluster_test")]
+#[cfg(feature = "redis_test")]
 mod tests {
     use super::*;
     use redis::Commands;
 
     #[tokio::test]
-    #[ignore = "Redis cluster doesn't exist in CI"]
+    #[ignore = "Redis doesn't exist in CI"]
     async fn test_decrement_counts() {
-        let redis_client = redis::cluster::ClusterClient::new(vec!["redis://localhost:6369"])
+        let redis_client = redis::Client::open("redis://localhost:6379")
             .expect("could not connect to redis client");
 
         let mut conn = redis_client

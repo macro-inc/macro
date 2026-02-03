@@ -21,7 +21,6 @@ import {
   type ProfilePictureItem,
   useProfilePictureUrl,
 } from '@core/signal/profilePicture';
-import { useOrganizationName } from '@core/user';
 import Logout from '@icon/regular/sign-out.svg';
 import { Popover } from '@kobalte/core';
 import IconUpload from '@macro-icons/macro-upload.svg';
@@ -65,7 +64,6 @@ function useUserName() {
 export function Account() {
   const email = useEmail();
   const userId = useUserId();
-  const organizationName = useOrganizationName();
   const licenseStatus = useLicenseStatus();
   const logout = useLogout();
   const { showPaywall } = usePaywallState();
@@ -177,9 +175,6 @@ export function Account() {
           text="Email"
           subtext={email() ?? ''}
         />
-        <Show when={organizationName()}>
-          {(name) => <TabContentRow text="Organization" subtext={name()} />}
-        </Show>
 
         <div class="flex gap-4 items-center">
           <TabContentRow

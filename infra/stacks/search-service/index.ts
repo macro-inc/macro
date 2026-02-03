@@ -124,12 +124,6 @@ const searchService = new SearchService(`${BASE_NAME}-${stack}`, {
       value: pulumi.interpolate`${ISSUER}`,
     },
     {
-      name: 'COMMS_SERVICE_URL',
-      value: `https://comms-service${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
-    },
-    {
       name: 'EMAIL_SERVICE_URL',
       value: `https://email-service${
         stack === 'prod' ? '' : `-${stack}`

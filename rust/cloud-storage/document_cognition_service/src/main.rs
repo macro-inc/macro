@@ -89,7 +89,8 @@ async fn main() -> anyhow::Result<()> {
     );
 
     tracing::info!("initialized dss client");
-    let comms_service_client = CommsServiceClient::new(config.comms_service_url.clone());
+    // Comms service is now served from document_storage_service under /comms prefix
+    let comms_service_client = CommsServiceClient::new(config.document_storage_service_url.clone());
 
     tracing::info!("initialized comms client");
     let sync_service_auth_key = match config.environment {

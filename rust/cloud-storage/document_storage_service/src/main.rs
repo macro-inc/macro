@@ -8,6 +8,7 @@ use crate::{
 use anyhow::Context;
 use comms::{
     domain::service::ChannelServiceImpl,
+    inbound::CommsRouterState,
     outbound::{http::user_repo::UserRepoImpl, postgres::comms_repo::PgCommsRepo},
 };
 use config::{Config, Environment};
@@ -18,7 +19,7 @@ use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::F
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
-use macro_redis_cluster_client::Redis;
+use macro_sha_count_client::Redis;
 use opensearch_client::OpensearchClient;
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
@@ -58,6 +59,11 @@ async fn main() -> anyhow::Result<()> {
 
     let document_permission_jwt_secret = secretsmanager_client
         .get_maybe_secret_value(env, DocumentPermissionJwtSecretKey::new()?)
+        .await?;
+
+    // Also get it with the comms_service type for CommsHandlerState
+    let comms_permissions_token_secret = secretsmanager_client
+        .get_maybe_secret_value(env, comms_service::DocumentPermissionJwtSecretKey::new()?)
         .await?;
 
     // Parse our configuration from the environment.
@@ -101,6 +107,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::trace!("initialized s3 client");
 
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
+        .contacts_queue(&config.vars.contacts_queue)
         .search_event_queue(&config.vars.search_event_queue)
         .document_delete_queue(&config.vars.document_delete_queue);
 
@@ -108,7 +115,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Redis handles it own connection pool internally. Each time we use redis
     // we should be using redis_client.get_connection() to grab a specific connection
-    let redis_client = redis::cluster::ClusterClient::new(vec![config.vars.redis_uri.as_ref()])
+    let redis_client = redis::Client::open(config.vars.redis_uri.as_ref())
         .expect("could not connect to redis client");
 
     match redis_client.get_connection().is_err() {
@@ -192,7 +199,8 @@ async fn main() -> anyhow::Result<()> {
     }
     tracing::trace!("initialized opensearch client");
 
-    let frecency_service = FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone()));
+    let frecency_storage = FrecencyPgStorage::new(db.clone());
+    let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
     let email_service =
         EmailServiceImpl::new(EmailPgRepo::new(db.clone()), frecency_service.clone());
     let system_properties_service =
@@ -204,29 +212,39 @@ async fn main() -> anyhow::Result<()> {
         Some(permission_checker),
         Some(notification_service),
     );
+
+    // Create the ChannelServiceImpl - we need to create separate instances as it doesn't impl Clone
+    let auth_service_url: reqwest::Url = config
+        .vars
+        .authentication_service_url
+        .as_ref()
+        .parse()
+        .context("AUTHENTICATION_SERVICE_URL must be a valid url")?;
+    let channel_service_for_soup = ChannelServiceImpl::new(
+        PgCommsRepo { pool: db.clone() },
+        UserRepoImpl::new(auth_service_secret_key.clone(), auth_service_url.clone()),
+        frecency_storage.clone(),
+    );
+    let channel_service_for_comms = ChannelServiceImpl::new(
+        PgCommsRepo { pool: db.clone() },
+        UserRepoImpl::new(auth_service_secret_key, auth_service_url),
+        frecency_storage.clone(),
+    );
+
+    // Create the CommsRouterState for comms_service routes
+    let comms_state = CommsRouterState::new(channel_service_for_comms);
+
     let api_context = ApiContext {
         soup_router_state: SoupRouterState::new(
             SoupImpl::new(
                 PgSoupRepo::new(db.clone()),
                 frecency_service,
                 email_service.clone(),
-                ChannelServiceImpl::new(
-                    PgCommsRepo { pool: db.clone() },
-                    UserRepoImpl::new(
-                        auth_service_secret_key,
-                        config
-                            .vars
-                            .authentication_service_url
-                            .as_ref()
-                            .parse()
-                            .context("AUTHENTICATION_SERVICE_URL must be a valid url")?,
-                    ),
-                    FrecencyPgStorage::new(db.clone()),
-                ),
+                channel_service_for_soup,
             ),
             email_service,
         ),
-        db,
+        db: db.clone(),
         redis_client: Arc::new(Redis::new(redis_client)),
         s3_client: Arc::new(S3::new(
             s3_client,
@@ -246,6 +264,10 @@ async fn main() -> anyhow::Result<()> {
         config: Arc::new(config),
         jwt_validation_args,
         dss_auth_key,
+        // Comms service fields
+        frecency_storage,
+        comms_state,
+        permissions_token_secret: comms_permissions_token_secret,
     };
 
     api::setup_and_serve(api_context).await?;

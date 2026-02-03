@@ -3,11 +3,11 @@ use anyhow::Context;
 use redis::AsyncCommands;
 
 pub(crate) async fn increment_counts(
-    client: &redis::cluster::ClusterClient,
+    client: &redis::Client,
     shas: Vec<String>,
 ) -> anyhow::Result<()> {
     let mut redis_connection = client
-        .get_async_connection()
+        .get_multiplexed_async_connection()
         .await
         .context("unable to connect to redis")?;
 
@@ -30,15 +30,15 @@ pub(crate) async fn increment_counts(
 }
 
 #[cfg(test)]
-#[cfg(feature = "redis_cluster_test")]
+#[cfg(feature = "redis_test")]
 mod tests {
     use super::*;
     use redis::Commands;
 
     #[tokio::test]
-    #[ignore = "Redis cluster doesn't exist in CI"]
+    #[ignore = "Redis doesn't exist in CI"]
     async fn test_increment_counts() {
-        let redis_client = redis::cluster::ClusterClient::new(vec!["redis://localhost:6369"])
+        let redis_client = redis::Client::open("redis://localhost:6379")
             .expect("could not connect to redis client");
 
         let mut conn = redis_client

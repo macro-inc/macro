@@ -108,3 +108,4 @@ uuid = { workspace = true }
 
 [dev-dependencies]
 macro_auth = { path = "../macro_auth", features = ["testing"] }
+macro_db_migrator = { path = "../macro_db_migrator" }

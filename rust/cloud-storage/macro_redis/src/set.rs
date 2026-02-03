@@ -9,7 +9,7 @@ pub async fn set_with_expiry<T>(
     expiry_seconds: u64,
 ) -> anyhow::Result<()>
 where
-    T: redis::ToRedisArgs + Send + Sync,
+    T: redis::ToSingleRedisArg + Send + Sync,
 {
     let mut redis_connection = client
         .get_multiplexed_async_connection()

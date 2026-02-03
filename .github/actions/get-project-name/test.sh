@@ -12,7 +12,6 @@ TEST_CASES=(
   "document-storage-service:cloud-storage-service"
   "document-storage:document-storage"
   "authentication-service:authentication-service"
-  "comms-service:comms-service"
   "opensearch:opensearch"
 )
 
