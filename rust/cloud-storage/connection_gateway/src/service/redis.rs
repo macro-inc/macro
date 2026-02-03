@@ -1,6 +1,10 @@
+use std::io::ErrorKind;
+
 use anyhow::{Context, Result};
 use futures::StreamExt;
-use redis::{AsyncCommands, FromRedisValue, ParsingError, Value, aio::MultiplexedConnection};
+use redis::{AsyncCommands, FromRedisValue, RedisResult, Value, aio::MultiplexedConnection};
+
+use std::io::Error as IoError;
 
 use crate::{context::ApiContext, model::message::Message};
 
@@ -32,14 +36,14 @@ pub async fn post_message(
 }
 
 impl FromRedisValue for MessageWithConnection {
-    fn from_redis_value(v: redis::Value) -> Result<Self, ParsingError> {
+    fn from_redis_value(v: &redis::Value) -> RedisResult<Self> {
         match v {
             Value::BulkString(bytes) => {
-                let value = serde_json::from_slice::<MessageWithConnection>(&bytes)
-                    .map_err(|e| ParsingError::from(e.to_string()))?;
+                let value = serde_json::from_slice::<MessageWithConnection>(bytes)
+                    .map_err(|e| IoError::new(ErrorKind::InvalidData, e.to_string()))?;
                 Ok(value)
             }
-            _ => Err(ParsingError::from("Invalid data type")),
+            _ => Err(IoError::new(ErrorKind::InvalidData, "Invalid data type").into()),
         }
     }
 }
