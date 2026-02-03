@@ -454,10 +454,6 @@ export class StaticFileService extends pulumi.ComponentResource {
                   value: args.dynamoDbTableName,
                 },
                 {
-                  name: `STATIC_FILE_SERVICE_S3_BUCKET_URL`,
-                  value: STORAGE_LOCATION,
-                },
-                {
                   name: 'STATIC_FILE_SERVICE_S3_EVENT_QUEUE_URL',
                   value: queueQueue.url,
                 },
