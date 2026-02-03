@@ -20,13 +20,6 @@ export {
   useIsAuthenticated,
 } from '@core/context/user';
 export {
-  useOrganizationQuery,
-  invalidateOrganization,
-  useIsInOrganization,
-  useOrganizationId,
-  useOrganizationName,
-} from './organization';
-export {
   useCompleteOnboardingMutation,
   useSetGroupMutation,
 } from './mutations';

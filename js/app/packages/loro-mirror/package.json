@@ -23,7 +23,7 @@
         "@types/node": "^18.0.0",
         "@typescript-eslint/eslint-plugin": "^5.0.0",
         "@typescript-eslint/parser": "^5.0.0",
-        "eslint": "^8.0.0",
+        "eslint": "^9.26.0",
         "rollup": "^4.34.8",
         "rollup-plugin-typescript2": "^0.36.0",
         "typescript": "^4.7.0",
@@ -34,6 +34,9 @@
         "overrides": {
             "brace-expansion": "^2.0.1",
             "js-yaml": "4.1.1"
-        }
+        },
+        "onlyBuiltDependencies": [
+            "esbuild"
+        ]
     }
 }

@@ -31,6 +31,13 @@ const documentStorageBucket = createBucket({
         expiredObjectDeleteMarker: true,
       },
     },
+    {
+      id: `noncurrent-version-cleanup-${stack}`,
+      enabled: true,
+      noncurrentVersionExpiration: {
+        days: 30,
+      },
+    },
   ],
   exposeHeaders: ['Content-Length', 'Content-Range'],
 });

@@ -1,7 +1,7 @@
 import { createBlockEffect, inBlock } from '@core/block';
 import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
-import { fetchToken } from '@core/util/fetchWithToken';
+import { fetchToken, unsetTokenPromise } from '@core/util/fetchWithToken';
 import { getMacroApiToken } from '@service-auth/fetch';
 import { createCallback } from '@solid-primitives/rootless';
 import {
@@ -48,6 +48,8 @@ async function resolveWsUrl() {
     if (!apiToken) throw new Error('No Macro API token');
     return `${wsHost}/?macro-api-token=${apiToken}`;
   }
+  // Clear any cached token promise to force a fresh refresh on reconnect
+  unsetTokenPromise();
   await fetchToken();
   return wsHost;
 }

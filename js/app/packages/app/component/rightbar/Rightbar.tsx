@@ -67,6 +67,7 @@ import {
   onCleanup,
   type Setter,
   Show,
+  Suspense,
   untrack,
 } from 'solid-js';
 import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
@@ -375,27 +376,40 @@ export function Rightbar(props: {
     }
   };
 
-  createEffect(() => {
-    if (props.isBig) {
-      borrowedFocus = document.activeElement;
-      editor()?.focus();
-    } else {
-      if (untrack(isRightPanelOpen)) {
-        return;
-      } else {
-        returnFocus();
-      }
-    }
-  });
+  // Defering these effects so that they don't trigger on first load
+  createEffect(
+    on(
+      () => props.isBig,
+      (isBig) => {
+        if (isBig) {
+          borrowedFocus = document.activeElement;
+          editor()?.focus();
+        } else {
+          if (untrack(isRightPanelOpen)) {
+            return;
+          } else {
+            returnFocus();
+          }
+        }
+      },
+      { defer: true }
+    )
+  );
 
-  createEffect(() => {
-    if (isRightPanelOpen()) {
-      borrowedFocus = document.activeElement;
-      editor()?.focus();
-    } else {
-      returnFocus();
-    }
-  });
+  createEffect(
+    on(
+      isRightPanelOpen,
+      (isOpen) => {
+        if (isOpen) {
+          borrowedFocus = document.activeElement;
+          editor()?.focus();
+        } else {
+          returnFocus();
+        }
+      },
+      { defer: true }
+    )
+  );
 
   return (
     <DragDropWrapper
@@ -756,26 +770,28 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
             setSpotlight={setBigChatOpen}
             tr={!bigChatOpen() && !settingsOpen()}
           >
-            <Rightbar
-              chatId={chatId()}
-              chatName={chatName()}
-              messages={messages}
-              onUnmount={getChatInputState}
-              initialState={initialChatState()}
-              onSend={onSend}
-              stream={stream}
-              stopGenerating={stopGenerating}
-              userPermissions={userPermissions}
-              setState={{
-                setChatId,
-                setModel,
-                setAttachments,
-                setText,
-                setMessages,
-                setStream,
-              }}
-              isBig={bigChatOpen()}
-            />
+            <Suspense>
+              <Rightbar
+                chatId={chatId()}
+                chatName={chatName()}
+                messages={messages}
+                onUnmount={getChatInputState}
+                initialState={initialChatState()}
+                onSend={onSend}
+                stream={stream}
+                stopGenerating={stopGenerating}
+                userPermissions={userPermissions}
+                setState={{
+                  setChatId,
+                  setModel,
+                  setAttachments,
+                  setText,
+                  setMessages,
+                  setStream,
+                }}
+                isBig={bigChatOpen()}
+              />
+            </Suspense>
           </SplitlikeContainer>
         </div>
       </Resize.Panel>

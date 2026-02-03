@@ -3064,6 +3064,11 @@ export type createCheckoutSessionResponse404 = {
   status: 404;
 };
 
+export type createCheckoutSessionResponse409 = {
+  data: string;
+  status: 409;
+};
+
 export type createCheckoutSessionResponse500 = {
   data: string;
   status: 500;
@@ -3076,6 +3081,7 @@ export type createCheckoutSessionResponseSuccess =
 export type createCheckoutSessionResponseError = (
   | createCheckoutSessionResponse400
   | createCheckoutSessionResponse404
+  | createCheckoutSessionResponse409
   | createCheckoutSessionResponse500
 ) & {
   headers: Headers;

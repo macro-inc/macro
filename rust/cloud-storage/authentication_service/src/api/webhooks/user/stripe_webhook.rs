@@ -149,6 +149,69 @@ async fn handle_customer_subscription_event(
             .await;
     }
 
+    // Check for duplicate subscriptions
+    let mut list_subscriptions = stripe::ListSubscriptions::new();
+    list_subscriptions.customer = Some(customer_id.clone());
+    list_subscriptions.limit = Some(10);
+
+    let all_subscriptions =
+        stripe::Subscription::list(&ctx.stripe_client, &list_subscriptions).await?;
+
+    let active_subscriptions: Vec<_> = all_subscriptions
+        .data
+        .iter()
+        .filter(|sub| {
+            matches!(
+                sub.status,
+                stripe::SubscriptionStatus::Active | stripe::SubscriptionStatus::Trialing
+            )
+        })
+        .collect();
+
+    // If this is a new active/trialing subscription and there are multiple active subscriptions,
+    // cancel the newer one (keep the oldest)
+    if matches!(subscription_status, "active" | "trialing") && active_subscriptions.len() > 1 {
+        // Find the oldest subscription by created timestamp
+        let oldest_subscription = active_subscriptions
+            .iter()
+            .min_by_key(|sub| sub.created)
+            .map(|sub| sub.id.as_str());
+
+        // If the current subscription is not the oldest, cancel it
+        if oldest_subscription != Some(subscription_id) {
+            tracing::warn!(
+                customer_id = %customer_id,
+                subscription_id = subscription_id,
+                oldest_subscription_id = ?oldest_subscription,
+                total_active = active_subscriptions.len(),
+                "Cancelling duplicate subscription - keeping oldest"
+            );
+
+            let sub_id: stripe::SubscriptionId = subscription_id.parse()?;
+            stripe::Subscription::cancel(
+                &ctx.stripe_client,
+                &sub_id,
+                stripe::CancelSubscription::default(),
+            )
+            .await?;
+
+            // Return early - don't update permissions for a cancelled duplicate
+            return Ok(());
+        }
+    }
+
+    // If subscription is being deleted/canceled, check if there's another active subscription
+    // before revoking permissions
+    if subscription_status == "canceled" && !active_subscriptions.is_empty() {
+        tracing::info!(
+            customer_id = %customer_id,
+            subscription_id = subscription_id,
+            remaining_active = active_subscriptions.len(),
+            "Subscription deleted but user still has active subscription(s) - not revoking permissions"
+        );
+        return Ok(());
+    }
+
     if subscription_status == "trialing" {
         // Add has_trialed: true to stripe customer metadata
         let mut params = stripe::UpdateCustomer::new();

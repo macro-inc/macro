@@ -23,7 +23,7 @@ impl ApiContext {
     pub async fn get_multiplexed_tokio_connection(
         &self,
     ) -> Result<MultiplexedConnection, RedisError> {
-        self.redis_client.get_multiplexed_tokio_connection().await
+        self.redis_client.get_multiplexed_async_connection().await
     }
 }
 

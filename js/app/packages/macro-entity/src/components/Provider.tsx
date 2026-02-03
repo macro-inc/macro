@@ -1,6 +1,4 @@
-import {
-  QueryClientProvider,
-} from '@tanstack/solid-query';
+import { QueryClientProvider } from '@tanstack/solid-query';
 import { SolidQueryDevtools } from '@tanstack/solid-query-devtools';
 import { LOCAL_ONLY } from '@core/constant/featureFlags';
 import { Show, type ParentProps } from 'solid-js';
@@ -17,7 +15,6 @@ export function Provider(props: ParentProps) {
     staleTime: 1000 * 60 * 55, // 55 minutes
     queryFn: fetchApiToken,
   });
-
 
   return (
     <QueryClientProvider client={queryClient}>
