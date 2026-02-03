@@ -2,7 +2,6 @@ import {
   isDraggingOverChannelSignal,
   isValidChannelDragSignal,
 } from '@block-channel/signal/attachment';
-import type { SendMessageArgs } from '@block-channel/signal/channel';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
 import {
   $convertSingleMentionToCard,
@@ -71,6 +70,7 @@ import { TaskPreviewPanel } from './TaskPreviewPanel';
 import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { ENABLE_STATIC_DOCUMENT_CARDS } from '@core/constant/featureFlags';
+import type { SendMessageArgs } from '@block-channel/hooks/message';
 
 false && fileFolderDrop;
 
