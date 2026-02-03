@@ -119,8 +119,6 @@ where
         }: PostSoupRequest,
         cursor: SoupCursor,
     ) -> Result<Json<PaginatedOpaqueCursor<SoupApiItem>>, SoupHandlerErr> {
-        // let filters = EntityFilterAst::new_from_filters(filters)?;
-
         let create_fallback = move || {
             let params_sort = params
                 .sort_method

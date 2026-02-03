@@ -103,11 +103,11 @@ pub enum SoupQuery<T> {
 
 /// the inner private type for [SoupQuery::Simple]
 #[derive(Debug)]
-pub(crate) struct SimpleQueryInner<T>(pub(crate) Query<Uuid, SimpleSortMethod, T>);
+pub struct SimpleQueryInner<T>(pub(crate) Query<Uuid, SimpleSortMethod, T>);
 
 /// the inner private type for [SoupQuery::Frecency]
 #[derive(Debug)]
-pub(crate) struct FrecencyQueryInner<T>(pub(crate) Query<Uuid, Frecency, T>);
+pub struct FrecencyQueryInner<T>(pub(crate) Query<Uuid, Frecency, T>);
 
 impl SoupQuery<EntityFilters> {
     /// create a new instance of a [SimpleSortMethod] with [EntityFilters] this is used to
@@ -159,15 +159,6 @@ impl SoupQuery<EntityFilters> {
             SoupQuery::Frecency(FrecencyQueryInner(query)) => Ok(SoupQuery::Frecency(
                 FrecencyQueryInner(query.try_map_filter(EntityFilterAst::new_from_filters)?),
             )),
-        }
-    }
-}
-
-impl SoupQuery<Option<EntityFilterAst>> {
-    pub(crate) fn filter(&self) -> Option<&EntityFilterAst> {
-        match self {
-            SoupQuery::Simple(query) => query.0.filter().as_ref(),
-            SoupQuery::Frecency(query) => query.0.filter().as_ref(),
         }
     }
 }

@@ -8,7 +8,7 @@ use email::domain::{
     ports::EmailService,
 };
 use http_body_util::BodyExt;
-use item_filters::ast::EntityFilterAst;
+use item_filters::EntityFilters;
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
 use model_user::UserContext;
 use models_pagination::{
@@ -23,17 +23,17 @@ use uuid::Uuid;
 
 use crate::{
     domain::{
-        models::{SoupErr, SoupQuery, SoupRequest, SoupType},
+        models::{FrecencyQueryInner, SimpleQueryInner, SoupErr, SoupQuery, SoupRequest, SoupType},
         ports::{SoupOutput, SoupService},
     },
     inbound::axum_router::{SoupRouterState, soup_router},
 };
 
-static CURSOR: &str = "eyJpZCI6ImUzNmM5MTJlLTU2M2MtNDIxZS1iMTAzLWE0YjAwY2ZmMzBlZSIsImxpbWl0IjoxMDAsInZhbCI6eyJzb3J0X3R5cGUiOiJ1cGRhdGVkX2F0IiwibGFzdF92YWwiOiIyMDI1LTExLTA3VDE5OjEyOjU5Ljc4MFoifX0=";
+static CURSOR: &str = "eyJpZCI6ImUzNmM5MTJlLTU2M2MtNDIxZS1iMTAzLWE0YjAwY2ZmMzBlZSIsImxpbWl0IjoxMDAsInZhbCI6eyJzb3J0X3R5cGUiOiJ1cGRhdGVkX2F0IiwibGFzdF92YWwiOiIyMDI1LTExLTA3VDE5OjEyOjU5Ljc4MFoifSwiZmlsdGVyIjp7fX0=";
 
 #[derive(Clone)]
 struct MockSoup {
-    called: Arc<std::sync::Mutex<Vec<SoupRequest>>>,
+    called: Arc<std::sync::Mutex<Vec<SoupRequest<EntityFilters>>>>,
 }
 
 impl MockSoup {
@@ -47,7 +47,7 @@ impl MockSoup {
 impl SoupService for MockSoup {
     async fn get_user_soup(
         &self,
-        req: crate::domain::models::SoupRequest,
+        req: crate::domain::models::SoupRequest<EntityFilters>,
     ) -> Result<SoupOutput, SoupErr> {
         let mut guard = self.called.lock().unwrap();
         guard.push(req);
@@ -347,7 +347,10 @@ async fn it_parses_file_assoc_filters() {
         SoupRequest {
             soup_type: SoupType::Expanded,
             limit: _,
-            cursor: SoupQuery::Simple(Query::Sort(SimpleSortMethod::ViewedAt, Some(_filters))),
+            cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
+                SimpleSortMethod::ViewedAt,
+                _filters
+            ))),
             user: _,
             email_preview_view: _,
             link_id: _
@@ -417,7 +420,7 @@ async fn cursor_with_assoc_works() {
     let res = (0..1000)
         .map(|x| Data(x, Uuid::new_v4()))
         .paginate_on(100, Frecency)
-        .filter_on(arg.cursor.filter().cloned())
+        .filter_on(arg.cursor.filter().clone())
         .into_page();
 
     let cursor = res.type_erase().next_cursor.unwrap();
@@ -450,10 +453,10 @@ async fn cursor_with_assoc_works() {
     assert_matches!(
         req,
         SoupRequest {
-            cursor: SoupQuery::Frecency(Query::Cursor(Cursor {
-                filter: Some(_f),
+            cursor: SoupQuery::Frecency(FrecencyQueryInner(Query::Cursor(Cursor {
+                filter: _f,
                 ..
-            })),
+            }))),
             ..
         }
     )
@@ -521,7 +524,7 @@ async fn cursor_with_all_works() {
     let res = (0..1000)
         .map(|x| Data(x, Uuid::new_v4()))
         .paginate_on(100, Frecency)
-        .filter_on(arg.cursor.filter().cloned())
+        .filter_on(arg.cursor.filter().clone())
         .into_page();
 
     let cursor = res.type_erase().next_cursor.unwrap();
@@ -554,10 +557,10 @@ async fn cursor_with_all_works() {
     assert_matches!(
         req,
         SoupRequest {
-            cursor: SoupQuery::Frecency(Query::Cursor(Cursor {
-                filter: Some(_f),
+            cursor: SoupQuery::Frecency(FrecencyQueryInner(Query::Cursor(Cursor {
+                filter: _f,
                 ..
-            })),
+            }))),
             ..
         }
     )
@@ -603,21 +606,20 @@ async fn it_parses_channel_filters() {
         guard.pop().unwrap()
     };
 
+    // Check that channel_filters were parsed correctly
     assert_matches!(
         arg,
         SoupRequest {
-            cursor: SoupQuery::Simple(Query::Sort(
+            cursor: SoupQuery::Simple(SimpleQueryInner(Query::Sort(
                 _,
-                Some(EntityFilterAst {
-                    document_filter: None,
-                    project_filter: None,
-                    chat_filter: None,
-                    email_filter: None,
-                    channel_filter: Some(_),
+                EntityFilters {
+                    channel_filters,
                     ..
-                }),
-            )),
+                },
+            ))),
             ..
+        } => {
+            assert!(!channel_filters.channel_ids.is_empty());
         }
     )
 }

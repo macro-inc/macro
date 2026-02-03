@@ -2,7 +2,7 @@ use crate::domain::models::{
     AdvancedSortParams, FrecencySoupItem, SimpleSortRequest, SoupErr, SoupRequest,
 };
 use either::Either;
-use item_filters::{EntityFilters, ast::EntityFilterAst};
+use item_filters::EntityFilters;
 use models_pagination::{Frecency, PaginatedCursor, SimpleSortMethod};
 use models_soup::item::SoupItem;
 
