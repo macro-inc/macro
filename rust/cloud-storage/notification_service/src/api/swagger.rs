@@ -17,16 +17,9 @@ use crate::{
     api::{
         device, health, notification,
         unsubscribe::{self, unsubscribe_item::UnsubscribeItemPathParams},
-        user_notification::{
-            self,
-            get_user_notifications_by_event_item_id::GetAllUserNotificationsResponse,
-        },
         user_notification_v2,
     },
-    model::{
-        device::DeviceRequest, notification::CreateNotification,
-        user_notification::NotificationBulkRequest,
-    },
+    model::{device::DeviceRequest, notification::CreateNotification},
 };
 
 #[derive(OpenApi)]
@@ -46,13 +39,6 @@ use crate::{
                 notification::create_notification::handler,
 
                 /// /user_notifications
-                user_notification::get_user_notification_by_id::handler,
-                user_notification::delete_user_notification::handler,
-                user_notification::bulk_delete_user_notification::handler,
-                user_notification::get_user_notifications_by_event_item_id::handler,
-                user_notification::bulk_get_user_notifications_by_event_item_id::handler,
-
-                /// /v2/user_notifications
                 user_notification_v2::list_typed_notifications,
                 user_notification_v2::bulk_get_typed_notifications_by_event_item_ids,
                 user_notification_v2::get_typed_by_event_item_id,
@@ -79,8 +65,6 @@ use crate::{
                         Notification,
                         CreateNotification,
                         UserNotification,
-                        GetAllUserNotificationsResponse,
-                        NotificationBulkRequest,
                         UnsubscribeItemPathParams,
                         UserUnsubscribe,
                         DeviceType,
