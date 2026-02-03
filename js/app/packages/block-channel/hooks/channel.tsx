@@ -1,6 +1,5 @@
 import { createAssertedContextProvider } from '@core/context/createContext';
-import { channelQueryOptions, useChannelQuery } from '@queries/channel/channel';
-import { useQueryClient } from '@queries/client';
+import { useChannelQuery } from '@queries/channel/channel';
 import {
   getThreadMessages,
   getTopLevelMessages,
@@ -12,7 +11,7 @@ import type {
   GetChannelResponseReactions,
 } from '@service-comms/generated/models';
 import type { Message } from '@service-comms/generated/models/message';
-import { createEffect, createMemo, on, type Accessor } from 'solid-js';
+import { createMemo, type Accessor } from 'solid-js';
 
 export type MessageSenderLookup = Map<string, string>;
 
@@ -35,13 +34,7 @@ export const [ChannelContextProvider, useChannelContext] =
   createAssertedContextProvider<ChannelContextValue>(
     'ChannelContext',
     (props: ChannelContextProps): ChannelContextValue => {
-      const queryClient = useQueryClient();
       const channelQuery = useChannelQuery(props.channelId);
-      createEffect(
-        on(props.channelId, (channelId) => {
-          queryClient.prefetchQuery(channelQueryOptions(channelId));
-        })
-      );
       const channel = createMemo(() => channelQuery.data);
       const channelType = createMemo(() => channel().channel.channel_type);
       const channelName = createMemo(() => channel().channel.name ?? '');
