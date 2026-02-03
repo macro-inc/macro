@@ -639,6 +639,10 @@ export function Soup() {
   const [preview, setPreview] = previewState();
   const selectedEntity = () => view().selectedEntity;
 
+  createEffect(() => {
+    handle.setDisplayName('');
+  });
+
   // Sync selected view to split metadata
   createEffect(() => {
     handle.updateMeta?.({ viewId: selectedView() });

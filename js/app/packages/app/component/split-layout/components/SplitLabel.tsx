@@ -59,9 +59,14 @@ export function SplitLabel(props: {
   id?: string;
   itemType?: ItemType;
 }) {
+  const panel = useSplitPanelOrThrow();
   const rename = useRenameSplit();
   const blockName = useBlockName();
   const blockId = useBlockId();
+
+  createEffect(() => {
+    panel.handle.setDisplayName(props.label);
+  });
 
   const startEditing = (e: MouseEvent) => {
     if (props.lockRename) return;

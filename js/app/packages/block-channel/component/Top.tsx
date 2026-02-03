@@ -18,9 +18,11 @@ import LinkIcon from '@icon/regular/link.svg';
 import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
 import type { ChannelType } from '@service-comms/generated/models/channelType';
 import { useUserId } from '@core/context/user';
-import { Show } from 'solid-js';
+import { createMemo, Show } from 'solid-js';
 import { AttachmentsModal } from './AttachmentsModal';
 import { ParticipantManager } from './ParticipantManager';
+import { useChannelContext } from '@block-channel/hooks/channel';
+import { isChannelAdminOrOwner } from '@queries/channel/derived';
 
 type TopIconProps = {
   channelType: ChannelType;
@@ -58,6 +60,12 @@ export function Top(props: TopProps) {
   const participantCount = () => props.participants.length;
   const blockId = useBlockId();
   const notificationSource = useGlobalNotificationSource();
+  const channelContext = useChannelContext();
+
+  const isAdminOrOwner = createMemo(() => {
+    const channelData = channelContext.channel();
+    return isChannelAdminOrOwner(channelData);
+  });
 
   function handleCopyLink() {
     navigator.clipboard.writeText(
@@ -89,6 +97,7 @@ export function Top(props: TopProps) {
               label={channelName() ?? 'New Channel'}
               id={props.channelId}
               itemType="channel"
+              lockRename={!isAdminOrOwner()}
             />
           </div>
         </div>
