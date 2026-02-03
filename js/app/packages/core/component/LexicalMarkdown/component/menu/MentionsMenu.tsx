@@ -438,6 +438,7 @@ function MentionsMenuInner(props: {
     props.menu.searchTerm()
   );
   const historyQuery = useHistoryQuery();
+  // TODO: support viewed at in history
   const history = createMemo(() => {
     if (props.history) {
       return props.history().map(entityMapper('item'));
@@ -464,24 +465,23 @@ function MentionsMenuInner(props: {
 
   const dmActivityByUserId = useDmActivityByUserId();
 
-  const users = createMemo(() => {
-    const list = props.users?.() ?? contacts();
-    const dmActivity = dmActivityByUserId();
+  const users = createMemo(
+    (): (Entity<'user'> & { lastInteraction: number | undefined })[] => {
+      const list = props.users?.() ?? contacts();
+      const dmActivity = dmActivityByUserId();
 
-    return list
-      .map(entityMapper('user'))
-      .map((entity) => {
-        const dmTimestamp = dmActivity.get(entity.id);
-        if (dmTimestamp) {
+      return list
+        .map(entityMapper('user'))
+        .map((entity) => {
+          const dmTimestamp = dmActivity.get(entity.id);
           return {
             ...entity,
             lastInteraction: dmTimestamp,
           };
-        }
-        return entity;
-      })
-      .filter(allItemFilter);
-  });
+        })
+        .filter(allItemFilter);
+    }
+  );
 
   let channels: Accessor<Entity<'channel'>[]>;
   if (props.channels) {
@@ -645,7 +645,22 @@ function MentionsMenuInner(props: {
 
   const itemSearch = createFreshSearch<CombinedEntity<'item' | 'channel'>>(
     {},
-    getItemSearchText
+    getItemSearchText,
+    (item) => item.kind === 'channel',
+    (item) => {
+      switch (item.kind) {
+        case 'item':
+          return {
+            updatedAt: item.data.updatedAt,
+          };
+        case 'channel':
+          return {
+            updatedAt: item.data.updated_at,
+          };
+        default:
+          return {};
+      }
+    }
   );
   const filteredItems = createMemo(() => {
     const allResults = itemSearch(historyAndChannels(), searchTerm()).map(
@@ -677,12 +692,18 @@ function MentionsMenuInner(props: {
     return email ? email.split('@')[1] : undefined;
   });
 
-  const userSearch = createFreshSearch<Entity<'user'>>(
-    FreshSearchPresets.baseUserSearch(
+  const userSearch = createFreshSearch<
+    Entity<'user'> & { lastInteraction: number | undefined }
+  >(
+    FreshSearchPresets.baseUserSearch<Entity<'user'>>(
       currentUserDomain,
       (item) => item.data.email
     ),
-    getItemSearchText
+    getItemSearchText,
+    (_item) => false,
+    (item) => ({
+      lastInteraction: item.lastInteraction,
+    })
   );
 
   // Group aliases available in channel context
@@ -712,7 +733,12 @@ function MentionsMenuInner(props: {
 
   const emailSearch = createFreshSearch<Entity<'email'>>(
     { timeWeight: 0, brevityWeight: 0.3 },
-    getItemSearchText
+    getItemSearchText,
+    (_item) => false,
+    (item) => ({
+      updatedAt: item.data.updatedAt,
+      viewedAt: item.data.viewedAt,
+    })
   );
 
   const filteredEmails = createMemo(() => {
