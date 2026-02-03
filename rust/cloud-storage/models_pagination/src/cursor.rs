@@ -46,6 +46,25 @@ pub struct Cursor<Id, C, F> {
     pub filter: F,
 }
 
+impl<Id, C, F> Cursor<Id, C, F> {
+    /// maps the filter from one type to another
+    pub fn map_filter<Fn: FnOnce(F) -> F2, F2>(self, cb: Fn) -> Cursor<Id, C, F2> {
+        let Cursor {
+            id,
+            limit,
+            val,
+            filter,
+        } = self;
+
+        Cursor {
+            id,
+            limit,
+            val,
+            filter: cb(filter),
+        }
+    }
+}
+
 /// Type alias for a [Cursor] with a [CursorVal] which is [Sortable]
 pub type CursorWithVal<Id, V> = Cursor<Id, CursorVal<V>, ()>;
 
@@ -456,6 +475,27 @@ impl<I, T: Sortable, F> Query<I, T, F> {
                 val,
                 filter: cb(filter),
             }),
+        }
+    }
+    /// maps this filter type into another one via a callback fn.
+    /// This is analagous to [Option::map] over just the filter generic type
+    pub fn try_map_filter<Cb, F2, E>(self, cb: Cb) -> Result<Query<I, T, F2>, E>
+    where
+        Cb: FnOnce(F) -> Result<F2, E>,
+    {
+        match self {
+            Query::Sort(a, b) => Ok(Query::Sort(a, cb(b)?)),
+            Query::Cursor(Cursor {
+                id,
+                limit,
+                val,
+                filter,
+            }) => Ok(Query::Cursor(Cursor {
+                id,
+                limit,
+                val,
+                filter: cb(filter)?,
+            })),
         }
     }
 

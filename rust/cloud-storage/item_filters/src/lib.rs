@@ -184,7 +184,7 @@ impl IsEmpty for ProjectFilters {
 }
 
 /// a bundle of all of the filters for each entity type
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 pub struct EntityFilters {
     /// the bundled [ProjectFilters]
