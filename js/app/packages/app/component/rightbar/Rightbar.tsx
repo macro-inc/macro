@@ -493,9 +493,7 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
       }
     | undefined
   >();
-  const userPermissions = createMemo(() =>
-    getPermissions(userAccessLevel())
-  );
+  const userPermissions = createMemo(() => getPermissions(userAccessLevel()));
 
   const [attachHotkeys, scopeId] = useHotkeyDOMScope('ai-chat');
 

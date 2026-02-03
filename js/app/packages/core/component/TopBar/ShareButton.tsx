@@ -161,7 +161,9 @@ export function ShareModal(props: ShareModalProps) {
         if (itemType === 'chat') {
           return cognitionApiServiceClient.getChatPermissions({ id });
         } else if (itemType === 'document') {
-          return storageServiceClient.getDocumentPermissions({ document_id: id });
+          return storageServiceClient.getDocumentPermissions({
+            document_id: id,
+          });
         } else if (itemType === 'project') {
           if (id === 'trash') {
             return;
