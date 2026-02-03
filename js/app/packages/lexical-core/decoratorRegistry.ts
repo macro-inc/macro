@@ -46,6 +46,10 @@ import type {
 } from './nodes/UserMentionNode';
 import type { VideoDecoratorProps, VideoNode } from './nodes/VideoNode';
 import type {
+  ThemeMentionDecoratorProps,
+  ThemeMentionNode,
+} from './nodes/ThemeMentionNode';
+import type {
   WatermarkDecoratorProps,
   WatermarkNode,
 } from './nodes/WatermarkNode';
@@ -106,6 +110,10 @@ export interface NodeDecoratorMap {
   HtmlRenderNode: {
     klass: typeof HtmlRenderNode;
     props: HtmlRenderDecoratorProps;
+  };
+  ThemeMentionNode: {
+    klass: typeof ThemeMentionNode;
+    props: ThemeMentionDecoratorProps;
   };
   WatermarkNode: {
     klass: typeof WatermarkNode;

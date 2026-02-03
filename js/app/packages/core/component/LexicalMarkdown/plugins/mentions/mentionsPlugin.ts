@@ -10,6 +10,7 @@ import {
   $createGroupMentionNode,
   $createInlineSearchNode,
   $createSnapshotNode,
+  $createThemeMentionNode,
   $createUserMentionNode,
   $handleInlineSearchNodeMutation,
   $handleInlineSearchNodeTransform,
@@ -30,6 +31,7 @@ import {
   InlineSearchNode,
   InlineSearchNodesType,
   type SnapshotNodeInfo,
+  type ThemeV1,
   type UserMentionInfo,
   UserMentionNode,
   validTriggerPosition,
@@ -101,6 +103,9 @@ export const INSERT_USER_MENTION_COMMAND: LexicalCommand<UserMentionInfo> =
 
 export const INSERT_GROUP_MENTION_COMMAND: LexicalCommand<GroupMentionInfo> =
   createCommand('INSERT_GROUP_MENTION_COMMAND');
+
+export const INSERT_THEME_MENTION_COMMAND: LexicalCommand<ThemeV1> =
+  createCommand('INSERT_THEME_MENTION_COMMAND');
 
 export type ItemMention = {
   itemType:
@@ -449,6 +454,30 @@ function registerMentionsPlugin(
         editor.update(() => {
           const mentionNode = $createGroupMentionNode(payload);
 
+          $insertNodes([mentionNode]);
+          if ($isRootOrShadowRoot(mentionNode.getParentOrThrow())) {
+            $wrapNodeInElement(mentionNode, $createParagraphNode);
+          }
+          mentionNode.selectEnd();
+        });
+        return true;
+      },
+      COMMAND_PRIORITY_NORMAL
+    ),
+
+    editor.registerCommand(
+      INSERT_THEME_MENTION_COMMAND,
+      (payload) => {
+        editor.update(() => {
+          const selection = $getSelection();
+          const mentionNode = $createThemeMentionNode(payload);
+
+          if ($isRangeSelection(selection) && !selection.isCollapsed()) {
+            $collapseSelection(selection);
+            $insertNodes([$createTextNode(' '), mentionNode]);
+            mentionNode.selectEnd();
+            return true;
+          }
           $insertNodes([mentionNode]);
           if ($isRootOrShadowRoot(mentionNode.getParentOrThrow())) {
             $wrapNodeInElement(mentionNode, $createParagraphNode);

@@ -1,5 +1,6 @@
 import type { BlockAlias, BlockName } from '@core/block';
 import { mergeRegister } from '@lexical/utils';
+import { isThemeV1Json } from '@lexical-core';
 import {
   $getSelection,
   $isRangeSelection,
@@ -7,7 +8,10 @@ import {
   type LexicalEditor,
   PASTE_COMMAND,
 } from 'lexical';
-import { INSERT_DOCUMENT_MENTION_COMMAND } from '../mentions';
+import {
+  INSERT_DOCUMENT_MENTION_COMMAND,
+  INSERT_THEME_MENTION_COMMAND,
+} from '../mentions';
 
 type MacroAppUrlParsed = {
   isValid: boolean;
@@ -131,6 +135,18 @@ function registerTextPastePlugin(editor: LexicalEditor) {
         if (event instanceof ClipboardEvent) {
           const pastedText: string =
             event.clipboardData?.getData('text/plain') || '';
+
+          // Check for theme JSON before checking for Macro URL
+          const themeV1 = isThemeV1Json(pastedText);
+          if (themeV1) {
+            const selection = $getSelection();
+            if ($isRangeSelection(selection) && !selection.isCollapsed())
+              return false;
+
+            event.preventDefault();
+            editor.dispatchCommand(INSERT_THEME_MENTION_COMMAND, themeV1);
+            return true;
+          }
 
           const parsedMacroAppUrl = parseMacroAppUrl(pastedText);
           if (
