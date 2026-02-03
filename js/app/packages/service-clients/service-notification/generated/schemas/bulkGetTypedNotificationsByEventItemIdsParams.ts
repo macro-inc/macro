@@ -5,14 +5,14 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type BulkGetUserNotificationsByEventItemIdParams = {
+export type BulkGetTypedNotificationsByEventItemIdsParams = {
   /**
    * Size limit per page. Default 20, max 500.
    * @minimum 0
    */
-  limit: number;
+  limit?: number;
   /**
-   * Cursor value. Base64 encoded timestamp and item id, separated by |.
+   * Cursor value. Base64 encoded timestamp and item id.
    */
   cursor?: string;
 };

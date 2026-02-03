@@ -409,295 +409,6 @@
         }
       }
     },
-    "/user_notifications/bulk": {
-      "delete": {
-        "tags": ["user_notification::bulk_delete_user_notification"],
-        "summary": "Marks the user's notifications as deleted",
-        "operationId": "bulk_delete_user_notification",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NotificationBulkRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmptyResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/user_notifications/item/bulk": {
-      "post": {
-        "tags": [
-          "user_notification::bulk_get_user_notifications_by_event_item_id"
-        ],
-        "summary": "Gets the user's notifications for a provided event item ids in a paginated format.\nThis will only return unseen notifications.",
-        "operationId": "bulk_get_user_notifications_by_event_item_id",
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Size limit per page. Default 20, max 500.",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "minimum": 0
-            }
-          },
-          {
-            "name": "cursor",
-            "in": "query",
-            "description": "Cursor value. Base64 encoded timestamp and item id, separated by |.",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BulkGetUserNotificationsByEventItemIdRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetAllUserNotificationsResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/user_notifications/item/{event_item_id}": {
-      "get": {
-        "tags": ["user_notification::get_user_notifications_by_event_item_id"],
-        "summary": "Gets the user's notifications for a given event item id in a paginated format.",
-        "operationId": "get_user_notifications_by_event_item_id",
-        "parameters": [
-          {
-            "name": "event_item_id",
-            "in": "path",
-            "description": "The event item id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Size limit per page. Default 20, max 500.",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          },
-          {
-            "name": "cursor",
-            "in": "query",
-            "description": "Cursor value. Base64 encoded timestamp and item id, separated by |.",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetAllUserNotificationsResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/user_notifications/{notification_id}": {
-      "get": {
-        "tags": ["user_notification::get_user_notification_by_id"],
-        "summary": "Gets a single user notification by id.",
-        "operationId": "get_user_notification_by_id",
-        "parameters": [
-          {
-            "name": "notification_id",
-            "in": "path",
-            "description": "ID of the notification",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserNotification"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": ["user_notification::delete_user_notification"],
-        "summary": "Marks the user's notification as deleted.",
-        "operationId": "delete_user_notification",
-        "parameters": [
-          {
-            "name": "notification_id",
-            "in": "path",
-            "description": "ID of the notification",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmptyResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/v2/user_notifications": {
       "get": {
         "tags": ["user_notification_v2"],
@@ -736,6 +447,58 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/user_notifications/bulk": {
+      "delete": {
+        "tags": ["notification_crate::inbound::http"],
+        "summary": "Soft-delete multiple user notifications.",
+        "operationId": "bulk_delete_user_notifications_v2",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
           },
           "400": {
             "description": "",
@@ -925,6 +688,292 @@
           }
         }
       }
+    },
+    "/v2/user_notifications/item/bulk": {
+      "post": {
+        "tags": ["user_notification_v2"],
+        "summary": "Wrapper handler that calls the inner generic bulk-get handler with `serde_json::Value`,\nthen converts each row to [`UserNotificationRow<NotifEvent>`].",
+        "description": "Rows that fail to deserialize are dropped with a warning log.",
+        "operationId": "bulk_get_typed_notifications_by_event_item_ids",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Size limit per page. Default 20, max 500.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Cursor value. Base64 encoded timestamp and item id.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkGetByEventItemIdsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetAllUserNotificationsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/user_notifications/item/{event_item_id}": {
+      "get": {
+        "tags": ["user_notification_v2"],
+        "summary": "Typed wrapper for getting notifications by a single event item ID.",
+        "operationId": "get_typed_notifications_by_event_item_id",
+        "parameters": [
+          {
+            "name": "event_item_id",
+            "in": "path",
+            "description": "The event item ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Size limit per page.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Cursor value. Base64 encoded timestamp and item id.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetAllUserNotificationsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/user_notifications/{notification_id}": {
+      "get": {
+        "tags": ["user_notification_v2"],
+        "summary": "Typed wrapper for getting a single notification by ID.",
+        "operationId": "get_typed_notification_by_id",
+        "parameters": [
+          {
+            "name": "notification_id",
+            "in": "path",
+            "description": "ID of the notification",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiUserNotification"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["notification_crate::inbound::http"],
+        "summary": "Soft-delete a single user notification.",
+        "operationId": "delete_user_notification_v2",
+        "parameters": [
+          {
+            "name": "notification_id",
+            "in": "path",
+            "description": "ID of the notification",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1000,15 +1049,18 @@
           }
         }
       },
-      "BulkGetUserNotificationsByEventItemIdRequest": {
+      "BulkGetByEventItemIdsRequest": {
         "type": "object",
+        "description": "Request body for bulk-fetching notifications by event item IDs.",
         "required": ["eventItemIds"],
         "properties": {
           "eventItemIds": {
             "type": "array",
             "items": {
-              "type": "string"
-            }
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The event item IDs to filter notifications by."
           }
         }
       },

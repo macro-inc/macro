@@ -89,7 +89,7 @@ export const documentMentionMetadata = z.object({
     .optional(),
 });
 
-type NotificationParams = { cursor?: string, limit?: number };
+type NotificationParams = { cursor?: string; limit?: number };
 
 export const notificationServiceClient = {
   async userNotifications(args: NotificationParams) {
@@ -116,8 +116,7 @@ export const notificationServiceClient = {
     );
   },
   async bulkGetUserNotificationsByEventItemId(
-    args: NotificationParams &
-      BulkGetUserNotificationsByEventItemIdRequest
+    args: NotificationParams & BulkGetUserNotificationsByEventItemIdRequest
   ) {
     const { limit, cursor } = args;
     return mapOk(

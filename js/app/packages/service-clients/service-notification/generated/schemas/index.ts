@@ -7,8 +7,8 @@
 
 export * from './apiUserNotification';
 export * from './apiUserNotificationSenderId';
-export * from './bulkGetUserNotificationsByEventItemIdParams';
-export * from './bulkGetUserNotificationsByEventItemIdRequest';
+export * from './bulkGetByEventItemIdsRequest';
+export * from './bulkGetTypedNotificationsByEventItemIdsParams';
 export * from './channelInviteMetadata';
 export * from './channelInviteMetadataAllOf';
 export * from './channelMentionMetadata';
@@ -35,7 +35,7 @@ export * from './entityType';
 export * from './errorResponse';
 export * from './getAllUserNotificationsResponse';
 export * from './getAllUserNotificationsResponseNextCursor';
-export * from './getUserNotificationsByEventItemIdParams';
+export * from './getTypedNotificationsByEventItemIdParams';
 export * from './inviteToTeamMetadata';
 export * from './inviteToTeamMetadataRole';
 export * from './itemSharedMetadata';
