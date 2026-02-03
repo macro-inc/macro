@@ -5,7 +5,7 @@ start_localstack:
   docker run -d --name localstack \
     --network databases \
     -p 4566:4566 \
-    -e SERVICES=sqs,dynamodb \
+    -e SERVICES=sqs,dynamodb,s3 \
     localstack/localstack 2>/dev/null || true
   @echo "LocalStack started"
 
@@ -65,9 +65,19 @@ create_local_tables:
     || true
   @echo "DynamoDB tables created"
 
+# Create S3 buckets in LocalStack
+create_local_buckets:
+  aws --endpoint-url=http://localhost:4566 s3 mb s3://macro-email-attachments || true
+  aws --endpoint-url=http://localhost:4566 s3 mb s3://doc-storage || true
+  aws --endpoint-url=http://localhost:4566 s3 mb s3://docx-upload || true
+  aws --endpoint-url=http://localhost:4566 s3 mb s3://static-file-storage || true
+  aws --endpoint-url=http://localhost:4566 s3 mb s3://bulk-upload-staging || true
+  @echo "S3 buckets created"
+
 # Full LocalStack setup
 setup_localstack:
   just start_localstack
   sleep 2
   just create_local_queues
   just create_local_tables
+  just create_local_buckets
