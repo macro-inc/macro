@@ -1,8 +1,5 @@
 import { createAssertedContextProvider } from '@core/context/createContext';
-import {
-  channelQueryOptions,
-  useChannelQuery,
-} from '@queries/channel/channel';
+import { channelQueryOptions, useChannelQuery } from '@queries/channel/channel';
 import { useQueryClient } from '@queries/client';
 import {
   getThreadMessages,

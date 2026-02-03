@@ -220,7 +220,10 @@ export function MessageList(props: MessageListProps) {
     const nextOffset = match(align)
       .with('start', () => targetTop)
       .with('end', () => targetBottom - handle.viewportSize)
-      .with('center', () => targetTop - (handle.viewportSize - targetBounds.height) / 2)
+      .with(
+        'center',
+        () => targetTop - (handle.viewportSize - targetBounds.height) / 2
+      )
       .otherwise(() => {
         if (targetTop < visibleTop) {
           return targetTop;
