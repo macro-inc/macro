@@ -303,6 +303,8 @@ const cloudStorageService = new CloudStorageService(
         name: 'RUST_LOG',
         value: `warn,document_storage_service=${
           stack === 'prod' ? 'debug' : 'trace'
+        },comms_service=${
+          stack === 'prod' ? 'debug' : 'trace'
         },tower_http=info,macro_share_permissions=${
           stack === 'prod' ? 'error' : 'trace'
         },macro_project_utils=info,macro_notify=info`,
