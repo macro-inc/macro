@@ -1,4 +1,3 @@
-import { useSendChannelMessageAction } from '@block-channel/signal/channel';
 import {
   clearDraftMessage,
   loadDraftMessage,
@@ -15,6 +14,7 @@ import type { ChannelParticipant } from '@service-comms/generated/models/channel
 import { createMemo, createSignal, onMount } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
 import { BaseInput } from './BaseInput';
+import { useSendChannelMessage } from '@block-channel/hooks/message';
 
 export type ChannelInputProps = {
   channelId: string;
@@ -29,7 +29,7 @@ export type ChannelInputProps = {
 };
 
 export function ChannelInput(props: ChannelInputProps) {
-  const sendMessage = useSendChannelMessageAction(() => props.channelId);
+  const sendMessage = useSendChannelMessage(() => props.channelId);
   const typingMutation = usePostTypingUpdateMutation();
 
   const channelUsers = createMemo<IUser[]>(() => {

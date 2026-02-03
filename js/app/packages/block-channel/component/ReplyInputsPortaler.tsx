@@ -1,8 +1,8 @@
 import { useMessageListContext } from '@block-channel/component/MessageList/MessageList';
 import {
   type SendMessageArgs,
-  useSendChannelMessageAction,
-} from '@block-channel/signal/channel';
+  useSendChannelMessage,
+} from '@block-channel/hooks/message';
 import type { MessageWithThreadId } from '@block-channel/signal/threads';
 import {
   clearDraftMessage,
@@ -40,7 +40,7 @@ export type ReplyInputsPortalerProps = {
 
 export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
   const listContext = useMessageListContext();
-  const sendMessage = useSendChannelMessageAction(() => props.channelId);
+  const sendMessage = useSendChannelMessage(() => props.channelId);
   const typingMutation = usePostTypingUpdateMutation();
 
   const blockRef = blockElementSignal.get;

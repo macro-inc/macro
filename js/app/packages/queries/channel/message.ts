@@ -74,9 +74,18 @@ export function optimisticInsertChannelMessage(
         edited_at: undefined,
       };
 
+      const newAttachments: Attachment[] = vars.attachments.map((a) => ({
+        id: crypto.randomUUID(),
+        channel_id: vars.channelId,
+        created_at: String(Date.now()),
+        message_id: vars.optimisticId,
+        ...a,
+      }));
+
       return {
         ...prev,
         messages: [...prev.messages, newMessage],
+        attachments: [...prev.attachments, ...newAttachments],
       };
     }
   );
@@ -101,6 +110,9 @@ export function rollbackInsertChannelMessage(
       return {
         ...prev,
         messages: prev.messages.filter((m) => m.id !== context.optimisticId),
+        attachments: prev.attachments.filter(
+          (a) => a.message_id !== context.optimisticId
+        ),
       };
     }
   );
