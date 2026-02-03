@@ -93,7 +93,7 @@ export const commsServiceClient = {
     if (before !== undefined) params.append('before', before.toString());
     if (after !== undefined) params.append('after', after.toString());
     return await commsFetch<GetMessageWithContextResponse>(
-      `/channels/messages/context?${params.toString()}`
+      `/comms/channels/messages/context?${params.toString()}`
     );
   },
   async postMessage(
