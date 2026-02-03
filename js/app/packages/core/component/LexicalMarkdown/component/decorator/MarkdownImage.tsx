@@ -21,6 +21,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  on,
   onCleanup,
   onMount,
   Show,
@@ -244,14 +245,16 @@ export function MarkdownImage(props: ImageDecoratorProps) {
   });
 
   const debouncedScale = debouncedDependent(scale, 60);
-  createEffect(() => {
-    editor()?.update(() => {
-      const node = $getNodeByKey(props.key);
-      if (node && $isImageNode(node)) {
-        node.setScale(debouncedScale(), false);
-      }
-    });
-  });
+  createEffect(
+    on(debouncedScale, (value) => {
+      editor()?.update(() => {
+        const node = $getNodeByKey(props.key);
+        if (node && $isImageNode(node)) {
+          node.setScale(value, false);
+        }
+      });
+    })
+  );
 
   const debouncedSetHover = debounce((state: boolean) => {
     setImageHover(state);
