@@ -122,6 +122,41 @@ pub trait NotificationRepository: Send + Sync + 'static {
         limit: u32,
         cursor: Query<Uuid, CreatedAt, ()>,
     ) -> impl Future<Output = Result<Vec<UserNotificationRow<T>>, Report>> + Send;
+
+    /// Get a user's active notifications filtered by event item IDs, with cursor-based pagination.
+    ///
+    /// Only returns notifications that are not deleted and not done,
+    /// matching one of the provided `event_item_ids`.
+    fn get_user_notifications_by_event_item_ids<T: DeserializeOwned + Send>(
+        &self,
+        user_id: &str,
+        event_item_ids: &[Uuid],
+        limit: u32,
+        cursor: Query<Uuid, CreatedAt, ()>,
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<T>>, Report>> + Send;
+
+    /// Get a single user notification by ID.
+    ///
+    /// Returns `None` if no active (non-deleted) notification exists for the given user and ID.
+    fn get_user_notification_by_id<T: DeserializeOwned + Send>(
+        &self,
+        user_id: &str,
+        notification_id: Uuid,
+    ) -> impl Future<Output = Result<Option<UserNotificationRow<T>>, Report>> + Send;
+
+    /// Soft-delete a single user notification.
+    fn delete_user_notification(
+        &self,
+        user_id: &str,
+        notification_id: Uuid,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Soft-delete multiple user notifications.
+    fn bulk_delete_user_notifications(
+        &self,
+        user_id: &str,
+        notification_ids: &[Uuid],
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 /// Port for WebSocket delivery via connection gateway.

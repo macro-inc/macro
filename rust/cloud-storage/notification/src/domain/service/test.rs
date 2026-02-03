@@ -226,6 +226,40 @@ impl NotificationRepository for MockRepository {
     ) -> Result<Vec<UserNotificationRow<T>>, Report> {
         Ok(vec![])
     }
+
+    async fn get_user_notifications_by_event_item_ids<T: DeserializeOwned + Send>(
+        &self,
+        _user_id: &str,
+        _event_item_ids: &[Uuid],
+        _limit: u32,
+        _cursor: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
+    ) -> Result<Vec<UserNotificationRow<T>>, Report> {
+        Ok(vec![])
+    }
+
+    async fn get_user_notification_by_id<T: DeserializeOwned + Send>(
+        &self,
+        _user_id: &str,
+        _notification_id: Uuid,
+    ) -> Result<Option<UserNotificationRow<T>>, Report> {
+        Ok(None)
+    }
+
+    async fn delete_user_notification(
+        &self,
+        _user_id: &str,
+        _notification_id: Uuid,
+    ) -> Result<(), Report> {
+        Ok(())
+    }
+
+    async fn bulk_delete_user_notifications(
+        &self,
+        _user_id: &str,
+        _notification_ids: &[Uuid],
+    ) -> Result<(), Report> {
+        Ok(())
+    }
 }
 
 impl NotificationRepository for std::sync::Arc<MockRepository> {
@@ -307,6 +341,48 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
     ) -> Result<Vec<UserNotificationRow<T>>, Report> {
         (**self)
             .get_user_notifications(user_id, limit, cursor)
+            .await
+    }
+
+    async fn get_user_notifications_by_event_item_ids<T: DeserializeOwned + Send>(
+        &self,
+        user_id: &str,
+        event_item_ids: &[Uuid],
+        limit: u32,
+        cursor: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
+    ) -> Result<Vec<UserNotificationRow<T>>, Report> {
+        (**self)
+            .get_user_notifications_by_event_item_ids(user_id, event_item_ids, limit, cursor)
+            .await
+    }
+
+    async fn get_user_notification_by_id<T: DeserializeOwned + Send>(
+        &self,
+        user_id: &str,
+        notification_id: Uuid,
+    ) -> Result<Option<UserNotificationRow<T>>, Report> {
+        (**self)
+            .get_user_notification_by_id(user_id, notification_id)
+            .await
+    }
+
+    async fn delete_user_notification(
+        &self,
+        user_id: &str,
+        notification_id: Uuid,
+    ) -> Result<(), Report> {
+        (**self)
+            .delete_user_notification(user_id, notification_id)
+            .await
+    }
+
+    async fn bulk_delete_user_notifications(
+        &self,
+        user_id: &str,
+        notification_ids: &[Uuid],
+    ) -> Result<(), Report> {
+        (**self)
+            .bulk_delete_user_notifications(user_id, notification_ids)
             .await
     }
 }

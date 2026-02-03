@@ -9,7 +9,9 @@ use crate::domain::models::queue_message::{
     APNSTargets, ClearPushIdentifier, ConnGatewayNotification, EmailNotification, Node,
     NotificationChannel, QueueMessage,
 };
-use crate::domain::models::request::{NotificationStatus, UpdateNotificationsRequest};
+use crate::domain::models::request::{
+    GetNotificationsByEventItemIdsRequest, NotificationStatus, UpdateNotificationsRequest,
+};
 use crate::domain::models::{
     DeviceEndpoint, Notification, NotificationResult, SendNotificationRequest, UserNotificationRow,
 };
@@ -36,7 +38,7 @@ pub trait NotificationIngress: Send + Sync + 'static {
     fn update_notifications(
         &self,
         req: UpdateNotificationsRequest,
-    ) -> impl Future<Output = Result<(), Report<SendNotificationError>>> + Send;
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 
     /// Get a user's active notifications, paginated.
     ///
@@ -47,9 +49,34 @@ pub trait NotificationIngress: Send + Sync + 'static {
         user_id: &str,
         limit: Option<u32>,
         cursor: Query<Uuid, CreatedAt, ()>,
-    ) -> impl Future<
-        Output = Result<Paginated<UserNotificationRow<T>, String>, Report<SendNotificationError>>,
-    > + Send;
+    ) -> impl Future<Output = Result<Paginated<UserNotificationRow<T>, String>, Report>> + Send;
+
+    /// Get a user's active notifications filtered by event item IDs, paginated.
+    fn get_user_notifications_by_event_item_ids<T: DeserializeOwned + Send>(
+        &self,
+        req: GetNotificationsByEventItemIdsRequest<'_>,
+    ) -> impl Future<Output = Result<Paginated<UserNotificationRow<T>, String>, Report>> + Send;
+
+    /// Get a single user notification by ID.
+    fn get_user_notification_by_id<T: DeserializeOwned + Send>(
+        &self,
+        user_id: &str,
+        notification_id: Uuid,
+    ) -> impl Future<Output = Result<Option<UserNotificationRow<T>>, Report>> + Send;
+
+    /// Soft-delete a single user notification.
+    fn delete_user_notification(
+        &self,
+        user_id: &str,
+        notification_id: Uuid,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Soft-delete multiple user notifications.
+    fn bulk_delete_user_notifications(
+        &self,
+        user_id: &str,
+        notification_ids: &[Uuid],
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 /// Service for sending notifications (ingress side).
@@ -79,19 +106,17 @@ where
     async fn update_notifications(
         &self,
         req: UpdateNotificationsRequest<'_>,
-    ) -> Result<(), Report<SendNotificationError>> {
+    ) -> Result<(), Report> {
         match &req.status {
             NotificationStatus::Seen => {
                 self.repository
                     .mark_notifications_seen(&req.user_id, req.notification_ids)
-                    .await
-                    .context(SendNotificationError::Other)?;
+                    .await?;
             }
             NotificationStatus::Done(done) => {
                 self.repository
                     .mark_notifications_done(&req.user_id, req.notification_ids, *done)
-                    .await
-                    .context(SendNotificationError::Other)?;
+                    .await?;
             }
         }
 
@@ -102,8 +127,7 @@ where
         let notifications_with_keys = self
             .repository
             .get_basic_notifications(req.notification_ids)
-            .await
-            .context(SendNotificationError::Other)?;
+            .await?;
 
         if notifications_with_keys.is_empty() {
             return Ok(());
@@ -112,8 +136,7 @@ where
         let device_endpoints = self
             .repository
             .get_device_endpoints(&[req.user_id.copied()])
-            .await
-            .context(SendNotificationError::Other)?;
+            .await?;
 
         let ios_endpoints: Vec<String> = device_endpoints
             .values()
@@ -159,10 +182,7 @@ where
                 })
                 .collect();
 
-        self.queue
-            .publish(&messages)
-            .await
-            .context(SendNotificationError::Other)?;
+        self.queue.publish(&messages).await?;
 
         Ok(())
     }
@@ -230,14 +250,13 @@ where
         user_id: &str,
         limit: Option<u32>,
         cursor: Query<Uuid, CreatedAt, ()>,
-    ) -> Result<Paginated<UserNotificationRow<T>, String>, Report<SendNotificationError>> {
+    ) -> Result<Paginated<UserNotificationRow<T>, String>, Report> {
         let limit = limit.unwrap_or(20).min(500);
 
         let rows = self
             .repository
             .get_user_notifications::<T>(user_id, limit, cursor)
-            .await
-            .context(SendNotificationError::Other)?;
+            .await?;
 
         let paginated = rows
             .into_iter()
@@ -246,6 +265,65 @@ where
             .type_erase();
 
         Ok(paginated)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_user_notifications_by_event_item_ids<T: DeserializeOwned + Send>(
+        &self,
+        req: GetNotificationsByEventItemIdsRequest<'_>,
+    ) -> Result<Paginated<UserNotificationRow<T>, String>, Report> {
+        let limit = req.limit.unwrap_or(20).min(500);
+
+        let rows = self
+            .repository
+            .get_user_notifications_by_event_item_ids::<T>(
+                req.user_id,
+                req.event_item_ids,
+                limit,
+                req.cursor,
+            )
+            .await?;
+
+        let paginated = rows
+            .into_iter()
+            .paginate_on(limit as usize, CreatedAt)
+            .into_page()
+            .type_erase();
+
+        Ok(paginated)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_user_notification_by_id<T: DeserializeOwned + Send>(
+        &self,
+        user_id: &str,
+        notification_id: Uuid,
+    ) -> Result<Option<UserNotificationRow<T>>, Report> {
+        self.repository
+            .get_user_notification_by_id::<T>(user_id, notification_id)
+            .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn delete_user_notification(
+        &self,
+        user_id: &str,
+        notification_id: Uuid,
+    ) -> Result<(), Report> {
+        self.repository
+            .delete_user_notification(user_id, notification_id)
+            .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn bulk_delete_user_notifications(
+        &self,
+        user_id: &str,
+        notification_ids: &[Uuid],
+    ) -> Result<(), Report> {
+        self.repository
+            .bulk_delete_user_notifications(user_id, notification_ids)
+            .await
     }
 }
 

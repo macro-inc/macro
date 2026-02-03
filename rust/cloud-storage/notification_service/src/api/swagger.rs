@@ -54,6 +54,11 @@ use crate::{
 
                 /// /v2/user_notifications
                 user_notification_v2::list_typed_notifications,
+                user_notification_v2::bulk_get_typed_notifications_by_event_item_ids,
+                user_notification_v2::get_typed_by_event_item_id,
+                user_notification_v2::get_typed_notification_by_id,
+                notification_crate::inbound::http::delete_notification,
+                notification_crate::inbound::http::bulk_delete_notifications,
                 notification_crate::inbound::http::bulk_mark_seen,
                 notification_crate::inbound::http::bulk_mark_done,
                 notification_crate::inbound::http::bulk_mark_undone,
@@ -100,6 +105,7 @@ use crate::{
                         user_notification_v2::NotifEvent,
                         user_notification_v2::ApiUserNotification,
                         user_notification_v2::GetAllUserNotificationsResponse,
+                        notification_crate::inbound::http::BulkGetByEventItemIdsRequest,
                 ),
         ),
         tags(

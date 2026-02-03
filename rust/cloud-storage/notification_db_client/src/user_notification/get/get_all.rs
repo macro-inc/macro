@@ -79,7 +79,7 @@ pub async fn get_all_user_notifications(
 }
 
 /// Gets all the user notifications for a given entity id in a cursor paginated format.
-/// NOTE: This will include "done" notifications but not deleted ones
+/// Only returns notifications that are not deleted and not done.
 #[tracing::instrument(skip(db))]
 pub async fn get_all_user_notifications_by_event_item_ids(
     db: &sqlx::PgPool,
