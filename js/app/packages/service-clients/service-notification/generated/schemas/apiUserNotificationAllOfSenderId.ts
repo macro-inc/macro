@@ -8,4 +8,4 @@
 /**
  * The user who triggered the notification.
  */
-export type ApiUserNotificationSenderId = string | null;
+export type ApiUserNotificationAllOfSenderId = string | null;

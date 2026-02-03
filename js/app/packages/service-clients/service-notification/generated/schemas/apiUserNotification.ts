@@ -5,34 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-import type { ApiUserNotificationSenderId } from './apiUserNotificationSenderId';
+import type { ApiUserNotificationAllOf } from './apiUserNotificationAllOf';
 import type { Entity } from './entity';
-import type { NotifEvent } from './notifEvent';
 
-export interface ApiUserNotification {
-  /** When the notification was created. */
-  createdAt: number;
-  /** When the notification was deleted. */
-  deletedAt: number;
-  /** Whether the notification is marked as done. */
-  done: boolean;
-  /** The entity the notification is about. */
-  entity: Entity;
-  /** The notification ID. */
-  id: string;
-  /** The notification event type string (e.g. "channel_mention").
-TODO make this a new type */
-  notificationEventType: string;
-  /** Deserialized notification metadata. */
-  notificationMetadata: NotifEvent;
-  /** The user who owns this notification. */
-  ownerId: string;
-  /** The user who triggered the notification. */
-  senderId?: ApiUserNotificationSenderId;
-  /** Whether the notification has been sent. */
-  sent: boolean;
-  /** When the notification was last updated. */
-  updatedAt: number;
-  /** When the notification was viewed/seen. */
-  viewedAt: number;
-}
+export type ApiUserNotification = Entity & ApiUserNotificationAllOf;

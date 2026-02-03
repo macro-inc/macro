@@ -979,75 +979,78 @@
   "components": {
     "schemas": {
       "ApiUserNotification": {
-        "type": "object",
-        "required": [
-          "ownerId",
-          "id",
-          "notificationEventType",
-          "entity",
-          "sent",
-          "done",
-          "createdAt",
-          "viewedAt",
-          "updatedAt",
-          "deletedAt",
-          "notificationMetadata"
-        ],
-        "properties": {
-          "createdAt": {
-            "type": "integer",
-            "format": "int64",
-            "description": "When the notification was created."
-          },
-          "deletedAt": {
-            "type": "integer",
-            "format": "int64",
-            "description": "When the notification was deleted."
-          },
-          "done": {
-            "type": "boolean",
-            "description": "Whether the notification is marked as done."
-          },
-          "entity": {
+        "allOf": [
+          {
             "$ref": "#/components/schemas/Entity",
             "description": "The entity the notification is about."
           },
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "The notification ID."
-          },
-          "notificationEventType": {
-            "type": "string",
-            "description": "The notification event type string (e.g. \"channel_mention\").\nTODO make this a new type"
-          },
-          "notificationMetadata": {
-            "$ref": "#/components/schemas/NotifEvent",
-            "description": "Deserialized notification metadata."
-          },
-          "ownerId": {
-            "type": "string",
-            "description": "The user who owns this notification."
-          },
-          "senderId": {
-            "type": ["string", "null"],
-            "description": "The user who triggered the notification."
-          },
-          "sent": {
-            "type": "boolean",
-            "description": "Whether the notification has been sent."
-          },
-          "updatedAt": {
-            "type": "integer",
-            "format": "int64",
-            "description": "When the notification was last updated."
-          },
-          "viewedAt": {
-            "type": "integer",
-            "format": "int64",
-            "description": "When the notification was viewed/seen."
+          {
+            "type": "object",
+            "required": [
+              "ownerId",
+              "id",
+              "notificationEventType",
+              "sent",
+              "done",
+              "createdAt",
+              "viewedAt",
+              "updatedAt",
+              "deletedAt",
+              "notificationMetadata"
+            ],
+            "properties": {
+              "createdAt": {
+                "type": "integer",
+                "format": "int64",
+                "description": "When the notification was created."
+              },
+              "deletedAt": {
+                "type": "integer",
+                "format": "int64",
+                "description": "When the notification was deleted."
+              },
+              "done": {
+                "type": "boolean",
+                "description": "Whether the notification is marked as done."
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The notification ID."
+              },
+              "notificationEventType": {
+                "type": "string",
+                "description": "The notification event type string (e.g. \"channel_mention\").\nTODO make this a new type"
+              },
+              "notificationMetadata": {
+                "$ref": "#/components/schemas/NotifEvent",
+                "description": "Deserialized notification metadata."
+              },
+              "ownerId": {
+                "type": "string",
+                "description": "The user who owns this notification."
+              },
+              "senderId": {
+                "type": ["string", "null"],
+                "description": "The user who triggered the notification."
+              },
+              "sent": {
+                "type": "boolean",
+                "description": "Whether the notification has been sent."
+              },
+              "updatedAt": {
+                "type": "integer",
+                "format": "int64",
+                "description": "When the notification was last updated."
+              },
+              "viewedAt": {
+                "type": "integer",
+                "format": "int64",
+                "description": "When the notification was viewed/seen."
+              }
+            }
           }
-        }
+        ]
       },
       "BulkGetByEventItemIdsRequest": {
         "type": "object",

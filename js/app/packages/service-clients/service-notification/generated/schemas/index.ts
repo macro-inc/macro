@@ -6,7 +6,8 @@
  */
 
 export * from './apiUserNotification';
-export * from './apiUserNotificationSenderId';
+export * from './apiUserNotificationAllOf';
+export * from './apiUserNotificationAllOfSenderId';
 export * from './bulkGetByEventItemIdsRequest';
 export * from './bulkGetTypedNotificationsByEventItemIdsParams';
 export * from './channelInviteMetadata';

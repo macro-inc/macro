@@ -138,6 +138,7 @@ pub struct ApiUserNotification {
     /// TODO make this a new type
     pub notification_event_type: String,
     /// The entity the notification is about.
+    #[serde(flatten)]
     pub entity: Entity<'static>,
     /// Whether the notification has been sent.
     pub sent: bool,
@@ -339,11 +340,11 @@ async fn bulk_get_typed_notifications_by_event_item_ids<
         axum::Json<model_error_response::ErrorResponse<'static>>,
     ),
 > {
-    let axum::Json(response) =
-        ::notification::inbound::http::bulk_get_by_event_item_ids::<S, serde_json::Value>(
-            state, macro_user, query, cursor, body,
-        )
-        .await?;
+    let axum::Json(response) = ::notification::inbound::http::bulk_get_by_event_item_ids::<
+        S,
+        serde_json::Value,
+    >(state, macro_user, query, cursor, body)
+    .await?;
 
     let items = response
         .items
@@ -392,11 +393,11 @@ async fn get_typed_by_event_item_id<S: ::notification::domain::service::Notifica
         axum::Json<model_error_response::ErrorResponse<'static>>,
     ),
 > {
-    let axum::Json(response) =
-        ::notification::inbound::http::get_by_event_item_id::<S, serde_json::Value>(
-            state, macro_user, path, query, cursor,
-        )
-        .await?;
+    let axum::Json(response) = ::notification::inbound::http::get_by_event_item_id::<
+        S,
+        serde_json::Value,
+    >(state, macro_user, path, query, cursor)
+    .await?;
 
     let items = response
         .items
@@ -442,11 +443,11 @@ async fn get_typed_notification_by_id<S: ::notification::domain::service::Notifi
         axum::Json<model_error_response::ErrorResponse<'static>>,
     ),
 > {
-    let axum::Json(row) =
-        ::notification::inbound::http::get_notification_by_id::<S, serde_json::Value>(
-            state, macro_user, path,
-        )
-        .await?;
+    let axum::Json(row) = ::notification::inbound::http::get_notification_by_id::<
+        S,
+        serde_json::Value,
+    >(state, macro_user, path)
+    .await?;
 
     let typed = to_typed_row(row).map_err(|e| {
         tracing::error!(error=?e, "failed to deserialize notification row");
