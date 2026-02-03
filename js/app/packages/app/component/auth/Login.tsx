@@ -1,5 +1,4 @@
 import { useIsAuthenticated } from '@core/auth';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { cn } from '@ui/utils/classname';
 import { setActiveModal } from '@core/signal/activeModal';
 import type { RedirectLocation } from '@core/util/authRedirect';

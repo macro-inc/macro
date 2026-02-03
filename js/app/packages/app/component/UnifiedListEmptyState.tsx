@@ -14,7 +14,6 @@ import Arcanum005 from '@macro-icons/arcanum/arcanum-005.svg';
 import Arcanum006 from '@macro-icons/arcanum/arcanum-006.svg';
 import Arcanum007 from '@macro-icons/arcanum/arcanum-007.svg';
 import Arcanum009 from '@macro-icons/arcanum/arcanum-009.svg';
-import { cn } from '@ui/utils/classname';
 
 false && fileSelector;
 false && folderSelector;

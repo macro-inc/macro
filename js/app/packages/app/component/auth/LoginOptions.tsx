@@ -17,7 +17,7 @@ function LoginOption(props: {
 }) {
   return (
     <div
-      onClick={(e) => {
+      onClick={(_e) => {
         if (isTouchDevice()) return;
         props.onClick();
       }}
