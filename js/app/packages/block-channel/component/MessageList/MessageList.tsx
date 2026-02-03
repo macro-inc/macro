@@ -52,6 +52,7 @@ import type { ScrollToIndexOpts } from 'virtua/unstable_core';
 import { MessageContainer } from '../Message/MessageContainer';
 import { ReplyInputsPortaler } from '../ReplyInputsPortaler';
 import type { MessageListContext } from '@block-channel/utils/listContext';
+import { match } from 'ts-pattern';
 
 false && observedSize;
 
@@ -216,27 +217,18 @@ export function MessageList(props: MessageListProps) {
     const visibleTop = currentOffset;
     const visibleBottom = currentOffset + handle.viewportSize;
 
-    let nextOffset: number | undefined;
-
-    switch (align) {
-      case 'start':
-        nextOffset = targetTop;
-        break;
-      case 'end':
-        nextOffset = targetBottom - handle.viewportSize;
-        break;
-      case 'center':
-        nextOffset =
-          targetTop - (handle.viewportSize - targetBounds.height) / 2;
-        break;
-      default:
+    const nextOffset = match(align)
+      .with('start', () => targetTop)
+      .with('end', () => targetBottom - handle.viewportSize)
+      .with('center', () => targetTop - (handle.viewportSize - targetBounds.height) / 2)
+      .otherwise(() => {
         if (targetTop < visibleTop) {
-          nextOffset = targetTop;
+          return targetTop;
         } else if (targetBottom > visibleBottom) {
-          nextOffset = targetBottom - handle.viewportSize;
+          return targetBottom - handle.viewportSize;
         }
-        break;
-    }
+        return undefined;
+      });
 
     if (nextOffset !== undefined) {
       handle.scrollTo(nextOffset);
@@ -893,16 +885,11 @@ function MessageListImpl(props: MessageListProps) {
     const threadState = createMemo(() =>
       listContext.getThreadState(row().message.id)
     );
-    const isThreadExpanded = createMemo(
-      () => threadState()?.threadExpanded === true
-    );
-    const parentIndex = createMemo(
-      () => messageListContext[row().id]?.index ?? 0
-    );
+    const isThreadExpanded = () => threadState()?.threadExpanded === true;
+    const parentIndex = () => messageListContext[row().id]?.index ?? 0;
     const parentDefaultContext = createDefaultMessageListContext(parentIndex);
-    const parentContext = createMemo(
-      () => messageListContext[row().id] ?? parentDefaultContext()
-    );
+    const parentContext = () =>
+      messageListContext[row().id] ?? parentDefaultContext();
 
     const renderThreadChild = (child: Message) => {
       const childId = () => child.id;

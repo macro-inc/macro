@@ -52,13 +52,11 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
 
   const onSend = (threadId: string) => async (args: SendMessageArgs) => {
     clearDraftMessage(props.channelId, threadId);
-    // Close the reply input optimistically before awaiting the mutation
     listContext.closeThreadReply(threadId, true);
 
     try {
       await sendMessage({ ...args, threadId });
     } catch {
-      // Re-open the reply input if the mutation failed (message rollback is handled by the mutation)
       listContext.createReply(threadId, true);
       return;
     }
