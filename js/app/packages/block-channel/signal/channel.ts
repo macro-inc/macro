@@ -1,4 +1,3 @@
-import type { ChannelData } from '@block-channel/definition';
 import {
   type InputAttachment,
   isStaticAttachmentType,
@@ -11,25 +10,6 @@ import type { SimpleMention } from '@service-comms/generated/models/simpleMentio
 import { useUserId } from '@core/context/user';
 import { blockNameToItemType } from '@service-storage/client';
 import type { Accessor } from 'solid-js';
-
-export function isValidChannelData(
-  data: ChannelData
-): data is Required<ChannelData> {
-  if (!data.channel) return false;
-  if (!data.channel.id) return false;
-  if (!data.participants) return false;
-  return true;
-}
-
-export function doesChannelRequireJoin(
-  data: Required<ChannelData>,
-  userId: string
-) {
-  return (
-    data.channel.channel_type === 'public' &&
-    data.participants.find((p) => p.user_id === userId) === undefined
-  );
-}
 
 function isMessageSendable(
   content: string | undefined,

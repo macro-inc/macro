@@ -1,6 +1,8 @@
 import { createAssertedContextProvider } from '@core/context/createContext';
-import { useChannelQuery } from '@queries/channel/channel';
-import { channelQueryOptions } from '@queries/channel/channel';
+import {
+  channelQueryOptions,
+  useChannelQuery,
+} from '@queries/channel/channel';
 import { useQueryClient } from '@queries/client';
 import {
   getThreadMessages,
@@ -43,19 +45,13 @@ export const [ChannelContextProvider, useChannelContext] =
           queryClient.prefetchQuery(channelQueryOptions(channelId));
         })
       );
-      const channelType = createMemo(
-        () => channelQuery.data.channel.channel_type
-      );
-      const channelName = createMemo(
-        () => channelQuery.data?.channel?.name ?? ''
-      );
       const channel = createMemo(() => channelQuery.data);
-      const messages = createMemo(() => getTopLevelMessages(channelQuery.data));
-      const threads = createMemo(() => getThreadMessages(channelQuery.data));
-      const reactions = createMemo(() => channelQuery.data?.reactions ?? {});
-      const attachments = createMemo(
-        () => channelQuery.data?.attachments ?? []
-      );
+      const channelType = createMemo(() => channel().channel.channel_type);
+      const channelName = createMemo(() => channel().channel.name ?? '');
+      const messages = createMemo(() => getTopLevelMessages(channel()));
+      const threads = createMemo(() => getThreadMessages(channel()));
+      const reactions = createMemo(() => channel().reactions ?? {});
+      const attachments = createMemo(() => channel().attachments ?? []);
 
       const messageSenderMap = createMemo(() => {
         const all = [...messages(), ...Object.values(threads()).flat()];
@@ -63,14 +59,14 @@ export const [ChannelContextProvider, useChannelContext] =
       });
 
       return {
-        channel: channel,
+        channel,
         channelName,
+        channelType,
         messages,
         threads,
         reactions,
         attachments,
         messageSenderMap,
-        channelType,
       };
     }
   );

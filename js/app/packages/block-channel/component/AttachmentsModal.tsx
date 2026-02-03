@@ -31,15 +31,12 @@ export function AttachmentsModal() {
   const mentionsQuery = useMentionsQuery(() => currentBlockId);
 
   const attachments = createMemo(() => {
-    const mentions: Attachment[] = (() => {
-      if (mentionsQuery.isLoading || mentionsQuery.isError) return [];
-
-      const mentions = (mentionsQuery.data?.mentions ?? []).map((m) =>
-        makeAttachmentFromMention(m, currentBlockId)
-      );
-
-      return mentions;
-    })();
+    const mentions: Attachment[] =
+      mentionsQuery.isLoading || mentionsQuery.isError
+        ? []
+        : (mentionsQuery.data?.mentions ?? []).map((m) =>
+            makeAttachmentFromMention(m, currentBlockId)
+          );
 
     const channelAttachments = channelContext.attachments() ?? [];
     const safeAttachments = filterSafeAttachments(channelAttachments);

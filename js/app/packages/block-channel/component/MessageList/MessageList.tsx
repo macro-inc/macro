@@ -55,6 +55,22 @@ import type { MessageListContext } from '@block-channel/utils/listContext';
 
 false && observedSize;
 
+type ThreadRow = {
+  id: string;
+  message: Message;
+  children: Message[];
+};
+
+type MessageListItemProps = {
+  message: Message;
+  index: Accessor<number>;
+  listContext: MessageListContext;
+  isFocused: boolean;
+  isTarget: boolean;
+  threadChildren?: Message[];
+  threadSiblings?: Message[];
+};
+
 // The size of a message with a profile picture and a one line message
 const BASE_ITEM_SIZE = 50;
 
@@ -95,8 +111,12 @@ const MessageListContentContext =
 
 export const useMessageListContext = () => {
   const context = useContext(MessageListContentContext);
-
-  return context!;
+  if (!context) {
+    throw new Error(
+      'useMessageListContext must be used within MessageListContentContext.Provider'
+    );
+  }
+  return context;
 };
 
 export type TargetMessageInfo = { messageId: string; threadId?: string };
@@ -641,24 +661,8 @@ function MessageListImpl(props: MessageListProps) {
     return currentTypingId;
   });
 
-  type ThreadRow = {
-    id: string;
-    message: Message;
-    children: Message[];
-  };
-
-  type MessageListItemProps = {
-    message: Message;
-    index: Accessor<number>;
-    listContext: MessageListContext;
-    isFocused: boolean;
-    isTarget: boolean;
-    threadChildren?: Message[];
-    threadSiblings?: Message[];
-  };
-
   const threadRows = createMemo<ThreadRow[]>(() => {
-    const list = filteredTopLevelMessages() ?? [];
+    const list = filteredTopLevelMessages();
     const out: ThreadRow[] = [];
     for (let i = list.length - 1; i >= 0; i--) {
       const message = list[i];
@@ -675,7 +679,7 @@ function MessageListImpl(props: MessageListProps) {
 
   // Ensure thread view store store reflects drafts. Only sets when no entry exists to avoid overriding user actions.
   createEffect(() => {
-    const base = filteredTopLevelMessages() ?? [];
+    const base = filteredTopLevelMessages();
     for (const message of base) {
       const hasDraft = !!loadDraftMessage(message.channel_id, message.id);
       const threadDetails = listContext.getThreadState(message.id);
@@ -689,7 +693,7 @@ function MessageListImpl(props: MessageListProps) {
   // Criteria: thread has an active reply, so keep its parent row mounted.
   // NOTE: VList receives reversed top-level rows, so indices must be normalized.
   const keepMountedIndices = createMemo(() => {
-    const list = filteredTopLevelMessages() ?? [];
+    const list = filteredTopLevelMessages();
     const length = list.length;
     const indices: number[] = [];
     for (let i = 0; i < length; i++) {
@@ -719,7 +723,7 @@ function MessageListImpl(props: MessageListProps) {
   });
 
   const lastMessageThread = createMemo(() => {
-    const base = filteredTopLevelMessages() ?? [];
+    const base = filteredTopLevelMessages();
     const lastTopLevelId = base[base.length - 1]?.id;
     return viewThreads[lastTopLevelId];
   });
@@ -994,7 +998,7 @@ function MessageListImpl(props: MessageListProps) {
               }}
               class="scrollbar-hidden [&>div]:mb-auto"
               data-channel-message-list
-              data={threadRows() ?? []}
+              data={threadRows()}
               shift={isPrepend()}
               itemSize={BASE_ITEM_SIZE}
               bufferSize={10 * BASE_ITEM_SIZE}
