@@ -31,114 +31,103 @@ export interface NotificationMetadataByType {
 export type UnifiedNotificationMetadata =
   NotificationMetadataByType[keyof NotificationMetadataByType];
 
+/**
+ * A notification with a specific event type.
+ * Use `getMetadata(notification)` to access the typed metadata content.
+ */
 export type TypedNotification<
   T extends NotificationEventType = NotificationEventType,
-> = {
-  [K in T]: Omit<
-    UnifiedNotification,
-    'notificationEventType' | 'notificationMetadata'
-  > & {
-    notificationEventType: K;
-    notificationMetadata: K extends keyof NotificationMetadataByType
-      ? NotificationMetadataByType[K]
-      : never;
-  };
-}[T];
+> = UnifiedNotification & {
+  notificationEventType: T;
+};
+
+/**
+ * Extract the typed metadata content from a notification.
+ * The API returns notificationMetadata in { tag, content } format - this extracts the content.
+ */
+export function getMetadata<T extends NotificationEventType>(
+  n: TypedNotification<T>
+): T extends keyof NotificationMetadataByType
+  ? NotificationMetadataByType[T]
+  : never {
+  // The notificationMetadata is { tag, content } format from the API
+  const metadata = n.notificationMetadata as { tag: string; content: unknown };
+  return metadata.content as T extends keyof NotificationMetadataByType
+    ? NotificationMetadataByType[T]
+    : never;
+}
+
+function isNotificationType<T extends NotificationEventType>(
+  n: UnifiedNotification,
+  type: T
+): n is TypedNotification<T> {
+  return n.notificationEventType === type;
+}
 
 export function isItemSharedUser(
   n: UnifiedNotification
 ): n is TypedNotification<'item_shared_user'> {
-  return (
-    'notificationEventType' in n &&
-    n.notificationEventType === 'item_shared_user'
-  );
+  return isNotificationType(n, 'item_shared_user');
 }
 
 export function isItemSharedOrganization(
   n: UnifiedNotification
 ): n is TypedNotification<'item_shared_organization'> {
-  return (
-    'notificationEventType' in n &&
-    n.notificationEventType === 'item_shared_organization'
-  );
+  return isNotificationType(n, 'item_shared_organization');
 }
 
 export function isChannelMention(
   n: UnifiedNotification
 ): n is TypedNotification<'channel_mention'> {
-  return (
-    'notificationEventType' in n &&
-    n.notificationEventType === 'channel_mention'
-  );
+  return isNotificationType(n, 'channel_mention');
 }
 
 export function isDocumentMention(
   n: UnifiedNotification
 ): n is TypedNotification<'document_mention'> {
-  return (
-    'notificationEventType' in n &&
-    n.notificationEventType === 'document_mention'
-  );
+  return isNotificationType(n, 'document_mention');
 }
 
 export function isChannelInvite(
   n: UnifiedNotification
 ): n is TypedNotification<'channel_invite'> {
-  return (
-    'notificationEventType' in n && n.notificationEventType === 'channel_invite'
-  );
+  return isNotificationType(n, 'channel_invite');
 }
 
 export function isChannelMessageSend(
   n: UnifiedNotification
 ): n is TypedNotification<'channel_message_send'> {
-  return (
-    'notificationEventType' in n &&
-    n.notificationEventType === 'channel_message_send'
-  );
+  return isNotificationType(n, 'channel_message_send');
 }
 
 export function isChannelMessageReply(
   n: UnifiedNotification
 ): n is TypedNotification<'channel_message_reply'> {
-  return (
-    'notificationEventType' in n &&
-    n.notificationEventType === 'channel_message_reply'
-  );
+  return isNotificationType(n, 'channel_message_reply');
 }
 
 export function isChannelMessageDocument(
   n: UnifiedNotification
 ): n is TypedNotification<'channel_message_document'> {
-  return (
-    'notificationEventType' in n &&
-    n.notificationEventType === 'channel_message_document'
-  );
+  return isNotificationType(n, 'channel_message_document');
 }
 
 export function isNewEmail(
   n: UnifiedNotification
 ): n is TypedNotification<'new_email'> {
-  return (
-    'notificationEventType' in n && n.notificationEventType === 'new_email'
-  );
+  return isNotificationType(n, 'new_email');
 }
 
 export function isInviteToTeam(
   n: UnifiedNotification
 ): n is TypedNotification<'invite_to_team'> {
-  return (
-    'notificationEventType' in n && n.notificationEventType === 'invite_to_team'
-  );
+  return isNotificationType(n, 'invite_to_team');
 }
 
 export function isRejectTeamInvite(
   n: UnifiedNotification
 ): n is TypedNotification<'reject_team_invite'> {
-  return (
-    'notificationEventType' in n &&
-    n.notificationEventType === 'reject_team_invite'
-  );
+  return isNotificationType(n, 'reject_team_invite');
 }
 
 export function extractMetadata<T extends NotificationEventType>(

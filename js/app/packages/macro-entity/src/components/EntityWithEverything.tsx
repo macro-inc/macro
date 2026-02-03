@@ -13,6 +13,7 @@ import ChatIcon from '@icon/regular/chat.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import {
   getAllNotificationsFromGroup,
+  getMetadata,
   getMostRecentNotification,
   isChannelMessageReply,
   type NotificationStack,
@@ -337,9 +338,9 @@ function NotificationRow(props: {
       return '';
     }
 
-    const metadata = tryToTypedNotification(
-      props.notification
-    )?.notificationMetadata;
+    const typed = tryToTypedNotification(props.notification);
+    if (!typed) return '';
+    const metadata = getMetadata(typed);
     if (
       !metadata ||
       !('messageContent' in metadata) ||
@@ -347,9 +348,10 @@ function NotificationRow(props: {
     )
       return '';
 
+    const content = metadata.messageContent;
     return (
       <Show
-        when={metadata.messageContent.trim()}
+        when={content?.trim()}
         fallback={<span class="italic text-ink-disabled">Attached items</span>}
       >
         {(content) => (
@@ -435,9 +437,14 @@ function StackedNotificationRow(props: {
   );
 
   const messageContent = createMemo(() => {
-    const metadata = mostRecent()?.notificationMetadata;
+    const notification = mostRecent();
+    if (!notification) return '';
+    const typed = tryToTypedNotification(notification);
+    if (!typed) return '';
+    const metadata = getMetadata(typed);
     if (metadata && 'messageContent' in metadata) {
-      return metadata.messageContent?.trim() ?? '';
+      const content = metadata.messageContent as string | null | undefined;
+      return content?.trim() ?? '';
     }
     return '';
   });
@@ -533,9 +540,11 @@ function StackedRepliesRow(props: {
     const notification = props.group.notifications[0];
     if (!notification) return '';
     const typed = tryToTypedNotification(notification);
-    if (!typed || !isChannelMessageReply(typed) || !typed.notificationMetadata)
-      return '';
-    return typed.notificationMetadata.threadParentSenderId ?? '';
+    if (!typed || !isChannelMessageReply(typed)) return '';
+    const metadata = getMetadata(
+      typed as TypedNotification<'channel_message_reply'>
+    );
+    return metadata?.threadParentSenderId ?? '';
   };
 
   const { firstName } = useDisplayNameParts(tryMacroId(threadParentSenderId()));

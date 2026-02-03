@@ -12,12 +12,12 @@ import {
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import { z } from 'zod';
 import type {
-  BulkGetUserNotificationsByEventItemIdRequest,
+  BulkGetByEventItemIdsRequest,
   GetAllUserNotificationsResponse,
 } from './generated/schemas';
+import type { ApiUserNotification } from './generated/schemas/apiUserNotification';
 import type { DeviceRequest } from './generated/schemas/deviceRequest';
 import type { NotificationBulkRequest } from './generated/schemas/notificationBulkRequest';
-import type { UserNotification } from './generated/schemas/userNotification';
 import type { UserUnsubscribe } from './generated/schemas/userUnsubscribe';
 
 const notificationHost: string = SERVER_HOSTS['notification-service'];
@@ -33,7 +33,7 @@ export type IncomingNotification = {
 type WithEventItemId = { event_item_id: string };
 type WithItem = { item_id: string; item_type: string };
 
-export type UnifiedNotification = Omit<UserNotification, 'ownerId'> & {
+export type UnifiedNotification = Omit<ApiUserNotification, 'ownerId'> & {
   senderId?: string | null;
   // whether the notification is incoming on the websocket and needs processing
   // as opposed to coming from the database or an already processed notification
@@ -108,7 +108,7 @@ export const notificationServiceClient = {
   },
   async getUserNotificationById(notificationId: string) {
     return mapOk(
-      await notificationFetch<UserNotification>(
+      await notificationFetch<ApiUserNotification>(
         `/user_notifications/${notificationId}`,
         { method: 'GET' }
       ),
@@ -116,7 +116,7 @@ export const notificationServiceClient = {
     );
   },
   async bulkGetUserNotificationsByEventItemId(
-    args: NotificationParams & BulkGetUserNotificationsByEventItemIdRequest
+    args: NotificationParams & BulkGetByEventItemIdsRequest
   ) {
     const { limit, cursor } = args;
     return mapOk(
