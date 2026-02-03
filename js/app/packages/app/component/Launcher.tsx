@@ -20,18 +20,14 @@ import { createControlledOpenSignal } from '@core/util/createControlledOpenSigna
 import { isErr, ok } from '@core/util/maybeResult';
 import { Dialog } from '@kobalte/core/dialog';
 import PixelArrowRight from '@macro-icons/pixel/arrow-right.svg';
-import WideChat from '@macro-icons/wide/chat.svg';
-import WideDiagram from '@macro-icons/wide/diagram.svg';
-import WideEmail from '@macro-icons/wide/email.svg';
-import WideFileCode from '@macro-icons/wide/file-code.svg';
-import WideFileMd from '@macro-icons/wide/file-md.svg';
 import { ChatIcon } from '@macro-icons/wide/animating/chat';
+import { DiagramIcon } from '@macro-icons/wide/animating/diagram';
+import { EmailIcon } from '@macro-icons/wide/animating/email';
+import { FileCodeIcon } from '@macro-icons/wide/animating/fileCode';
 import { FileMdIcon } from '@macro-icons/wide/animating/fileMd';
+import { FolderIcon } from '@macro-icons/wide/animating/folder';
 import { StarIcon } from '@macro-icons/wide/animating/star';
 import { TaskIcon } from '@macro-icons/wide/animating/task';
-import WideFolder from '@macro-icons/wide/folder.svg';
-import WideStar from '@macro-icons/wide/star.svg';
-import WideTask from '@macro-icons/wide/task.svg';
 import { createProject } from '@queries/storage/projects';
 import { createEffect, createSignal, For, onMount, Show } from 'solid-js';
 import { type FocusableElement, tabbable } from 'tabbable';
@@ -153,7 +149,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     : []),
   {
     label: 'Email',
-    icon: (props?) => <WideEmail />,
+    icon: (props?) => <EmailIcon {...props} />,
     description: 'Create email',
     blockName: 'email',
     hotkeyToken: TOKENS.create.email,
@@ -208,7 +204,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'Canvas',
-    icon: (props?) => <WideDiagram />,
+    icon: (props?) => <DiagramIcon {...props} />,
     description: 'Create canvas',
     blockName: 'canvas',
     hotkeyToken: TOKENS.create.canvas,
@@ -234,7 +230,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'Folder',
-    icon: (props?) => <WideFolder />,
+    icon: (props?) => <FolderIcon {...props} />,
     description: 'Create folder',
     blockName: 'project',
     hotkeyToken: TOKENS.create.project,
@@ -251,7 +247,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'Code',
-    icon: (props?) => <WideFileCode />,
+    icon: (props?) => <FileCodeIcon {...props} />,
     description: 'Create code file',
     blockName: 'code',
     hotkeyToken: TOKENS.create.code,

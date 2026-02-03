@@ -1,15 +1,15 @@
 export const ChatIcon = (props: { triggerAnimation?: boolean }) => {
   return (
     <svg
-      width="100%" 
-      height="100%" 
+      width="100%"
+      height="100%"
       viewBox="0 -4 24 24"
-      fill="currentColor" 
-      stroke="none" 
+      fill="currentColor"
+      stroke="none"
       xmlns="http://www.w3.org/2000/svg"
       class={props.triggerAnimation ? 'animating' : ''}
     >
-      <title>Animated task icon</title>
+      <title>Animated chat icon</title>
       <style>{`
         @keyframes dot-bounce {
           0% {
@@ -44,11 +44,11 @@ export const ChatIcon = (props: { triggerAnimation?: boolean }) => {
           animation: dot-bounce .2s 0.4s;
         }
       `}</style>
-      <path d="M23 0H2V2H22V14H24V1C24 0.453333 23.5467 0 23 0Z"/>
-      <path d="M2 2H0V15C0 15.5467 0.453333 16 1 16H20L22 18V14H2V2Z"/>
-      <path class="dot-2" d="M13 7H11V9H13V7Z"/>
-      <path class="dot-3" d="M17 7H15V9H17V7Z"/>
-      <path class="dot-1" d="M9 7H7V9H9V7Z"/>
+      <path d="M23 0H2V2H22V14H24V1C24 0.453333 23.5467 0 23 0Z" />
+      <path d="M2 2H0V15C0 15.5467 0.453333 16 1 16H20L22 18V14H2V2Z" />
+      <path class="dot-2" d="M13 7H11V9H13V7Z" />
+      <path class="dot-3" d="M17 7H15V9H17V7Z" />
+      <path class="dot-1" d="M9 7H7V9H9V7Z" />
     </svg>
   );
 };
