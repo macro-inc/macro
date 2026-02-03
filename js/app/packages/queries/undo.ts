@@ -87,7 +87,9 @@ export const [MutationUndoProvider, useMutationUndoContext] =
             callbacks?.onSuccess?.();
           } catch (err) {
             setUndoStack((prev) => [...prev, entry]);
-            callbacks?.onError?.(err instanceof Error ? err : new Error(String(err)));
+            callbacks?.onError?.(
+              err instanceof Error ? err : new Error(String(err))
+            );
           } finally {
             callbacks?.onSettled?.();
           }
@@ -107,7 +109,9 @@ export const [MutationUndoProvider, useMutationUndoContext] =
             callbacks?.onSuccess?.();
           } catch (err) {
             setRedoStack((prev) => [...prev, entry]);
-            callbacks?.onError?.(err instanceof Error ? err : new Error(String(err)));
+            callbacks?.onError?.(
+              err instanceof Error ? err : new Error(String(err))
+            );
           } finally {
             callbacks?.onSettled?.();
           }
