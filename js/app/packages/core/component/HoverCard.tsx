@@ -65,9 +65,15 @@ export function HoverCard(props: HoverCardComponentProps) {
   });
 
   const handleOpenChange = (open: boolean) => {
+    if (!open && nestedOpenCount() > 0) {
+      return;
+    }
+
     setIsHoverCardOpen(open);
     props.onOpenChange?.(open);
   };
+
+  const shouldForceMount = () => nestedOpenCount() > 0;
 
   return (
     <KobalteHoverCard
@@ -83,7 +89,7 @@ export function HoverCard(props: HoverCardComponentProps) {
       gutter={props.gutter ?? 8}
       open={isHoverCardOpen()}
       onOpenChange={handleOpenChange}
-      forceMount={nestedOpenCount() > 0}
+      forceMount={shouldForceMount()}
     >
       <KobalteHoverCard.Trigger as="span" disabled={props.disabled}>
         {props.trigger}
