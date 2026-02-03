@@ -1,9 +1,6 @@
 import type { ThemeMentionDecoratorProps, ThemeV1 } from '@lexical-core';
-import {
-  setUserThemes,
-  userThemes,
-} from '../../../../../block-theme/signals/themeSignals';
-import { applyTheme } from '../../../../../block-theme/utils/themeUtils';
+import { setUserThemes, userThemes } from '@block-theme/signals/themeSignals';
+import { applyTheme } from '@block-theme/utils/themeUtils';
 import { useSettingsState } from '@core/constant/SettingsState';
 
 export function ThemeMention(props: ThemeMentionDecoratorProps) {
