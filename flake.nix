@@ -42,6 +42,7 @@
           nodejs_24
           pulumi
           pulumiPackages.pulumi-nodejs
+          sops
           biome
           jq
           stripe-cli
@@ -58,27 +59,34 @@
             ]
           )
         ];
-        libraries = with pkgs; [
-          openssl
-          glib
-          libclang
-        ] ++ pkgs.lib.optionals isLinux [
-          glibc.dev
-          gcc
-        ] ++ pkgs.lib.optionals isDarwin [
-          libiconv
-        ];
+        libraries =
+          with pkgs;
+          [
+            openssl
+            glib
+            libclang
+          ]
+          ++ pkgs.lib.optionals isLinux [
+            glibc.dev
+            gcc
+          ]
+          ++ pkgs.lib.optionals isDarwin [
+            libiconv
+          ];
       in
       {
-        devShell = pkgs.mkShell ({
-          buildInputs = packages ++ libraries;
-          PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
-          LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
-          SOPS_KMS_ARN = "arn:aws:kms:us-east-1:569036502058:key/mrk-cab29bf948044eb79005a81f48d40e93,arn:aws:kms:us-west-1:569036502058:key/mrk-cab29bf948044eb79005a81f48d40e93";
-        } // pkgs.lib.optionalAttrs isLinux {
-          LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath libraries}";
-          BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.glibc.dev}/include -I${pkgs.gcc.cc}/lib/gcc/${pkgs.stdenv.hostPlatform.config}/${pkgs.gcc.version}/include";
-        });
+        devShell = pkgs.mkShell (
+          {
+            buildInputs = packages ++ libraries;
+            PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
+            LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
+            SOPS_KMS_ARN = "arn:aws:kms:us-east-1:569036502058:key/mrk-cab29bf948044eb79005a81f48d40e93,arn:aws:kms:us-west-1:569036502058:key/mrk-cab29bf948044eb79005a81f48d40e93";
+          }
+          // pkgs.lib.optionalAttrs isLinux {
+            LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath libraries}";
+            BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.glibc.dev}/include -I${pkgs.gcc.cc}/lib/gcc/${pkgs.stdenv.hostPlatform.config}/${pkgs.gcc.version}/include";
+          }
+        );
       }
     );
 }

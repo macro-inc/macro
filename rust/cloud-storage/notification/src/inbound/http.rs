@@ -64,23 +64,9 @@ impl<S: NotificationIngress> NotificationRouterState<S> {
 pub fn router<S: NotificationIngress, T: Serialize + DeserializeOwned + Send + 'static>()
 -> Router<NotificationRouterState<S>> {
     Router::new()
-        .route("/", get(list_user_notifications::<S, T>))
-        .route(
-            "/item/bulk",
-            post(bulk_get_by_event_item_ids::<S, T>),
-        )
-        .route(
-            "/item/:event_item_id",
-            get(get_by_event_item_id::<S, T>),
-        )
         .route("/bulk/seen", patch(bulk_mark_seen))
         .route("/bulk/done", patch(bulk_mark_done))
         .route("/bulk/undone", patch(bulk_mark_undone))
-        .route("/bulk", delete(bulk_delete_notifications::<S>))
-        .route(
-            "/:notification_id",
-            get(get_notification_by_id::<S, T>).delete(delete_notification::<S>),
-        )
 }
 
 /// the params for pagination
@@ -447,10 +433,7 @@ pub async fn bulk_delete_notifications<S: NotificationIngress>(
 ) -> Result<Json<()>, (StatusCode, Json<ErrorResponse<'static>>)> {
     service
         .inner
-        .bulk_delete_user_notifications(
-            macro_user.macro_user_id.as_ref(),
-            &req.notification_ids,
-        )
+        .bulk_delete_user_notifications(macro_user.macro_user_id.as_ref(), &req.notification_ids)
         .await
         .map_err(|e| {
             tracing::error!(error=?e, "failed to delete user notifications");
