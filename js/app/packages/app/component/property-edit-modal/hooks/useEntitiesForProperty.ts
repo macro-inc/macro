@@ -161,7 +161,22 @@ export function useEntitiesForProperty(
   // search function for fuzzy matching
   const entitySearch = createFreshSearch<CombinedEntity>(
     createEntitySearchConfig(currentUserDomain),
-    getEntitySearchText
+    getEntitySearchText,
+    (item) => item.kind === 'channel',
+    (item) => {
+      switch (item.kind) {
+        case 'item':
+          return {
+            updatedAt: item.data.updatedAt,
+          };
+        case 'channel':
+          return {
+            updatedAt: item.data.updated_at,
+          };
+        default:
+          return {};
+      }
+    }
   );
 
   // get filtered entities based on search query
