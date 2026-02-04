@@ -223,8 +223,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::trace!("initialized notification ingress service");
 
     let permission_checker = PermissionServiceImpl::new(db.clone());
-    let notification_service =
-        NotificationServiceImpl::new(make_notification_ingress());
+    let notification_service = NotificationServiceImpl::new(make_notification_ingress());
     let properties_service = PropertiesServiceImpl::new(
         PropertiesPgRepo::new(db.clone()),
         Some(permission_checker),

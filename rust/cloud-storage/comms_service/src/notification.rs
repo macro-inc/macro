@@ -206,7 +206,11 @@ async fn send_notification_queue_message(
         .recipient_ids
         .unwrap_or_default()
         .into_iter()
-        .filter_map(|id| MacroUserIdStr::parse_from_str(&id).ok().map(|u| u.into_owned()))
+        .filter_map(|id| {
+            MacroUserIdStr::parse_from_str(&id)
+                .ok()
+                .map(|u| u.into_owned())
+        })
         .collect();
 
     match msg.notification_event {
@@ -219,7 +223,10 @@ async fn send_notification_queue_message(
             }
             .into_request()
             .with_conn_gateway();
-            ingress.send_notification(req).await.map_err(|e| anyhow::anyhow!("{e}"))?;
+            ingress
+                .send_notification(req)
+                .await
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
         }
         NotificationEvent::ChannelMessageSend(metadata) => {
             let req = SendNotificationRequestBuilder {
@@ -230,7 +237,10 @@ async fn send_notification_queue_message(
             }
             .into_request()
             .with_conn_gateway();
-            ingress.send_notification(req).await.map_err(|e| anyhow::anyhow!("{e}"))?;
+            ingress
+                .send_notification(req)
+                .await
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
         }
         NotificationEvent::ChannelMention(metadata) => {
             let req = SendNotificationRequestBuilder {
@@ -241,7 +251,10 @@ async fn send_notification_queue_message(
             }
             .into_request()
             .with_conn_gateway();
-            ingress.send_notification(req).await.map_err(|e| anyhow::anyhow!("{e}"))?;
+            ingress
+                .send_notification(req)
+                .await
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
         }
         NotificationEvent::ChannelMessageReply(metadata) => {
             let req = SendNotificationRequestBuilder {
@@ -252,7 +265,10 @@ async fn send_notification_queue_message(
             }
             .into_request()
             .with_conn_gateway();
-            ingress.send_notification(req).await.map_err(|e| anyhow::anyhow!("{e}"))?;
+            ingress
+                .send_notification(req)
+                .await
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
         }
         NotificationEvent::ChannelMessageDocument(ChannelMessageDocumentMetadata(metadata)) => {
             let req = SendNotificationRequestBuilder {
@@ -263,7 +279,10 @@ async fn send_notification_queue_message(
             }
             .into_request()
             .with_conn_gateway();
-            ingress.send_notification(req).await.map_err(|e| anyhow::anyhow!("{e}"))?;
+            ingress
+                .send_notification(req)
+                .await
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
         }
         other => {
             tracing::warn!(?other, "unhandled notification event type in comms_service");

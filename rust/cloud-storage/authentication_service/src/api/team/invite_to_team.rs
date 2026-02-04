@@ -6,7 +6,9 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use macro_user_id::{cowlike::CowLike, email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
+use macro_user_id::{
+    cowlike::CowLike, email::Email, lowercased::Lowercase, user_id::MacroUserIdStr,
+};
 use model_entity::EntityType;
 use model_user::axum_extractor::MacroUserExtractor;
 use notification::domain::models::SendNotificationRequestBuilder;
@@ -182,10 +184,8 @@ pub(in crate::api::team) async fn notify_team_invite(
             role: None,
         };
 
-        let recipient =
-            MacroUserIdStr::try_from_email(team_invite.email.as_ref()).map_err(|e| {
-                anyhow::anyhow!("failed to parse email as macro user id: {}", e)
-            })?;
+        let recipient = MacroUserIdStr::try_from_email(team_invite.email.as_ref())
+            .map_err(|e| anyhow::anyhow!("failed to parse email as macro user id: {}", e))?;
 
         let entity_id = team_invite.team_invite_id.to_string();
         let request = SendNotificationRequestBuilder {

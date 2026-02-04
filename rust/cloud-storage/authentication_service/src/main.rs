@@ -174,12 +174,7 @@ async fn main() -> anyhow::Result<()> {
 
     let notification_repository = DbNotificationRepository::new(db.clone());
     let notification_queue = SqsNotificationQueue::new(
-        aws_sdk_sqs::Client::new(
-            &aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region("us-east-1")
-                .load()
-                .await,
-        ),
+        aws_sdk_sqs::Client::new(&macro_aws_config::get_macro_aws_config().await),
         config.notification_queue.clone(),
     );
     let notification_ingress_service = NotificationIngressService::new(

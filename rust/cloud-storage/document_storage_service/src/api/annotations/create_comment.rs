@@ -53,7 +53,9 @@ pub struct Params {
     )]
 #[axum::debug_handler(state = ApiContext)]
 pub async fn create_comment_handler(
-    State(notification_ingress_service): State<Arc<NotificationIngressService<DbNotificationRepository<PgPool>, SqsNotificationQueue>>>,
+    State(notification_ingress_service): State<
+        Arc<NotificationIngressService<DbNotificationRepository<PgPool>, SqsNotificationQueue>>,
+    >,
     State(db): State<PgPool>,
     State(conn_gateway_client): State<Arc<ConnectionGatewayClient>>,
     Extension(UserContext { user_id, .. }): Extension<UserContext>,

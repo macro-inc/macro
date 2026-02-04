@@ -129,7 +129,7 @@ impl From<&ApiContext> for CommsHandlerState {
             jwt_validation_args: ctx.jwt_validation_args.clone(),
             db: ctx.db.clone(),
             connection_gateway_client: ctx.conn_gateway_client.clone(),
-            macro_notify_client: ctx.macro_notify_client.clone(),
+            notification_ingress_service: ctx.notification_ingress_service.clone(),
             sqs_client: ctx.sqs_client.clone(),
             permissions_token_secret: ctx.permissions_token_secret.clone(),
             frecency_storage: ctx.frecency_storage.clone(),

@@ -12,8 +12,6 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model::contacts::ConnectionsMessage;
 use model_entity::EntityType;
 use model_notifications::NewEmailMetadata;
-use notification::domain::models::SendNotificationRequestBuilder;
-use notification::domain::service::NotificationIngress;
 use models_email::db::address::EmailRecipientType;
 use models_email::email::service;
 use models_email::email::service::link;
@@ -23,6 +21,8 @@ use models_email::gmail::operations::GmailApiOperation;
 use models_email::service::attachment::{AttachmentUploadArgs, AttachmentUploadDestination};
 use models_email::service::message::{Message, is_spam_or_trash};
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use notification::domain::models::SendNotificationRequestBuilder;
+use notification::domain::service::NotificationIngress;
 use std::collections::HashSet;
 use std::result;
 use uuid::Uuid;
@@ -516,13 +516,12 @@ async fn send_notifications(
     };
 
     let macro_id_str = link.macro_id.to_string();
-    let recipient = MacroUserIdStr::parse_from_str(&macro_id_str)
-        .map_err(|e| {
-            ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::InvalidData,
-                source: anyhow::anyhow!("failed to parse macro user id: {}", e),
-            })
-        })?;
+    let recipient = MacroUserIdStr::parse_from_str(&macro_id_str).map_err(|e| {
+        ProcessingError::NonRetryable(DetailedError {
+            reason: FailureReason::InvalidData,
+            source: anyhow::anyhow!("failed to parse macro user id: {}", e),
+        })
+    })?;
 
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Email.with_entity_string(message.db_id.to_string()),

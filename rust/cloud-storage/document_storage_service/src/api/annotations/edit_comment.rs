@@ -48,7 +48,9 @@ pub struct Params {
     )]
 pub async fn edit_comment_handler(
     State(db): State<PgPool>,
-    State(notification_ingress_service): State<Arc<NotificationIngressService<DbNotificationRepository<PgPool>, SqsNotificationQueue>>>,
+    State(notification_ingress_service): State<
+        Arc<NotificationIngressService<DbNotificationRepository<PgPool>, SqsNotificationQueue>>,
+    >,
     State(conn_gateway_client): State<Arc<ConnectionGatewayClient>>,
     Extension(UserContext { user_id, .. }): Extension<UserContext>,
     Path(Params { comment_id }): Path<Params>,
