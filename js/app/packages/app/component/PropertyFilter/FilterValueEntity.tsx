@@ -8,6 +8,7 @@ import {
   entityMapper,
   getEntityName,
   getEntitySearchText,
+  getEntityTimestampedItem,
   getEntityType,
   threadMapper,
 } from '@core/component/Properties/component/modal/shared/entityUtils';
@@ -203,7 +204,9 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
   // Search function for fuzzy matching (same config as PropertyEntitySelector)
   const entitySearch = createFreshSearch<CombinedEntity>(
     createEntitySearchConfig(currentUserDomain),
-    getEntitySearchText
+    getEntitySearchText,
+    (item) => item.kind === 'channel',
+    getEntityTimestampedItem
   );
 
   // Get selected entity IDs for filtering

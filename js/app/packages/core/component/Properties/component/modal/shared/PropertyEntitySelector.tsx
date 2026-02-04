@@ -45,6 +45,7 @@ import {
   entityMapper,
   getEntityName,
   getEntitySearchText,
+  getEntityTimestampedItem,
   getEntityType,
   threadMapper,
 } from './entityUtils';
@@ -323,7 +324,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
   const entitySearch = createFreshSearch<CombinedEntity>(
     createEntitySearchConfig(currentUserDomain),
-    getEntitySearchText
+    getEntitySearchText,
+    (item) => item.kind === 'channel',
+    getEntityTimestampedItem
   );
 
   const filteredEntities = createMemo(() => {
