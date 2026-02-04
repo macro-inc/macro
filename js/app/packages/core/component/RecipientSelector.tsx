@@ -335,10 +335,17 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
   // Create search function for recipients - only used for initial sorting with no query
   const recipientSearch = createFreshSearch<CombinedRecipientItem<K>>(
-    FreshSearchPresets.baseUserSearch(currentUserDomain, (item) =>
-      item.kind === 'user' ? item.data.email : undefined
+    FreshSearchPresets.baseUserSearch<CombinedRecipientItem<K>>(
+      currentUserDomain,
+      getRecipientOptionEmail as (
+        item: CombinedRecipientItem<K>
+      ) => string | undefined
     ),
-    getRecipientOptionTextValue as (item: CombinedRecipientItem<K>) => string
+    getRecipientOptionTextValue as (item: CombinedRecipientItem<K>) => string,
+    (item) => item.kind === 'channel',
+    (item) => ({
+      lastInteraction: (item as any).lastInteraction,
+    })
   );
 
   const recipients = createMemo(() => {
