@@ -17,7 +17,9 @@ function createSearch(opts: { useViewedAt?: boolean; channelBoost?: number }) {
       timeWeight: 0.9,
       fuzzyWeight: 0.1,
     },
-    (item) => item.name
+    (item) => item.name,
+    (item) => item.type === 'channel',
+    (item) => ({ viewedAt: item.viewedAt, updatedAt: item.updatedAt })
   );
 }
 
@@ -77,7 +79,9 @@ describe('createFreshSearch with comma-separated channel matching', () => {
         fuzzyWeight: 0.9,
         timeWeight: 0.1,
       },
-      (item) => item.name
+      (item) => item.name,
+      (item) => item.type === 'channel',
+      (item) => ({ viewedAt: item.viewedAt, updatedAt: item.updatedAt })
     );
   }
 
@@ -217,7 +221,9 @@ describe('freshSort with all exact matches', () => {
         fuzzyWeight: 0.5,
         timeWeight: 0.5,
       },
-      (item) => item.name
+      (item) => item.name,
+      (item) => item.type === 'channel',
+      (item) => ({ viewedAt: item.viewedAt, updatedAt: item.updatedAt })
     );
 
     const results = search(items, 'Design');
@@ -248,7 +254,9 @@ describe('freshSort with all exact matches', () => {
         timeWeight: 0.2,
         channelBoost: 2.0,
       },
-      (item) => item.name
+      (item) => item.name,
+      (item) => item.type === 'channel',
+      (item) => ({ viewedAt: item.viewedAt, updatedAt: item.updatedAt })
     );
 
     const results = search(items, 'Design');
@@ -299,7 +307,9 @@ describe('boostFn functionality', () => {
           return itemDomain === currentUserDomain ? 1.0 : 0; // 100% boost for same domain
         },
       },
-      (item) => item.name
+      (item) => item.name,
+      (item) => item.type === 'channel',
+      (item) => ({ viewedAt: item.viewedAt, updatedAt: item.updatedAt })
     );
 
     const results = search(items, 'o'); // All three match with 'o' in their names
@@ -337,7 +347,9 @@ describe('boostFn functionality', () => {
           return itemDomain === currentUserDomain ? 0.5 : 0;
         },
       },
-      (item) => item.name
+      (item) => item.name,
+      (item) => item.type === 'channel',
+      (item) => ({ viewedAt: item.viewedAt, updatedAt: item.updatedAt })
     );
 
     const results = search(items, 'Ali');
@@ -360,7 +372,9 @@ describe('boostFn functionality', () => {
         timeWeight: 0.5,
         boostFn: () => 0, // No boost
       },
-      (item) => item.name
+      (item) => item.name,
+      (item) => item.type === 'channel',
+      (item) => ({ viewedAt: item.viewedAt, updatedAt: item.updatedAt })
     );
 
     const results = search(items, '');
@@ -398,7 +412,9 @@ describe('boostFn functionality', () => {
           return itemDomain === 'macro.com' ? 0.3 : 0;
         },
       },
-      (item) => item.name
+      (item) => item.name,
+      (item) => item.type === 'channel',
+      (item) => ({ viewedAt: item.viewedAt, updatedAt: item.updatedAt })
     );
 
     const results = search(items, 'Design');
@@ -420,7 +436,9 @@ describe('boostFn functionality', () => {
         timeWeight: 0.5,
         // boostFn is undefined
       },
-      (item) => item.name
+      (item) => item.name,
+      (item) => item.type === 'channel',
+      (item) => ({ viewedAt: item.viewedAt, updatedAt: item.updatedAt })
     );
 
     const results = search(items, '');
@@ -468,7 +486,9 @@ describe('DM activity timestamps for user ranking', () => {
         timeWeight: 0.3,
         brevityWeight: 0.1,
       },
-      (item) => item.name
+      (item) => item.name,
+      (item) => item.type === 'channel',
+      (item) => ({ lastInteraction: item.lastInteraction })
     );
 
     const results = search(users, '');
@@ -513,7 +533,9 @@ describe('DM activity timestamps for user ranking', () => {
         timeWeight: 0.3,
         brevityWeight: 0.1,
       },
-      (item) => item.name
+      (item) => item.name,
+      (item) => item.type === 'channel',
+      (item) => ({ lastInteraction: item.lastInteraction })
     );
 
     const results = search(users, 'Ali');
@@ -548,7 +570,9 @@ describe('DM activity timestamps for user ranking', () => {
         timeWeight: 0.3,
         brevityWeight: 0.1,
       },
-      (item) => item.name
+      (item) => item.name,
+      (item) => item.type === 'channel',
+      (item) => ({ lastInteraction: item.lastInteraction })
     );
 
     const results = search(users, '');
