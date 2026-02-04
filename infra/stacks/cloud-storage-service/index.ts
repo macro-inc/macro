@@ -425,14 +425,6 @@ const cloudStorageService = new CloudStorageService(
         name: 'DD_ENV',
         value: stack,
       },
-      {
-        name: 'DD_VERSION',
-        value: '1.0.0',
-      },
-      {
-        name: 'OTEL_EXPORTER_OTLP_ENDPOINT',
-        value: 'http://127.0.0.1:4317',
-      },
     ],
     isPrivate: false,
     tags,

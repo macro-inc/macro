@@ -156,10 +156,6 @@ const searchProcessingService = new SearchProcessingService(
         name: 'DD_ENV',
         value: stack,
       },
-      {
-        name: 'OTEL_EXPORTER_OTLP_ENDPOINT',
-        value: 'http://127.0.0.1:4317',
-      },
     ],
     tags,
   }

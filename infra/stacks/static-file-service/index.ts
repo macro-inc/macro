@@ -101,10 +101,6 @@ const containerEnvVars = [
     name: 'DD_ENV',
     value: stack,
   },
-  {
-    name: 'OTEL_EXPORTER_OTLP_ENDPOINT',
-    value: 'http://127.0.0.1:4317',
-  },
 ];
 
 /// available as env var: DYNAMODB_TABLE_NAME

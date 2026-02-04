@@ -127,34 +127,28 @@ impl MacroEntrypoint {
     }
 }
 
+/// Opentelemetry export endpoint to talk with datadog sidecar
+const OTEL_EXPORTER_OTLP_ENDPOINT: &str = "http://127.0.0.1:4317";
+
 /// Initialize OpenTelemetry with OTLP exporter to the Datadog agent.
 /// The Datadog agent sidecar listens on localhost:4317 for OTLP gRPC.
 fn init_opentelemetry() -> SdkTracerProvider {
-    // Get OTLP endpoint from env, defaulting to localhost:4317 (Datadog agent sidecar)
-    let endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
-        .unwrap_or_else(|_| "http://127.0.0.1:4317".to_string());
-
     let exporter = opentelemetry_otlp::SpanExporter::builder()
         .with_tonic()
-        .with_endpoint(&endpoint)
+        .with_endpoint(OTEL_EXPORTER_OTLP_ENDPOINT)
         .build()
         .expect("failed to create OTLP span exporter");
 
     // Get service name from DD_SERVICE or OTEL_SERVICE_NAME
-    let service_name = std::env::var("DD_SERVICE")
-        .or_else(|_| std::env::var("OTEL_SERVICE_NAME"))
-        .unwrap_or_else(|_| "unknown-service".to_string());
+    let service_name =
+        std::env::var("DD_SERVICE").unwrap_or_else(|_| "unknown-service".to_string());
 
     // Get environment from DD_ENV
     let env = std::env::var("DD_ENV").unwrap_or_else(|_| "unknown".to_string());
 
-    // Get version from DD_VERSION
-    let version = std::env::var("DD_VERSION").unwrap_or_else(|_| "0.0.0".to_string());
-
     let resource = opentelemetry_sdk::Resource::builder()
         .with_service_name(service_name)
         .with_attribute(opentelemetry::KeyValue::new("deployment.environment", env))
-        .with_attribute(opentelemetry::KeyValue::new("service.version", version))
         .build();
 
     SdkTracerProvider::builder()
