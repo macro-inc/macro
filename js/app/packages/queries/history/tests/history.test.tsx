@@ -7,7 +7,7 @@ vi.mock('@core/constant/allBlocks', () => ({
 import type { Item } from '@service-storage/generated/schemas/item';
 import {
   transformHistoryResponse,
-  // updateViewedAtAndMoveItemToFront,
+  updateViewedAtAndMoveItemToFront,
 } from '../transforms';
 
 function createItem(overrides: Partial<Item> = {}): Item {
@@ -38,74 +38,72 @@ describe('history transforms', () => {
     expect(result[0].name).toBe('My Doc');
   });
 
-  // TODO: fix tests
-  //
-  // describe('updateViewedAtAndMoveItemToFront', () => {
-  //   it('moves item to front and updates viewedAt', () => {
-  //     const items: Item[] = [
-  //       createItem({ id: 'item-1' }),
-  //       createItem({ id: 'item-2' }),
-  //       createItem({ id: 'item-3' }),
-  //     ];
-  //     const timestamp = Date.now();
-  //
-  //     const result = updateViewedAtAndMoveItemToFront(
-  //       items,
-  //       'item-2',
-  //       timestamp
-  //     );
-  //
-  //     expect(result[0].id).toBe('item-2');
-  //     expect(result[0].viewedAt).toBe(timestamp);
-  //     expect(result[1].id).toBe('item-1');
-  //     expect(result[2].id).toBe('item-3');
-  //   });
-  //
-  //   it('returns original array if item not found', () => {
-  //     const items: Item[] = [
-  //       createItem({ id: 'item-1' }),
-  //       createItem({ id: 'item-2' }),
-  //     ];
-  //
-  //     const result = updateViewedAtAndMoveItemToFront(
-  //       items,
-  //       'nonexistent',
-  //       Date.now()
-  //     );
-  //
-  //     expect(result).toBe(items);
-  //     expect(result.length).toBe(2);
-  //   });
-  //
-  //   it('keeps item at front if already first', () => {
-  //     const items: Item[] = [
-  //       createItem({ id: 'item-1' }),
-  //       createItem({ id: 'item-2' }),
-  //     ];
-  //     const timestamp = Date.now();
-  //
-  //     const result = updateViewedAtAndMoveItemToFront(
-  //       items,
-  //       'item-1',
-  //       timestamp
-  //     );
-  //
-  //     expect(result[0].id).toBe('item-1');
-  //     expect(result[0].viewedAt).toBe(timestamp);
-  //     expect(result[1].id).toBe('item-2');
-  //   });
-  //
-  //   it('does not mutate original array', () => {
-  //     const items: Item[] = [
-  //       createItem({ id: 'item-1' }),
-  //       createItem({ id: 'item-2' }),
-  //     ];
-  //     const originalLength = items.length;
-  //
-  //     updateViewedAtAndMoveItemToFront(items, 'item-2', Date.now());
-  //
-  //     expect(items.length).toBe(originalLength);
-  //     expect(items[0].id).toBe('item-1');
-  //   });
-  // });
+  describe('updateViewedAtAndMoveItemToFront', () => {
+    it('moves item to front and updates viewedAt', () => {
+      const items: Item[] = [
+        createItem({ id: 'item-1' }),
+        createItem({ id: 'item-2' }),
+        createItem({ id: 'item-3' }),
+      ];
+      const timestamp = Date.now();
+
+      const result = updateViewedAtAndMoveItemToFront(
+        items,
+        'item-2',
+        timestamp
+      );
+
+      expect(result[0].id).toBe('item-2');
+      expect(result[0].viewedAt).toBe(timestamp);
+      expect(result[1].id).toBe('item-1');
+      expect(result[2].id).toBe('item-3');
+    });
+
+    it('returns original array if item not found', () => {
+      const items: Item[] = [
+        createItem({ id: 'item-1' }),
+        createItem({ id: 'item-2' }),
+      ];
+
+      const result = updateViewedAtAndMoveItemToFront(
+        items,
+        'nonexistent',
+        Date.now()
+      );
+
+      expect(result).toBe(items);
+      expect(result.length).toBe(2);
+    });
+
+    it('keeps item at front if already first', () => {
+      const items: Item[] = [
+        createItem({ id: 'item-1' }),
+        createItem({ id: 'item-2' }),
+      ];
+      const timestamp = Date.now();
+
+      const result = updateViewedAtAndMoveItemToFront(
+        items,
+        'item-1',
+        timestamp
+      );
+
+      expect(result[0].id).toBe('item-1');
+      expect(result[0].viewedAt).toBe(timestamp);
+      expect(result[1].id).toBe('item-2');
+    });
+
+    it('does not mutate original array', () => {
+      const items: Item[] = [
+        createItem({ id: 'item-1' }),
+        createItem({ id: 'item-2' }),
+      ];
+      const originalLength = items.length;
+
+      updateViewedAtAndMoveItemToFront(items, 'item-2', Date.now());
+
+      expect(items.length).toBe(originalLength);
+      expect(items[0].id).toBe('item-1');
+    });
+  });
 });
