@@ -5,7 +5,6 @@ import {
   ok,
   throwOnErr,
 } from '@core/util/maybeResult';
-import { queryKeys } from '@macro-entity';
 import { commsServiceClient } from '@service-comms/client';
 import type { getChannelResponseError } from '@service-comms/generated/client';
 import type {
