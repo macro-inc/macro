@@ -2,16 +2,8 @@ import { useUpsertSavedViewMutation } from '@app/component/Soup';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ViewConfigBase } from '@app/component/ViewConfig';
 import { unwrapSignals } from '@core/util/unwrapSignals';
-import {
-  optimisticUpdateChannelName,
-  rollbackUpdateChannelName,
-  type UpdateChannelNameContext,
-} from '@queries/channel/channel';
-import { invalidateListChannels } from '@queries/channel/channels';
-import { channelKeys } from '@queries/channel/keys';
-import { queryClient } from '@queries/client';
 import { createMemo, createSignal, onMount } from 'solid-js';
-import { createRenameDssEntityMutation } from '../../../macro-entity/src/queries/dss';
+import { createRenameDssEntityMutation } from '../../../macro-entity/src/queries/rename';
 import type { EntityData } from '../../../macro-entity/src/types/entity';
 import { EntityModalActionFooter, EntityModalTitle } from './EntityModal';
 
@@ -21,40 +13,7 @@ export const RenameView = (props: {
   onFinish: () => void;
   onCancel: () => void;
 }) => {
-  const renameMutation = createRenameDssEntityMutation({
-    onMutate(variables) {
-      if (variables.entity.type !== 'channel') return;
-
-      const context = optimisticUpdateChannelName({
-        channelId: variables.entity.id,
-        name: variables.newName,
-      });
-      return { context, channelId: variables.entity.id };
-    },
-    onError(
-      _,
-      _variables,
-      onMutateResult: {
-        context: UpdateChannelNameContext | undefined;
-        channelId: string;
-      }
-    ) {
-      if (onMutateResult?.context) {
-        rollbackUpdateChannelName(
-          onMutateResult.channelId,
-          onMutateResult.context
-        );
-      }
-    },
-    onSettled(_, __, variables) {
-      if (variables.entity.type !== 'channel') return;
-
-      queryClient.invalidateQueries({
-        queryKey: channelKeys.withID(variables.entity.id).queryKey,
-      });
-      invalidateListChannels();
-    },
-  });
+  const renameMutation = createRenameDssEntityMutation();
   let inputRef: HTMLInputElement | undefined;
   const saveViewMutation = useUpsertSavedViewMutation();
   const {
