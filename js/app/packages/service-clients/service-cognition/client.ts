@@ -17,7 +17,6 @@ import type { DocumentTextPart } from '@service-cognition/generated/schemas/docu
 import { uuid } from 'short-uuid';
 import { waitExtractionStatus } from './extraction';
 import type { CreateChatRequest } from './generated/schemas/createChatRequest';
-import { DocumentCognitionServiceApiVersion } from './generated/schemas/documentCognitionServiceApiVersion';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
 import type { GetBatchPreviewRequest } from './generated/schemas/getBatchPreviewRequest';
 import type { GetBatchPreviewResponse } from './generated/schemas/getBatchPreviewResponse';
@@ -42,18 +41,6 @@ import {
 
 const dcsHost: string = SERVER_HOSTS['cognition-service'];
 
-const apiVersions = Object.values(
-  DocumentCognitionServiceApiVersion
-) satisfies string[];
-const latestApiVersion = apiVersions[apiVersions.length - 1];
-
-// NOTE: change this to the version you want to use, defaults to latest
-// TODO: @whutchinson98 will update this back to undefined once we've made it so v2 is the default version
-const overrideApiVersion: string | undefined = 'v2';
-
-const apiVersion = overrideApiVersion ?? latestApiVersion;
-console.log('DCS API version:', apiVersion);
-
 type WithChatId = { chat_id: string };
 type WithDocumentId = { document_id: string };
 type WithName = { name: string };
@@ -73,7 +60,7 @@ export function dcsFetch<T extends ObjectLike = never>(
 ):
   | Promise<MaybeResult<FetchWithTokenErrorCode, T>>
   | Promise<MaybeError<FetchWithTokenErrorCode>> {
-  return fetchWithToken<T>(`${dcsHost}/${apiVersion}${url}`, init);
+  return fetchWithToken<T>(`${dcsHost}/${url}`, init);
 }
 export type Success = { success: boolean };
 

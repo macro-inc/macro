@@ -18,7 +18,6 @@ import type {
 } from './generated/schemas';
 import type { DeviceRequest } from './generated/schemas/deviceRequest';
 import type { NotificationBulkRequest } from './generated/schemas/notificationBulkRequest';
-import { NotificationServiceApiVersion } from './generated/schemas/notificationServiceApiVersion';
 import type { UserNotification } from './generated/schemas/userNotification';
 import type { UserUnsubscribe } from './generated/schemas/userUnsubscribe';
 
@@ -42,17 +41,6 @@ export type UnifiedNotification = Omit<UserNotification, 'ownerId'> & {
   new?: boolean;
 };
 
-const apiVersions = Object.values(
-  NotificationServiceApiVersion
-) satisfies string[];
-const latestApiVersion = apiVersions[apiVersions.length - 1];
-
-// NOTE: change this to the version you want to use, defaults to latest
-const overrideApiVersion: string | undefined = undefined;
-
-const apiVersion = overrideApiVersion ?? latestApiVersion;
-console.log('Notification Service API version:', apiVersion);
-
 export function notificationFetch(
   url: string,
   init?: SafeFetchInit
@@ -67,7 +55,7 @@ export function notificationFetch<T extends ObjectLike = never>(
 ):
   | Promise<MaybeResult<FetchWithTokenErrorCode, T>>
   | Promise<MaybeError<FetchWithTokenErrorCode>> {
-  return fetchWithToken<T>(`${notificationHost}/${apiVersion}${url}`, init);
+  return fetchWithToken<T>(`${notificationHost}/${url}`, init);
 }
 export type Success = { success: boolean };
 
