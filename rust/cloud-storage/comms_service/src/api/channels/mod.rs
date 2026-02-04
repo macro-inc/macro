@@ -25,15 +25,10 @@ pub mod post_typing;
 pub mod remove_participants;
 use crate::api::context::AppState;
 
-use tower_http::compression::CompressionLayer;
-
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", post(create_channel::create_channel_handler))
-        .route(
-            "/:channel_id",
-            get(get_channel::get_channel_handler).layer(compose_layers![CompressionLayer::new(),]),
-        )
+        .route("/:channel_id", get(get_channel::get_channel_handler))
         .route(
             "/:channel_id",
             delete(delete_channel::delete_channel_handler),
