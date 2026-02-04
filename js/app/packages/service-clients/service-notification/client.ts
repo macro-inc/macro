@@ -55,7 +55,7 @@ export function notificationFetch<T extends ObjectLike = never>(
 ):
   | Promise<MaybeResult<FetchWithTokenErrorCode, T>>
   | Promise<MaybeError<FetchWithTokenErrorCode>> {
-  return fetchWithToken<T>(`${notificationHost}/${url}`, init);
+  return fetchWithToken<T>(`${notificationHost}${url}`, init);
 }
 export type Success = { success: boolean };
 

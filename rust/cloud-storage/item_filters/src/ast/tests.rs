@@ -29,6 +29,7 @@ fn it_expands_filters() {
             document_ids: vec![document_id.to_string()],
             project_ids: vec![project_id.to_string()],
             owners: vec!["macro|hello@test.com".to_string()],
+            importance: Some(true),
         },
         ..Default::default()
     };
@@ -50,36 +51,45 @@ fn it_expands_filters() {
                     {
                         "&": [
                             {
-                                "|": [
+                                "&": [
                                     {
-                                        "l": {
-                                            "ft": "pdf",
-                                        }
+                                        "|": [
+                                            {
+                                                "l": {
+                                                    "ft": "pdf",
+                                                }
+                                            },
+                                            {
+                                                "l": {
+                                                    "ft": "txt"
+                                                }
+                                            }
+                                        ]
                                     },
                                     {
                                         "l": {
-                                            "ft": "txt"
+                                            "id": document_id
                                         }
                                     }
                                 ]
                             },
                             {
                                 "l": {
-                                    "id": document_id
+                                    "pid": project_id
                                 }
                             }
                         ]
                     },
                     {
                         "l": {
-                            "pid": project_id
+                            "o": "macro|hello@test.com"
                         }
                     }
                 ]
             },
             {
                 "l": {
-                    "o": "macro|hello@test.com"
+                    "imp": true
                 }
             }
         ]
@@ -97,6 +107,7 @@ fn it_expands_file_associations() {
             document_ids: vec![],
             project_ids: vec![],
             owners: vec![],
+            importance: Some(true),
         },
         ..Default::default()
     };
@@ -166,6 +177,7 @@ fn it_expands_other_association() {
             document_ids: vec![],
             project_ids: vec![],
             owners: vec![],
+            importance: Some(true),
         },
         ..Default::default()
     };

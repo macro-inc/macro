@@ -4641,6 +4641,10 @@
             },
             "description": "Channel IDs to search within. Examples: ['general']. Empty to search all accessible channels."
           },
+          "importance": {
+            "type": ["boolean", "null"],
+            "description": "Filter by channel importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
+          },
           "mentions": {
             "type": "array",
             "items": {
@@ -4839,6 +4843,10 @@
               "type": "string"
             },
             "description": "Chat ids to search over. Examples: ['chat1'], ['chat1', 'chat2']. When provided, chat search will only match results on these chats. Empty to search all accessible chats."
+          },
+          "importance": {
+            "type": ["boolean", "null"],
+            "description": "Filter by chat importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
           },
           "owners": {
             "type": "array",
@@ -5445,6 +5453,10 @@
             },
             "description": "Document file types to search. Examples: ['pdf'], ['md', 'txt']. Empty to search all file types."
           },
+          "importance": {
+            "type": ["boolean", "null"],
+            "description": "Filter by document importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
+          },
           "owners": {
             "type": "array",
             "items": {
@@ -6022,6 +6034,10 @@
               "type": "string"
             },
             "description": "Email CC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by CC."
+          },
+          "importance": {
+            "type": ["boolean", "null"],
+            "description": "Filter by email importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
           },
           "recipients": {
             "type": "array",
@@ -7570,6 +7586,10 @@
         "type": "object",
         "description": "The project filters used to filter down what projects you search over.",
         "properties": {
+          "importance": {
+            "type": ["boolean", "null"],
+            "description": "Filter by project importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
+          },
           "owners": {
             "type": "array",
             "items": {

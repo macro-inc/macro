@@ -36,7 +36,7 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
                     validate_api_version,
                 ))
                 .layer(macro_cors::cors_layer())
-                .layer(CompressionLayer::new().gzip(true).br(true)),
+                .layer(CompressionLayer::new().gzip(true)),
         )
         // The health router is attached here so we don't attach the logging middleware to it
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()));

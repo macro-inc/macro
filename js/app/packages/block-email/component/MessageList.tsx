@@ -101,10 +101,7 @@ export function MessageList(props: MessageListProps) {
             return (
               <MessageContainer
                 isFirstMessage={normalizedIndex() === 0}
-                isLastMessage={
-                  normalizedIndex() ===
-                  (context.messages.list().length ?? 0) - 1
-                }
+                isLastMessage={isLastMessage()}
                 isFocused={isFocusedSelector(message().db_id ?? undefined)}
                 isTarget={isTargetSelector(message().db_id ?? undefined)}
                 message={message()}

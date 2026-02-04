@@ -97,7 +97,9 @@ export function Top(props: TopProps) {
               label={channelName() ?? 'New Channel'}
               id={props.channelId}
               itemType="channel"
-              lockRename={!isAdminOrOwner()}
+              lockRename={
+                props.channelType === 'direct_message' || !isAdminOrOwner()
+              }
             />
           </div>
         </div>

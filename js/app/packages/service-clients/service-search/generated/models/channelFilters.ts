@@ -4,6 +4,7 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ChannelFiltersImportance } from './channelFiltersImportance';
 import type { ChannelFiltersOrgId } from './channelFiltersOrgId';
 
 /**
@@ -12,6 +13,8 @@ import type { ChannelFiltersOrgId } from './channelFiltersOrgId';
 export interface ChannelFilters {
   /** Channel IDs to search within. Examples: ['general']. Empty to search all accessible channels. */
   channel_ids?: string[];
+  /** Filter by channel importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing. */
+  importance?: ChannelFiltersImportance;
   /** Channel user mentions to search for. Examples: ['@username']. Empty if not filtering by mentions. */
   mentions?: string[];
   /** Channel organization ID to search within. Empty to ignore organization filtering. */

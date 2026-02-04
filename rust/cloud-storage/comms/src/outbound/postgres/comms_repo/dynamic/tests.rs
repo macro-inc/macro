@@ -166,6 +166,72 @@ async fn test_get_user_channels_dynamic_mixed_supported_and_unsupported_filters(
     );
 }
 
+// Test filtering channels by importance
+// importance=true is a no-op (returns all channels)
+// importance=false short-circuits to match nothing (1=0)
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("channels"))
+)]
+async fn test_get_user_channels_dynamic_filter_by_importance(pool: Pool<sqlx::Postgres>) {
+    use filter_ast::ExpandFrame;
+    use item_filters::ChannelFilters;
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    // importance=true: no-op, should return all channels
+    {
+        let channel_filters = ChannelFilters {
+            importance: Some(true),
+            ..Default::default()
+        };
+
+        let filter_ast = ChannelFilters::expand_ast(channel_filters)
+            .unwrap()
+            .map(std::sync::Arc::new);
+
+        let params = GetChannelsRequest {
+            macro_id: user_id.clone(),
+            limit: Some(20),
+            query: Query::Sort(SimpleSortMethod::UpdatedAt, filter_ast),
+        }
+        .into_params();
+
+        let channels = get_user_channels_dynamic(&pool, &params).await.unwrap();
+        assert_eq!(
+            channels.len(),
+            4,
+            "importance=true should return all 4 channels"
+        );
+    }
+
+    // importance=false: 1=0, should return no channels
+    {
+        let channel_filters = ChannelFilters {
+            importance: Some(false),
+            ..Default::default()
+        };
+
+        let filter_ast = ChannelFilters::expand_ast(channel_filters)
+            .unwrap()
+            .map(std::sync::Arc::new);
+
+        let params = GetChannelsRequest {
+            macro_id: user_id.into_owned(),
+            limit: Some(20),
+            query: Query::Sort(SimpleSortMethod::UpdatedAt, filter_ast),
+        }
+        .into_params();
+
+        let channels = get_user_channels_dynamic(&pool, &params).await.unwrap();
+        assert_eq!(
+            channels.len(),
+            0,
+            "importance=false should return no channels"
+        );
+    }
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("channels"))

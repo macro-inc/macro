@@ -624,6 +624,105 @@ async fn test_dynamic_query_pagination(pool: Pool<Postgres>) -> anyhow::Result<(
     Ok(())
 }
 
+// Test filtering emails by importance
+// The fixture has:
+//   Thread 1 (msg 1): INBOX + CATEGORY_PERSONAL → important (has priority label)
+//   Thread 2 (msg 2): SENT → important (has priority label)
+//   Thread 3 (msg 3): DRAFT → important (no depriority label)
+//   Thread 4 (msg 4): STARRED + INBOX → important (no depriority label)
+//   Thread 5 (msg 5): IMPORTANT + INBOX → important (no depriority label)
+//   Thread 6 (msg 6): Work + CATEGORY_UPDATES → NOT important (depriority, no priority)
+//   Thread 7 (msg 7): INBOX + CATEGORY_PROMOTIONS → NOT important (depriority, no priority)
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn test_dynamic_query_with_importance_filter(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let limit = 50;
+
+    // importance=true: threads with priority labels OR without depriority labels
+    {
+        let filter = Arc::new(Expr::Literal(EmailLiteral::Importance(true)));
+        let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
+
+        let results =
+            dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
+
+        // Threads 1 (CATEGORY_PERSONAL), 2 (SENT), 3 (no depriority), 4 (no depriority), 5 (no depriority)
+        assert_eq!(
+            results.len(),
+            5,
+            "importance=true should return 5 important threads"
+        );
+
+        let result_ids: std::collections::HashSet<String> =
+            results.iter().map(|r| r.id.to_string()).collect();
+
+        assert!(
+            result_ids.contains("20000001-0000-0000-0000-000000000001"),
+            "Should include thread 1 (CATEGORY_PERSONAL)"
+        );
+        assert!(
+            result_ids.contains("20000002-0000-0000-0000-000000000002"),
+            "Should include thread 2 (SENT)"
+        );
+        assert!(
+            result_ids.contains("20000003-0000-0000-0000-000000000003"),
+            "Should include thread 3 (no depriority)"
+        );
+        assert!(
+            result_ids.contains("20000004-0000-0000-0000-000000000004"),
+            "Should include thread 4 (no depriority)"
+        );
+        assert!(
+            result_ids.contains("20000005-0000-0000-0000-000000000005"),
+            "Should include thread 5 (no depriority)"
+        );
+
+        // Threads 6 and 7 should be excluded (depriority labels, no priority)
+        assert!(
+            !result_ids.contains("20000006-0000-0000-0000-000000000006"),
+            "Should exclude thread 6 (CATEGORY_UPDATES)"
+        );
+        assert!(
+            !result_ids.contains("20000007-0000-0000-0000-000000000007"),
+            "Should exclude thread 7 (CATEGORY_PROMOTIONS)"
+        );
+    }
+
+    // importance=false: threads with depriority labels AND without priority labels
+    {
+        let filter = Arc::new(Expr::Literal(EmailLiteral::Importance(false)));
+        let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
+
+        let results =
+            dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
+
+        // Threads 6 (CATEGORY_UPDATES) and 7 (CATEGORY_PROMOTIONS)
+        assert_eq!(
+            results.len(),
+            2,
+            "importance=false should return 2 unimportant threads"
+        );
+
+        let result_ids: std::collections::HashSet<String> =
+            results.iter().map(|r| r.id.to_string()).collect();
+
+        assert!(
+            result_ids.contains("20000006-0000-0000-0000-000000000006"),
+            "Should include thread 6 (CATEGORY_UPDATES)"
+        );
+        assert!(
+            result_ids.contains("20000007-0000-0000-0000-000000000007"),
+            "Should include thread 7 (CATEGORY_PROMOTIONS)"
+        );
+    }
+
+    Ok(())
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("email_thread_metadata"))

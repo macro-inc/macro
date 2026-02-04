@@ -1,6 +1,6 @@
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { createMemo, createSignal, onMount, Show } from 'solid-js';
-import { createBulkRenameDssEntityMutation } from '../../../macro-entity/src/queries/dss';
+import { createBulkRenameDssEntityMutation } from '../../../macro-entity/src/queries/rename';
 import type { EntityData } from '../../../macro-entity/src/types/entity';
 import {
   BulkEditEntityModalActionFooter,
@@ -88,10 +88,9 @@ export const BulkRenameEntitiesView = (props: {
       default:
     }
 
-    await renameMutation.mutateAsync({
-      entities: props.entities,
-      name: renameFn,
-    });
+    await renameMutation.mutateAsync(
+      props.entities.map((e) => ({ entity: e, newName: renameFn(e.name) }))
+    );
 
     props.onFinish();
   };
