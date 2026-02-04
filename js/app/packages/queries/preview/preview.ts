@@ -1,6 +1,7 @@
 import { DEFAULT_ITEM_TYPE } from '@service-storage/client';
 import { useQuery } from '@tanstack/solid-query';
 import type { Accessor, Setter } from 'solid-js';
+import { createMemo } from 'solid-js';
 import { queryClient } from '../client';
 import { previewDataLoader } from './dataloader';
 import { defaultNameTransform, fetchMessageContext } from './fetchers';
@@ -27,7 +28,7 @@ export function useItemPreview(item: Accessor<ItemEntity>) {
     };
   });
 
-  const preview = () => {
+  const preview = createMemo(() => {
     const data = queryReadyGate(previewQuery) ? previewQuery.data : undefined;
     const channelMessageData = queryReadyGate(maybeChannelMessageQuery)
       ? maybeChannelMessageQuery.data
@@ -48,7 +49,7 @@ export function useItemPreview(item: Accessor<ItemEntity>) {
       };
     }
     return dataWithName;
-  };
+  });
 
   return [preview] as const;
 }
