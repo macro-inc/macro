@@ -26,7 +26,7 @@ type EntityRenameOperationResult = {
   success: boolean;
 };
 
-/** Map of channel ID to its update context */
+// Maps channel ID to its update context, which lets us rollback the updated at timestamp as well as name
 type ChannelRenameContexts = Map<string, UpdateChannelNameContext | undefined>;
 
 type RenameRollbackContext = {
@@ -90,10 +90,7 @@ const validateEntityRename = (entity: EntityData): void => {
   }
 };
 
-/**
- * Helper to update entity names in DSS query data.
- * TODO: move item to front of list with updatedAt timestamp
- */
+// TODO: move item to front of list with updatedAt timestamp
 function updateEntityNamesInDssQueryData(
   prev: InfiniteData<SoupPage, unknown> | undefined,
   updates: EntityIdToNameMap
@@ -121,7 +118,6 @@ function updateEntityNamesInDssQueryData(
           break;
         }
         default:
-          // NOTE: email renames are not supported here
           break;
       }
       return item;
@@ -187,9 +183,6 @@ const renameHistorySetData = (entities: EntityRenameData[]) => {
   });
 };
 
-/**
- * Helper to perform optimistic rename updates for entities
- */
 function performOptimisticRenameUpdates(
   entities: EntityRenameData[]
 ): RenameRollbackContext {
@@ -206,9 +199,6 @@ function performOptimisticRenameUpdates(
   };
 }
 
-/**
- * Helper to rollback optimistic rename updates on error
- */
 function rollbackOptimisticRenameUpdates({
   contexts,
   updates,
@@ -266,7 +256,7 @@ const bulkRenameOnSettled = (
     return;
   }
 
-  // If error occurred without data, rollback everything
+  // rollback everything if we can't identify specific failures
   if (!data) {
     rollbackOptimisticRenameUpdates(onMutateResult);
     return;
@@ -301,9 +291,7 @@ const bulkRenameOnSettled = (
   }
 };
 
-/**
- * Mutation to rename a DSS entity.
- */
+/** supports channel/document/chat/project rename */
 export function createRenameDssEntityMutation(
   callbacks?: MutationCallbacks<
     RenameDssEntityMutationData,
@@ -341,6 +329,7 @@ export function createRenameDssEntityMutation(
   }));
 }
 
+/** supports channel/document/chat/project bulk rename */
 export function createBulkRenameDssEntityMutation() {
   return useMutation<
     BulkRenameDssEntityMutationData,
