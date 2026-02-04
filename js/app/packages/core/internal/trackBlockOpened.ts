@@ -18,6 +18,8 @@ export function track(
 ) {
   const itemType = blockNameToItemType(blockName);
 
+  // TODO: we can also optimistically update viewed at on dss query
+
   if (!isCloudStorageItem(itemType)) return;
 
   const upsertToHistoryMutation = useUpsertToHistoryMutation(undefined, client);
