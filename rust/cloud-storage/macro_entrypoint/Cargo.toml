@@ -7,7 +7,11 @@ version = "0.1.0"
 [dependencies]
 dotenvy = { workspace = true }
 macro_env = { path = "../macro_env" }
+opentelemetry = { workspace = true }
+opentelemetry_sdk = { workspace = true }
+opentelemetry-otlp = { workspace = true }
 tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true }
 tracing-panic = "0.1"
 tracing-subscriber = { workspace = true }
 tracing-tree = { workspace = true }
