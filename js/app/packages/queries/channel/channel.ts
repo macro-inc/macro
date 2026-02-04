@@ -177,17 +177,3 @@ export function softInvalidateChannelWithID(channelID: string) {
     refetchType: 'inactive',
   });
 }
-
-export function optimisticUpdateChannelViewedAt(channelId: string) {
-  const now = new Date().toISOString();
-
-  queryClient.setQueryData<ApiChannelWithLatest[]>(
-    queryKeys.all.channel,
-    (old) => {
-      if (!old) return old;
-      return old.map((channel) =>
-        channel.id === channelId ? { ...channel, viewed_at: now } : channel
-      );
-    }
-  );
-}
