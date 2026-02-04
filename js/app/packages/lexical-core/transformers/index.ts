@@ -34,7 +34,7 @@ import {
   PRESERVE_LINES,
   SEARCH_MATCH,
 } from './transformers';
-import { UNKNOWN_XML } from './unknownXml';
+import { UNKNOWN_MENTION } from './unknownMention';
 import { E_WATERMARK, I_WATERMARK } from './watermark';
 
 /**
@@ -63,7 +63,7 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_WATERMARK,
   I_SNAPSHOT_NODE,
   ...CUSTOM_TRANSFORMERS,
-  UNKNOWN_XML, // Must be last to act as fallback for unrecognized XML tags
+  UNKNOWN_MENTION, // Must be last to act as fallback for unrecognized XML tags
 ];
 
 /**
@@ -91,7 +91,7 @@ export const EXTERNAL_TRANSFORMERS: Transformer[] = [
   E_SNAPSHOT_NODE,
   ...HTML_ENTITY_TRANSFORMERS,
   ...CUSTOM_TRANSFORMERS,
-  UNKNOWN_XML, // Must be last to act as fallback for unrecognized XML tags
+  UNKNOWN_MENTION, // Must be last to act as fallback for unrecognized XML tags
 ];
 
 /**
@@ -133,5 +133,5 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   E_INLINE_EQUATION_NODE,
   ...HTML_ENTITY_TRANSFORMERS,
   ...CUSTOM_TRANSFORMERS,
-  UNKNOWN_XML, // Must be last to act as fallback for unrecognized XML tags
+  UNKNOWN_MENTION, // Must be last to act as fallback for unrecognized XML tags
 ];
