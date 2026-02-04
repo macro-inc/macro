@@ -28,6 +28,41 @@ import type {
   ValidHotkey,
 } from './types';
 
+/**
+ * Removes hotkey commands from the global token map when their scope is destroyed.
+ */
+export function removeCommandsFromTokenMap(
+  tokenMap: Map<HotkeyToken, HotkeyCommand[]>,
+  commands: HotkeyCommand[]
+): Map<HotkeyToken, HotkeyCommand[]> {
+  if (commands.length === 0) return tokenMap;
+
+  let newMap: Map<HotkeyToken, HotkeyCommand[]> | undefined;
+
+  for (const command of commands) {
+    if (!command.hotkeyToken) continue;
+
+    const currentMap = newMap ?? tokenMap;
+    const existingCommands = currentMap.get(command.hotkeyToken);
+    if (!existingCommands) continue;
+
+    const filtered = existingCommands.filter((c) => c !== command);
+    if (filtered.length === existingCommands.length) continue;
+
+    if (!newMap) {
+      newMap = new Map(tokenMap);
+    }
+
+    if (filtered.length > 0) {
+      newMap.set(command.hotkeyToken, filtered);
+    } else {
+      newMap.delete(command.hotkeyToken);
+    }
+  }
+
+  return newMap ?? tokenMap;
+}
+
 type GetHotkeyCommandOptions = {
   /**
    * The property to sort by. Defaults to 'handlerPriority'.
@@ -170,36 +205,16 @@ export function removeScope(scopeId: string) {
     return;
   }
 
-  const commandsToRemove: HotkeyCommand[] = [];
-  scope.hotkeyCommands.forEach((commands) => {
-    commandsToRemove.push(...commands);
-  });
-  commandsToRemove.push(...scope.unkeyedCommands);
+  // Collect all commands from this scope to remove from the global token map
+  const commandsToRemove = [
+    ...Array.from(scope.hotkeyCommands.values()).flat(),
+    ...scope.unkeyedCommands,
+  ];
 
   if (commandsToRemove.length > 0) {
-    setHotkeyTokenMap((prev) => {
-      const newMap = new Map(prev);
-      let modified = false;
-
-      for (const command of commandsToRemove) {
-        if (command.hotkeyToken) {
-          const existingCommands = newMap.get(command.hotkeyToken);
-          if (existingCommands) {
-            const filtered = existingCommands.filter((c) => c !== command);
-            if (filtered.length !== existingCommands.length) {
-              modified = true;
-              if (filtered.length > 0) {
-                newMap.set(command.hotkeyToken, filtered);
-              } else {
-                newMap.delete(command.hotkeyToken);
-              }
-            }
-          }
-        }
-      }
-
-      return modified ? newMap : prev;
-    });
+    setHotkeyTokenMap((prev) =>
+      removeCommandsFromTokenMap(prev, commandsToRemove)
+    );
   }
 
   scope.hotkeyCommands.clear();
