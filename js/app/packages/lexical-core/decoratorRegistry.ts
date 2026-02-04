@@ -150,10 +150,11 @@ export function setDecorator<T extends LexicalNode>(
   decoratorRegistry.set(klass, component);
 }
 
-export function getDecorator<T extends LexicalNode>(
-  klass: Klass<T>
-): DecoratorComponent<NodeClassToProps<T>> | undefined {
-  return decoratorRegistry.get(klass);
+export function getDecorator<
+  T extends LexicalNode,
+  Props extends {} = NodeClassToProps<T>,
+>(klass: Klass<T>): DecoratorComponent<Props> | undefined {
+  return decoratorRegistry.get(klass) as DecoratorComponent<Props> | undefined;
 }
 
 export function clearDecorators() {

@@ -14,11 +14,16 @@ export function UnknownMention(props: UnknownMentionDecoratorProps) {
   };
 
   return (
-    <span class="pointer-events-auto text-ink-muted/50">
+    <span
+      class="relative py-0.5 px-0.5 cursor-default text-ink-muted/50"
+      classList={{
+        'bracket-offset-2': isSelectedAsNode(),
+      }}
+    >
       <span class="relative top-[0.125em] size-[1em] inline-flex mx-1 opacity-50">
         <Fallback />
       </span>
-      <span class="">Unknown</span>
+      <span>{props.name || 'Unknown'}</span>
     </span>
   );
 }

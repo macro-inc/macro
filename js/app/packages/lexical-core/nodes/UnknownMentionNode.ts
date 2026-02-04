@@ -1,5 +1,6 @@
 import {
   $applyNodeReplacement,
+  DecoratorNode,
   type DOMConversionMap,
   type DOMConversionOutput,
   type DOMExportOutput,
@@ -13,7 +14,6 @@ import {
 } from 'lexical';
 import { type DecoratorComponent, getDecorator } from '../decoratorRegistry';
 import { $applyIdFromSerialized } from '../plugins/nodeIdPlugin';
-import { DecoratorBlockNode } from './DecoratorBlockNode';
 
 export type UnknownMentionData = {
   name: string;
@@ -24,18 +24,23 @@ export type SerializedUnknownMentionNode = Spread<
   SerializedLexicalNode
 >;
 
-export type UnknownMentionDecoratorProps = UnknownMentionData & {
+export type UnknownMentionDecoratorProps = {
+  name: string;
   key: NodeKey;
   theme: EditorThemeClasses;
 };
 
-export class UnknownMentionNode extends DecoratorBlockNode<
+export class UnknownMentionNode extends DecoratorNode<
   DecoratorComponent<UnknownMentionDecoratorProps> | undefined
 > {
   __name: string;
 
   static getType() {
     return 'unknown-mention';
+  }
+
+  isInline(): boolean {
+    return true;
   }
 
   isKeyboardSelectable(): boolean {
@@ -47,7 +52,7 @@ export class UnknownMentionNode extends DecoratorBlockNode<
   }
 
   constructor(name: string, key?: NodeKey) {
-    super('left', key);
+    super(key);
     this.__name = name;
   }
 
@@ -124,7 +129,7 @@ export class UnknownMentionNode extends DecoratorBlockNode<
     if (decorator) {
       return () =>
         decorator({
-          name: this.__name,
+          name: this.getName(),
           key: this.getKey(),
           theme: config.theme,
         });
