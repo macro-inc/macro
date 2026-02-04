@@ -69,7 +69,7 @@ const getEntityRenameData = (
 
 const performEntityRename = async (operation: EntityRenameOperation) => {
   const data = getEntityRenameData(operation);
-  const success = await renameItem({ ...data, skipRefetch: true });
+  const success = await renameItem(data);
   return { success };
 };
 
@@ -235,6 +235,8 @@ const bulkRenameMutationFn = async (
   const entities = params.map((p) => p.entity);
   entities.forEach(validateEntityRename);
 
+  // TODO: add bulk rename on backend or consider batching in chunks
+  // with timeouts to avoid too many requests
   return await Promise.all(params.map(performEntityRename));
 };
 
