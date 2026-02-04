@@ -60,7 +60,7 @@ export function dcsFetch<T extends ObjectLike = never>(
 ):
   | Promise<MaybeResult<FetchWithTokenErrorCode, T>>
   | Promise<MaybeError<FetchWithTokenErrorCode>> {
-  return fetchWithToken<T>(`${dcsHost}/${url}`, init);
+  return fetchWithToken<T>(`${dcsHost}${url}`, init);
 }
 export type Success = { success: boolean };
 

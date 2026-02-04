@@ -108,7 +108,7 @@ export function dssFetch<T extends Record<string, any> = never>(
 ):
   | Promise<MaybeResult<FetchWithTokenErrorCode, T>>
   | Promise<MaybeError<FetchWithTokenErrorCode>> {
-  return fetchWithToken<T>(`${dssHost}/${url}`, init);
+  return fetchWithToken<T>(`${dssHost}${url}`, init);
 }
 
 export type Success = {
