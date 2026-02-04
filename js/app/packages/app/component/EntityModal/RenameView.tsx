@@ -7,6 +7,7 @@ import {
   rollbackUpdateChannelName,
   type UpdateChannelNameContext,
 } from '@queries/channel/channel';
+import { invalidateListChannels } from '@queries/channel/channels';
 import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
 import { createMemo, createSignal, onMount } from 'solid-js';
@@ -46,10 +47,12 @@ export const RenameView = (props: {
       }
     },
     onSettled(_, __, variables) {
-      // TODO: fix the backend so that the /channels/{id} endpoint returns the updated name
-      queryClient.prefetchQuery({
+      if (variables.entity.type !== 'channel') return;
+
+      queryClient.invalidateQueries({
         queryKey: channelKeys.withID(variables.entity.id).queryKey,
       });
+      invalidateListChannels();
     },
   });
   let inputRef: HTMLInputElement | undefined;

@@ -87,9 +87,14 @@ export function optimisticUpdateChannelName(
   vars: WithChannelId<{ name: string }>
 ): UpdateChannelNameContext | undefined {
   const queryKey = channelKeys.withID(vars.channelId).queryKey;
+  const listQueryKey = channelKeys.listChannels.queryKey;
+
   queryClient.cancelQueries({ queryKey });
+  queryClient.cancelQueries({ queryKey: listQueryKey });
 
   let context: UpdateChannelNameContext | undefined;
+
+  const now = new Date().toISOString();
 
   queryClient.setQueriesData(
     { queryKey },
@@ -106,9 +111,22 @@ export function optimisticUpdateChannelName(
         channel: {
           ...prev.channel,
           name: vars.name,
-          updated_at: new Date().toISOString(),
+          updated_at: now,
         },
       };
+    }
+  );
+
+  queryClient.setQueriesData(
+    { queryKey: listQueryKey },
+    (prev: ApiChannelWithLatest[] | undefined) => {
+      if (!prev) return prev;
+
+      return prev.map((channel) =>
+        channel.id === vars.channelId
+          ? { ...channel, name: vars.name, updated_at: now }
+          : channel
+      );
     }
   );
 
@@ -123,6 +141,7 @@ export function rollbackUpdateChannelName(
   context: UpdateChannelNameContext
 ): void {
   const queryKey = channelKeys.withID(channelId).queryKey;
+  const listQueryKey = channelKeys.listChannels.queryKey;
 
   queryClient.setQueriesData(
     { queryKey },
@@ -137,6 +156,23 @@ export function rollbackUpdateChannelName(
           updated_at: context.previousUpdatedAt,
         },
       };
+    }
+  );
+
+  queryClient.setQueriesData(
+    { queryKey: listQueryKey },
+    (prev: ApiChannelWithLatest[] | undefined) => {
+      if (!prev) return prev;
+
+      return prev.map((channel) =>
+        channel.id === channelId
+          ? {
+              ...channel,
+              name: context.previousName,
+              updated_at: context.previousUpdatedAt,
+            }
+          : channel
+      );
     }
   );
 }
