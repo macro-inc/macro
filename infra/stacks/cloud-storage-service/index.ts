@@ -301,13 +301,7 @@ const cloudStorageService = new CloudStorageService(
       },
       {
         name: 'RUST_LOG',
-        value: `warn,document_storage_service=${
-          stack === 'prod' ? 'debug' : 'trace'
-        },comms_service=${
-          stack === 'prod' ? 'debug' : 'trace'
-        },tower_http=info,macro_share_permissions=${
-          stack === 'prod' ? 'error' : 'trace'
-        },macro_project_utils=info,macro_notify=info`,
+        value: 'info',
       },
       {
         name: 'DOCUMENT_STORAGE_BUCKET',
@@ -376,9 +370,8 @@ const cloudStorageService = new CloudStorageService(
       },
       {
         name: 'CONNECTION_GATEWAY_URL',
-        value: `https://connection-gateway${
-          stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
+        value: `https://connection-gateway${stack === 'prod' ? '' : `-${stack}`
+          }.macro.com`,
       },
       {
         name: 'BULK_UPLOAD_REQUESTS_TABLE',
