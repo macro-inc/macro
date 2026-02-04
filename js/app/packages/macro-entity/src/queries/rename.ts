@@ -187,11 +187,8 @@ function performOptimisticRenameUpdates(
   entities: EntityRenameData[]
 ): RenameRollbackContext {
   renamePreviewSetData(entities);
-
   renameHistorySetData(entities);
-
   renameDssSetData(entities);
-
   const channelContexts = renameChannelSetData(entities);
 
   return {
