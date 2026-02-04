@@ -16,6 +16,7 @@ import {
   setActiveScope,
   setActiveScopeBranch,
   setExecutedTokens,
+  setHotkeyTokenMap,
   setLastExecutedCommand,
   setPressedKeys,
 } from './state';
@@ -168,6 +169,41 @@ export function removeScope(scopeId: string) {
     }
     return;
   }
+
+  const commandsToRemove: HotkeyCommand[] = [];
+  scope.hotkeyCommands.forEach((commands) => {
+    commandsToRemove.push(...commands);
+  });
+  commandsToRemove.push(...scope.unkeyedCommands);
+
+  if (commandsToRemove.length > 0) {
+    setHotkeyTokenMap((prev) => {
+      const newMap = new Map(prev);
+      let modified = false;
+
+      for (const command of commandsToRemove) {
+        if (command.hotkeyToken) {
+          const existingCommands = newMap.get(command.hotkeyToken);
+          if (existingCommands) {
+            const filtered = existingCommands.filter((c) => c !== command);
+            if (filtered.length !== existingCommands.length) {
+              modified = true;
+              if (filtered.length > 0) {
+                newMap.set(command.hotkeyToken, filtered);
+              } else {
+                newMap.delete(command.hotkeyToken);
+              }
+            }
+          }
+        }
+      }
+
+      return modified ? newMap : prev;
+    });
+  }
+
+  scope.hotkeyCommands.clear();
+  scope.unkeyedCommands.length = 0;
 
   // if scope is in currently active scope branch, we want to "snip just above it", i.e. set active scope to closest DOM scope parent.
   if (scope.type === 'dom') {
