@@ -811,18 +811,15 @@ export function optimisticUpdateDssItemViewedAt(itemId: string): void {
 
           if (currentItemId !== itemId) return item;
 
-          // Update viewedAt based on item type
           switch (item.tag) {
             case 'document':
             case 'chat':
             case 'project':
+            case 'emailThread':
               item.data.viewedAt = Date.parse(now);
               break;
             case 'channel':
               item.data.viewed_at = now;
-              break;
-            case 'emailThread':
-              item.data.viewedAt = Date.parse(now);
               break;
           }
 
