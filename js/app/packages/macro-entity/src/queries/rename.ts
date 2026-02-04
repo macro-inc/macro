@@ -9,8 +9,11 @@ import type { ItemType } from '@service-storage/client';
 import type { EntityData } from '../types/entity';
 import { queryClient } from './client';
 import { queryKeys } from './key';
-import { useMutation } from '@tanstack/solid-query';
+import { type InfiniteData, useMutation } from '@tanstack/solid-query';
 import { toast } from '@core/component/Toast/Toast';
+import type { SoupPage } from '@service-storage/generated/schemas';
+import { setPreviewData } from '@queries/preview';
+import { setHistoryItemData } from '@queries/history/history';
 
 type EntityWithName = EntityData & { name: string };
 
@@ -26,9 +29,14 @@ type EntityRenameOperationResult = {
 /** Map of channel ID to its update context */
 type ChannelRenameContexts = Map<string, UpdateChannelNameContext | undefined>;
 
+type RenameRollbackContext = {
+  channels: ChannelRenameContexts;
+};
+
 type EntityRenameData = {
   id: string;
   itemType: ItemType;
+  oldName: string;
   newName: string;
 };
 
@@ -43,7 +51,7 @@ type RenameDssEntityMutationData = EntityRenameOperationResult;
 type BulkRenameDssEntityMutationData = RenameDssEntityMutationData[];
 
 type RenameOnMutateResult = {
-  contexts: ChannelRenameContexts;
+  contexts: RenameRollbackContext;
   updates: EntityRenameData[];
 };
 
@@ -54,42 +62,68 @@ const getEntityRenameData = (
   return {
     id: entity.id,
     itemType: entity.type,
+    oldName: entity.name,
     newName,
   };
 };
 
 const performEntityRename = async (operation: EntityRenameOperation) => {
   const data = getEntityRenameData(operation);
-  const success = await renameItem(data);
+  const success = await renameItem({ ...data, skipRefetch: true });
   return { success };
 };
 
-const isEntityRenameSupported = (entity: EntityData) => {
+const validateEntityRename = (entity: EntityData): void => {
   switch (entity.type) {
     case 'channel':
-      return entity.channelType !== 'direct_message';
+      // NOTE: channel type is undefined if provided from the split modal due to casting in createEntityData
+      if (entity.channelType === 'direct_message') {
+        throw new Error('Direct messages do not support renaming');
+      }
+      break;
     case 'document':
     case 'chat':
     case 'project':
-      return true;
+      return;
     default:
-      return false;
+      throw new Error(`Unsupported entity type: ${entity.type}`);
   }
 };
 
 /**
  * Helper to update entity names in DSS query data
  */
-function updateEntityNamesInQueryData(
-  prev: { pages: { items: EntityData[] }[] } | undefined,
+function updateEntityNamesInDssQueryData(
+  prev: InfiniteData<SoupPage, unknown> | undefined,
   updates: EntityIdToNameMap
-) {
+): InfiniteData<SoupPage, unknown> | undefined {
   if (!prev) return prev;
   const pages = prev.pages.map((page) => ({
     ...page,
     items: page.items.map((item) => {
-      const newName = updates.get(item.id);
-      return newName ? { ...item, name: newName } : item;
+      // NOTE: reactivity does not seem to be a problem here so no spread is needed?
+      switch (item.tag) {
+        case 'channel': {
+          const itemId = item.data.channel.id;
+          const newName = updates.get(itemId);
+          if (!newName) return item;
+          item.data.channel.name = newName;
+          break;
+        }
+        case 'document':
+        case 'chat':
+        case 'project': {
+          const itemId = item.data.id;
+          const newName = updates.get(itemId);
+          if (!newName) return item;
+          item.data.name = newName;
+          break;
+        }
+        default:
+          // NOTE: email renames are not supported here
+          break;
+      }
+      return item;
     }),
   }));
   return {
@@ -98,28 +132,27 @@ function updateEntityNamesInQueryData(
   };
 }
 
-/**
- * Helper to perform optimistic rename updates for entities
- */
-function performOptimisticRenameUpdates(
-  entities: EntityRenameData[]
-): ChannelRenameContexts {
+const renameDssSetData = (entities: EntityRenameData[]) => {
   const updates: EntityIdToNameMap = new Map(
     entities.map((e) => [e.id, e.newName])
   );
-  const contexts: ChannelRenameContexts = new Map();
 
   queryClient.cancelQueries({
-    queryKey: queryKeys.dss({ infinite: true }),
+    queryKey: queryKeys.all.dss,
   });
-
-  queryClient.setQueriesData(
-    { queryKey: queryKeys.dss({ infinite: true }) },
-    (prev: { pages: { items: EntityData[] }[] } | undefined) =>
-      updateEntityNamesInQueryData(prev, updates)
+  queryClient.setQueriesData({ queryKey: queryKeys.all.dss }, (prev) =>
+    updateEntityNamesInDssQueryData(
+      prev as InfiniteData<SoupPage, unknown> | undefined,
+      updates
+    )
   );
+};
 
-  // Handle channel-specific optimistic updates
+const renameChannelSetData = (
+  entities: EntityRenameData[]
+): ChannelRenameContexts => {
+  const contexts: ChannelRenameContexts = new Map();
+
   entities.forEach(({ id, itemType, newName }) => {
     if (itemType === 'channel') {
       const context = optimisticUpdateChannelName({
@@ -133,6 +166,43 @@ function performOptimisticRenameUpdates(
   });
 
   return contexts;
+};
+
+const renamePreviewSetData = (entities: EntityRenameData[]) => {
+  entities.forEach(({ id, newName }) => {
+    setPreviewData(id, (prev) => ({
+      ...prev,
+      name: newName,
+    }));
+  });
+};
+
+const renameHistorySetData = (entities: EntityRenameData[]) => {
+  entities.forEach(({ id, newName }) => {
+    setHistoryItemData(id, (prev) => ({
+      ...prev,
+      name: newName,
+    }));
+  });
+};
+
+/**
+ * Helper to perform optimistic rename updates for entities
+ */
+function performOptimisticRenameUpdates(
+  entities: EntityRenameData[]
+): RenameRollbackContext {
+  renamePreviewSetData(entities);
+
+  renameHistorySetData(entities);
+
+  renameDssSetData(entities);
+
+  const channelContexts = renameChannelSetData(entities);
+
+  return {
+    channels: channelContexts,
+  };
 }
 
 /**
@@ -142,10 +212,14 @@ function rollbackOptimisticRenameUpdates({
   contexts,
   updates,
 }: RenameOnMutateResult): void {
-  if (!contexts) return;
-  updates.forEach(({ id, itemType }) => {
+  updates.forEach(({ id, oldName, itemType }) => {
+    const reverseUpdate = { id, itemType, newName: oldName, oldName };
+    renameDssSetData([reverseUpdate]);
+    renameHistorySetData([reverseUpdate]);
+    renamePreviewSetData([reverseUpdate]);
+
     if (itemType === 'channel') {
-      const context = contexts.get(id);
+      const context = contexts.channels.get(id);
       if (context) {
         rollbackUpdateChannelName(id, context);
       } else {
@@ -159,9 +233,7 @@ const bulkRenameMutationFn = async (
   params: BulkRenameDssEntityMutationVariables
 ): Promise<BulkRenameDssEntityMutationData> => {
   const entities = params.map((p) => p.entity);
-  if (!entities.every(isEntityRenameSupported)) {
-    throw new Error(`Unsupported entity type provided`);
-  }
+  entities.forEach(validateEntityRename);
 
   return await Promise.all(params.map(performEntityRename));
 };
@@ -180,20 +252,18 @@ const bulkRenameOnSettled = (
   params: BulkRenameDssEntityMutationVariables,
   onMutateResult: RenameOnMutateResult | undefined
 ): void => {
-  if (error) {
-    console.error(`Failed bulk rename`, params, data, error);
-    toast.failure('Failed to rename items');
+  const hasFailed = !!error || data?.some((d) => !d.success);
+  if (hasFailed) {
+    console.error(`Failed rename`, params, data, error);
+    toast.failure('Failed to rename');
 
     if (onMutateResult) {
       rollbackOptimisticRenameUpdates(onMutateResult);
     }
+
+    // TODO: refetch since some items may have succeeded
+    // or only rollback the failed items
   }
-
-  // TODO: refetch channel id/list query
-
-  queryClient.invalidateQueries({
-    queryKey: queryKeys.all.dss,
-  });
 };
 
 /**
@@ -222,13 +292,14 @@ export function createRenameDssEntityMutation(
     >(
       {
         onMutate: async (params) => bulkRenameOnMutate([params]),
-        onSettled: (data, error, params, onMutateResult) =>
+        onSettled: (data, error, params, onMutateResult) => {
           bulkRenameOnSettled(
             data ? [data] : undefined,
             error,
             [params],
             onMutateResult
-          ),
+          );
+        },
       },
       callbacks
     ),
