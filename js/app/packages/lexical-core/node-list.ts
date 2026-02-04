@@ -36,6 +36,7 @@ import { UnlinkedTextNode } from './nodes/UnlinkedTextNode';
 import { UserMentionNode } from './nodes/UserMentionNode';
 import { VideoNode } from './nodes/VideoNode';
 import { ThemeMentionNode } from './nodes/ThemeMentionNode';
+import { UnknownXmlNode } from './nodes/UnknownXmlNode';
 import { WatermarkNode } from './nodes/WatermarkNode';
 
 /**
@@ -95,6 +96,7 @@ export const SupportedNodeTypes = [
   ClassedBlockNode,
   WatermarkNode,
   ThemeMentionNode,
+  UnknownXmlNode,
 ] as const;
 
 export const NodeReplacements: LexicalNodeReplacement[] = [

@@ -3,7 +3,6 @@
  * synced via a single LoroText item
  */
 
-import { ENABLE_SVG_PREVIEW } from '@core/constant/featureFlags';
 import {
   $isCodeNode,
   CodeNode,
@@ -21,6 +20,8 @@ import {
 } from 'lexical';
 import { $applyIdFromSerialized } from '../plugins/nodeIdPlugin';
 import { $applyPeerIdFromSerialized } from '../plugins/peerIdPlugin';
+
+const ENABLE_SVG_PREVIEW = true;
 
 /**
  * Lexical default imported prism languages.
@@ -53,7 +54,7 @@ import {
   normalizedLanguage,
   type SupportedLanguage,
   SupportedLanguages,
-} from '@lexical-core/utils/languageSupport';
+} from '../utils/languageSupport';
 
 const VERSION = 2;
 

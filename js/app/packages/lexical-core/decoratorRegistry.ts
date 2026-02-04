@@ -53,6 +53,10 @@ import type {
   WatermarkDecoratorProps,
   WatermarkNode,
 } from './nodes/WatermarkNode';
+import type {
+  UnknownXmlNode,
+  UnknownDecoratorProps,
+} from './nodes/UnknownXmlNode';
 
 // Generic component type to be overridden by solid-js on the front end
 // and nothing on the backend.
@@ -118,6 +122,10 @@ export interface NodeDecoratorMap {
   WatermarkNode: {
     klass: typeof WatermarkNode;
     props: WatermarkDecoratorProps;
+  };
+  UnknownXmlNode: {
+    klass: typeof UnknownXmlNode;
+    props: UnknownDecoratorProps;
   };
 }
 
