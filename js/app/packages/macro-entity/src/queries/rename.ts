@@ -253,16 +253,48 @@ const bulkRenameOnSettled = (
   onMutateResult: RenameOnMutateResult | undefined
 ): void => {
   const hasFailed = !!error || data?.some((d) => !d.success);
-  if (hasFailed) {
-    console.error(`Failed rename`, params, data, error);
-    toast.failure('Failed to rename');
+  if (!hasFailed) return;
 
-    if (onMutateResult) {
-      rollbackOptimisticRenameUpdates(onMutateResult);
+  console.error(`Failed rename`, params, data, error);
+  toast.failure('Failed to rename');
+
+  if (!onMutateResult) {
+    // TODO: refetch everything since we don't have rollback data
+    return;
+  }
+
+  // If error occurred without data, rollback everything
+  if (!data) {
+    rollbackOptimisticRenameUpdates(onMutateResult);
+    return;
+  }
+
+  // Rollback only the failed items by matching indices
+  const failedUpdates: EntityRenameData[] = [];
+  const failedChannelContexts: ChannelRenameContexts = new Map();
+
+  data.forEach((result, index) => {
+    if (!result.success) {
+      const update = onMutateResult.updates[index];
+      if (update) {
+        failedUpdates.push(update);
+        // Preserve channel context for failed channels
+        if (update.itemType === 'channel') {
+          const context = onMutateResult.contexts.channels.get(update.id);
+          if (context !== undefined) {
+            failedChannelContexts.set(update.id, context);
+          }
+        }
+      }
     }
+  });
 
-    // TODO: refetch since some items may have succeeded
-    // or only rollback the failed items
+  // Rollback only the failed items
+  if (failedUpdates.length > 0) {
+    rollbackOptimisticRenameUpdates({
+      contexts: { channels: failedChannelContexts },
+      updates: failedUpdates,
+    });
   }
 };
 
