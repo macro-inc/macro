@@ -47,6 +47,7 @@ import {
   getEntitySearchText,
   getEntityTimestampedItem,
   getEntityType,
+  isChannelEntity,
   threadMapper,
 } from './entityUtils';
 import { OptionCheckBox } from './OptionCheckBox';
@@ -325,7 +326,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const entitySearch = createFreshSearch<CombinedEntity>(
     createEntitySearchConfig(currentUserDomain),
     getEntitySearchText,
-    (item) => item.kind === 'channel',
+    isChannelEntity,
     getEntityTimestampedItem
   );
 

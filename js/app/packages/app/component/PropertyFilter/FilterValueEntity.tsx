@@ -10,6 +10,7 @@ import {
   getEntitySearchText,
   getEntityTimestampedItem,
   getEntityType,
+  isChannelEntity,
   threadMapper,
 } from '@core/component/Properties/component/modal/shared/entityUtils';
 import { usePropertyEntityDisplay } from '@core/component/Properties/hooks/usePropertyEntityDisplay';
@@ -205,7 +206,7 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
   const entitySearch = createFreshSearch<CombinedEntity>(
     createEntitySearchConfig(currentUserDomain),
     getEntitySearchText,
-    (item) => item.kind === 'channel',
+    isChannelEntity,
     getEntityTimestampedItem
   );
 

@@ -7,8 +7,9 @@ import {
   createEntitySearchConfig,
   entityMapper,
   getEntitySearchText,
-  threadMapper,
   getEntityTimestampedItem,
+  isChannelEntity,
+  threadMapper,
 } from '@core/component/Properties/component/modal/shared/entityUtils';
 import { useContacts } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
@@ -163,7 +164,7 @@ export function useEntitiesForProperty(
   const entitySearch = createFreshSearch<CombinedEntity>(
     createEntitySearchConfig(currentUserDomain),
     getEntitySearchText,
-    (item) => item.kind === 'channel',
+    isChannelEntity,
     getEntityTimestampedItem
   );
 

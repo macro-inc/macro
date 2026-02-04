@@ -85,6 +85,11 @@ export function getEntityType(entity: CombinedEntity): EntityType {
   }
 }
 
+/** Check if entity is a channel */
+export function isChannelEntity(item: CombinedEntity): boolean {
+  return item.kind === 'channel';
+}
+
 /** Get timestamped item from combined entity */
 export function getEntityTimestampedItem<T extends CombinedEntity>(
   item: T
