@@ -2,7 +2,6 @@ use axum::{
     Router,
     routing::{delete, get, patch, post},
 };
-use macro_axum_utils::compose_layers;
 
 pub mod add_participants;
 pub mod create_channel;
