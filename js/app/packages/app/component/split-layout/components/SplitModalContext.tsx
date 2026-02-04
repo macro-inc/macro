@@ -64,8 +64,8 @@ export function SplitModalProvider(props: ParentProps) {
     setIsOpen(true);
   };
 
-  // TODO: this casting is a bit dangerous since downstream
-  // components might not be aware that some fields are missing
+  // TODO: we should ideally not be type casting here because
+  // downstream components might not be aware that some entity data fields are missing
   const createEntityData = (): EntityData | undefined => {
     const params = modalParams();
     if (!params) return undefined;
