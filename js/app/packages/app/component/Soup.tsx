@@ -679,9 +679,6 @@ export function Soup() {
     'channel',
     (notification) => {
       entityQueryClient.invalidateQueries({
-        queryKey: queryKeys.all.channel,
-      });
-      entityQueryClient.invalidateQueries({
         queryKey: queryKeys.all.dss,
       });
       invalidateEntityNotifications(notification.entity_id);
