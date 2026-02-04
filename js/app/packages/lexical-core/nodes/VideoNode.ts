@@ -228,7 +228,7 @@ export class VideoNode extends MediaNode<{ controls: boolean }> {
       return this.__cachedDecoratorComponent;
     }
 
-    const decorator = getDecorator<VideoNode>(VideoNode);
+    const decorator = getDecorator<VideoDecoratorProps>(VideoNode);
     if (decorator) {
       const comp = () => decorator(this.exportComponentProps());
       this.__cachedDecoratorComponent = comp;

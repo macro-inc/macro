@@ -142,7 +142,8 @@ export class GroupMentionNode extends DecoratorNode<
   }
 
   decorate(_: LexicalEditor, config: EditorConfig) {
-    const decorator = getDecorator<GroupMentionNode>(GroupMentionNode);
+    const decorator =
+      getDecorator<GroupMentionDecoratorProps>(GroupMentionNode);
     if (decorator) {
       return () =>
         decorator({

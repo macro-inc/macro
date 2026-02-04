@@ -125,15 +125,16 @@ export class UnknownMentionNode extends DecoratorNode<
   }
 
   decorate(_: LexicalEditor, config: EditorConfig) {
-    const decorator = getDecorator<UnknownMentionNode>(UnknownMentionNode);
-    if (decorator) {
-      return () =>
-        decorator({
-          name: this.getName(),
-          key: this.getKey(),
-          theme: config.theme,
-        });
-    }
+    const decorator =
+      getDecorator<UnknownMentionDecoratorProps>(UnknownMentionNode);
+    if (!decorator) return;
+
+    return () =>
+      decorator({
+        name: this.__name,
+        key: this.getKey(),
+        theme: config.theme,
+      });
   }
 }
 
