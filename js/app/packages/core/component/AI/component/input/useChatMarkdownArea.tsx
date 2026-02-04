@@ -51,7 +51,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import type { IOrganizationUser } from '@core/user';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { $isDocumentMentionNode } from '@lexical-core';
-import type { Item } from '@service-storage/generated/schemas/item';
+import type { HistoryItem } from '@queries/history/history';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { activeElement } from 'app/signal/focus';
 import { filePastePlugin } from 'core/component/LexicalMarkdown/plugins/file-paste/filePastePlugin';
@@ -221,7 +221,7 @@ export type ConsumableChatMarkdownAreaProps = {
   initialValue?: string;
   placeholder?: string;
   users?: Accessor<IOrganizationUser[]>;
-  history?: Accessor<Item[]>;
+  history?: Accessor<HistoryItem[]>;
   onPasteFile?: (files: File[]) => void;
   dontFocusOnMount?: boolean;
   portalScope?: PortalScope;
