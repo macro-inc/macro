@@ -9,22 +9,20 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import { UserIcon } from '@core/component/UserIcon';
 import { ENABLE_CHAT_CHANNEL_ATTACHMENT } from '@core/constant/featureFlags';
-import {
-  useChannelsContext,
-  useDmActivityByUserId,
-} from '@core/context/channels';
+import { useChannelsContext } from '@core/context/channels';
 import { useEmail } from '@core/context/user';
 import clickOutside from '@core/directive/clickOutside';
 import {
   type ChannelWithParticipants,
   type IUser,
+  useAugmentUserWithDmActivity,
   useContacts,
 } from '@core/user';
 import { getDateSuggestions } from '@core/util/dateParser';
 import {
   createFreshSearch,
   FreshSearchPresets,
-  TimestampedItem,
+  type TimestampedItem,
 } from '@core/util/freshSort';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import ClockIcon from '@icon/regular/clock.svg';
@@ -132,6 +130,10 @@ const getItemTimestamp = (item: CombinedEntity): TimestampedItem => {
       return {
         updatedAt: item.data.updatedAt,
         viewedAt: item.data.viewedAt,
+      };
+    case 'user':
+      return {
+        lastInteraction: item.data.lastInteraction,
       };
     default:
       return {};
@@ -486,26 +488,15 @@ function MentionsMenuInner(props: {
   }
 
   const contacts = useContacts();
+  const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
 
-  const dmActivityByUserId = useDmActivityByUserId();
+  const users = createMemo((): Entity<'user'>[] => {
+    const list = props.users?.() ?? contacts();
 
-  const users = createMemo(
-    (): (Entity<'user'> & { lastInteraction: number | undefined })[] => {
-      const list = props.users?.() ?? contacts();
-      const dmActivity = dmActivityByUserId();
-
-      return list
-        .map(entityMapper('user'))
-        .map((entity) => {
-          const dmTimestamp = dmActivity.get(entity.id);
-          return {
-            ...entity,
-            lastInteraction: dmTimestamp,
-          };
-        })
-        .filter(allItemFilter);
-    }
-  );
+    return list
+      .map((user) => entityMapper('user')(augmentUserWithDmActivity(user)))
+      .filter(allItemFilter);
+  });
 
   let channels: Accessor<Entity<'channel'>[]>;
   if (props.channels) {
@@ -703,19 +694,14 @@ function MentionsMenuInner(props: {
     return email ? email.split('@')[1] : undefined;
   });
 
-  const userSearch = createFreshSearch<
-    Entity<'user'> & { lastInteraction: number | undefined }
-  >(
+  const userSearch = createFreshSearch<Entity<'user'>>(
     FreshSearchPresets.baseUserSearch<Entity<'user'>>(
       currentUserDomain,
       (item) => item.data.email
     ),
     getItemSearchText,
     (_item) => false,
-    (item) => ({
-      ...getItemTimestamp(item),
-      lastInteraction: item.lastInteraction,
-    })
+    getItemTimestamp
   );
 
   // Group aliases available in channel context

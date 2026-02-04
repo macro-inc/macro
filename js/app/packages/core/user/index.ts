@@ -7,6 +7,7 @@ export {
   type WithCustomUserInput,
 } from './combinedRecipient';
 export { useContacts } from './contactService';
+export { useAugmentUserWithDmActivity } from './dmActivity';
 export {
   type DisplayNameParts,
   useDisplayName,

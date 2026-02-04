@@ -1,7 +1,4 @@
-import {
-  useChannelsContext,
-  useDmActivityByUserId,
-} from '@core/context/channels';
+import { useChannelsContext } from '@core/context/channels';
 import {
   type CombinedEntity,
   createEntitySearchConfig,
@@ -14,7 +11,7 @@ import {
   threadMapper,
 } from '@core/component/Properties/component/modal/shared/entityUtils';
 import { usePropertyEntityDisplay } from '@core/component/Properties/hooks/usePropertyEntityDisplay';
-import { useContacts } from '@core/user';
+import { useAugmentUserWithDmActivity, useContacts } from '@core/user';
 import { useEmail } from '@core/context/user';
 import { createFreshSearch } from '@core/util/freshSort';
 import {
@@ -94,7 +91,6 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
   const contacts = useContacts();
   const channelsContext = useChannelsContext();
   const channels = channelsContext.channels;
-  const dmActivityByUserId = useDmActivityByUserId();
   const historyQuery = useHistoryQuery();
 
   // Email queries for THREAD type or generic ENTITY (no specific type)
@@ -133,20 +129,11 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
   });
 
   // Helper to augment user entities with DM activity timestamps (same as MentionsMenu)
-  const augmentUsersWithDmActivity = () => {
-    const dmActivity = dmActivityByUserId();
-    return contacts()
-      .map(entityMapper('user'))
-      .map((entity) => {
-        const dmTimestamp = dmActivity.get(entity.id);
-        if (dmTimestamp) {
-          return {
-            ...entity,
-            lastInteraction: dmTimestamp,
-          };
-        }
-        return entity;
-      });
+  const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
+  const augmentUsersWithDmActivity = (): CombinedEntity[] => {
+    return contacts().map((user) =>
+      entityMapper('user')(augmentUserWithDmActivity(user))
+    );
   };
 
   // Get entities based on specific entity type (same logic as PropertyEntitySelector)

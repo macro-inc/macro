@@ -16,7 +16,7 @@ export type CombinedEntity =
 /** Creates a mapper function for a specific entity kind */
 export function entityMapper(kind: 'item' | 'user' | 'channel') {
   return (data: Item | IUser | ChannelWithParticipants): CombinedEntity => {
-    return { kind, data, id: (data as { id: string }).id } as CombinedEntity;
+    return { kind, data, id: data.id } as CombinedEntity;
   };
 }
 
@@ -102,6 +102,10 @@ export function getEntityTimestampedItem<T extends CombinedEntity>(
     case 'channel':
       return {
         updatedAt: item.data.updated_at,
+      };
+    case 'user':
+      return {
+        lastInteraction: item.data.lastInteraction,
       };
     default:
       return {};
