@@ -219,7 +219,7 @@ pub fn to_typed_row(
         .deserialize_json::<NotifEvent>()
 }
 
-/// Build the strongly typed v2 router.
+/// Build the strongly typed router.
 ///
 /// Instantiates the notification crate's generic router, then overwrites the
 /// GET `/` route with a wrapper that deserializes each row into [`NotifEvent`].
@@ -258,7 +258,7 @@ pub fn router<
 #[utoipa::path(
     get,
     operation_id = "list_typed_notifications",
-    path = "/v2/user_notifications",
+    path = "/v1/user_notifications",
     params(
         ("limit" = Option<u32>, Query, description = "Size limit per page."),
         ("cursor" = Option<String>, Query, description = "Cursor value. Base64 encoded timestamp and item id."),
@@ -312,7 +312,7 @@ async fn list_typed_notifications<S: ::notification::domain::service::Notificati
 #[utoipa::path(
     post,
     operation_id = "bulk_get_typed_notifications_by_event_item_ids",
-    path = "/v2/user_notifications/item/bulk",
+    path = "/v1/user_notifications/item/bulk",
     params(
         ("limit" = Option<u32>, Query, description = "Size limit per page. Default 20, max 500."),
         ("cursor" = Option<String>, Query, description = "Cursor value. Base64 encoded timestamp and item id."),
@@ -367,7 +367,7 @@ async fn bulk_get_typed_notifications_by_event_item_ids<
 #[utoipa::path(
     get,
     operation_id = "get_typed_notifications_by_event_item_id",
-    path = "/v2/user_notifications/item/{event_item_id}",
+    path = "/v1/user_notifications/item/{event_item_id}",
     params(
         ("event_item_id" = uuid::Uuid, Path, description = "The event item ID"),
         ("limit" = Option<u32>, Query, description = "Size limit per page."),
@@ -420,7 +420,7 @@ async fn get_typed_by_event_item_id<S: ::notification::domain::service::Notifica
 #[utoipa::path(
     get,
     operation_id = "get_typed_notification_by_id",
-    path = "/v2/user_notifications/{notification_id}",
+    path = "/v1/user_notifications/{notification_id}",
     params(
         ("notification_id" = uuid::Uuid, Path, description = "ID of the notification"),
     ),
