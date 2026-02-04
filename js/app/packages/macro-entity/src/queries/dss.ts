@@ -42,6 +42,15 @@ import {
 import { queryClient } from './client';
 import { type DssQueryKey, dssQueryKeyHashFn, queryKeys } from './key';
 
+const getSoupItemId = (item: SoupApiItem): string => {
+  switch (item.tag) {
+    case 'channel':
+      return item.data.channel.id;
+    default:
+      return item.data.id;
+  }
+};
+
 const resolveDocumentEntityName = (
   entity: DocumentEntity | SoupDocument
 ): string => {
@@ -447,15 +456,6 @@ export function createBulkDeleteDssItemsMutation() {
         queryKey: queryKeys.all.search,
       });
 
-      function getSoupItemId(item: SoupApiItem): string {
-        switch (item.tag) {
-          case 'channel':
-            return item.data.channel.id;
-          default:
-            return item.data.id;
-        }
-      }
-
       function removeEntitiesFromQueryData(
         prev: InfiniteData<SoupPage, unknown> | undefined
       ): InfiniteData<SoupPage, unknown> | undefined {
@@ -789,4 +789,51 @@ export function createBulkMoveToProjectDssEntityMutation() {
       );
     },
   }));
+}
+
+/**
+ * Optimistically update the viewedAt timestamp for a DSS item.
+ * Updates the item across all DSS queries.
+ */
+export function optimisticUpdateDssItemViewedAt(itemId: string): void {
+  const now = new Date().toISOString();
+
+  queryClient.setQueriesData(
+    { queryKey: queryKeys.all.dss },
+    (prev: InfiniteData<SoupPage, unknown> | undefined) => {
+      if (!prev) return prev;
+
+      const pages = prev.pages.map((page) => ({
+        ...page,
+        items: page.items.map((item): SoupApiItem => {
+          // Get the item ID based on its type
+          const currentItemId = getSoupItemId(item);
+
+          if (currentItemId !== itemId) return item;
+
+          // Update viewedAt based on item type
+          switch (item.tag) {
+            case 'document':
+            case 'chat':
+            case 'project':
+              item.data.viewedAt = Date.parse(now);
+              break;
+            case 'channel':
+              item.data.viewed_at = now;
+              break;
+            case 'emailThread':
+              item.data.viewedAt = Date.parse(now);
+              break;
+          }
+
+          return item;
+        }),
+      }));
+
+      return {
+        ...prev,
+        pages,
+      };
+    }
+  );
 }

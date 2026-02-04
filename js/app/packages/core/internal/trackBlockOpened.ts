@@ -1,5 +1,6 @@
 import type { BlockName } from '../block';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
+import { optimisticUpdateDssItemViewedAt } from '@macro-entity';
 import {
   blockNameToItemType,
   isCloudStorageItem,
@@ -18,7 +19,7 @@ export function track(
 ) {
   const itemType = blockNameToItemType(blockName);
 
-  // TODO: we can also optimistically update viewed at on dss query
+  optimisticUpdateDssItemViewedAt(itemId);
 
   if (!isCloudStorageItem(itemType)) return;
 
