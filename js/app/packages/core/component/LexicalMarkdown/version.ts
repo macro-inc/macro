@@ -6,7 +6,8 @@
  *
  * Version 1.0 - July 18, 2025
  * Version 1.1 - August 7, 2025. Added scale support to media nodes.
+ * Version 1.2 - Feb 3, 2026. Added theme-mention-node.
  */
-export const MARKDOWN_VERSION_COUNTER = 1.1;
+export const MARKDOWN_VERSION_COUNTER = 1.2;
 
 export const STAGING_TAG = 'staging';
