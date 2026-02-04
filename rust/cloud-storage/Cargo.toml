@@ -196,7 +196,11 @@ tower-http = { version = "0.6.1", features = [
   "cors",
   "trace",
 ] }
+opentelemetry = "0.31.0"
+opentelemetry_sdk = { version = "0.31.0", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.31.0", features = ["grpc-tonic"] }
 tracing = "0.1.44"
+tracing-opentelemetry = "0.32.1"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
 tracing-tree = "0.4.0"
 unsynn = "0.3"
