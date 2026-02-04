@@ -249,7 +249,8 @@ const bulkRenameOnSettled = (
   toast.failure('Failed to rename');
 
   if (!onMutateResult) {
-    // TODO: refetch everything since we don't have rollback data
+    // most likely nothing to rollback, but it's possible there were mutations that succeeded before the OnMutate failed
+    // TODO: refetch everything to be safe
     return;
   }
 
