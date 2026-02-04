@@ -10,7 +10,7 @@ import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import type { DocumentMentionInfo } from '@lexical-core';
 import type { Item } from '@service-storage/generated/schemas/item';
-import { useHistoryQuery } from '@queries/history/history';
+import { useHistoryQuery, type HistoryItem } from '@queries/history/history';
 import fuzzy from 'fuzzy';
 import {
   createMemo,
@@ -29,7 +29,7 @@ type AttachMenuProps = {
   open?: boolean;
   onClose?: () => void;
   trigger: JSX.Element;
-  onAttach: (items: Item[]) => void;
+  onAttach: (items: HistoryItem[]) => void;
   onAttachDocuments?: (items: DocumentMentionInfo[]) => void;
   attachedItems?: () => Item[];
   setIsPending?: Setter<boolean>;
