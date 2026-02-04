@@ -12,6 +12,8 @@ pub enum ProjectLiteral {
     ProjectId(Uuid),
     /// the owner of the project
     Owner(MacroUserIdStr<'static>),
+    /// this node value filters by project importance. false short-circuits to match nothing.
+    Importance(bool),
 }
 
 impl ExpandFrame<ProjectLiteral> for ProjectFilters {
@@ -21,6 +23,7 @@ impl ExpandFrame<ProjectLiteral> for ProjectFilters {
         let ProjectFilters {
             project_ids,
             owners,
+            importance,
         } = input;
 
         let project_ids = project_ids
@@ -33,6 +36,10 @@ impl ExpandFrame<ProjectLiteral> for ProjectFilters {
             .map(|s| MacroUserIdStr::parse_from_str(s).map(CowLike::into_owned))
             .try_expand(|r| r.map(ProjectLiteral::Owner), Expr::or)?;
 
-        Ok([project_ids, owners].into_iter().fold_with(Expr::and))
+        let importance_node = importance.map(|imp| Expr::Literal(ProjectLiteral::Importance(imp)));
+
+        Ok([project_ids, owners, importance_node]
+            .into_iter()
+            .fold_with(Expr::and))
     }
 }

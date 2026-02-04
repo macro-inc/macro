@@ -77,6 +77,8 @@ fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
         filter_ast::ExprFrame::Literal(DocumentLiteral::Owner(o)) => {
             format!(r#"entity_id IN (SELECT id FROM "Document" WHERE owner = '{o}' AND "deletedAt" IS NULL)"#)
         }
+        filter_ast::ExprFrame::Literal(DocumentLiteral::Importance(true)) => String::new(),
+        filter_ast::ExprFrame::Literal(DocumentLiteral::Importance(false)) => "1=0".to_string(),
     });
     if formatting.is_empty() {
         String::new()
@@ -121,6 +123,8 @@ fn build_chat_filter(ast: Option<&Expr<ChatLiteral>>) -> String {
             filter_ast::ExprFrame::Literal(ChatLiteral::Owner(o)) => {
                 format!(r#"entity_id IN (SELECT id FROM "Chat" WHERE "userId" = '{o}' AND "deletedAt" IS NULL)"#)
             }
+            filter_ast::ExprFrame::Literal(ChatLiteral::Importance(true)) => String::new(),
+            filter_ast::ExprFrame::Literal(ChatLiteral::Importance(false)) => "1=0".to_string(),
         });
     if formatting.is_empty() {
         String::new()
@@ -143,6 +147,8 @@ fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
         filter_ast::ExprFrame::Literal(ProjectLiteral::Owner(o)) => {
             format!(r#"entity_id IN (SELECT id FROM "Project" WHERE "userId" = '{o}' AND "deletedAt" IS NULL)"#)
         }
+        filter_ast::ExprFrame::Literal(ProjectLiteral::Importance(true)) => String::new(),
+        filter_ast::ExprFrame::Literal(ProjectLiteral::Importance(false)) => "1=0".to_string(),
     });
     if formatting.is_empty() {
         String::new()

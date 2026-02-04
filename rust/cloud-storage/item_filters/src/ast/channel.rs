@@ -18,6 +18,8 @@ pub enum ChannelLiteral {
     ChannelId(Uuid),
     /// the message comes from some sender x
     Sender(MacroUserIdStr<'static>),
+    /// this node value filters by channel importance. false short-circuits to match nothing.
+    Importance(bool),
 }
 
 impl ExpandFrame<ChannelLiteral> for ChannelFilters {
@@ -32,6 +34,7 @@ impl ExpandFrame<ChannelLiteral> for ChannelFilters {
             org_id,
             channel_ids,
             sender_ids,
+            importance,
         } = filter_request;
 
         let thread_ids = thread_ids
@@ -58,10 +61,17 @@ impl ExpandFrame<ChannelLiteral> for ChannelFilters {
             .map(|s| MacroUserIdStr::parse_from_str(s).map(CowLike::into_owned))
             .try_expand(|r| r.map(ChannelLiteral::Sender), Expr::or)?;
 
-        Ok(
-            [thread_ids, mentions, organizations, channel_ids, sender_ids]
-                .into_iter()
-                .fold_with(Expr::and),
-        )
+        let importance_node = importance.map(|imp| Expr::Literal(ChannelLiteral::Importance(imp)));
+
+        Ok([
+            thread_ids,
+            mentions,
+            organizations,
+            channel_ids,
+            sender_ids,
+            importance_node,
+        ]
+        .into_iter()
+        .fold_with(Expr::and))
     }
 }

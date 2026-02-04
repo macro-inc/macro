@@ -97,5 +97,45 @@ VALUES
     ('macro|user-1@test.com', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'document', '2024-01-01 00:00:00', '2024-01-08 10:00:00'),
     ('macro|user-1@test.com', 'a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1', 'chat', '2024-01-01 00:00:00', '2024-01-07 10:00:00');
 
+---------------------------------------------------
+--  DOCUMENT SUB TYPES & ASSIGNEES (for importance testing)
+---------------------------------------------------
+
+-- Make some documents tasks
+INSERT INTO public.document_sub_type ("document_id", "sub_type")
+VALUES
+    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'task'),  -- doc-in-A is a task
+    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'task'),  -- doc-in-B is a task
+    ('cccccccc-cccc-cccc-cccc-cccccccccccc', 'task');   -- doc-in-C is a task
+-- doc-in-D and standalone doc are NOT tasks
+
+-- Assignee properties for tasks
+INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+VALUES
+    -- doc-in-A: assigned to user-1 (important to user-1)
+    (
+        'a0000001-0000-0000-0000-000000000001',
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        'TASK',
+        '00000001-0000-0000-0000-000000000001',
+        '{"type": "EntityReference", "value": [{"entity_type": "USER", "entity_id": "macro|user-1@test.com"}]}'
+    ),
+    -- doc-in-B: assigned to a different user (NOT important to user-1)
+    (
+        'a0000001-0000-0000-0000-000000000002',
+        'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+        'TASK',
+        '00000001-0000-0000-0000-000000000001',
+        '{"type": "EntityReference", "value": [{"entity_type": "USER", "entity_id": "macro|other-user@test.com"}]}'
+    ),
+    -- doc-in-C: assigned to user-1 (important to user-1)
+    (
+        'a0000001-0000-0000-0000-000000000003',
+        'cccccccc-cccc-cccc-cccc-cccccccccccc',
+        'TASK',
+        '00000001-0000-0000-0000-000000000001',
+        '{"type": "EntityReference", "value": [{"entity_type": "USER", "entity_id": "macro|user-1@test.com"}]}'
+    );
+
 -- Re-enable foreign key constraints
 SET session_replication_role = 'origin';

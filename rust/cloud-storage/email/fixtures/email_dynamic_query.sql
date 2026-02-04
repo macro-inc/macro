@@ -23,7 +23,11 @@ VALUES
     ('10000004-0000-0000-0000-000000000004', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'STARRED', 'STARRED', 'Show', 'LabelShow', 'System', NOW()),
     ('10000005-0000-0000-0000-000000000005', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'DRAFT', 'DRAFT', 'Show', 'LabelShow', 'System', NOW()),
     ('10000006-0000-0000-0000-000000000006', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'TRASH', 'TRASH', 'Hide', 'LabelHide', 'System', NOW()),
-    ('10000007-0000-0000-0000-000000000007', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Label_Work', 'Work', 'Show', 'LabelShow', 'User', NOW());
+    ('10000007-0000-0000-0000-000000000007', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Label_Work', 'Work', 'Show', 'LabelShow', 'User', NOW()),
+    -- Category labels for importance testing
+    ('10000008-0000-0000-0000-000000000008', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'CATEGORY_PERSONAL', 'CATEGORY_PERSONAL', 'Show', 'LabelShow', 'System', NOW()),
+    ('10000009-0000-0000-0000-000000000009', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'CATEGORY_UPDATES', 'CATEGORY_UPDATES', 'Show', 'LabelShow', 'System', NOW()),
+    ('10000010-0000-0000-0000-000000000010', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'CATEGORY_PROMOTIONS', 'CATEGORY_PROMOTIONS', 'Show', 'LabelShow', 'System', NOW());
 
 -- Insert test threads
 INSERT INTO email_threads (
@@ -159,4 +163,12 @@ VALUES
     ('30000006-0000-0000-0000-000000000006', '10000007-0000-0000-0000-000000000007'),
 
     -- Message 7: INBOX
-    ('30000007-0000-0000-0000-000000000007', '10000001-0000-0000-0000-000000000001');
+    ('30000007-0000-0000-0000-000000000007', '10000001-0000-0000-0000-000000000001'),
+
+    -- Importance labels:
+    -- Message 1 (thread 1): CATEGORY_PERSONAL (priority label → important)
+    ('30000001-0000-0000-0000-000000000001', '10000008-0000-0000-0000-000000000008'),
+    -- Message 6 (thread 6): CATEGORY_UPDATES (depriority label, no priority → NOT important)
+    ('30000006-0000-0000-0000-000000000006', '10000009-0000-0000-0000-000000000009'),
+    -- Message 7 (thread 7): CATEGORY_PROMOTIONS (depriority label, no priority → NOT important)
+    ('30000007-0000-0000-0000-000000000007', '10000010-0000-0000-0000-000000000010');
