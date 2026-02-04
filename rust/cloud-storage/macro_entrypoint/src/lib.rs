@@ -3,7 +3,10 @@
 //! This is used to provide consistent behaviour with e.g. tracing configurations
 
 use macro_env::Environment;
-use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt};
+use opentelemetry::trace::TracerProvider as _;
+use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_sdk::trace::SdkTracerProvider;
+use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt, util::SubscriberInitExt};
 use tracing_tree::HierarchicalLayer;
 
 /// unit struct which defines the behaviour for instantiation
@@ -25,7 +28,21 @@ impl Default for MacroEntrypoint {
 
 /// sentinel struct which guarantees that we called [MacroEntrypoint::init]
 #[derive(Debug)]
-pub struct InitializedEntrypoint(());
+pub struct InitializedEntrypoint {
+    tracer_provider: Option<SdkTracerProvider>,
+}
+
+impl InitializedEntrypoint {
+    /// Gracefully shut down the OpenTelemetry tracer provider.
+    /// This should be called before the application exits to ensure all traces are flushed.
+    pub fn shutdown(&self) {
+        if let Some(ref provider) = self.tracer_provider
+            && let Err(e) = provider.shutdown()
+        {
+            tracing::error!(error=?e, "failed to shutdown tracer provider");
+        }
+    }
+}
 
 impl MacroEntrypoint {
     /// create a new instance of [Self] from an input [Environment]
@@ -53,6 +70,9 @@ impl MacroEntrypoint {
                     .with_line_number(true)
                     .pretty()
                     .init();
+                InitializedEntrypoint {
+                    tracer_provider: None,
+                }
             }
             (
                 Environment::Local,
@@ -62,22 +82,40 @@ impl MacroEntrypoint {
             ) => {
                 let subscriber = Registry::default().with(HierarchicalLayer::new(level));
                 tracing::subscriber::set_global_default(subscriber).unwrap();
+                InitializedEntrypoint {
+                    tracer_provider: None,
+                }
             }
             (Environment::Production | Environment::Develop, _) => {
-                tracing_subscriber::fmt()
+                let tracer_provider = init_opentelemetry();
+
+                // Get service name for the tracer
+                let service_name =
+                    std::env::var("DD_SERVICE").unwrap_or_else(|_| "unknown-service".to_string());
+
+                let tracer = tracer_provider.tracer(service_name);
+                let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
+
+                let fmt_layer = tracing_subscriber::fmt::layer()
                     .with_ansi(false)
-                    .with_env_filter(EnvFilter::from_default_env())
                     .with_file(true)
                     .with_line_number(true)
                     .json()
                     .with_current_span(true)
                     .with_span_list(false)
-                    .flatten_event(true)
+                    .flatten_event(true);
+
+                Registry::default()
+                    .with(EnvFilter::from_default_env())
+                    .with(fmt_layer)
+                    .with(otel_layer)
                     .init();
+
+                InitializedEntrypoint {
+                    tracer_provider: Some(tracer_provider),
+                }
             }
         }
-
-        InitializedEntrypoint(())
     }
 
     /// begin modifying the options for the local environment
@@ -87,6 +125,42 @@ impl MacroEntrypoint {
             next: Default::default(),
         }
     }
+}
+
+/// Initialize OpenTelemetry with OTLP exporter to the Datadog agent.
+/// The Datadog agent sidecar listens on localhost:4317 for OTLP gRPC.
+fn init_opentelemetry() -> SdkTracerProvider {
+    // Get OTLP endpoint from env, defaulting to localhost:4317 (Datadog agent sidecar)
+    let endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
+        .unwrap_or_else(|_| "http://127.0.0.1:4317".to_string());
+
+    let exporter = opentelemetry_otlp::SpanExporter::builder()
+        .with_tonic()
+        .with_endpoint(&endpoint)
+        .build()
+        .expect("failed to create OTLP span exporter");
+
+    // Get service name from DD_SERVICE or OTEL_SERVICE_NAME
+    let service_name = std::env::var("DD_SERVICE")
+        .or_else(|_| std::env::var("OTEL_SERVICE_NAME"))
+        .unwrap_or_else(|_| "unknown-service".to_string());
+
+    // Get environment from DD_ENV
+    let env = std::env::var("DD_ENV").unwrap_or_else(|_| "unknown".to_string());
+
+    // Get version from DD_VERSION
+    let version = std::env::var("DD_VERSION").unwrap_or_else(|_| "0.0.0".to_string());
+
+    let resource = opentelemetry_sdk::Resource::builder()
+        .with_service_name(service_name)
+        .with_attribute(opentelemetry::KeyValue::new("deployment.environment", env))
+        .with_attribute(opentelemetry::KeyValue::new("service.version", version))
+        .build();
+
+    SdkTracerProvider::builder()
+        .with_batch_exporter(exporter)
+        .with_resource(resource)
+        .build()
 }
 
 /// builder struct for modifying the local environment options
