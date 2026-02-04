@@ -204,25 +204,6 @@ export function File(props: { node: EntityMentionNode; mode: RenderMode }) {
           trigger={
             <div
               class="document-mention internal-link"
-              ontouchstart={(e) => {
-                if (isTouchDevice()) {
-                  e.preventDefault();
-                }
-              }}
-              ontouchend={(e) => {
-                if (isTouchDevice()) {
-                  e.preventDefault();
-                  if (
-                    matches(item(), (i) => !i.loading && i.access === 'access')
-                  ) {
-                    replaceOrInsertSplit({
-                      type: blockName() as BlockName,
-                      id: props.node.file,
-                    });
-                    track(TrackingEvents.BLOCKCANVAS.FILES.OPENFILESIDE);
-                  }
-                }
-              }}
               on:pointerdown={(e) => {
                 setSelfMouseDownPosition(vec2(e.pageX, e.pageY));
               }}

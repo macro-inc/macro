@@ -4,6 +4,7 @@ import { useUnfurl } from '@core/signal/unfurl';
 import { debounce } from '@solid-primitives/scheduled';
 import { createSignal, type ParentProps, Show } from 'solid-js';
 import { floatWithElement } from '../../directive/floatWithElement';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 false && floatWithElement;
 
@@ -30,7 +31,10 @@ export function LinkWithPreview(props: UnfurlLinkProps) {
         href={props.url}
         target="_blank"
         class={`${props.class || ''}`}
-        onMouseEnter={() => debouncedSetPreviewOpen(true)}
+        onMouseEnter={() => {
+          if (isTouchDevice()) return;
+          debouncedSetPreviewOpen(true);
+        }}
         onMouseLeave={() => {
           debouncedSetPreviewOpen.clear();
           debouncedSetPreviewOpen(false);
