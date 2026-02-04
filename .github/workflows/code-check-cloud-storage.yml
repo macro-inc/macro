@@ -113,22 +113,54 @@ jobs:
         with:
           token: ${{ GITHUB.TOKEN }}
           diff: |
-            docx-unzip-handler: ./rust/cloud-storage/docx-unzip-handler/*
-            worker-trigger: ./rust/cloud-storage/worker-trigger/*
-            document-text-extractor: ./rust/cloud-storage/document-text-extractor/*
-            organization_retention_trigger: ./rust/cloud-storage/organization_retention_trigger/*
-            organization_retention_handler: ./rust/cloud-storage/organization_retention_handler/*
-            delete_chat_handler: ./rust/cloud-storage/delete_chat_handler/*
-            search_upload_handler: ./rust/cloud-storage/search_upload_handler/*
-            upload_extractor_lambda_trigger: ./rust/cloud-storage/upload_extractor_lambda_trigger/*
-            upload_extractor_lambda_handler: ./rust/cloud-storage/upload_extractor_lambda_handler/*
-            email_suppression_handler: ./rust/cloud-storage/email_suppression_handler/*
-            deleted_item_poller: ./rust/cloud-storage/deleted_item_poller/*
-            email_refresh_handler: ./rust/cloud-storage/email_refresh_handler/*
-            email_scheduled_handler: ./rust/cloud-storage/email_scheduled_handler/*
-            email_sfs_delete_handler: ./rust/cloud-storage/email_sfs_delete_handler/*
-            user_link_cleanup_handler: ./rust/cloud-storage/user_link_cleanup_handler/*
-            lambda_aggregate_frecency: ./rust/cloud-storage/lambda_aggregate_frecency/*
+            docx-unzip-handler:
+              - ./rust/cloud-storage/docx-unzip-handler/**/*.rs
+              - ./rust/cloud-storage/docx-unzip-handler/*.toml
+            worker-trigger:
+              - ./rust/cloud-storage/worker-trigger/**/*.rs
+              - ./rust/cloud-storage/worker-trigger/*.toml
+            document-text-extractor:
+              - ./rust/cloud-storage/document-text-extractor/**/*.rs
+              - ./rust/cloud-storage/document-text-extractor/*.toml
+            organization_retention_trigger:
+              - ./rust/cloud-storage/organization_retention_trigger/**/*.rs
+              - ./rust/cloud-storage/organization_retention_trigger/*.toml
+            organization_retention_handler:
+              - ./rust/cloud-storage/organization_retention_handler/**/*.rs
+              - ./rust/cloud-storage/organization_retention_handler/*.toml
+            delete_chat_handler:
+              - ./rust/cloud-storage/delete_chat_handler/**/*.rs
+              - ./rust/cloud-storage/delete_chat_handler/*.toml
+            search_upload_handler:
+              - ./rust/cloud-storage/search_upload_handler/**/*.rs
+              - ./rust/cloud-storage/search_upload_handler/*.toml
+            upload_extractor_lambda_trigger:
+              - ./rust/cloud-storage/upload_extractor_lambda_trigger/**/*.rs
+              - ./rust/cloud-storage/upload_extractor_lambda_trigger/*.toml
+            upload_extractor_lambda_handler:
+              - ./rust/cloud-storage/upload_extractor_lambda_handler/**/*.rs
+              - ./rust/cloud-storage/upload_extractor_lambda_handler/*.toml
+            email_suppression_handler:
+              - ./rust/cloud-storage/email_suppression_handler/**/*.rs
+              - ./rust/cloud-storage/email_suppression_handler/*.toml
+            deleted_item_poller:
+              - ./rust/cloud-storage/deleted_item_poller/**/*.rs
+              - ./rust/cloud-storage/deleted_item_poller/*.toml
+            email_refresh_handler:
+              - ./rust/cloud-storage/email_refresh_handler/**/*.rs
+              - ./rust/cloud-storage/email_refresh_handler/*.toml
+            email_scheduled_handler:
+              - ./rust/cloud-storage/email_scheduled_handler/**/*.rs
+              - ./rust/cloud-storage/email_scheduled_handler/*.toml
+            email_sfs_delete_handler:
+              - ./rust/cloud-storage/email_sfs_delete_handler/**/*.rs
+              - ./rust/cloud-storage/email_sfs_delete_handler/*.toml
+            user_link_cleanup_handler:
+              - ./rust/cloud-storage/user_link_cleanup_handler/**/*.rs
+              - ./rust/cloud-storage/user_link_cleanup_handler/*.toml
+            lambda_aggregate_frecency:
+              - ./rust/cloud-storage/lambda_aggregate_frecency/**/*.rs
+              - ./rust/cloud-storage/lambda_aggregate_frecency/*.toml
 
   check-lambdas:
     needs: diff-check
