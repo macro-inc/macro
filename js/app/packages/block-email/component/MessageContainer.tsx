@@ -134,6 +134,10 @@ export function MessageContainer(props: MessageContainerProps) {
     );
   });
 
+  const draftAttachments = createMemo(() => {
+    return props.message.attachments_draft ?? [];
+  });
+
   const { replaceOrInsertSplit } = useSplitLayout();
   const entityQueryClient = useQueryClient();
 
@@ -282,6 +286,22 @@ export function MessageContainer(props: MessageContainerProps) {
                       onClick={(fileType) =>
                         onClickAttachment(attachment, fileType)
                       }
+                    />
+                  )}
+                </For>
+              </div>
+            </Show>
+
+            {/* Draft attachments. Needed to display attachments of sent messages before they actually get sent (undo window). */}
+            <Show when={draftAttachments().length > 0}>
+              <div class="flex flex-row overflow-x-scroll mt-2 gap-2">
+                <For each={draftAttachments()}>
+                  {(attachment) => (
+                    <EmailAttachmentPill
+                      attachment={{
+                        fileName: attachment.file_name,
+                        mimeType: attachment.content_type,
+                      }}
                     />
                   )}
                 </For>

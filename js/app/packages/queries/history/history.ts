@@ -9,7 +9,7 @@ import {
   useQuery,
   type QueryClient,
 } from '@tanstack/solid-query';
-import type { Accessor } from 'solid-js';
+import type { Accessor, Setter } from 'solid-js';
 import { queryClient } from '../client';
 import { historyKeys } from './keys';
 import {
@@ -29,6 +29,28 @@ export {
 
 const HISTORY_STALE_TIME = 5 * 60 * 1000;
 const HISTORY_GC_TIME = 10 * 60 * 1000;
+
+export function setHistoryItemData(
+  itemId: string,
+  updater: Setter<HistoryItem>
+) {
+  return queryClient.setQueryData<HistoryQueryResponse>(
+    historyKeys.list.queryKey,
+    (prev) => {
+      if (!prev) return prev;
+      const items = prev.data.map((item) => {
+        if (item.id === itemId) {
+          return updater(item);
+        }
+        return item;
+      });
+      return {
+        ...prev,
+        data: items,
+      };
+    }
+  );
+}
 
 function historyQueryOptions() {
   return {

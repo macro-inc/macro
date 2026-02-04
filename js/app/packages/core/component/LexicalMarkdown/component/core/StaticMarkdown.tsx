@@ -23,6 +23,7 @@ import {
   type HorizontalRuleNode,
   type ImageNode,
   type ThemeMentionNode,
+  type UnknownMentionNode,
   isSupportedLanguage,
   normalizedLanguage,
   SupportedNodeTypes,
@@ -77,6 +78,7 @@ import { MarkdownImage as ImageDecorator } from '../decorator/MarkdownImage';
 import { MarkdownVideo as VideoDecorator } from '../decorator/MarkdownVideo';
 import { UserMention as UserMentionDecorator } from '../decorator/UserMention';
 import { ThemeMention as ThemeMentionDecorator } from '../decorator/ThemeMention';
+import { UnknownMention as UnknownMentionDecorator } from '../decorator/UnknownMention';
 import { Watermark as WatermarkDecorator } from '../decorator/Watermark';
 import { LinkWithPreview } from './LinkWithPreview';
 
@@ -354,6 +356,20 @@ const Snapshot: RenderableEntity<SnapshotNode> = {
   render: (props) => (
     <span>
       {SnapshotDecorator({
+        ...props.node.exportComponentProps(),
+        key: props.node.getKey(),
+        theme: props.theme,
+      })}
+    </span>
+  ),
+};
+
+const UnknownMention: RenderableEntity<UnknownMentionNode> = {
+  guard: (node: LexicalNode): node is UnknownMentionNode =>
+    node.__type === 'unknown-mention',
+  render: (props) => (
+    <span>
+      {UnknownMentionDecorator({
         ...props.node.exportComponentProps(),
         key: props.node.getKey(),
         theme: props.theme,
@@ -675,6 +691,7 @@ const InlineEntities: Array<RenderableEntity> = [
   HorizontalRule,
   Equation,
   ThemeMention,
+  UnknownMention,
   Watermark,
 ] as const;
 

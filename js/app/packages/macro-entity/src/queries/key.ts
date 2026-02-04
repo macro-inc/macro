@@ -7,7 +7,6 @@ const BASE_AUTH = ['auth'];
 const ENTITY = 'entity';
 const BASE_ENTITY = {
   entity: [ENTITY],
-  channel: [ENTITY, 'channel'],
   dss: [ENTITY, 'dss'],
   email: [ENTITY, 'email'],
   search: [ENTITY, 'search'],
@@ -44,7 +43,6 @@ export const queryKeys = {
       { ...args },
     ],
   },
-  channel: (args: KeyOptions) => [...BASE_ENTITY.channel, { ...args }],
   chat: (args?: InfiniteKeyOptions) => [
     ...BASE_ENTITY.dss,
     { type: 'chat', ...args },

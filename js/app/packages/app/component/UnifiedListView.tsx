@@ -338,32 +338,15 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   );
 
   // Auto-select first entity when no selection exists
-  createEffect(() => {
-    if (isTouchDevice()) return;
-    if (view()?.hasUserInteractedEntity) return;
-    if (selectedEntity()) return;
-
-    const first = entities_()?.at(0);
-    if (first) setSelectedEntity(first);
-  });
-
-  // Always keep an entity selected when the list has items (e.g. after deletes).
   createEffect(
-    on([entities_, selectedEntity], () => {
+    on(entities_, () => {
       if (isTouchDevice()) return;
-
       const list = entities_() ?? [];
       const first = list.at(0);
       if (!first) return;
 
       const current = selectedEntity();
-      if (!current) {
-        setSelectedEntity(first);
-        return;
-      }
-
-      const existsInList = entityById().has(current.id);
-      if (!existsInList) {
+      if (!current || !entityById().has(current.id)) {
         setSelectedEntity(first);
       }
     })

@@ -11,6 +11,7 @@ import {
   HtmlRenderNode,
   ImageNode,
   ThemeMentionNode,
+  UnknownMentionNode,
   UserMentionNode,
   VideoNode,
   WatermarkNode,
@@ -30,6 +31,7 @@ import { MarkdownImage } from './component/decorator/MarkdownImage';
 import { MarkdownVideo } from './component/decorator/MarkdownVideo';
 import { UserMention } from './component/decorator/UserMention';
 import { ThemeMention } from './component/decorator/ThemeMention';
+import { UnknownMention } from './component/decorator/UnknownMention';
 import { Watermark } from './component/decorator/Watermark';
 import { registerDiffNodeFactory } from './component/dom-factory/diff-factory';
 
@@ -52,6 +54,7 @@ export function initializeLexical() {
   setDecorator(SnapshotNode, Snapshot);
   setDecorator(HtmlRenderNode, HtmlRender);
   setDecorator(ThemeMentionNode, ThemeMention);
+  setDecorator(UnknownMentionNode, UnknownMention);
   setDecorator(WatermarkNode, Watermark);
   registerDiffNodeFactory();
 }

@@ -20,6 +20,7 @@ import {
   type ViewId,
   type ViewLabel,
 } from '@core/types/view';
+import { throttledDependent } from '@core/util/debounce';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { Tabs } from '@kobalte/core/tabs';
 import {
@@ -638,6 +639,7 @@ export function Soup() {
   const previewState = () => splitPanelContext.previewState;
   const [preview, setPreview] = previewState();
   const selectedEntity = () => view().selectedEntity;
+  const throttledSelectedEntity = throttledDependent(selectedEntity, 100);
 
   createEffect(() => {
     handle.setDisplayName('');
@@ -678,9 +680,6 @@ export function Soup() {
     notificationSource,
     'channel',
     (notification) => {
-      entityQueryClient.invalidateQueries({
-        queryKey: queryKeys.all.channel,
-      });
       entityQueryClient.invalidateQueries({
         queryKey: queryKeys.all.dss,
       });
@@ -777,7 +776,7 @@ export function Soup() {
           </SplitPanelContext.Provider>
           <Show when={preview()}>
             <PreviewPanel
-              selectedEntity={selectedEntity()}
+              selectedEntity={throttledSelectedEntity()}
               orchestrator={orchestrator}
               splitPanelContext={splitPanelContext}
             />

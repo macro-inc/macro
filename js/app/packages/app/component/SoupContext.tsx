@@ -5,7 +5,11 @@ import { HotkeyTags } from '@core/hotkey/constants';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import { HOTKEY_PRIORITY_LOW } from '@core/hotkey/types';
-import { getHotkeyCommand, runCommand } from '@core/hotkey/utils';
+import {
+  getHotkeyCommand,
+  getScopeElement,
+  runCommand,
+} from '@core/hotkey/utils';
 import { isModality } from '@core/mobile/inputModality';
 import type { DefaultView, ViewId } from '@core/types/view';
 import { getActualTarget } from '@core/util/getActualTarget';
@@ -1462,10 +1466,11 @@ export function createNavigationEntityListShortcut({
           const getEnterCommand = () => {
             const currentActiveScope = activeScope();
             if (!currentActiveScope) return undefined;
-            let activeScopeNode = hotkeyScopeTree.get(currentActiveScope);
+            const activeScopeNode = hotkeyScopeTree.get(currentActiveScope);
             if (!activeScopeNode) return undefined;
             if (activeScopeNode?.type !== 'dom') return;
-            const dom = activeScopeNode.element;
+            const dom = getScopeElement(currentActiveScope);
+            if (!dom) return undefined;
             const closestBlockScope = dom.closest(`[id="block-${entity.id}"]`);
             if (
               !closestBlockScope ||

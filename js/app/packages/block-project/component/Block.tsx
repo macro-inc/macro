@@ -18,6 +18,7 @@ import {
   type UploadInput,
   uploadFiles,
 } from '@core/util/upload';
+import { throttledDependent } from '@core/util/debounce';
 import {
   queryKeys,
   useQueryClient as useEntityQueryClient,
@@ -102,6 +103,7 @@ const Block: Component = () => {
   const [preview, setPreview] = splitPanelContext.previewState;
   const view = createMemo(() => viewsData[selectedView()]);
   const selectedEntity = () => view().selectedEntity;
+  const throttledSelectedEntity = throttledDependent(selectedEntity, 150);
 
   if (!isRenderedFromPreview) {
     registerHotkey({
@@ -169,7 +171,7 @@ const Block: Component = () => {
             </SplitPanelContext.Provider>
             <Show when={preview()}>
               <PreviewPanel
-                selectedEntity={selectedEntity()}
+                selectedEntity={throttledSelectedEntity()}
                 orchestrator={orchestrator}
                 splitPanelContext={splitPanelContext}
               />

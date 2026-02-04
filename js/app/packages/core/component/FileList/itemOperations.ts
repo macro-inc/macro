@@ -60,13 +60,13 @@ export async function getItemAccessLevel({
   }
 }
 
+/** @internal use rename mutation wrappers instead of this */
 export async function renameItem(args: {
   itemType: ItemType;
   id: string;
   newName: string;
-  skipRefetch?: boolean;
 }): Promise<boolean> {
-  const { itemType, id, newName, skipRefetch = false } = args;
+  const { itemType, id, newName } = args;
 
   let result;
 
@@ -108,9 +108,6 @@ export async function renameItem(args: {
     return false;
   }
 
-  if (!skipRefetch) {
-    refetchResources({ id });
-  }
   return true;
 }
 
@@ -189,43 +186,6 @@ export async function bulkDelete(
     });
   }
 
-  return {
-    success: failedItems.length === 0,
-    failedItems,
-  };
-}
-
-export async function bulkRename(
-  selectedItems: { item: Item; newName: string }[],
-  chunkSize: number = DEFAULT_CHUNK_SIZE
-): Promise<{ success: boolean; failedItems: Item[] }> {
-  const failedItems: Item[] = [];
-
-  for (let i = 0; i < selectedItems.length; i += chunkSize) {
-    const chunk = selectedItems.slice(i, i + chunkSize);
-
-    const results = await Promise.allSettled(
-      chunk.map(({ item, newName }) =>
-        renameItem({
-          itemType: item.type,
-          id: item.id,
-          newName,
-          skipRefetch: true,
-        })
-      )
-    );
-
-    results.forEach((result, index) => {
-      if (
-        result.status === 'rejected' ||
-        (result.status === 'fulfilled' && !result.value)
-      ) {
-        failedItems.push(chunk[index].item);
-      }
-    });
-  }
-
-  refetchResources();
   return {
     success: failedItems.length === 0,
     failedItems,

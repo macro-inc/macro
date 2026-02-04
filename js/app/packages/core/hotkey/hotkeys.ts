@@ -375,7 +375,6 @@ export function useHotkeyDOMScope(
     }
     if (DOMScope?.type === 'dom') {
       DOMScope.parentScopeId = parentScopeId;
-      DOMScope.element = el;
     }
 
     el.addEventListener('focusin', handleFocusIn);

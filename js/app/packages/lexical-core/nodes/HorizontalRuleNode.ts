@@ -69,7 +69,7 @@ export class HorizontalRuleNode extends DecoratorBlockNode<
   }
 
   decorate() {
-    const dec = getDecorator<HorizontalRuleNode>(HorizontalRuleNode);
+    const dec = getDecorator<HorizontalRuleDecoratorProps>(HorizontalRuleNode);
     if (dec) {
       return () =>
         dec({

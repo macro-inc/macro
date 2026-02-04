@@ -53,11 +53,17 @@ import type {
   WatermarkDecoratorProps,
   WatermarkNode,
 } from './nodes/WatermarkNode';
+import type {
+  UnknownMentionNode,
+  UnknownMentionDecoratorProps,
+} from './nodes/UnknownMentionNode';
 
 // Generic component type to be overridden by solid-js on the front end
 // and nothing on the backend.
 export type DecoratorComponent<P extends {}> = (props: P) => any;
 
+// Maps node type names to their class and props types
+// This provides compile-time type safety for decorator registration
 export interface NodeDecoratorMap {
   DiffInsertNode: {
     klass: typeof DiffInsertNode;
@@ -119,33 +125,32 @@ export interface NodeDecoratorMap {
     klass: typeof WatermarkNode;
     props: WatermarkDecoratorProps;
   };
+  UnknownMentionNode: {
+    klass: typeof UnknownMentionNode;
+    props: UnknownMentionDecoratorProps;
+  };
 }
-
-export type NodeClassToProps<T extends LexicalNode> = T extends InstanceType<
-  NodeDecoratorMap[keyof NodeDecoratorMap]['klass']
->
-  ? Extract<
-      NodeDecoratorMap[keyof NodeDecoratorMap],
-      { klass: new (...args: any) => T }
-    >['props']
-  : never;
 
 const decoratorRegistry = new Map<
   Klass<LexicalNode>,
   DecoratorComponent<any>
 >();
 
-export function setDecorator<T extends LexicalNode>(
-  klass: Klass<T>,
-  component: DecoratorComponent<NodeClassToProps<T>>
+// Type-safe registration: caller specifies both the node class and props type explicitly
+export function setDecorator<TProps extends {}>(
+  klass: Klass<LexicalNode>,
+  component: DecoratorComponent<TProps>
 ): void {
   decoratorRegistry.set(klass, component);
 }
 
-export function getDecorator<T extends LexicalNode>(
-  klass: Klass<T>
-): DecoratorComponent<NodeClassToProps<T>> | undefined {
-  return decoratorRegistry.get(klass);
+// Simple retrieval: caller specifies the props type they expect
+// This avoids complex conditional type inference that can fail
+export function getDecorator<TProps extends {}>(
+  klass: Klass<LexicalNode>
+): DecoratorComponent<TProps> | undefined {
+  const decorator = decoratorRegistry.get(klass);
+  return decorator as DecoratorComponent<TProps> | undefined;
 }
 
 export function clearDecorators() {

@@ -23,6 +23,7 @@ export * from './nodes/ImageNode';
 export * from './nodes/InlineSearchNode';
 export * from './nodes/MediaNode';
 export * from './nodes/UnlinkedTextNode';
+export * from './nodes/UnknownMentionNode';
 export * from './nodes/UserMentionNode';
 export * from './nodes/VideoNode';
 export * from './nodes/ThemeMentionNode';

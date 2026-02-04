@@ -139,7 +139,7 @@ export class EquationNode extends DecoratorNode<
   }
 
   decorate(__: LexicalEditor, _: EditorConfig) {
-    const decorator = getDecorator<EquationNode>(EquationNode);
+    const decorator = getDecorator<EquationDecoratorProps>(EquationNode);
     if (decorator) {
       return () =>
         decorator({

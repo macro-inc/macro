@@ -147,7 +147,8 @@ export class ThemeMentionNode extends DecoratorNode<
   }
 
   decorate(_: LexicalEditor, config: EditorConfig) {
-    const decorator = getDecorator<ThemeMentionNode>(ThemeMentionNode);
+    const decorator =
+      getDecorator<ThemeMentionDecoratorProps>(ThemeMentionNode);
     if (decorator) {
       return () =>
         decorator({
