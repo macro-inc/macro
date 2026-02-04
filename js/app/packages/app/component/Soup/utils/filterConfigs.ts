@@ -2,13 +2,14 @@ import type { ExpandedEntityType } from '@macro-entity';
 import type { DocumentTypeFilter, FilterOptions } from '../../ViewConfig';
 import { ENABLE_TASKS_TABS } from '@core/constant/featureFlags';
 import type { Component } from 'solid-js';
-import { ChatIcon } from '@macro-icons/wide/animating/chat';
-import { DiagramIcon } from '@macro-icons/wide/animating/diagram';
-import { EmailIcon } from '@macro-icons/wide/animating/email';
-import { FileMdIcon } from '@macro-icons/wide/animating/fileMd';
-import { FolderIcon } from '@macro-icons/wide/animating/folder';
-import { StarIcon } from '@macro-icons/wide/animating/star';
-import { TaskIcon } from '@macro-icons/wide/animating/task';
+import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
+import { AnimatedChatIcon } from '@macro-icons/wide/animating/chat';
+import { AnimatedDiagramIcon } from '@macro-icons/wide/animating/diagram';
+import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
+import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
+import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
+import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
+import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
 
 /**
  * Mapping of icon types to their animated icon components.
@@ -18,14 +19,14 @@ export const ANIMATED_ICONS: Record<
   string,
   Component<{ triggerAnimation?: boolean }>
 > = {
-  md: FileMdIcon,
-  chat: StarIcon,
-  channel: ChatIcon,
-  directMessage: ChatIcon,
-  task: TaskIcon,
-  email: EmailIcon,
-  project: FolderIcon,
-  canvas: DiagramIcon,
+  md: AnimatedFileMdIcon,
+  chat: AnimatedStarIcon,
+  channel: AnimatedChannelIcon,
+  directMessage: AnimatedChatIcon,
+  task: AnimatedTaskIcon,
+  email: AnimatedEmailIcon,
+  project: AnimatedFolderIcon,
+  canvas: AnimatedDiagramIcon,
 };
 
 /**
@@ -85,7 +86,7 @@ export const ENTITY_TYPE_FILTERS: EntityTypeFilterConfig[] = [
     kind: 'channelCategory',
     channelCategory: 'people',
     label: 'People',
-    iconType: 'channel',
+    iconType: 'directMessage',
     enabled: true,
     shortcut: 'p',
   },
@@ -93,7 +94,7 @@ export const ENTITY_TYPE_FILTERS: EntityTypeFilterConfig[] = [
     kind: 'channelCategory',
     channelCategory: 'groups',
     label: 'Teams',
-    iconType: 'directMessage',
+    iconType: 'channel',
     enabled: true,
     shortcut: 'm',
   },
@@ -108,7 +109,7 @@ export const ENTITY_TYPE_FILTERS: EntityTypeFilterConfig[] = [
   {
     kind: 'entityType',
     type: 'email',
-    label: 'Mail',
+    label: 'Email',
     iconType: 'email',
     enabled: true,
     shortcut: 'l',

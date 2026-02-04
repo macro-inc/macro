@@ -1,4 +1,7 @@
-export const EmailIcon = (props: { triggerAnimation?: boolean }) => {
+import { createUniqueId } from 'solid-js';
+
+export const AnimatedEmailIcon = (props: { triggerAnimation?: boolean }) => {
+  const maskId = createUniqueId();
   return (
     <svg
       width="100%"
@@ -7,7 +10,8 @@ export const EmailIcon = (props: { triggerAnimation?: boolean }) => {
       fill="currentColor"
       stroke="none"
       xmlns="http://www.w3.org/2000/svg"
-      class={props.triggerAnimation ? 'animating' : ''}
+      overflow="visible"
+      class={`animated-email-icon ${props.triggerAnimation ? 'animating' : ''}`}
     >
       <title>Animated email icon</title>
       <style>{`
@@ -19,72 +23,83 @@ export const EmailIcon = (props: { triggerAnimation?: boolean }) => {
           0% { opacity: 0; }
           100% { opacity: 1; }
         }
-        .triangle {
-          opacity: 0;
+        .animated-email-icon {
+          .triangle, .notch {
+            opacity: 0;
+          }
+          .notch {
+            translate: -.5px .5px;
+          }
+          .left-line, .right-line, .bottom-line, .left-flap, .right-flap-1 {
+            transition: transform 0.4s ease;
+          }
+          #${maskId} .moving-square {
+            transition: transform 0.4s ease;
+            transform-origin: -1 -1;
+          }
+          .left-line {
+            transform-origin: .75px .75px;
+          }
+          .right-line {
+            transform-origin: 17.25px .75px;
+          }
+          .bottom-line {
+            transform-origin: .75px 10.75px;
+          }
+          .left-flap {
+            transform-origin: 1.23px 0.17px;
+          }
+          .right-flap-1 {
+            transform-origin: 17.73px 1.33px;
+          }
         }
-        .animating .triangle {
-          animation: appear 0.0s ease forwards .4s;
-        }
-        .notch {
-          opacity: 0;
-          translate: -.5px .5px;
-        }
-        .animating .notch {
-          animation: appear 0.2s ease forwards .4s;
-        }
-        .right-line {
-          transform-origin: 17.25px .75px;
-          transition: rotate 0.4s ease;
-        }
-        .animating .right-line {
-          rotate: 50.5deg;
-          animation: disappear 0.4s ease forwards .4s;
-        }
-        .left-line {
-          transform-origin: .75px .75px;
-          transition: rotate 0.4s ease;
-        }
-        .animating .left-line {
-          rotate: -20deg;
-          animation: disappear 0.4s ease forwards .4s;
-        }
-        .bottom-line {
-          transform-origin: .75px 10.75px;
-          transition: transform 0.4s ease;
-        }
-        .animating .bottom-line {
-          transform: translate(3.5px, 0) rotate(-40deg);
-          animation: disappear 0.4s ease forwards .4s;
-        }
-        .left-flap {
-          transform-origin: 1.23px 0.17px;
-          transition: rotate 0.4s ease;
-        }
-        .animating .left-flap {
-          rotate: 30deg;
-          animation: disappear 0.4s ease forwards .4s;
-        }
-        .right-flap-1 {
-          transform-origin: 17.73px 1.33px;
-          transition: transform 0.4s ease;
-        }
-        .animating .right-flap-1 {
-          transform: translate(-4px, 3.1px);
-          animation: disappear 0.4s ease forwards .4s;
+        .animated-email-icon.animating {
+          .triangle, .notch {
+            animation: appear 0.2s ease forwards .4s;
+          }
+          #${maskId} .moving-square {
+            transition: transform 0.4s ease;
+            transform: scaleX(1.2);
+          }
+          .left-line, .right-line, .bottom-line, .left-flap, .right-flap-1, .right-flap-2 {
+            animation: disappear 0.4s ease forwards .4s;
+          }
+          .left-line {
+            transform: rotate(-20deg);
+          }
+          .right-line {
+            transform: rotate(50.5deg);
+          }
+          .bottom-line {
+            transform: translate(3.5px, 0) rotate(-40deg);
+          }
+          .left-flap {
+            transform: rotate(30deg);
+          }
+          .right-flap-1 {
+            transform: translate(-4px, 3.1px);
+          }
         }
       `}</style>
-      <mask id="square-mask" mask-type="luminance">
+      <mask id={maskId}>
         <rect x="0" y="0" width="18" height="18" fill="white" />
-        <rect x="-1" y="-1" width="2.5" height="2.5" fill="black" />
+        <rect
+          class="moving-square"
+          x="-1"
+          y="-1"
+          width="2.5"
+          height="2.5"
+          fill="black"
+        />
       </mask>
-      <g mask="url(#square-mask)">
+      <g mask={`url(#${maskId})`}>
         <path
           class="triangle"
           d="M4.60001 12C4.53001 12 4.47001 12 4.40001 11.97C4.16001 11.91 3.98001 11.73 3.89001 11.5L0.0500093 1.01C-0.0399907 0.78 9.32813e-06 0.52 0.140009 0.32C0.280009 0.12 0.510009 0 0.750009 0H17.25C17.57 0 17.85 0.2 17.96 0.5C18.07 0.8 17.98 1.13 17.73 1.33L5.08001 11.83C4.94001 11.94 4.77001 12 4.60001 12ZM1.82001 1.5L4.93001 9.99L15.17 1.5H1.82001Z"
         />
         <path
           class="notch"
-          d="M7.55006 4.04004L3.06006 4.89004L3.58006 6.30004L7.55006 4.04004Z"
+          d="M7.45815 4.23999L2.85815 4.81999L3.58815 6.78999L7.45815 4.23999Z"
         />
         <path
           class="top-line"

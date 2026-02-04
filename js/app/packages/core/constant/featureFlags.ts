@@ -96,6 +96,8 @@ export const ENABLE_SVG_PREVIEW = true;
 
 export const USE_WIDE_ICONS = true;
 
+export const ENABLE_ANIMATED_ICONS = true;
+
 export const ENABLE_PROPERTY_DISPLAY = DEV_MODE_ENV;
 export const ENABLE_PROPERTY_SORT = DEV_MODE_ENV;
 export const ENABLE_PROPERTY_FILTER = DEV_MODE_ENV;

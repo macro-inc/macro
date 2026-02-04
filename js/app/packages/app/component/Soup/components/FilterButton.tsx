@@ -2,6 +2,7 @@ import type { Component } from 'solid-js';
 import { createSignal } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+import { ENABLE_ANIMATED_ICONS } from '@core/constant/featureFlags';
 
 const SHORTCUT_SUFFIXES: Record<string, string> = { space: '␣', '/': '/' };
 
@@ -67,8 +68,8 @@ export const FilterButton: Component<FilterButtonProps> = (props) => {
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
-          {props.animatedIcon ? (
-            <div class="size-3.5">
+          {ENABLE_ANIMATED_ICONS && props.animatedIcon ? (
+            <div class="size-3.5 overflow-visible">
               <Dynamic
                 component={props.animatedIcon}
                 triggerAnimation={isHovered() || props.isActive()}

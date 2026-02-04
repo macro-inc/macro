@@ -1,4 +1,7 @@
-export const StarIcon = (props: { triggerAnimation?: boolean }) => {
+import { createUniqueId } from 'solid-js';
+
+export const AnimatedStarIcon = (props: { triggerAnimation?: boolean }) => {
+  const maskId = createUniqueId();
   return (
     <svg
       width="100%"
@@ -7,32 +10,27 @@ export const StarIcon = (props: { triggerAnimation?: boolean }) => {
       fill="currentColor"
       stroke="none"
       xmlns="http://www.w3.org/2000/svg"
-      class={props.triggerAnimation ? 'animating' : ''}
+      overflow="visible"
+      class={`animated-star-icon ${props.triggerAnimation ? 'animating' : ''}`}
     >
       <title>Animated star icon</title>
-      <style>{`.inflated-rhombus {
-          transform-origin: 9px 6px;
-          transition: scale 0.4s ease;
+      <style>{`
+        .animated-star-icon {
+          .star-inflate, .star-eye, #${maskId} .inflated-rhombus {
+            transform-origin: 9px 6px;
+            transition: transform 0.4s ease;
+          }
         }
-        .animating .inflated-rhombus {
-          scale: 2.22;
-        }
-        .star-inflate {
-          transition: transform 0.4s ease;
-          transform-origin: 9px 6px;
-        }
-        .animating .star-inflate {
-          transform: scale(2.22);
-        }
-        .star-eye {
-          transition: scale 0.4s ease;
-          transform-origin: 9px 6px;
-        }
-        .animating .star-eye {
-          scale: 2;
+        .animated-star-icon.animating {
+          .star-inflate, #${maskId} .inflated-rhombus {
+            transform: scale(2.22);
+          }
+          .star-eye {
+            transform: scale(2);
+          }
         }
       `}</style>
-      <mask class="star-mask" id="inflated-rhombus-mask" mask-type="luminance">
+      <mask id={maskId}>
         <rect x="0" y="0" width="18" height="18" fill="white" />
         <path
           class="inflated-rhombus"
@@ -41,8 +39,7 @@ export const StarIcon = (props: { triggerAnimation?: boolean }) => {
         />
       </mask>
       <path
-        class="star-body"
-        mask="url(#inflated-rhombus-mask)"
+        mask={`url(#${maskId})`}
         d="M17.23 5.29C10.27 5.29 9.67001 4.54 9.67001 0.7C9.67001 0.31 9.36001 0 8.97001 0C8.58001 0 8.27001 0.31 8.27001 0.7C8.27001 4.54 7.66001 5.29 0.71001 5.29C0.32001 5.29 0.0100098 5.6 0.0100098 5.99C0.0100098 6.38 0.32001 6.69 0.71001 6.69C7.67001 6.69 8.27001 7.44 8.27001 11.28C8.27001 11.67 8.58001 11.98 8.97001 11.98C9.36001 11.98 9.67001 11.67 9.67001 11.28C9.67001 7.44 10.28 6.69 17.23 6.69C17.62 6.69 17.93 6.38 17.93 5.99C17.93 5.6 17.62 5.29 17.23 5.29ZM8.97001 8.64L6.32001 5.99L8.97001 3.34L11.62 5.99L8.97001 8.64Z"
       />
       <path

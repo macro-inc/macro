@@ -1,4 +1,7 @@
-export const FolderIcon = (props: { triggerAnimation?: boolean }) => {
+import { createUniqueId } from 'solid-js';
+
+export const AnimatedFolderIcon = (props: { triggerAnimation?: boolean }) => {
+  const maskId = createUniqueId();
   return (
     <svg
       width="100%"
@@ -7,32 +10,34 @@ export const FolderIcon = (props: { triggerAnimation?: boolean }) => {
       fill="currentColor"
       stroke="none"
       xmlns="http://www.w3.org/2000/svg"
-      class={props.triggerAnimation ? 'animating' : ''}
+      overflow="visible"
+      class={`animated-folder-icon ${props.triggerAnimation ? 'animating' : ''}`}
     >
       <title>Animated folder icon</title>
       <style>{`
-        .paper {
-          transform-origin: center;
-          transition: transform 0.4s ease;
+        .animated-folder-icon {
+          .paper, .folder {
+            transform-origin: center;
+            transition: transform 0.4s ease;
+          }
+          #${maskId} .mask-shape {
+            transform-origin: center;
+            transition: transform 0.4s ease;
+          }
         }
-        .animating .paper {
-          transform: translate(0, -2.5px);
-        }
-        .folder {
-          transform-origin: center;
-          transition: transform 0.4s ease;
-        }
-        .animating .folder {
-          transform: translate(0, 2.5px);
-        }
-        .mask-shape {
-          transition: transform 0.4s ease;
-        }
-        .animating .mask-shape {
-          transform: translate(0, 5px);
+        .animated-folder-icon.animating {
+          .paper {
+            transform: translate(0, -2.5px);
+          }
+          .folder {
+            transform: translate(0, 2.5px);
+          }
+          #${maskId} .mask-shape {
+            transform: translate(0, 5px);
+          }
         }
       `}</style>
-      <mask id="folder-mask">
+      <mask id={maskId}>
         <rect width="18" height="12" fill="white" />
         <path
           class="mask-shape"
@@ -46,7 +51,7 @@ export const FolderIcon = (props: { triggerAnimation?: boolean }) => {
       </g>
       <path
         class="paper"
-        mask="url(#folder-mask)"
+        mask={`url(#${maskId})`}
         d="M15.75 6.75H14.25V3H3.75V5.25H2.25V1.5H15.75V6.75Z"
       />
     </svg>

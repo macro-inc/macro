@@ -2,7 +2,10 @@ import type { BlockAlias, BlockName } from '@core/block';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { Hotkey } from '@core/component/Hotkey';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
-import { ENABLE_CREATE_TASK } from '@core/constant/featureFlags';
+import {
+  ENABLE_ANIMATED_ICONS,
+  ENABLE_CREATE_TASK,
+} from '@core/constant/featureFlags';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { pressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
@@ -20,16 +23,32 @@ import { createControlledOpenSignal } from '@core/util/createControlledOpenSigna
 import { isErr, ok } from '@core/util/maybeResult';
 import { Dialog } from '@kobalte/core/dialog';
 import PixelArrowRight from '@macro-icons/pixel/arrow-right.svg';
-import { ChatIcon } from '@macro-icons/wide/animating/chat';
-import { DiagramIcon } from '@macro-icons/wide/animating/diagram';
-import { EmailIcon } from '@macro-icons/wide/animating/email';
-import { FileCodeIcon } from '@macro-icons/wide/animating/fileCode';
-import { FileMdIcon } from '@macro-icons/wide/animating/fileMd';
-import { FolderIcon } from '@macro-icons/wide/animating/folder';
-import { StarIcon } from '@macro-icons/wide/animating/star';
-import { TaskIcon } from '@macro-icons/wide/animating/task';
+import { AnimatedChatIcon } from '@macro-icons/wide/animating/chat';
+import { AnimatedDiagramIcon } from '@macro-icons/wide/animating/diagram';
+import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
+import { AnimatedFileCodeIcon } from '@macro-icons/wide/animating/fileCode';
+import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
+import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
+import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
+import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
+import WideChat from '@macro-icons/wide/chat.svg';
+import WideDiagram from '@macro-icons/wide/diagram.svg';
+import WideEmail from '@macro-icons/wide/email.svg';
+import WideFileCode from '@macro-icons/wide/file-code.svg';
+import WideFileMd from '@macro-icons/wide/file-md.svg';
+import WideFolder from '@macro-icons/wide/folder.svg';
+import WideStar from '@macro-icons/wide/star.svg';
+import WideTask from '@macro-icons/wide/task.svg';
 import { createProject } from '@queries/storage/projects';
-import { createEffect, createSignal, For, onMount, Show } from 'solid-js';
+import {
+  type Component,
+  createEffect,
+  createSignal,
+  For,
+  onMount,
+  Show,
+} from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { type FocusableElement, tabbable } from 'tabbable';
 import { useSplitLayout } from './split-layout/layout';
 
@@ -101,12 +120,14 @@ type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {
   label: string;
   blockName: BlockName;
   altHotkeyToken?: HotkeyToken;
+  animatedIcon?: Component<{ triggerAnimation?: boolean }>;
 };
 
 export const CREATABLE_BLOCKS: CreatableBlock[] = [
   {
-    label: 'Docs',
-    icon: (props?) => <FileMdIcon {...props} />,
+    label: 'Doc',
+    icon: WideFileMd,
+    animatedIcon: AnimatedFileMdIcon,
     description: 'Create doc',
     blockName: 'md',
     hotkeyToken: TOKENS.create.note,
@@ -131,7 +152,8 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     ? [
         {
           label: 'Task',
-          icon: (props?) => <TaskIcon {...props} />,
+          icon: WideTask,
+          animatedIcon: AnimatedTaskIcon,
           description: 'Create task',
           blockName: 'task' as BlockName,
           hotkeyToken: TOKENS.create.task,
@@ -149,7 +171,8 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     : []),
   {
     label: 'Email',
-    icon: (props?) => <EmailIcon {...props} />,
+    icon: WideEmail,
+    animatedIcon: AnimatedEmailIcon,
     description: 'Create email',
     blockName: 'email',
     hotkeyToken: TOKENS.create.email,
@@ -165,7 +188,8 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'Message',
-    icon: (props?) => <ChatIcon {...props} />,
+    icon: WideChat,
+    animatedIcon: AnimatedChatIcon,
     description: 'Create message',
     blockName: 'channel',
     hotkeyToken: TOKENS.create.message,
@@ -180,8 +204,9 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     },
   },
   {
-    label: 'AI',
-    icon: (props?) => <StarIcon {...props} />,
+    label: 'Agent',
+    icon: WideStar,
+    animatedIcon: AnimatedStarIcon,
     description: 'Create AI chat',
     blockName: 'chat' as BlockName,
     hotkeyToken: TOKENS.create.chat,
@@ -204,7 +229,8 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'Canvas',
-    icon: (props?) => <DiagramIcon {...props} />,
+    icon: WideDiagram,
+    animatedIcon: AnimatedDiagramIcon,
     description: 'Create canvas',
     blockName: 'canvas',
     hotkeyToken: TOKENS.create.canvas,
@@ -230,7 +256,8 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'Folder',
-    icon: (props?) => <FolderIcon {...props} />,
+    icon: WideFolder,
+    animatedIcon: AnimatedFolderIcon,
     description: 'Create folder',
     blockName: 'project',
     hotkeyToken: TOKENS.create.project,
@@ -247,7 +274,8 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'Code',
-    icon: (props?) => <FileCodeIcon {...props} />,
+    icon: WideFileCode,
+    animatedIcon: AnimatedFileCodeIcon,
     description: 'Create code file',
     blockName: 'code',
     hotkeyToken: TOKENS.create.code,
@@ -299,7 +327,8 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
       ? getIconConfig(props.creatableBlock.blockName ?? 'pdf').foreground
       : 'text-accent';
 
-  const Icon = props.creatableBlock.icon;
+  const StaticIcon = props.creatableBlock.icon;
+  const AnimatedIcon = props.creatableBlock.animatedIcon;
 
   return (
     <button
@@ -378,7 +407,11 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
           'scale-110': props.focused,
         }}
       >
-        {Icon && <Icon triggerAnimation={props.focused} />}
+        {ENABLE_ANIMATED_ICONS && AnimatedIcon ? (
+          <AnimatedIcon triggerAnimation={props.focused} />
+        ) : (
+          <Dynamic component={StaticIcon} />
+        )}
       </div>
     </button>
   );
