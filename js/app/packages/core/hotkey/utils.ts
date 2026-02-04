@@ -111,7 +111,6 @@ type RegisterScopeArgsBase = {
 
 type RegisterDOMScopeArgs = RegisterScopeArgsBase & {
   type: 'dom';
-  element?: Element;
   runWithInputFocused?: never;
   condition?: never;
 };
@@ -142,7 +141,6 @@ export function registerScope(args: RegisterScopeArgs) {
       ? {
           ...baseScope,
           type: 'dom',
-          element: args.element ?? document.body,
         }
       : {
           ...baseScope,
@@ -177,11 +175,12 @@ export function removeScope(scopeId: string) {
         let parentScope = hotkeyScopeTree.get(currentScope.parentScopeId ?? '');
         let foundDOMScopeParent = false;
         while (parentScope) {
-          if (
-            parentScope.type === 'dom' &&
-            parentScope.element instanceof HTMLElement
-          ) {
-            parentScope.element.focus();
+          const parentElement =
+            parentScope.type === 'dom'
+              ? getScopeElement(parentScope.scopeId)
+              : null;
+          if (parentElement instanceof HTMLElement) {
+            parentElement.focus();
             setActiveScope(parentScope.scopeId);
             foundDOMScopeParent = true;
             break;
@@ -228,11 +227,12 @@ export function activateClosestDOMScope() {
   let activeScopeId = 'global';
   // find the closest active DOM scope
   while (currentScope) {
-    if (
-      currentScope.type === 'dom' &&
-      currentScope.element instanceof HTMLElement
-    ) {
-      currentScope.element.focus();
+    const scopeElement =
+      currentScope.type === 'dom'
+        ? getScopeElement(currentScope.scopeId)
+        : null;
+    if (scopeElement instanceof HTMLElement) {
+      scopeElement.focus();
       activeScopeId = currentScope.scopeId;
       break;
     }
@@ -513,6 +513,10 @@ export function getKeyString(pressedKeys: Set<string>): ValidHotkey {
       return 0;
     })
     .join('+') as ValidHotkey;
+}
+
+export function getScopeElement(scopeId: string): Element | null {
+  return document.querySelector(`[data-hotkey-scope="${scopeId}"]`);
 }
 
 // Returns the id of the closest parent scope, or 'global' if no parent scope is found.

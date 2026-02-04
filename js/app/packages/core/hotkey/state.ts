@@ -10,7 +10,6 @@ const initialTree = new Map<string, ScopeNode>([
     {
       scopeId: 'global',
       type: 'dom',
-      element: document.body,
       childScopeIds: [],
       hotkeyCommands: new Map(),
       unkeyedCommands: [],
