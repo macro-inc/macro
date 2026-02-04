@@ -71,7 +71,7 @@ export const FilterButton: Component<FilterButtonProps> = (props) => {
             <div class="size-3.5">
               <Dynamic
                 component={props.animatedIcon}
-                triggerAnimation={isHovered()}
+                triggerAnimation={isHovered() || props.isActive()}
               />
             </div>
           ) : (
