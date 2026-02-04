@@ -1,29 +1,70 @@
 import { itemToSafeName } from '@core/constant/allBlocks';
 import type { Item } from '@service-storage/generated/schemas/item';
 
-type ItemWithViewedAt = Item & { viewedAt?: number };
-
-export type HistoryItem = Item & {
-  name: string;
+type BaseHistoryItem = Pick<
+  Item,
+  'id' | 'name' | 'createdAt' | 'updatedAt' | 'deletedAt'
+> & {
   viewedAt?: number;
 };
 
+export type DocumentHistoryItem = BaseHistoryItem &
+  Pick<Extract<Item, { type: 'document' }>, 'type' | 'fileType' | 'subType'>;
+
+export type ChatHistoryItem = BaseHistoryItem &
+  Pick<Extract<Item, { type: 'chat' }>, 'type' | 'isPersistent'>;
+
+export type ProjectHistoryItem = BaseHistoryItem &
+  Pick<Extract<Item, { type: 'project' }>, 'type'>;
+
+/** Minimal history item types containing only the properties actually used */
+export type HistoryItem =
+  | DocumentHistoryItem
+  | ChatHistoryItem
+  | ProjectHistoryItem;
+
 export type HistoryQueryResponse = {
-  data: Item[];
+  data: HistoryItem[];
 };
 
-export function transformHistoryItem(item: Item): HistoryItem {
-  return {
-    ...item,
+export function transformHistoryItem(item: HistoryItem): HistoryItem {
+  const base = {
+    id: item.id,
     name: itemToSafeName(item),
-    viewedAt: (item as ItemWithViewedAt).viewedAt,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+    deletedAt: item.deletedAt,
+    viewedAt: item.viewedAt,
   };
+
+  switch (item.type) {
+    case 'document':
+      return {
+        ...base,
+        type: 'document',
+        fileType: item.fileType,
+        subType: item.subType,
+      };
+
+    case 'chat':
+      return {
+        ...base,
+        type: 'chat',
+        isPersistent: item.isPersistent,
+      };
+
+    case 'project':
+      return {
+        ...base,
+        type: 'project',
+      };
+  }
 }
 
 export function filterInstructionsMd(
-  items: Item[],
+  items: HistoryItem[],
   instructionsId: string | null | undefined
-): Item[] {
+): HistoryItem[] {
   if (!instructionsId) return items;
   return items.filter((item) => item.id !== instructionsId);
 }
@@ -42,17 +83,17 @@ export function transformHistoryResponse(
  * Returns a new array without mutating the input.
  */
 export function updateViewedAtAndMoveItemToFront(
-  items: ItemWithViewedAt[],
+  items: HistoryItem[],
   itemId: string,
   timestamp: number
-): ItemWithViewedAt[] {
+): HistoryItem[] {
   const itemIndex = items.findIndex((item) => item.id === itemId);
 
   // Item not found, return original array
   if (itemIndex === -1) return items;
 
   const item = items[itemIndex];
-  const updatedItem: ItemWithViewedAt = { ...item, viewedAt: timestamp };
+  const updatedItem: HistoryItem = { ...item, viewedAt: timestamp };
 
   // Return new array with updated item at front
   return [
