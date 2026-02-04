@@ -344,7 +344,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       const list = entities_() ?? [];
       const first = list.at(0);
       if (!first) return;
-  
+
       const current = selectedEntity();
       if (!current || !entityById().has(current.id)) {
         setSelectedEntity(first);
