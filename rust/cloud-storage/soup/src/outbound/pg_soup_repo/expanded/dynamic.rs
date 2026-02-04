@@ -288,6 +288,7 @@ fn build_chat_filter(ast: Option<&Expr<ChatLiteral>>) -> String {
         filter_ast::ExprFrame::Literal(ChatLiteral::ChatId(i)) => format!("c.id = '{i}'"),
         filter_ast::ExprFrame::Literal(ChatLiteral::Owner(o)) => format!("c.owner = '{o}'"),
         filter_ast::ExprFrame::Literal(ChatLiteral::Importance(true)) => String::new(),
+        // all chats are important, so if importance is false, exclude them
         filter_ast::ExprFrame::Literal(ChatLiteral::Importance(false)) => "1=0".to_string(),
     });
     if formatting.is_empty() {
@@ -310,6 +311,7 @@ fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
         }
         filter_ast::ExprFrame::Literal(ProjectLiteral::Owner(o)) => format!("p.owner = '{o}'"),
         filter_ast::ExprFrame::Literal(ProjectLiteral::Importance(true)) => String::new(),
+        // all projects are important, so if importance is false, exclude them
         filter_ast::ExprFrame::Literal(ProjectLiteral::Importance(false)) => "1=0".to_string(),
     });
     if formatting.is_empty() {
