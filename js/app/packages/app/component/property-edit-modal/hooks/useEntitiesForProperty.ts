@@ -8,6 +8,7 @@ import {
   entityMapper,
   getEntitySearchText,
   threadMapper,
+  getEntityTimestampedItem,
 } from '@core/component/Properties/component/modal/shared/entityUtils';
 import { useContacts } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
@@ -163,20 +164,7 @@ export function useEntitiesForProperty(
     createEntitySearchConfig(currentUserDomain),
     getEntitySearchText,
     (item) => item.kind === 'channel',
-    (item) => {
-      switch (item.kind) {
-        case 'item':
-          return {
-            updatedAt: item.data.updatedAt,
-          };
-        case 'channel':
-          return {
-            updatedAt: item.data.updated_at,
-          };
-        default:
-          return {};
-      }
-    }
+    getEntityTimestampedItem
   );
 
   // get filtered entities based on search query

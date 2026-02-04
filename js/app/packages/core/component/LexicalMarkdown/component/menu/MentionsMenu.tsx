@@ -21,7 +21,11 @@ import {
   useContacts,
 } from '@core/user';
 import { getDateSuggestions } from '@core/util/dateParser';
-import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
+import {
+  createFreshSearch,
+  FreshSearchPresets,
+  TimestampedItem,
+} from '@core/util/freshSort';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import ClockIcon from '@icon/regular/clock.svg';
 import EmailIcon from '@icon/regular/envelope.svg';
@@ -111,6 +115,26 @@ const getItemSearchText = (item: CombinedEntity): string => {
       return item.data.name ?? 'No Subject';
     case 'group':
       return item.data.groupAlias;
+  }
+};
+
+const getItemTimestamp = (item: CombinedEntity): TimestampedItem => {
+  switch (item.kind) {
+    case 'item':
+      return {
+        updatedAt: item.data.updatedAt,
+      };
+    case 'channel':
+      return {
+        updatedAt: item.data.updated_at,
+      };
+    case 'email':
+      return {
+        updatedAt: item.data.updatedAt,
+        viewedAt: item.data.viewedAt,
+      };
+    default:
+      return {};
   }
 };
 
@@ -647,20 +671,7 @@ function MentionsMenuInner(props: {
     {},
     getItemSearchText,
     (item) => item.kind === 'channel',
-    (item) => {
-      switch (item.kind) {
-        case 'item':
-          return {
-            updatedAt: item.data.updatedAt,
-          };
-        case 'channel':
-          return {
-            updatedAt: item.data.updated_at,
-          };
-        default:
-          return {};
-      }
-    }
+    getItemTimestamp
   );
   const filteredItems = createMemo(() => {
     const allResults = itemSearch(historyAndChannels(), searchTerm()).map(
@@ -702,6 +713,7 @@ function MentionsMenuInner(props: {
     getItemSearchText,
     (_item) => false,
     (item) => ({
+      ...getItemTimestamp(item),
       lastInteraction: item.lastInteraction,
     })
   );
@@ -735,10 +747,7 @@ function MentionsMenuInner(props: {
     { timeWeight: 0, brevityWeight: 0.3 },
     getItemSearchText,
     (_item) => false,
-    (item) => ({
-      updatedAt: item.data.updatedAt,
-      viewedAt: item.data.viewedAt,
-    })
+    getItemTimestamp
   );
 
   const filteredEmails = createMemo(() => {

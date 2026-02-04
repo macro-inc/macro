@@ -85,6 +85,24 @@ export function getEntityType(entity: CombinedEntity): EntityType {
   }
 }
 
+/** Get timestamped item from combined entity */
+export function getEntityTimestampedItem<T extends CombinedEntity>(
+  item: T
+): TimestampedItem {
+  switch (item.kind) {
+    case 'item':
+      return {
+        updatedAt: item.data.updatedAt,
+      };
+    case 'channel':
+      return {
+        updatedAt: item.data.updated_at,
+      };
+    default:
+      return {};
+  }
+}
+
 /**
  * Creates search config for entity searches with same-domain boost.
  * Uses the same preset as MentionsMenu and RecipientSelector for consistency.
