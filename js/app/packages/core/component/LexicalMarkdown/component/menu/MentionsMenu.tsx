@@ -44,7 +44,6 @@ import type { List } from 'lodash';
 import {
   type Accessor,
   createEffect,
-  createMemo,
   createSignal,
   For,
   type JSXElement,
@@ -465,57 +464,53 @@ function MentionsMenuInner(props: {
   );
   const historyQuery = useHistoryQuery();
   // TODO: support viewed at in history
-  const history = createMemo(() => {
+  const history = () => {
     if (props.history) {
       return props.history().map(entityMapper('item'));
     }
-    return historyQuery.data?.map(entityMapper('item')) ?? [];
-  });
+
+    return historyQuery.isSuccess
+      ? historyQuery.data?.map(entityMapper('item'))
+      : [];
+  };
 
   let emails: Accessor<Entity<'email'>[]>;
   if (props.emails) {
-    emails = createMemo(
-      () =>
-        props.emails?.().map(entityMapper('email')).filter(allItemFilter) ?? []
-    );
+    emails = () =>
+      props.emails?.().map(entityMapper('email')).filter(allItemFilter) ?? [];
   } else {
     const emailsFromSource = useEmails();
-    emails = createMemo(
-      () =>
-        emailsFromSource().map(entityMapper('email')).filter(allItemFilter) ??
-        []
-    );
+    emails = () =>
+      emailsFromSource().map(entityMapper('email')).filter(allItemFilter) ?? [];
   }
 
   const contacts = useContacts();
   const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
 
-  const users = createMemo((): Entity<'user'>[] => {
+  const users = (): Entity<'user'>[] => {
     const list = props.users?.() ?? contacts();
 
     return list
       .map((user) => entityMapper('user')(augmentUserWithDmActivity(user)))
       .filter(allItemFilter);
-  });
+  };
 
   let channels: Accessor<Entity<'channel'>[]>;
   if (props.channels) {
-    channels = createMemo(
-      () =>
-        props.channels?.().map(entityMapper('channel')).filter(allItemFilter) ??
-        []
-    );
+    channels = () =>
+      props.channels?.().map(entityMapper('channel')).filter(allItemFilter) ??
+      [];
   } else {
     const { channels: userChannels } = useChannelsContext();
-    channels = createMemo(() => {
+    channels = () => {
       if (!ENABLE_CHAT_CHANNEL_ATTACHMENT && props.block === 'chat') {
         return [];
       }
       return userChannels().map(entityMapper('channel')).filter(allItemFilter);
-    });
+    };
   }
 
-  const args = createMemo((): SearchArgs => {
+  const args = (): SearchArgs => {
     return {
       params: {
         cursor: null,
@@ -528,12 +523,12 @@ function MentionsMenuInner(props: {
         query: searchTerm(),
       },
     };
-  });
+  };
 
   const emailUnifiedSearchInfiniteQuery =
     createUnifiedSearchInfiniteQuery(args);
 
-  const foundEmails = createMemo((): Entity<'email'>[] => {
+  const foundEmails = (): Entity<'email'>[] => {
     if (emailUnifiedSearchInfiniteQuery.status === 'success') {
       function isEmail(
         e: WithSearch<EntityData>
@@ -557,10 +552,10 @@ function MentionsMenuInner(props: {
     } else {
       return [];
     }
-  });
+  };
 
   // Get open tabs from split manager
-  const openTabs = createMemo(() => {
+  const openTabs = () => {
     const splitManager = globalSplitManager();
     if (!splitManager) return [];
 
@@ -607,9 +602,9 @@ function MentionsMenuInner(props: {
     }
 
     return tabItems.filter(allItemFilter);
-  });
+  };
 
-  const historyAndChannels = createMemo(() => {
+  const historyAndChannels = () => {
     const historyItems = history().filter(allItemFilter);
     const channelItems = channels();
     const currentBlockId = useMaybeBlockId();
@@ -635,7 +630,7 @@ function MentionsMenuInner(props: {
     // The prioritization happens in filteredItems instead
 
     return Array.from(itemMap.values());
-  });
+  };
 
   const [menuOpen, setMenuOpen] = [props.menu.isOpen, props.menu.setIsOpen];
 
@@ -664,7 +659,7 @@ function MentionsMenuInner(props: {
     (item) => item.kind === 'channel',
     getItemTimestamp
   );
-  const filteredItems = createMemo(() => {
+  const filteredItems = () => {
     const allResults = itemSearch(historyAndChannels(), searchTerm()).map(
       (result) => {
         return result.item;
@@ -686,13 +681,13 @@ function MentionsMenuInner(props: {
 
     // Return open tabs first, then other items
     return [...tabResults, ...otherResults];
-  });
+  };
 
   const currentUserEmail = useEmail();
-  const currentUserDomain = createMemo(() => {
+  const currentUserDomain = () => {
     const email = currentUserEmail();
     return email ? email.split('@')[1] : undefined;
-  });
+  };
 
   const userSearch = createFreshSearch<Entity<'user'>>(
     FreshSearchPresets.baseUserSearch<Entity<'user'>>(
@@ -705,7 +700,7 @@ function MentionsMenuInner(props: {
   );
 
   // Group aliases available in channel context
-  const specialGroups = createMemo((): Entity<'group'>[] => {
+  const specialGroups = (): Entity<'group'>[] => {
     if (props.block !== 'channel') return [];
     if (!useMaybeBlockId()) return [];
 
@@ -718,16 +713,16 @@ function MentionsMenuInner(props: {
     return availableGroups
       .filter((g) => g.match(term))
       .map((g) => createGroupAlias(g.alias));
-  });
+  };
 
-  const filteredUsers = createMemo(() => {
+  const filteredUsers = () => {
     const searchedUsers = userSearch(users(), searchTerm()).map((result) => {
       return result.item;
     });
     return [...specialGroups(), ...searchedUsers] as CombinedEntity<
       'user' | 'group'
     >[];
-  });
+  };
 
   const emailSearch = createFreshSearch<Entity<'email'>>(
     { timeWeight: 0, brevityWeight: 0.3 },
@@ -736,7 +731,7 @@ function MentionsMenuInner(props: {
     getItemTimestamp
   );
 
-  const filteredEmails = createMemo(() => {
+  const filteredEmails = () => {
     const mail = emailSearch(emails(), searchTerm()).map(
       (result) => result.item
     );
@@ -753,9 +748,9 @@ function MentionsMenuInner(props: {
     }
 
     return merge(mail, otherMail);
-  });
+  };
 
-  const dateSuggestions = createMemo(() => {
+  const dateSuggestions = () => {
     const suggestions = getDateSuggestions(searchTerm());
     return suggestions
       .map((suggestion) => ({
@@ -763,20 +758,20 @@ function MentionsMenuInner(props: {
         id: `date-${suggestion.date.toISOString()}`,
       }))
       .map(entityMapper('date'));
-  });
+  };
 
   // The raw bins store the counts for all matching items
-  const rawBins = createMemo<Record<MentionBins, number>>(() => ({
+  const rawBins = () => ({
     users: filteredUsers().length,
     items: filteredItems().length,
     dates: dateSuggestions().length,
     emails: filteredEmails().length,
-  }));
+  });
 
   // The bins is the limited and rounded count for each bucket
-  const bins = createMemo(() => computeBins(rawBins(), MAX_ITEMS));
+  const bins = () => computeBins(rawBins(), MAX_ITEMS);
 
-  const combinedItems = createMemo<CombinedEntity[]>(() => {
+  const combinedItems = () => {
     const currentViewAllMode = viewAllMode();
 
     if (currentViewAllMode) {
@@ -802,7 +797,7 @@ function MentionsMenuInner(props: {
       ...dateSuggestions().slice(0, bins().dates),
       ...filteredEmails().slice(0, bins().emails),
     ];
-  });
+  };
 
   const [escapeSpaceState, setEscapeSpaceState] = createSignal<
     'start' | 'single' | 'double' | null
@@ -814,7 +809,7 @@ function MentionsMenuInner(props: {
     }
   });
 
-  const selectedCategory = createMemo<SelectedCategory>(() => {
+  const selectedCategory = () => {
     if (viewAllMode()) return null; // no category selection in view all mode
 
     const index = selectedIndex();
@@ -850,7 +845,7 @@ function MentionsMenuInner(props: {
     }
 
     return null;
-  });
+  };
 
   const itemAction = createItemHandler({
     editor: props.editor,
@@ -1041,15 +1036,15 @@ function MentionsMenuInner(props: {
     setSelectedIndex(0);
   };
 
-  const hasOnlyOneCategory = createMemo(() => {
+  const hasOnlyOneCategory = () => {
     const currentRawBins = rawBins();
     const categoriesWithMatches = Object.values(currentRawBins).filter(
       (count) => count > 0
     );
     return categoriesWithMatches.length === 1;
-  });
+  };
 
-  const inner = createMemo(() => {
+  const inner = () => {
     const currentViewAllMode = viewAllMode();
 
     // ---- SINGLE BUCKET MODE -------------------------------------------------
@@ -1057,7 +1052,7 @@ function MentionsMenuInner(props: {
       const allItems = combinedItems();
       const totalLength = () => allItems.length;
 
-      const renderViewAllOptions = createMemo(() => {
+      const renderViewAllOptions = () => {
         const categoryLabel = {
           users: 'People',
           items: 'Documents & Channels',
@@ -1108,7 +1103,7 @@ function MentionsMenuInner(props: {
             </div>
           </>
         );
-      });
+      };
 
       return (
         <Show
@@ -1266,7 +1261,7 @@ function MentionsMenuInner(props: {
         </div>
       </Show>
     );
-  });
+  };
 
   const clickOutsideHandler = (e: MouseEvent) => {
     e.stopPropagation();

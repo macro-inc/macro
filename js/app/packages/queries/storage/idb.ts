@@ -7,13 +7,22 @@ type IDBPersisterOptions = Readonly<{
   dbName?: string;
   storeName?: string;
   key?: string;
+  /** Debounce persist calls by this many ms. Defaults to 1000. */
+  debounceMs?: number;
 }>;
 
 const DEFAULT_DB = 'macro-query-cache';
 const DEFAULT_STORE = 'persisted';
 const DEFAULT_KEY = 'tanstack';
+const DEFAULT_DEBOUNCE_MS = 1000;
+
+/** Cached database connections by dbName */
+const dbCache = new Map<string, IDBDatabase>();
 
 function openDB(dbName: string, storeName: string): Promise<IDBDatabase> {
+  const cached = dbCache.get(dbName);
+  if (cached) return Promise.resolve(cached);
+
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(dbName, 1);
     req.onupgradeneeded = () => {
@@ -22,7 +31,11 @@ function openDB(dbName: string, storeName: string): Promise<IDBDatabase> {
         db.createObjectStore(storeName);
       }
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      const db = req.result;
+      dbCache.set(dbName, db);
+      resolve(db);
+    };
     req.onerror = () => reject(req.error);
   });
 }
@@ -34,18 +47,14 @@ async function withStore<T>(
   fn: (store: IDBObjectStore) => IDBRequest<T>
 ): Promise<T> {
   const db = await openDB(dbName, storeName);
-  try {
-    return await new Promise<T>((resolve, reject) => {
-      const tx = db.transaction(storeName, mode);
-      const store = tx.objectStore(storeName);
-      const req = fn(store);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-      tx.onabort = () => reject(tx.error);
-    });
-  } finally {
-    db.close();
-  }
+  return new Promise<T>((resolve, reject) => {
+    const tx = db.transaction(storeName, mode);
+    const store = tx.objectStore(storeName);
+    const req = fn(store);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+    tx.onabort = () => reject(tx.error);
+  });
 }
 
 export function createIDBPersister(
@@ -54,13 +63,29 @@ export function createIDBPersister(
   const dbName = options.dbName ?? DEFAULT_DB;
   const storeName = options.storeName ?? DEFAULT_STORE;
   const key = options.key ?? DEFAULT_KEY;
+  const debounceMs = options.debounceMs ?? DEFAULT_DEBOUNCE_MS;
+
+  let pendingClient: PersistedClient | null = null;
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const flushPersist = async () => {
+    if (!pendingClient) return;
+    const client = pendingClient;
+    pendingClient = null;
+    const value = JSON.stringify(client);
+    await withStore(dbName, storeName, 'readwrite', (store) =>
+      store.put(value, key)
+    );
+  };
 
   return {
     persistClient: async (client: PersistedClient) => {
-      const value = JSON.stringify(client);
-      await withStore(dbName, storeName, 'readwrite', (store) =>
-        store.put(value, key)
-      );
+      pendingClient = client;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        debounceTimer = null;
+        flushPersist();
+      }, debounceMs);
     },
     restoreClient: async () => {
       const value = await withStore<string | undefined>(
@@ -77,6 +102,11 @@ export function createIDBPersister(
       }
     },
     removeClient: async () => {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+        pendingClient = null;
+      }
       await withStore(dbName, storeName, 'readwrite', (store) =>
         store.delete(key)
       );
