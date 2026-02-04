@@ -91,7 +91,8 @@ const validateEntityRename = (entity: EntityData): void => {
 };
 
 /**
- * Helper to update entity names in DSS query data
+ * Helper to update entity names in DSS query data.
+ * TODO: move item to front of list with updatedAt timestamp
  */
 function updateEntityNamesInDssQueryData(
   prev: InfiniteData<SoupPage, unknown> | undefined,
