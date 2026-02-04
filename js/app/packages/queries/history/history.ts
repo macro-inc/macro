@@ -248,8 +248,6 @@ export function useUpdatedDssItemName(itemId: string | Accessor<string>) {
 
     return {
       ...historyQueryOptions(),
-      queryKey: historyKeys.list.queryKey,
-      placeholderData: (prev) => prev,
       select: (data: HistoryQueryResponse): HistoryItem[] => {
         return transformHistoryResponse(data, instructionsId, true);
       },
