@@ -21,6 +21,20 @@ import { queryClient } from '../client';
 import { channelKeys, ChannelNonceKeys } from './keys';
 import { createMutationNonce, registerNonce } from '../nonce';
 
+/**
+ * Register nonces for both message and attachment deduplication.
+ * The server echoes the same nonce for both message and attachment WebSocket events.
+ */
+function registerMessageNonces(
+  optimisticId: string,
+  hasAttachments: boolean
+): void {
+  registerNonce(ChannelNonceKeys.MESSAGE, optimisticId);
+  if (hasAttachments) {
+    registerNonce(ChannelNonceKeys.ATTACHMENT, optimisticId);
+  }
+}
+
 type WithChannelId<T> = T & { channelId: string };
 type WithOptimisticId<T> = T & { optimisticId: string };
 type WithSenderId<T> = T & { senderId: string };
@@ -353,8 +367,11 @@ export function useSendMessageMutation(
     ...withCallbacks<IdResponse, Error, SendMessageParams, SendMessageContext>(
       {
         onMutate: (vars) => {
-          // Register nonce for deduplication when WebSocket event arrives
-          registerNonce(ChannelNonceKeys.MESSAGE, vars.optimisticId);
+          // Register nonces for deduplication when WebSocket events arrive
+          registerMessageNonces(
+            vars.optimisticId,
+            vars.message.attachments.length > 0
+          );
           return optimisticInsertChannelMessage({
             channelId: vars.channelID,
             optimisticId: vars.optimisticId,
