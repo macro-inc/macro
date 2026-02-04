@@ -7,7 +7,6 @@ type IDBPersisterOptions = Readonly<{
   dbName?: string;
   storeName?: string;
   key?: string;
-  /** Debounce persist calls by this many ms. Defaults to 1000. */
   debounceMs?: number;
 }>;
 
@@ -16,13 +15,11 @@ const DEFAULT_STORE = 'persisted';
 const DEFAULT_KEY = 'tanstack';
 const DEFAULT_DEBOUNCE_MS = 1000;
 
-/** Cached database connections by dbName */
 const dbCache = new Map<string, IDBDatabase>();
 
 function openDB(dbName: string, storeName: string): Promise<IDBDatabase> {
   const cached = dbCache.get(dbName);
   if (cached) return Promise.resolve(cached);
-
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(dbName, 1);
     req.onupgradeneeded = () => {
@@ -72,9 +69,8 @@ export function createIDBPersister(
     if (!pendingClient) return;
     const client = pendingClient;
     pendingClient = null;
-    const value = JSON.stringify(client);
     await withStore(dbName, storeName, 'readwrite', (store) =>
-      store.put(value, key)
+      store.put(client, key)
     );
   };
 
@@ -88,18 +84,13 @@ export function createIDBPersister(
       }, debounceMs);
     },
     restoreClient: async () => {
-      const value = await withStore<string | undefined>(
+      const value = await withStore<PersistedClient | undefined>(
         dbName,
         storeName,
         'readonly',
         (store) => store.get(key)
       );
-      if (!value) return undefined;
-      try {
-        return JSON.parse(value) as PersistedClient;
-      } catch {
-        return undefined;
-      }
+      return value;
     },
     removeClient: async () => {
       if (debounceTimer) {
