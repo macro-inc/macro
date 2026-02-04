@@ -36,7 +36,6 @@ import {
 } from '@macro-entity';
 import { useHistoryQuery } from '@queries/history/history';
 import type { SearchArgs } from '@service-search/client';
-import type { Item } from '@service-storage/generated/schemas/item';
 import { debounce } from '@solid-primitives/scheduled';
 import { globalSplitManager } from 'app/signal/splitLayout';
 import type { LexicalEditor } from 'lexical';
@@ -80,6 +79,7 @@ import {
   handleUserMention,
   type UserMentionRecord,
 } from '../../utils/mentionsUtils';
+import type { HistoryItem as Item } from '@queries/history/history';
 
 false && clickOutside;
 false && floatWithSelection;
