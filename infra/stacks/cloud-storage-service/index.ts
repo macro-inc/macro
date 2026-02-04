@@ -370,8 +370,9 @@ const cloudStorageService = new CloudStorageService(
       },
       {
         name: 'CONNECTION_GATEWAY_URL',
-        value: `https://connection-gateway${stack === 'prod' ? '' : `-${stack}`
-          }.macro.com`,
+        value: `https://connection-gateway${
+          stack === 'prod' ? '' : `-${stack}`
+        }.macro.com`,
       },
       {
         name: 'BULK_UPLOAD_REQUESTS_TABLE',
