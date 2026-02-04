@@ -5,9 +5,13 @@ import type { MessageToSendDbId } from '@service-email/generated/schemas';
 import type { MessageToSend } from '@service-email/generated/schemas/messageToSend';
 
 export async function saveEmailDraft(
-  draft: MessageToSend
+  draft: MessageToSend,
+  sendTime?: string | null
 ): Promise<MessageToSendDbId | false> {
-  const createRes = await emailClient.createDraft({ draft });
+  const createRes = await emailClient.createDraft({
+    draft,
+    send_time: sendTime,
+  });
   if (isErr(createRes)) {
     logger.error(new Error('Failed to save draft', { cause: createRes[0] }));
     return false;

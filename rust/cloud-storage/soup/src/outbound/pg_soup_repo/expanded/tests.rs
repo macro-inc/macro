@@ -2104,6 +2104,343 @@ async fn test_dynamic_query_with_ast_and_frecency_exclusion(
     Ok(())
 }
 
+// Test filtering documents by importance
+// The fixture has:
+//   doc-in-A: task, assigned to user-1 (important)
+//   doc-in-B: task, assigned to other-user (NOT important)
+//   doc-in-C: task, assigned to user-1 (important)
+//   doc-in-D: not a task (important - non-tasks are always important)
+//   standalone doc: not a task (important)
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_filter_documents_by_importance(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{DocumentFilters, EntityFilters};
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    // importance=true: non-tasks + tasks assigned to user
+    {
+        let entity_filters = EntityFilters {
+            document_filters: DocumentFilters {
+                importance: Some(true),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+        let items = expanded_dynamic_cursor_soup(
+            &db,
+            ExpandedDynamicCursorArgs {
+                user_id: user_id.copied(),
+                limit: 20,
+                cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+                exclude_frecency: false,
+            },
+        )
+        .await?;
+
+        let mut doc_ids: HashSet<Uuid> = HashSet::new();
+        let mut chat_count = 0;
+        let mut project_count = 0;
+
+        for item in &items {
+            match item {
+                SoupItem::Document(doc) => {
+                    doc_ids.insert(doc.id);
+                }
+                SoupItem::Chat(_) => chat_count += 1,
+                SoupItem::Project(_) => project_count += 1,
+                _ => unimplemented!("encountered unexpected entity"),
+            }
+        }
+
+        let expected_ids: HashSet<Uuid> = [
+            "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", // doc-in-A (task, assigned to user)
+            "cccccccc-cccc-cccc-cccc-cccccccccccc", // doc-in-C (task, assigned to user)
+            "dddddddd-dddd-dddd-dddd-dddddddddddd", // doc-in-D (not a task)
+            "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee", // standalone doc (not a task)
+        ]
+        .iter()
+        .map(|&s| Uuid::parse_str(s).unwrap())
+        .collect();
+
+        assert_eq!(
+            doc_ids, expected_ids,
+            "Should get the correct important documents"
+        );
+        assert_eq!(chat_count, 4, "Should get all chats");
+        assert_eq!(project_count, 4, "Should get all projects");
+    }
+
+    // importance=false: only tasks NOT assigned to user
+    {
+        let entity_filters = EntityFilters {
+            document_filters: DocumentFilters {
+                importance: Some(false),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+        let items = expanded_dynamic_cursor_soup(
+            &db,
+            ExpandedDynamicCursorArgs {
+                user_id: user_id.copied(),
+                limit: 20,
+                cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+                exclude_frecency: false,
+            },
+        )
+        .await?;
+
+        let mut doc_ids: HashSet<Uuid> = HashSet::new();
+        let mut chat_count = 0;
+        let mut project_count = 0;
+
+        for item in &items {
+            match item {
+                SoupItem::Document(doc) => {
+                    doc_ids.insert(doc.id);
+                }
+                SoupItem::Chat(_) => chat_count += 1,
+                SoupItem::Project(_) => project_count += 1,
+                _ => unimplemented!("encountered unexpected entity"),
+            }
+        }
+
+        let expected_ids: HashSet<Uuid> = [
+            "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", // doc-in-B (task, assigned to other user)
+        ]
+        .iter()
+        .map(|&s| Uuid::parse_str(s).unwrap())
+        .collect();
+
+        assert_eq!(
+            doc_ids, expected_ids,
+            "Should get the correct unimportant documents"
+        );
+        assert_eq!(chat_count, 4, "Should get all chats");
+        assert_eq!(project_count, 4, "Should get all projects");
+    }
+
+    Ok(())
+}
+
+// Test filtering chats by importance
+// importance=true is a no-op (returns all chats)
+// importance=false short-circuits to match nothing (1=0)
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_filter_chats_by_importance(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{ChatFilters, EntityFilters};
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    // importance=true: no-op, should return all chats
+    {
+        let entity_filters = EntityFilters {
+            chat_filters: ChatFilters {
+                importance: Some(true),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+        let items = expanded_dynamic_cursor_soup(
+            &db,
+            ExpandedDynamicCursorArgs {
+                user_id: user_id.copied(),
+                limit: 20,
+                cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+                exclude_frecency: false,
+            },
+        )
+        .await?;
+
+        let mut doc_count = 0;
+        let mut chat_count = 0;
+        let mut project_count = 0;
+
+        for item in &items {
+            match item {
+                SoupItem::Document(_) => doc_count += 1,
+                SoupItem::Chat(_) => chat_count += 1,
+                SoupItem::Project(_) => project_count += 1,
+                _ => unimplemented!("encountered unexpected entity"),
+            }
+        }
+
+        assert_eq!(chat_count, 4, "importance=true should return all chats");
+        assert_eq!(doc_count, 5, "Should get all documents");
+        assert_eq!(project_count, 4, "Should get all projects");
+    }
+
+    // importance=false: 1=0, should return no chats
+    {
+        let entity_filters = EntityFilters {
+            chat_filters: ChatFilters {
+                importance: Some(false),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+        let items = expanded_dynamic_cursor_soup(
+            &db,
+            ExpandedDynamicCursorArgs {
+                user_id: user_id.copied(),
+                limit: 20,
+                cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+                exclude_frecency: false,
+            },
+        )
+        .await?;
+
+        let mut doc_count = 0;
+        let mut chat_count = 0;
+        let mut project_count = 0;
+
+        for item in &items {
+            match item {
+                SoupItem::Document(_) => doc_count += 1,
+                SoupItem::Chat(_) => chat_count += 1,
+                SoupItem::Project(_) => project_count += 1,
+                _ => unimplemented!("encountered unexpected entity"),
+            }
+        }
+
+        assert_eq!(chat_count, 0, "importance=false should return no chats");
+        assert_eq!(doc_count, 5, "Should get all documents");
+        assert_eq!(project_count, 4, "Should get all projects");
+    }
+
+    Ok(())
+}
+
+// Test filtering projects by importance
+// importance=true is a no-op (returns all projects)
+// importance=false short-circuits to match nothing (1=0)
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_filter_projects_by_importance(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{EntityFilters, ProjectFilters};
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    // importance=true: no-op, should return all projects
+    {
+        let entity_filters = EntityFilters {
+            project_filters: ProjectFilters {
+                importance: Some(true),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+        let items = expanded_dynamic_cursor_soup(
+            &db,
+            ExpandedDynamicCursorArgs {
+                user_id: user_id.copied(),
+                limit: 20,
+                cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+                exclude_frecency: false,
+            },
+        )
+        .await?;
+
+        let mut doc_count = 0;
+        let mut chat_count = 0;
+        let mut project_count = 0;
+
+        for item in &items {
+            match item {
+                SoupItem::Document(_) => doc_count += 1,
+                SoupItem::Chat(_) => chat_count += 1,
+                SoupItem::Project(_) => project_count += 1,
+                _ => unimplemented!("encountered unexpected entity"),
+            }
+        }
+
+        assert_eq!(
+            project_count, 4,
+            "importance=true should return all projects"
+        );
+        assert_eq!(doc_count, 5, "Should get all documents");
+        assert_eq!(chat_count, 4, "Should get all chats");
+    }
+
+    // importance=false: 1=0, should return no projects
+    {
+        let entity_filters = EntityFilters {
+            project_filters: ProjectFilters {
+                importance: Some(false),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+        let items = expanded_dynamic_cursor_soup(
+            &db,
+            ExpandedDynamicCursorArgs {
+                user_id: user_id.copied(),
+                limit: 20,
+                cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+                exclude_frecency: false,
+            },
+        )
+        .await?;
+
+        let mut doc_count = 0;
+        let mut chat_count = 0;
+        let mut project_count = 0;
+
+        for item in &items {
+            match item {
+                SoupItem::Document(_) => doc_count += 1,
+                SoupItem::Chat(_) => chat_count += 1,
+                SoupItem::Project(_) => project_count += 1,
+                _ => unimplemented!("encountered unexpected entity"),
+            }
+        }
+
+        assert_eq!(
+            project_count, 0,
+            "importance=false should return no projects"
+        );
+        assert_eq!(doc_count, 5, "Should get all documents");
+        assert_eq!(chat_count, 4, "Should get all chats");
+    }
+
+    Ok(())
+}
+
 /// Test that system properties are populated on SoupItems (Documents and Projects)
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",

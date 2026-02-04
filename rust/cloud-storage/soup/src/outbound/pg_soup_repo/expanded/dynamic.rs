@@ -108,6 +108,11 @@ static DOCUMENT_CLAUSE: &str = r#"
         AND ep_status.entity_id = d.id 
         AND ep_status.entity_type = 'TASK'
         AND ep_status.property_definition_id = $7
+    LEFT JOIN entity_properties ep_assignees
+        ON dt.sub_type = 'task'
+        AND ep_assignees.entity_id = d.id
+        AND ep_assignees.entity_type = 'TASK'
+        AND ep_assignees.property_definition_id = $8
     INNER JOIN UserAccessibleItems uai ON uai.item_id = d.id AND uai.item_type = 'document'
     -- This MUST be a LEFT JOIN to support all three sort methods
     LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
@@ -239,6 +244,26 @@ fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
             format!(r#"d."projectId" = '{p}'"#)
         }
         filter_ast::ExprFrame::Literal(DocumentLiteral::Owner(o)) => format!("d.owner = '{o}'"),
+        filter_ast::ExprFrame::Literal(DocumentLiteral::Importance(true)) => {
+            // "Important" documents: non-tasks OR tasks where user is an assignee
+            r#"(
+                dt.sub_type IS NULL
+                OR dt.sub_type != 'task'
+                OR ep_assignees.values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', $1))
+            )"#
+                .to_string()
+        }
+        // filter_ast::ExprFrame::Literal(DocumentLiteral::Importance(false)) => String::new()
+        filter_ast::ExprFrame::Literal(DocumentLiteral::Importance(false)) => {
+            // "Unimportant" documents: tasks where user is NOT an assignee
+            r#"(
+                dt.sub_type = 'task'
+                -- special null handling for jsonb column
+                AND (ep_assignees.values = 'null'
+                OR NOT ep_assignees.values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', $1)))
+            )"#
+                .to_string()
+        }
     });
     if formatting.is_empty() {
         String::new()
@@ -262,6 +287,9 @@ fn build_chat_filter(ast: Option<&Expr<ChatLiteral>>) -> String {
         filter_ast::ExprFrame::Literal(ChatLiteral::Role(_r)) => String::new(),
         filter_ast::ExprFrame::Literal(ChatLiteral::ChatId(i)) => format!("c.id = '{i}'"),
         filter_ast::ExprFrame::Literal(ChatLiteral::Owner(o)) => format!("c.owner = '{o}'"),
+        filter_ast::ExprFrame::Literal(ChatLiteral::Importance(true)) => String::new(),
+        // all chats are important, so if importance is false, exclude them
+        filter_ast::ExprFrame::Literal(ChatLiteral::Importance(false)) => "1=0".to_string(),
     });
     if formatting.is_empty() {
         String::new()
@@ -282,6 +310,9 @@ fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
             format!(r#"p."parentId" = '{p}'"#)
         }
         filter_ast::ExprFrame::Literal(ProjectLiteral::Owner(o)) => format!("p.owner = '{o}'"),
+        filter_ast::ExprFrame::Literal(ProjectLiteral::Importance(true)) => String::new(),
+        // all projects are important, so if importance is false, exclude them
+        filter_ast::ExprFrame::Literal(ProjectLiteral::Importance(false)) => "1=0".to_string(),
     });
     if formatting.is_empty() {
         String::new()
@@ -525,6 +556,7 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
     let (cursor_id, cursor_timestamp) = cursor.vals();
     let cursor_id_str = cursor_id.as_ref().map(|u| u.to_string());
     let status_property_id = SystemPropertyKey::STATUS_UUID;
+    let assignees_property_id = SystemPropertyKey::ASSIGNEES_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
     let mut items = build_query(cursor.filter(), exclude_frecency)
@@ -536,6 +568,7 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
         .bind(cursor_id_str)
         .bind(completed_option_id)
         .bind(status_property_id)
+        .bind(assignees_property_id)
         .try_map(|row| SoupRow::from_row(&row)?.into_soup_item())
         .fetch_all(db)
         .await?;

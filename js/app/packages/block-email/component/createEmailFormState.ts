@@ -51,6 +51,7 @@ type EmailFormState = {
   withQuotedText: boolean;
   subject: string;
   markdownBody: string;
+  sendTime?: Date;
 };
 
 const EMPTY_FORM_STATE: EmailFormState = {
@@ -137,6 +138,9 @@ export function createEmailFormState(
       withQuotedText: draftContainsAppendedReply(),
       subject: initialSubject,
       markdownBody: '',
+      sendTime: draft?.scheduled_send_time
+        ? new Date(draft.scheduled_send_time)
+        : undefined,
     } satisfies EmailFormState;
   };
 
@@ -228,6 +232,11 @@ export function createEmailFormState(
     return rt;
   };
 
+  const setSendTime = (date: Date | null) => {
+    setState('sendTime', date ?? undefined);
+    callDirty();
+  };
+
   const callDirty = () => {
     onDirtyCb()?.();
   };
@@ -276,6 +285,8 @@ export function createEmailFormState(
     setReplyType,
     shouldFocusInput,
     setShouldFocusInput,
+    sendTime: () => state.sendTime,
+    setSendTime,
     reset,
     clear,
     setOnDirty: (cb?: () => void) => {

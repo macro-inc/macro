@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { DocumentFiltersImportance } from './documentFiltersImportance';
 
 /**
  * The document filters used to filter down what documents you search over.
@@ -13,6 +14,8 @@ export interface DocumentFilters {
   document_ids?: string[];
   /** Document file types to search. Examples: ['pdf'], ['md', 'txt']. Empty to search all file types. */
   file_types?: string[];
+  /** Filter by document importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing. */
+  importance?: DocumentFiltersImportance;
   /** Filter by document owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners. */
   owners?: string[];
   /** A list of project ids to search within. Examples: ['project1'].

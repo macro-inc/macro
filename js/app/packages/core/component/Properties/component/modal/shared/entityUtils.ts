@@ -16,7 +16,7 @@ export type CombinedEntity =
 /** Creates a mapper function for a specific entity kind */
 export function entityMapper(kind: 'item' | 'user' | 'channel') {
   return (data: Item | IUser | ChannelWithParticipants): CombinedEntity => {
-    return { kind, data, id: (data as { id: string }).id } as CombinedEntity;
+    return { kind, data, id: data.id } as CombinedEntity;
   };
 }
 
@@ -85,20 +85,47 @@ export function getEntityType(entity: CombinedEntity): EntityType {
   }
 }
 
+/** Check if entity is a channel */
+export function isChannelEntity(item: CombinedEntity): boolean {
+  return item.kind === 'channel';
+}
+
+/** Get timestamped item from combined entity */
+export function getEntityTimestampedItem<T extends CombinedEntity>(
+  item: T
+): TimestampedItem {
+  switch (item.kind) {
+    case 'item':
+      return {
+        updatedAt: item.data.updatedAt,
+      };
+    case 'channel':
+      return {
+        updatedAt: item.data.updated_at,
+      };
+    case 'user':
+      return {
+        lastInteraction: item.data.lastInteraction,
+      };
+    default:
+      return {};
+  }
+}
+
 /**
  * Creates search config for entity searches with same-domain boost.
  * Uses the same preset as MentionsMenu and RecipientSelector for consistency.
  */
-export function createEntitySearchConfig(
+export function createEntitySearchConfig<T extends CombinedEntity>(
   currentUserDomain: Accessor<string | undefined>
-): FreshSortConfig {
-  const boostFn = <T extends TimestampedItem>(item: T): number => {
+): FreshSortConfig<T> {
+  const boostFn = (item: T): number => {
     const userDomain = currentUserDomain();
     if (!userDomain) return 0;
 
     // Check if this looks like a CombinedEntity with user data
-    if (item?.kind === 'user' && item?.data?.email) {
-      const email = item.data.email as string;
+    if (item.kind === 'user' && item.data.email) {
+      const email = item.data.email;
       const itemDomain = email.split('@')[1];
       return itemDomain === userDomain ? 0.5 : 0;
     }

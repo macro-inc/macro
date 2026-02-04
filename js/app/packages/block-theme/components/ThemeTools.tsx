@@ -1,5 +1,5 @@
 import { deleteTheme, exportTheme, importTheme, invertTheme, saveTheme } from '../utils/themeUtils';
-import { currentThemeId, isThemeSaved, themes } from '../signals/themeSignals';
+import { currentThemeId, isThemeSaved, themes, userThemes } from '../signals/themeSignals';
 import { createEffect, createMemo, createSignal, Show } from 'solid-js';
 import IconLightDark from '@macro-icons/macro-light-dark.svg';
 import IconClipboard from '@macro-icons/macro-clipboard.svg';
@@ -9,8 +9,6 @@ import IconTrash from '@macro-icons/macro-trash.svg';
 import { randomizeTheme } from './ThemeEditorBasic';
 import IconDice from '@macro-icons/macro-dice.svg';
 import IconSave from '@macro-icons/macro-save.svg';
-// import { copyTokens } from './ComputeTokens';
-import { DEFAULT_THEMES } from '../constants';
 
 export function ThemeTools() {
   let themeName!: HTMLDivElement;
@@ -25,7 +23,7 @@ export function ThemeTools() {
 
   const [showTrash, setShowTrash] = createSignal<boolean>(true);
   createEffect(() => {
-    if(isThemeSaved() && !DEFAULT_THEMES.find((t) => t.id === currentThemeId())){setShowTrash(true)}
+    if(isThemeSaved() && userThemes().some((t) => t.id === currentThemeId())){setShowTrash(true)}
     else{setShowTrash(false)}
   });
 

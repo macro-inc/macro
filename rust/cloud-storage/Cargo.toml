@@ -153,7 +153,7 @@ hex = "0.4.3"
 http = "1"
 http-body-util = "0.1.2"
 itertools = "0.14"
-jsonwebtoken = "9.3.1"
+jsonwebtoken = { version = "10.3.0", features = ["rust_crypto"] }
 lambda_runtime = "0.13.0"
 lazy_static = "1.5.0"
 log = "0.4.26"
@@ -216,7 +216,7 @@ async-stripe = { version = "0.41", default-features = false, features = [
   "runtime-tokio-hyper",
 ] }
 axum-macros = "0.4.2"
-bytes = "1.10.1"
+bytes = "1.11.1"
 bzip2 = { version = "0.5.1", default-features = false, features = [
   "libbz2-rs-sys",
 ] }

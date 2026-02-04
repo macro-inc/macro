@@ -76,7 +76,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::trace!("initialized config");
 
     let (min_connections, max_connections): (u32, u32) = match config.environment {
-        Environment::Production => (10, 50),
+        Environment::Production => (25, 75),
         Environment::Develop => (3, 20),
         Environment::Local => (3, 10),
     };

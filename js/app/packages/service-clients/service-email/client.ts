@@ -26,6 +26,8 @@ import type {
   SendMessageResponse,
   UpdateLabelBatchRequest,
   UpdateLabelBatchResponse,
+  UpsertScheduledRequest,
+  UpsertScheduledResponse,
 } from './generated/schemas';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
 
@@ -146,6 +148,32 @@ export const emailClient = {
         method: 'POST',
         body: JSON.stringify(args),
       }),
+      (result) => result
+    );
+  },
+
+  async scheduleMessage(args: { draftID: string } & UpsertScheduledRequest) {
+    const { draftID, ...rest } = args;
+    return mapOk(
+      await emailFetch<UpsertScheduledResponse>(
+        `/email/drafts/scheduled/${draftID}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify(rest),
+        }
+      ),
+      (result) => result
+    );
+  },
+
+  async unscheduleMessage(args: { draftID: string }) {
+    return mapOk(
+      await emailFetch<EmptyResponse>(
+        `/email/drafts/scheduled/${args.draftID}`,
+        {
+          method: 'DELETE',
+        }
+      ),
       (result) => result
     );
   },

@@ -4,6 +4,7 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ChatFiltersImportance } from './chatFiltersImportance';
 
 /**
  * The chat filters used to filter down what chats you search over.
@@ -11,6 +12,8 @@
 export interface ChatFilters {
   /** Chat ids to search over. Examples: ['chat1'], ['chat1', 'chat2']. When provided, chat search will only match results on these chats. Empty to search all accessible chats. */
   chat_ids?: string[];
+  /** Filter by chat importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing. */
+  importance?: ChatFiltersImportance;
   /** Filter by chat owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners. */
   owners?: string[];
   /** A list of project ids to search within. Examples: ['project1']. Empty to ignore project filtering. */

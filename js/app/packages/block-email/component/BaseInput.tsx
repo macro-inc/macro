@@ -41,7 +41,11 @@ import {
 } from '@lexical-core';
 import { logger } from '@observability';
 import { useEmailLinksQuery } from '@queries/email/link';
-import { useSendMessageMutation } from '@queries/email/thread';
+import {
+  useScheduleMessageMutation,
+  useSendMessageMutation,
+  useUnscheduleMessageMutation,
+} from '@queries/email/thread';
 import type {
   MessageToSendDbId,
   MessageWithBodyReplyless,
@@ -79,7 +83,10 @@ import {
   untrack,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { deleteEmailDraft, saveEmailDraft } from '../signal/emailDraft';
+import {
+  useDeleteDraftMutation,
+  useSaveDraftMutation,
+} from '@queries/email/draft';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
 import { getFirstName } from '../util/name';
 import {
@@ -100,7 +107,12 @@ import {
 import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
 import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
 import { plural } from '@core/util/string';
+import { EmailDateSelector } from '@block-email/component/email-date-selector';
 import { isMobile } from '@core/mobile/isMobile';
+import { queryClient } from '@queries/client';
+import { emailKeys } from '@queries/email/keys';
+import { stickyGate } from '@core/util/debounce';
+import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
 
 false && fileFolderDrop;
 false && fileSelector;
@@ -376,6 +388,8 @@ export function BaseInput(props: {
   });
 
   const uploadAttachmentMutation = useUploadDraftAttachmentsMutation();
+  const saveDraftMutation = useSaveDraftMutation();
+  const deleteDraftMutation = useDeleteDraftMutation();
 
   function refetchThreadMessages() {
     ctx.query.refetch();
@@ -459,7 +473,7 @@ export function BaseInput(props: {
     if (!draftToSave) {
       const draftId = savedDraftId();
       if (draftId) {
-        await deleteEmailDraft(draftId);
+        await deleteDraftMutation.mutateAsync({ draftId });
         refetchThreadMessages();
       }
       setSavedDraftId(undefined);
@@ -470,7 +484,7 @@ export function BaseInput(props: {
 
     if (!currentThread && !newMessage) {
       logger.error(new Error('Failed to save draft: thread not found'));
-      return false;
+      return;
     }
 
     if (newMessage && currentThread) {
@@ -479,39 +493,51 @@ export function BaseInput(props: {
           'Failed to save draft: new message and current thread cannot be provided together'
         )
       );
-      return false;
+      return;
     }
 
     let linkId: string | undefined = currentThread?.link_id;
     if (newMessage || !linkId) {
       if (emailLinksQuery.isPending) {
-        return false;
+        return;
       }
 
       if (emailLinksQuery.isError) {
         logger.error(
           new Error('Failed to save email draft: could not load email links')
         );
-        return false;
+        return;
       }
 
       const linksData = emailLinksQuery.data;
       if (!linksData || linksData.links.length === 0) {
         logger.error(new Error('Failed to save email draft: no links found'));
-        return false;
+        return;
       }
       linkId = linksData.links[0].id;
     }
 
-    const draftResponse = await saveEmailDraft({
-      ...draftToSave,
-      db_id: savedDraftId(),
-      link_id: linkId!,
-      provider_thread_id: currentThread?.provider_id,
-      thread_db_id: currentThread?.db_id,
+    const existingDraft = savedDraftId() !== undefined;
+
+    // If there's an existing draft, we should send the sendTime so that the send time
+    // stays up to date and is not removed
+    const sendTime = existingDraft
+      ? form().sendTime()?.toISOString()
+      : undefined;
+
+    const draftResponse = await saveDraftMutation.mutateAsync({
+      draft: {
+        ...draftToSave,
+        db_id: savedDraftId(),
+        link_id: linkId!,
+        provider_thread_id: currentThread?.provider_id,
+        thread_db_id: currentThread?.db_id,
+      },
+      sendTime,
     });
 
-    if (draftResponse) {
+    const draftId = draftResponse.draft.db_id;
+    if (draftId) {
       // If the email draft saved successfully, we want to upload the
       // attachments as well. We should grab only the attachments that
       // haven't been uploaded yet
@@ -524,7 +550,7 @@ export function BaseInput(props: {
 
       if (attachments.length) {
         const uploaded = await uploadAttachmentMutation.mutateAsync({
-          draftID: draftResponse,
+          draftID: draftId,
           attachments: attachments.map((a) => a.file),
         });
 
@@ -537,8 +563,9 @@ export function BaseInput(props: {
         }
       }
 
-      setSavedDraftId(draftResponse);
+      setSavedDraftId(draftId);
       refetchThreadMessages();
+      return draftId;
     }
   }
 
@@ -589,6 +616,23 @@ export function BaseInput(props: {
   const [attachComposeHotkeys, composeHotkeyScope] =
     useHotkeyDOMScope('compose-message');
   let composeContainerRef: HTMLDivElement | undefined;
+
+  const scheduleMessageMutation = useScheduleMessageMutation({
+    onSuccess: () => {
+      toast.success('Email scheduled');
+
+      const thread = ctx.thread();
+
+      if (!thread?.db_id) return;
+
+      queryClient.invalidateQueries({
+        queryKey: emailKeys.threadMessages(thread.db_id).queryKey,
+      });
+    },
+    onError: () => {
+      toast.failure('Failed to schedule email');
+    },
+  });
 
   const sendEmail = async (markDone = false) => {
     if (sendMutation.isPending || uploadAttachmentMutation.isPending) return;
@@ -672,6 +716,28 @@ export function BaseInput(props: {
     const currentDraftID = savedDraftId();
     if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
 
+    const sendTime = form().sendTime()?.toISOString();
+
+    if (sendTime) {
+      // Just in case, always get a fresh save of the draft so we don't miss any information
+      const draftID = await executeSaveDraft();
+
+      if (!draftID) {
+        console.error('No draft');
+        toast.failure('Failed to schedule message', 'Draft required');
+        cleanupWatermark();
+        return;
+      }
+
+      scheduleMessageMutation.mutate({
+        draftID,
+        sendTime,
+      });
+
+      cleanupWatermark();
+      return;
+    }
+
     sendMutation.mutate({
       message: {
         db_id: currentDraftID,
@@ -714,7 +780,7 @@ export function BaseInput(props: {
   const deleteDraftAndReset = async () => {
     const draftId = savedDraftId();
     if (draftId) {
-      await deleteEmailDraft(draftId);
+      await deleteDraftMutation.mutateAsync({ draftId });
       refetchThreadMessages();
     }
     resetState();
@@ -888,6 +954,39 @@ export function BaseInput(props: {
     });
   };
 
+  const unscheduleMessageMutation = useUnscheduleMessageMutation({
+    onSuccess: () => {
+      toast.success('Email unscheduled');
+    },
+    onError: () => {
+      toast.failure('Failed to unschedule email');
+    },
+  });
+
+  const handleSendTimeChange = (date: Date | null) => {
+    const currentSendTime = form().sendTime();
+    const currentDraft = savedDraftId();
+
+    // If we unset the send time, we need to unschedule the message
+    if (!date && currentSendTime && currentDraft) {
+      unscheduleMessageMutation.mutate({
+        draftID: currentDraft,
+      });
+    }
+
+    form().setSendTime(date);
+    scheduleDraftSave();
+  };
+
+  const isDraftSaving = () => saveDraftMutation.isPending;
+
+  // Used to keep displaying draft status for some time
+  const debouncedIsDraftSaving = stickyGate(isDraftSaving, 2000);
+
+  // Used to keep displaying spinner for a short time before switching
+  // to saved state
+  const laggedIsDraftSaving = stickyGate(isDraftSaving, 250);
+
   return (
     <div
       ref={(el) => {
@@ -896,7 +995,7 @@ export function BaseInput(props: {
       class="relative flex flex-col flex-1 bg-input border-t border-x border-edge-muted rounded-t-[5px] -mb-[7px] max-w-full"
     >
       {/* Top Bar */}
-      <div class="flex items-start gap-2 p-2">
+      <div class="relative flex items-start gap-2 p-2">
         <DropdownMenu>
           <DropdownMenu.Trigger>
             <div class="px-1">
@@ -1036,6 +1135,17 @@ export function BaseInput(props: {
                 </Tooltip>
               </Show>
             </div>
+          </div>
+        </Show>
+        <Show when={debouncedIsDraftSaving()}>
+          <div class="absolute right-4 top-4 flex gap-1 items-center text-xs text-ink-muted">
+            <Show
+              when={laggedIsDraftSaving()}
+              fallback={<span>Draft saved</span>}
+            >
+              <Spinner class="size-4 animate-spin" />
+              <span>Saving draft</span>
+            </Show>
           </div>
         </Show>
       </div>
@@ -1242,6 +1352,12 @@ export function BaseInput(props: {
                 </div>
               </KToggleButton>
             </Tooltip>
+            <Show when={ENABLE_EMAIL_SCHEDULED_SEND}>
+              <EmailDateSelector
+                sendTime={form().sendTime() ?? null}
+                onSendTimeChange={handleSendTimeChange}
+              />
+            </Show>
             <Show when={savedDraftId()}>
               <Button
                 onclick={deleteDraftAndReset}

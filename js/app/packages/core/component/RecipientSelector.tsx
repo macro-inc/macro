@@ -26,7 +26,6 @@ import {
 } from '@kobalte/core/combobox';
 import type { Channel } from '@service-comms/generated/models/channel';
 import { useEmail, useUserId } from '@core/context/user';
-import { useDmActivityByUserId } from '@core/context/channels';
 import { debounce } from '@solid-primitives/scheduled';
 import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
 import * as EmailValidator from 'email-validator';
@@ -42,6 +41,7 @@ import {
   Switch,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
+import { useAugmentUserWithDmActivity } from '@core/user/dmActivity';
 
 function getRecipientOptionEmail(
   option: CombinedRecipientItem
@@ -331,21 +331,24 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     return email ? email.split('@')[1] : undefined;
   });
 
-  const dmActivityByUserId = useDmActivityByUserId();
-
   // Create search function for recipients - only used for initial sorting with no query
-  const recipientSearch = createFreshSearch<CombinedRecipientItem<K>>(
-    FreshSearchPresets.baseUserSearch(currentUserDomain, (item) =>
-      item.kind === 'user' ? item.data.email : undefined
+  const recipientSearch = createFreshSearch<CombinedRecipientItem>(
+    FreshSearchPresets.baseUserSearch<CombinedRecipientItem>(
+      currentUserDomain,
+      getRecipientOptionEmail
     ),
-    getRecipientOptionTextValue as (item: CombinedRecipientItem<K>) => string
+    getRecipientOptionTextValue,
+    (item) => item.kind === 'channel',
+    (item) => ({
+      lastInteraction:
+        item.kind === 'user' ? item.data.lastInteraction : undefined,
+    })
   );
 
+  const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
   const recipients = createMemo(() => {
-    const options: CombinedRecipientItem<K>[] = [];
+    const options: CombinedRecipientItem[] = [];
     const emails = new Set<string>();
-
-    const dmActivity = dmActivityByUserId();
 
     for (const option of props.options()) {
       const item = option as CombinedRecipientItem;
@@ -364,19 +367,11 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         emails.add(email.toLowerCase());
       }
 
-      // Augment user items with DM activity timestamp
       if (item.kind === 'user') {
-        const dmTimestamp = dmActivity.get(item.id);
-        if (dmTimestamp) {
-          options.push({
-            ...option,
-            lastInteraction: dmTimestamp,
-          } as CombinedRecipientItem<K>);
-          continue;
-        }
+        item.data = augmentUserWithDmActivity(item.data);
       }
 
-      options.push(option);
+      options.push(item);
     }
 
     const sorted = recipientSearch(options, '').map((item) => {

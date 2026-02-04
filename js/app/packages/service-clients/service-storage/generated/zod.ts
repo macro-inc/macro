@@ -3538,6 +3538,12 @@ export const postItemsSoupBody = zod
           .describe(
             "Channel IDs to search within. Examples: ['general']. Empty to search all accessible channels."
           ),
+        importance: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Filter by channel importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
+          ),
         mentions: zod
           .array(zod.string())
           .optional()
@@ -3574,6 +3580,12 @@ export const postItemsSoupBody = zod
           .optional()
           .describe(
             "Chat ids to search over. Examples: ['chat1'], ['chat1', 'chat2']. When provided, chat search will only match results on these chats. Empty to search all accessible chats."
+          ),
+        importance: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Filter by chat importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
           ),
         owners: zod
           .array(zod.string())
@@ -3612,6 +3624,12 @@ export const postItemsSoupBody = zod
           .describe(
             "Document file types to search. Examples: ['pdf'], ['md', 'txt']. Empty to search all file types."
           ),
+        importance: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Filter by document importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
+          ),
         owners: zod
           .array(zod.string())
           .optional()
@@ -3643,6 +3661,12 @@ export const postItemsSoupBody = zod
           .describe(
             "Email CC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by CC."
           ),
+        importance: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Filter by email importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
+          ),
         recipients: zod
           .array(zod.string())
           .optional()
@@ -3662,6 +3686,12 @@ export const postItemsSoupBody = zod
       ),
     project_filters: zod
       .object({
+        importance: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Filter by project importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
+          ),
         owners: zod
           .array(zod.string())
           .optional()

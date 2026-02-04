@@ -77,6 +77,26 @@ fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
         filter_ast::ExprFrame::Literal(DocumentLiteral::Owner(o)) => {
             format!(r#"entity_id IN (SELECT id FROM "Document" WHERE owner = '{o}' AND "deletedAt" IS NULL)"#)
         }
+        filter_ast::ExprFrame::Literal(DocumentLiteral::Importance(true)) => {
+            // "Important" documents: non-tasks OR tasks where user is an assignee
+            r#"(
+                dt.sub_type IS NULL
+                OR dt.sub_type != 'task'
+                OR ep_assignees.values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', $1))
+            )"#
+                .to_string()
+        }
+        // filter_ast::ExprFrame::Literal(DocumentLiteral::Importance(false)) => String::new()
+        filter_ast::ExprFrame::Literal(DocumentLiteral::Importance(false)) => {
+            // "Unimportant" documents: tasks where user is NOT an assignee
+            r#"(
+                dt.sub_type = 'task'
+                -- special null handling for jsonb column
+                AND (ep_assignees.values = 'null'
+                OR NOT ep_assignees.values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', $1)))
+            )"#
+                .to_string()
+        }
     });
     if formatting.is_empty() {
         String::new()
@@ -121,6 +141,9 @@ fn build_chat_filter(ast: Option<&Expr<ChatLiteral>>) -> String {
             filter_ast::ExprFrame::Literal(ChatLiteral::Owner(o)) => {
                 format!(r#"entity_id IN (SELECT id FROM "Chat" WHERE "userId" = '{o}' AND "deletedAt" IS NULL)"#)
             }
+            // all chats are important, so if importance is false, exclude them
+            filter_ast::ExprFrame::Literal(ChatLiteral::Importance(true)) => String::new(),
+            filter_ast::ExprFrame::Literal(ChatLiteral::Importance(false)) => "1=0".to_string(),
         });
     if formatting.is_empty() {
         String::new()
@@ -143,6 +166,9 @@ fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
         filter_ast::ExprFrame::Literal(ProjectLiteral::Owner(o)) => {
             format!(r#"entity_id IN (SELECT id FROM "Project" WHERE "userId" = '{o}' AND "deletedAt" IS NULL)"#)
         }
+        filter_ast::ExprFrame::Literal(ProjectLiteral::Importance(true)) => String::new(),
+        // all projects are important, so if importance is false, exclude them
+        filter_ast::ExprFrame::Literal(ProjectLiteral::Importance(false)) => "1=0".to_string(),
     });
     if formatting.is_empty() {
         String::new()

@@ -16,6 +16,7 @@ import {
   setActiveScope,
   setActiveScopeBranch,
   setExecutedTokens,
+  setHotkeyTokenMap,
   setLastExecutedCommand,
   setPressedKeys,
 } from './state';
@@ -26,6 +27,41 @@ import type {
   ScopeNode,
   ValidHotkey,
 } from './types';
+
+/**
+ * Removes hotkey commands from the global token map when their scope is destroyed.
+ */
+export function removeCommandsFromTokenMap(
+  tokenMap: Map<HotkeyToken, HotkeyCommand[]>,
+  commands: HotkeyCommand[]
+): Map<HotkeyToken, HotkeyCommand[]> {
+  if (commands.length === 0) return tokenMap;
+
+  let newMap: Map<HotkeyToken, HotkeyCommand[]> | undefined;
+
+  for (const command of commands) {
+    if (!command.hotkeyToken) continue;
+
+    const currentMap = newMap ?? tokenMap;
+    const existingCommands = currentMap.get(command.hotkeyToken);
+    if (!existingCommands) continue;
+
+    const filtered = existingCommands.filter((c) => c !== command);
+    if (filtered.length === existingCommands.length) continue;
+
+    if (!newMap) {
+      newMap = new Map(tokenMap);
+    }
+
+    if (filtered.length > 0) {
+      newMap.set(command.hotkeyToken, filtered);
+    } else {
+      newMap.delete(command.hotkeyToken);
+    }
+  }
+
+  return newMap ?? tokenMap;
+}
 
 type GetHotkeyCommandOptions = {
   /**
@@ -166,6 +202,21 @@ export function removeScope(scopeId: string) {
     }
     return;
   }
+
+  // Collect all commands from this scope to remove from the global token map
+  const commandsToRemove = [
+    ...Array.from(scope.hotkeyCommands.values()).flat(),
+    ...scope.unkeyedCommands,
+  ];
+
+  if (commandsToRemove.length > 0) {
+    setHotkeyTokenMap((prev) =>
+      removeCommandsFromTokenMap(prev, commandsToRemove)
+    );
+  }
+
+  scope.hotkeyCommands.clear();
+  scope.unkeyedCommands.length = 0;
 
   // if scope is in currently active scope branch, we want to "snip just above it", i.e. set active scope to closest DOM scope parent.
   if (scope.type === 'dom') {

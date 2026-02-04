@@ -1,13 +1,16 @@
 import { useMaybeBlockId } from '@core/block';
-import {
-  useChannelsContext,
-  useDmActivityByUserId,
-} from '@core/context/channels';
+import { useChannelsContext } from '@core/context/channels';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { IUser } from '@core/user';
-import { idToEmail, tryMacroId, useContacts, useDisplayName } from '@core/user';
+import {
+  idToEmail,
+  tryMacroId,
+  useAugmentUserWithDmActivity,
+  useContacts,
+  useDisplayName,
+} from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
 import CompanyIcon from '@icon/duotone/building-duotone.svg';
 import ChannelBuildingIcon from '@icon/duotone/building-office-duotone.svg';
@@ -45,7 +48,9 @@ import {
   entityMapper,
   getEntityName,
   getEntitySearchText,
+  getEntityTimestampedItem,
   getEntityType,
+  isChannelEntity,
   threadMapper,
 } from './entityUtils';
 import { OptionCheckBox } from './OptionCheckBox';
@@ -159,7 +164,6 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const contacts = useContacts();
   const channelsContext = useChannelsContext();
   const channels = channelsContext.channels;
-  const dmActivityByUserId = useDmActivityByUserId();
 
   // Get current user info for injection into contacts
   const currentUserId = useUserId();
@@ -239,18 +243,11 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   });
 
   // Helper to augment user entities with DM activity timestamps (same as MentionsMenu)
-  const augmentUsersWithDmActivity = (users: IUser[]) => {
-    const dmActivity = dmActivityByUserId();
-    return users.map(entityMapper('user')).map((entity) => {
-      const dmTimestamp = dmActivity.get(entity.id);
-      if (dmTimestamp) {
-        return {
-          ...entity,
-          lastInteraction: dmTimestamp,
-        };
-      }
-      return entity;
-    });
+  const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
+  const augmentUsersWithDmActivity = (users: IUser[]): CombinedEntity[] => {
+    return users.map((user) =>
+      entityMapper('user')(augmentUserWithDmActivity(user))
+    );
   };
 
   // Local entities (always available, used for instant results)
@@ -323,7 +320,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
   const entitySearch = createFreshSearch<CombinedEntity>(
     createEntitySearchConfig(currentUserDomain),
-    getEntitySearchText
+    getEntitySearchText,
+    isChannelEntity,
+    getEntityTimestampedItem
   );
 
   const filteredEntities = createMemo(() => {

@@ -271,7 +271,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
               name: BASE_NAME,
               image: image.image.imageUri,
               stopTimeout: 10, // 10 seconds to force kill the task
-              cpu: stack === 'prod' ? 1024 : 512,
+              cpu: stack === 'prod' ? 2048 : 512,
               memory: stack === 'prod' ? 4096 : 2048,
               environment: containerEnvVars,
               logConfiguration: {

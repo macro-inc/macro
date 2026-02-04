@@ -9,19 +9,21 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import { UserIcon } from '@core/component/UserIcon';
 import { ENABLE_CHAT_CHANNEL_ATTACHMENT } from '@core/constant/featureFlags';
-import {
-  useChannelsContext,
-  useDmActivityByUserId,
-} from '@core/context/channels';
+import { useChannelsContext } from '@core/context/channels';
 import { useEmail } from '@core/context/user';
 import clickOutside from '@core/directive/clickOutside';
 import {
   type ChannelWithParticipants,
   type IUser,
+  useAugmentUserWithDmActivity,
   useContacts,
 } from '@core/user';
 import { getDateSuggestions } from '@core/util/dateParser';
-import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
+import {
+  createFreshSearch,
+  FreshSearchPresets,
+  type TimestampedItem,
+} from '@core/util/freshSort';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import ClockIcon from '@icon/regular/clock.svg';
 import EmailIcon from '@icon/regular/envelope.svg';
@@ -111,6 +113,30 @@ const getItemSearchText = (item: CombinedEntity): string => {
       return item.data.name ?? 'No Subject';
     case 'group':
       return item.data.groupAlias;
+  }
+};
+
+const getItemTimestamp = (item: CombinedEntity): TimestampedItem => {
+  switch (item.kind) {
+    case 'item':
+      return {
+        updatedAt: item.data.updatedAt,
+      };
+    case 'channel':
+      return {
+        updatedAt: item.data.updated_at,
+      };
+    case 'email':
+      return {
+        updatedAt: item.data.updatedAt,
+        viewedAt: item.data.viewedAt,
+      };
+    case 'user':
+      return {
+        lastInteraction: item.data.lastInteraction,
+      };
+    default:
+      return {};
   }
 };
 
@@ -438,6 +464,7 @@ function MentionsMenuInner(props: {
     props.menu.searchTerm()
   );
   const historyQuery = useHistoryQuery();
+  // TODO: support viewed at in history
   const history = createMemo(() => {
     if (props.history) {
       return props.history().map(entityMapper('item'));
@@ -461,25 +488,13 @@ function MentionsMenuInner(props: {
   }
 
   const contacts = useContacts();
+  const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
 
-  const dmActivityByUserId = useDmActivityByUserId();
-
-  const users = createMemo(() => {
+  const users = createMemo((): Entity<'user'>[] => {
     const list = props.users?.() ?? contacts();
-    const dmActivity = dmActivityByUserId();
 
     return list
-      .map(entityMapper('user'))
-      .map((entity) => {
-        const dmTimestamp = dmActivity.get(entity.id);
-        if (dmTimestamp) {
-          return {
-            ...entity,
-            lastInteraction: dmTimestamp,
-          };
-        }
-        return entity;
-      })
+      .map((user) => entityMapper('user')(augmentUserWithDmActivity(user)))
       .filter(allItemFilter);
   });
 
@@ -645,7 +660,9 @@ function MentionsMenuInner(props: {
 
   const itemSearch = createFreshSearch<CombinedEntity<'item' | 'channel'>>(
     {},
-    getItemSearchText
+    getItemSearchText,
+    (item) => item.kind === 'channel',
+    getItemTimestamp
   );
   const filteredItems = createMemo(() => {
     const allResults = itemSearch(historyAndChannels(), searchTerm()).map(
@@ -678,11 +695,13 @@ function MentionsMenuInner(props: {
   });
 
   const userSearch = createFreshSearch<Entity<'user'>>(
-    FreshSearchPresets.baseUserSearch(
+    FreshSearchPresets.baseUserSearch<Entity<'user'>>(
       currentUserDomain,
       (item) => item.data.email
     ),
-    getItemSearchText
+    getItemSearchText,
+    (_item) => false,
+    getItemTimestamp
   );
 
   // Group aliases available in channel context
@@ -712,7 +731,9 @@ function MentionsMenuInner(props: {
 
   const emailSearch = createFreshSearch<Entity<'email'>>(
     { timeWeight: 0, brevityWeight: 0.3 },
-    getItemSearchText
+    getItemSearchText,
+    (_item) => false,
+    getItemTimestamp
   );
 
   const filteredEmails = createMemo(() => {

@@ -42,6 +42,10 @@ pub struct DocumentFilters {
     /// Filter by document owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub owners: Vec<String>,
+
+    /// Filter by document importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub importance: Option<bool>,
 }
 
 impl IsEmpty for DocumentFilters {
@@ -51,11 +55,13 @@ impl IsEmpty for DocumentFilters {
             document_ids,
             project_ids,
             owners,
+            importance,
         } = self;
         file_types.is_empty()
             && document_ids.is_empty()
             && project_ids.is_empty()
             && owners.is_empty()
+            && importance.is_none()
     }
 }
 
@@ -78,6 +84,10 @@ pub struct ChatFilters {
     /// Filter by chat owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub owners: Vec<String>,
+
+    /// Filter by chat importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub importance: Option<bool>,
 }
 
 impl IsEmpty for ChatFilters {
@@ -87,8 +97,13 @@ impl IsEmpty for ChatFilters {
             chat_ids,
             project_ids,
             owners,
+            importance,
         } = self;
-        role.is_empty() && chat_ids.is_empty() && project_ids.is_empty() && owners.is_empty()
+        role.is_empty()
+            && chat_ids.is_empty()
+            && project_ids.is_empty()
+            && owners.is_empty()
+            && importance.is_none()
     }
 }
 
@@ -108,6 +123,10 @@ pub struct EmailFilters {
     /// Email Recipient addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by Recipient.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub recipients: Vec<String>,
+
+    /// Filter by email importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub importance: Option<bool>,
 }
 
 impl IsEmpty for EmailFilters {
@@ -117,8 +136,13 @@ impl IsEmpty for EmailFilters {
             cc,
             bcc,
             recipients,
+            importance,
         } = self;
-        senders.is_empty() && cc.is_empty() && bcc.is_empty() && recipients.is_empty()
+        senders.is_empty()
+            && cc.is_empty()
+            && bcc.is_empty()
+            && recipients.is_empty()
+            && importance.is_none()
     }
 }
 
@@ -141,6 +165,10 @@ pub struct ChannelFilters {
     /// Sender IDs to search within. Examples: ['user1']. Empty to search all accessible senders.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sender_ids: Vec<String>,
+
+    /// Filter by channel importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub importance: Option<bool>,
 }
 
 impl IsEmpty for ChannelFilters {
@@ -151,12 +179,14 @@ impl IsEmpty for ChannelFilters {
             org_id,
             channel_ids,
             sender_ids,
+            importance,
         } = self;
         thread_ids.is_empty()
             && mentions.is_empty()
             && org_id.is_none()
             && channel_ids.is_empty()
             && sender_ids.is_empty()
+            && importance.is_none()
     }
 }
 
@@ -171,6 +201,10 @@ pub struct ProjectFilters {
     /// Filter by project owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub owners: Vec<String>,
+
+    /// Filter by project importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub importance: Option<bool>,
 }
 
 impl IsEmpty for ProjectFilters {
@@ -178,8 +212,9 @@ impl IsEmpty for ProjectFilters {
         let ProjectFilters {
             project_ids,
             owners,
+            importance,
         } = self;
-        project_ids.is_empty() && owners.is_empty()
+        project_ids.is_empty() && owners.is_empty() && importance.is_none()
     }
 }
 

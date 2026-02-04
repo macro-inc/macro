@@ -23,7 +23,11 @@ import {
 } from '@core/user';
 import Caution from '@icon/regular/warning.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
-import { useSendMessageMutation } from '@queries/email/thread';
+import {
+  useScheduleMessageMutation,
+  useSendMessageMutation,
+  useUnscheduleMessageMutation,
+} from '@queries/email/thread';
 import {
   createMemo,
   createSignal,
@@ -52,9 +56,9 @@ import {
 } from '@block-email/util/prepareEmailBody';
 import { convertEmailRecipientToContactInfo } from '@block-email/util/recipientConversion';
 import {
-  deleteEmailDraft,
-  saveEmailDraft,
-} from '@block-email/signal/emailDraft';
+  useDeleteDraftMutation,
+  useSaveDraftMutation,
+} from '@queries/email/draft';
 import {
   useRemoveDraftAttachmentMutation,
   useUploadDraftAttachmentsMutation,
@@ -62,6 +66,9 @@ import {
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
 import { useMaybeEmailContext } from '@block-email/component/EmailContext';
 import { decodeBase64Utf8 } from '@block-email/util/decodeBase64';
+import { stickyGate } from '@core/util/debounce';
+import { queryClient } from '@queries/client';
+import { queryKeys } from '@macro-entity';
 
 const DRAFT_DEBOUNCE_MS = 1000;
 
@@ -160,6 +167,8 @@ export function EmailCompose(props: EmailComposeProps) {
   );
 
   const uploadAttachmentMutation = useUploadDraftAttachmentsMutation();
+  const saveDraftMutation = useSaveDraftMutation();
+  const deleteDraftMutation = useDeleteDraftMutation();
 
   function collectDraft() {
     $removeAllWatermarkNodes(editor());
@@ -196,7 +205,7 @@ export function EmailCompose(props: EmailComposeProps) {
     if (!draftToSave) {
       const draftID = currentDraftID();
       if (draftID) {
-        await deleteEmailDraft(draftID);
+        await deleteDraftMutation.mutateAsync({ draftId: draftID });
       }
       setCurrentDraftID(undefined);
       return;
@@ -207,16 +216,26 @@ export function EmailCompose(props: EmailComposeProps) {
       logger.error(
         new Error('Failed to save email draft: could not load email links')
       );
-      return false;
+      return;
     }
 
-    const draftResponse = await saveEmailDraft({
-      ...draftToSave,
-      db_id: currentDraftID(),
-      link_id: linkID,
+    const existingDraft = currentDraftID() !== undefined;
+
+    // If there's an existing draft, we should send the sendTime so that the send time
+    // stays up to date and is not removed
+    const sendTime = existingDraft ? form.sendTime()?.toISOString() : undefined;
+
+    const draftResponse = await saveDraftMutation.mutateAsync({
+      draft: {
+        ...draftToSave,
+        db_id: currentDraftID(),
+        link_id: linkID,
+      },
+      sendTime,
     });
 
-    if (draftResponse) {
+    const draftId = draftResponse.draft.db_id;
+    if (draftId) {
       // If the email draft saved successfully, we want to upload the
       // attachments as well. We should grab only the attachments that
       // haven't been uploaded yet
@@ -229,7 +248,7 @@ export function EmailCompose(props: EmailComposeProps) {
 
       if (attachments.length) {
         const uploaded = await uploadAttachmentMutation.mutateAsync({
-          draftID: draftResponse,
+          draftID: draftId,
           attachments: attachments.map((a) => a.file),
         });
 
@@ -242,7 +261,9 @@ export function EmailCompose(props: EmailComposeProps) {
         }
       }
 
-      setCurrentDraftID(draftResponse);
+      setCurrentDraftID(draftId);
+
+      return draftId;
     }
   }
 
@@ -432,7 +453,21 @@ export function EmailCompose(props: EmailComposeProps) {
     },
   });
 
-  const onSubmit = () => {
+  const scheduleMessageMutation = useScheduleMessageMutation({
+    onSuccess: () => {
+      toast.success('Email scheduled');
+
+      replaceSplit({
+        content: { type: 'component', id: 'unified-list' },
+        mergeHistory: true,
+      });
+    },
+    onError: () => {
+      toast.failure('Failed to schedule email');
+    },
+  });
+
+  const onSubmit = async () => {
     setValidationError(null);
 
     const currentEditor = editor();
@@ -491,6 +526,28 @@ export function EmailCompose(props: EmailComposeProps) {
       return;
     }
 
+    const sendTime = form.sendTime()?.toISOString();
+
+    if (sendTime) {
+      // Just in case, always get a fresh save of the draft so we don't miss any information
+      const draftID = await executeSaveDraft();
+
+      if (!draftID) {
+        console.error('No draft');
+        toast.failure('Failed to schedule message', 'Draft required');
+        cleanupWatermark();
+        return;
+      }
+
+      scheduleMessageMutation.mutate({
+        draftID,
+        sendTime,
+      });
+
+      cleanupWatermark();
+      return;
+    }
+
     sendMutation.mutate({
       message: {
         link_id: currentLink.id,
@@ -508,10 +565,38 @@ export function EmailCompose(props: EmailComposeProps) {
         body_html: data.html,
         body_macro: data.raw,
         db_id: currentDraftID(),
+        send_time: sendTime,
       },
     });
 
     cleanupWatermark();
+  };
+
+  const unscheduleMessageMutation = useUnscheduleMessageMutation({
+    onSuccess: () => {
+      toast.success('Email unscheduled');
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.all.dss,
+      });
+    },
+    onError: () => {
+      toast.failure('Failed to unschedule email');
+    },
+  });
+
+  const handleSendTimeChange = (date: Date | null) => {
+    const currentSendTime = form.sendTime();
+    const currentDraft = currentDraftID();
+
+    // If we unset the send time, we need to unschedule the message
+    if (!date && currentSendTime && currentDraft) {
+      unscheduleMessageMutation.mutate({
+        draftID: currentDraft,
+      });
+    }
+
+    form.setSendTime(date);
+    scheduleDraftSave();
   };
 
   const resetState = () => {
@@ -524,7 +609,7 @@ export function EmailCompose(props: EmailComposeProps) {
   const deleteDraftAndReset = async () => {
     const draftId = currentDraftID();
     if (draftId) {
-      await deleteEmailDraft(draftId);
+      await deleteDraftMutation.mutateAsync({ draftId });
     }
     resetState();
   };
@@ -543,6 +628,23 @@ export function EmailCompose(props: EmailComposeProps) {
 
     return decodedHtml;
   };
+
+  const getRecipientOptions = () => {
+    // If we're being displayed for a draft,
+    // we should get the recipients from the draft
+    const fromDraft = emailContext?.recipientOptions();
+
+    return fromDraft ?? destinationOptions();
+  };
+
+  const isDraftSaving = () => saveDraftMutation.isPending;
+
+  // Used to keep displaying draft status for some time
+  const debouncedIsDraftSaving = stickyGate(isDraftSaving, 2000);
+
+  // Used to keep displaying spinner for a short time before switching
+  // to saved state
+  const laggedIsDraftSaving = stickyGate(isDraftSaving, 250);
 
   return (
     <>
@@ -628,6 +730,17 @@ export function EmailCompose(props: EmailComposeProps) {
                     </Show>
                   </Suspense>
                   <div class="flex gap-2 ml-auto">
+                    <Show when={debouncedIsDraftSaving()}>
+                      <div class="flex gap-1 items-center text-sm text-ink-muted">
+                        <Show
+                          when={laggedIsDraftSaving()}
+                          fallback={<span>Draft saved</span>}
+                        >
+                          <CircleSpinner class="size-4 animate-spin" />
+                          <span>Saving draft</span>
+                        </Show>
+                      </div>
+                    </Show>
                     <Show when={!showCc()}>
                       <button
                         type="button"
@@ -657,9 +770,9 @@ export function EmailCompose(props: EmailComposeProps) {
                       To
                     </div>
                     <div class="flex-1">
-                      <RecipientSelector<'user' | 'contact'>
+                      <RecipientSelector
                         inputRef={registerRef('directRecipientsSelector')}
-                        options={destinationOptions}
+                        options={getRecipientOptions}
                         selectedOptions={form.recipients().to}
                         setSelectedOptions={(next) =>
                           form.setRecipients('to', next)
@@ -686,9 +799,9 @@ export function EmailCompose(props: EmailComposeProps) {
                         Cc
                       </div>
                       <div class="flex-1">
-                        <RecipientSelector<'user' | 'contact'>
+                        <RecipientSelector
                           inputRef={registerRef('ccRecipientsSelector')}
-                          options={destinationOptions}
+                          options={getRecipientOptions}
                           selectedOptions={form.recipients().cc}
                           setSelectedOptions={(next) =>
                             form.setRecipients('cc', next)
@@ -708,9 +821,9 @@ export function EmailCompose(props: EmailComposeProps) {
                         Bcc
                       </div>
                       <div class="flex-1">
-                        <RecipientSelector<'user' | 'contact'>
+                        <RecipientSelector
                           inputRef={registerRef('bccRecipientsSelector')}
-                          options={destinationOptions}
+                          options={getRecipientOptions}
                           selectedOptions={form.recipients().bcc}
                           setSelectedOptions={(next) =>
                             form.setRecipients('bcc', next)
@@ -769,7 +882,9 @@ export function EmailCompose(props: EmailComposeProps) {
                   onAddAttachments={onAddAttachments}
                   onRemoveAttachment={handleRemoveAttachment}
                   attachments={form.attachments.list()}
-                  onSubmit={onSubmit}
+                  sendTime={form.sendTime()}
+                  onSendTimeChange={handleSendTimeChange}
+                  onSubmit={() => void onSubmit()}
                   isSubmitting={sendMutation.isPending}
                   hasDraft={currentDraftID() != null}
                   onDraftDeletePress={deleteDraftAndReset}

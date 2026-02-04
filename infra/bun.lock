@@ -59,10 +59,6 @@
       "name": "cloud-storage-service-stack",
       "version": "0.0.0",
     },
-    "stacks/comms-service": {
-      "name": "comms-service-stack",
-      "version": "0.0.0",
-    },
     "stacks/connection-gateway": {
       "name": "connection-gateway-stack",
       "version": "0.0.0",
@@ -148,10 +144,6 @@
     },
     "stacks/search-processing-service": {
       "name": "search-processing-service-stack",
-      "version": "0.0.0",
-    },
-    "stacks/search-service": {
-      "name": "search-service-stack",
       "version": "0.0.0",
     },
     "stacks/search-text-extractor-queue": {
@@ -574,8 +566,6 @@
 
     "common-ancestor-path": ["common-ancestor-path@1.0.1", "", {}, "sha512-L3sHRo1pXXEqX8VU28kfgUY+YGsk09hPqZiZmLacNib6XNTCM8ubYeT7ryXQw8asB1sKgcU5lkB7ONug08aB8w=="],
 
-    "comms-service-stack": ["comms-service-stack@workspace:stacks/comms-service"],
-
     "connection-gateway-stack": ["connection-gateway-stack@workspace:stacks/connection-gateway"],
 
     "contacts-service-stack": ["contacts-service-stack@workspace:stacks/contacts-service"],
@@ -887,8 +877,6 @@
     "search-event-queue-stack": ["search-event-queue-stack@workspace:stacks/search-event-queue"],
 
     "search-processing-service-stack": ["search-processing-service-stack@workspace:stacks/search-processing-service"],
-
-    "search-service-stack": ["search-service-stack@workspace:stacks/search-service"],
 
     "search-text-extractor-queue-stack": ["search-text-extractor-queue-stack@workspace:stacks/search-text-extractor-queue"],
 

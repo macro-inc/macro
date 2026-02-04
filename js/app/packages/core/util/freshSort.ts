@@ -7,7 +7,17 @@ import type { FilterResult } from 'fuzzy';
 import fuzzy from 'fuzzy';
 import { fuzzyScoreCommaSpaceSeparated } from './fuzzy';
 
-export interface FreshSortConfig {
+type BoostFn<T> = (item: T) => number;
+
+type NameFn<T> = (item: T) => string;
+
+type TimestampFn<T> = (item: T) => TimestampedItem;
+
+type IsChannelFn<T> = (item: T) => boolean;
+
+type EmailFn<T> = (item: T) => string | undefined;
+
+export interface FreshSortConfig<T> {
   /** Weight for fuzzy match (0-1). Higher values prioritize search relevance. Default: 0.7 */
   fuzzyWeight?: number;
   /** Weight for time recency (0-1). Higher values prioritize recent items. Default: 0.3 */
@@ -27,21 +37,15 @@ export interface FreshSortConfig {
   /** Enable comma-separated matching for channel names. When enabled, query "a,b" matches channel name "a,c,b". Default: false */
   commaSeparatedChannelMatch?: boolean;
   /** Function to calculate per-item boost. Returns a boost multiplier (e.g., 0.2 for +20% boost). Default: undefined */
-  boostFn?: <T extends TimestampedItem>(item: T) => number;
+  boostFn?: BoostFn<T>;
 }
 
-// TODO: fix this type since [key: string]: any is too loose
-// for example, CombinedEntity in mentions menu only includes timestamp info under the data field
-// but this assumed a flattened object so fresh search isn't working
+type FreshSortConfigWithDefaults = Required<FreshSortConfig<unknown>>;
+
 export interface TimestampedItem {
   updatedAt?: number | string;
-  updated_at?: number | string;
   viewedAt?: number | string;
-  viewed_at?: number | string;
   lastInteraction?: number | string;
-  last_interaction?: number | string;
-  type?: string;
-  [key: string]: any;
 }
 
 export interface FreshSortResult<T> {
@@ -66,12 +70,6 @@ const DEFAULT_CONFIG = {
   boostFn: undefined,
 } as const;
 
-type FreshSortConfigWithDefaults = Required<
-  Omit<FreshSortConfig, 'boostFn'>
-> & {
-  boostFn: FreshSortConfig['boostFn'];
-};
-
 function extractTimestamp(
   item: TimestampedItem,
   useViewedAt: boolean = false
@@ -79,19 +77,9 @@ function extractTimestamp(
   let timestamp: number | string | undefined;
 
   if (useViewedAt) {
-    timestamp =
-      item.viewedAt ??
-      item.viewed_at ??
-      item.updatedAt ??
-      item.updated_at ??
-      item.lastInteraction ??
-      item.last_interaction;
+    timestamp = item.viewedAt ?? item.updatedAt ?? item.lastInteraction;
   } else {
-    timestamp =
-      item.updatedAt ??
-      item.updated_at ??
-      item.lastInteraction ??
-      item.last_interaction;
+    timestamp = item.updatedAt ?? item.lastInteraction;
   }
 
   if (timestamp === undefined || timestamp === null) return 0;
@@ -113,10 +101,6 @@ function extractTimestamp(
   }
 
   return 0;
-}
-
-function isChannelItem(item: TimestampedItem): boolean {
-  return item.type === 'channel';
 }
 
 function calculateTimeScore(
@@ -158,9 +142,11 @@ function calculateBrevityScore(text: string): number {
   return Math.exp(-2 * normalizedLength);
 }
 
-export function freshSort<T extends TimestampedItem>(
+function freshSort<T>(
   filterResults: FilterResult<T>[],
-  config: FreshSortConfig = {}
+  config: FreshSortConfig<T> = {},
+  isChannelItem: IsChannelFn<T>,
+  getTimestamp: TimestampFn<T>
 ): FreshSortResult<T>[] {
   const finalConfig = {
     ...DEFAULT_CONFIG,
@@ -181,11 +167,12 @@ export function freshSort<T extends TimestampedItem>(
       : 1;
 
   const scoredResults: FreshSortResult<T>[] = filterResults.map((result) => {
+    const timestampInfo = getTimestamp(result.original);
     const rawScore = result.score === Infinity ? maxFuzzyScore : result.score;
     const fuzzyScore =
       maxFuzzyScore === 0 ? 0 : normalizeFuzzyScore(rawScore, maxFuzzyScore);
     const timeScore = calculateTimeScore(
-      extractTimestamp(result.original, finalConfig.useViewedAt),
+      extractTimestamp(timestampInfo, finalConfig.useViewedAt),
       finalConfig
     );
 
@@ -226,9 +213,11 @@ export function freshSort<T extends TimestampedItem>(
   return scoredResults;
 }
 
-export function createFreshSearch<T extends TimestampedItem>(
-  config: FreshSortConfig = {},
-  extractor: (item: T) => string
+export function createFreshSearch<T>(
+  config: FreshSortConfig<T> = {},
+  getName: NameFn<T>,
+  isChannelItem: IsChannelFn<T>,
+  getTimestamp: TimestampFn<T>
 ) {
   return (items: T[], query: string): FreshSortResult<T>[] => {
     const finalConfig = { ...DEFAULT_CONFIG, ...config };
@@ -245,7 +234,7 @@ export function createFreshSearch<T extends TimestampedItem>(
 
       for (const item of items) {
         if (isChannelItem(item)) {
-          const name = extractor(item);
+          const name = getName(item);
           const score = fuzzyScoreCommaSpaceSeparated(query, name);
           if (score >= 0) {
             channelResults.push({
@@ -262,18 +251,18 @@ export function createFreshSearch<T extends TimestampedItem>(
 
       // Get fuzzy results for non-channel items using regular matching
       const nonChannelResults = fuzzy.filter(query, nonChannelItems, {
-        extract: extractor,
+        extract: getName,
       });
 
       // Combine results
       const allResults = [...channelResults, ...nonChannelResults];
-      return freshSort(allResults, config);
+      return freshSort(allResults, config, isChannelItem, getTimestamp);
     }
 
     const fuzzyResults = fuzzy.filter(query, items, {
-      extract: extractor,
+      extract: getName,
     });
-    return freshSort(fuzzyResults, config);
+    return freshSort(fuzzyResults, config, isChannelItem, getTimestamp);
   };
 }
 
@@ -283,12 +272,11 @@ export function createFreshSearch<T extends TimestampedItem>(
  * @param boost - The boost multiplier to apply (default: 0.5 for +50% boost)
  * @param getEmail - Function to extract email from item (default: assumes item.data.email)
  */
-export function createSameDomainBoostFn<T extends TimestampedItem>(
+export function createSameDomainBoostFn<T>(
   currentUserDomain: Accessor<string | undefined>,
   boost: number = 0.5,
-  getEmail: (item: T) => string | undefined = (item) =>
-    (item as { data?: { email?: string } }).data?.email
-): (item: T) => number {
+  getEmail: EmailFn<T>
+): BoostFn<T> {
   return (item: T) => {
     const userDomain = currentUserDomain();
     if (!userDomain) return 0;
@@ -306,14 +294,13 @@ export const FreshSearchPresets = {
    * Base user search - balances fuzzy matching with recency, includes same-domain boost.
    * Good for recipient selectors, user pickers, and @mention menus.
    */
-  baseUserSearch: <T extends TimestampedItem>(
+  baseUserSearch: <T>(
     currentUserDomain: Accessor<string | undefined>,
-    getEmail: (item: T) => string | undefined = (item) =>
-      (item as { data?: { email?: string } }).data?.email
-  ): Omit<FreshSortConfig, 'boostFn'> & { boostFn: (item: T) => number } => ({
+    getEmail: EmailFn<T>
+  ): FreshSortConfig<T> => ({
     fuzzyWeight: 0.5,
     timeWeight: 0.4,
     brevityWeight: 0.1,
-    boostFn: createSameDomainBoostFn(currentUserDomain, 0.5, getEmail),
+    boostFn: createSameDomainBoostFn<T>(currentUserDomain, 0.5, getEmail),
   }),
 } as const;
