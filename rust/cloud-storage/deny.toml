@@ -181,9 +181,6 @@ allow = [
 ]
 # List of crates to deny
 deny = [
-  { crate = "dotenv", wrappers = [
-    "macro_entrypoint",
-  ], reason = "Use macro_entrypoint for dotenv setup in workspace crates" },
   { crate = "tracing-subscriber", wrappers = [
     "lambda_runtime_api_client", # External crate allowed to use tracing-subscriber
     "macro_entrypoint",
@@ -247,7 +244,6 @@ skip = [
   { crate = "rand_core", reason = "Different dependencies require different versions" },
   { crate = "rustc-hash", reason = "Hash function dependencies" },
   { crate = "rustls", reason = "TLS dependencies version mismatch" },
-  { crate = "rustls-native-certs", reason = "TLS certificate dependencies" },
   { crate = "rustls-webpki", reason = "TLS dependencies version mismatch" },
   { crate = "security-framework", reason = "macOS security framework dependencies" },
   { crate = "selectors", reason = "CSS selector dependencies" },
