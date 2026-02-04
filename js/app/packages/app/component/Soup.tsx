@@ -73,7 +73,10 @@ import {
   VIEWCONFIG_DEFAULTS_IDS,
   type ViewConfigBase,
 } from './ViewConfig';
-import { ENTITY_TYPE_FILTERS } from './Soup/utils/filterConfigs';
+import {
+  ANIMATED_ICONS,
+  ENTITY_TYPE_FILTERS,
+} from './Soup/utils/filterConfigs';
 import { useFilterActions } from './Soup/hooks/useFilterActions';
 import {
   FilterButton,
@@ -374,9 +377,11 @@ function EntityTypeIconFilter() {
           <For each={ENTITY_TYPE_FILTERS.filter((f) => f.enabled)}>
             {(filter) => {
               const iconConfig = () => getIconConfig(filter.iconType);
+              const animatedIcon = () => ANIMATED_ICONS[filter.iconType];
               return (
                 <FilterButton
                   icon={iconConfig().icon}
+                  animatedIcon={animatedIcon()}
                   label={filter.label}
                   shortcut={filter.shortcut}
                   isActive={() => filterActions.isFilterConfigActive(filter)}

@@ -1,6 +1,32 @@
 import type { ExpandedEntityType } from '@macro-entity';
 import type { DocumentTypeFilter, FilterOptions } from '../../ViewConfig';
 import { ENABLE_TASKS_TABS } from '@core/constant/featureFlags';
+import type { Component } from 'solid-js';
+import { ChatIcon } from '@macro-icons/wide/animating/chat';
+import { DiagramIcon } from '@macro-icons/wide/animating/diagram';
+import { EmailIcon } from '@macro-icons/wide/animating/email';
+import { FileMdIcon } from '@macro-icons/wide/animating/fileMd';
+import { FolderIcon } from '@macro-icons/wide/animating/folder';
+import { StarIcon } from '@macro-icons/wide/animating/star';
+import { TaskIcon } from '@macro-icons/wide/animating/task';
+
+/**
+ * Mapping of icon types to their animated icon components.
+ * Used to provide hover animations on filter buttons.
+ */
+export const ANIMATED_ICONS: Record<
+  string,
+  Component<{ triggerAnimation?: boolean }>
+> = {
+  md: FileMdIcon,
+  chat: StarIcon,
+  channel: ChatIcon,
+  directMessage: ChatIcon,
+  task: TaskIcon,
+  email: EmailIcon,
+  project: FolderIcon,
+  canvas: DiagramIcon,
+};
 
 /**
  * Discriminated union for entity type filter configurations.

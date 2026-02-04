@@ -1,4 +1,5 @@
 import type { Component } from 'solid-js';
+import { createSignal } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 
@@ -36,6 +37,7 @@ export const ShortcutLabel: Component<{ label: string; shortcut: string }> = (
 
 export interface FilterButtonProps {
   icon: Component<{ class?: string }>;
+  animatedIcon?: Component<{ triggerAnimation?: boolean }>;
   label: string;
   shortcut: string;
   isActive: () => boolean;
@@ -43,29 +45,46 @@ export interface FilterButtonProps {
   paddingClass?: string;
 }
 
-export const FilterButton: Component<FilterButtonProps> = (props) => (
-  <div class="flex items-center mr-0.5 shrink-0">
-    <Tooltip
-      tooltip={<LabelAndHotKey label={props.label} shortcut={props.shortcut} />}
-    >
-      <button
-        type="button"
-        class={`flex items-center gap-1 h-[22px] touch:mobile-width:h-9 ${props.paddingClass ?? 'pl-2 pr-2.5'} active:bg-accent active:text-panel rounded-full`}
-        classList={{
-          'bg-accent text-panel': props.isActive(),
-          'text-ink-muted hover:text-accent hover:bg-accent/20':
-            !props.isActive(),
-        }}
-        onClick={props.onClick}
+export const FilterButton: Component<FilterButtonProps> = (props) => {
+  const [isHovered, setIsHovered] = createSignal(false);
+
+  return (
+    <div class="flex items-center mr-0.5 shrink-0">
+      <Tooltip
+        tooltip={
+          <LabelAndHotKey label={props.label} shortcut={props.shortcut} />
+        }
       >
-        <Dynamic component={props.icon} class="size-3.5" />
-        <span class="leading-none">
-          <ShortcutLabel label={props.label} shortcut={props.shortcut} />
-        </span>
-      </button>
-    </Tooltip>
-  </div>
-);
+        <button
+          type="button"
+          class={`flex items-center gap-1 h-[22px] touch:mobile-width:h-9 ${props.paddingClass ?? 'pl-2 pr-2.5'} active:bg-accent active:text-panel rounded-full`}
+          classList={{
+            'bg-accent text-panel': props.isActive(),
+            'text-ink-muted hover:text-accent hover:bg-accent/20':
+              !props.isActive(),
+          }}
+          onClick={props.onClick}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
+          {props.animatedIcon ? (
+            <div class="size-3.5">
+              <Dynamic
+                component={props.animatedIcon}
+                triggerAnimation={isHovered()}
+              />
+            </div>
+          ) : (
+            <Dynamic component={props.icon} class="size-3.5" />
+          )}
+          <span class="leading-none">
+            <ShortcutLabel label={props.label} shortcut={props.shortcut} />
+          </span>
+        </button>
+      </Tooltip>
+    </div>
+  );
+};
 
 export const FilterDivider: Component = () => (
   <div class="mx-0.5 w-px h-5 bg-edge-muted/50 shrink-0" />
