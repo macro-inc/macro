@@ -97,6 +97,23 @@ let containerEnvVars = [
     name: 'CONNECTION_GATEWAY_URL',
     value: `https://connection-gateway${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
   },
+  // OpenTelemetry / Datadog tracing configuration
+  {
+    name: 'DD_SERVICE',
+    value: 'contacts-service',
+  },
+  {
+    name: 'DD_ENV',
+    value: stack,
+  },
+  {
+    name: 'DD_VERSION',
+    value: '1.0.0',
+  },
+  {
+    name: 'OTEL_EXPORTER_OTLP_ENDPOINT',
+    value: 'http://127.0.0.1:4317',
+  },
 ];
 
 const cloudStorageStack = new pulumi.StackReference('cloud-storage-stack', {
