@@ -58,6 +58,7 @@ default = [
   "sfs_delete",
 ]
 gmail_webhook_auth = []
+local_auth = ["macro_middleware/local_auth"]
 local_queue = []
 sfs_map = []
 sfs_delete = []

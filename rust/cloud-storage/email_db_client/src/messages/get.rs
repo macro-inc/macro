@@ -525,10 +525,12 @@ pub async fn convert_db_messages_to_service_concurrent(
         .map(|m| m.id)
         .collect();
 
-    // Collect message IDs that are drafts created in Macro (no provider_id)
+    // Query for drafts and sent messages we haven't gotten a provider id from gmail for. We return
+    // draft attachments for non-drafts without provider ids so we can show the attachments on the
+    // just-sent message, before the undo delay expires and before we get the provider id from gmail.
     let draft_message_ids: Vec<Uuid> = db_messages
         .iter()
-        .filter(|m| m.is_draft && m.provider_id.is_none())
+        .filter(|m| m.provider_id.is_none())
         .map(|m| m.id)
         .collect();
 
