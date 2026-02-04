@@ -50,16 +50,7 @@ export function useRenameSplit() {
 
 // Helper to convert ItemType to EntityData type
 const itemTypeToEntityType = (itemType: ItemType): EntityData['type'] => {
-  switch (itemType) {
-    case 'document':
-      return 'document';
-    case 'chat':
-      return 'chat';
-    case 'project':
-      return 'project';
-    default:
-      return 'document'; // fallback
-  }
+  return itemType;
 };
 
 export function SplitModalProvider(props: ParentProps) {
