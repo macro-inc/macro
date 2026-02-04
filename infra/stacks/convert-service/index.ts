@@ -103,6 +103,19 @@ let containerEnvVars = [
     name: 'WEB_SOCKET_RESPONSE_LAMBDA',
     value: pulumi.interpolate`${jobUpdateHandlerLambdaName}`,
   },
+  // OpenTelemetry / Datadog tracing configuration
+  {
+    name: 'DD_SERVICE',
+    value: 'convert-service',
+  },
+  {
+    name: 'DD_ENV',
+    value: stack,
+  },
+  {
+    name: 'OTEL_EXPORTER_OTLP_ENDPOINT',
+    value: 'http://127.0.0.1:4317',
+  },
 ];
 
 const convertService = new ConvertService('convert-service', {

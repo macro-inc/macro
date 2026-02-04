@@ -514,6 +514,19 @@ const containerEnvVars = [
     name: 'EMAIL_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID',
     value: pulumi.interpolate`${cloudfrontDistribution.publicKey.id}`,
   },
+  // OpenTelemetry / Datadog tracing configuration
+  {
+    name: 'DD_SERVICE',
+    value: 'email-service',
+  },
+  {
+    name: 'DD_ENV',
+    value: stack,
+  },
+  {
+    name: 'OTEL_EXPORTER_OTLP_ENDPOINT',
+    value: 'http://127.0.0.1:4317',
+  },
 ];
 
 const emailService = new EmailService('email-service', {

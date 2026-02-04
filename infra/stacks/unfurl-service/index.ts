@@ -44,6 +44,19 @@ const unfurlService = new UnfurlService(`unfurl-service-${stack}`, {
         stack === 'prod' ? 'debug' : 'trace'
       },tower_http=debug`,
     },
+    // OpenTelemetry / Datadog tracing configuration
+    {
+      name: 'DD_SERVICE',
+      value: 'unfurl-service',
+    },
+    {
+      name: 'DD_ENV',
+      value: stack,
+    },
+    {
+      name: 'OTEL_EXPORTER_OTLP_ENDPOINT',
+      value: 'http://127.0.0.1:4317',
+    },
   ],
   isPrivate: false,
   tags,

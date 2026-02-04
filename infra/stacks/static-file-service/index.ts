@@ -92,6 +92,19 @@ const containerEnvVars = [
     name: 'MACRO_API_TOKEN_PUBLIC_KEY',
     value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenPublicKey}`,
   },
+  // OpenTelemetry / Datadog tracing configuration
+  {
+    name: 'DD_SERVICE',
+    value: 'static-file-service',
+  },
+  {
+    name: 'DD_ENV',
+    value: stack,
+  },
+  {
+    name: 'OTEL_EXPORTER_OTLP_ENDPOINT',
+    value: 'http://127.0.0.1:4317',
+  },
 ];
 
 /// available as env var: DYNAMODB_TABLE_NAME

@@ -312,6 +312,19 @@ const documentCognitionService = new DocumentCognitionService(
         name: 'AUTHENTICATION_SERVICE_SECRET_KEY',
         value: AUTHENTICATION_SERVICE_INTERNAL_API_KEY_SECRET_NAME,
       },
+      // OpenTelemetry / Datadog tracing configuration
+      {
+        name: 'DD_SERVICE',
+        value: 'document-cognition-service',
+      },
+      {
+        name: 'DD_ENV',
+        value: stack,
+      },
+      {
+        name: 'OTEL_EXPORTER_OTLP_ENDPOINT',
+        value: 'http://127.0.0.1:4317',
+      },
     ],
     isPrivate: false,
     tags,

@@ -147,6 +147,19 @@ const searchProcessingService = new SearchProcessingService(
         name: 'LEXICAL_SERVICE_URL',
         value: `https://lexical-service-${stack}.macroverse.workers.dev`,
       },
+      // OpenTelemetry / Datadog tracing configuration
+      {
+        name: 'DD_SERVICE',
+        value: 'search-processing-service',
+      },
+      {
+        name: 'DD_ENV',
+        value: stack,
+      },
+      {
+        name: 'OTEL_EXPORTER_OTLP_ENDPOINT',
+        value: 'http://127.0.0.1:4317',
+      },
     ],
     tags,
   }
