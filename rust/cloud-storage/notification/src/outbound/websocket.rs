@@ -143,7 +143,7 @@ impl WebSocketGatewayOps for ConnectionGatewayClient {
     }
 }
 
-impl<W: WebSocketGatewayOps + Send + Sync> WebSocketSender for WebSocketGatewayAdapter<W> {
+impl<W: WebSocketGatewayOps + Send + Sync + 'static> WebSocketSender for WebSocketGatewayAdapter<W> {
     async fn send_notifications<'a, T: Serialize + Send + Sync>(
         &self,
         message_type: &str,

@@ -5,6 +5,12 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
+use ::notification::domain::service::NotificationEgressService;
+use ::notification::inbound::worker::NotificationWorker;
+use ::notification::outbound::email::EmailAdapter;
+use ::notification::outbound::mobile::MobilePushAdapter;
+use ::notification::outbound::rate_limit::RedisRateLimitAdapter;
+use ::notification::outbound::websocket::{ConnectionGatewayClient, WebSocketGatewayAdapter};
 use secretsmanager_client::SecretManager;
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
@@ -101,6 +107,47 @@ pub async fn main() -> anyhow::Result<()> {
     );
     let ingress_state =
         ::notification::inbound::http::NotificationRouterState::new(ingress_service);
+
+    // Set up egress worker for delivering notifications from the queue
+    let egress_repository =
+        ::notification::outbound::repository::DbNotificationRepository::new(db.clone());
+
+    let connection_gateway_url =
+        std::env::var("CONNECTION_GATEWAY_URL").unwrap_or_else(|_| "http://localhost:8082".into());
+    let websocket_adapter = WebSocketGatewayAdapter::new(ConnectionGatewayClient::new(
+        internal_secret_key.as_ref().to_string(),
+        connection_gateway_url,
+    ));
+
+    let mobile_adapter = MobilePushAdapter::new(
+        aws_sdk_sns::Client::new(&aws_config),
+        config.apple_bundle_id.clone().leak(),
+    );
+
+    let ses_client = aws_sdk_sesv2::Client::new(&aws_config);
+    let email_adapter = EmailAdapter::new(ses_client, config.sender_base_address.clone());
+
+    let redis_uri = std::env::var("REDIS_URI").unwrap_or_else(|_| "redis://localhost:6379".into());
+    let redis_client = redis::Client::open(redis_uri).expect("failed to create redis client");
+    let rate_limit_adapter = RedisRateLimitAdapter::new(redis_client);
+
+    let egress_queue = ::notification::outbound::queue::FileQueue::new_in_temp()
+        .expect("failed to create file queue for egress worker");
+    let egress_service = NotificationEgressService::new(
+        egress_queue,
+        egress_repository,
+        websocket_adapter,
+        mobile_adapter,
+        email_adapter,
+        rate_limit_adapter,
+    );
+
+    let worker = NotificationWorker::new(egress_service);
+
+    tokio::spawn(async move {
+        tracing::info!("starting notification egress worker");
+        worker.run().await
+    });
 
     api::setup_and_serve(
         ApiContext {

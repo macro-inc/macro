@@ -5914,6 +5914,7 @@ dependencies = [
  "notification",
  "notification_db_client",
  "paste",
+ "redis",
  "regex",
  "secretsmanager_client",
  "serde",

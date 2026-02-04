@@ -54,6 +54,7 @@ models_comms = { path = "../models_comms" }
 models_pagination = { path = "../models_pagination", features = ["axum"] }
 notification = { path = "../notification", features = ["axum"] }
 notification_db_client = { path = "../notification_db_client" }
+redis = { workspace = true }
 paste = "1"
 regex = { workspace = true }
 secretsmanager_client = { path = "../secretsmanager_client" }

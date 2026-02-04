@@ -63,7 +63,7 @@ impl MobilePushOps for aws_sdk_sns::Client {
     }
 }
 
-impl<P: MobilePushOps + Send + Sync> NotificationSender for MobilePushAdapter<P> {
+impl<P: MobilePushOps + Send + Sync + 'static> NotificationSender for MobilePushAdapter<P> {
     async fn send_ios_push_notification<T: Serialize + Send + Sync>(
         &self,
         endpoint_arn: &str,

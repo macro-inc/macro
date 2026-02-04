@@ -918,6 +918,7 @@ impl RateLimitPort for MockRateLimiter {
 fn create_egress_service<R: RateLimitPort>(
     rate_limiter: R,
 ) -> NotificationEgressService<
+    MockQueue,
     MockRepository,
     MockWebSocketSender,
     MockMobileSender,
@@ -925,6 +926,7 @@ fn create_egress_service<R: RateLimitPort>(
     R,
 > {
     NotificationEgressService::new(
+        MockQueue::new(),
         MockRepository::new(),
         MockWebSocketSender,
         MockMobileSender,
