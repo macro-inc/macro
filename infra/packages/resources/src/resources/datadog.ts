@@ -120,29 +120,36 @@ export const datadogAgentContainer = {
       name: 'DD_API_KEY',
       value: DATADOG_API_KEY,
     },
-    // NOTE: this is purposfully commented out because we do not use OTLP and
-    // this was causing 1GB/s of data to be written to disk
-    // {
-    //   name: 'DD_APM_ENABLED',
-    //   value: 'true',
-    // },
-    // {
-    //   name: 'DD_LOGS_ENABLED',
-    //   value: 'true',
-    // },
-    // {
-    //   name: 'DD_OTLP_CONFIG_LOGS_ENABLED',
-    //   value: 'true',
-    // },
-    // {
-    //   name: 'DD_OTLP_CONFIG_RECEIVER_PROTOCOLS_GRPC_ENDPOINT',
-    //   value: '0.0.0.0:4317',
-    // },
+    // APM/Tracing configuration
+    {
+      name: 'DD_APM_ENABLED',
+      value: 'true',
+    },
+    {
+      name: 'DD_OTLP_CONFIG_RECEIVER_PROTOCOLS_GRPC_ENDPOINT',
+      value: '0.0.0.0:4317',
+    },
+    // Sampling configuration to prevent excessive disk writes
+    // Sample 10% of traces in prod, 100% in dev for debugging
+    {
+      name: 'DD_APM_SAMPLE_RATE',
+      value: stack === 'prod' ? '0.1' : '1.0',
+    },
+    // Limit max traces per second to prevent runaway costs
+    {
+      name: 'DD_APM_MAX_TPS',
+      value: '100',
+    },
+    // Disable disk buffering to prevent the 1GB/s disk write issue
+    {
+      name: 'DD_APM_RECEIVER_SOCKET',
+      value: '',
+    },
   ],
-  // portMappings: [
-  //   {
-  //     containerPort: 4317,
-  //   },
-  // ],
+  portMappings: [
+    {
+      containerPort: 4317,
+    },
+  ],
   memoryReservation: 256,
 } satisfies ecs.TaskDefinitionContainerDefinitionArgs;

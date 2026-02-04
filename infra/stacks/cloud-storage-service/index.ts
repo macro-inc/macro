@@ -422,6 +422,23 @@ const cloudStorageService = new CloudStorageService(
         name: 'CONTACTS_QUEUE',
         value: pulumi.interpolate`${contactsQueueName}`,
       },
+      // OpenTelemetry / Datadog tracing configuration
+      {
+        name: 'DD_SERVICE',
+        value: 'cloud-storage-service',
+      },
+      {
+        name: 'DD_ENV',
+        value: stack,
+      },
+      {
+        name: 'DD_VERSION',
+        value: '1.0.0',
+      },
+      {
+        name: 'OTEL_EXPORTER_OTLP_ENDPOINT',
+        value: 'http://127.0.0.1:4317',
+      },
     ],
     isPrivate: false,
     tags,
