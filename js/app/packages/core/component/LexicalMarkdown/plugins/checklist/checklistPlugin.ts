@@ -32,7 +32,7 @@ function boundsCheck(rect: DOMRect, x: number, y: number): boolean {
     x >= left - CLICK_BUFFER - oneRem * 1.25 &&
     x <= left + CLICK_BUFFER &&
     y >= top - CLICK_BUFFER &&
-    y <= y + CLICK_BUFFER + oneRem
+    y <= top + CLICK_BUFFER + oneRem
   ) {
     return true;
   }
