@@ -107,7 +107,7 @@ impl FusionAuthClient {
     /// Constructs the oauth2 authorize url for the given idp
     /// If login_hint is provided, it will be used as the login_hint parameter. This is used to
     /// ensure users are correctly redirected for domain specific SSO
-    #[tracing::instrument(skip(self, state), fields(application_id=%self.application_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
+    #[tracing::instrument(skip(self, state), fields(application_id=%self.application_id, fusion_auth_base_url=%self.fusion_auth_base_url), level = tracing::Level::TRACE)]
     pub fn construct_oauth2_authorize_url<T>(
         &self,
         idp_id: &str,
@@ -117,8 +117,11 @@ impl FusionAuthClient {
     where
         T: serde::Serialize + std::fmt::Debug + 'static,
     {
-        let mut url = Url::parse(&format!("{}/oauth2/authorize", self.fusion_auth_base_url))
-            .expect("Invalid base URL");
+        let mut url = Url::parse(&format!(
+            "{}/oauth2/authorize",
+            transform_fusionauth_url(&self.fusion_auth_base_url)
+        ))
+        .expect("Invalid base URL");
 
         url.query_pairs_mut()
             .append_pair("client_id", &self.client_id)
@@ -142,3 +145,27 @@ impl FusionAuthClient {
         Ok(url.to_string())
     }
 }
+
+/// Transforms the url replacing the domain with localhost
+#[tracing::instrument(level = tracing::Level::TRACE)]
+fn transform_local_fusionauth_url(url: &str) -> String {
+    if url.starts_with("http://fusionauth:9011") {
+        url.replace("fusionauth", "localhost")
+    } else {
+        url.to_string()
+    }
+}
+
+/// Transforms the fusionauth url from the docker-network version into the
+/// local version that will work in the browser.
+#[tracing::instrument(level = tracing::Level::TRACE)]
+fn transform_fusionauth_url(url: &str) -> String {
+    // TODO: may want to make this something we initialize once
+    match macro_env::Environment::new_or_prod() {
+        macro_env::Environment::Local => transform_local_fusionauth_url(url),
+        _ => url.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod test;

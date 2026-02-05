@@ -2,7 +2,7 @@
 
 This pulumi stack contains everything you need to be able to setup a "macro compliant" fusionauth instance.
 
-Ideal for local development.
+Supports easy setup for local development.
 
 # Prerequisites
 
@@ -18,26 +18,16 @@ The following are required tools you need to have setup ahead of time:
 
 ## Deploy Local Fusionauth Instance
 
-Download your .env file used to create the local fusionauth stack:
+Make sure you've already created your main **.env** file in the root of the repo via `just get_environment`.
 
-```bash
-just setup_fusionauth_env
-```
+Run `just setup` to setup the local fusionauth instance and get everything ready to be run.
 
-This is used in the docker-compose automatically.
-
-Now run `just start_fusionauth` to create the local fusionauth instance. Through the [./kickstart/kickstart.json](kickstart) file, we automatically create an admin user and admin api key to use.
+Important Keys:
 
 ```
 username: admin@macro.com
 password: macroIsGreat!
 api-key: bf69486b-4733-4954-a44e-2e1b5f2c8a91
-```
-
-Now you can run the following to get things in sync and ready to start your local dev journey
- 
-```bash
-just instantiate_fusionauth
 ```
 
 # TODO
