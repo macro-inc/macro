@@ -78,9 +78,9 @@ async fn main() -> anyhow::Result<()> {
     tracing::trace!("initialized config");
 
     let (min_connections, max_connections): (u32, u32) = match config.environment {
-        Environment::Production => (25, 75),
-        Environment::Develop => (3, 20),
-        Environment::Local => (3, 10),
+        Environment::Production => (50, 150),
+        Environment::Develop => (15, 50),
+        Environment::Local => (15, 50),
     };
 
     let db = PgPoolOptions::new()
