@@ -80,7 +80,6 @@ function useItemPreviewData(props: ItemPreviewProps) {
   ) {
     if (type === 'project') {
       insertProjectIntoHistory(id);
-      await postNewHistoryItem('project', id);
     }
     const _type = subType ?? fileType ?? type;
     if (!_type) return;
