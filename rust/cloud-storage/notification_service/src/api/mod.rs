@@ -17,7 +17,7 @@ mod device;
 mod health;
 mod notification;
 mod unsubscribe;
-pub(crate) mod user_notification_v2;
+pub(crate) mod user_notification;
 
 pub(crate) mod swagger;
 
@@ -77,7 +77,7 @@ fn api_router<S: ::notification::domain::service::NotificationIngress>(
         .nest("/device", device::router())
         .nest(
             "/user_notifications",
-            user_notification_v2::router(ingress_state),
+            user_notification::router(ingress_state),
         )
         .nest("/unsubscribe", unsubscribe::router())
         .layer(middleware)

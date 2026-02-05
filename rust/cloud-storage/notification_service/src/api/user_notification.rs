@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 #[cfg(test)]
-mod tests;
+mod test;
 
 /// Defines a notification event enum with compile-time safety guarantees.
 ///
