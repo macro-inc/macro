@@ -219,6 +219,8 @@ const signingKey = new FusionAuthKey(
   { provider: fusionAuthProvider }
 );
 
+export const signingKeyId = signingKey.keyId;
+
 const macroApplication = new FusionAuthApplication(
   'macro-application',
   {
