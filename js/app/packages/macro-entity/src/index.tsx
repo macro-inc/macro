@@ -3,11 +3,6 @@ export { EntityWrapper } from './components/EntityWrapper';
 export { createFilter } from './components/Filter';
 export { Provider } from './components/Provider';
 export * from './components/Sort';
-export {
-  createUnifiedList,
-  UnifiedList,
-  type UnifiedListComponent,
-} from './components/UnifiedList';
 export { UnreadIndicator } from './components/Unread';
 export { createChannelsQuery } from './queries/channel';
 export { useQueryClient } from './queries/client';
