@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createFreshSearch, normalizeFuzzyScore } from './freshSort';
 import type { LastInteractionTimestamp } from '@core/user/types';
+import { applyDurationToDate } from './dateSearch/dateParser';
 
 interface MockItem {
   id: string;
@@ -31,11 +32,29 @@ function createSearch(opts: { useViewedAt?: boolean; channelBoost?: number }) {
 
 describe('freshSort ordering', () => {
   it('orders by viewedAt - most recent first', () => {
-    const now = Date.now();
+    const now = new Date();
     const items: MockItem[] = [
-      { id: '1', name: 'Meeting Notes', type: 'item', viewedAt: now - 3600000 }, // 1hr ago
-      { id: '2', name: 'Project Plan', type: 'item', viewedAt: now - 60000 }, // 1min ago
-      { id: '3', name: 'Old Draft', type: 'item', viewedAt: now - 86400000 }, // 1day ago
+      {
+        id: '1',
+        name: 'Meeting Notes',
+        type: 'item',
+        viewedAt: applyDurationToDate(now, { value: -1, unit: 'h' }).getTime(),
+      },
+      {
+        id: '2',
+        name: 'Project Plan',
+        type: 'item',
+        viewedAt: applyDurationToDate(now, {
+          value: -1,
+          unit: 'min',
+        }).getTime(),
+      },
+      {
+        id: '3',
+        name: 'Old Draft',
+        type: 'item',
+        viewedAt: applyDurationToDate(now, { value: -1, unit: 'd' }).getTime(),
+      },
     ];
 
     const search = createSearch({ useViewedAt: true });
@@ -45,14 +64,25 @@ describe('freshSort ordering', () => {
   });
 
   it('boosts channels above documents when searching', () => {
-    const now = Date.now();
+    const now = new Date();
     const items: MockItem[] = [
-      { id: '1', name: 'Design Doc', type: 'item', viewedAt: now - 1000 },
+      {
+        id: '1',
+        name: 'Design Doc',
+        type: 'item',
+        viewedAt: applyDurationToDate(now, {
+          value: -1,
+          unit: 'min',
+        }).getTime(),
+      },
       {
         id: '2',
         name: 'Design Channel',
         type: 'channel',
-        viewedAt: now - 5000,
+        viewedAt: applyDurationToDate(now, {
+          value: -5,
+          unit: 'min',
+        }).getTime(),
       },
     ];
 
@@ -63,11 +93,29 @@ describe('freshSort ordering', () => {
   });
 
   it('mixes documents and channels by recency without boost', () => {
-    const now = Date.now();
+    const now = new Date();
     const items: MockItem[] = [
-      { id: '1', name: 'Doc A', type: 'item', viewedAt: now - 3600000 }, // 1hr ago
-      { id: '2', name: 'Channel B', type: 'channel', viewedAt: now - 60000 }, // 1min ago
-      { id: '3', name: 'Doc C', type: 'item', viewedAt: now - 86400000 }, // 1day ago
+      {
+        id: '1',
+        name: 'Doc A',
+        type: 'item',
+        viewedAt: applyDurationToDate(now, { value: -1, unit: 'h' }).getTime(),
+      },
+      {
+        id: '2',
+        name: 'Channel B',
+        type: 'channel',
+        viewedAt: applyDurationToDate(now, {
+          value: -1,
+          unit: 'min',
+        }).getTime(),
+      },
+      {
+        id: '3',
+        name: 'Doc C',
+        type: 'item',
+        viewedAt: applyDurationToDate(now, { value: -1, unit: 'd' }).getTime(),
+      },
     ];
 
     const search = createSearch({ useViewedAt: true, channelBoost: 1.0 });
@@ -213,12 +261,30 @@ describe('normalizeFuzzyScore', () => {
 
 describe('freshSort with all exact matches', () => {
   it('sorts by recency when all items are exact matches (Infinity scores)', () => {
-    const now = Date.now();
+    const now = new Date();
     const items: MockItem[] = [
-      { id: '1', name: 'Design', type: 'item', viewedAt: now - 3600000 }, // 1hr ago
-      { id: '2', name: 'Design', type: 'item', viewedAt: now - 60000 }, // 1min ago
-      { id: '3', name: 'Design', type: 'item', viewedAt: now - 86400000 }, // 1day ago
-      { id: '4', name: 'Design', type: 'item', viewedAt: now - 1000 }, // 1sec ago
+      {
+        id: '1',
+        name: 'Design',
+        type: 'item',
+        viewedAt: applyDurationToDate(now, { value: -1, unit: 'h' }).getTime(),
+      },
+      {
+        id: '2',
+        name: 'Design',
+        type: 'item',
+        viewedAt: applyDurationToDate(now, {
+          value: -1,
+          unit: 'min',
+        }).getTime(),
+      },
+      {
+        id: '3',
+        name: 'Design',
+        type: 'item',
+        viewedAt: applyDurationToDate(now, { value: -1, unit: 'd' }).getTime(),
+      },
+      { id: '4', name: 'Design', type: 'item', viewedAt: now.getTime() },
     ];
 
     const search = createFreshSearch<MockItem>(
@@ -292,7 +358,7 @@ describe('boostFn functionality', () => {
         name: 'Bob Smith',
         type: 'item',
         email: 'bob@macro.com',
-        viewedAt: now - 5000, // Older than Alice
+        viewedAt: now - 5000,
       },
       {
         id: '3',
@@ -366,10 +432,26 @@ describe('boostFn functionality', () => {
   });
 
   it('handles boostFn returning 0 for no boost', () => {
-    const now = Date.now();
+    const now = new Date();
     const items: MockItemWithEmail[] = [
-      { id: '1', name: 'Alice', type: 'item', viewedAt: now - 1000 },
-      { id: '2', name: 'Bob', type: 'item', viewedAt: now - 2000 },
+      {
+        id: '1',
+        name: 'Alice',
+        type: 'item',
+        viewedAt: applyDurationToDate(now, {
+          value: -1,
+          unit: 'min',
+        }).getTime(),
+      },
+      {
+        id: '2',
+        name: 'Bob',
+        type: 'item',
+        viewedAt: applyDurationToDate(now, {
+          value: -2,
+          unit: 'min',
+        }).getTime(),
+      },
     ];
 
     const search = createFreshSearch<MockItemWithEmail>(
@@ -430,10 +512,26 @@ describe('boostFn functionality', () => {
   });
 
   it('works without boostFn (undefined)', () => {
-    const now = Date.now();
+    const now = new Date();
     const items: MockItemWithEmail[] = [
-      { id: '1', name: 'Alice', type: 'item', viewedAt: now - 1000 },
-      { id: '2', name: 'Bob', type: 'item', viewedAt: now - 2000 },
+      {
+        id: '1',
+        name: 'Alice',
+        type: 'item',
+        viewedAt: applyDurationToDate(now, {
+          value: -1,
+          unit: 'min',
+        }).getTime(),
+      },
+      {
+        id: '2',
+        name: 'Bob',
+        type: 'item',
+        viewedAt: applyDurationToDate(now, {
+          value: -2,
+          unit: 'min',
+        }).getTime(),
+      },
     ];
 
     const search = createFreshSearch<MockItemWithEmail>(
@@ -456,21 +554,27 @@ describe('boostFn functionality', () => {
 
 describe('DM activity timestamps for user ranking', () => {
   it('ranks users with recent DM activity higher', () => {
-    const now = Date.now();
+    const now = new Date();
     const users: User[] = [
       {
         id: '1',
         name: 'Alice Johnson',
         type: 'item',
         email: 'alice@example.com',
-        lastInteraction: now - 86400000, // 1 day ago (unix timestamp in milliseconds)
+        lastInteraction: applyDurationToDate(now, {
+          value: -1,
+          unit: 'd',
+        }).getTime(),
       },
       {
         id: '2',
         name: 'Bob Smith',
         type: 'item',
         email: 'bob@example.com',
-        lastInteraction: now - 3600000, // 1 hour ago
+        lastInteraction: applyDurationToDate(now, {
+          value: -1,
+          unit: 'h',
+        }).getTime(),
       },
       {
         id: '3',
@@ -503,28 +607,37 @@ describe('DM activity timestamps for user ranking', () => {
   });
 
   it('combines DM activity with fuzzy search', () => {
-    const now = Date.now();
+    const now = new Date();
     const users: User[] = [
       {
         id: '1',
         name: 'Alice Anderson',
         type: 'item',
         email: 'alice@example.com',
-        lastInteraction: now - 86400000, // 1 day ago
+        lastInteraction: applyDurationToDate(now, {
+          value: -1,
+          unit: 'd',
+        }).getTime(),
       },
       {
         id: '2',
         name: 'Alicia Martinez',
         type: 'item',
         email: 'alicia@example.com',
-        lastInteraction: now - 3600000, // 1 hour ago
+        lastInteraction: applyDurationToDate(now, {
+          value: -1,
+          unit: 'h',
+        }).getTime(),
       },
       {
         id: '3',
         name: 'Bob Wilson',
         type: 'item',
         email: 'bob@example.com',
-        lastInteraction: now - 60000, // 1 minute ago
+        lastInteraction: applyDurationToDate(now, {
+          value: -1,
+          unit: 'min',
+        }).getTime(),
       },
     ];
 
