@@ -8,21 +8,35 @@ import {
   isTaskClosed,
 } from '@app/component/Soup/utils/filterHelpers';
 import { useUserId } from '@core/context/user';
+import { createMemo } from 'solid-js';
+import {
+  DEPRIORITY_LABEL_SIGNAL_TOGGLES,
+  PRIORITY_LABEL_SIGNAL_TOGGLES,
+} from '@app/component/next-soup/filters/signal-configs';
+
+/** Labels that indicate priority emails (signal) */
+const PRIORITY_LABELS = createMemo(
+  () =>
+    new Set(
+      PRIORITY_LABEL_SIGNAL_TOGGLES.filter(({ enabled }) => enabled()).map(
+        ({ key }) => key
+      )
+    )
+);
+
+/** Labels that indicate depriority emails (noise) */
+const DEPRIORITY_LABELS = createMemo(
+  () =>
+    new Set(
+      DEPRIORITY_LABEL_SIGNAL_TOGGLES.filter(({ enabled }) => enabled()).map(
+        ({ key }) => key
+      )
+    )
+);
 
 // ============================================================================
 // Signal/Noise Configuration
 // ============================================================================
-
-/** Labels that indicate priority emails (signal) */
-const PRIORITY_LABELS = new Set(['CATEGORY_PERSONAL', 'SENT', 'IMPORTANT']);
-
-/** Labels that indicate depriority emails (noise) */
-const DEPRIORITY_LABELS = new Set([
-  'CATEGORY_UPDATES',
-  'CATEGORY_PROMOTIONS',
-  'CATEGORY_SOCIAL',
-  'CATEGORY_FORUMS',
-]);
 
 /** Extract label tokens from email labels for matching */
 const getLabelTokens = (
@@ -59,12 +73,14 @@ function getEmailSignalInfo(entity: EmailEntity): {
   hasDepriority: boolean;
 } {
   const labelTokens = getLabelTokens(entity.labels);
+  const priorityLabels = PRIORITY_LABELS();
+  const depriorityLabels = DEPRIORITY_LABELS();
 
   const hasPriorityLabel = labelTokens.some((label) =>
-    PRIORITY_LABELS.has(label)
+    priorityLabels.has(label)
   );
   const hasDeprioritizingLabel = labelTokens.some((label) =>
-    DEPRIORITY_LABELS.has(label)
+    depriorityLabels.has(label)
   );
 
   return {
