@@ -103,7 +103,6 @@ pub async fn main() -> anyhow::Result<()> {
     let ingress_service = ::notification::domain::service::NotificationIngressService::new(
         notification_repository,
         notification_queue,
-        "notification_service",
     );
     let ingress_state =
         ::notification::inbound::http::NotificationRouterState::new(ingress_service);
