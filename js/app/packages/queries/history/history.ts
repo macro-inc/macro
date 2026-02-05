@@ -14,13 +14,13 @@ import { createEffect, type Accessor, type Setter } from 'solid-js';
 import { queryClient } from '../client';
 import { historyKeys } from './keys';
 import {
-  type HistoryItem,
   transformHistoryResponse,
   updateViewedAtAndMoveItemToFront,
 } from './transforms';
 import { queryReadyGate } from '@queries/gate';
 
-export type { HistoryItem, HistoryQueryResponse } from './transforms';
+import type { HistoryItem } from './types';
+export type { HistoryItem } from './types';
 
 const HISTORY_STALE_TIME = 5 * 60 * 1000;
 const HISTORY_GC_TIME = 10 * 60 * 1000;
