@@ -24,6 +24,7 @@ type ChannelContextValue = {
   attachments: Accessor<Attachment[]>;
   messageSenderMap: Accessor<MessageSenderLookup>;
   channelType: Accessor<ChannelType>;
+  isFetching: Accessor<boolean>;
 };
 
 type ChannelContextProps = {
@@ -48,6 +49,8 @@ export const [ChannelContextProvider, useChannelContext] =
         return new Map(all.map((m) => [m.id, m.sender_id]));
       });
 
+      const isFetching = createMemo(() => channelQuery.isFetching);
+
       return {
         channel,
         channelName,
@@ -57,6 +60,7 @@ export const [ChannelContextProvider, useChannelContext] =
         reactions,
         attachments,
         messageSenderMap,
+        isFetching,
       };
     }
   );
