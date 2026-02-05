@@ -31,7 +31,6 @@ import {
 } from '@app/component/PreviewPanel';
 import { SplitPanelContext } from '@app/component/split-layout/context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import { EmptyState } from '@app/component/UnifiedListEmptyState';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { useTaskProperties } from '@core/component/Properties/hooks';
@@ -81,6 +80,7 @@ import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
 import { soupKeys } from '@queries/soup/keys';
 import type { CacheSnapshot } from 'virtua/unstable_core';
+import { EmptyState } from '@app/component/next-soup/soup-view/empty-states';
 
 const DEFAULT_ENTITY_HEIGHT = 40;
 
