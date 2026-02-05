@@ -59,9 +59,9 @@ runs:
 
     - name: Run database migrations
       shell: bash
-      working-directory: rust/cloud-storage
+      working-directory: rust/cloud-storage/macro_db_client
       env:
         DATABASE_URL: ${{ steps.get-db-url.outputs.database_url }}
       run: |
         echo "Running migrations for ${{ inputs.environment }} environment..."
-        just sqlx::migrate_db "$DATABASE_URL"
+        cargo sqlx migrate run
