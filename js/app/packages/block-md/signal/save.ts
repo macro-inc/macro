@@ -47,13 +47,14 @@ export function useRenameMarkdownDocument() {
   const documentId = useBlockId();
   const renameMutation = createRenameDssEntityMutation();
 
-  return async (documentName: string) => {
+  return async (newName: string, oldName: string) => {
     await renameMutation.mutateAsync({
       entity: {
         type: 'document',
+        name: oldName,
         id: documentId,
       },
-      newName: documentName,
+      newName,
     });
   };
 }
