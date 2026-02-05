@@ -313,10 +313,20 @@ describe('freshSort with all exact matches', () => {
   });
 
   it('channel boost works correctly with all exact matches', () => {
-    const now = Date.now();
+    const now = new Date();
     const items: MockItem[] = [
-      { id: '1', name: 'Design', type: 'item', viewedAt: now - 1000 },
-      { id: '2', name: 'Design', type: 'channel', viewedAt: now - 5000 },
+      {
+        id: '1',
+        name: 'Design',
+        type: 'item',
+        viewedAt: applyDurationToDate(now, { value: -1, unit: 's' }).getTime(),
+      },
+      {
+        id: '2',
+        name: 'Design',
+        type: 'channel',
+        viewedAt: applyDurationToDate(now, { value: -5, unit: 's' }).getTime(),
+      },
     ];
 
     const search = createFreshSearch<MockItem>(
@@ -344,28 +354,28 @@ describe('boostFn functionality', () => {
   }
 
   it('applies per-item boost correctly', () => {
-    const now = Date.now();
+    const now = new Date();
     const items: MockItemWithEmail[] = [
       {
         id: '1',
         name: 'Alice Johnson',
         type: 'item',
         email: 'alice@example.com',
-        viewedAt: now - 1000,
+        viewedAt: applyDurationToDate(now, { value: -1, unit: 's' }).getTime(),
       },
       {
         id: '2',
         name: 'Bob Smith',
         type: 'item',
         email: 'bob@macro.com',
-        viewedAt: now - 5000,
+        viewedAt: applyDurationToDate(now, { value: -5, unit: 's' }).getTime(),
       },
       {
         id: '3',
         name: 'Charlie Brown',
         type: 'item',
         email: 'charlie@example.com',
-        viewedAt: now - 3000,
+        viewedAt: applyDurationToDate(now, { value: -3, unit: 's' }).getTime(),
       },
     ];
 
@@ -391,21 +401,21 @@ describe('boostFn functionality', () => {
   });
 
   it('boostFn works with search query', () => {
-    const now = Date.now();
+    const now = new Date();
     const items: MockItemWithEmail[] = [
       {
         id: '1',
         name: 'Alice Johnson',
         type: 'item',
         email: 'alice@example.com',
-        viewedAt: now - 1000,
+        viewedAt: applyDurationToDate(now, { value: -1, unit: 's' }).getTime(),
       },
       {
         id: '2',
         name: 'Alicia Smith',
         type: 'item',
         email: 'alicia@macro.com',
-        viewedAt: now - 1000,
+        viewedAt: applyDurationToDate(now, { value: -1, unit: 's' }).getTime(),
       },
     ];
 
@@ -472,21 +482,21 @@ describe('boostFn functionality', () => {
   });
 
   it('combines boostFn with channelBoost', () => {
-    const now = Date.now();
+    const now = new Date();
     const items: MockItemWithEmail[] = [
       {
         id: '1',
         name: 'Design Doc',
         type: 'item',
         email: 'alice@macro.com',
-        viewedAt: now - 1000,
+        viewedAt: applyDurationToDate(now, { value: -1, unit: 's' }).getTime(),
       },
       {
         id: '2',
         name: 'Design Channel',
         type: 'channel',
         email: 'system@example.com',
-        viewedAt: now - 1000,
+        viewedAt: applyDurationToDate(now, { value: -1, unit: 's' }).getTime(),
       },
     ];
 
