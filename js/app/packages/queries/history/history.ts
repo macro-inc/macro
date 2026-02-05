@@ -76,8 +76,9 @@ export function useHistoryQuery() {
 }
 
 // TODO: this is a temporary side effect to remove the instructions item from history
+// load this at the app root level to prevent duplicate work
 // this will be removed from the backend
-export function removeInstructionsMdFromHistorySideEffect() {
+export function RemoveInstructionsMdFromHistorySideEffect() {
   const instructionsIdQuery = useInstructionsMdIdQuery();
   const historyQuery = useHistoryQuery();
   createEffect(() => {
@@ -95,6 +96,7 @@ export function removeInstructionsMdFromHistorySideEffect() {
       }
     );
   });
+  return null;
 }
 
 export async function prefetchHistory() {
