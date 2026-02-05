@@ -55,7 +55,7 @@ pub async fn map_thread_resource_to_service(
         .collect::<Result<Vec<_>, _>>()
         .context("Mapping one or more messages failed")?;
 
-    service_messages.sort_by(|a, b| a.internal_date_ts.cmp(&b.internal_date_ts));
+    service_messages.sort_by_key(|a| a.internal_date_ts);
 
     // if any messages in the thread are in the inbox, the thread is visible in the inbox.
     let inbox_visible = service_messages.iter().any(|msg| {

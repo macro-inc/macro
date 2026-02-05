@@ -342,11 +342,14 @@ async fn test_create_notification_returns_none_on_conflict(pool: Pool<Postgres>)
     assert_eq!(result, None);
 
     // Verify only one notification exists
-    let count: i64 = sqlx::query_scalar!("SELECT COUNT(*) FROM notification WHERE id = $1", notification_id)
-        .fetch_one(&pool)
-        .await
-        .unwrap()
-        .unwrap();
+    let count: i64 = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM notification WHERE id = $1",
+        notification_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap()
+    .unwrap();
     assert_eq!(count, 1);
 
     // Verify only one user_notification exists (not duplicated)

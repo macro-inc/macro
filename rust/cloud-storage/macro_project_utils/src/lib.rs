@@ -12,8 +12,8 @@ where
 }
 
 #[tracing::instrument(skip(db))]
-pub async fn update_project_modified<'a, T>(
-    db: &'a sqlx::Pool<sqlx::Postgres>,
+pub async fn update_project_modified<T>(
+    db: &sqlx::Pool<sqlx::Postgres>,
     project_modified_args: ProjectModifiedArgs<T>,
 ) where
     T: Clone + std::fmt::Debug + ToString + std::marker::Send + Sync,
