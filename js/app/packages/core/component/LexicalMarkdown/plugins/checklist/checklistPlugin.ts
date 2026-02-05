@@ -69,7 +69,7 @@ function wrapCheckboxMouseEvent(
 function registerMouseEvents(editor: LexicalEditor) {
   const mouseDownPosition = [0, 0];
 
-  function click(e: MouseEvent) {
+  function click(e: PointerEvent) {
     wrapCheckboxMouseEvent(e, editor, (e: MouseEvent) => {
       editor.update(() => {
         const { target, clientX, clientY } = e;
@@ -93,7 +93,7 @@ function registerMouseEvents(editor: LexicalEditor) {
   /**
    * Prevent default on checkbox mousedown to avoid focus change.
    */
-  function mousedown(e: MouseEvent) {
+  function pointerdown(e: PointerEvent) {
     wrapCheckboxMouseEvent(e, editor, (e) => {
       editor.read(() => {
         const { target, clientX, clientY } = e;
@@ -113,11 +113,11 @@ function registerMouseEvents(editor: LexicalEditor) {
   return editor.registerRootListener((root, prevRoot) => {
     if (root) {
       root.addEventListener('click', click);
-      root.addEventListener('mousedown', mousedown);
+      root.addEventListener('pointerdown', pointerdown);
     }
     if (prevRoot) {
       prevRoot.removeEventListener('click', click);
-      prevRoot.removeEventListener('mousedown', mousedown);
+      prevRoot.removeEventListener('pointerdown', pointerdown);
     }
   });
 }
