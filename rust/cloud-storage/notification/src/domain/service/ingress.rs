@@ -164,6 +164,7 @@ where
                                 notif: APNSPushNotification {
                                     aps: Aps {
                                         content_available: Some(1),
+                                        sound: None,
                                         ..Default::default()
                                     },
                                     push_notification_data: ClearPushIdentifier {

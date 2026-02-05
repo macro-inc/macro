@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 /// The APNS payload container.
-#[derive(Serialize, Debug, Default, Deserialize)]
+#[derive(Serialize, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Aps {
     /// The alert content.
@@ -41,6 +41,23 @@ pub struct Aps {
     /// Interruption level: passive, active, time-sensitive, critical.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub interruption_level: Option<InterruptionLevel>,
+}
+
+impl Default for Aps {
+    fn default() -> Self {
+        Self {
+            alert: Default::default(),
+            badge: Default::default(),
+            // default to sending the default ios sound (which also controls vibration)
+            sound: Some(Sound::Default("default".to_string())),
+            content_available: Default::default(),
+            mutable_content: Default::default(),
+            category: Default::default(),
+            thread_id: Default::default(),
+            relevance_score: Default::default(),
+            interruption_level: Default::default(),
+        }
+    }
 }
 
 /// The alert content of an APNS notification.
