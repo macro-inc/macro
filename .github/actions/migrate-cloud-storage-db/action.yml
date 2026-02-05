@@ -37,7 +37,7 @@ runs:
     - name: Install sqlx-cli
       shell: bash
       run: |
-        cargo install sqlx-cli --locked --no-default-features --features postgres
+        cargo install sqlx-cli --locked --no-default-features --features postgres,rustls
 
     - name: Get database URL from Secrets Manager
       id: get-db-url
