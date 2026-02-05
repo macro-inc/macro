@@ -4,15 +4,17 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { ApiUserNotificationAllOfDeletedAt } from './apiUserNotificationAllOfDeletedAt';
 import type { ApiUserNotificationAllOfSenderId } from './apiUserNotificationAllOfSenderId';
+import type { ApiUserNotificationAllOfUpdatedAt } from './apiUserNotificationAllOfUpdatedAt';
+import type { ApiUserNotificationAllOfViewedAt } from './apiUserNotificationAllOfViewedAt';
 import type { NotifEvent } from './notifEvent';
 
 export type ApiUserNotificationAllOf = {
   /** When the notification was created. */
   createdAt: number;
   /** When the notification was deleted. */
-  deletedAt: number;
+  deletedAt: ApiUserNotificationAllOfDeletedAt;
   /** Whether the notification is marked as done. */
   done: boolean;
   /** The notification ID. */
@@ -29,7 +31,7 @@ TODO make this a new type */
   /** Whether the notification has been sent. */
   sent: boolean;
   /** When the notification was last updated. */
-  updatedAt: number;
+  updatedAt: ApiUserNotificationAllOfUpdatedAt;
   /** When the notification was viewed/seen. */
-  viewedAt: number;
+  viewedAt: ApiUserNotificationAllOfViewedAt;
 };

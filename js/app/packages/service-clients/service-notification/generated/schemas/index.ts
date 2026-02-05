@@ -7,7 +7,10 @@
 
 export * from './apiUserNotification';
 export * from './apiUserNotificationAllOf';
+export * from './apiUserNotificationAllOfDeletedAt';
 export * from './apiUserNotificationAllOfSenderId';
+export * from './apiUserNotificationAllOfUpdatedAt';
+export * from './apiUserNotificationAllOfViewedAt';
 export * from './bulkGetByEventItemIdsRequest';
 export * from './bulkGetTypedNotificationsByEventItemIdsParams';
 export * from './channelInviteMetadata';
