@@ -29,8 +29,10 @@ export {
 const HISTORY_STALE_TIME = 5 * 60 * 1000;
 const HISTORY_GC_TIME = 10 * 60 * 1000;
 
+type HistoryQueryFnResult = HistoryItem[];
+
 function setHistoryItemData(itemId: string, updater: Setter<HistoryItem>) {
-  return queryClient.setQueryData<HistoryItem[]>(
+  return queryClient.setQueryData<HistoryQueryFnResult>(
     historyQueryOptions.queryKey,
     (prev) => {
       if (!prev) return prev;
@@ -45,8 +47,8 @@ function setHistoryItemData(itemId: string, updater: Setter<HistoryItem>) {
   );
 }
 
-function setHistoryData(updater: Setter<HistoryItem[]>) {
-  return queryClient.setQueryData<HistoryItem[]>(
+function setHistoryData(updater: Setter<HistoryQueryFnResult>) {
+  return queryClient.setQueryData<HistoryQueryFnResult>(
     historyQueryOptions.queryKey,
     updater
   );
@@ -62,7 +64,7 @@ export function setHistoryItemName(itemId: string, name: string) {
 
 const historyQueryOptions = queryOptions({
   queryKey: historyKeys.list.queryKey,
-  queryFn: async (): Promise<HistoryItem[]> => {
+  queryFn: async (): Promise<HistoryQueryFnResult> => {
     const result = await throwOnErr(
       async () => await storageServiceClient.getUsersHistory()
     );
@@ -132,7 +134,7 @@ type UpsertToHistoryParams = {
 };
 
 type UpsertToHistoryContext = {
-  previousData: HistoryItem[] | undefined;
+  previousData: HistoryQueryFnResult | undefined;
 };
 
 export function useUpsertToHistoryMutation(
