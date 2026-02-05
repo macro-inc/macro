@@ -4,13 +4,13 @@ use crate::domain::{
     models::{
         ExclusionReason, FilteredRecipient, Notification, NotificationExtEmail, NotificationExtIos,
         RateLimitConfig, RateLimitKey, RecipientExclusion, apple::APNSPushNotification,
-        mobile::MessageAttributes, queue_message::EmailContent,
+        mobile, mobile::MessageAttributes, queue_message::EmailContent,
     },
     service::SendNotificationError,
 };
 use itertools::Itertools;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use model_entity::Entity;
+use model_entity::{Entity, as_owned::IntoOwned};
 use rootcause::{Report, report};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -73,11 +73,19 @@ impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
         } = self;
 
         let sender = req.sender_id.clone().map(CowLike::into_owned);
+        let entity = req.notification_entity.clone().into_owned();
 
         SendNotificationRequest {
             req,
             build_apns: Some(Box::new(move |notif: T| {
-                let attrs = notif.message_attributes();
+                let collapse_key = notif
+                    .collapse_key(&entity)
+                    .into_hashed()
+                    .into_inner();
+                let attrs = MessageAttributes {
+                    push_type: mobile::PushType::Alert,
+                    collapse_key,
+                };
                 let apns = notif.into_apns(sender.clone())?;
 
                 Some((apns, attrs))
@@ -227,4 +235,17 @@ pub struct UpdateNotificationsRequest<'a> {
     pub notification_ids: &'a [Uuid],
     /// The status to set on the notifications.
     pub status: NotificationStatus,
+}
+
+/// Request to get a user's notifications filtered by event item IDs.
+#[derive(Debug)]
+pub struct GetNotificationsByEventItemIdsRequest<'a> {
+    /// The user whose notifications to retrieve.
+    pub user_id: &'a str,
+    /// The event item IDs to filter by.
+    pub event_item_ids: &'a [Uuid],
+    /// Maximum number of results per page (default 20, max 500).
+    pub limit: Option<u32>,
+    /// Cursor for pagination.
+    pub cursor: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
 }

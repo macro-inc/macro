@@ -71,7 +71,6 @@ pub(crate) struct ApiContext {
     pub dynamo_db: aws_sdk_dynamodb::Client,
     pub soup_router_state: DssSoupState,
     pub sqs_client: Arc<sqs_client::SQS>,
-    pub macro_notify_client: Arc<macro_notify::MacroNotify>,
     pub notification_ingress_service: Arc<NotificationIngressType>,
     pub conn_gateway_client: Arc<ConnectionGatewayClient>,
     pub sync_service_client: Arc<SyncServiceClient>,

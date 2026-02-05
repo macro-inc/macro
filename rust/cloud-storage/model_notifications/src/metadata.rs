@@ -2,11 +2,13 @@ use crate::NotificationEventType;
 use doppleganger::Doppleganger;
 use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
 use mention_utils::parse::{ParsedXmlText, XmlFormatter};
+use model_entity::Entity;
 use model_entity::EntityType;
+use notification::domain::models::RateLimitConfig;
+use notification::domain::models::RateLimitKey;
 use notification::domain::models::{
-    NotificationExtIos,
+    NotifCollapseKey, NotificationExtIos,
     apple::{APNSPushNotification, AlertDictionary, Aps},
-    mobile::{MessageAttributes, PushType},
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use utoipa::ToSchema;
@@ -294,6 +296,18 @@ impl notification::domain::models::Notification for DocumentMentionMetadata {
     }
 }
 
+impl notification::domain::models::Notification for InviteToTeamMetadata {
+    const TYPE_NAME: &'static str = "invite_to_team";
+
+    fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
+        None
+    }
+
+    fn rate_limit_key(&self) -> Option<notification::domain::models::RateLimitKey> {
+        None
+    }
+}
+
 /// Metadata for when a user is assigned to a task
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -435,11 +449,9 @@ fn alert_apns(title: String, body: String) -> APNSPushNotification<()> {
 impl NotificationExtIos for ChannelInviteMetadata {
     type NotifData = ();
 
-    fn message_attributes(&self) -> MessageAttributes {
-        MessageAttributes {
-            push_type: PushType::Alert,
-            collapse_key: "channel_invite".to_string(),
-        }
+    fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
+        let entity_type: &'static str = entity.entity_type.into();
+        NotifCollapseKey::new(entity_type).append(&entity.entity_id)
     }
 
     fn into_apns<'a>(
@@ -456,11 +468,8 @@ impl NotificationExtIos for ChannelInviteMetadata {
 impl NotificationExtIos for ChannelMessageSendMetadata {
     type NotifData = ();
 
-    fn message_attributes(&self) -> MessageAttributes {
-        MessageAttributes {
-            push_type: PushType::Alert,
-            collapse_key: "channel_message_send".to_string(),
-        }
+    fn collapse_key(&self, _entity: &Entity<'_>) -> NotifCollapseKey {
+        NotifCollapseKey::new(&self.message_id)
     }
 
     fn into_apns<'a>(
@@ -468,9 +477,7 @@ impl NotificationExtIos for ChannelMessageSendMetadata {
         _sender_id: Option<MacroUserIdStr<'a>>,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let title = match self.common.channel_type {
-            ChannelType::DirectMessage => {
-                self.sender.email_part().local_part().to_string()
-            }
+            ChannelType::DirectMessage => self.sender.email_part().local_part().to_string(),
             _ => format!(
                 "{} <{}>",
                 self.sender.email_part().local_part(),
@@ -485,11 +492,8 @@ impl NotificationExtIos for ChannelMessageSendMetadata {
 impl NotificationExtIos for ChannelMentionMetadata {
     type NotifData = ();
 
-    fn message_attributes(&self) -> MessageAttributes {
-        MessageAttributes {
-            push_type: PushType::Alert,
-            collapse_key: "channel_mention".to_string(),
-        }
+    fn collapse_key(&self, _entity: &Entity<'_>) -> NotifCollapseKey {
+        NotifCollapseKey::new(&self.message_id)
     }
 
     fn into_apns<'a>(
@@ -515,11 +519,8 @@ impl NotificationExtIos for ChannelMentionMetadata {
 impl NotificationExtIos for ChannelReplyMetadata {
     type NotifData = ();
 
-    fn message_attributes(&self) -> MessageAttributes {
-        MessageAttributes {
-            push_type: PushType::Alert,
-            collapse_key: "channel_message_reply".to_string(),
-        }
+    fn collapse_key(&self, _entity: &Entity<'_>) -> NotifCollapseKey {
+        NotifCollapseKey::new(&self.message_id)
     }
 
     fn into_apns<'a>(
@@ -536,11 +537,9 @@ impl NotificationExtIos for ChannelReplyMetadata {
 impl NotificationExtIos for DocumentMentionMetadata {
     type NotifData = ();
 
-    fn message_attributes(&self) -> MessageAttributes {
-        MessageAttributes {
-            push_type: PushType::Alert,
-            collapse_key: "document_mention".to_string(),
-        }
+    fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
+        let entity_type: &'static str = entity.entity_type.into();
+        NotifCollapseKey::new(entity_type).append(&entity.entity_id)
     }
 
     fn into_apns<'a>(
@@ -555,3 +554,48 @@ impl NotificationExtIos for DocumentMentionMetadata {
     }
 }
 
+impl notification::domain::models::Notification for TaskAssignedMetadata {
+    const TYPE_NAME: &'static str = "task_assigned";
+
+    fn rate_limit_config() -> Option<RateLimitConfig> {
+        None
+    }
+
+    fn rate_limit_key(&self) -> Option<RateLimitKey> {
+        None
+    }
+}
+
+impl NotificationExtIos for TaskAssignedMetadata {
+    type NotifData = ();
+
+    fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
+        let entity_type: &'static str = entity.entity_type.into();
+        NotifCollapseKey::new(entity_type).append(&entity.entity_id)
+    }
+
+    fn into_apns<'a>(
+        self,
+        _sender_id: Option<MacroUserIdStr<'a>>,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        let title = self.assigned_by.email_part().email_str().to_string();
+        let body = if let Some(ref task_name) = self.task_name {
+            format!("assigned you to {}", task_name)
+        } else {
+            "assigned you a task".to_string()
+        };
+        Some(APNSPushNotification {
+            aps: Aps {
+                alert: Some(notification::domain::models::apple::Alert::Dictionary(
+                    AlertDictionary {
+                        title: Some(title),
+                        body: Some(body),
+                        ..Default::default()
+                    },
+                )),
+                ..Default::default()
+            },
+            push_notification_data: (),
+        })
+    }
+}

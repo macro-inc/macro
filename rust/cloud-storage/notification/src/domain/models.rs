@@ -11,14 +11,16 @@ pub mod rate_limit;
 pub mod recipient;
 pub mod request;
 
-pub use mobile::DeviceEndpoint;
+pub use mobile::{DeviceEndpoint, HashedCollapseKey, NotifCollapseKey};
 pub use rate_limit::{RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimitResult};
 pub use recipient::{ExclusionReason, FilteredRecipient, RecipientExclusion};
 pub use request::{NotificationResult, SendNotificationRequest, SendNotificationRequestBuilder};
 
-use crate::domain::models::{
-    apple::APNSPushNotification, mobile::MessageAttributes, queue_message::EmailContent,
-};
+use chrono::{DateTime, Utc};
+use model_entity::Entity;
+use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
+
+use crate::domain::models::{apple::APNSPushNotification, queue_message::EmailContent};
 
 /// Notification ID paired with its APNS collapse key, for push clearing.
 #[derive(Debug, Clone)]
@@ -27,6 +29,179 @@ pub struct NotificationIdAndCollapseKey {
     pub id: uuid::Uuid,
     /// The APNS collapse key used to identify the push notification to clear.
     pub apns_collapse_key: String,
+}
+
+/// A row from the `user_notification` + `notification` join query.
+///
+/// The metadata field is generic so callers can deserialize it into
+/// whatever type they need without this crate depending on the caller's models.
+#[derive(Debug, Clone, Serialize)]
+pub struct UserNotificationRow<T> {
+    /// The user who owns this notification.
+    pub owner_id: MacroUserIdStr<'static>,
+    /// The notification ID.
+    pub notification_id: uuid::Uuid,
+    /// The notification event type string (e.g. "channel_mention").
+    /// TODO make this a new type
+    pub notification_event_type: String,
+    /// The entity the notification is about.
+    pub entity: Entity<'static>,
+    /// Whether the notification has been sent.
+    pub sent: bool,
+    /// Whether the notification is marked as done.
+    pub done: bool,
+    /// When the notification was created.
+    pub created_at: Option<DateTime<Utc>>,
+    /// When the notification was viewed/seen.
+    pub viewed_at: Option<DateTime<Utc>>,
+    /// When the notification was last updated.
+    pub updated_at: Option<DateTime<Utc>>,
+    /// When the notification was deleted.
+    pub deleted_at: Option<DateTime<Utc>>,
+    /// Deserialized notification metadata.
+    pub notification_metadata: T,
+    /// The user who triggered the notification.
+    pub sender_id: Option<MacroUserIdStr<'static>>,
+}
+
+/// A notification metadata value tagged with the notification event type.
+#[derive(Debug, Serialize)]
+pub struct TaggedContent<T> {
+    tag: String,
+    content: T,
+}
+
+impl<T> UserNotificationRow<T> {
+    /// Wrap the metadata in a [`TaggedContent`] using the notification event type as the tag.
+    pub fn into_tagged(self) -> UserNotificationRow<TaggedContent<T>> {
+        let UserNotificationRow {
+            owner_id,
+            notification_id,
+            notification_event_type,
+            entity,
+            sent,
+            done,
+            created_at,
+            viewed_at,
+            updated_at,
+            deleted_at,
+            notification_metadata,
+            sender_id,
+        } = self;
+
+        UserNotificationRow {
+            owner_id,
+            notification_id,
+            entity,
+            sent,
+            done,
+            created_at,
+            viewed_at,
+            updated_at,
+            deleted_at,
+            notification_metadata: TaggedContent {
+                tag: notification_event_type.clone(),
+                content: notification_metadata,
+            },
+            notification_event_type,
+            sender_id,
+        }
+    }
+}
+
+impl<T: Serialize> UserNotificationRow<T> {
+    /// Serialize the metadata into a [`serde_json::Value`].
+    pub fn into_json(self) -> Result<UserNotificationRow<serde_json::Value>, serde_json::Error> {
+        let UserNotificationRow {
+            owner_id,
+            notification_id,
+            notification_event_type,
+            entity,
+            sent,
+            done,
+            created_at,
+            viewed_at,
+            updated_at,
+            deleted_at,
+            notification_metadata,
+            sender_id,
+        } = self;
+
+        let val = serde_json::to_value(notification_metadata)?;
+
+        Ok(UserNotificationRow {
+            owner_id,
+            notification_id,
+            notification_event_type,
+            entity,
+            sent,
+            done,
+            created_at,
+            viewed_at,
+            updated_at,
+            deleted_at,
+            notification_metadata: val,
+            sender_id,
+        })
+    }
+}
+
+impl UserNotificationRow<serde_json::Value> {
+    /// Deserialize the JSON metadata into a concrete type `T`.
+    pub fn deserialize_json<T: DeserializeOwned>(
+        self,
+    ) -> Result<UserNotificationRow<T>, serde_json::Error> {
+        let UserNotificationRow {
+            owner_id,
+            notification_id,
+            notification_event_type,
+            entity,
+            sent,
+            done,
+            created_at,
+            viewed_at,
+            updated_at,
+            deleted_at,
+            notification_metadata,
+            sender_id,
+        } = self;
+
+        let val = serde_json::from_value(notification_metadata)?;
+
+        Ok(UserNotificationRow {
+            owner_id,
+            notification_id,
+            notification_event_type,
+            entity,
+            sent,
+            done,
+            created_at,
+            viewed_at,
+            updated_at,
+            deleted_at,
+            notification_metadata: val,
+            sender_id,
+        })
+    }
+}
+
+impl<T> Identify for UserNotificationRow<T> {
+    type Id = uuid::Uuid;
+    fn id(&self) -> Self::Id {
+        self.notification_id
+    }
+}
+
+impl<T> SortOn<CreatedAt> for UserNotificationRow<T> {
+    fn sort_on(sort: CreatedAt) -> impl FnMut(&Self) -> CursorVal<CreatedAt> {
+        move |v| {
+            let last_val = v.created_at.unwrap_or(DateTime::UNIX_EPOCH);
+            CursorVal {
+                sort_type: sort,
+                last_val,
+            }
+        }
+    }
 }
 
 /// Trait that all notification types must implement.
@@ -50,8 +225,8 @@ pub trait NotificationExtEmail: Notification {
 pub trait NotificationExtIos: Notification {
     /// The custom data type included in the APNS push notification payload.
     type NotifData: Send;
-    /// Get the message attributes for this push notification.
-    fn message_attributes(&self) -> MessageAttributes;
+    /// Build the collapse key for this push notification.
+    fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey;
     /// Convert this notification into an APNS push notification.
     fn into_apns<'a>(
         self,

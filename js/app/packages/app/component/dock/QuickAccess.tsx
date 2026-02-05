@@ -8,9 +8,11 @@ import { useChannelsContext } from '@core/context/channels';
 import { Tooltip } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
 import {
+  getMetadata,
   isChannelMention,
   isChannelMessageReply,
   notificationIsRead,
+  tryToTypedNotification,
   type UnifiedNotification,
 } from '@notifications';
 import type { ApiChannelWithLatest as ChannelWithLatest } from '@service-comms/generated/models';
@@ -99,13 +101,21 @@ function QuickAccessItem(props: QuickAccessItemProps) {
     const channelId = notification.entity_id;
 
     if (isChannelMention(notification) || isChannelMessageReply(notification)) {
-      const metadata = notification.notificationMetadata;
-      if (metadata && metadata.messageId) {
-        navigateToMessage(
-          channelId,
-          metadata.messageId,
-          metadata.threadId || undefined
-        );
+      const typed = tryToTypedNotification(notification);
+      if (typed) {
+        const metadata = getMetadata(typed);
+        if (metadata && 'messageId' in metadata && metadata.messageId) {
+          navigateToMessage(
+            channelId,
+            metadata.messageId,
+            ('threadId' in metadata && metadata.threadId) || undefined
+          );
+        } else {
+          replaceOrInsertSplit(
+            { type: 'channel', id: channelId },
+            'quick-access'
+          );
+        }
       } else {
         replaceOrInsertSplit(
           { type: 'channel', id: channelId },

@@ -21,7 +21,6 @@ pub struct ApiContext {
     pub db: PgPool,
     pub sqs_client: Arc<sqs_client::SQS>,
     pub document_storage_client: Arc<DocumentStorageServiceClient>,
-    pub macro_notify_client: Arc<macro_notify::MacroNotify>,
     pub comms_service_client: Arc<comms_service_client::CommsServiceClient>,
     pub search_service_client: Arc<SearchServiceClient>,
     pub scribe: Arc<DcsScribe>,
@@ -49,7 +48,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     use frecency::domain::services::FrecencyQueryServiceImpl;
     use frecency::outbound::postgres::FrecencyPgStorage;
     use lexical_client::LexicalClient;
-    use macro_notify::MacroNotifyClient;
     use scribe::ScribeClient;
     use search_service_client::SearchServiceClient;
     use soup::domain::service::SoupImpl;
@@ -69,8 +67,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         "dummy_auth_key".into(),
         "http://localhost".into(),
     ));
-    let macro_notify_client =
-        MacroNotifyClient::new("dummy_queue".into(), "dummy_service".into()).await;
     let comms_service_client = Arc::new(CommsServiceClient::new("http://localhost".into()));
     let search_service_client =
         SearchServiceClient::new("dummy_auth_key".into(), "http://localhost".into());
@@ -135,7 +131,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         db: pool.clone(),
         sqs_client: Arc::new(sqs_client),
         document_storage_client,
-        macro_notify_client: Arc::new(macro_notify_client),
         comms_service_client,
         search_service_client: Arc::new(search_service_client),
         scribe: Arc::new(content_client),

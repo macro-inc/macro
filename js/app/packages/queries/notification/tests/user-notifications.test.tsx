@@ -3,8 +3,8 @@
  */
 
 import { err, ok } from '@core/util/maybeResult';
+import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
 import type { GetAllUserNotificationsResponse } from '@service-notification/generated/schemas/getAllUserNotificationsResponse';
-import type { UserNotification } from '@service-notification/generated/schemas/userNotification';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import type { JSX } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -47,29 +47,33 @@ vi.mock('../../client', () => ({
 type UserNotificationsPageParam = { limit: number; cursor?: string };
 
 function createMockNotification(
-  overrides: Partial<UserNotification> = {}
-): UserNotification {
+  overrides: Partial<ApiUserNotification> = {}
+): ApiUserNotification {
   return {
     id: `notification-${Math.random().toString(36).slice(2)}`,
     entity_id: 'entity-1',
     entity_type: 'document',
     createdAt: Date.now(),
-    updatedAt: null,
-    viewedAt: null,
-    deletedAt: null,
+    updatedAt: 0,
+    viewedAt: 0,
+    deletedAt: 0,
     done: false,
     sent: true,
-    notificationEventType: 'ItemShared',
+    ownerId: 'owner-1',
+    notificationEventType: 'item_shared_user',
     notificationMetadata: {
-      sharer_id: 'user-1',
-      permission_level: 'editor',
+      tag: 'item_shared_user',
+      content: {
+        sharedBy: 'user-1',
+        permissionLevel: 'editor',
+      },
     },
     ...overrides,
-  } as UserNotification;
+  } as ApiUserNotification;
 }
 
 function createMockNotificationPage(
-  notifications: UserNotification[],
+  notifications: ApiUserNotification[],
   nextCursor?: string
 ): GetAllUserNotificationsResponse {
   return {
@@ -144,8 +148,8 @@ describe('notification mutations', () => {
 
   describe('useMarkNotificationsAsSeenMutation', () => {
     it('should optimistically update viewedAt when marking as seen', async () => {
-      const n1 = createMockNotification({ id: 'n1', viewedAt: null });
-      const n2 = createMockNotification({ id: 'n2', viewedAt: null });
+      const n1 = createMockNotification({ id: 'n1', viewedAt: 0 });
+      const n2 = createMockNotification({ id: 'n2', viewedAt: 0 });
       seedQueryCache([createMockNotificationPage([n1, n2])]);
 
       mockBulkMarkNotificationAsSeen.mockResolvedValue(ok({ success: true }));
@@ -163,14 +167,14 @@ describe('notification mutations', () => {
       await mutatePromise;
 
       const notifications = getNotificationsFromCache();
-      expect(notifications[0].viewedAt).not.toBeNull();
-      expect(notifications[1].viewedAt).toBeNull();
+      expect(notifications[0].viewedAt).toBeGreaterThan(0);
+      expect(notifications[1].viewedAt).toBe(0);
 
       cleanup();
     });
 
     it('should rollback optimistic update on error', async () => {
-      const n1 = createMockNotification({ id: 'n1', viewedAt: null });
+      const n1 = createMockNotification({ id: 'n1', viewedAt: 0 });
       seedQueryCache([createMockNotificationPage([n1])]);
 
       mockBulkMarkNotificationAsSeen.mockResolvedValue(
@@ -194,14 +198,14 @@ describe('notification mutations', () => {
       await new Promise((r) => setTimeout(r, 10));
 
       const notifications = getNotificationsFromCache();
-      expect(notifications[0].viewedAt).toBeNull();
+      expect(notifications[0].viewedAt).toBe(0);
 
       cleanup();
     });
 
     it('should handle marking notifications across multiple pages', async () => {
-      const n1 = createMockNotification({ id: 'n1', viewedAt: null });
-      const n2 = createMockNotification({ id: 'n2', viewedAt: null });
+      const n1 = createMockNotification({ id: 'n1', viewedAt: 0 });
+      const n2 = createMockNotification({ id: 'n2', viewedAt: 0 });
       seedQueryCache([
         createMockNotificationPage([n1]),
         createMockNotificationPage([n2]),
@@ -222,8 +226,8 @@ describe('notification mutations', () => {
       await mutatePromise;
 
       const notifications = getNotificationsFromCache();
-      expect(notifications[0].viewedAt).toBeNull(); // n1 unchanged
-      expect(notifications[1].viewedAt).not.toBeNull(); // n2 updated
+      expect(notifications[0].viewedAt).toBe(0); // n1 unchanged
+      expect(notifications[1].viewedAt).toBeGreaterThan(0); // n2 updated
 
       cleanup();
     });

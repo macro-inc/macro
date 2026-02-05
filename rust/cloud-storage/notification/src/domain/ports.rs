@@ -9,16 +9,19 @@ use std::future::Future;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use uuid::Uuid;
+
+use models_pagination::{CreatedAt, Query};
 
 use crate::domain::models::{
     DeviceEndpoint, Notification, NotificationIdAndCollapseKey, RateLimitConfig, RateLimitKey,
-    RateLimitResult, SendNotificationRequestBuilder, android::FCMMessage,
+    RateLimitResult, SendNotificationRequestBuilder, UserNotificationRow, android::FCMMessage,
     apple::APNSPushNotification, mobile::MessageAttributes,
 };
 
 /// Port for sending mobile push notifications (iOS/Android via SNS).
-pub trait NotificationSender {
+pub trait NotificationSender: Send + Sync + 'static {
     /// Send an iOS push notification via APNS.
     fn send_ios_push_notification<T: Serialize + Send + Sync>(
         &self,
@@ -37,7 +40,7 @@ pub trait NotificationSender {
 }
 
 /// Port for rate limiting operations.
-pub trait RateLimitPort {
+pub trait RateLimitPort: Send + Sync + 'static {
     /// Check if the action is allowed and increment the counter.
     ///
     /// The `RateLimitKey` is a hashed value - callers control what gets rate
@@ -109,10 +112,55 @@ pub trait NotificationRepository: Send + Sync + 'static {
         &self,
         notification_ids: &[Uuid],
     ) -> impl Future<Output = Result<Vec<NotificationIdAndCollapseKey>, Report>> + Send;
+
+    /// Get a user's active (not deleted, not done) notifications with cursor-based pagination.
+    ///
+    /// The metadata JSON column is deserialized into `T`.
+    fn get_user_notifications<T: DeserializeOwned + Send>(
+        &self,
+        user_id: &str,
+        limit: u32,
+        cursor: Query<Uuid, CreatedAt, ()>,
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<T>>, Report>> + Send;
+
+    /// Get a user's active notifications filtered by event item IDs, with cursor-based pagination.
+    ///
+    /// Only returns notifications that are not deleted and not done,
+    /// matching one of the provided `event_item_ids`.
+    fn get_user_notifications_by_event_item_ids<T: DeserializeOwned + Send>(
+        &self,
+        user_id: &str,
+        event_item_ids: &[Uuid],
+        limit: u32,
+        cursor: Query<Uuid, CreatedAt, ()>,
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<T>>, Report>> + Send;
+
+    /// Get a single user notification by ID.
+    ///
+    /// Returns `None` if no active (non-deleted) notification exists for the given user and ID.
+    fn get_user_notification_by_id<T: DeserializeOwned + Send>(
+        &self,
+        user_id: &str,
+        notification_id: Uuid,
+    ) -> impl Future<Output = Result<Option<UserNotificationRow<T>>, Report>> + Send;
+
+    /// Soft-delete a single user notification.
+    fn delete_user_notification(
+        &self,
+        user_id: &str,
+        notification_id: Uuid,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Soft-delete multiple user notifications.
+    fn bulk_delete_user_notifications(
+        &self,
+        user_id: &str,
+        notification_ids: &[Uuid],
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 /// Port for WebSocket delivery via connection gateway.
-pub trait WebSocketSender {
+pub trait WebSocketSender: Send + Sync + 'static {
     /// Send notifications to users via WebSocket.
     ///
     /// Returns the set of users who successfully received the notification
@@ -127,7 +175,7 @@ pub trait WebSocketSender {
 use crate::domain::models::queue_message::EmailContent;
 
 /// Port for email delivery.
-pub trait EmailSender {
+pub trait EmailSender: Send + Sync + 'static {
     /// Send an email with pre-built content to a user.
     fn send_email(
         &self,
@@ -136,7 +184,7 @@ pub trait EmailSender {
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
-use crate::domain::models::queue_message::{QueueMessage, RawQueueMessage};
+use crate::domain::models::queue_message::{DeliverySuccess, QueueMessage, RawQueueMessage};
 
 /// Port for publishing notifications to delivery queue and receiving them.
 pub trait NotificationQueue: Send + Sync + 'static {
@@ -155,4 +203,18 @@ pub trait NotificationQueue: Send + Sync + 'static {
         &self,
         receipt_handle: &str,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Port for delivering notifications from the queue.
+///
+/// This trait defines the egress (outbound delivery) side of the notification
+/// system. Implementations poll the queue and deliver via WebSocket, push, and email.
+pub trait NotificationEgress: Send + Sync + 'static {
+    /// Poll the queue and attempt to deliver notifications.
+    ///
+    /// Returns results for each delivery attempt across all messages received.
+    /// Messages are automatically deleted from the queue after successful delivery.
+    fn poll_and_deliver(
+        &self,
+    ) -> impl Future<Output = Vec<Result<DeliverySuccess, Report>>> + Send;
 }

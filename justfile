@@ -52,7 +52,6 @@ stop-databases:
 import 'local_stack.just'
 
 # Sets up local database
-# Assumes postgres is running locally via `just run_dbs`
 setup_local_dbs:
   # run dbs detached
   just run_dbs -d
