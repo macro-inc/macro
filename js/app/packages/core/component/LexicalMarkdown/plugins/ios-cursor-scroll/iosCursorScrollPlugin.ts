@@ -57,6 +57,7 @@ export function iosCursorScrollPlugin(options: IosCursorScrollPluginOptions) {
     });
 
     return () => {
+      cancelAnimationFrame(rafId);
       removeUpdateListener();
       disposeRoot();
     };

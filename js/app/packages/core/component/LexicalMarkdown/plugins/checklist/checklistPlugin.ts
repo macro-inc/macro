@@ -91,7 +91,7 @@ function registerMouseEvents(editor: LexicalEditor) {
   }
 
   /**
-   * Prevent default on checkbox mousedown to avoid focus change.
+   * Prevent default on checkbox pointerdown to avoid focus change.
    */
   function pointerdown(e: PointerEvent) {
     wrapCheckboxMouseEvent(e, editor, (e) => {
