@@ -27,7 +27,10 @@ export type HistoryQueryResponse = {
   data: HistoryItem[];
 };
 
-export function transformHistoryItem(item: HistoryItem, rawName?: boolean): HistoryItem {
+export function transformHistoryItem(
+  item: HistoryItem,
+  rawName?: boolean
+): HistoryItem {
   const base = {
     id: item.id,
     name: rawName ? item.name : itemToSafeName(item),
