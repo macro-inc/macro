@@ -108,6 +108,7 @@ import {
   createFilesReadyHandler,
   getDragDropPosition,
 } from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
+import { iosCursorScrollPlugin } from '@core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
@@ -579,7 +580,8 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
         onVersionError: (error) => setEditorError(error),
       })
     )
-    .use(pinnedPropertiesPlugin());
+    .use(pinnedPropertiesPlugin())
+    .use(iosCursorScrollPlugin({ scrollContainer: () => md.scrollContainer }));
 
   if (ENABLE_MARKDOWN_LIVE_COLLABORATION) {
     const getBlockLoroManager = blockLoroManagerSignal.get;
