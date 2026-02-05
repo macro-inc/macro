@@ -3401,3 +3401,1014 @@ async fn test_exhaustive_entity_type_counts(pool: Pool<Postgres>) -> anyhow::Res
 
     Ok(())
 }
+
+// ============================================================================
+// Exhaustive expanded_dynamic_cursor_soup tests
+// Uses dynamic_query_exhaustive fixture.
+// ============================================================================
+
+// Fixture constants for dynamic_query_exhaustive
+const DYN_PROJECT_ROOT: &str = "aa000001-ffff-ffff-ffff-ffffffffffff";
+const DYN_PROJECT_MID: &str = "aa000002-ffff-ffff-ffff-ffffffffffff";
+const DYN_PROJECT_DEEP: &str = "aa000003-ffff-ffff-ffff-ffffffffffff";
+const DYN_PROJECT_ISOLATED: &str = "aa000004-ffff-ffff-ffff-ffffffffffff";
+const DYN_DOC_ROOT_PDF: &str = "bb000001-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const DYN_DOC_MID_DOCX: &str = "bb000002-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const DYN_DOC_DEEP_PDF: &str = "bb000003-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const DYN_DOC_STANDALONE_TXT: &str = "bb000004-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const DYN_DOC_DELETED: &str = "bb000005-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const DYN_DOC_TASK_COMPLETED: &str = "bb000006-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const DYN_DOC_TASK_INCOMPLETE: &str = "bb000007-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const DYN_DOC_TASK_NO_STATUS: &str = "bb000008-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const DYN_DOC_ISOLATED: &str = "bb000009-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const DYN_DOC_SHARED_MD: &str = "bb000010-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const DYN_CHAT_ROOT: &str = "cc000001-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const DYN_CHAT_STANDALONE: &str = "cc000002-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const DYN_CHAT_DELETED: &str = "cc000003-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const DYN_CHAT_ISOLATED: &str = "cc000004-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const DYN_CHAT_SHARED: &str = "cc000005-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+
+/// Helper to call expanded_dynamic_cursor_soup with common defaults
+async fn dyn_fetch(
+    db: &PgPool,
+    user: &str,
+    limit: u16,
+    sort: SimpleSortMethod,
+    filters: EntityFilterAst,
+    exclude_frecency: bool,
+) -> Result<Vec<SoupItem>, sqlx::Error> {
+    let user_id = MacroUserIdStr::parse_from_str(user).unwrap();
+    expanded_dynamic_cursor_soup(
+        db,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit,
+            cursor: Query::Sort(sort, filters),
+            exclude_frecency,
+        },
+    )
+    .await
+}
+
+// ---- Sort methods (4 tests) ----
+
+/// 1. Verify UpdatedAt sort order through the dynamic query.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("dynamic_query_exhaustive")
+    )
+)]
+async fn test_dyn_sort_updated_at(db: PgPool) -> anyhow::Result<()> {
+    let items = dyn_fetch(
+        &db,
+        "macro|user-1@test.com",
+        50,
+        SimpleSortMethod::UpdatedAt,
+        EntityFilterAst::mock_empty(),
+        false,
+    )
+    .await?;
+
+    let ids: Vec<Uuid> = items.iter().map(|i| i.id()).collect();
+
+    // updatedAt DESC:
+    // chat-standalone    2024-03-11
+    // doc-deep-pdf       2024-03-10
+    // chat-shared        2024-02-18
+    // project-deep       2024-02-12
+    // project-mid        2024-02-11
+    // project-root       2024-02-10
+    // chat-root          2024-02-09
+    // doc-shared-md      2024-02-08
+    // doc-task-no-status 2024-02-07
+    // doc-task-incomplete 2024-02-06
+    // doc-task-completed 2024-02-05
+    // doc-standalone-txt 2024-02-04
+    // doc-mid-docx       2024-02-02
+    // doc-root-pdf       2024-02-01
+    let expected: Vec<Uuid> = [
+        DYN_CHAT_STANDALONE,
+        DYN_DOC_DEEP_PDF,
+        DYN_CHAT_SHARED,
+        DYN_PROJECT_DEEP,
+        DYN_PROJECT_MID,
+        DYN_PROJECT_ROOT,
+        DYN_CHAT_ROOT,
+        DYN_DOC_SHARED_MD,
+        DYN_DOC_TASK_NO_STATUS,
+        DYN_DOC_TASK_INCOMPLETE,
+        DYN_DOC_TASK_COMPLETED,
+        DYN_DOC_STANDALONE_TXT,
+        DYN_DOC_MID_DOCX,
+        DYN_DOC_ROOT_PDF,
+    ]
+    .iter()
+    .map(|s| uuid(s))
+    .collect();
+
+    assert_eq!(ids, expected, "UpdatedAt sort order is wrong");
+    Ok(())
+}
+
+/// 2. Verify CreatedAt sort order through the dynamic query.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("dynamic_query_exhaustive")
+    )
+)]
+async fn test_dyn_sort_created_at(db: PgPool) -> anyhow::Result<()> {
+    let items = dyn_fetch(
+        &db,
+        "macro|user-1@test.com",
+        50,
+        SimpleSortMethod::CreatedAt,
+        EntityFilterAst::mock_empty(),
+        false,
+    )
+    .await?;
+
+    let ids: Vec<Uuid> = items.iter().map(|i| i.id()).collect();
+
+    // createdAt DESC:
+    // chat-shared        2024-01-18
+    // project-deep       2024-01-12
+    // project-mid        2024-01-11
+    // project-root       2024-01-10
+    // chat-standalone    2024-01-09
+    // chat-root          2024-01-08 (id cc000001 > bb000010)
+    // doc-shared-md      2024-01-08
+    // doc-task-no-status 2024-01-07
+    // doc-task-incomplete 2024-01-06
+    // doc-task-completed 2024-01-05
+    // doc-standalone-txt 2024-01-04
+    // doc-deep-pdf       2024-01-03
+    // doc-mid-docx       2024-01-02
+    // doc-root-pdf       2024-01-01
+    let expected: Vec<Uuid> = [
+        DYN_CHAT_SHARED,
+        DYN_PROJECT_DEEP,
+        DYN_PROJECT_MID,
+        DYN_PROJECT_ROOT,
+        DYN_CHAT_STANDALONE,
+        DYN_CHAT_ROOT,
+        DYN_DOC_SHARED_MD,
+        DYN_DOC_TASK_NO_STATUS,
+        DYN_DOC_TASK_INCOMPLETE,
+        DYN_DOC_TASK_COMPLETED,
+        DYN_DOC_STANDALONE_TXT,
+        DYN_DOC_DEEP_PDF,
+        DYN_DOC_MID_DOCX,
+        DYN_DOC_ROOT_PDF,
+    ]
+    .iter()
+    .map(|s| uuid(s))
+    .collect();
+
+    assert_eq!(ids, expected, "CreatedAt sort order is wrong");
+    Ok(())
+}
+
+/// 3. Verify ViewedAt sort order through the dynamic query.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("dynamic_query_exhaustive")
+    )
+)]
+async fn test_dyn_sort_viewed_at(db: PgPool) -> anyhow::Result<()> {
+    let items = dyn_fetch(
+        &db,
+        "macro|user-1@test.com",
+        50,
+        SimpleSortMethod::ViewedAt,
+        EntityFilterAst::mock_empty(),
+        false,
+    )
+    .await?;
+
+    let ids: Vec<Uuid> = items.iter().map(|i| i.id()).collect();
+
+    // With history (UserHistory.updatedAt DESC):
+    //   doc-mid-docx         2024-03-08
+    //   doc-task-no-status   2024-03-07
+    //   doc-standalone-txt   2024-03-06
+    //   doc-root-pdf         2024-03-05
+    //   doc-task-completed   2024-03-04
+    //   chat-root            2024-03-03
+    //   project-root         2024-03-02
+    //   project-deep         2024-03-01
+    // Without history (epoch, tie by id DESC):
+    //   cc000005 chat-shared
+    //   cc000002 chat-standalone
+    //   bb000010 doc-shared-md
+    //   bb000007 doc-task-incomplete
+    //   bb000003 doc-deep-pdf
+    //   aa000002 project-mid
+    let expected: Vec<Uuid> = [
+        DYN_DOC_MID_DOCX,
+        DYN_DOC_TASK_NO_STATUS,
+        DYN_DOC_STANDALONE_TXT,
+        DYN_DOC_ROOT_PDF,
+        DYN_DOC_TASK_COMPLETED,
+        DYN_CHAT_ROOT,
+        DYN_PROJECT_ROOT,
+        DYN_PROJECT_DEEP,
+        DYN_CHAT_SHARED,
+        DYN_CHAT_STANDALONE,
+        DYN_DOC_SHARED_MD,
+        DYN_DOC_TASK_INCOMPLETE,
+        DYN_DOC_DEEP_PDF,
+        DYN_PROJECT_MID,
+    ]
+    .iter()
+    .map(|s| uuid(s))
+    .collect();
+
+    assert_eq!(ids, expected, "ViewedAt sort order is wrong");
+    Ok(())
+}
+
+/// 4. Verify ViewedUpdated sort order through the dynamic query.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("dynamic_query_exhaustive")
+    )
+)]
+async fn test_dyn_sort_viewed_updated(db: PgPool) -> anyhow::Result<()> {
+    let items = dyn_fetch(
+        &db,
+        "macro|user-1@test.com",
+        50,
+        SimpleSortMethod::ViewedUpdated,
+        EntityFilterAst::mock_empty(),
+        false,
+    )
+    .await?;
+
+    let ids: Vec<Uuid> = items.iter().map(|i| i.id()).collect();
+
+    // COALESCE(uh.updatedAt, item.updatedAt) DESC:
+    //   chat-standalone      no history -> updatedAt 2024-03-11
+    //   doc-deep-pdf         no history -> updatedAt 2024-03-10
+    //   doc-mid-docx         history 2024-03-08
+    //   doc-task-no-status   history 2024-03-07
+    //   doc-standalone-txt   history 2024-03-06
+    //   doc-root-pdf         history 2024-03-05
+    //   doc-task-completed   history 2024-03-04
+    //   chat-root            history 2024-03-03
+    //   project-root         history 2024-03-02
+    //   project-deep         history 2024-03-01
+    //   chat-shared          no history -> updatedAt 2024-02-18
+    //   project-mid          no history -> updatedAt 2024-02-11
+    //   doc-shared-md        no history -> updatedAt 2024-02-08
+    //   doc-task-incomplete  no history -> updatedAt 2024-02-06
+    let expected: Vec<Uuid> = [
+        DYN_CHAT_STANDALONE,
+        DYN_DOC_DEEP_PDF,
+        DYN_DOC_MID_DOCX,
+        DYN_DOC_TASK_NO_STATUS,
+        DYN_DOC_STANDALONE_TXT,
+        DYN_DOC_ROOT_PDF,
+        DYN_DOC_TASK_COMPLETED,
+        DYN_CHAT_ROOT,
+        DYN_PROJECT_ROOT,
+        DYN_PROJECT_DEEP,
+        DYN_CHAT_SHARED,
+        DYN_PROJECT_MID,
+        DYN_DOC_SHARED_MD,
+        DYN_DOC_TASK_INCOMPLETE,
+    ]
+    .iter()
+    .map(|s| uuid(s))
+    .collect();
+
+    assert_eq!(ids, expected, "ViewedUpdated sort order is wrong");
+    Ok(())
+}
+
+// ---- Access control & deleted items (3 tests) ----
+
+/// 5. Deleted doc and chat never appear in dynamic query results.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("dynamic_query_exhaustive")
+    )
+)]
+async fn test_dyn_deleted_items_excluded(db: PgPool) -> anyhow::Result<()> {
+    let items = dyn_fetch(
+        &db,
+        "macro|user-1@test.com",
+        50,
+        SimpleSortMethod::UpdatedAt,
+        EntityFilterAst::mock_empty(),
+        false,
+    )
+    .await?;
+
+    let ids: HashSet<Uuid> = items.iter().map(|i| i.id()).collect();
+
+    assert!(
+        !ids.contains(&uuid(DYN_DOC_DELETED)),
+        "Deleted document must not appear"
+    );
+    assert!(
+        !ids.contains(&uuid(DYN_CHAT_DELETED)),
+        "Deleted chat must not appear"
+    );
+
+    Ok(())
+}
+
+/// 6. Isolated project/doc/chat excluded for user-1 in dynamic query.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("dynamic_query_exhaustive")
+    )
+)]
+async fn test_dyn_access_control_excludes_isolated(db: PgPool) -> anyhow::Result<()> {
+    let items = dyn_fetch(
+        &db,
+        "macro|user-1@test.com",
+        50,
+        SimpleSortMethod::UpdatedAt,
+        EntityFilterAst::mock_empty(),
+        false,
+    )
+    .await?;
+
+    let ids: HashSet<Uuid> = items.iter().map(|i| i.id()).collect();
+
+    assert!(
+        !ids.contains(&uuid(DYN_PROJECT_ISOLATED)),
+        "Isolated project must not appear for user-1"
+    );
+    assert!(
+        !ids.contains(&uuid(DYN_DOC_ISOLATED)),
+        "Isolated doc must not appear for user-1"
+    );
+    assert!(
+        !ids.contains(&uuid(DYN_CHAT_ISOLATED)),
+        "Isolated chat must not appear for user-1"
+    );
+
+    Ok(())
+}
+
+/// 7. User-2 only sees isolated items through the dynamic query.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("dynamic_query_exhaustive")
+    )
+)]
+async fn test_dyn_user_isolation(db: PgPool) -> anyhow::Result<()> {
+    let items = dyn_fetch(
+        &db,
+        "macro|user-2@test.com",
+        50,
+        SimpleSortMethod::UpdatedAt,
+        EntityFilterAst::mock_empty(),
+        false,
+    )
+    .await?;
+
+    let ids: HashSet<Uuid> = items.iter().map(|i| i.id()).collect();
+
+    let expected: HashSet<Uuid> = [DYN_PROJECT_ISOLATED, DYN_DOC_ISOLATED, DYN_CHAT_ISOLATED]
+        .iter()
+        .map(|s| uuid(s))
+        .collect();
+
+    assert_eq!(
+        ids, expected,
+        "User-2 should only see isolated project, its doc, and its chat"
+    );
+
+    Ok(())
+}
+
+// ---- Filter types (3 tests) ----
+
+/// 8. Filter documents by owner (user-2) returns only doc-shared-md.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("dynamic_query_exhaustive")
+    )
+)]
+async fn test_dyn_filter_doc_by_owner(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{DocumentFilters, EntityFilters};
+
+    let entity_filters = EntityFilters {
+        document_filters: DocumentFilters {
+            owners: vec!["macro|user-2@test.com".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+    let items = dyn_fetch(
+        &db,
+        "macro|user-1@test.com",
+        50,
+        SimpleSortMethod::UpdatedAt,
+        filters,
+        false,
+    )
+    .await?;
+
+    let doc_ids: Vec<Uuid> = items
+        .iter()
+        .filter_map(|i| match i {
+            SoupItem::Document(d) => Some(d.id),
+            _ => None,
+        })
+        .collect();
+
+    // Only doc-shared-md is owned by user-2 and accessible to user-1
+    assert_eq!(doc_ids.len(), 1, "Should get exactly 1 document");
+    assert_eq!(doc_ids[0], uuid(DYN_DOC_SHARED_MD));
+
+    // Chats and projects should still be present (unfiltered)
+    let chat_count = items
+        .iter()
+        .filter(|i| matches!(i, SoupItem::Chat(_)))
+        .count();
+    let project_count = items
+        .iter()
+        .filter(|i| matches!(i, SoupItem::Project(_)))
+        .count();
+    assert_eq!(chat_count, 3, "Should get all 3 chats");
+    assert_eq!(project_count, 3, "Should get all 3 projects");
+
+    Ok(())
+}
+
+/// 9. Filter documents by project ID returns only docs in that project.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("dynamic_query_exhaustive")
+    )
+)]
+async fn test_dyn_filter_doc_by_project(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{DocumentFilters, EntityFilters};
+
+    // Filter for documents in project-deep only
+    let entity_filters = EntityFilters {
+        document_filters: DocumentFilters {
+            project_ids: vec![DYN_PROJECT_DEEP.to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+    let items = dyn_fetch(
+        &db,
+        "macro|user-1@test.com",
+        50,
+        SimpleSortMethod::UpdatedAt,
+        filters,
+        false,
+    )
+    .await?;
+
+    let doc_ids: Vec<Uuid> = items
+        .iter()
+        .filter_map(|i| match i {
+            SoupItem::Document(d) => Some(d.id),
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(doc_ids.len(), 1, "Should get exactly 1 document in deep");
+    assert_eq!(doc_ids[0], uuid(DYN_DOC_DEEP_PDF));
+
+    Ok(())
+}
+
+/// 10. Filter documents by multiple file types (pdf + docx).
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("dynamic_query_exhaustive")
+    )
+)]
+async fn test_dyn_filter_multiple_file_types(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{DocumentFilters, EntityFilters};
+
+    let entity_filters = EntityFilters {
+        document_filters: DocumentFilters {
+            file_types: vec!["pdf".to_string(), "docx".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+    let items = dyn_fetch(
+        &db,
+        "macro|user-1@test.com",
+        50,
+        SimpleSortMethod::UpdatedAt,
+        filters,
+        false,
+    )
+    .await?;
+
+    let doc_ids: HashSet<Uuid> = items
+        .iter()
+        .filter_map(|i| match i {
+            SoupItem::Document(d) => Some(d.id),
+            _ => None,
+        })
+        .collect();
+
+    // Accessible pdf docs: doc-root-pdf, doc-deep-pdf
+    // Accessible docx docs: doc-mid-docx
+    let expected_docs: HashSet<Uuid> = [DYN_DOC_ROOT_PDF, DYN_DOC_MID_DOCX, DYN_DOC_DEEP_PDF]
+        .iter()
+        .map(|s| uuid(s))
+        .collect();
+
+    assert_eq!(
+        doc_ids, expected_docs,
+        "Should get exactly the pdf and docx documents"
+    );
+
+    Ok(())
+}
+
+// ---- Task completion & document fields (2 tests) ----
+
+/// 11. Task documents should have correct is_completed values.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("dynamic_query_exhaustive")
+    )
+)]
+async fn test_dyn_task_completion_status(db: PgPool) -> anyhow::Result<()> {
+    use models_soup::document::SoupDocumentSubType;
+
+    let items = dyn_fetch(
+        &db,
+        "macro|user-1@test.com",
+        50,
+        SimpleSortMethod::UpdatedAt,
+        EntityFilterAst::mock_empty(),
+        false,
+    )
+    .await?;
+
+    let items_map: std::collections::HashMap<Uuid, &SoupItem> =
+        items.iter().map(|i| (i.id(), i)).collect();
+
+    // Completed task
+    let doc = unwrap_enum!(items_map[&uuid(DYN_DOC_TASK_COMPLETED)], SoupItem::Document);
+    match &doc.sub_type {
+        Some(SoupDocumentSubType::Task { is_completed }) => {
+            assert!(is_completed, "Completed task should have is_completed=true");
+        }
+        other => panic!("Expected Task sub_type, got {:?}", other),
+    }
+
+    // Incomplete task (status = In Progress)
+    let doc = unwrap_enum!(
+        items_map[&uuid(DYN_DOC_TASK_INCOMPLETE)],
+        SoupItem::Document
+    );
+    match &doc.sub_type {
+        Some(SoupDocumentSubType::Task { is_completed }) => {
+            assert!(
+                !is_completed,
+                "Incomplete task should have is_completed=false"
+            );
+        }
+        other => panic!("Expected Task sub_type, got {:?}", other),
+    }
+
+    // Task with no status property
+    let doc = unwrap_enum!(items_map[&uuid(DYN_DOC_TASK_NO_STATUS)], SoupItem::Document);
+    match &doc.sub_type {
+        Some(SoupDocumentSubType::Task { is_completed }) => {
+            assert!(
+                !is_completed,
+                "Task with no status should have is_completed=false"
+            );
+        }
+        other => panic!("Expected Task sub_type, got {:?}", other),
+    }
+
+    // Non-task document
+    let doc = unwrap_enum!(items_map[&uuid(DYN_DOC_ROOT_PDF)], SoupItem::Document);
+    assert!(
+        doc.sub_type.is_none(),
+        "Non-task document should have sub_type=None"
+    );
+
+    Ok(())
+}
+
+/// 12. Document fields (sha, file_type, viewed_at, project_id) populated correctly.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("dynamic_query_exhaustive")
+    )
+)]
+async fn test_dyn_document_fields(db: PgPool) -> anyhow::Result<()> {
+    let items = dyn_fetch(
+        &db,
+        "macro|user-1@test.com",
+        50,
+        SimpleSortMethod::UpdatedAt,
+        EntityFilterAst::mock_empty(),
+        false,
+    )
+    .await?;
+
+    let items_map: std::collections::HashMap<Uuid, &SoupItem> =
+        items.iter().map(|i| (i.id(), i)).collect();
+
+    // doc-root-pdf: pdf, sha-root-pdf, has history, in project-root
+    let doc = unwrap_enum!(items_map[&uuid(DYN_DOC_ROOT_PDF)], SoupItem::Document);
+    assert_eq!(doc.file_type.as_deref(), Some("pdf"));
+    assert_eq!(doc.sha.as_deref(), Some("sha-root-pdf"));
+    assert!(doc.viewed_at.is_some(), "doc-root-pdf has history");
+    assert_eq!(doc.project_id, Some(uuid(DYN_PROJECT_ROOT)));
+
+    // doc-mid-docx: docx, sha-mid-docx, has history, in project-mid
+    let doc = unwrap_enum!(items_map[&uuid(DYN_DOC_MID_DOCX)], SoupItem::Document);
+    assert_eq!(doc.file_type.as_deref(), Some("docx"));
+    assert_eq!(doc.sha.as_deref(), Some("sha-mid-docx"));
+    assert!(doc.viewed_at.is_some(), "doc-mid-docx has history");
+    assert_eq!(doc.project_id, Some(uuid(DYN_PROJECT_MID)));
+
+    // doc-standalone-txt: txt, sha-standalone-txt, has history, no project
+    let doc = unwrap_enum!(items_map[&uuid(DYN_DOC_STANDALONE_TXT)], SoupItem::Document);
+    assert_eq!(doc.file_type.as_deref(), Some("txt"));
+    assert_eq!(doc.sha.as_deref(), Some("sha-standalone-txt"));
+    assert!(doc.viewed_at.is_some(), "doc-standalone-txt has history");
+    assert_eq!(doc.project_id, None);
+
+    // doc-deep-pdf: pdf, no history
+    let doc = unwrap_enum!(items_map[&uuid(DYN_DOC_DEEP_PDF)], SoupItem::Document);
+    assert_eq!(doc.file_type.as_deref(), Some("pdf"));
+    assert!(doc.viewed_at.is_none(), "doc-deep-pdf has no history");
+    assert_eq!(doc.project_id, Some(uuid(DYN_PROJECT_DEEP)));
+
+    // doc-shared-md: md, owned by user-2
+    let doc = unwrap_enum!(items_map[&uuid(DYN_DOC_SHARED_MD)], SoupItem::Document);
+    assert_eq!(doc.file_type.as_deref(), Some("md"));
+    assert_eq!(doc.sha.as_deref(), Some("sha-shared-md"));
+    assert_eq!(doc.project_id, Some(uuid(DYN_PROJECT_ROOT)));
+
+    Ok(())
+}
+
+// ---- Pagination (2 tests) ----
+
+/// 13. Walk all items limit=1, verify no dupes, matches bulk fetch order.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("dynamic_query_exhaustive")
+    )
+)]
+async fn test_dyn_paginate_one_at_a_time(db: PgPool) -> anyhow::Result<()> {
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+    let sort = SimpleSortMethod::UpdatedAt;
+    let filters = EntityFilterAst::mock_empty();
+
+    let mut all_ids: Vec<Uuid> = Vec::new();
+    let mut current_query: Query<Uuid, SimpleSortMethod, EntityFilterAst> =
+        Query::Sort(sort, filters.clone());
+
+    loop {
+        let result = expanded_dynamic_cursor_soup(
+            &db,
+            ExpandedDynamicCursorArgs {
+                user_id: user_id.copied(),
+                limit: 1,
+                cursor: current_query,
+                exclude_frecency: false,
+            },
+        )
+        .await?
+        .into_iter()
+        .paginate_on(1, sort)
+        .filter_on(filters.clone())
+        .into_page();
+
+        all_ids.extend(result.items.iter().map(|i| i.id()));
+
+        match result.next_cursor {
+            Some(cursor) => {
+                let decoded = cursor.decode_json().unwrap();
+                current_query = Query::Cursor(models_pagination::Cursor {
+                    id: decoded.id,
+                    limit: decoded.limit,
+                    val: decoded.val,
+                    filter: decoded.filter,
+                });
+            }
+            None => break,
+        }
+    }
+
+    assert_eq!(all_ids.len(), 14, "Should walk through all 14 items");
+
+    let unique: HashSet<Uuid> = all_ids.iter().copied().collect();
+    assert_eq!(
+        unique.len(),
+        14,
+        "No duplicates when paginating one at a time"
+    );
+
+    // Verify order matches a single large fetch
+    let all_at_once = dyn_fetch(
+        &db,
+        "macro|user-1@test.com",
+        50,
+        sort,
+        EntityFilterAst::mock_empty(),
+        false,
+    )
+    .await?;
+    let expected_ids: Vec<Uuid> = all_at_once.iter().map(|i| i.id()).collect();
+    assert_eq!(
+        all_ids, expected_ids,
+        "Paginated order should match single-fetch order"
+    );
+
+    Ok(())
+}
+
+/// 14. Paginate through filtered results, verify filter consistency and no dupes.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("dynamic_query_exhaustive")
+    )
+)]
+async fn test_dyn_paginate_with_filters(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{DocumentFilters, EntityFilters};
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+    let sort = SimpleSortMethod::CreatedAt;
+    let page_size: u16 = 3;
+
+    let entity_filters = EntityFilters {
+        document_filters: DocumentFilters {
+            file_types: vec!["pdf".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let make_filters = || {
+        EntityFilterAst::new_from_filters(entity_filters.clone())
+            .unwrap()
+            .unwrap()
+    };
+
+    let mut all_items: Vec<SoupItem> = Vec::new();
+    let mut current_query: Query<Uuid, SimpleSortMethod, EntityFilterAst> =
+        Query::Sort(sort, make_filters());
+
+    loop {
+        let result = expanded_dynamic_cursor_soup(
+            &db,
+            ExpandedDynamicCursorArgs {
+                user_id: user_id.copied(),
+                limit: page_size,
+                cursor: current_query,
+                exclude_frecency: false,
+            },
+        )
+        .await?
+        .into_iter()
+        .paginate_on(page_size as usize, sort)
+        .filter_on(make_filters())
+        .into_page();
+
+        all_items.extend(result.items);
+
+        match result.next_cursor {
+            Some(cursor) => {
+                let decoded = cursor.decode_json()?;
+                current_query = Query::Cursor(models_pagination::Cursor {
+                    id: decoded.id,
+                    limit: decoded.limit,
+                    val: decoded.val,
+                    filter: decoded.filter,
+                });
+            }
+            None => break,
+        }
+    }
+
+    // Verify all documents are PDFs (filter consistency)
+    for item in &all_items {
+        if let SoupItem::Document(doc) = item {
+            assert_eq!(
+                doc.file_type.as_deref(),
+                Some("pdf"),
+                "All documents should be PDFs"
+            );
+        }
+    }
+
+    // Verify no duplicates
+    let all_ids: Vec<Uuid> = all_items.iter().map(|i| i.id()).collect();
+    let unique: HashSet<Uuid> = all_ids.iter().copied().collect();
+    assert_eq!(
+        all_ids.len(),
+        unique.len(),
+        "Should have no duplicate items across pages"
+    );
+
+    // Should get 2 pdf docs + 3 chats + 3 projects = 8 total
+    let doc_count = all_items
+        .iter()
+        .filter(|i| matches!(i, SoupItem::Document(_)))
+        .count();
+    assert_eq!(doc_count, 2, "Should get exactly 2 PDF documents");
+
+    Ok(())
+}
+
+// ---- Frecency (2 tests) ----
+
+/// 15. exclude_frecency=true removes items with frecency records.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("dynamic_query_exhaustive")
+    )
+)]
+async fn test_dyn_exclude_frecency(db: PgPool) -> anyhow::Result<()> {
+    let items = dyn_fetch(
+        &db,
+        "macro|user-1@test.com",
+        50,
+        SimpleSortMethod::UpdatedAt,
+        EntityFilterAst::mock_empty(),
+        true, // exclude_frecency
+    )
+    .await?;
+
+    let ids: HashSet<Uuid> = items.iter().map(|i| i.id()).collect();
+
+    // doc-root-pdf and chat-root have frecency records and should be excluded
+    assert!(
+        !ids.contains(&uuid(DYN_DOC_ROOT_PDF)),
+        "doc-root-pdf should be excluded (has frecency)"
+    );
+    assert!(
+        !ids.contains(&uuid(DYN_CHAT_ROOT)),
+        "chat-root should be excluded (has frecency)"
+    );
+
+    // All other accessible items should still be present (14 - 2 = 12)
+    assert_eq!(
+        items.len(),
+        12,
+        "Should get 12 items after frecency exclusion"
+    );
+
+    // Verify a non-frecency item is still present
+    assert!(
+        ids.contains(&uuid(DYN_DOC_MID_DOCX)),
+        "doc-mid-docx should still be present"
+    );
+
+    Ok(())
+}
+
+/// 16. exclude_frecency works with all 4 sort methods.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("dynamic_query_exhaustive")
+    )
+)]
+async fn test_dyn_exclude_frecency_all_sort_methods(db: PgPool) -> anyhow::Result<()> {
+    let frecency_ids: HashSet<Uuid> = [DYN_DOC_ROOT_PDF, DYN_CHAT_ROOT]
+        .iter()
+        .map(|s| uuid(s))
+        .collect();
+
+    for sort in [
+        SimpleSortMethod::UpdatedAt,
+        SimpleSortMethod::CreatedAt,
+        SimpleSortMethod::ViewedAt,
+        SimpleSortMethod::ViewedUpdated,
+    ] {
+        let items = dyn_fetch(
+            &db,
+            "macro|user-1@test.com",
+            50,
+            sort,
+            EntityFilterAst::mock_empty(),
+            true,
+        )
+        .await?;
+
+        let ids: HashSet<Uuid> = items.iter().map(|i| i.id()).collect();
+
+        for fid in &frecency_ids {
+            assert!(
+                !ids.contains(fid),
+                "Sort {:?}: item {} should be excluded by frecency filter",
+                sort,
+                fid
+            );
+        }
+
+        assert_eq!(
+            items.len(),
+            12,
+            "Sort {:?}: should get 12 items after frecency exclusion",
+            sort
+        );
+    }
+
+    Ok(())
+}
+
+// ---- Edge cases (1 test) ----
+
+/// 17. All 3 entity types filtered to nothing returns empty vec.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("dynamic_query_exhaustive")
+    )
+)]
+async fn test_dyn_all_types_filtered_to_empty(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{ChatFilters, DocumentFilters, EntityFilters, ProjectFilters};
+
+    let entity_filters = EntityFilters {
+        document_filters: DocumentFilters {
+            document_ids: vec!["00000000-0000-0000-0000-000000000000".to_string()],
+            ..Default::default()
+        },
+        chat_filters: ChatFilters {
+            chat_ids: vec!["00000000-0000-0000-0000-000000000000".to_string()],
+            ..Default::default()
+        },
+        project_filters: ProjectFilters {
+            project_ids: vec!["00000000-0000-0000-0000-000000000000".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+    let items = dyn_fetch(
+        &db,
+        "macro|user-1@test.com",
+        50,
+        SimpleSortMethod::UpdatedAt,
+        filters,
+        false,
+    )
+    .await?;
+
+    assert!(
+        items.is_empty(),
+        "All types filtered to nothing should return empty"
+    );
+
+    Ok(())
+}
