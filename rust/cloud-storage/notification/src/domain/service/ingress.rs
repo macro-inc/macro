@@ -6,7 +6,7 @@
 use crate::domain::models::apple::{APNSPushNotification, Aps};
 use crate::domain::models::mobile::{MessageAttributes, PushType};
 use crate::domain::models::queue_message::{
-    APNSTargets, ClearPushIdentifier, ConnGatewayNotification, EmailNotification, Node,
+    APNSTargets, ClearPushIdentifier, ConnGatewayNotification, EmailNotification, Node, Notif,
     NotificationChannel, QueueMessage,
 };
 use crate::domain::models::request::{
@@ -210,10 +210,13 @@ where
 
         // Build queue messages first so we can extract the APNS collapse key
         let mut request = request;
-        let (queue_messages, apns_collapse_key) = self.build_queue_message(&mut request).await?;
+
+        let notification_id = Uuid::now_v7();
+        let (queue_messages, apns_collapse_key) = self
+            .build_queue_message(notification_id, &mut request)
+            .await?;
 
         // Create notification in DB (with collapse key if APNS was built)
-        let notification_id = Uuid::now_v7();
         let created = self
             .repository
             .create_notification(
@@ -371,6 +374,7 @@ where
     ///   Returns `(queue_messages, apns_collapse_key)`.
     async fn build_queue_message<'a, T: Notification + Clone, U: Serialize + Send + Sync>(
         &self,
+        notification_id: Uuid,
         notification: &mut SendNotificationRequest<'a, T, U>,
     ) -> Result<(Vec<QueueMessage<'a, T, U>>, Option<String>), Report<SendNotificationError>> {
         let rate_limit = notification.req.get_rate_limit()?;
@@ -385,7 +389,7 @@ where
                 rate_limit: rate_limit.clone(),
                 content: Node {
                     notif: NotificationChannel::ConnGateway(ConnGatewayNotification {
-                        notif: notification.req.notification.clone(),
+                        notif: Notif::clone_from_request(notification_id, notification),
                         recipients: notification.req.recipient_ids.iter().cloned().collect(),
                     }),
                     on_failure: None,

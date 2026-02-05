@@ -93,9 +93,7 @@ where
         mut recursion_tail: Vec<Result<DeliverySuccess, Report>>,
     ) -> Vec<Result<DeliverySuccess, Report>> {
         let result = match &node.notif {
-            NotificationChannel::ConnGateway(conn) => {
-                self.deliver_conn_gateway(message_type, conn).await
-            }
+            NotificationChannel::ConnGateway(conn) => self.deliver_conn_gateway(conn).await,
             NotificationChannel::Ios(apns) => self.deliver_ios(apns).await,
             NotificationChannel::Email(email) => self.deliver_email(email).await,
         };
@@ -116,11 +114,10 @@ where
     /// Deliver via connection gateway (WebSocket).
     async fn deliver_conn_gateway(
         &self,
-        message_type: &str,
         conn: &ConnGatewayNotification<'static, serde_json::Value>,
     ) -> Result<DeliverySuccess, Report> {
         self.websocket
-            .send_notifications(message_type, &conn.recipients, &conn.notif)
+            .send_notifications(&conn.recipients, &conn.notif)
             .await?;
         Ok(DeliverySuccess::ConnGateway)
     }
