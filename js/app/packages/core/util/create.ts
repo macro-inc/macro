@@ -148,79 +148,47 @@ export async function createTask(
 export async function createCodeFileFromText({
   code,
   extension,
-  title,
-}: {
-  code: string;
-  title?: string;
-  extension: CodeFileExtension;
-}) {
-  const encoder = new TextEncoder();
-  const buffer = encoder.encode(code);
-  const sha = await contentHash(buffer);
-  if (!isCodeEditorExtensionSupported(extension))
-    return err(
-      'UNSUPPORTED_EXTENSION',
-      `${extension} is not supported by the code block`
-    );
-  // mime types for code blocks are all text, and the backend doesn't care
-  const mimeType = 'text/plain';
-
-  const maybeCode = await storageServiceClient.createDocument({
-    documentName: title ?? 'New Code File',
-    fileType: extension,
-    sha: sha,
-  });
-
-  invalidateUserQuota();
-
-  // TODO: this is kind of odd, since there's an actual code we could use for the paywall, 402 Payment Required
-  if (isErr(maybeCode) && maybeCode[0][0].message.includes('403')) {
-    return err('UNAUTHORIZED', maybeCode[0][0].message);
-  }
-  if (isErr(maybeCode)) return err('SERVER_ERROR', maybeCode[0][0].message);
-  const [, document] = maybeCode;
-  const uploadResult = await uploadToPresignedUrl({
-    presignedUrl: document.presignedUrl,
-    buffer,
-    sha,
-    type: mimeType,
-  });
-  if (isErr(uploadResult)) return err('SERVER_ERROR', 'Failed to upload file');
-  postNewHistoryItem('document', document.metadata.documentId);
-  return ok({ documentId: document.metadata.documentId });
-}
-
-export async function createCodeFileFromTextWithLanguage({
-  code,
   language,
   title,
 }: {
   code: string;
   title?: string;
-  language: string;
+  extension?: CodeFileExtension;
+  language?: string;
 }) {
   const encoder = new TextEncoder();
   const buffer = encoder.encode(code);
   const sha = await contentHash(buffer);
-  if (!isCodeEditorLanguageSupported(language))
-    return err(
-      'UNSUPPORTED_LANGUAGE',
-      `${language} is not supported by the code block`
-    );
-  // mime types for code blocks are all text, and the backend doesn't care
-  const mimeType = 'text/plain';
 
-  const extension = getExtensionForLanguage(language);
-  if (!extension) {
-    return err(
-      'UNSUPPORTED_LANGUAGE',
-      `Could not find file extension for language: ${language}`
-    );
+  let finalExtension: CodeFileExtension | undefined = extension;
+
+  if (language && !extension) {
+    if (!isCodeEditorLanguageSupported(language))
+      return err(
+        'UNSUPPORTED_LANGUAGE',
+        `${language} is not supported by the code block`
+      );
+
+    finalExtension = getExtensionForLanguage(language);
+    if (!finalExtension) {
+      return err(
+        'UNSUPPORTED_LANGUAGE',
+        `Could not find file extension for language: ${language}`
+      );
+    }
   }
+
+  if (!finalExtension || !isCodeEditorExtensionSupported(finalExtension))
+    return err(
+      'UNSUPPORTED_EXTENSION',
+      `${finalExtension ?? 'undefined'} is not supported by the code block`
+    );
+
+  const mimeType = 'text/plain';
 
   const maybeCode = await storageServiceClient.createDocument({
     documentName: title ?? 'New Code File',
-    fileType: extension,
+    fileType: finalExtension,
     sha: sha,
   });
 
