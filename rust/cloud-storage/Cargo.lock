@@ -5875,6 +5875,7 @@ dependencies = [
  "model_notifications",
  "models_pagination",
  "serde",
+ "serde_json",
  "sqlx",
  "tracing",
  "uuid",
