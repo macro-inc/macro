@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createFreshSearch, normalizeFuzzyScore } from './freshSort';
+import type { LastInteractionTimestamp } from '@core/user/types';
 
 interface MockItem {
   id: string;
@@ -7,6 +8,11 @@ interface MockItem {
   type: 'item' | 'channel';
   viewedAt?: number;
   updatedAt?: number;
+  lastInteraction?: LastInteractionTimestamp;
+}
+
+interface User extends MockItem {
+  email: string;
 }
 
 function createSearch(opts: { useViewedAt?: boolean; channelBoost?: number }) {
@@ -449,27 +455,22 @@ describe('boostFn functionality', () => {
 });
 
 describe('DM activity timestamps for user ranking', () => {
-  interface UserWithInteraction extends MockItem {
-    email: string;
-    lastInteraction?: number;
-  }
-
   it('ranks users with recent DM activity higher', () => {
     const now = Date.now();
-    const users: UserWithInteraction[] = [
+    const users: User[] = [
       {
         id: '1',
         name: 'Alice Johnson',
         type: 'item',
         email: 'alice@example.com',
-        lastInteraction: now / 1000 - 86400, // 1 day ago (unix timestamp in seconds)
+        lastInteraction: now - 86400000, // 1 day ago (unix timestamp in milliseconds)
       },
       {
         id: '2',
         name: 'Bob Smith',
         type: 'item',
         email: 'bob@example.com',
-        lastInteraction: now / 1000 - 3600, // 1 hour ago
+        lastInteraction: now - 3600000, // 1 hour ago
       },
       {
         id: '3',
@@ -480,7 +481,7 @@ describe('DM activity timestamps for user ranking', () => {
       },
     ];
 
-    const search = createFreshSearch<UserWithInteraction>(
+    const search = createFreshSearch<User>(
       {
         fuzzyWeight: 0.6,
         timeWeight: 0.3,
@@ -503,31 +504,31 @@ describe('DM activity timestamps for user ranking', () => {
 
   it('combines DM activity with fuzzy search', () => {
     const now = Date.now();
-    const users: UserWithInteraction[] = [
+    const users: User[] = [
       {
         id: '1',
         name: 'Alice Anderson',
         type: 'item',
         email: 'alice@example.com',
-        lastInteraction: now / 1000 - 86400, // 1 day ago
+        lastInteraction: now - 86400000, // 1 day ago
       },
       {
         id: '2',
         name: 'Alicia Martinez',
         type: 'item',
         email: 'alicia@example.com',
-        lastInteraction: now / 1000 - 3600, // 1 hour ago
+        lastInteraction: now - 3600000, // 1 hour ago
       },
       {
         id: '3',
         name: 'Bob Wilson',
         type: 'item',
         email: 'bob@example.com',
-        lastInteraction: now / 1000 - 60, // 1 minute ago
+        lastInteraction: now - 60000, // 1 minute ago
       },
     ];
 
-    const search = createFreshSearch<UserWithInteraction>(
+    const search = createFreshSearch<User>(
       {
         fuzzyWeight: 0.6,
         timeWeight: 0.3,
@@ -547,7 +548,7 @@ describe('DM activity timestamps for user ranking', () => {
   });
 
   it('handles users without lastInteraction gracefully', () => {
-    const users: UserWithInteraction[] = [
+    const users: User[] = [
       {
         id: '1',
         name: 'Alice',
@@ -564,7 +565,7 @@ describe('DM activity timestamps for user ranking', () => {
       },
     ];
 
-    const search = createFreshSearch<UserWithInteraction>(
+    const search = createFreshSearch<User>(
       {
         fuzzyWeight: 0.6,
         timeWeight: 0.3,

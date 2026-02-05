@@ -8,6 +8,7 @@ import { useChannelsActivityQuery } from '@queries/channel/activity';
 import { queryReadyGate } from '@queries/gate';
 import { createAssertedContextProvider } from './createContext';
 import { useUserId } from './user';
+import type { LastInteractionTimestamp } from '@core/user/types';
 
 type ChannelsContextValue = {
   channels: Accessor<ApiChannelWithLatest[]>;
@@ -81,10 +82,10 @@ export function useDmActivityByUserId(): Accessor<Map<string, number>> {
 
   return createMemo(() => {
     const currentUser = currentUserId();
-    if (!currentUser) return new Map<string, number>();
+    if (!currentUser) return new Map<string, LastInteractionTimestamp>();
 
     const allChannels = channels();
-    const map = new Map<string, number>();
+    const map = new Map<string, LastInteractionTimestamp>();
 
     for (const channel of allChannels) {
       if (channel.channel_type !== 'direct_message') continue;
@@ -97,7 +98,7 @@ export function useDmActivityByUserId(): Accessor<Map<string, number>> {
       const timestamp = channel.updated_at;
       if (timestamp) {
         const date = new Date(timestamp);
-        const unixTimestamp = Math.floor(date.getTime() / 1000);
+        const unixTimestamp = date.getTime();
         map.set(otherParticipant.user_id, unixTimestamp);
       }
     }

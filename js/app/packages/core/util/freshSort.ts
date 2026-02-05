@@ -6,6 +6,7 @@ import type { Accessor } from 'solid-js';
 import type { FilterResult } from 'fuzzy';
 import fuzzy from 'fuzzy';
 import { fuzzyScoreCommaSpaceSeparated } from './fuzzy';
+import type { LastInteractionTimestamp } from '@core/user';
 
 type BoostFn<T> = (item: T) => number;
 
@@ -45,7 +46,7 @@ type FreshSortConfigWithDefaults = Required<FreshSortConfig<unknown>>;
 export interface TimestampedItem {
   updatedAt?: number | string;
   viewedAt?: number | string;
-  lastInteraction?: number | string;
+  lastInteraction?: LastInteractionTimestamp | string;
 }
 
 export interface FreshSortResult<T> {
@@ -85,18 +86,19 @@ function extractTimestamp(
   if (timestamp === undefined || timestamp === null) return 0;
 
   if (typeof timestamp === 'number') {
-    return timestamp > 1e10 ? Math.floor(timestamp / 1000) : timestamp;
+    return timestamp;
   }
 
   if (typeof timestamp === 'string') {
     const isoDate = new Date(timestamp);
-    if (!isNaN(isoDate.getTime())) {
-      return Math.floor(isoDate.getTime() / 1000);
+    const isoDateTime = isoDate.getTime();
+    if (!isNaN(isoDateTime)) {
+      return isoDateTime;
     }
 
     const parsed = parseInt(timestamp, 10);
     if (!isNaN(parsed)) {
-      return parsed > 1e10 ? Math.floor(parsed / 1000) : parsed;
+      return parsed;
     }
   }
 
@@ -108,7 +110,7 @@ function calculateTimeScore(
   config: FreshSortConfigWithDefaults
 ): number {
   const now = Date.now();
-  const itemTime = timestamp * 1000;
+  const itemTime = timestamp;
   const age = Math.max(0, now - itemTime);
   if (age >= config.maxAgeMs) {
     return 0;
