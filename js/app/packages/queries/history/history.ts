@@ -3,7 +3,12 @@ import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { storageServiceClient } from '@service-storage/client';
 import type { CloudStorageItemType } from '@service-storage/generated/schemas/cloudStorageItemType';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
-import { useMutation, useQuery, type QueryClient } from '@tanstack/solid-query';
+import {
+  useMutation,
+  useQuery,
+  queryOptions,
+  type QueryClient,
+} from '@tanstack/solid-query';
 import { createEffect, type Accessor, type Setter } from 'solid-js';
 import { queryClient } from '../client';
 import { historyKeys } from './keys';
@@ -26,7 +31,7 @@ const HISTORY_GC_TIME = 10 * 60 * 1000;
 
 function setHistoryItemData(itemId: string, updater: Setter<HistoryItem>) {
   return queryClient.setQueryData<HistoryItem[]>(
-    historyKeys.list.queryKey,
+    historyQueryOptions.queryKey,
     (prev) => {
       if (!prev) return prev;
       const items = prev.map((item) => {
@@ -42,7 +47,7 @@ function setHistoryItemData(itemId: string, updater: Setter<HistoryItem>) {
 
 function setHistoryData(updater: Setter<HistoryItem[]>) {
   return queryClient.setQueryData<HistoryItem[]>(
-    historyKeys.list.queryKey,
+    historyQueryOptions.queryKey,
     updater
   );
 }
@@ -55,23 +60,21 @@ export function setHistoryItemName(itemId: string, name: string) {
   }));
 }
 
-function historyQueryOptions() {
-  return {
-    queryKey: historyKeys.list.queryKey,
-    queryFn: async (): Promise<HistoryItem[]> => {
-      const result = await throwOnErr(
-        async () => await storageServiceClient.getUsersHistory()
-      );
-      return transformHistoryResponse(result);
-    },
-    staleTime: HISTORY_STALE_TIME,
-    gcTime: HISTORY_GC_TIME,
-  };
-}
+const historyQueryOptions = queryOptions({
+  queryKey: historyKeys.list.queryKey,
+  queryFn: async (): Promise<HistoryItem[]> => {
+    const result = await throwOnErr(
+      async () => await storageServiceClient.getUsersHistory()
+    );
+    return transformHistoryResponse(result);
+  },
+  staleTime: HISTORY_STALE_TIME,
+  gcTime: HISTORY_GC_TIME,
+});
 
 export function useHistoryQuery() {
   const baseQuery = useQuery(() => ({
-    ...historyQueryOptions(),
+    ...historyQueryOptions,
     placeholderData: (prev) => prev,
     reconcile: 'id',
   }));
@@ -102,13 +105,13 @@ export function RemoveInstructionsMdFromHistorySideEffect() {
 
 export async function prefetchHistory() {
   void (await catchToResult(
-    async () => await queryClient.prefetchQuery(historyQueryOptions())
+    async () => await queryClient.prefetchQuery(historyQueryOptions)
   ));
 }
 
 export function refetchHistory() {
   return queryClient.invalidateQueries({
-    queryKey: historyKeys.list.queryKey,
+    queryKey: historyQueryOptions.queryKey,
   });
 }
 
@@ -161,11 +164,11 @@ export function useUpsertToHistoryMutation(
         {
           onMutate: async (_params) => {
             await queryClient.cancelQueries({
-              queryKey: historyKeys.list.queryKey,
+              queryKey: historyQueryOptions.queryKey,
             });
 
             const previousData = queryClient.getQueryData<HistoryItem[]>(
-              historyKeys.list.queryKey
+              historyQueryOptions.queryKey
             );
 
             // NOTE: doesn't make sense to do this if it gets invalidated on refetch anyways
@@ -182,7 +185,7 @@ export function useUpsertToHistoryMutation(
             // NOTE: the history refetch will invalidate the optimistic update viewed at
             // since only soup items have viewed at timestamp
             queryClient.invalidateQueries({
-              queryKey: historyKeys.list.queryKey,
+              queryKey: historyQueryOptions.queryKey,
             });
           },
         },
@@ -259,7 +262,7 @@ export function useUpdatedDssItemName(itemId: string | Accessor<string>) {
  */
 export function getHistoryItems(): HistoryItem[] {
   const data = queryClient.getQueryData<HistoryItem[]>(
-    historyKeys.list.queryKey
+    historyQueryOptions.queryKey
   );
   if (!data) return [];
   return data;
