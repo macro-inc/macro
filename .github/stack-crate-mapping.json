@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Maps infra stack names to their corresponding Rust crates. Dependencies are handled by cargo tree.",
+  "stacks": {
+    "authentication-service": {
+      "crates": ["authentication_service", "user_link_cleanup_handler"]
+    },
+    "bulk-upload": {
+      "crates": ["upload_extractor_lambda_handler", "upload_extractor_lambda_trigger"]
+    },
+    "connection-gateway": {
+      "crates": ["connection_gateway"]
+    },
+    "contacts-service": {
+      "crates": ["contacts_service"]
+    },
+    "convert-service": {
+      "crates": ["convert_service"]
+    },
+    "delete-document-worker": {
+      "crates": ["delete_document_worker"]
+    },
+    "deleted-item-poller": {
+      "crates": ["deleted_item_poller"]
+    },
+    "dlp-handler": {
+      "crates": ["dataloss_prevention_handler"]
+    },
+    "document-cognition-service": {
+      "crates": ["document_cognition_service"]
+    },
+    "document-storage": {
+      "crates": ["document_storage_service"]
+    },
+    "cloud-storage-service": {
+      "crates": ["document_storage_service"]
+    },
+    "document-text-extractor": {
+      "crates": ["document_text_extractor", "docx_unzip_handler"]
+    },
+    "email-service": {
+      "crates": ["email_service", "email_refresh_handler", "email_scheduled_handler"]
+    },
+    "email-sfs-delete-handler": {
+      "crates": ["email_sfs_delete_handler"]
+    },
+    "email-suppression": {
+      "crates": ["email_suppression_handler"]
+    },
+    "notification-service": {
+      "crates": ["notification_service"]
+    },
+    "organization-retention": {
+      "crates": ["organization_retention_handler", "organization_retention_trigger"]
+    },
+    "search-processing-service": {
+      "crates": ["search_processing_service"]
+    },
+    "search-upload": {
+      "crates": ["search_upload_handler"]
+    },
+    "sha-cleanup": {
+      "crates": ["sha_cleanup_worker"]
+    },
+    "static-file-service": {
+      "crates": ["static_file_service"]
+    },
+    "unfurl-service": {
+      "crates": ["unfurl_service"]
+    },
+    "opensearch": {
+      "crates": [],
+      "comment": "Infra-only stack, no Rust code"
+    },
+    "search-event-queue": {
+      "crates": [],
+      "comment": "Infra-only stack, no Rust code"
+    },
+    "search-text-extractor-queue": {
+      "crates": [],
+      "comment": "Infra-only stack, no Rust code"
+    },
+    "document-storage-bucket-integrations": {
+      "crates": [],
+      "comment": "Infra-only stack, no Rust code"
+    },
+    "link-sharing": {
+      "crates": [],
+      "comment": "Infra-only stack, no Rust code"
+    },
+    "cloud-storage-cache": {
+      "crates": [],
+      "comment": "Infra-only stack, no Rust code"
+    }
+  }
+}

@@ -7,7 +7,8 @@ on:
       - 'rust/cloud-storage/**'
       - 'infra/**'
       - '.github/workflows/deploy-cloud-storage-on-push.yml'
-      - '.github/services-config.json'
+      - '.github/stack-crate-mapping.json'
+      - '.github/scripts/detect-affected-services-v2.sh'
 
 concurrency:
   group: deploy-cloud-storage-${{ github.ref }}
@@ -30,23 +31,36 @@ jobs:
         with:
           toolchain: stable
 
+      - name: Cache cargo dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            rust/cloud-storage/target/
+          key: ${{ runner.os }}-cargo-tree-${{ hashFiles('rust/cloud-storage/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-tree-
+
       - name: Detect changed services
         id: detect
         run: |
           # Make the script executable
-          chmod +x .github/scripts/detect-affected-services.sh
-          
+          chmod +x .github/scripts/detect-affected-services-v2.sh
+
           # Run the detection script and capture output
-          OUTPUT=$(.github/scripts/detect-affected-services.sh)
-          
+          # The script uses cargo tree to find all transitive dependents
+          OUTPUT=$(.github/scripts/detect-affected-services-v2.sh)
+
           # Parse the output
           SERVICES=$(echo "$OUTPUT" | grep "^services=" | cut -d'=' -f2-)
           HAS_CHANGES=$(echo "$OUTPUT" | grep "^has_changes=" | cut -d'=' -f2-)
-          
+
           # Set outputs
           echo "services=$SERVICES" >> $GITHUB_OUTPUT
           echo "has_changes=$HAS_CHANGES" >> $GITHUB_OUTPUT
-          
+
           # Log for debugging
           echo "Detected services: $SERVICES"
           echo "Has changes: $HAS_CHANGES"
@@ -98,12 +112,12 @@ jobs:
       - name: Check deployment results
         run: |
           if [[ "${{ needs.detect-changes.outputs.has_changes }}" == "false" ]]; then
-            echo "ℹ️ No cloud-storage services were affected by the changes"
+            echo "No cloud-storage services were affected by the changes"
           elif [[ "${{ needs.deploy-services.result }}" == "failure" ]]; then
-            echo "❌ One or more service deployments failed"
+            echo "One or more service deployments failed"
             exit 1
           elif [[ "${{ needs.deploy-services.result }}" == "skipped" ]]; then
-            echo "⏭️ No services to deploy"
+            echo "No services to deploy"
           else
-            echo "✅ All affected cloud-storage services deployed successfully to dev environment"
+            echo "All affected cloud-storage services deployed successfully to dev environment"
           fi
