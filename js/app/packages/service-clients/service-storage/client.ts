@@ -16,7 +16,6 @@ import {
   type FetchWithTokenErrorCode,
   fetchWithToken,
 } from '@core/util/fetchWithToken';
-import { contentHash } from '@core/util/hash';
 import {
   err,
   isErr,
@@ -28,7 +27,6 @@ import {
 } from '@core/util/maybeResult';
 import { registerClient } from '@core/util/mockClient';
 import type { SafeFetchInit } from '@core/util/safeFetch';
-import { utf8Encode } from '@core/util/string';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import { platformFetch } from 'core/util/platformFetch';
 import type { AccessLevel, View, ViewsResponse } from './generated/schemas';
@@ -87,7 +85,6 @@ import {
   type GetDocxFileResponse,
   getDocxExpandedParts,
 } from './util/getDocxFile';
-import { uploadToPresignedUrl } from './util/uploadToPresignedUrl';
 
 // the server is set to expire at 15 minutes, so expire just before that
 const MINUTES_BEFORE_PRESIGNED_EXPIRES = 14;
@@ -460,51 +457,6 @@ export const storageServiceClient = {
 
     const [, response] = result;
     return ok({ documentId: response.documentId });
-  },
-
-  async createTextDocument({ text, ...docArgs }) {
-    const buffer = utf8Encode(text);
-    const sha = await contentHash(buffer);
-    // INFO: Typescript trips up on resolving storageServiceClient.createDocument, not sure why
-    const maybeDoc = await dssFetch<CreateDocumentResponse>(`/documents`, {
-      method: 'POST',
-      body: JSON.stringify({ sha, ...docArgs }),
-    });
-    if (isErr(maybeDoc)) {
-      const err = maybeDoc[0];
-
-      if (err[0].message.includes('403')) {
-        showPaywall(PaywallKey.FILE_LIMIT);
-      }
-      return maybeDoc;
-    }
-
-    const [
-      ,
-      {
-        data: { documentMetadata, presignedUrl },
-      },
-    ] = maybeDoc;
-
-    if (!presignedUrl) {
-      console.error('no presigned url found for upload');
-      return err('SERVER_ERROR', 'Failed to upload file');
-    }
-
-    const maybeUpload = await uploadToPresignedUrl({
-      presignedUrl,
-      buffer,
-      sha,
-      type: 'text/plain',
-    });
-
-    if (isErr(maybeUpload)) {
-      return err('SERVER_ERROR', 'Failed to upload file');
-    }
-
-    return ok({
-      metadata: documentMetadata,
-    });
   },
 
   async copyDocument(params: {
