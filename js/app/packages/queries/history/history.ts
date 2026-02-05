@@ -20,12 +20,7 @@ import {
 } from './transforms';
 import { queryReadyGate } from '@queries/gate';
 
-export { historyKeys } from './keys';
 export type { HistoryItem, HistoryQueryResponse } from './transforms';
-export {
-  transformHistoryItem,
-  transformHistoryResponse,
-} from './transforms';
 
 const HISTORY_STALE_TIME = 5 * 60 * 1000;
 const HISTORY_GC_TIME = 10 * 60 * 1000;
