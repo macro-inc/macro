@@ -36,14 +36,10 @@ type HistoryQueryFnResult = HistoryItem[];
 function setHistoryData(
   updater: Updater<HistoryQueryFnResult, HistoryQueryFnResult>
 ) {
-  const updaterWrapper = (prev: HistoryQueryFnResult | undefined) => {
+  return queryClient.setQueryData(historyQueryOptions.queryKey, (prev) => {
     if (!prev) return prev;
     return typeof updater === 'function' ? updater(prev) : updater;
-  };
-  return queryClient.setQueryData<HistoryQueryFnResult>(
-    historyQueryOptions.queryKey,
-    updaterWrapper
-  );
+  });
 }
 
 function setHistoryItemData(itemId: string, updater: Setter<HistoryItem>) {
@@ -170,9 +166,7 @@ export function useUpsertToHistoryMutation(
               queryKey: historyQueryOptions.queryKey,
             });
 
-            const previousData = queryClient.getQueryData<HistoryItem[]>(
-              historyQueryOptions.queryKey
-            );
+            const previousData = getHistoryItems();
 
             // NOTE: doesn't make sense to do this if it gets invalidated on refetch anyways
             // optimisticUpdateViewedAt(params.itemId);
@@ -262,10 +256,8 @@ export function useUpdatedDssItemName(itemId: string | Accessor<string>) {
  * Get history items from cache.
  * For use in standalone functions outside component context.
  */
-export function getHistoryItems(): HistoryItem[] {
-  const data = queryClient.getQueryData<HistoryItem[]>(
-    historyQueryOptions.queryKey
-  );
+export function getHistoryItems() {
+  const data = queryClient.getQueryData(historyQueryOptions.queryKey);
   if (!data) return [];
   return data;
 }
