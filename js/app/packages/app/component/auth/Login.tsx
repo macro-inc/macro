@@ -70,11 +70,9 @@ export function Login() {
     unsetTokenPromise();
     invalidateUserInfo();
     const userInfo = await fetchUserInfo();
-    if (
-      userInfo?.authenticated &&
-      location.state?.originalLocation &&
-      location.state.originalLocation.pathname !== location.pathname
-    ) {
+    if (userInfo?.authenticated) {
+      // Always set the login cookie when authenticated, regardless of redirect state.
+      // This ensures CloudFront can redirect logged-in users to /app on subsequent visits.
       updateCookie('login', 'true', {
         expires: oneYearFromNow,
         maxAge: 31536000, // one year in seconds
