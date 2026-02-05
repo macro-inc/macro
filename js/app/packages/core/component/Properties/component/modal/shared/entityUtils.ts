@@ -3,7 +3,7 @@ import type { EmailEntity } from '@macro-entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Accessor } from 'solid-js';
 import type { FreshSortConfig, TimestampedItem } from '@core/util/freshSort';
-import type { HistoryItem as Item } from '@queries/history/transforms';
+import type { HistoryItem as Item } from '@queries/history/history';
 
 /** Combined entity type for unified handling across entity selectors */
 export type CombinedEntity =
