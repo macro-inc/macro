@@ -3,14 +3,8 @@ import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { storageServiceClient } from '@service-storage/client';
 import type { CloudStorageItemType } from '@service-storage/generated/schemas/cloudStorageItemType';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
-import {
-  type UseQueryResult,
-  useMutation,
-  useQuery,
-  type QueryClient,
-  useQueries,
-} from '@tanstack/solid-query';
-import { createEffect, createMemo, type Accessor, type Setter } from 'solid-js';
+import { useMutation, useQuery, type QueryClient } from '@tanstack/solid-query';
+import { createEffect, type Accessor, type Setter } from 'solid-js';
 import { queryClient } from '../client';
 import { historyKeys } from './keys';
 import {
