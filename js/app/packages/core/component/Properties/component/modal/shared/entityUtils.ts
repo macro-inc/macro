@@ -3,11 +3,11 @@ import type { EmailEntity } from '@macro-entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Accessor } from 'solid-js';
 import type { FreshSortConfig, TimestampedItem } from '@core/util/freshSort';
-import type { HistoryItem } from '@queries/history/transforms';
+import type { HistoryItem as Item } from '@queries/history/transforms';
 
 /** Combined entity type for unified handling across entity selectors */
 export type CombinedEntity =
-  | { kind: 'item'; id: string; data: HistoryItem }
+  | { kind: 'item'; id: string; data: Item }
   | { kind: 'user'; id: string; data: IUser }
   | { kind: 'channel'; id: string; data: ChannelWithParticipants }
   | { kind: 'company'; id: string; data: null }
@@ -15,9 +15,7 @@ export type CombinedEntity =
 
 /** Creates a mapper function for a specific entity kind */
 export function entityMapper(kind: 'item' | 'user' | 'channel') {
-  return (
-    data: HistoryItem | IUser | ChannelWithParticipants
-  ): CombinedEntity => {
+  return (data: Item | IUser | ChannelWithParticipants): CombinedEntity => {
     return { kind, data, id: data.id } as CombinedEntity;
   };
 }
