@@ -17,7 +17,7 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
-import { updateCookie } from '@core/util/cookies';
+import { LOGIN_COOKIE_AGE, updateCookie } from '@core/util/cookies';
 import { EmailForm } from './EmailForm';
 import { LoginOptions } from './LoginOptions';
 import { identifyUser, Stage } from './Shared';
@@ -62,10 +62,9 @@ export function Login() {
   });
 
   const onComplete = async () => {
-    const currentDate = new Date();
-    const oneYearFromNow = new Date(
-      currentDate.setFullYear(currentDate.getFullYear() + 1)
-    );
+    const expires = new Date();
+    expires.setMonth(expires.getMonth() + 1);
+
     setActiveModal();
     unsetTokenPromise();
     invalidateUserInfo();
@@ -76,8 +75,8 @@ export function Login() {
       location.state.originalLocation.pathname !== location.pathname
     ) {
       updateCookie('login', 'true', {
-        expires: oneYearFromNow,
-        maxAge: 31536000, // one year in seconds
+        expires,
+        maxAge: LOGIN_COOKIE_AGE,
         sameSite: 'Lax',
         path: '/',
       });
