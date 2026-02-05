@@ -3,7 +3,6 @@
  * When the keyboard appears or the cursor moves into the safe zone near the
  * keyboard, this scrolls the cursor into view.
  */
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import type { Accessor } from 'solid-js';
 import type { LexicalEditor } from 'lexical';
@@ -18,8 +17,6 @@ interface IosCursorScrollPluginOptions {
 
 export function iosCursorScrollPlugin(options: IosCursorScrollPluginOptions) {
   return (editor: LexicalEditor) => {
-    if (!isNativeMobilePlatform()) return () => {};
-
     let disposeRoot!: () => void;
 
     const scrollCaretIntoView = () => {

@@ -178,6 +178,8 @@ import { useBlockSave, useSaveMarkdownDocument } from '../signal/save';
 import { MarkdownCollabProvider } from './MarkdownCollabProvider';
 import { MarkdownPopup } from './MarkdownPopup';
 import { isMobile } from '@core/mobile/isMobile';
+import { isIOS } from '@solid-primitives/platform';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 
 false && fileFolderDrop;
 
@@ -580,8 +582,13 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
         onVersionError: (error) => setEditorError(error),
       })
     )
-    .use(pinnedPropertiesPlugin())
-    .use(iosCursorScrollPlugin({ scrollContainer: () => md.scrollContainer }));
+    .use(pinnedPropertiesPlugin());
+
+  if (isIOS || isNativeMobilePlatform()) {
+    plugins.use(
+      iosCursorScrollPlugin({ scrollContainer: () => md.scrollContainer })
+    );
+  }
 
   if (ENABLE_MARKDOWN_LIVE_COLLABORATION) {
     const getBlockLoroManager = blockLoroManagerSignal.get;
