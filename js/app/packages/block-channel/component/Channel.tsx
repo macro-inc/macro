@@ -422,7 +422,7 @@ export function Channel(props: {
           <FloatingInputLoader
             minShowTime={200}
             successDuration={100}
-            isLoading={channelContext.isFetching}
+            isLoading={() => channelQuery.isFetching}
             loadingText="Refreshing messages"
             class="top-0 bottom-auto mt-2 mb-0 z-10"
           />
