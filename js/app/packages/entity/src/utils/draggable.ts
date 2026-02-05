@@ -1,0 +1,22 @@
+import { createDraggable } from '@thisbeyond/solid-dnd';
+import { createUniqueId } from 'solid-js';
+import type { EntityData } from '../types/entity';
+import type { EntityDragData } from '../types/drag';
+import { useDragOperation } from '@app/component/ItemDragAndDrop';
+
+export function createEntityDraggable(options: {
+  entity: EntityData;
+  splitId?: string;
+}): ReturnType<typeof createDraggable> {
+  const { isAltKey } = useDragOperation();
+  const draggableId = `${options.entity.id}-${options.splitId ?? createUniqueId()}`;
+
+  const dragData: EntityDragData = {
+    dragType: 'entity',
+    splitId: options.splitId,
+    ...options.entity,
+    operation: () => (isAltKey() ? 'copy' : 'move'),
+  };
+
+  return createDraggable(draggableId, dragData);
+}
