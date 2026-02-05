@@ -59,7 +59,11 @@ export function stackNotifications(
       .filter(Boolean)
   );
 
-  const isShadowed = (n: TypedNotification<'channel_message_send'> | TypedNotification<'channel_message_reply'>) => {
+  const isShadowed = (
+    n:
+      | TypedNotification<'channel_message_send'>
+      | TypedNotification<'channel_message_reply'>
+  ) => {
     const metadata = getMetadata(n);
     return metadata.messageId && mentionedMsgIds.has(metadata.messageId);
   };

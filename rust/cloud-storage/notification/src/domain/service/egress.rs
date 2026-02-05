@@ -191,10 +191,9 @@ where
             }
 
             // Delete from queue only if all deliveries succeeded
-            if all_succeeded {
-                if let Err(e) = self.queue.delete_message(&receipt_handle).await {
-                    results.push(Err(e))
-                }
+            if all_succeeded && let Err(e) = self.queue.delete_message(&receipt_handle).await {
+                // if delete queue fails push it into the results
+                results.push(Err(e))
             }
         }
 

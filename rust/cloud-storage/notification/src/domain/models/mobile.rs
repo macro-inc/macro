@@ -10,7 +10,7 @@ use crate::domain::models::{
 
 /// SNS target platform for push notifications.
 #[derive(Debug)]
-pub(crate) enum SnsTarget<'a, T> {
+pub enum SnsTarget<'a, T> {
     /// iOS target via APNS.
     Ios(&'a APNSPushNotification<T>),
     /// Android target via FCM.

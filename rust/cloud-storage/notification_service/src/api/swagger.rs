@@ -17,7 +17,7 @@ use crate::{
     api::{
         device, health, notification,
         unsubscribe::{self, unsubscribe_item::UnsubscribeItemPathParams},
-        user_notification_v2,
+        user_notification,
     },
     model::{device::DeviceRequest, notification::CreateNotification},
 };
@@ -39,10 +39,10 @@ use crate::{
                 notification::create_notification::handler,
 
                 /// /user_notifications
-                user_notification_v2::list_typed_notifications,
-                user_notification_v2::bulk_get_typed_notifications_by_event_item_ids,
-                user_notification_v2::get_typed_by_event_item_id,
-                user_notification_v2::get_typed_notification_by_id,
+                user_notification::list_typed_notifications,
+                user_notification::bulk_get_typed_notifications_by_event_item_ids,
+                user_notification::get_typed_by_event_item_id,
+                user_notification::get_typed_notification_by_id,
                 notification_crate::inbound::http::delete_notification,
                 notification_crate::inbound::http::bulk_delete_notifications,
                 notification_crate::inbound::http::bulk_mark_seen,
@@ -86,9 +86,9 @@ use crate::{
                         DocumentMentionMetadata,
 
                         // v2 typed notifications
-                        user_notification_v2::NotifEvent,
-                        user_notification_v2::ApiUserNotification,
-                        user_notification_v2::GetAllUserNotificationsResponse,
+                        user_notification::NotifEvent,
+                        user_notification::ApiUserNotification,
+                        user_notification::GetAllUserNotificationsResponse,
                         notification_crate::inbound::http::BulkGetByEventItemIdsRequest,
                 ),
         ),

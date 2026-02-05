@@ -16,13 +16,13 @@ use axum::{
     routing::{delete, get, patch, post},
 };
 use macro_db_client::annotations::CommentError;
+use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::{annotations::Comment, response::ErrorResponse};
-use model_entity::EntityType;
-use macro_user_id::email::ReadEmailParts;
 use model_entity::Entity;
+use model_entity::EntityType;
 use notification::domain::models::{
-    Notification, NotifCollapseKey, NotificationExtIos, RateLimitConfig, RateLimitKey,
+    NotifCollapseKey, Notification, NotificationExtIos, RateLimitConfig, RateLimitKey,
     SendNotificationRequestBuilder,
     apple::{APNSPushNotification, AlertDictionary, Aps},
 };

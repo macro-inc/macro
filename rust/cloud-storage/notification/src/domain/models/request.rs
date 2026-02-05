@@ -3,8 +3,8 @@
 use crate::domain::{
     models::{
         ExclusionReason, FilteredRecipient, Notification, NotificationExtEmail, NotificationExtIos,
-        RateLimitConfig, RateLimitKey, RecipientExclusion, apple::APNSPushNotification,
-        mobile, mobile::MessageAttributes, queue_message::EmailContent,
+        RateLimitConfig, RateLimitKey, RecipientExclusion, apple::APNSPushNotification, mobile,
+        mobile::MessageAttributes, queue_message::EmailContent,
     },
     service::SendNotificationError,
 };
@@ -78,10 +78,7 @@ impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
         SendNotificationRequest {
             req,
             build_apns: Some(Box::new(move |notif: T| {
-                let collapse_key = notif
-                    .collapse_key(&entity)
-                    .into_hashed()
-                    .into_inner();
+                let collapse_key = notif.collapse_key(&entity).into_hashed().into_inner();
                 let attrs = MessageAttributes {
                     push_type: mobile::PushType::Alert,
                     collapse_key,

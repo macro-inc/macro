@@ -214,7 +214,6 @@ pub trait NotificationEgress: Send + Sync + 'static {
     ///
     /// Returns results for each delivery attempt across all messages received.
     /// Messages are automatically deleted from the queue after successful delivery.
-    fn poll_and_deliver(
-        &self,
-    ) -> impl Future<Output = Vec<Result<DeliverySuccess, Report>>> + Send;
+    fn poll_and_deliver(&self)
+    -> impl Future<Output = Vec<Result<DeliverySuccess, Report>>> + Send;
 }
