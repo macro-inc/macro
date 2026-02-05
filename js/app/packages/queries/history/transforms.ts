@@ -63,14 +63,6 @@ export function transformHistoryItem(item: HistoryItem): HistoryItem {
   }
 }
 
-export function filterInstructionsMd(
-  items: HistoryItem[],
-  instructionsId: string | null | undefined
-): HistoryItem[] {
-  if (!instructionsId) return items;
-  return items.filter((item) => item.id !== instructionsId);
-}
-
 export function transformHistoryResponse(
   response: HistoryQueryResponse
 ): HistoryItem[] {

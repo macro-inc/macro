@@ -17,7 +17,6 @@ import { queryReadyGate } from '@queries/gate';
 export { historyKeys } from './keys';
 export type { HistoryItem, HistoryQueryResponse } from './transforms';
 export {
-  filterInstructionsMd,
   transformHistoryItem,
   transformHistoryResponse,
 } from './transforms';
