@@ -1,5 +1,6 @@
 import { createMemo, For, Show } from 'solid-js';
 import { UserIcon } from './UserIcon';
+import { cn } from '@ui/utils/classname';
 
 export type UserGroupProps = {
   userIds: string[];
@@ -68,7 +69,11 @@ export function UserGroup(props: UserGroupProps) {
       <For each={displayUserIds()}>
         {(userId) => (
           <div
-            class={`bg-panel rounded-full ${sizeClasses().wrapper} ${sizeClasses().overlap}`}
+            class={cn(
+              'bg-panel rounded-full',
+              sizeClasses().wrapper,
+              sizeClasses().overlap
+            )}
           >
             <UserIcon
               id={userId}
@@ -83,7 +88,10 @@ export function UserGroup(props: UserGroupProps) {
       <Show when={remaining()}>
         <div class="z-4">
           <div
-            class={`${sizeClasses().counter} bg-menu text-ink border-panel rounded-full flex flex-col justify-center items-center`}
+            class={cn(
+              'bg-menu text-ink border-panel rounded-full flex flex-col justify-center items-center',
+              sizeClasses().counter
+            )}
           >
             <span>+{remaining()}</span>
           </div>
