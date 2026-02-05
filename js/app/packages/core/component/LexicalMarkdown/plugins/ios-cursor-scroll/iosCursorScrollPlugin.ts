@@ -4,7 +4,7 @@
  * obscured by the keyboard.
  */
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { virtualKeyboardDuration, virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
+import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import type { Accessor } from 'solid-js';
 import type { LexicalEditor } from 'lexical';
 import { createEffect, createRoot, on } from 'solid-js';
@@ -32,8 +32,6 @@ export function iosCursorScrollPlugin(options: IosCursorScrollPluginOptions) {
           const scrollEl = options.scrollContainer();
           if (!scrollEl) return;
 
-          // Wait one frame for DOM to settle after keyboard animation starts
-          // (the --dvh CSS variable is already adjusted for keyboard height)
           setTimeout(() => {
             editor.read(() => {
               const caretRect = $getCaretRect();
@@ -45,10 +43,11 @@ export function iosCursorScrollPlugin(options: IosCursorScrollPluginOptions) {
 
               if (caretRect.bottom > safeZoneBottom) {
                 const scrollAmount = caretRect.bottom - safeZoneBottom;
+                // For some reason, setting this to 'instant' makes it scroll to the wrong location???
                 scrollEl.scrollBy({ top: scrollAmount, behavior: 'smooth' });
               }
             });
-          }, virtualKeyboardDuration() * 1000);
+          }, 0);
         })
       );
     });
