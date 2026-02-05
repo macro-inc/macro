@@ -4,6 +4,7 @@ import {
   addHours,
   addMinutes,
   addMonths,
+  addSeconds,
   addWeeks,
   addYears,
 } from 'date-fns';
@@ -55,6 +56,13 @@ describe('parseDurationString', () => {
     expect(parseDurationString('90min')).toEqual({ value: 90, unit: 'min' });
   });
 
+  it('should parse seconds correctly', () => {
+    expect(parseDurationString('1s')).toEqual({ value: 1, unit: 's' });
+    expect(parseDurationString('30s')).toEqual({ value: 30, unit: 's' });
+    expect(parseDurationString('90s')).toEqual({ value: 90, unit: 's' });
+    expect(parseDurationString('0.5s')).toEqual({ value: 0.5, unit: 's' });
+  });
+
   it('should handle whitespace', () => {
     expect(parseDurationString(' 3d ')).toEqual({ value: 3, unit: 'd' });
     expect(parseDurationString('3 d')).toEqual({ value: 3, unit: 'd' });
@@ -66,6 +74,7 @@ describe('parseDurationString', () => {
     expect(parseDurationString('1W')).toEqual({ value: 1, unit: 'w' });
     expect(parseDurationString('2H')).toEqual({ value: 2, unit: 'h' });
     expect(parseDurationString('30MIN')).toEqual({ value: 30, unit: 'min' });
+    expect(parseDurationString('30S')).toEqual({ value: 30, unit: 's' });
   });
 
   it('should return null for invalid input', () => {
@@ -116,6 +125,12 @@ describe('applyDurationToDate', () => {
     const duration: ParsedDuration = { value: 45, unit: 'min' };
     const result = applyDurationToDate(baseDate, duration);
     expect(result).toEqual(addMinutes(baseDate, 45));
+  });
+
+  it('should add seconds correctly', () => {
+    const duration: ParsedDuration = { value: 30, unit: 's' };
+    const result = applyDurationToDate(baseDate, duration);
+    expect(result).toEqual(addSeconds(baseDate, 30));
   });
 
   it('should round decimal values', () => {
@@ -203,6 +218,7 @@ describe('formatDuration', () => {
     expect(formatDuration({ value: 1, unit: 'm' })).toBe('1 month');
     expect(formatDuration({ value: 1, unit: 'y' })).toBe('1 year');
     expect(formatDuration({ value: 1, unit: 'min' })).toBe('1 minute');
+    expect(formatDuration({ value: 1, unit: 's' })).toBe('1 second');
   });
 
   it('should format plural units correctly', () => {
@@ -212,6 +228,7 @@ describe('formatDuration', () => {
     expect(formatDuration({ value: 5, unit: 'm' })).toBe('5 months');
     expect(formatDuration({ value: 2, unit: 'y' })).toBe('2 years');
     expect(formatDuration({ value: 30, unit: 'min' })).toBe('30 minutes');
+    expect(formatDuration({ value: 30, unit: 's' })).toBe('30 seconds');
   });
 
   it('should handle decimal values', () => {
