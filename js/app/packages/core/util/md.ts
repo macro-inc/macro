@@ -1,57 +1,18 @@
 import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import { setEditorStateFromMarkdown } from '@core/component/LexicalMarkdown/utils';
-import { storageServiceClient } from '@service-storage/client';
-import { postNewHistoryItem } from '@queries/history/history';
-import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';
-import { contentHash } from './hash';
-import { isErr } from './maybeResult';
+import { createMarkdownFile } from './create';
 
 export async function createFromMarkdownText(args: {
   markdown: string;
   title?: string;
-  preserveNewLines?: boolean;
 }): Promise<{ documentId: string } | { error: string }> {
-  const { markdown, title, preserveNewLines } = args;
-  const { editor, cleanup } = createLexicalWrapper({
-    type: 'markdown',
-    namespace: 'block-md-disposable',
-    isInteractable: () => true,
+  const { markdown, title } = args;
+  const documentId = await createMarkdownFile({
+    title,
+    content: markdown,
   });
-  setEditorStateFromMarkdown(
-    editor,
-    markdown,
-    'external',
-    preserveNewLines ?? false
-  );
-  const state = JSON.stringify(editor.getEditorState().toJSON());
-  cleanup();
-
-  const encoder = new TextEncoder();
-  const buffer = encoder.encode(state);
-
-  const sha = await contentHash(buffer);
-
-  const maybeMd = await storageServiceClient.createDocument({
-    documentName: title ?? 'New Notebook',
-    fileType: 'md',
-    sha: sha,
-  });
-
-  if (isErr(maybeMd)) return { error: 'Document creation failed.' };
-
-  const [, md] = maybeMd;
-
-  const uploadResult = await uploadToPresignedUrl({
-    presignedUrl: md.presignedUrl,
-    buffer,
-    sha,
-    type: 'text/markdown',
-  });
-
-  if (isErr(uploadResult)) return { error: 'Failed to upload file.' };
-
-  postNewHistoryItem('document', md.metadata.documentId);
-  return { documentId: md.metadata.documentId };
+  if (!documentId) return { error: 'Failed to create document' };
+  return { documentId };
 }
 
 export async function transformMarkdownText(args: {
