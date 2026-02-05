@@ -259,10 +259,6 @@ const ROUTES: RouteDefinition[] = [
     ),
   },
   {
-    path: '/new/:block',
-    component: lazy(() => import('./NewRoute')),
-  },
-  {
     // This splat route must be last to catch all unmatched routes
     path: '*404',
     component: NotFound,
