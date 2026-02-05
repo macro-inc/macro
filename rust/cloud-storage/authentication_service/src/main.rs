@@ -165,23 +165,13 @@ async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
 
-    let macro_notify_client = macro_notify::MacroNotify::new(
-        config.notification_queue.clone(),
-        "authentication_service".to_string(),
-    )
-    .await;
-    tracing::trace!("initialized macro_notify client");
-
     let notification_repository = DbNotificationRepository::new(db.clone());
     let notification_queue = SqsNotificationQueue::new(
         aws_sdk_sqs::Client::new(&macro_aws_config::get_macro_aws_config().await),
         config.notification_queue.clone(),
     );
-    let notification_ingress_service = NotificationIngressService::new(
-        notification_repository,
-        notification_queue,
-        "authentication_service",
-    );
+    let notification_ingress_service =
+        NotificationIngressService::new(notification_repository, notification_queue);
     tracing::trace!("initialized notification ingress service");
 
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(
@@ -215,7 +205,6 @@ async fn main() -> anyhow::Result<()> {
             document_storage_service_client: Arc::new(document_storage_service_client),
             notification_service_client: Arc::new(notification_service_client),
             ses_client: Arc::new(ses_client),
-            macro_notify_client: Arc::new(macro_notify_client),
             notification_ingress_service: Arc::new(notification_ingress_service),
             sqs_client: Arc::new(sqs_client),
             environment: config.environment,

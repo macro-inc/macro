@@ -19,8 +19,12 @@ use macro_db_client::annotations::CommentError;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::{annotations::Comment, response::ErrorResponse};
 use model_entity::EntityType;
+use macro_user_id::email::ReadEmailParts;
+use model_entity::Entity;
 use notification::domain::models::{
-    Notification, RateLimitConfig, RateLimitKey, SendNotificationRequestBuilder,
+    Notification, NotifCollapseKey, NotificationExtIos, RateLimitConfig, RateLimitKey,
+    SendNotificationRequestBuilder,
+    apple::{APNSPushNotification, AlertDictionary, Aps},
 };
 use serde::{Deserialize, Serialize};
 use tower::ServiceBuilder;
@@ -181,20 +185,44 @@ pub struct DocumentMentionNotification {
 impl Notification for DocumentMentionNotification {
     const TYPE_NAME: &'static str = "document_mention";
 
-    fn title(&self) -> String {
-        "Document Mention".to_string()
-    }
-
-    fn body(&self) -> String {
-        format!("You were mentioned in {}", self.document_name)
-    }
-
     fn rate_limit_config() -> Option<RateLimitConfig> {
         None
     }
 
     fn rate_limit_key(&self) -> Option<RateLimitKey> {
         None
+    }
+}
+
+impl NotificationExtIos for DocumentMentionNotification {
+    type NotifData = ();
+
+    fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
+        let entity_type: &'static str = entity.entity_type.into();
+        NotifCollapseKey::new(entity_type).append(&entity.entity_id)
+    }
+
+    fn into_apns<'a>(
+        self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        let sender = sender_id?;
+        let file_type = self.file_type.as_ref()?;
+        let title = sender.0.email_part().email_str().to_string();
+        let body = format!("You were mentioned in {}.{}", self.document_name, file_type);
+        Some(APNSPushNotification {
+            aps: Aps {
+                alert: Some(notification::domain::models::apple::Alert::Dictionary(
+                    AlertDictionary {
+                        title: Some(title),
+                        body: Some(body),
+                        ..Default::default()
+                    },
+                )),
+                ..Default::default()
+            },
+            push_notification_data: (),
+        })
     }
 }
 

@@ -108,7 +108,6 @@ async fn patch_chat_v2(
 
     macro_project_utils::update_project_modified(
         &ctx.db,
-        &ctx.macro_notify_client,
         macro_project_utils::ProjectModifiedArgs {
             project_id: req.project_id.clone(),
             old_project_id: chat_context.project_id.clone(),

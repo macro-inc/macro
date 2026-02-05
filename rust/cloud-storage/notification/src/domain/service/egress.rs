@@ -8,7 +8,8 @@ use crate::domain::models::queue_message::{
     NotificationChannel, QueueMessage,
 };
 use crate::domain::ports::{
-    EmailSender, NotificationRepository, NotificationSender, RateLimitPort, WebSocketSender,
+    EmailSender, NotificationEgress, NotificationQueue, NotificationRepository, NotificationSender,
+    RateLimitPort, WebSocketSender,
 };
 use rootcause::prelude::ResultExt;
 use rootcause::{Report, report};
@@ -16,7 +17,8 @@ use rootcause::{Report, report};
 /// Service for delivering notifications (egress side).
 ///
 /// Handles consuming from queue and delivering via WebSocket, push, and email.
-pub struct NotificationEgressService<N, W, M, E, R> {
+pub struct NotificationEgressService<Q, N, W, M, E, R> {
+    queue: Q,
     #[allow(dead_code)]
     repository: N,
     websocket: W,
@@ -25,8 +27,9 @@ pub struct NotificationEgressService<N, W, M, E, R> {
     rate_limiter: R,
 }
 
-impl<N, W, M, E, R> NotificationEgressService<N, W, M, E, R>
+impl<Q, N, W, M, E, R> NotificationEgressService<Q, N, W, M, E, R>
 where
+    Q: NotificationQueue,
     N: NotificationRepository,
     W: WebSocketSender,
     M: NotificationSender,
@@ -34,8 +37,16 @@ where
     R: RateLimitPort,
 {
     /// Create a new egress service.
-    pub fn new(repository: N, websocket: W, mobile: M, email: E, rate_limiter: R) -> Self {
+    pub fn new(
+        queue: Q,
+        repository: N,
+        websocket: W,
+        mobile: M,
+        email: E,
+        rate_limiter: R,
+    ) -> Self {
         Self {
+            queue,
             repository,
             websocket,
             mobile,
@@ -52,7 +63,7 @@ where
     /// If a rate limit is configured and exceeded, returns an empty list (no delivery).
     pub async fn deliver_notification(
         &self,
-        message: QueueMessage<'static, serde_json::Value>,
+        message: QueueMessage<'static, serde_json::Value, serde_json::Value>,
     ) -> Vec<Result<DeliverySuccess, Report<DeliveryFailure>>> {
         // Check rate limit if configured
         if let Some((key, config)) = message.rate_limit {
@@ -78,7 +89,7 @@ where
     async fn deliver_notification_inner(
         &self,
         message_type: &str,
-        node: Node<'static, serde_json::Value>,
+        node: Node<'static, serde_json::Value, serde_json::Value>,
         mut recursion_tail: Vec<Result<DeliverySuccess, Report>>,
     ) -> Vec<Result<DeliverySuccess, Report>> {
         let result = match &node.notif {
@@ -142,5 +153,51 @@ where
             .send_email(email.to.clone(), &email.content)
             .await?;
         Ok(DeliverySuccess::Email)
+    }
+}
+
+impl<Q, N, W, M, E, R> NotificationEgress for NotificationEgressService<Q, N, W, M, E, R>
+where
+    Q: NotificationQueue,
+    N: NotificationRepository,
+    W: WebSocketSender,
+    M: NotificationSender,
+    E: EmailSender,
+    R: RateLimitPort,
+{
+    #[tracing::instrument(ret, skip(self))]
+    async fn poll_and_deliver(&self) -> Vec<Result<DeliverySuccess, Report>> {
+        let messages = match self.queue.receive_messages().await {
+            Ok(msgs) => msgs,
+            Err(e) => {
+                return vec![Err(e)];
+            }
+        };
+
+        let mut results = Vec::new();
+
+        for message in messages {
+            let receipt_handle = message.receipt_handle.clone();
+
+            // Deliver the notification (body is already parsed as QueueMessage)
+            let delivery_results = self.deliver_notification(message.body).await;
+
+            // Check if all deliveries succeeded
+            let all_succeeded = delivery_results.iter().all(Result::is_ok);
+
+            // Add results (stripping the DeliveryFailure context for the trait return type)
+            for result in delivery_results {
+                results.push(result.map_err(Report::from));
+            }
+
+            // Delete from queue only if all deliveries succeeded
+            if all_succeeded {
+                if let Err(e) = self.queue.delete_message(&receipt_handle).await {
+                    results.push(Err(e))
+                }
+            }
+        }
+
+        results
     }
 }

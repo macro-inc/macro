@@ -4,9 +4,11 @@
 //! Implementations live in the outbound module.
 
 use macro_user_id::user_id::MacroUserIdStr;
+use model_notifications::TaskAssignedMetadata;
 use models_properties::EntityType;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_value::PropertyValue;
+use notification::domain::models::SendNotificationRequest;
 use uuid::Uuid;
 
 /// Repository trait for property operations.
@@ -133,15 +135,15 @@ pub trait PermissionService: Send + Sync + 'static {
 /// Notification service trait for sending notifications.
 ///
 /// This trait abstracts notification operations, allowing for different implementations
-/// (e.g., macro_notify-backed, mock for testing).
+/// (e.g., notification-service-backed, mock for testing).
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
 pub trait NotificationService: Send + Sync + 'static {
     type Err;
 
     /// Send a notification message.
     /// Returns the notification ID if successful.
-    fn send_notification(
+    fn send_notification<'a>(
         &self,
-        message: model_notifications::NotificationQueueMessage,
+        message: SendNotificationRequest<'a, TaskAssignedMetadata, ()>,
     ) -> impl Future<Output = Result<uuid::Uuid, Self::Err>> + Send;
 }

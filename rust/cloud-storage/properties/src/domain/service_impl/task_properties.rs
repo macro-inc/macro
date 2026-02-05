@@ -8,6 +8,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::EntityType;
 use models_properties::api::requests::SetPropertyValue;
 use models_properties::service::property_value::PropertyValue;
+use notification::domain::models::SendNotificationRequestBuilder;
 use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
@@ -189,30 +190,31 @@ where
                 .map_err(|e| PropertiesErr::Validation(format!("Invalid user ID format: {}", e)))?
                 .into_owned();
 
-        let metadata = model_notifications::TaskAssignedMetadata {
-            task_id: task_id.to_string(),
-            task_name: task_name.clone(),
-            assigned_by: assigned_by.clone(),
-        };
-
-        let notification_event = model_notifications::NotificationEvent::TaskAssigned(metadata);
-
         let notification_entity =
             model_entity::EntityType::Document.with_entity_string(task_id.to_string());
 
         let notification_futures: Vec<_> = recipient_ids
             .iter()
             .map(|recipient_id| {
-                let message = model_notifications::NotificationQueueMessage {
-                    notification_entity: notification_entity.clone(),
-                    notification_event: notification_event.clone(),
-                    sender_id: Some(assigned_by.clone()),
-                    recipient_ids: Some(vec![recipient_id.to_string()]),
+                let metadata = model_notifications::TaskAssignedMetadata {
+                    task_id: task_id.to_string(),
+                    task_name: task_name.clone(),
+                    assigned_by: assigned_by.clone(),
                 };
+
+                let request = SendNotificationRequestBuilder {
+                    notification_entity: notification_entity.clone(),
+                    notification: metadata,
+                    sender_id: Some(assigned_by.clone()),
+                    recipient_ids: HashSet::from([recipient_id.copied()]),
+                }
+                .into_request()
+                .with_apns()
+                .with_conn_gateway();
 
                 let recipient_id_for_log = recipient_id.clone();
                 async move {
-                    let send_result = notification_service.send_notification(message).await;
+                    let send_result = notification_service.send_notification(request).await;
                     match send_result {
                         Ok(notification_id) => {
                             tracing::debug!(

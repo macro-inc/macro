@@ -89,6 +89,7 @@ pub async fn create_comment_handler(
                     mention_id,
                 )
                 .into_request()
+                .with_apns()
                 .with_conn_gateway();
 
                 _ = notification_ingress_service

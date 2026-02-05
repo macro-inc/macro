@@ -43,9 +43,9 @@ pub struct ConnGatewayNotification<'a, T> {
 
 /// The delivery channel variants.
 #[derive(Debug, Serialize, Deserialize)]
-pub enum NotificationChannel<'a, T> {
+pub enum NotificationChannel<'a, T, U> {
     /// Delivering to an iOS device with APNS.
-    Ios(Box<APNSTargets<T>>),
+    Ios(Box<APNSTargets<U>>),
     /// Delivering to a user's email inbox.
     Email(EmailNotification<'a>),
     /// Delivering a foreground notification via connection gateway.
@@ -54,17 +54,17 @@ pub enum NotificationChannel<'a, T> {
 
 /// A delivery node with optional fallback on failure.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Node<'a, T> {
+pub struct Node<'a, T, U> {
     /// The channel of notification we are delivering on.
-    pub notif: NotificationChannel<'a, T>,
+    pub notif: NotificationChannel<'a, T, U>,
     /// The optional next channel we will attempt to deliver on if this method fails.
-    pub on_failure: Option<Box<Node<'a, T>>>,
+    pub on_failure: Option<Box<Node<'a, T, U>>>,
 }
 
 /// Message published to SQS after DB persistence.
 /// Contains everything needed for delivery.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct QueueMessage<'a, T> {
+pub struct QueueMessage<'a, T, U> {
     /// The notification type name (e.g., "channel_message_send").
     pub message_type: String,
     /// The rate limit key for this notification.
@@ -72,14 +72,22 @@ pub struct QueueMessage<'a, T> {
     pub rate_limit: Option<(RateLimitKey, RateLimitConfig)>,
     /// The methods on which we will attempt to deliver.
     /// This is an ALL relationship.
-    pub content: Node<'a, T>,
+    pub content: Node<'a, T, U>,
+}
+
+/// Custom data payload for a silent background push that clears a previously
+/// delivered notification from the user's device.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ClearPushIdentifier {
+    /// The collapse key identifier used to match the notification to clear.
+    pub identifier: String,
 }
 
 /// Raw message received from SQS.
 #[derive(Debug)]
 pub struct RawQueueMessage {
     /// The deserialized queue message body.
-    pub body: QueueMessage<'static, serde_json::Value>,
+    pub body: QueueMessage<'static, serde_json::Value, serde_json::Value>,
     /// The receipt handle for deleting the message after processing.
     pub receipt_handle: String,
 }

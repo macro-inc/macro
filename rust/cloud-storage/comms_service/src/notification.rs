@@ -222,6 +222,7 @@ async fn send_notification_queue_message(
                 recipient_ids,
             }
             .into_request()
+            .with_apns()
             .with_conn_gateway();
             ingress
                 .send_notification(req)
@@ -236,6 +237,7 @@ async fn send_notification_queue_message(
                 recipient_ids,
             }
             .into_request()
+            .with_apns()
             .with_conn_gateway();
             ingress
                 .send_notification(req)
@@ -250,6 +252,7 @@ async fn send_notification_queue_message(
                 recipient_ids,
             }
             .into_request()
+            .with_apns()
             .with_conn_gateway();
             ingress
                 .send_notification(req)
@@ -264,6 +267,7 @@ async fn send_notification_queue_message(
                 recipient_ids,
             }
             .into_request()
+            .with_apns()
             .with_conn_gateway();
             ingress
                 .send_notification(req)
@@ -278,6 +282,7 @@ async fn send_notification_queue_message(
                 recipient_ids,
             }
             .into_request()
+            .with_apns()
             .with_conn_gateway();
             ingress
                 .send_notification(req)

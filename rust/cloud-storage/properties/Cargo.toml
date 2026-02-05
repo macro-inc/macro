@@ -10,7 +10,6 @@ futures = { workspace = true }
 email_db_client = { path = "../email_db_client" }
 macro_db_client = { path = "../macro_db_client" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = ["cloud_storage", "user_permissions"] }
-macro_notify = { path = "../macro_notify" }
 notification = { path = "../notification" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }

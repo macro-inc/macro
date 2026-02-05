@@ -7,6 +7,7 @@ import { getNotificationById } from '@queries/notification/user-notifications';
 import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
 import {
+  getMetadata,
   tryToTypedNotification,
   type TypedNotification,
 } from './notification-metadata';
@@ -67,11 +68,9 @@ async function openChannelNotification(
   layoutManager: SplitManager
 ) {
   const channelId = notification.entity_id;
-  const messageId = notification.notificationMetadata.messageId;
-  const threadId =
-    'threadId' in notification.notificationMetadata
-      ? notification.notificationMetadata.threadId
-      : undefined;
+  const metadata = getMetadata(notification);
+  const messageId = metadata.messageId;
+  const threadId = 'threadId' in metadata ? metadata.threadId : undefined;
   openSplitIfNotOpen(layoutManager, 'channel', channelId);
 
   const orchestrator = layoutManager.getOrchestrator();
@@ -119,7 +118,7 @@ function getSupportedHandler(
     .with(
       { notificationEventType: 'new_email' },
       (n) => async (lm: SplitManager) => {
-        openSplitIfNotOpen(lm, 'email', n.notificationMetadata.threadId);
+        openSplitIfNotOpen(lm, 'email', getMetadata(n).threadId);
       }
     )
     .with(
@@ -137,7 +136,7 @@ function getSupportedHandler(
       (n) => async (lm: SplitManager) =>
         openSplitIfNotOpen(
           lm,
-          safeFileTypeToBlockName(n.notificationMetadata.itemType),
+          safeFileTypeToBlockName(getMetadata(n).itemType),
           n.entity_id
         )
     )
@@ -151,7 +150,7 @@ function getSupportedHandler(
       (n) => async (lm: SplitManager) =>
         openSplitIfNotOpen(
           lm,
-          safeFileTypeToBlockName(n.notificationMetadata.fileType),
+          safeFileTypeToBlockName(getMetadata(n).fileType),
           n.entity_id
         )
     )
@@ -164,7 +163,7 @@ function getSupportedHandler(
     .with(
       { notificationEventType: 'task_assigned' },
       (n) => async (lm: SplitManager) => {
-        openSplitIfNotOpen(lm, 'task', n.notificationMetadata.taskId);
+        openSplitIfNotOpen(lm, 'task', getMetadata(n).taskId);
       }
     )
     .exhaustive();
