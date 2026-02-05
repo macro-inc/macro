@@ -1,9 +1,9 @@
 use crate::api::context::ApiContext;
+use ::notification::inbound::http::NotificationRouterState;
 use anyhow::Context;
 use axum::Router;
 use macro_middleware::auth::internal_access::ValidInternalKey;
 use model::version::{ServiceNameState, VersionedApiServiceName, validate_api_version};
-use ::notification::inbound::http::NotificationRouterState;
 use tower::ServiceBuilder;
 use tower_http::{compression::CompressionLayer, trace::TraceLayer};
 use utoipa::OpenApi;
@@ -63,7 +63,7 @@ fn api_router<S: ::notification::domain::service::NotificationIngress>(
     state: ApiContext,
     ingress_state: NotificationRouterState<S>,
 ) -> Router<ApiContext> {
-    let jwt_middleware = || {
+    let middleware = {
         ServiceBuilder::new()
             .layer(axum::middleware::from_fn_with_state(
                 state.jwt_args.clone(),
@@ -75,22 +75,14 @@ fn api_router<S: ::notification::domain::service::NotificationIngress>(
     };
 
     let internal_router = Router::new()
-        .nest("/device", device::router().layer(jwt_middleware()))
+        .nest("/device", device::router())
+        .nest("/user_notifications", user_notification::router())
         .nest(
             "/user_notifications",
-            user_notification::router().layer(jwt_middleware()),
+            user_notification_v2::router(ingress_state),
         )
-        .nest(
-            "/user_notifications",
-            user_notification_v2::router(ingress_state).layer(jwt_middleware()),
-        )
-        .nest(
-            "/unsubscribe",
-            unsubscribe::router().layer(axum::middleware::from_fn_with_state(
-                state.jwt_args.clone(),
-                macro_middleware::auth::decode_jwt::handler,
-            )),
-        )
+        .nest("/unsubscribe", unsubscribe::router())
+        .layer(middleware)
         .nest(
             "/notifications",
             notification::router().layer(
