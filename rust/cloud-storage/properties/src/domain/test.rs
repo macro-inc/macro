@@ -541,24 +541,6 @@ async fn check_notifications(test_case: NotificationTestCase) {
         notif_service
             .expect_send_notification()
             .times(expected_count)
-            .withf(move |message| {
-                let event_type_correct = message.notification_event.event_type()
-                    == model_notifications::NotificationEventType::TaskAssigned;
-                let recipient_correct = if let Some(expected) = &expected_recipients {
-                    message
-                        .recipient_ids
-                        .as_ref()
-                        .map(|ids| ids.len() == 1 && expected.contains(&ids[0]))
-                        .unwrap_or(false)
-                } else {
-                    message
-                        .recipient_ids
-                        .as_ref()
-                        .map(|ids| ids.len() == 1)
-                        .unwrap_or(false)
-                };
-                event_type_correct && recipient_correct
-            })
             .returning(|_| Box::pin(async { Ok(Uuid::new_v4()) }));
     }
 

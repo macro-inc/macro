@@ -13,6 +13,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use models_pagination::{CreatedAt, Query};
 use rootcause::Report;
+use serde::de::DeserializeOwned;
 use sqlx::PgPool;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
@@ -112,12 +113,42 @@ pub trait NotificationDbOps: Send + Sync + 'static {
     /// Get a user's active (not deleted, not done) notifications with cursor-based pagination.
     ///
     /// The metadata JSON column is deserialized into `T`.
-    fn get_user_notifications<T: Notification>(
+    fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
         user_id: &str,
         limit: u32,
         cursor: Query<Uuid, CreatedAt, ()>,
     ) -> impl std::future::Future<Output = Result<Vec<UserNotificationRow<T>>, Report>> + Send;
+
+    /// Get a user's active notifications filtered by event item IDs, with cursor-based pagination.
+    fn get_user_notifications_by_event_item_ids<T: DeserializeOwned + Send>(
+        &self,
+        user_id: &str,
+        event_item_ids: &[Uuid],
+        limit: u32,
+        cursor: Query<Uuid, CreatedAt, ()>,
+    ) -> impl std::future::Future<Output = Result<Vec<UserNotificationRow<T>>, Report>> + Send;
+
+    /// Get a single user notification by ID.
+    fn get_user_notification_by_id<T: DeserializeOwned + Send>(
+        &self,
+        user_id: &str,
+        notification_id: Uuid,
+    ) -> impl std::future::Future<Output = Result<Option<UserNotificationRow<T>>, Report>> + Send;
+
+    /// Soft-delete a single user notification.
+    fn delete_user_notification(
+        &self,
+        user_id: &str,
+        notification_id: Uuid,
+    ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
+
+    /// Soft-delete multiple user notifications.
+    fn bulk_delete_user_notifications(
+        &self,
+        user_id: &str,
+        notification_ids: &[Uuid],
+    ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
 }
 
 impl NotificationDbOps for PgPool {
@@ -253,7 +284,11 @@ impl NotificationDbOps for PgPool {
         .await?;
 
         // Insert user notifications
-        let user_ids: Vec<String> = request.recipient_ids.iter().map(|id| id.to_string()).collect();
+        let user_ids: Vec<String> = request
+            .recipient_ids
+            .iter()
+            .map(|id| id.to_string())
+            .collect();
 
         sqlx::query!(
             r#"
@@ -364,7 +399,7 @@ impl NotificationDbOps for PgPool {
             .collect())
     }
 
-    async fn get_user_notifications<T: Notification>(
+    async fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
         user_id: &str,
         limit: u32,
@@ -386,7 +421,7 @@ impl NotificationDbOps for PgPool {
                 un.seen_at::timestamptz as viewed_at,
                 un.created_at::timestamptz as updated_at,
                 un.deleted_at::timestamptz,
-                n.metadata as notification_metadata,
+                n.metadata as "notification_metadata: serde_json::Value",
                 n.notification_event_type as notification_event_type,
                 n.sender_id as sender_id
             FROM user_notification un
@@ -419,14 +454,15 @@ impl NotificationDbOps for PgPool {
                     .transpose()
                     .map_err(|e| rootcause::report!(e))?;
 
-                let notification_metadata = row
-                    .notification_metadata
-                    .map(serde_json::from_value::<T>)
-                    .transpose()
+                let owner_id = MacroUserIdStr::parse_from_str(&row.owner_id)
+                    .map(CowLike::into_owned)
+                    .map_err(|e| rootcause::report!(e))?;
+
+                let notification_metadata = serde_json::from_value::<T>(row.notification_metadata)
                     .map_err(|e| rootcause::report!(e))?;
 
                 Ok(UserNotificationRow {
-                    owner_id: row.owner_id,
+                    owner_id,
                     notification_id: row.notification_id,
                     notification_event_type: row.notification_event_type,
                     entity,
@@ -441,6 +477,202 @@ impl NotificationDbOps for PgPool {
                 })
             })
             .collect()
+    }
+
+    async fn get_user_notifications_by_event_item_ids<T: DeserializeOwned + Send>(
+        &self,
+        user_id: &str,
+        event_item_ids: &[Uuid],
+        limit: u32,
+        cursor: Query<Uuid, CreatedAt, ()>,
+    ) -> Result<Vec<UserNotificationRow<T>>, Report> {
+        let query_limit = limit as i64;
+        let (cursor_id, cursor_timestamp) = cursor.vals();
+        let event_item_ids: Vec<String> = event_item_ids.iter().map(|id| id.to_string()).collect();
+
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                un.user_id as owner_id,
+                un.notification_id,
+                n.event_item_id,
+                n.event_item_type,
+                un.sent,
+                un.done,
+                un.created_at::timestamptz,
+                un.seen_at::timestamptz as viewed_at,
+                un.created_at::timestamptz as updated_at,
+                un.deleted_at::timestamptz,
+                n.metadata as "notification_metadata: serde_json::Value",
+                n.notification_event_type as notification_event_type,
+                n.sender_id as sender_id
+            FROM user_notification un
+            JOIN notification n ON n.id = un.notification_id
+            WHERE un.user_id = $1
+            AND n.event_item_id = ANY($2)
+            AND un.deleted_at IS NULL
+            AND un.done = false
+            AND (($4::timestamptz IS NULL)
+                OR (un.created_at, un.notification_id) < ($4, $5))
+            ORDER BY un.created_at DESC, un.notification_id DESC
+            LIMIT $3
+            "#,
+            user_id,
+            &event_item_ids,
+            query_limit,
+            cursor_timestamp,
+            cursor_id as _,
+        )
+        .fetch_all(self)
+        .await?;
+
+        rows.into_iter()
+            .map(|row| {
+                let entity = EntityType::from_str(&row.event_item_type)
+                    .map_err(|e| rootcause::report!(e))?
+                    .with_entity_string(row.event_item_id);
+
+                let sender_id = row
+                    .sender_id
+                    .map(|s| MacroUserIdStr::parse_from_str(&s).map(CowLike::into_owned))
+                    .transpose()
+                    .map_err(|e| rootcause::report!(e))?;
+
+                let owner_id = MacroUserIdStr::parse_from_str(&row.owner_id)
+                    .map(CowLike::into_owned)
+                    .map_err(|e| rootcause::report!(e))?;
+
+                let notification_metadata = serde_json::from_value::<T>(row.notification_metadata)
+                    .map_err(|e| rootcause::report!(e))?;
+
+                Ok(UserNotificationRow {
+                    owner_id,
+                    notification_id: row.notification_id,
+                    notification_event_type: row.notification_event_type,
+                    entity,
+                    sent: row.sent,
+                    done: row.done,
+                    created_at: row.created_at,
+                    viewed_at: row.viewed_at,
+                    updated_at: row.updated_at,
+                    deleted_at: row.deleted_at,
+                    notification_metadata,
+                    sender_id,
+                })
+            })
+            .collect()
+    }
+
+    async fn get_user_notification_by_id<T: DeserializeOwned + Send>(
+        &self,
+        user_id: &str,
+        notification_id: Uuid,
+    ) -> Result<Option<UserNotificationRow<T>>, Report> {
+        let row = sqlx::query!(
+            r#"
+            SELECT
+                un.user_id as owner_id,
+                un.notification_id,
+                n.event_item_id,
+                n.event_item_type,
+                un.sent,
+                un.done,
+                un.created_at::timestamptz,
+                un.seen_at::timestamptz as viewed_at,
+                un.created_at::timestamptz as updated_at,
+                un.deleted_at::timestamptz,
+                n.metadata as "notification_metadata: serde_json::Value",
+                n.notification_event_type as notification_event_type,
+                n.sender_id as sender_id
+            FROM user_notification un
+            JOIN notification n ON n.id = un.notification_id
+            WHERE un.user_id = $1
+            AND un.notification_id = $2
+            AND un.deleted_at IS NULL
+            LIMIT 1
+            "#,
+            user_id,
+            notification_id,
+        )
+        .fetch_optional(self)
+        .await?;
+
+        let Some(row) = row else {
+            return Ok(None);
+        };
+
+        let entity = EntityType::from_str(&row.event_item_type)
+            .map_err(|e| rootcause::report!(e))?
+            .with_entity_string(row.event_item_id);
+
+        let sender_id = row
+            .sender_id
+            .as_deref()
+            .map(|s| MacroUserIdStr::parse_from_str(s).map(CowLike::into_owned))
+            .transpose()
+            .map_err(|e| rootcause::report!(e))?;
+
+        let owner_id = MacroUserIdStr::parse_from_str(&row.owner_id)
+            .map(CowLike::into_owned)
+            .map_err(|e| rootcause::report!(e))?;
+
+        let notification_metadata = serde_json::from_value::<T>(row.notification_metadata)
+            .map_err(|e| rootcause::report!(e))?;
+
+        Ok(Some(UserNotificationRow {
+            owner_id,
+            notification_id: row.notification_id,
+            notification_event_type: row.notification_event_type,
+            entity,
+            sent: row.sent,
+            done: row.done,
+            created_at: row.created_at,
+            viewed_at: row.viewed_at,
+            updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+            notification_metadata,
+            sender_id,
+        }))
+    }
+
+    async fn delete_user_notification(
+        &self,
+        user_id: &str,
+        notification_id: Uuid,
+    ) -> Result<(), Report> {
+        sqlx::query!(
+            r#"
+            UPDATE user_notification
+            SET deleted_at = NOW()
+            WHERE user_id = $1 AND notification_id = $2
+            "#,
+            user_id,
+            notification_id,
+        )
+        .execute(self)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn bulk_delete_user_notifications(
+        &self,
+        user_id: &str,
+        notification_ids: &[Uuid],
+    ) -> Result<(), Report> {
+        sqlx::query!(
+            r#"
+            UPDATE user_notification
+            SET deleted_at = NOW()
+            WHERE user_id = $1 AND notification_id = ANY($2)
+            "#,
+            user_id,
+            notification_ids,
+        )
+        .execute(self)
+        .await?;
+
+        Ok(())
     }
 }
 
@@ -515,14 +747,54 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
         self.db.get_basic_notifications(notification_ids).await
     }
 
-    async fn get_user_notifications<T: Notification>(
+    async fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
         user_id: &str,
         limit: u32,
         cursor: Query<Uuid, CreatedAt, ()>,
     ) -> Result<Vec<UserNotificationRow<T>>, Report> {
+        self.db.get_user_notifications(user_id, limit, cursor).await
+    }
+
+    async fn get_user_notifications_by_event_item_ids<T: DeserializeOwned + Send>(
+        &self,
+        user_id: &str,
+        event_item_ids: &[Uuid],
+        limit: u32,
+        cursor: Query<Uuid, CreatedAt, ()>,
+    ) -> Result<Vec<UserNotificationRow<T>>, Report> {
         self.db
-            .get_user_notifications(user_id, limit, cursor)
+            .get_user_notifications_by_event_item_ids(user_id, event_item_ids, limit, cursor)
+            .await
+    }
+
+    async fn get_user_notification_by_id<T: DeserializeOwned + Send>(
+        &self,
+        user_id: &str,
+        notification_id: Uuid,
+    ) -> Result<Option<UserNotificationRow<T>>, Report> {
+        self.db
+            .get_user_notification_by_id(user_id, notification_id)
+            .await
+    }
+
+    async fn delete_user_notification(
+        &self,
+        user_id: &str,
+        notification_id: Uuid,
+    ) -> Result<(), Report> {
+        self.db
+            .delete_user_notification(user_id, notification_id)
+            .await
+    }
+
+    async fn bulk_delete_user_notifications(
+        &self,
+        user_id: &str,
+        notification_ids: &[Uuid],
+    ) -> Result<(), Report> {
+        self.db
+            .bulk_delete_user_notifications(user_id, notification_ids)
             .await
     }
 }

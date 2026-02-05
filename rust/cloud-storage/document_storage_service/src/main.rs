@@ -206,11 +206,7 @@ async fn main() -> anyhow::Result<()> {
             aws_sdk_sqs::Client::new(&aws_config),
             config.vars.notification_queue.as_ref().to_string(),
         );
-        NotificationIngressService::new(
-            notification_repository,
-            notification_queue,
-            "document_storage_service",
-        )
+        NotificationIngressService::new(notification_repository, notification_queue)
     };
     let notification_ingress_service = Arc::new(make_notification_ingress());
     tracing::trace!("initialized notification ingress service");

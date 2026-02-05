@@ -1,20 +1,23 @@
 use anyhow::Context;
 use macro_env::Environment;
+use macro_env_var::env_var;
 use std::sync::LazyLock;
 
 // We have a check for this env var in the config creation so we can safely unwrap here
 pub static BASE_URL: LazyLock<String> = LazyLock::new(|| std::env::var("BASE_URL").unwrap());
 
-/// The apple bundle id
-#[allow(dead_code)]
-pub static APPLE_BUNDLE_ID: LazyLock<String> = LazyLock::new(|| {
-    std::env::var("APPLE_BUNDLE_ID").unwrap_or_else(|_| "com.macro.app.prod".to_string())
-});
+env_var!(
+    pub(super) struct Vars {
+        pub(crate) NotificationQueue,
+        pub(crate) ConnectionGatewayUrl,
+        pub(crate) RedisUri,
+        pub(crate) AppleBundleId
+    }
+);
 
 #[derive(Debug)]
 pub struct Config {
     /// The services base url including the scheme.
-    #[allow(dead_code)]
     pub base_url: String,
 
     /// The connection URL for the Postgres database this application should use.
@@ -29,8 +32,6 @@ pub struct Config {
     /// The environment we are in
     pub environment: Environment,
 
-    /// The notification queue
-    pub notification_queue: String,
     /// The notification queue max messages per poll
     pub notification_queue_max_messages: i32,
     /// The notification queue wait time seconds
@@ -43,17 +44,11 @@ pub struct Config {
     pub sns_fcm_platform_arn: String,
 
     /// The sender base address
-    #[allow(dead_code)]
     // Explicitly allowed as it's used to ensure we have a correct sender base address in the lazy env var above
     pub sender_base_address: String,
 
-    /// The apple bundle id
-    #[allow(dead_code)]
-    pub apple_bundle_id: String,
-
     /// The push notification event handler queue
     pub push_notification_event_handler_queue: String,
-
 }
 
 impl Config {
@@ -72,9 +67,6 @@ impl Config {
             .context("INTERNAL_API_SECRET_KEY must be provided")?;
 
         let environment = Environment::new_or_prod();
-
-        let notification_queue =
-            std::env::var("NOTIFICATION_QUEUE").context("NOTIFICATION_QUEUE must be provided")?;
 
         let notification_queue_max_messages: i32 = std::env::var("NOTIFICATION_QUEUE_MAX_MESSAGES")
             .unwrap_or("9".to_string())
@@ -96,9 +88,6 @@ impl Config {
         let sender_base_address =
             std::env::var("SENDER_BASE_ADDRESS").context("SENDER_BASE_ADDRESS must be provided")?;
 
-        let apple_bundle_id =
-            std::env::var("APPLE_BUNDLE_ID").context("APPLE_BUNDLE_ID must be provided")?;
-
         let push_notification_event_handler_queue =
             std::env::var("PUSH_NOTIFICATION_EVENT_HANDLER_QUEUE")
                 .context("PUSH_NOTIFICATION_EVENT_HANDLER_QUEUE must be provided")?;
@@ -114,13 +103,11 @@ impl Config {
             internal_api_secret_key,
             port,
             environment,
-            notification_queue,
             notification_queue_max_messages,
             notification_queue_wait_time_seconds,
             sns_apns_platform_arn,
             sns_fcm_platform_arn,
             sender_base_address,
-            apple_bundle_id,
             push_notification_event_handler_queue,
         })
     }

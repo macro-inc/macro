@@ -9,6 +9,7 @@ import {
   tryToTypedNotification,
   type UnifiedNotification,
 } from '@notifications';
+import type { NotificationEventType } from '@service-notification/generated/schemas';
 import { openNotification } from '@notifications/notification-navigation';
 import { createMemo, For, Show } from 'solid-js';
 
@@ -70,7 +71,7 @@ export function Notifications(props: NotificationsProps) {
                   <div>
                     {
                       NOTIFICATION_LABEL_BY_TYPE[
-                        notification.notificationEventType
+                        notification.notificationEventType as NotificationEventType
                       ]
                     }
                   </div>

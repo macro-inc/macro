@@ -21,6 +21,7 @@ use crate::domain::service::{
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use rootcause::Report;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
@@ -217,13 +218,47 @@ impl NotificationRepository for MockRepository {
         Ok(self.basic_notifications.clone())
     }
 
-    async fn get_user_notifications<T: Notification>(
+    async fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
         _user_id: &str,
         _limit: u32,
         _cursor: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
     ) -> Result<Vec<UserNotificationRow<T>>, Report> {
         Ok(vec![])
+    }
+
+    async fn get_user_notifications_by_event_item_ids<T: DeserializeOwned + Send>(
+        &self,
+        _user_id: &str,
+        _event_item_ids: &[Uuid],
+        _limit: u32,
+        _cursor: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
+    ) -> Result<Vec<UserNotificationRow<T>>, Report> {
+        Ok(vec![])
+    }
+
+    async fn get_user_notification_by_id<T: DeserializeOwned + Send>(
+        &self,
+        _user_id: &str,
+        _notification_id: Uuid,
+    ) -> Result<Option<UserNotificationRow<T>>, Report> {
+        Ok(None)
+    }
+
+    async fn delete_user_notification(
+        &self,
+        _user_id: &str,
+        _notification_id: Uuid,
+    ) -> Result<(), Report> {
+        Ok(())
+    }
+
+    async fn bulk_delete_user_notifications(
+        &self,
+        _user_id: &str,
+        _notification_ids: &[Uuid],
+    ) -> Result<(), Report> {
+        Ok(())
     }
 }
 
@@ -298,13 +333,57 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
         (**self).get_basic_notifications(notification_ids).await
     }
 
-    async fn get_user_notifications<T: Notification>(
+    async fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
         user_id: &str,
         limit: u32,
         cursor: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
     ) -> Result<Vec<UserNotificationRow<T>>, Report> {
-        (**self).get_user_notifications(user_id, limit, cursor).await
+        (**self)
+            .get_user_notifications(user_id, limit, cursor)
+            .await
+    }
+
+    async fn get_user_notifications_by_event_item_ids<T: DeserializeOwned + Send>(
+        &self,
+        user_id: &str,
+        event_item_ids: &[Uuid],
+        limit: u32,
+        cursor: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
+    ) -> Result<Vec<UserNotificationRow<T>>, Report> {
+        (**self)
+            .get_user_notifications_by_event_item_ids(user_id, event_item_ids, limit, cursor)
+            .await
+    }
+
+    async fn get_user_notification_by_id<T: DeserializeOwned + Send>(
+        &self,
+        user_id: &str,
+        notification_id: Uuid,
+    ) -> Result<Option<UserNotificationRow<T>>, Report> {
+        (**self)
+            .get_user_notification_by_id(user_id, notification_id)
+            .await
+    }
+
+    async fn delete_user_notification(
+        &self,
+        user_id: &str,
+        notification_id: Uuid,
+    ) -> Result<(), Report> {
+        (**self)
+            .delete_user_notification(user_id, notification_id)
+            .await
+    }
+
+    async fn bulk_delete_user_notifications(
+        &self,
+        user_id: &str,
+        notification_ids: &[Uuid],
+    ) -> Result<(), Report> {
+        (**self)
+            .bulk_delete_user_notifications(user_id, notification_ids)
+            .await
     }
 }
 
@@ -370,7 +449,7 @@ where
     N: NotificationRepository,
     Q: NotificationQueue,
 {
-    NotificationIngressService::new(repository, queue, "test_service")
+    NotificationIngressService::new(repository, queue)
 }
 
 #[tokio::test]
@@ -467,8 +546,7 @@ async fn test_queue_message_conn_gateway_only() {
     use std::sync::Arc;
 
     let queue = Arc::new(MockQueue::new());
-    let service =
-        NotificationIngressService::new(MockRepository::new(), queue.clone(), "test_service");
+    let service = NotificationIngressService::new(MockRepository::new(), queue.clone());
 
     let recipient = test_user_id("user@example.com");
     let request = SendNotificationRequestBuilder {
@@ -497,8 +575,7 @@ async fn test_queue_message_email_per_recipient() {
     use std::sync::Arc;
 
     let queue = Arc::new(MockQueue::new());
-    let service =
-        NotificationIngressService::new(MockRepository::new(), queue.clone(), "test_service");
+    let service = NotificationIngressService::new(MockRepository::new(), queue.clone());
 
     let recipient1 = test_user_id("user1@example.com");
     let recipient2 = test_user_id("user2@example.com");
@@ -535,7 +612,7 @@ async fn test_queue_message_multiple_channels() {
         recipient.clone(),
         DeviceEndpoint::Ios("arn:aws:sns:test".to_string()),
     );
-    let service = NotificationIngressService::new(repo, queue.clone(), "test_service");
+    let service = NotificationIngressService::new(repo, queue.clone());
 
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("entity_1"),
@@ -606,7 +683,7 @@ async fn test_apns_enqueues_correct_data_for_multiple_users() {
             ),
         );
 
-    let service = NotificationIngressService::new(repo, queue.clone(), "test_service");
+    let service = NotificationIngressService::new(repo, queue.clone());
 
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("doc_123"),
@@ -691,7 +768,7 @@ async fn test_apns_collapse_key_stored_on_create() {
         DeviceEndpoint::Ios("arn:aws:sns:us-east-1:111:endpoint/APNS/app/alice".to_string()),
     ));
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationIngressService::new(repo.clone(), queue, "test_service");
+    let service = NotificationIngressService::new(repo.clone(), queue);
 
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("doc_1"),
@@ -723,7 +800,7 @@ async fn test_no_apns_collapse_key_when_apns_not_enabled() {
 
     let repo = Arc::new(MockRepository::new());
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationIngressService::new(repo.clone(), queue, "test_service");
+    let service = NotificationIngressService::new(repo.clone(), queue);
 
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("doc_1"),
@@ -839,6 +916,7 @@ impl RateLimitPort for MockRateLimiter {
 fn create_egress_service<R: RateLimitPort>(
     rate_limiter: R,
 ) -> NotificationEgressService<
+    MockQueue,
     MockRepository,
     MockWebSocketSender,
     MockMobileSender,
@@ -846,6 +924,7 @@ fn create_egress_service<R: RateLimitPort>(
     R,
 > {
     NotificationEgressService::new(
+        MockQueue::new(),
         MockRepository::new(),
         MockWebSocketSender,
         MockMobileSender,
@@ -961,7 +1040,7 @@ async fn test_mark_seen_publishes_ios_clear_message() {
             ),
     );
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationIngressService::new(repo.clone(), queue.clone(), "test_service");
+    let service = NotificationIngressService::new(repo.clone(), queue.clone());
 
     let notification_ids = [notif_id];
     service
@@ -1024,7 +1103,7 @@ async fn test_mark_seen_skips_push_when_no_collapse_key() {
         DeviceEndpoint::Ios("arn:aws:sns:us-east-1:111:endpoint/APNS/app/bob".to_string()),
     ));
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationIngressService::new(repo.clone(), queue.clone(), "test_service");
+    let service = NotificationIngressService::new(repo.clone(), queue.clone());
 
     let notification_ids = [notif_id];
     service
@@ -1060,7 +1139,7 @@ async fn test_mark_seen_skips_push_when_no_device_endpoints() {
         // No device endpoints registered
     );
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationIngressService::new(repo.clone(), queue.clone(), "test_service");
+    let service = NotificationIngressService::new(repo.clone(), queue.clone());
 
     let notification_ids = [notif_id];
     service
@@ -1102,7 +1181,7 @@ async fn test_mark_done_updates_db_and_clears_push() {
             ),
     );
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationIngressService::new(repo.clone(), queue.clone(), "test_service");
+    let service = NotificationIngressService::new(repo.clone(), queue.clone());
 
     let notification_ids = [notif_id];
     service
@@ -1147,7 +1226,7 @@ async fn test_mark_undone_updates_db_no_push_clear() {
             ),
     );
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationIngressService::new(repo.clone(), queue.clone(), "test_service");
+    let service = NotificationIngressService::new(repo.clone(), queue.clone());
 
     let notification_ids = [notif_id];
     service

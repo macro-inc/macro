@@ -15,7 +15,7 @@ use crate::api::{
     context::ApiContext,
     middleware::team_access::{AdminRole, TeamAccessRoleExtractor},
 };
-use authentication_service::notifications::InviteToTeamNotification;
+use model_notifications::InviteToTeamMetadata;
 
 use model::{
     response::{EmptyResponse, ErrorResponse},
@@ -136,7 +136,7 @@ async fn notify_team_invite(
 ) -> anyhow::Result<()> {
     let team_name = macro_db_client::team::get::get_team_name(db, team_id).await?;
 
-    let notification = InviteToTeamNotification {
+    let notification = InviteToTeamMetadata {
         invited_by: invited_by.clone(),
         team_name: team_name.clone(),
         team_id: team_id.to_string(),
