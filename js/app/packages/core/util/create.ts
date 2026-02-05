@@ -288,7 +288,7 @@ export async function createStaticFile(file: File): Promise<string> {
   if (isErr(result)) throw new Error('Failed to upload file');
 
   const { upload_url, id } = result[1];
-  const uploadResult = await staticFileClient.uploadToPresignedUlr({
+  const uploadResult = await staticFileClient.uploadToPresignedUrl({
     url: upload_url,
     blob: file,
   });
