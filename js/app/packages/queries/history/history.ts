@@ -32,6 +32,7 @@ const HISTORY_GC_TIME = 10 * 60 * 1000;
 
 type HistoryQueryFnResult = HistoryItem[];
 
+/** Sets the history data on the query cache directly. Updater fn already handles undefined. */
 function setHistoryData(
   updater: Updater<HistoryQueryFnResult, HistoryQueryFnResult>
 ) {
