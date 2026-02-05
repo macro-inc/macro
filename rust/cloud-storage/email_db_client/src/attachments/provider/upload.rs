@@ -217,14 +217,17 @@ pub async fn fetch_job_attachments_for_backfill(
     Ok(attachments)
 }
 
-/// fetch attachments for a specific message to upload to Macro. This is called when a new email is
-/// inserted for a user. Attachments for the message should be uploaded if any message in the
-/// message's thread meets any of the following criteria:
+/// Fetch and atomically claim attachments for a specific message to upload to Macro.
+/// This is called when a new email is inserted for a user. Attachments for the message
+/// should be uploaded if any message in the message's thread meets any of the following criteria:
 /// 1. the user sent the message
 /// 2. the message has the IMPORTANT label
 /// 3. the message came from someone with the same domain as the user
 /// 4. the domain the email was sent from is part of the whitelisted domains
 /// 5. the user has previously sent a message to any participant in the thread
+///
+/// The query atomically claims attachments (sets upload_claimed_at) to prevent duplicate
+/// uploads from concurrent workers processing the same message.
 ///
 /// For simplicity's sake, conditions 1 2 3 and 4 are evaluated in the first query, and condition 5
 /// is evaluated in a separate query. These queries are very similar to fetch_thread_attachments_for_backfill
@@ -235,9 +238,46 @@ pub async fn new_email_document_atts(
     db: &Pool<Postgres>,
     message_provider_id: &str,
 ) -> anyhow::Result<Vec<AttachmentUploadMetadata>> {
-    // query for conditions 1 2 and 3
+    // query for conditions 1-4: claim attachments atomically and return metadata
     let query1 = format!(
         r#"
+        WITH claimed AS (
+            UPDATE email_attachments
+            SET upload_claimed_at = NOW()
+            WHERE id IN (
+                SELECT a.id
+                FROM email_attachments a
+                JOIN email_messages m ON a.message_id = m.id
+                LEFT JOIN document_email de ON de.email_attachment_id = a.id
+                WHERE m.provider_id = $1
+                    AND a.filename IS NOT NULL
+                    {}
+                    AND de.email_attachment_id IS NULL
+                    AND a.upload_claimed_at IS NULL
+                    AND EXISTS (
+                        SELECT 1
+                        FROM email_messages m2
+                        LEFT JOIN email_message_labels ml ON m2.id = ml.message_id
+                        LEFT JOIN email_labels l ON ml.label_id = l.id
+                        LEFT JOIN email_contacts c ON m2.from_contact_id = c.id
+                        JOIN email_threads t ON m2.thread_id = t.id
+                        JOIN email_links link ON t.link_id = link.id
+                        WHERE m2.thread_id = m.thread_id
+                            AND (
+                                m2.is_sent = true
+                                OR l.name = 'IMPORTANT'
+                                OR (
+                                    c.email_address IS NOT NULL
+                                    AND RIGHT(c.email_address, LENGTH(RIGHT(link.email_address,
+                                        LENGTH(link.email_address) - POSITION('@' IN link.email_address)))) =
+                                    RIGHT(link.email_address, LENGTH(link.email_address) - POSITION('@' IN link.email_address))
+                                )
+                                {}
+                            )
+                    )
+            )
+            RETURNING id
+        )
         SELECT
             a.id AS attachment_db_id,
             m.provider_id as email_provider_id,
@@ -252,35 +292,7 @@ pub async fn new_email_document_atts(
         FROM email_attachments a
         JOIN email_messages m ON a.message_id = m.id
         JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
-        LEFT JOIN document_email de ON de.email_attachment_id = a.id
-        WHERE m.provider_id = $1
-            AND a.filename IS NOT NULL
-            -- attachment mime type filters injected below
-            {}
-            AND de.email_attachment_id IS NULL
-            AND EXISTS ( -- only fetch if at least one message in the thread meets any of the criteria
-                SELECT 1
-                FROM email_messages m2
-                LEFT JOIN email_message_labels ml ON m2.id = ml.message_id
-                LEFT JOIN email_labels l ON ml.label_id = l.id
-                LEFT JOIN email_contacts c ON m2.from_contact_id = c.id
-                JOIN email_threads t ON m2.thread_id = t.id
-                JOIN email_links link ON t.link_id = link.id
-                WHERE m2.thread_id = m.thread_id -- check against the message's thread
-                    AND (
-                        m2.is_sent = true -- condition 1
-                        OR l.name = 'IMPORTANT' -- condition 2
-                        OR (
-                            -- condition 3
-                            c.email_address IS NOT NULL
-                            AND RIGHT(c.email_address, LENGTH(RIGHT(link.email_address,
-                                LENGTH(link.email_address) - POSITION('@' IN link.email_address)))) =
-                            RIGHT(link.email_address, LENGTH(link.email_address) - POSITION('@' IN link.email_address))
-                        )
-                        -- whitelisted domain check injected below
-                        {}
-                    )
-            )
+        WHERE a.id IN (SELECT id FROM claimed)
         ORDER BY a.id
         "#,
         ATTACHMENT_MIME_TYPE_FILTERS, ATTACHMENT_WHITELISTED_DOMAINS
@@ -296,57 +308,66 @@ pub async fn new_email_document_atts(
         .map(map_row_to_attachment_metadata)
         .collect();
 
-    // if one or more condition has already been met, return - don't need to check condition 5
+    // if one or more condition has already been met, return
     if !attachments.is_empty() {
         return Ok(attachments);
     }
 
-    // query for condition 4
+    // query for condition 5: claim attachments atomically and return metadata
     let query2 = format!(
         r#"
-        -- Step 1: Get the user's own email address and thread_id from the message
         WITH
         message_info AS (
             SELECT m.thread_id, l.email_address as user_email, m.link_id
-            FROM public.email_messages m
-            JOIN public.email_threads t ON m.thread_id = t.id
-            JOIN public.email_links l ON t.link_id = l.id
+            FROM email_messages m
+            JOIN email_threads t ON m.thread_id = t.id
+            JOIN email_links l ON t.link_id = l.id
             WHERE m.provider_id = $1
         ),
-
-        -- Step 2: Create a distinct list of OTHER people this user has ever sent mail to.
         previously_contacted_emails AS (
             SELECT DISTINCT ec.email_address
-            FROM public.email_messages em
-            JOIN public.email_message_recipients emr ON em.id = emr.message_id
-            JOIN public.email_contacts ec ON emr.contact_id = ec.id
+            FROM email_messages em
+            JOIN email_message_recipients emr ON em.id = emr.message_id
+            JOIN email_contacts ec ON emr.contact_id = ec.id
             WHERE em.link_id = (SELECT link_id FROM message_info)
                 AND em.is_sent = true
                 AND ec.email_address != (SELECT user_email FROM message_info)
         ),
-
-        -- Step 3: For the message's thread, create a complete list of OTHER participant email addresses.
         thread_participants AS (
-            -- Get all senders in the thread (excluding the user)
             SELECT DISTINCT ec.email_address
-            FROM public.email_messages em
-            JOIN public.email_contacts ec ON em.from_contact_id = ec.id
+            FROM email_messages em
+            JOIN email_contacts ec ON em.from_contact_id = ec.id
             WHERE em.thread_id = (SELECT thread_id FROM message_info)
                 AND ec.email_address != (SELECT user_email FROM message_info)
-
             UNION
-
-            -- Get all recipients in the thread (excluding the user)
             SELECT DISTINCT ec.email_address
-            FROM public.email_messages em
-            JOIN public.email_message_recipients emr ON em.id = emr.message_id
-            JOIN public.email_contacts ec ON emr.contact_id = ec.id
+            FROM email_messages em
+            JOIN email_message_recipients emr ON em.id = emr.message_id
+            JOIN email_contacts ec ON emr.contact_id = ec.id
             WHERE em.thread_id = (SELECT thread_id FROM message_info)
                 AND ec.email_address != (SELECT user_email FROM message_info)
+        ),
+        claimed AS (
+            UPDATE email_attachments
+            SET upload_claimed_at = NOW()
+            WHERE id IN (
+                SELECT a.id
+                FROM email_attachments a
+                JOIN email_messages m ON a.message_id = m.id
+                LEFT JOIN document_email de ON de.email_attachment_id = a.id
+                WHERE m.provider_id = $1
+                    AND de.email_attachment_id IS NULL
+                    AND a.upload_claimed_at IS NULL
+                    AND a.filename IS NOT NULL
+                    {}
+                    AND EXISTS (
+                        SELECT 1
+                        FROM thread_participants tp
+                        INNER JOIN previously_contacted_emails pce ON tp.email_address = pce.email_address
+                    )
+            )
+            RETURNING id
         )
-
-        -- Final Step: Select attachments from the specific message if AT LEAST ONE of the OTHER participants
-        --             in the thread is in the list of OTHER previously_contacted_emails.
         SELECT
             a.id AS attachment_db_id,
             m.provider_id as email_provider_id,
@@ -358,20 +379,10 @@ pub async fn new_email_document_atts(
             m.thread_id as thread_db_id,
             from_contact.email_address as sender_email,
             m.subject as subject
-        FROM public.email_attachments a
-        JOIN public.email_messages m ON a.message_id = m.id
-        JOIN public.email_contacts from_contact ON m.from_contact_id = from_contact.id
-        LEFT JOIN public.document_email de ON de.email_attachment_id = a.id
-        WHERE m.provider_id = $1
-            AND de.email_attachment_id IS NULL
-            AND EXISTS (
-                SELECT 1
-                FROM thread_participants tp
-                INNER JOIN previously_contacted_emails pce ON tp.email_address = pce.email_address
-            )
-            -- attachment mime type filters injected below
-            {}
-            AND a.filename IS NOT NULL
+        FROM email_attachments a
+        JOIN email_messages m ON a.message_id = m.id
+        JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
+        WHERE a.id IN (SELECT id FROM claimed)
         ORDER BY a.id
         "#,
         ATTACHMENT_MIME_TYPE_FILTERS
@@ -390,15 +401,33 @@ pub async fn new_email_document_atts(
     Ok(attachments)
 }
 
-/// fetch videos and inline images for a new email for insertion into sfs. we insert them into
-/// sfs so we can display thumbnails for them in the FE.
+/// Fetch and atomically claim videos and inline images for a new email for insertion into sfs.
+/// We insert them into sfs so we can display thumbnails for them in the FE.
+///
+/// The query atomically claims attachments (sets upload_claimed_at) to prevent duplicate
+/// uploads from concurrent workers processing the same message.
 #[tracing::instrument(skip(db), err)]
 pub async fn new_email_media_atts(
     db: &Pool<Postgres>,
     message_provider_id: &str,
 ) -> anyhow::Result<Vec<AttachmentUploadMetadata>> {
-    let query1 = format!(
+    let query = format!(
         r#"
+        WITH claimed AS (
+            UPDATE email_attachments
+            SET upload_claimed_at = NOW()
+            WHERE id IN (
+                SELECT a.id
+                FROM email_attachments a
+                JOIN email_messages m ON a.message_id = m.id
+                LEFT JOIN email_attachments_sfs eas ON eas.attachment_id = a.id
+                WHERE m.provider_id = $1
+                    AND {}
+                    AND eas.attachment_id IS NULL
+                    AND a.upload_claimed_at IS NULL
+            )
+            RETURNING id
+        )
         SELECT
             a.id AS attachment_db_id,
             m.provider_id as email_provider_id,
@@ -413,22 +442,18 @@ pub async fn new_email_media_atts(
         FROM email_attachments a
         JOIN email_messages m ON a.message_id = m.id
         JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
-        LEFT JOIN email_attachments_sfs eas ON eas.attachment_id = a.id
-        WHERE m.provider_id = $1
-            -- attachment mime type filters injected below
-            AND {}
-        AND eas.attachment_id IS NULL
+        WHERE a.id IN (SELECT id FROM claimed)
         ORDER BY a.id
         "#,
         ATTACHMENT_MIME_TYPE_FILTERS_WITH_MEDIA
     );
 
-    let rows = sqlx::query(&query1)
+    let rows = sqlx::query(&query)
         .bind(message_provider_id)
         .fetch_all(db)
         .await?;
 
-    let attachments: Vec<AttachmentUploadMetadata> = rows
+    let attachments = rows
         .into_iter()
         .map(map_row_to_attachment_metadata)
         .collect();

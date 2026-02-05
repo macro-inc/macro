@@ -562,3 +562,129 @@ async fn new_email_media_returns_empty_for_nonexistent_message(pool: Pool<Postgr
 
     Ok(())
 }
+
+// ============================================================================
+// Upload claim tests - verify attachments are atomically claimed
+// ============================================================================
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("upload_claim_tests"))
+)]
+async fn new_email_document_atts_claims_attachments(pool: Pool<Postgres>) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let message_provider_id = "claim-test-doc-msg";
+
+    // First call should return attachments and claim them
+    let res = new_email_document_atts(&pool, message_provider_id).await?;
+    assert_eq!(res.len(), 2);
+
+    // Verify the attachments were claimed (upload_claimed_at is now set)
+    let attachment_ids: Vec<Uuid> = res.iter().map(|a| a.attachment_db_id).collect();
+    for attachment_id in &attachment_ids {
+        let row: (Option<chrono::DateTime<chrono::Utc>>,) =
+            sqlx::query_as(r#"SELECT upload_claimed_at FROM email_attachments WHERE id = $1"#)
+                .bind(attachment_id)
+                .fetch_one(&pool)
+                .await?;
+        assert!(
+            row.0.is_some(),
+            "Attachment should have upload_claimed_at set after being returned"
+        );
+    }
+
+    // Second call should return empty (attachments already claimed)
+    let res2 = new_email_document_atts(&pool, message_provider_id).await?;
+    assert_eq!(
+        res2.len(),
+        0,
+        "Second call should return empty since attachments are already claimed"
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("upload_claim_tests"))
+)]
+async fn new_email_media_atts_claims_attachments(pool: Pool<Postgres>) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let message_provider_id = "claim-test-media-msg";
+
+    // First call should return attachments and claim them
+    let res = new_email_media_atts(&pool, message_provider_id).await?;
+    assert_eq!(res.len(), 2);
+
+    // Verify the attachments were claimed (upload_claimed_at is now set)
+    let attachment_ids: Vec<Uuid> = res.iter().map(|a| a.attachment_db_id).collect();
+    for attachment_id in &attachment_ids {
+        let row: (Option<chrono::DateTime<chrono::Utc>>,) =
+            sqlx::query_as(r#"SELECT upload_claimed_at FROM email_attachments WHERE id = $1"#)
+                .bind(attachment_id)
+                .fetch_one(&pool)
+                .await?;
+        assert!(
+            row.0.is_some(),
+            "Attachment should have upload_claimed_at set after being returned"
+        );
+    }
+
+    // Second call should return empty (attachments already claimed)
+    let res2 = new_email_media_atts(&pool, message_provider_id).await?;
+    assert_eq!(
+        res2.len(),
+        0,
+        "Second call should return empty since attachments are already claimed"
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("upload_claim_tests"))
+)]
+async fn new_email_document_atts_excludes_preclaimed_attachments(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    // This message has an attachment that was pre-claimed (upload_claimed_at already set)
+    let message_provider_id = "claim-test-preclaimed-msg";
+
+    let res = new_email_document_atts(&pool, message_provider_id).await?;
+
+    // Should return 0 attachments since the attachment is already claimed
+    assert_eq!(
+        res.len(),
+        0,
+        "Pre-claimed attachments should not be returned"
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("upload_claim_tests"))
+)]
+async fn new_email_media_atts_excludes_preclaimed_attachments(pool: Pool<Postgres>) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    // This message has an attachment that was pre-claimed (upload_claimed_at already set)
+    let message_provider_id = "claim-test-preclaimed-media-msg";
+
+    let res = new_email_media_atts(&pool, message_provider_id).await?;
+
+    // Should return 0 attachments since the attachment is already claimed
+    assert_eq!(
+        res.len(),
+        0,
+        "Pre-claimed attachments should not be returned"
+    );
+
+    Ok(())
+}
