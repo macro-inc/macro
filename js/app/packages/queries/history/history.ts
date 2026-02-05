@@ -228,10 +228,10 @@ export async function removeHistoryItem(
 }
 
 /**
- * Hook to get the updated name of a DSS item from history.
+ * Hook to get the updated raw name of a history item.
  * Returns the raw name without transform (preserves empty strings).
  */
-export function useUpdatedDssItemName(itemId: string) {
+export function useHistoryItemRawName(itemId: string) {
   const historyQuery = useHistoryQuery();
 
   return () => {

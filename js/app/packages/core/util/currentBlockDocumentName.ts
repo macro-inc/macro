@@ -6,7 +6,7 @@ import {
 } from '@core/block';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { blockMetadataSignal } from '@core/signal/load';
-import { useUpdatedDssItemName } from '@queries/history/history';
+import { useHistoryItemRawName } from '@queries/history/history';
 import { formatDocumentName } from '@service-storage/util/filename';
 
 export const useBlockDocumentName = (defaultName?: string) => {
@@ -19,7 +19,7 @@ export const useBlockDocumentName = (defaultName?: string) => {
   const blockName = useBlockAliasedName();
   const isFileBlock = !NonDocumentBlockTypes.includes(blockName);
 
-  const updatedName = useUpdatedDssItemName(blockId);
+  const updatedName = useHistoryItemRawName(blockId);
 
   return () => {
     const current = updatedName();
