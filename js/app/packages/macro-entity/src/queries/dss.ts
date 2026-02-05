@@ -796,7 +796,7 @@ export function createBulkMoveToProjectDssEntityMutation() {
  * Updates the item across all DSS queries.
  */
 export function optimisticUpdateDssItemViewedAt(itemId: string): void {
-  const now = new Date().toISOString();
+  const now = new Date();
 
   queryClient.setQueriesData(
     { queryKey: queryKeys.all.dss },
@@ -816,10 +816,10 @@ export function optimisticUpdateDssItemViewedAt(itemId: string): void {
             case 'chat':
             case 'project':
             case 'emailThread':
-              item.data.viewedAt = Date.parse(now);
+              item.data.viewedAt = now.getTime();
               break;
             case 'channel':
-              item.data.viewed_at = now;
+              item.data.viewed_at = now.toISOString();
               break;
           }
 
