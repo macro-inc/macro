@@ -1,0 +1,67 @@
+name: Migrate Cloud Storage Database
+description: Run database migrations for cloud storage services
+
+inputs:
+  environment:
+    description: 'Environment to run migrations for (dev, prod)'
+    required: true
+  aws-access-key:
+    description: 'AWS access key'
+    required: true
+  aws-secret-key:
+    description: 'AWS secret key'
+    required: true
+  aws-region:
+    description: 'AWS region'
+    required: false
+    default: 'us-east-1'
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ inputs.aws-access-key }}
+        aws-secret-access-key: ${{ inputs.aws-secret-key }}
+        aws-region: ${{ inputs.aws-region }}
+
+    - name: Setup Rust
+      uses: ./.github/actions/setup-rust
+
+    - name: Install just
+      uses: extractions/setup-just@v2
+
+    - name: Install sqlx-cli
+      shell: bash
+      run: |
+        cargo install sqlx-cli --locked --no-default-features --features postgres
+
+    - name: Get database URL from Secrets Manager
+      id: get-db-url
+      shell: bash
+      run: |
+        if [ "${{ inputs.environment }}" = "prod" ]; then
+          SECRET_NAME="macro-db-prod"
+        else
+          SECRET_NAME="macro-db-dev"
+        fi
+
+        DATABASE_URL=$(aws secretsmanager get-secret-value \
+          --secret-id "$SECRET_NAME" \
+          --query SecretString \
+          --output text)
+
+        echo "::add-mask::$DATABASE_URL"
+        echo "database_url=$DATABASE_URL" >> $GITHUB_OUTPUT
+
+    - name: Run database migrations
+      shell: bash
+      working-directory: rust/cloud-storage
+      env:
+        DATABASE_URL: ${{ steps.get-db-url.outputs.database_url }}
+      run: |
+        echo "Running migrations for ${{ inputs.environment }} environment..."
+        just sqlx::migrate_db "$DATABASE_URL"
