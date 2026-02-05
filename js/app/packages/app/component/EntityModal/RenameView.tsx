@@ -1,5 +1,5 @@
 import { createSignal, onMount } from 'solid-js';
-import { createRenameDssEntityMutation } from '../../../macro-entity/src/queries/dss';
+import { createRenameDssEntityMutation } from '../../../macro-entity/src/queries/rename';
 import type { EntityData } from '../../../macro-entity/src/types/entity';
 import { EntityModalActionFooter, EntityModalTitle } from './EntityModal';
 
