@@ -1,4 +1,10 @@
 use crate::api::context::ApiContext;
+use ::notification::domain::service::NotificationEgressService;
+use ::notification::inbound::worker::NotificationWorker;
+use ::notification::outbound::email::EmailAdapter;
+use ::notification::outbound::mobile::MobilePushAdapter;
+use ::notification::outbound::rate_limit::RedisRateLimitAdapter;
+use ::notification::outbound::websocket::{ConnectionGatewayClient, WebSocketGatewayAdapter};
 use anyhow::Context;
 use config::Config;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -97,10 +103,52 @@ pub async fn main() -> anyhow::Result<()> {
     let ingress_service = ::notification::domain::service::NotificationIngressService::new(
         notification_repository,
         notification_queue,
-        "notification_service",
     );
     let ingress_state =
         ::notification::inbound::http::NotificationRouterState::new(ingress_service);
+
+    // Set up egress worker for delivering notifications from the queue
+    let egress_repository =
+        ::notification::outbound::repository::DbNotificationRepository::new(db.clone());
+
+    let vars = config::Vars::new()?;
+
+    let websocket_adapter = WebSocketGatewayAdapter::new(ConnectionGatewayClient::new(
+        internal_secret_key.as_ref().to_string(),
+        vars.connection_gateway_url.as_ref().to_string(),
+    ));
+
+    let mobile_adapter = MobilePushAdapter::new(
+        aws_sdk_sns::Client::new(&aws_config),
+        vars.apple_bundle_id.as_ref().to_string(),
+    );
+
+    let ses_client = aws_sdk_sesv2::Client::new(&aws_config);
+    let email_adapter = EmailAdapter::new(ses_client, config.sender_base_address.clone());
+
+    let redis_client =
+        redis::Client::open(vars.redis_uri.as_ref()).expect("failed to create redis client");
+    let rate_limit_adapter = RedisRateLimitAdapter::new(redis_client);
+
+    let egress_queue = ::notification::outbound::queue::SqsNotificationQueue::new(
+        aws_sdk_sqs::Client::new(&aws_config),
+        vars.notification_queue.as_ref().to_string(),
+    );
+    let egress_service = NotificationEgressService::new(
+        egress_queue,
+        egress_repository,
+        websocket_adapter,
+        mobile_adapter,
+        email_adapter,
+        rate_limit_adapter,
+    );
+
+    let worker = NotificationWorker::new(egress_service);
+
+    tokio::spawn(async move {
+        tracing::info!("starting notification egress worker");
+        worker.run().await
+    });
 
     api::setup_and_serve(
         ApiContext {

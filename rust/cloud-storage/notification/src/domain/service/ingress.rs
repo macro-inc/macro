@@ -86,7 +86,7 @@ pub trait NotificationIngress: Send + Sync + 'static {
 pub struct NotificationIngressService<N, Q> {
     repository: N,
     queue: Q,
-    service_name: String,
+    service_name: &'static str,
 }
 
 impl<N, Q> NotificationIngress for NotificationIngressService<N, Q>
@@ -218,7 +218,7 @@ where
             .create_notification(
                 &request.req,
                 notification_id,
-                &self.service_name,
+                self.service_name,
                 apns_collapse_key.as_deref(),
             )
             .await
@@ -333,11 +333,11 @@ where
     Q: NotificationQueue,
 {
     /// Create a new ingress service.
-    pub fn new(repository: N, queue: Q, service_name: impl Into<String>) -> Self {
+    pub fn new(repository: N, queue: Q) -> Self {
         Self {
             repository,
             queue,
-            service_name: service_name.into(),
+            service_name: std::env!("CARGO_PKG_NAME"),
         }
     }
 

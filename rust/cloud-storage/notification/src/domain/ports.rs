@@ -21,7 +21,7 @@ use crate::domain::models::{
 };
 
 /// Port for sending mobile push notifications (iOS/Android via SNS).
-pub trait NotificationSender {
+pub trait NotificationSender: Send + Sync + 'static {
     /// Send an iOS push notification via APNS.
     fn send_ios_push_notification<T: Serialize + Send + Sync>(
         &self,
@@ -40,7 +40,7 @@ pub trait NotificationSender {
 }
 
 /// Port for rate limiting operations.
-pub trait RateLimitPort {
+pub trait RateLimitPort: Send + Sync + 'static {
     /// Check if the action is allowed and increment the counter.
     ///
     /// The `RateLimitKey` is a hashed value - callers control what gets rate
@@ -160,7 +160,7 @@ pub trait NotificationRepository: Send + Sync + 'static {
 }
 
 /// Port for WebSocket delivery via connection gateway.
-pub trait WebSocketSender {
+pub trait WebSocketSender: Send + Sync + 'static {
     /// Send notifications to users via WebSocket.
     ///
     /// Returns the set of users who successfully received the notification
@@ -175,7 +175,7 @@ pub trait WebSocketSender {
 use crate::domain::models::queue_message::EmailContent;
 
 /// Port for email delivery.
-pub trait EmailSender {
+pub trait EmailSender: Send + Sync + 'static {
     /// Send an email with pre-built content to a user.
     fn send_email(
         &self,
@@ -184,7 +184,7 @@ pub trait EmailSender {
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
-use crate::domain::models::queue_message::{QueueMessage, RawQueueMessage};
+use crate::domain::models::queue_message::{DeliverySuccess, QueueMessage, RawQueueMessage};
 
 /// Port for publishing notifications to delivery queue and receiving them.
 pub trait NotificationQueue: Send + Sync + 'static {
@@ -203,4 +203,18 @@ pub trait NotificationQueue: Send + Sync + 'static {
         &self,
         receipt_handle: &str,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Port for delivering notifications from the queue.
+///
+/// This trait defines the egress (outbound delivery) side of the notification
+/// system. Implementations poll the queue and deliver via WebSocket, push, and email.
+pub trait NotificationEgress: Send + Sync + 'static {
+    /// Poll the queue and attempt to deliver notifications.
+    ///
+    /// Returns results for each delivery attempt across all messages received.
+    /// Messages are automatically deleted from the queue after successful delivery.
+    fn poll_and_deliver(
+        &self,
+    ) -> impl Future<Output = Vec<Result<DeliverySuccess, Report>>> + Send;
 }
