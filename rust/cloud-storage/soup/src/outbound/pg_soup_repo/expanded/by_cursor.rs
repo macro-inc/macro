@@ -174,7 +174,7 @@ r#"
                 -- Seek method: find items "before" the cursor position
                 -- using (sort_ts, id) tuple comparison for deterministic ordering
                 (sort_ts, id::text) < ($4, $5)
-            ORDER BY sort_ts DESC, updated_at DESC
+            ORDER BY sort_ts DESC, id DESC
             LIMIT $3
         )
 
