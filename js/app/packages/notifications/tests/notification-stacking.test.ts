@@ -20,14 +20,17 @@ function createNotification(
     entity_id: 'channel-1',
     entity_type: 'channel',
     createdAt,
-    updatedAt: null,
-    viewedAt: null,
-    deletedAt: null,
+    updatedAt: 0,
+    viewedAt: 0,
+    deletedAt: 0,
     done: false,
     sent: true,
     senderId: 'user-1',
     notificationEventType: type,
-    notificationMetadata: metadata,
+    notificationMetadata: {
+      tag: type,
+      content: metadata,
+    },
   } as UnifiedNotification;
 }
 

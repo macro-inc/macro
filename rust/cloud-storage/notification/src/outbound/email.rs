@@ -77,7 +77,7 @@ impl EmailServiceOps for aws_sdk_sesv2::Client {
     }
 }
 
-impl<E: EmailServiceOps + Send + Sync> EmailSender for EmailAdapter<E> {
+impl<E: EmailServiceOps + Send + Sync + 'static> EmailSender for EmailAdapter<E> {
     async fn send_email(
         &self,
         recipient: MacroUserIdStr<'_>,

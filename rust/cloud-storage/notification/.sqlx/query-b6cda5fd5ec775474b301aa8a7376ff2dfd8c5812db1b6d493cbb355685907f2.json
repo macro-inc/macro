@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                un.user_id as owner_id,\n                un.notification_id,\n                n.event_item_id,\n                n.event_item_type,\n                un.sent,\n                un.done,\n                un.created_at::timestamptz,\n                un.seen_at::timestamptz as viewed_at,\n                un.created_at::timestamptz as updated_at,\n                un.deleted_at::timestamptz,\n                n.metadata as notification_metadata,\n                n.notification_event_type as notification_event_type,\n                n.sender_id as sender_id\n            FROM user_notification un\n            JOIN notification n ON n.id = un.notification_id\n            WHERE un.user_id = $1\n            AND un.deleted_at IS NULL\n            AND un.done = false\n            AND (($3::timestamptz IS NULL)\n                OR (un.created_at, un.notification_id) < ($3, $4))\n            ORDER BY un.created_at DESC, un.notification_id DESC\n            LIMIT $2\n            ",
+  "query": "\n            SELECT\n                un.user_id as owner_id,\n                un.notification_id,\n                n.event_item_id,\n                n.event_item_type,\n                un.sent,\n                un.done,\n                un.created_at::timestamptz,\n                un.seen_at::timestamptz as viewed_at,\n                un.created_at::timestamptz as updated_at,\n                un.deleted_at::timestamptz,\n                n.metadata as \"notification_metadata: serde_json::Value\",\n                n.notification_event_type as notification_event_type,\n                n.sender_id as sender_id\n            FROM user_notification un\n            JOIN notification n ON n.id = un.notification_id\n            WHERE un.user_id = $1\n            AND n.event_item_id = ANY($2)\n            AND un.deleted_at IS NULL\n            AND un.done = false\n            AND (($4::timestamptz IS NULL)\n                OR (un.created_at, un.notification_id) < ($4, $5))\n            ORDER BY un.created_at DESC, un.notification_id DESC\n            LIMIT $3\n            ",
   "describe": {
     "columns": [
       {
@@ -55,7 +55,7 @@
       },
       {
         "ordinal": 10,
-        "name": "notification_metadata",
+        "name": "notification_metadata: serde_json::Value",
         "type_info": "Jsonb"
       },
       {
@@ -72,6 +72,7 @@
     "parameters": {
       "Left": [
         "Text",
+        "TextArray",
         "Int8",
         "Timestamptz",
         "Uuid"
@@ -88,10 +89,10 @@
       null,
       null,
       null,
-      true,
+      false,
       false,
       true
     ]
   },
-  "hash": "df9396937d4e99e6eb4a2911530c5eb0fac0c571ebc43b91a8a52680778b235d"
+  "hash": "b6cda5fd5ec775474b301aa8a7376ff2dfd8c5812db1b6d493cbb355685907f2"
 }

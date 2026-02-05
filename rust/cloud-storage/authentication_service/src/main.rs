@@ -170,11 +170,8 @@ async fn main() -> anyhow::Result<()> {
         aws_sdk_sqs::Client::new(&macro_aws_config::get_macro_aws_config().await),
         config.notification_queue.clone(),
     );
-    let notification_ingress_service = NotificationIngressService::new(
-        notification_repository,
-        notification_queue,
-        "authentication_service",
-    );
+    let notification_ingress_service =
+        NotificationIngressService::new(notification_repository, notification_queue);
     tracing::trace!("initialized notification ingress service");
 
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(

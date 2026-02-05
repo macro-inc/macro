@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface BulkGetUserNotificationsByEventItemIdRequest {
-  eventItemIds: string[];
-}
+/**
+ * The user who triggered the notification.
+ */
+export type ApiUserNotificationAllOfSenderId = string | null;

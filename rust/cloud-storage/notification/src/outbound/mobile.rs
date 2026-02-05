@@ -16,12 +16,12 @@ use crate::domain::ports::NotificationSender;
 /// and FCM (Android) through SNS.
 pub struct MobilePushAdapter<P> {
     push_service: P,
-    apns_bundle_id: &'static str,
+    apns_bundle_id: String,
 }
 
 impl<P> MobilePushAdapter<P> {
     /// Create a new mobile push adapter.
-    pub fn new(push_service: P, apns_bundle_id: &'static str) -> Self {
+    pub fn new(push_service: P, apns_bundle_id: String) -> Self {
         Self {
             push_service,
             apns_bundle_id,
@@ -63,7 +63,7 @@ impl MobilePushOps for aws_sdk_sns::Client {
     }
 }
 
-impl<P: MobilePushOps + Send + Sync> NotificationSender for MobilePushAdapter<P> {
+impl<P: MobilePushOps + Send + Sync + 'static> NotificationSender for MobilePushAdapter<P> {
     async fn send_ios_push_notification<T: Serialize + Send + Sync>(
         &self,
         endpoint_arn: &str,
@@ -71,7 +71,7 @@ impl<P: MobilePushOps + Send + Sync> NotificationSender for MobilePushAdapter<P>
         attributes: &MessageAttributes,
     ) -> Result<(), Report> {
         let target = SnsTarget::Ios(notification);
-        let sns_attributes = build_sns_attributes(self.apns_bundle_id, attributes);
+        let sns_attributes = build_sns_attributes(&self.apns_bundle_id, attributes);
         self.push_service
             .push_notification(endpoint_arn, &target, sns_attributes)
             .await
@@ -84,7 +84,7 @@ impl<P: MobilePushOps + Send + Sync> NotificationSender for MobilePushAdapter<P>
         attributes: &MessageAttributes,
     ) -> Result<(), Report> {
         let target = SnsTarget::Android(notification);
-        let sns_attributes = build_sns_attributes(self.apns_bundle_id, attributes);
+        let sns_attributes = build_sns_attributes(&self.apns_bundle_id, attributes);
         self.push_service
             .push_notification(endpoint_arn, &target, sns_attributes)
             .await

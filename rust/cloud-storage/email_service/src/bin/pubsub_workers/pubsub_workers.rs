@@ -90,7 +90,6 @@ async fn main() -> anyhow::Result<()> {
             aws_sdk_sqs::Client::new(&aws_config),
             config.notification_queue.clone(),
         ),
-        "email_service",
     ));
 
     let link_manager_worker = sqs_worker::SQSWorker::new(

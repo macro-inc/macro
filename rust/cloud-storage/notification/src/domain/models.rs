@@ -38,7 +38,7 @@ pub struct NotificationIdAndCollapseKey {
 #[derive(Debug, Clone, Serialize)]
 pub struct UserNotificationRow<T> {
     /// The user who owns this notification.
-    pub owner_id: String,
+    pub owner_id: MacroUserIdStr<'static>,
     /// The notification ID.
     pub notification_id: uuid::Uuid,
     /// The notification event type string (e.g. "channel_mention").

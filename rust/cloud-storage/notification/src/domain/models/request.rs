@@ -236,3 +236,16 @@ pub struct UpdateNotificationsRequest<'a> {
     /// The status to set on the notifications.
     pub status: NotificationStatus,
 }
+
+/// Request to get a user's notifications filtered by event item IDs.
+#[derive(Debug)]
+pub struct GetNotificationsByEventItemIdsRequest<'a> {
+    /// The user whose notifications to retrieve.
+    pub user_id: &'a str,
+    /// The event item IDs to filter by.
+    pub event_item_ids: &'a [Uuid],
+    /// Maximum number of results per page (default 20, max 500).
+    pub limit: Option<u32>,
+    /// Cursor for pagination.
+    pub cursor: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
+}

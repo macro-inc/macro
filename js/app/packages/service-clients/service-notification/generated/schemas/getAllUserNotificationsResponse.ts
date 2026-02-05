@@ -4,11 +4,15 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { ApiUserNotification } from './apiUserNotification';
 import type { GetAllUserNotificationsResponseNextCursor } from './getAllUserNotificationsResponseNextCursor';
-import type { UserNotification } from './userNotification';
 
+/**
+ * The strongly typed response for listing user notifications.
+ */
 export interface GetAllUserNotificationsResponse {
-  items: UserNotification[];
+  /** The list of items returned. */
+  items: ApiUserNotification[];
+  /** The next page cursor if it exists. */
   next_cursor?: GetAllUserNotificationsResponseNextCursor;
 }
