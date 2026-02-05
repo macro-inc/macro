@@ -40,6 +40,13 @@ function setHistoryItemData(itemId: string, updater: Setter<HistoryItem>) {
   );
 }
 
+function setHistoryData(updater: Setter<HistoryItem[]>) {
+  return queryClient.setQueryData<HistoryItem[]>(
+    historyKeys.list.queryKey,
+    updater
+  );
+}
+
 export function setHistoryItemName(itemId: string, name: string) {
   return setHistoryItemData(itemId, (prev) => ({
     ...prev,
@@ -85,13 +92,10 @@ export function RemoveInstructionsMdFromHistorySideEffect() {
     const history = historyQuery.data;
     if (!instructionsId || !history || !history.length) return;
     if (!history.some((item) => item.id === instructionsId)) return;
-    return queryClient.setQueryData<HistoryItem[]>(
-      historyKeys.list.queryKey,
-      (prev) => {
-        if (!prev) return prev;
-        return prev.filter((item) => item.id !== instructionsId);
-      }
-    );
+    return setHistoryData((prev) => {
+      if (!prev) return prev;
+      return prev.filter((item) => item.id !== instructionsId);
+    });
   });
   return null;
 }
@@ -113,7 +117,7 @@ export function refetchHistory() {
 function optimisticUpdateViewedAt(itemId: string) {
   const now = Date.now();
 
-  queryClient.setQueryData<HistoryItem[]>(historyKeys.list.queryKey, (old) => {
+  setHistoryData((old) => {
     if (!old) return old;
     return updateViewedAtAndMoveItemToFront(old, itemId, now);
   });
@@ -171,10 +175,7 @@ export function useUpsertToHistoryMutation(
           },
           onError: (_err, _params, context) => {
             if (context?.previousData) {
-              queryClient.setQueryData(
-                historyKeys.list.queryKey,
-                context.previousData
-              );
+              setHistoryData(context.previousData);
             }
           },
           onSettled: () => {
@@ -217,7 +218,7 @@ export async function removeHistoryItem(
   itemType: CloudStorageItemType,
   itemId: string
 ): Promise<boolean> {
-  queryClient.setQueryData<HistoryItem[]>(historyKeys.list.queryKey, (old) => {
+  setHistoryData((old) => {
     if (!old) return old;
     return old.filter((item) => item.id !== itemId);
   });
@@ -301,7 +302,7 @@ export async function insertProjectIntoHistory(projectId: string) {
     }
   }
 
-  queryClient.setQueryData<HistoryItem[]>(historyKeys.list.queryKey, (old) => {
+  setHistoryData((old) => {
     if (!old) return old;
     return [...old, ...newData];
   });
