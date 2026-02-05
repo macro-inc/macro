@@ -1,14 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-
-vi.mock('@core/constant/allBlocks', () => ({
-  itemToSafeName: (item: { name?: string }) => item.name ?? 'Untitled',
-}));
-
 import type { Item } from '@service-storage/generated/schemas/item';
 import {
   transformHistoryResponse,
   updateViewedAtAndMoveItemToFront,
 } from '../transforms';
+
+vi.mock('@core/constant/allBlocks', () => ({
+  itemToSafeName: (item: { name?: string }) => item.name || 'Untitled',
+}));
 
 function createItem(overrides: Partial<Item> = {}): Item {
   return {
@@ -23,19 +22,31 @@ function createItem(overrides: Partial<Item> = {}): Item {
 }
 
 describe('history transforms', () => {
-  it('transforms response and filters instructions.md', () => {
+  it('transforms response', () => {
     const data = {
       data: [
         createItem({ id: 'doc-1', name: 'My Doc' }),
-        createItem({ id: 'instructions-md', name: 'Instructions' }),
         createItem({ id: 'doc-2', name: 'Other Doc' }),
       ],
     };
 
-    const result = transformHistoryResponse(data, 'instructions-md');
+    const result = transformHistoryResponse(data);
 
     expect(result.map((i) => i.id)).toEqual(['doc-1', 'doc-2']);
     expect(result[0].name).toBe('My Doc');
+  });
+
+  it('keeps raw name for md documents', () => {
+    const data = {
+      data: [createItem({ id: 'doc-1', name: '', fileType: 'md' })],
+    };
+
+    console.log('data', data);
+
+    const result = transformHistoryResponse(data);
+
+    expect(result[0].name).toBe('Untitled');
+    expect(result[0].rawName).toBe('');
   });
 
   describe('updateViewedAtAndMoveItemToFront', () => {
