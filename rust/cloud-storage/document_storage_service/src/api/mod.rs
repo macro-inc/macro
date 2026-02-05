@@ -165,6 +165,7 @@ fn api_router(state: ApiContext) -> Router {
             comms_service::comms_router(&CommsHandlerState::from_ref(&state))
                 .with_state(CommsHandlerState::from_ref(&state)),
         )
+        .merge(permissions::router())
         .layer(
             ServiceBuilder::new()
                 .layer(axum::middleware::from_fn(

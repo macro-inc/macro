@@ -1,5 +1,6 @@
 pub mod chat;
 pub mod document;
+pub mod entity_permission;
 pub mod history;
 pub mod pin;
 pub mod project;
