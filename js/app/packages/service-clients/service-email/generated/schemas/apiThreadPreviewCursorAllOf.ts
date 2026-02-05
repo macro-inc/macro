@@ -4,8 +4,6 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { APIEmailThreadPreviewMetadata } from './aPIEmailThreadPreviewMetadata';
 import type { ApiAttachment } from './apiAttachment';
 import type { ApiContact } from './apiContact';
 import type { ApiLabel } from './apiLabel';
@@ -16,5 +14,4 @@ export type ApiThreadPreviewCursorAllOf = {
   contacts: ApiContact[];
   frecencyScore?: ApiThreadPreviewCursorAllOfFrecencyScore;
   labels: ApiLabel[];
-  metadata: APIEmailThreadPreviewMetadata;
 };

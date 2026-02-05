@@ -89,7 +89,6 @@ impl<'a> Deref for MacroUserIdStr<'a> {
 
 impl<'a> MacroUserIdStr<'a> {
     /// parse the inner value from the input string
-    #[tracing::instrument(err)]
     pub fn parse_from_str(s: &'a str) -> Result<Self, ParseErr> {
         MacroUserId::parse_from_str(s)
             .map(|id| id.lowercase())

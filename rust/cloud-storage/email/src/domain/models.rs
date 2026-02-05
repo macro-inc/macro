@@ -94,7 +94,6 @@ pub struct EnrichedEmailThreadPreview {
     pub thread: EmailThreadPreview,
     pub attachments: Vec<Attachment>,
     pub labels: Vec<Label>,
-    pub metadata: EmailThreadPreviewMetadata,
     pub frecency_score: Option<AggregateFrecency>,
     pub participants: Vec<Contact>,
 }
@@ -127,19 +126,6 @@ impl SortOn<SimpleSortMethod> for EnrichedEmailThreadPreview {
             }
         }
     }
-}
-
-/// derived metadata for the email thread that the FE uses for filtering
-#[derive(Debug, Clone, Default)]
-pub struct EmailThreadPreviewMetadata {
-    /// if user has previously emailed any sender
-    pub known_sender: bool,
-    /// if any email contains a <table> html tag
-    pub tabular: bool,
-    /// if any email contains a calendar invite
-    pub calendar_invite: bool,
-    /// if any sender is a generic email
-    pub generic_sender: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -249,13 +235,4 @@ pub struct Link {
     pub is_sync_active: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
-}
-
-/// thread values needed to build thread preview metadata
-#[derive(Debug)]
-pub struct IntermediateThreadMetadata {
-    pub thread_id: Uuid,
-    pub has_table: bool,
-    pub has_calendar_invite: bool,
-    pub sender_emails: Vec<String>,
 }

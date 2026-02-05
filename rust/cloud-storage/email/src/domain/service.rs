@@ -1,5 +1,3 @@
-mod preview_metadata;
-
 use crate::domain::{
     models::{
         EmailErr, EnrichedEmailThreadPreview, GetEmailsRequest, PreviewCursorQuery, UserProvider,
@@ -85,17 +83,10 @@ where
             ids: ids.as_slice(),
         };
 
-        let (
-            attachment_map_result,
-            participant_result,
-            labels_result,
-            metadata_result,
-            frecency_scores,
-        ) = tokio::join!(
+        let (attachment_map_result, participant_result, labels_result, frecency_scores) = tokio::join!(
             self.email_repo.attachments_by_thread_ids(&thread_ids),
             self.email_repo.contacts_by_thread_ids(&thread_ids),
             self.email_repo.labels_by_thread_ids(&thread_ids),
-            self.get_preview_metadata(&previews, &link_id),
             self.frecency_service
                 .get_frecencies_by_ids(frecency_request)
         );
@@ -112,7 +103,6 @@ where
             .map_err(anyhow::Error::from)?
             .into_iter()
             .group_by(|v| v.thread_id);
-        let mut metadata_map = metadata_result.map_err(anyhow::Error::from)?;
 
         let mut frecency_scores_map: HashMap<AggregateId<'static>, FrecencyData> =
             frecency_scores?.into_inner();
@@ -129,7 +119,6 @@ where
                     attachments: attachment_map.remove(&thread.id).unwrap_or_default(),
                     labels: labels_map.remove(&thread.id).unwrap_or_default(),
                     participants: participant_map.remove(&thread.id).unwrap_or_default(),
-                    metadata: metadata_map.remove(&thread.id).unwrap_or_default(),
                     frecency_score: frecency_scores_map
                         .remove(&id)
                         .map(|data| id.into_aggregate(data)),

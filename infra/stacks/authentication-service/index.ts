@@ -281,6 +281,15 @@ const service = new AuthenticationService('authentication-service', {
       name: 'STRIPE_PREMIUM_PRICE_ID',
       value: pulumi.interpolate`${STRIPE_PREMIUM_PRICE_ID}`,
     },
+    // OpenTelemetry / Datadog tracing configuration
+    {
+      name: 'DD_SERVICE',
+      value: 'authentication-service',
+    },
+    {
+      name: 'DD_ENV',
+      value: stack,
+    },
   ],
 });
 

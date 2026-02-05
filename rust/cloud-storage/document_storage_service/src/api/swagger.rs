@@ -103,9 +103,8 @@ use models_permissions::share_permission::channel_share_permission::UpdateOperat
 use models_soup::chat::SoupChat;
 use models_soup::document::SoupDocument;
 use models_soup::email_thread::{
-    SoupAttachment, SoupContact, SoupEmailThreadPreview, SoupEmailThreadPreviewMetadata,
-    SoupEnrichedEmailThreadPreview, SoupLabel, SoupLabelListVisibility, SoupLabelType,
-    SoupMessageListVisibility,
+    SoupAttachment, SoupContact, SoupEmailThreadPreview, SoupEnrichedEmailThreadPreview, SoupLabel,
+    SoupLabelListVisibility, SoupLabelType, SoupMessageListVisibility,
 };
 use models_soup::item::SoupItem;
 use models_soup::project::SoupProject;
@@ -291,7 +290,6 @@ use utoipa::OpenApi;
             SoupEmailThreadPreview,
             SoupAttachment,
             SoupContact,
-            SoupEmailThreadPreviewMetadata,
             SoupLabel,
             SoupLabelListVisibility,
             SoupMessageListVisibility,

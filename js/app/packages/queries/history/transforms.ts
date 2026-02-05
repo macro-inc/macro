@@ -27,10 +27,10 @@ export type HistoryQueryResponse = {
   data: HistoryItem[];
 };
 
-export function transformHistoryItem(item: HistoryItem): HistoryItem {
+export function transformHistoryItem(item: HistoryItem, rawName?: boolean): HistoryItem {
   const base = {
     id: item.id,
-    name: itemToSafeName(item),
+    name: rawName ? item.name : itemToSafeName(item),
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
     deletedAt: item.deletedAt,
@@ -71,10 +71,11 @@ export function filterInstructionsMd(
 
 export function transformHistoryResponse(
   data: HistoryQueryResponse,
-  instructionsId: string | null | undefined
+  instructionsId: string | null | undefined,
+  rawName?: boolean
 ): HistoryItem[] {
-  return filterInstructionsMd(data.data, instructionsId).map(
-    transformHistoryItem
+  return filterInstructionsMd(data.data, instructionsId).map((item) =>
+    transformHistoryItem(item, rawName)
   );
 }
 

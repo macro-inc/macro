@@ -25,8 +25,8 @@ use models_pagination::{
 use models_soup::{
     comms::SoupChannel,
     email_thread::{
-        SoupAttachment, SoupContact, SoupEmailThreadPreview, SoupEmailThreadPreviewMetadata,
-        SoupEnrichedEmailThreadPreview, SoupLabel,
+        SoupAttachment, SoupContact, SoupEmailThreadPreview, SoupEnrichedEmailThreadPreview,
+        SoupLabel,
     },
     item::SoupItem,
 };
@@ -275,7 +275,6 @@ where
                      thread,
                      attachments,
                      labels,
-                     metadata,
                      mut frecency_score,
                      participants,
                      ..
@@ -285,7 +284,6 @@ where
                         thread: SoupEmailThreadPreview::mirror(thread),
                         attachments: Vec::<SoupAttachment>::mirror(attachments),
                         participants: Vec::<SoupContact>::mirror(participants),
-                        metadata: SoupEmailThreadPreviewMetadata::mirror(metadata),
                         labels: Vec::<SoupLabel>::mirror(labels),
                         properties: Default::default(),
                     };

@@ -45,4 +45,6 @@ Will need to have a corresponding job initiated for the file beforehand. */
   projectId?: CreateDocumentRequestProjectId;
   /** The sha of the document. */
   sha: string;
+  /** Whether to add a viewed_at record for this document upon creation. */
+  skipHistory?: boolean;
 }

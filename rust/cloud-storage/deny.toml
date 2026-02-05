@@ -181,9 +181,13 @@ allow = [
 ]
 # List of crates to deny
 deny = [
+  { crate = "aws-config", wrappers = [
+    "macro_aws_config",
+  ], reason = "Use macro_aws_config for AWS configuration in workspace crates" },
   { crate = "tracing-subscriber", wrappers = [
     "lambda_runtime_api_client", # External crate allowed to use tracing-subscriber
     "macro_entrypoint",
+    "tracing-opentelemetry",     # OpenTelemetry integration requires tracing-subscriber
     "tracing-panic",             # External crate allowed to use tracing-subscriber
     "tracing-tree",
   ], reason = "Use macro_entrypoint for tracing setup in workspace crates" },

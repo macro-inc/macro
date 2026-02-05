@@ -7,7 +7,7 @@ const serverHostLocal: Servers = {
   'cognition-websocket-service': 'ws://localhost:8085',
   'connection-gateway': 'ws://localhost:8082',
   'notification-service': 'http://localhost:8089',
-  'static-file': 'http://localhost:8094',
+  'static-file': 'http://localhost:8100',
   'unfurl-service': 'http://localhost:8095',
   contacts: 'http://localhost:8083',
   'email-service': 'http://localhost:8087',

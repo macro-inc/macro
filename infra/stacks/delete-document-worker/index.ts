@@ -113,6 +113,15 @@ const deleteDocumentWorker = new Worker(`delete-document-worker-${stack}`, {
         stack === 'prod' ? '' : `-${stack === 'dev' ? 'dev3' : stack}`
       }.macroverse.workers.dev`,
     },
+    // OpenTelemetry / Datadog tracing configuration
+    {
+      name: 'DD_SERVICE',
+      value: 'delete-document-worker',
+    },
+    {
+      name: 'DD_ENV',
+      value: stack,
+    },
   ],
   cloudStorageClusterName: cloudStorageClusterName,
   deleteDocumentQueueArn: deleteDocumentQueueArn,

@@ -145,7 +145,8 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
   const debouncedRename = debounce(() => {
     const name = state();
-    if (canEdit()) renameMarkdownDocument(name);
+    const prevName = untrack(mdDocumentName);
+    if (canEdit()) renameMarkdownDocument(name, prevName);
   }, 500);
 
   const [state, setState] = createSignal('');

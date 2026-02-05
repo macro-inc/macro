@@ -260,6 +260,22 @@ services:
       start_period: 10s
 
   # ============================================================================
+  # static_file_cdn (Port 8100)
+  # Local CloudFront emulation - routes to S3 and static_file_service
+  # ============================================================================
+  static_file_cdn:
+    image: nginx:alpine
+    ports:
+      - "8100:80"
+    volumes:
+      - ./infra/local/nginx/static-file-cdn.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - static_file_service
+    networks:
+      - databases
+      - services
+
+  # ============================================================================
   # unfurl_service (Port 8095)
   # URL unfurling - no dependencies
   # ============================================================================

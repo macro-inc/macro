@@ -4,8 +4,6 @@ import {
   isTaskEntity,
   type TaskEntityWithProperties,
 } from '@macro-entity';
-import type { APIEmailThreadPreviewMetadata } from '@service-email/generated/schemas';
-import type { SoupEmailThreadPreviewMetadata } from '@service-storage/generated/schemas';
 import { makePersisted } from '@solid-primitives/storage';
 import { createMemo, createSignal } from 'solid-js';
 import { isSignalTask } from './Soup/utils/filterHelpers';
@@ -58,16 +56,6 @@ const PRIORITY_LABEL_SIGNAL_CONFIGS: SignalConfig<string>[] = [
   },
 ];
 
-const PRIORITY_METADATA_SIGNAL_CONFIGS: SignalConfig<
-  keyof SoupEmailThreadPreviewMetadata
->[] = [
-  {
-    key: 'knownSender',
-    label: 'Known Sender',
-    defaultValue: false,
-  },
-];
-
 const DEPRIORITY_LABEL_SIGNAL_CONFIGS: SignalConfig<string>[] = [
   {
     key: 'CATEGORY_UPDATES',
@@ -91,36 +79,13 @@ const DEPRIORITY_LABEL_SIGNAL_CONFIGS: SignalConfig<string>[] = [
   },
 ];
 
-const DEPRIORITY_METADATA_SIGNAL_CONFIGS: SignalConfig<
-  keyof SoupEmailThreadPreviewMetadata
->[] = [
-  {
-    key: 'tabular',
-    label: 'Tabular',
-    defaultValue: false,
-  },
-  {
-    key: 'genericSender',
-    label: 'Generic Sender',
-    defaultValue: false,
-  },
-];
-
 export const PRIORITY_LABEL_SIGNAL_TOGGLES = createSignalToggles(
   'priority_label',
   PRIORITY_LABEL_SIGNAL_CONFIGS
 );
-export const PRIORITY_METADATA_SIGNAL_TOGGLES = createSignalToggles(
-  'priority_metadata',
-  PRIORITY_METADATA_SIGNAL_CONFIGS
-);
 export const DEPRIORITY_LABEL_SIGNAL_TOGGLES = createSignalToggles(
   'depriority_label',
   DEPRIORITY_LABEL_SIGNAL_CONFIGS
-);
-export const DEPRIORITY_METADATA_SIGNAL_TOGGLES = createSignalToggles(
-  'depriority_metadata',
-  DEPRIORITY_METADATA_SIGNAL_CONFIGS
 );
 
 // Computed Sets based on persisted settings
@@ -142,24 +107,6 @@ const SIGNAL_DEPRIORITY_LABELS = createMemo(
     )
 );
 
-const SIGNAL_PRIORITY_METADATA = createMemo(
-  () =>
-    new Set<keyof SoupEmailThreadPreviewMetadata>(
-      PRIORITY_METADATA_SIGNAL_TOGGLES.filter(({ enabled }) => enabled()).map(
-        ({ key }) => key
-      )
-    )
-);
-
-const SIGNAL_DEPRIORITY_METADATA = createMemo(
-  () =>
-    new Set<keyof SoupEmailThreadPreviewMetadata>(
-      DEPRIORITY_METADATA_SIGNAL_TOGGLES.filter(({ enabled }) => enabled()).map(
-        ({ key }) => key
-      )
-    )
-);
-
 const getLabelTokens = (
   labels?: Array<{ id?: string; providerLabelId?: string; name?: string }>
 ): string[] => {
@@ -175,38 +122,10 @@ const getLabelTokens = (
   return tokens.map((token) => token.toUpperCase());
 };
 
-// Helper to safely check metadata properties that may use different naming conventions. We can removed this when we're no longer using Email query, and only Soup query.
-const getMetadataValue = (
-  metadata:
-    | SoupEmailThreadPreviewMetadata
-    | APIEmailThreadPreviewMetadata
-    | undefined,
-  key: keyof SoupEmailThreadPreviewMetadata
-): boolean | undefined => {
-  if (!metadata) return undefined;
-
-  // Check SoupEmailThreadPreviewMetadata format (camelCase)
-  if (key in metadata) {
-    return (metadata as SoupEmailThreadPreviewMetadata)[key];
-  }
-
-  // Check APIEmailThreadPreviewMetadata format (snake_case)
-  const snakeCaseKey = key
-    .replace(/([A-Z])/g, '_$1')
-    .toLowerCase() as keyof APIEmailThreadPreviewMetadata;
-  if (snakeCaseKey in metadata) {
-    return (metadata as APIEmailThreadPreviewMetadata)[snakeCaseKey];
-  }
-
-  return undefined;
-};
-
 const getEmailSignalInfo = (entity: Extract<EntityData, { type: 'email' }>) => {
   const labelTokens = getLabelTokens(entity.labels);
   const priorityLabels = SIGNAL_PRIORITY_LABELS();
   const depriorityLabels = SIGNAL_DEPRIORITY_LABELS();
-  const priorityMetadata = SIGNAL_PRIORITY_METADATA();
-  const depriorityMetadata = SIGNAL_DEPRIORITY_METADATA();
 
   const hasPriorityLabel = labelTokens.some((label) =>
     priorityLabels.has(label)
@@ -215,20 +134,9 @@ const getEmailSignalInfo = (entity: Extract<EntityData, { type: 'email' }>) => {
     depriorityLabels.has(label)
   );
 
-  const hasPriorityMetadata = entity.metadata
-    ? Array.from(priorityMetadata).some(
-        (key) => getMetadataValue(entity.metadata, key) === true
-      )
-    : false;
-  const hasDeprioritizingMetadata = entity.metadata
-    ? Array.from(depriorityMetadata).some(
-        (key) => getMetadataValue(entity.metadata, key) === true
-      )
-    : false;
-
   return {
-    hasPriority: hasPriorityMetadata || hasPriorityLabel,
-    hasDepriority: hasDeprioritizingLabel || hasDeprioritizingMetadata,
+    hasPriority: hasPriorityLabel,
+    hasDepriority: hasDeprioritizingLabel,
   };
 };
 

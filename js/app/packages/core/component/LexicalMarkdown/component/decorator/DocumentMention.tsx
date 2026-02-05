@@ -12,7 +12,6 @@ import {
 import { EntityIcon } from '@core/component/EntityIcon';
 import { resolveBlockAlias, verifyBlockName } from '@core/constant/allBlocks';
 import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import { canNestBlock } from '@core/orchestrator';
 import {
@@ -353,21 +352,6 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
             }}
             style={{
               'user-select': 'inherit',
-            }}
-            ontouchstart={(e: TouchEvent) => {
-              if (isTouchDevice()) {
-                e.preventDefault();
-              }
-            }}
-            ontouchend={(e: TouchEvent) => {
-              if (isTouchDevice()) {
-                e.preventDefault();
-                if (
-                  matches(item(), (i) => !i.loading && i.access === 'access')
-                ) {
-                  open(null);
-                }
-              }
             }}
             {...navHandlers}
           >

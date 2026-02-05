@@ -95,6 +95,7 @@ pub(in crate::api) async fn create_task_handler(
             email_attachment_id: None,
             created_at: None,
             is_task: true,
+            skip_history: false,
         },
     )
     .await;
