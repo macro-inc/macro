@@ -984,6 +984,12 @@ export const createDocumentHandlerBody = zod.object({
     ),
   projectId: zod.string().nullish(),
   sha: zod.string().describe('The sha of the document.'),
+  skipHistory: zod
+    .boolean()
+    .optional()
+    .describe(
+      'Whether to add a viewed_at record for this document upon creation.'
+    ),
 });
 
 export const createDocumentHandlerResponse = zod.object({

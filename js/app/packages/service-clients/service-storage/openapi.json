@@ -5136,6 +5136,10 @@
           "sha": {
             "type": "string",
             "description": "The sha of the document."
+          },
+          "skipHistory": {
+            "type": "boolean",
+            "description": "Whether to add a viewed_at record for this document upon creation."
           }
         }
       },
