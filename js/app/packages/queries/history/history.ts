@@ -8,6 +8,7 @@ import {
   useQuery,
   queryOptions,
   type QueryClient,
+  type Updater,
 } from '@tanstack/solid-query';
 import { createEffect, type Accessor, type Setter } from 'solid-js';
 import { queryClient } from '../client';
@@ -47,10 +48,16 @@ function setHistoryItemData(itemId: string, updater: Setter<HistoryItem>) {
   );
 }
 
-function setHistoryData(updater: Setter<HistoryQueryFnResult>) {
+function setHistoryData(
+  updater: Updater<HistoryQueryFnResult, HistoryQueryFnResult>
+) {
+  const updaterWrapper = (prev: HistoryQueryFnResult | undefined) => {
+    if (!prev) return prev;
+    return typeof updater === 'function' ? updater(prev) : updater;
+  };
   return queryClient.setQueryData<HistoryQueryFnResult>(
     historyQueryOptions.queryKey,
-    updater
+    updaterWrapper
   );
 }
 
@@ -98,7 +105,6 @@ export function RemoveInstructionsMdFromHistorySideEffect() {
     if (!instructionsId || !history || !history.length) return;
     if (!history.some((item) => item.id === instructionsId)) return;
     return setHistoryData((prev) => {
-      if (!prev) return prev;
       return prev.filter((item) => item.id !== instructionsId);
     });
   });
@@ -123,7 +129,6 @@ function optimisticUpdateViewedAt(itemId: string) {
   const now = Date.now();
 
   setHistoryData((old) => {
-    if (!old) return old;
     return updateViewedAtAndMoveItemToFront(old, itemId, now);
   });
 }
@@ -224,7 +229,6 @@ export async function removeHistoryItem(
   itemId: string
 ): Promise<boolean> {
   setHistoryData((old) => {
-    if (!old) return old;
     return old.filter((item) => item.id !== itemId);
   });
 
@@ -308,7 +312,6 @@ export async function insertProjectIntoHistory(projectId: string) {
   }
 
   setHistoryData((old) => {
-    if (!old) return old;
     return [...old, ...newData];
   });
 
