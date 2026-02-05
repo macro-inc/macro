@@ -17,7 +17,6 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
-import { LOGIN_COOKIE_AGE, updateCookie } from '@core/util/cookies';
 import { EmailForm } from './EmailForm';
 import { LoginOptions } from './LoginOptions';
 import { identifyUser, Stage } from './Shared';
@@ -62,9 +61,6 @@ export function Login() {
   });
 
   const onComplete = async () => {
-    const expires = new Date();
-    expires.setMonth(expires.getMonth() + 1);
-
     setActiveModal();
     unsetTokenPromise();
     invalidateUserInfo();
@@ -74,12 +70,6 @@ export function Login() {
       location.state?.originalLocation &&
       location.state.originalLocation.pathname !== location.pathname
     ) {
-      updateCookie('login', 'true', {
-        expires,
-        maxAge: LOGIN_COOKIE_AGE,
-        sameSite: 'Lax',
-        path: '/',
-      });
       await identifyUser();
     }
   };
