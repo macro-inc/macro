@@ -50,7 +50,6 @@ import { detect } from 'detect-browser';
 import {
   createEffect,
   type JSX,
-  lazy,
   Match,
   onCleanup,
   onMount,
