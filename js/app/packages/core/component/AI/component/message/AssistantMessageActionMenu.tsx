@@ -100,7 +100,6 @@ export function AssistantMessageActionAndMetadata(props: AssistantActionProps) {
     const maybeDoc = await createFromMarkdownText({
       markdown: content,
       title: title ?? `AI Message`,
-      preserveNewLines: false,
     });
 
     if ('error' in maybeDoc) {

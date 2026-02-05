@@ -208,7 +208,6 @@ export function PDFPopup(props: PDFPopupProps) {
     const maybeDoc = await createFromMarkdownText({
       markdown: content,
       title: title ?? `${blockMetadataSignal()?.documentName} - AI Explanation`,
-      preserveNewLines: false,
     });
 
     if ('error' in maybeDoc) {

@@ -187,7 +187,6 @@ export function AssistantMessage(props: {
     const maybeDoc = await createFromMarkdownText({
       markdown: content,
       title: title ?? `AI Message`,
-      preserveNewLines: false,
     });
 
     if ('error' in maybeDoc) {

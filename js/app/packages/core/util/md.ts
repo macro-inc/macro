@@ -21,7 +21,7 @@ export async function createFromMarkdownText(args: {
     editor,
     markdown,
     'external',
-    preserveNewLines ?? true
+    preserveNewLines ?? false
   );
   const state = JSON.stringify(editor.getEditorState().toJSON());
   cleanup();
