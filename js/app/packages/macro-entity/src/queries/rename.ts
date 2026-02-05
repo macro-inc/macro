@@ -13,7 +13,7 @@ import { type InfiniteData, useMutation } from '@tanstack/solid-query';
 import { toast } from '@core/component/Toast/Toast';
 import type { SoupPage } from '@service-storage/generated/schemas';
 import { setPreviewData } from '@queries/preview';
-import { setHistoryItemData } from '@queries/history/history';
+import { setHistoryItemName } from '@queries/history/history';
 
 type RenamableEntity = Pick<EntityData, 'id' | 'type' | 'name'> &
   Partial<EntityData>;
@@ -177,11 +177,7 @@ const renamePreviewSetData = (entities: EntityRenameData[]) => {
 
 const renameHistorySetData = (entities: EntityRenameData[]) => {
   entities.forEach(({ id, newName }) => {
-    setHistoryItemData(id, (prev) => ({
-      ...prev,
-      name: newName,
-      rawName: newName,
-    }));
+    setHistoryItemName(id, newName);
   });
 };
 

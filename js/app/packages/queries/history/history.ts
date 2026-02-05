@@ -24,14 +24,10 @@ export {
 const HISTORY_STALE_TIME = 5 * 60 * 1000;
 const HISTORY_GC_TIME = 10 * 60 * 1000;
 
-export function setHistoryItemData(
-  itemId: string,
-  updater: Setter<HistoryItem>
-) {
+function setHistoryItemData(itemId: string, updater: Setter<HistoryItem>) {
   return queryClient.setQueryData<HistoryItem[]>(
     historyKeys.list.queryKey,
     (prev) => {
-      console.log('setHistoryItemData', prev);
       if (!prev) return prev;
       const items = prev.map((item) => {
         if (item.id === itemId) {
@@ -42,6 +38,14 @@ export function setHistoryItemData(
       return items;
     }
   );
+}
+
+export function setHistoryItemName(itemId: string, name: string) {
+  return setHistoryItemData(itemId, (prev) => ({
+    ...prev,
+    name,
+    rawName: name,
+  }));
 }
 
 function historyQueryOptions() {
