@@ -34,8 +34,6 @@ pub async fn main() -> anyhow::Result<()> {
         Environment::Local => (1, 10),
     };
 
-    println!("database url: {:?}", &config.database_url);
-
     let db = PgPoolOptions::new()
         .min_connections(min_connections)
         .max_connections(max_connections)
