@@ -150,15 +150,15 @@ pub struct ApiUserNotification {
     pub created_at: Option<DateTime<Utc>>,
     /// When the notification was viewed/seen.
     #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable = false)]
+    #[schema(value_type = i64, nullable = true)]
     pub viewed_at: Option<DateTime<Utc>>,
     /// When the notification was last updated.
     #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable = false)]
+    #[schema(value_type = i64, nullable = true)]
     pub updated_at: Option<DateTime<Utc>>,
     /// When the notification was deleted.
     #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable = false)]
+    #[schema(value_type = i64, nullable = true)]
     pub deleted_at: Option<DateTime<Utc>>,
     /// Deserialized notification metadata.
     pub notification_metadata: NotifEvent,

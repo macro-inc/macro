@@ -312,3 +312,51 @@ async fn test_get_user_notifications_empty(pool: Pool<Postgres>) {
 
     assert!(result.is_empty());
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_create_notification_returns_none_on_conflict(pool: Pool<Postgres>) {
+    let recipient = test_user("recipient@test.com");
+    let notification_id = uuid::Uuid::new_v4();
+
+    let request = SendNotificationRequestBuilder {
+        notification_entity: EntityType::Document.with_entity_str("doc-1"),
+        notification: TestNotification {
+            message: "hello".to_string(),
+        },
+        sender_id: None,
+        recipient_ids: std::collections::HashSet::from([recipient.clone()]),
+    };
+
+    // First creation should succeed
+    let result = pool
+        .create_notification(&request, notification_id, "test_service", None)
+        .await
+        .unwrap();
+    assert_eq!(result, Some(notification_id));
+
+    // Second creation with same ID should return None
+    let result = pool
+        .create_notification(&request, notification_id, "test_service", None)
+        .await
+        .unwrap();
+    assert_eq!(result, None);
+
+    // Verify only one notification exists
+    let count: i64 = sqlx::query_scalar!("SELECT COUNT(*) FROM notification WHERE id = $1", notification_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(count, 1);
+
+    // Verify only one user_notification exists (not duplicated)
+    let user_count: i64 = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM user_notification WHERE notification_id = $1",
+        notification_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(user_count, 1);
+}

@@ -8,6 +8,7 @@ use crate::domain::models::queue_message::{QueueMessage, RawQueueMessage};
 use crate::domain::ports::NotificationQueue;
 
 /// SQS-backed implementation of the notification queue port.
+#[derive(Clone)]
 pub struct SqsNotificationQueue {
     client: SqsClient,
     queue_url: String,

@@ -265,7 +265,7 @@ impl NotificationDbOps for PgPool {
         let sender_id = request.sender_id.as_ref().map(|id| id.to_string());
 
         // Insert notification
-        sqlx::query!(
+        let result = sqlx::query!(
             r#"
             INSERT INTO notification (id, notification_event_type, event_item_id, event_item_type, service_sender, metadata, sender_id, apns_collapse_key)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -282,6 +282,11 @@ impl NotificationDbOps for PgPool {
         )
         .execute(&mut *tx)
         .await?;
+
+        // Return None early if notification already exists (conflict)
+        if result.rows_affected() == 0 {
+            return Ok(None);
+        }
 
         // Insert user notifications
         let user_ids: Vec<String> = request

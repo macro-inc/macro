@@ -94,15 +94,17 @@ pub async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
 
+    let vars = config::Vars::new()?;
     let notification_repository =
         ::notification::outbound::repository::DbNotificationRepository::new(db.clone());
+
     let notification_queue = ::notification::outbound::queue::SqsNotificationQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
-        config.push_notification_event_handler_queue.clone(),
+        vars.notification_queue.as_ref().to_string(),
     );
     let ingress_service = ::notification::domain::service::NotificationIngressService::new(
         notification_repository,
-        notification_queue,
+        notification_queue.clone(),
     );
     let ingress_state =
         ::notification::inbound::http::NotificationRouterState::new(ingress_service);
@@ -110,8 +112,6 @@ pub async fn main() -> anyhow::Result<()> {
     // Set up egress worker for delivering notifications from the queue
     let egress_repository =
         ::notification::outbound::repository::DbNotificationRepository::new(db.clone());
-
-    let vars = config::Vars::new()?;
 
     let websocket_adapter = WebSocketGatewayAdapter::new(ConnectionGatewayClient::new(
         internal_secret_key.as_ref().to_string(),
@@ -130,12 +130,8 @@ pub async fn main() -> anyhow::Result<()> {
         redis::Client::open(vars.redis_uri.as_ref()).expect("failed to create redis client");
     let rate_limit_adapter = RedisRateLimitAdapter::new(redis_client);
 
-    let egress_queue = ::notification::outbound::queue::SqsNotificationQueue::new(
-        aws_sdk_sqs::Client::new(&aws_config),
-        vars.notification_queue.as_ref().to_string(),
-    );
     let egress_service = NotificationEgressService::new(
-        egress_queue,
+        notification_queue,
         egress_repository,
         websocket_adapter,
         mobile_adapter,
