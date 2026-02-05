@@ -18,10 +18,6 @@ import type { NamedSubType } from '@macro-entity';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import type { ItemType } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
-import {
-  insertProjectIntoHistory,
-  postNewHistoryItem,
-} from '@queries/history/history';
 import { Match, Switch, Suspense } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { PopupPreview } from './DocumentPreview';
@@ -78,9 +74,6 @@ function useItemPreviewData(props: ItemPreviewProps) {
     subType?: NamedSubType,
     altKey?: boolean
   ) {
-    if (type === 'project') {
-      insertProjectIntoHistory(id);
-    }
     const _type = subType ?? fileType ?? type;
     if (!_type) return;
     openItem(_type, id, openInNewSplitForMention(altKey, true));
