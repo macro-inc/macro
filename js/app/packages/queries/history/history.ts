@@ -32,22 +32,6 @@ const HISTORY_GC_TIME = 10 * 60 * 1000;
 
 type HistoryQueryFnResult = HistoryItem[];
 
-function setHistoryItemData(itemId: string, updater: Setter<HistoryItem>) {
-  return queryClient.setQueryData<HistoryQueryFnResult>(
-    historyQueryOptions.queryKey,
-    (prev) => {
-      if (!prev) return prev;
-      const items = prev.map((item) => {
-        if (item.id === itemId) {
-          return updater(item);
-        }
-        return item;
-      });
-      return items;
-    }
-  );
-}
-
 function setHistoryData(
   updater: Updater<HistoryQueryFnResult, HistoryQueryFnResult>
 ) {
@@ -59,6 +43,17 @@ function setHistoryData(
     historyQueryOptions.queryKey,
     updaterWrapper
   );
+}
+
+function setHistoryItemData(itemId: string, updater: Setter<HistoryItem>) {
+  return setHistoryData((prev) => {
+    return prev.map((item) => {
+      if (item.id === itemId) {
+        return updater(item);
+      }
+      return item;
+    });
+  });
 }
 
 export function setHistoryItemName(itemId: string, name: string) {
