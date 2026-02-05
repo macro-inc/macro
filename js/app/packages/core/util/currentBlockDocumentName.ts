@@ -15,10 +15,11 @@ export const useBlockDocumentName = (defaultName?: string) => {
   }
   // TODO: find new solution once block sigal is deprecated for good.
   const [metadata] = blockMetadataSignal;
+  const blockId = useBlockId();
   const blockName = useBlockAliasedName();
   const isFileBlock = !NonDocumentBlockTypes.includes(blockName);
 
-  const updatedName = useUpdatedDssItemName(useBlockId());
+  const updatedName = useUpdatedDssItemName(blockId);
 
   return () => {
     const current = updatedName();
