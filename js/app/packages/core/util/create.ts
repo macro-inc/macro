@@ -36,11 +36,11 @@ type CreateMarkdownFileArgs = {
   title?: string;
   content?: string;
   projectId?: string;
-  isTask?: boolean;
 };
 
 /**
- * Initializes a new markdown file in dss & sync_service given a content string
+ * Initializes a new markdown file in dss & sync_service given a content string.
+ * Use createTask for the task subtype.
  */
 export async function createMarkdownFile(
   args?: CreateMarkdownFileArgs
@@ -58,7 +58,7 @@ export async function createMarkdownFile(
     fileType: 'md',
     sha: fakeSha,
     projectId: args?.projectId,
-    isTask: args?.isTask ?? false,
+    isTask: false,
   });
 
   invalidateUserQuota();
