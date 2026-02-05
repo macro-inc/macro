@@ -93,6 +93,7 @@ struct BatchSendMessageBody<'a> {
 }
 
 impl WebSocketGatewayOps for ConnectionGatewayClient {
+    #[tracing::instrument(err, skip(self, payload))]
     async fn send_to_users<'a, T: Serialize + Send + Sync>(
         &self,
         message_type: &str,
@@ -122,7 +123,8 @@ impl WebSocketGatewayOps for ConnectionGatewayClient {
             ))
             .json(&body)
             .send()
-            .await?;
+            .await?
+            .error_for_status()?;
 
         let json = res.json().await?;
         let response: GatewayResponse = serde_json::from_value(json)?;
@@ -149,17 +151,11 @@ impl<W: WebSocketGatewayOps + Send + Sync + 'static> WebSocketSender
     async fn send_notifications<'a, T: Serialize + Send + Sync>(
         &self,
         message_type: &str,
-        notifications: Vec<(MacroUserIdStr<'a>, &T)>,
+        recipients: &[MacroUserIdStr<'a>],
+        notification: &T,
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
-        // Get the first notification to serialize, return empty if none
-        let Some((_, notification)) = notifications.first() else {
-            return Ok(HashSet::new());
-        };
-
-        let user_ids: Vec<_> = notifications.iter().map(|(id, _)| id.clone()).collect();
-
         self.gateway
-            .send_to_users(message_type, &user_ids, *notification)
+            .send_to_users(message_type, recipients, notification)
             .await
     }
 }

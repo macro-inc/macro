@@ -119,14 +119,8 @@ where
         message_type: &str,
         conn: &ConnGatewayNotification<'static, serde_json::Value>,
     ) -> Result<DeliverySuccess, Report> {
-        let notifications: Vec<_> = conn
-            .recipients
-            .iter()
-            .map(|r| (r.clone(), &conn.notif))
-            .collect();
-
         self.websocket
-            .send_notifications(message_type, notifications)
+            .send_notifications(message_type, &conn.recipients, &conn.notif)
             .await?;
         Ok(DeliverySuccess::ConnGateway)
     }

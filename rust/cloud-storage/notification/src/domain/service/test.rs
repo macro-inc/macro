@@ -834,7 +834,8 @@ impl WebSocketSender for MockWebSocketSender {
     async fn send_notifications<'a, T: Serialize + Send + Sync>(
         &self,
         _message_type: &str,
-        _notifications: Vec<(MacroUserIdStr<'a>, &T)>,
+        _recipients: &[MacroUserIdStr<'a>],
+        _notification: &T,
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
         Ok(HashSet::new())
     }
