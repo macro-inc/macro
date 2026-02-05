@@ -19,6 +19,7 @@ import {
   isCodeEditorLanguageSupported,
 } from './languageQuery';
 import { err, isErr, ok } from './maybeResult';
+import type { CreateDocumentRequest } from '@service-storage/generated/schemas/createDocumentRequest';
 
 /**
  * Generate a fake sha256 hash
@@ -31,6 +32,19 @@ function fakeSha256() {
   crypto.getRandomValues(bytes); // secure RNG
   return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
+
+// TODO: centralize creation of entities
+// biome-ignore lint/correctness/noUnusedVariables: to be used in the future
+const createEntityOnServer = async (
+  args: CreateDocumentRequest
+): Promise<string | undefined> => {
+  const result = await storageServiceClient.createDocument({
+    ...args,
+    sha: args.sha ?? fakeSha256(),
+  });
+  if (isErr(result)) return;
+  return result[1].metadata.documentId;
+};
 
 type CreateMarkdownFileArgs = {
   title?: string;
