@@ -3183,20 +3183,6 @@ export const getItemsSoupResponse = zod.object({
                     type: zod.enum(['system', 'user']),
                   })
                 ),
-                metadata: zod.object({
-                  calendarInvite: zod
-                    .boolean()
-                    .describe('if any email contains a calendar invite'),
-                  genericSender: zod
-                    .boolean()
-                    .describe('if any sender is a generic email'),
-                  knownSender: zod
-                    .boolean()
-                    .describe('if user has previously emailed any sender'),
-                  tabular: zod
-                    .boolean()
-                    .describe('if any email contains a <table> html tag'),
-                }),
                 participants: zod.array(
                   zod.object({
                     emailAddress: zod.string().nullish(),
@@ -4602,20 +4588,6 @@ export const postItemsSoupResponse = zod.object({
                     type: zod.enum(['system', 'user']),
                   })
                 ),
-                metadata: zod.object({
-                  calendarInvite: zod
-                    .boolean()
-                    .describe('if any email contains a calendar invite'),
-                  genericSender: zod
-                    .boolean()
-                    .describe('if any sender is a generic email'),
-                  knownSender: zod
-                    .boolean()
-                    .describe('if user has previously emailed any sender'),
-                  tabular: zod
-                    .boolean()
-                    .describe('if any email contains a <table> html tag'),
-                }),
                 participants: zod.array(
                   zod.object({
                     emailAddress: zod.string().nullish(),

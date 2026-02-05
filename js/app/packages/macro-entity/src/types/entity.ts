@@ -1,13 +1,6 @@
 import { isEntityType } from '@core/types/utils';
-import type {
-  APIEmailThreadPreviewMetadata,
-  ApiLabel,
-} from '@service-email/generated/schemas';
-import type {
-  SoupEmailThreadPreviewMetadata,
-  SoupLabel,
-  SoupProperty,
-} from '@service-storage/generated/schemas';
+import type { ApiLabel } from '@service-email/generated/schemas';
+import type { SoupLabel, SoupProperty } from '@service-storage/generated/schemas';
 import type { JSX } from 'solid-js';
 
 export type EntityBase = {
@@ -85,7 +78,6 @@ export type EmailEntity = EntityBase & {
   senderEmail?: string;
   senderName?: string;
   labels?: SoupLabel[] | ApiLabel[];
-  metadata?: SoupEmailThreadPreviewMetadata | APIEmailThreadPreviewMetadata;
 };
 
 export type ProjectEntity = EntityBase & {

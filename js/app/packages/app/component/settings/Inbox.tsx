@@ -2,20 +2,12 @@ import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { For } from 'solid-js';
 import {
   DEPRIORITY_LABEL_SIGNAL_TOGGLES,
-  DEPRIORITY_METADATA_SIGNAL_TOGGLES,
   PRIORITY_LABEL_SIGNAL_TOGGLES,
-  PRIORITY_METADATA_SIGNAL_TOGGLES,
 } from '../soupFilters';
 
 export function Inbox() {
-  const prioritySignals = [
-    ...PRIORITY_LABEL_SIGNAL_TOGGLES,
-    ...PRIORITY_METADATA_SIGNAL_TOGGLES,
-  ];
-  const deprioritySignals = [
-    ...DEPRIORITY_LABEL_SIGNAL_TOGGLES,
-    ...DEPRIORITY_METADATA_SIGNAL_TOGGLES,
-  ];
+  const prioritySignals = [...PRIORITY_LABEL_SIGNAL_TOGGLES];
+  const deprioritySignals = [...DEPRIORITY_LABEL_SIGNAL_TOGGLES];
 
   return (
       <div class="font-mono flex flex-col gap-3 text-sm p-2">

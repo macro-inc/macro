@@ -8,7 +8,6 @@
 export * from './accessLevel';
 export * from './addDraftAttachmentRequest';
 export * from './addDraftAttachmentResponse';
-export * from './aPIEmailThreadPreviewMetadata';
 export * from './aPIThread';
 export * from './aPIThreadLatestInboundMessageTs';
 export * from './aPIThreadLatestNonSpamMessageTs';

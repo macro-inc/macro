@@ -8606,33 +8606,6 @@
           }
         }
       },
-      "SoupEmailThreadPreviewMetadata": {
-        "type": "object",
-        "required": [
-          "knownSender",
-          "tabular",
-          "calendarInvite",
-          "genericSender"
-        ],
-        "properties": {
-          "calendarInvite": {
-            "type": "boolean",
-            "description": "if any email contains a calendar invite"
-          },
-          "genericSender": {
-            "type": "boolean",
-            "description": "if any sender is a generic email"
-          },
-          "knownSender": {
-            "type": "boolean",
-            "description": "if user has previously emailed any sender"
-          },
-          "tabular": {
-            "type": "boolean",
-            "description": "if any email contains a <table> html tag"
-          }
-        }
-      },
       "SoupEnrichedEmailThreadPreview": {
         "allOf": [
           {
@@ -8640,13 +8613,7 @@
           },
           {
             "type": "object",
-            "required": [
-              "attachments",
-              "participants",
-              "metadata",
-              "labels",
-              "properties"
-            ],
+            "required": ["attachments", "participants", "labels", "properties"],
             "properties": {
               "attachments": {
                 "type": "array",
@@ -8659,9 +8626,6 @@
                 "items": {
                   "$ref": "#/components/schemas/SoupLabel"
                 }
-              },
-              "metadata": {
-                "$ref": "#/components/schemas/SoupEmailThreadPreviewMetadata"
               },
               "participants": {
                 "type": "array",

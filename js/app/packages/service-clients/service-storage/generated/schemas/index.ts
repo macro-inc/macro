@@ -482,7 +482,6 @@ export * from './soupDocumentSubTypeOneOfType';
 export * from './soupDocumentSubTypeProperty';
 export * from './soupDocumentViewedAt';
 export * from './soupEmailThreadPreview';
-export * from './soupEmailThreadPreviewMetadata';
 export * from './soupEmailThreadPreviewName';
 export * from './soupEmailThreadPreviewProviderId';
 export * from './soupEmailThreadPreviewSenderEmail';
