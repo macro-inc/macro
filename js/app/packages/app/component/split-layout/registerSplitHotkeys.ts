@@ -4,7 +4,6 @@ import {
   useBigChat,
   useToggleRightPanel,
 } from '@core/signal/layout';
-import type { ViewId } from '@core/types/view';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { globalSplitManager } from '../../signal/splitLayout';
 import { fireMacroJump } from '../MacroJump';
@@ -21,7 +20,6 @@ export function registerSplitHotkeys(args: {
   goBack: () => void;
   canGoForward: () => boolean;
   goForward: () => void;
-  setSelectedView: (view: ViewId) => void;
   replaceSplit: (options: {
     content: SplitContent;
     referredFrom?: ReferredFrom;

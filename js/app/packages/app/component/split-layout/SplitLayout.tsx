@@ -19,7 +19,6 @@ import {
   Suspense,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { createSoupContext } from '../SoupContext';
 import { PopoverSplitRenderer } from './components/PopoverSplitRenderer';
 import { SplitContainer } from './components/SplitContainer';
 import { SplitLayoutContext, SplitPanelContext } from './context';
@@ -355,11 +354,6 @@ function SplitPanel(props: SplitPanelProps) {
   const panelSize = createElementSize(panelRef);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
 
-  const soupContext = createSoupContext({
-    splitId: props.split.id,
-    domRef: panelRef,
-  });
-
   const [previewState, setPreviewState] = createSignal(false);
 
   const splitLayoutHelpers = useSplitLayout();
@@ -372,7 +366,6 @@ function SplitPanel(props: SplitPanelProps) {
     goBack: () => props.handle.goBack(),
     canGoForward: () => props.handle.canGoForward(),
     goForward: () => props.handle.goForward(),
-    setSelectedView: (view) => soupContext.setSelectedView(view),
     replaceSplit: splitLayoutHelpers.replaceSplit,
     splitName: () => props.handle.displayName(),
     getSplitCount: () => splitLayoutHelpers.getSplitCount(),
@@ -392,7 +385,6 @@ function SplitPanel(props: SplitPanelProps) {
         value={{
           handle: props.handle,
           splitHotkeyScope,
-          soupContext,
           isPanelActive: () => props.active,
           panelRef,
           panelSize,

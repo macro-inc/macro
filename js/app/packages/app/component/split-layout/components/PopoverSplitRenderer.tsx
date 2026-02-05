@@ -5,7 +5,6 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { Dialog } from '@kobalte/core/dialog';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { createStubSoupContext } from '../../SoupContext';
 import { SplitPanelContext, type SplitPanelContextType } from '../context';
 import type {
   PopoverSplitOptions,
@@ -92,7 +91,6 @@ function PopoverSplitModal(props: {
     handle: stubHandle,
     splitHotkeyScope: `popover-${props.popover.id}`,
     isPanelActive: () => true,
-    soupContext: createStubSoupContext(),
     panelRef,
     panelSize: { width: null, height: null },
     contentOffsetTop,

@@ -5,7 +5,6 @@ import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
 import type { ViewId } from '@core/types/view';
 import { type JSXElement, lazy } from 'solid-js';
 import { EmailCompose } from '../../../block-email/component/Compose';
-import { Soup } from '../Soup';
 import { SettingsPanel } from '../settings/Settings';
 import NotificationRoute from '@notifications/components/NotificationRoute';
 import { SoupView } from '@app/component/next-soup/soup-view/soup-view';
@@ -56,8 +55,7 @@ export function resolveComponent(
   };
 }
 
-registerComponent('soup-v2', () => <SoupView />);
-registerComponent('unified-list', () => <Soup />, { viewId: 'signal' });
+registerComponent('unified-list', () => <SoupView />);
 registerComponent('loading', () => <LoadingBlock />);
 registerComponent('channel-compose', () => <ChannelCompose />);
 registerComponent('email-compose', () => <EmailCompose />);

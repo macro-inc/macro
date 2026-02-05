@@ -21,12 +21,14 @@ import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
 import { useElementItemCount } from '@app/component/next-soup/use-element-item-count';
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { openEntityInNewTab } from '@app/component/next-soup/utils';
+import {
+  openEntityInNewTab,
+  openEntityInSplitFromUnifiedList,
+} from '@app/component/next-soup/utils';
 import {
   PreviewPanel,
   useMaybePreviewPanel,
 } from '@app/component/PreviewPanel';
-import { openEntityInSplitFromUnifiedList } from '@app/component/soupContextHelpers';
 import { SplitPanelContext } from '@app/component/split-layout/context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { EmptyState } from '@app/component/UnifiedListEmptyState';
