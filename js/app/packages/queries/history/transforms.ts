@@ -6,6 +6,7 @@ type BaseHistoryItem = Pick<
   'id' | 'name' | 'createdAt' | 'updatedAt' | 'deletedAt'
 > & {
   viewedAt?: number;
+  rawName?: string;
 };
 
 export type DocumentHistoryItem = BaseHistoryItem &
@@ -27,17 +28,15 @@ export type HistoryQueryResponse = {
   data: HistoryItem[];
 };
 
-export function transformHistoryItem(
-  item: HistoryItem,
-  rawName?: boolean
-): HistoryItem {
+export function transformHistoryItem(item: HistoryItem): HistoryItem {
   const base = {
     id: item.id,
-    name: rawName ? item.name : itemToSafeName(item),
+    name: itemToSafeName(item),
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
     deletedAt: item.deletedAt,
     viewedAt: item.viewedAt,
+    rawName: item.name,
   };
 
   switch (item.type) {
@@ -73,13 +72,9 @@ export function filterInstructionsMd(
 }
 
 export function transformHistoryResponse(
-  data: HistoryQueryResponse,
-  instructionsId: string | null | undefined,
-  rawName?: boolean
+  response: HistoryQueryResponse
 ): HistoryItem[] {
-  return filterInstructionsMd(data.data, instructionsId).map((item) =>
-    transformHistoryItem(item, rawName)
-  );
+  return response.data.map(transformHistoryItem);
 }
 
 /**

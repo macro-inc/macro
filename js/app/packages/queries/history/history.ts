@@ -8,16 +8,17 @@ import {
   useMutation,
   useQuery,
   type QueryClient,
+  useQueries,
 } from '@tanstack/solid-query';
-import type { Accessor, Setter } from 'solid-js';
+import { createEffect, createMemo, type Accessor, type Setter } from 'solid-js';
 import { queryClient } from '../client';
 import { historyKeys } from './keys';
 import {
   type HistoryItem,
-  type HistoryQueryResponse,
   transformHistoryResponse,
   updateViewedAtAndMoveItemToFront,
 } from './transforms';
+import { queryReadyGate } from '@queries/gate';
 
 export { historyKeys } from './keys';
 export type { HistoryItem, HistoryQueryResponse } from './transforms';
@@ -34,20 +35,18 @@ export function setHistoryItemData(
   itemId: string,
   updater: Setter<HistoryItem>
 ) {
-  return queryClient.setQueryData<HistoryQueryResponse>(
+  return queryClient.setQueryData<HistoryItem[]>(
     historyKeys.list.queryKey,
     (prev) => {
+      console.log('setHistoryItemData', prev);
       if (!prev) return prev;
-      const items = prev.data.map((item) => {
+      const items = prev.map((item) => {
         if (item.id === itemId) {
           return updater(item);
         }
         return item;
       });
-      return {
-        ...prev,
-        data: items,
-      };
+      return items;
     }
   );
 }
@@ -55,34 +54,47 @@ export function setHistoryItemData(
 function historyQueryOptions() {
   return {
     queryKey: historyKeys.list.queryKey,
-    queryFn: async (): Promise<HistoryQueryResponse> => {
+    queryFn: async (): Promise<HistoryItem[]> => {
       const result = await throwOnErr(
         async () => await storageServiceClient.getUsersHistory()
       );
-      return result;
+      return transformHistoryResponse(result);
     },
     staleTime: HISTORY_STALE_TIME,
     gcTime: HISTORY_GC_TIME,
   };
 }
 
-export function useHistoryQuery(options?: {
-  instructionsMdIdQuery?: UseQueryResult<string | null | undefined, Error>;
-}) {
-  const instructionsMdIdQueryInternal = useInstructionsMdIdQuery();
-  const instructionsIdQuery =
-    options?.instructionsMdIdQuery ?? instructionsMdIdQueryInternal;
-
-  return useQuery(() => ({
+export function useHistoryQuery() {
+  const baseQuery = useQuery(() => ({
     ...historyQueryOptions(),
     placeholderData: (prev) => prev,
-    select: (data: HistoryQueryResponse): HistoryItem[] => {
-      const instructionsId = instructionsIdQuery.isSuccess
-        ? instructionsIdQuery.data
-        : null;
-      return transformHistoryResponse(data, instructionsId);
-    },
+    reconcile: 'id',
   }));
+
+  return baseQuery;
+}
+
+// TODO: this is a temporary side effect to remove the instructions item from history
+// this will be removed from the backend
+export function removeInstructionsMdFromHistorySideEffect() {
+  const instructionsIdQuery = useInstructionsMdIdQuery();
+  const historyQuery = useHistoryQuery();
+  createEffect(() => {
+    const instructionsReady = queryReadyGate(instructionsIdQuery);
+    if (!instructionsReady) return;
+    const instructionsId = instructionsIdQuery.data;
+    const history = historyQuery.data;
+    if (!instructionsId || !history || !history.length) return;
+    if (!history.some((item) => item.id === instructionsId)) return;
+    return queryClient.setQueryData<HistoryItem[]>(
+      historyKeys.list.queryKey,
+      (prev) => {
+        if (!prev) return prev;
+        return prev.filter((item) => item.id !== instructionsId);
+      }
+    );
+  });
 }
 
 export async function prefetchHistory() {
@@ -102,17 +114,10 @@ export function refetchHistory() {
 function optimisticUpdateViewedAt(itemId: string) {
   const now = Date.now();
 
-  queryClient.setQueryData<HistoryQueryResponse>(
-    historyKeys.list.queryKey,
-    (old) => {
-      if (!old) return old;
-
-      return {
-        ...old,
-        data: updateViewedAtAndMoveItemToFront(old.data, itemId, now),
-      };
-    }
-  );
+  queryClient.setQueryData<HistoryItem[]>(historyKeys.list.queryKey, (old) => {
+    if (!old) return old;
+    return updateViewedAtAndMoveItemToFront(old, itemId, now);
+  });
 }
 
 type UpsertToHistoryParams = {
@@ -121,7 +126,7 @@ type UpsertToHistoryParams = {
 };
 
 type UpsertToHistoryContext = {
-  previousData: HistoryQueryResponse | undefined;
+  previousData: HistoryItem[] | undefined;
 };
 
 export function useUpsertToHistoryMutation(
@@ -156,7 +161,7 @@ export function useUpsertToHistoryMutation(
               queryKey: historyKeys.list.queryKey,
             });
 
-            const previousData = queryClient.getQueryData<HistoryQueryResponse>(
+            const previousData = queryClient.getQueryData<HistoryItem[]>(
               historyKeys.list.queryKey
             );
 
@@ -213,16 +218,10 @@ export async function removeHistoryItem(
   itemType: CloudStorageItemType,
   itemId: string
 ): Promise<boolean> {
-  queryClient.setQueryData<HistoryQueryResponse>(
-    historyKeys.list.queryKey,
-    (old) => {
-      if (!old) return old;
-      return {
-        ...old,
-        data: old.data.filter((item) => item.id !== itemId),
-      };
-    }
-  );
+  queryClient.setQueryData<HistoryItem[]>(historyKeys.list.queryKey, (old) => {
+    if (!old) return old;
+    return old.filter((item) => item.id !== itemId);
+  });
 
   const maybeRemoved = await storageServiceClient.removeItemFromUserHistory({
     itemId,
@@ -239,31 +238,18 @@ export async function removeHistoryItem(
  * Returns the raw name without transform (preserves empty strings).
  */
 export function useUpdatedDssItemName(itemId: string | Accessor<string>) {
-  const instructionsMdIdQuery = useInstructionsMdIdQuery();
-
-  const rawHistoryQuery = useQuery(() => {
-    const instructionsId = instructionsMdIdQuery.isSuccess
-      ? instructionsMdIdQuery.data
-      : null;
-
-    return {
-      ...historyQueryOptions(),
-      select: (data: HistoryQueryResponse): HistoryItem[] => {
-        return transformHistoryResponse(data, instructionsId, true);
-      },
-    };
-  });
+  const historyQuery = useHistoryQuery();
 
   return () => {
-    if (rawHistoryQuery.isLoading) return undefined;
-    const history = rawHistoryQuery.data;
+    if (historyQuery.isLoading) return undefined;
+    const history = historyQuery.data;
     if (!history) return undefined;
 
     const itemIdValue = typeof itemId === 'function' ? itemId() : itemId;
     if (!itemIdValue) return undefined;
 
     const item = history.find((item) => item.id === itemIdValue);
-    return item?.name;
+    return item?.rawName;
   };
 }
 
@@ -272,11 +258,11 @@ export function useUpdatedDssItemName(itemId: string | Accessor<string>) {
  * For use in standalone functions outside component context.
  */
 export function getHistoryItems(): HistoryItem[] {
-  const data = queryClient.getQueryData<HistoryQueryResponse>(
+  const data = queryClient.getQueryData<HistoryItem[]>(
     historyKeys.list.queryKey
   );
   if (!data) return [];
-  return transformHistoryResponse(data, null);
+  return data;
 }
 
 /**
@@ -284,10 +270,8 @@ export function getHistoryItems(): HistoryItem[] {
  * Recursively fetches project content and adds all items to history.
  */
 export async function insertProjectIntoHistory(projectId: string) {
-  const prevData =
-    queryClient.getQueryData<HistoryQueryResponse>(historyKeys.list.queryKey)
-      ?.data ?? [];
-  const newData: HistoryQueryResponse['data'] = [];
+  const prevData = getHistoryItems();
+  const newData: HistoryItem[] = [];
   const ids = [projectId];
 
   storageServiceClient.upsertItemToUserHistory({
@@ -318,16 +302,10 @@ export async function insertProjectIntoHistory(projectId: string) {
     }
   }
 
-  queryClient.setQueryData<HistoryQueryResponse>(
-    historyKeys.list.queryKey,
-    (old) => {
-      if (!old) return old;
-      return {
-        ...old,
-        data: [...old.data, ...newData],
-      };
-    }
-  );
+  queryClient.setQueryData<HistoryItem[]>(historyKeys.list.queryKey, (old) => {
+    if (!old) return old;
+    return [...old, ...newData];
+  });
 
   const upsertResults = newData
     .filter((item) => !prevData.some(({ id }) => id === item.id))

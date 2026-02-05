@@ -180,6 +180,7 @@ const renameHistorySetData = (entities: EntityRenameData[]) => {
     setHistoryItemData(id, (prev) => ({
       ...prev,
       name: newName,
+      rawName: newName,
     }));
   });
 };
