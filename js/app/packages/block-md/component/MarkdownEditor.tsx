@@ -176,6 +176,7 @@ import type { MarkdownRewriteOutput } from '../signal/rewriteSignal';
 import { useBlockSave, useSaveMarkdownDocument } from '../signal/save';
 import { MarkdownCollabProvider } from './MarkdownCollabProvider';
 import { MarkdownPopup } from './MarkdownPopup';
+import { isMobile } from '@core/mobile/isMobile';
 
 false && fileFolderDrop;
 
@@ -991,7 +992,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
         </Show>
 
         <ScopedPortal scope="block">
-          <Show when={!isBlankMarkdown()}>
+          <Show when={!isBlankMarkdown() && !isMobile()}>
             <div class="absolute bottom-2 left-2 w-fit h-fit">
               <Wordcount stats={wordcountStats} />
             </div>
@@ -1033,7 +1034,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
           />
         </Show>
 
-        <Show when={DEBUG}>
+        <Show when={DEBUG && !isMobile()}>
           <Show when={state()}>
             {(state) => (
               <LexicalStateDebugger state={state()}></LexicalStateDebugger>
