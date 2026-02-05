@@ -12,10 +12,13 @@ export type HistoryQueryResponse = {
   data: Item[];
 };
 
-export function transformHistoryItem(item: Item): HistoryItem {
+export function transformHistoryItem(
+  item: Item,
+  rawName?: boolean
+): HistoryItem {
   return {
     ...item,
-    name: itemToSafeName(item),
+    name: rawName ? item.name : itemToSafeName(item),
     viewedAt: (item as ItemWithViewedAt).viewedAt,
   };
 }
@@ -30,10 +33,11 @@ export function filterInstructionsMd(
 
 export function transformHistoryResponse(
   data: HistoryQueryResponse,
-  instructionsId: string | null | undefined
+  instructionsId: string | null | undefined,
+  rawName?: boolean
 ): HistoryItem[] {
-  return filterInstructionsMd(data.data, instructionsId).map(
-    transformHistoryItem
+  return filterInstructionsMd(data.data, instructionsId).map((item) =>
+    transformHistoryItem(item, rawName)
   );
 }
 

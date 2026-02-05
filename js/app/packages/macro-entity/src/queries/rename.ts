@@ -15,10 +15,11 @@ import type { SoupPage } from '@service-storage/generated/schemas';
 import { setPreviewData } from '@queries/preview';
 import { setHistoryItemData } from '@queries/history/history';
 
-type EntityWithName = EntityData & { name: string };
+type RenamableEntity = Pick<EntityData, 'id' | 'type' | 'name'> &
+  Partial<EntityData>;
 
 type EntityRenameOperation = {
-  entity: EntityWithName;
+  entity: RenamableEntity;
   newName: string;
 };
 
