@@ -71,20 +71,20 @@ function registerMouseEvents(editor: LexicalEditor) {
 
   function click(e: PointerEvent) {
     wrapCheckboxMouseEvent(e, editor, (e: MouseEvent) => {
-      editor.update(() => {
-        const { target, clientX, clientY } = e;
-        if (!(target instanceof HTMLElement)) return;
+      const { target, clientX, clientY } = e;
+      if (!(target instanceof HTMLElement)) return;
+      if (!boundsCheck(target.getBoundingClientRect(), clientX, clientY))
+        return;
+      if (
+        Math.abs(mouseDownPosition[0] - clientX) >= 5 ||
+        Math.abs(mouseDownPosition[1] - clientY) >= 5
+      )
+        return;
 
+      editor.update(() => {
         const nearest = $getNearestNodeFromDOMNode(target);
         if ($isListItemNode(nearest)) {
-          if (boundsCheck(target.getBoundingClientRect(), clientX, clientY)) {
-            if (
-              Math.abs(mouseDownPosition[0] - clientX) < 5 &&
-              Math.abs(mouseDownPosition[1] - clientY) < 5
-            ) {
-              nearest.toggleChecked();
-            }
-          }
+          nearest.toggleChecked();
         }
       });
     });
