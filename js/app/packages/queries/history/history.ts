@@ -38,6 +38,7 @@ function setHistoryData(
   });
 }
 
+/** Sets the history data on the query cache directly for a single item */
 function setHistoryItemData(itemId: string, updater: Setter<HistoryItem>) {
   return setHistoryData((prev) => {
     return prev.map((item) => {
@@ -207,9 +208,7 @@ export async function postNewHistoryItem(
   return isOk(maybeAdded) && !!maybeAdded[1].success;
 }
 
-/**
- * Standalone function to remove an item from history.
- */
+/** Standalone function to remove an item from history. */
 export async function removeHistoryItem(
   itemType: CloudStorageItemType,
   itemId: string
@@ -228,10 +227,7 @@ export async function removeHistoryItem(
   return isOk(maybeRemoved) && !!maybeRemoved[1].success;
 }
 
-/**
- * Hook to get the updated raw name of a history item.
- * Returns the raw name without transform (preserves empty strings).
- */
+/** Hook to get the updated raw name (no transform) of a HistoryItem */
 export function useHistoryItemRawName(itemId: string) {
   const historyQuery = useHistoryQuery();
 
