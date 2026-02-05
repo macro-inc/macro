@@ -205,6 +205,7 @@ export function createDssInfiniteQuery(
     };
   });
 }
+
 const selectData: (
   data: InfiniteData<
     SoupPage,
@@ -793,10 +794,12 @@ export function createBulkMoveToProjectDssEntityMutation() {
 
 /**
  * Optimistically update the viewedAt timestamp for a DSS item.
- * Updates the item across all DSS queries.
+ * Updates the item across all DSS queries if it exists.
+ * Returns true if the item was updated, i.e. found in the cache, false otherwise.
  */
-export function optimisticUpdateDssItemViewedAt(itemId: string): void {
+export function optimisticUpdateDssItemViewedAt(itemId: string): boolean {
   const now = new Date();
+  let found = false;
 
   queryClient.setQueriesData(
     { queryKey: queryKeys.all.dss },
@@ -806,10 +809,10 @@ export function optimisticUpdateDssItemViewedAt(itemId: string): void {
       const pages = prev.pages.map((page) => ({
         ...page,
         items: page.items.map((item): SoupApiItem => {
-          // Get the item ID based on its type
           const currentItemId = getSoupItemId(item);
-
           if (currentItemId !== itemId) return item;
+
+          found = true;
 
           switch (item.tag) {
             case 'document':
@@ -833,4 +836,20 @@ export function optimisticUpdateDssItemViewedAt(itemId: string): void {
       };
     }
   );
+
+  return found;
+}
+
+export function hasSoupItem(itemId: string) {
+  return queryClient
+    .getQueryData<InfiniteData<SoupPage, unknown>>(queryKeys.all.dss)
+    ?.pages.some((page) =>
+      page.items.some((item) => getSoupItemId(item) === itemId)
+    );
+}
+
+export function invalidateSoup() {
+  queryClient.invalidateQueries({
+    queryKey: queryKeys.all.dss,
+  });
 }

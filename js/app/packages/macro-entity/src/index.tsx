@@ -19,6 +19,8 @@ export {
   createMoveToProjectDssEntityMutation,
   createCopyDssEntityMutation,
   optimisticUpdateDssItemViewedAt,
+  hasSoupItem,
+  invalidateSoup,
 } from './queries/dss';
 export { createEmailsInfiniteQuery } from './queries/email';
 export type { EntityInfiniteQuery, EntityQuery } from './queries/entity';
