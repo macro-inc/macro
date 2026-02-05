@@ -18,8 +18,9 @@ import {
   updateViewedAtAndMoveItemToFront,
 } from './transforms';
 import { queryReadyGate } from '@queries/gate';
-
 import type { HistoryItem } from './types';
+
+// re-export history item type from this file
 export type { HistoryItem } from './types';
 
 const HISTORY_STALE_TIME = 5 * 60 * 1000;
