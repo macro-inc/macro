@@ -172,15 +172,10 @@ export function Channel(props: {
 
     track(TrackingEvents.BLOCKCHANNEL.CHANNEL.OPEN);
 
-    // If the data was served from cache (older than 2s), schedule a background
-    // refetch after a short delay so the UI loads instantly from cache first.
-    const STALE_THRESHOLD_MS = 2_000;
-    const REFETCH_DELAY_MS = 1_000;
+    const STALE_THRESHOLD_MS = 1_000;
     const age = Date.now() - channelQuery.dataUpdatedAt;
     if (age > STALE_THRESHOLD_MS) {
-      setTimeout(() => {
-        invalidateChannelWithID(props.channelId);
-      }, REFETCH_DELAY_MS);
+      invalidateChannelWithID(props.channelId);
     }
   });
 
@@ -425,6 +420,8 @@ export function Channel(props: {
             ref={containerRef}
           />
           <FloatingInputLoader
+            minShowTime={200}
+            successDuration={100}
             isLoading={channelContext.isFetching}
             loadingText="Refreshing messages"
             class="top-0 bottom-auto mt-2 mb-0 z-10"
