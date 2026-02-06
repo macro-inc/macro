@@ -27,5 +27,5 @@ export function NotificationCount(props: NotificationCountProps) {
     return notDoneNotifications.length;
   });
 
-  return <Show when={count() > 0}>{(c) => c()}</Show>;
+  return <Show when={count() > 0}>{count()}</Show>;
 }

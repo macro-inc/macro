@@ -9,12 +9,17 @@ import { Dynamic } from 'solid-js/web';
 
 type SlotElement = 'div' | 'span' | 'button';
 
-const placeGrid = (area: string | [string, string] | undefined) => {
-  if (area === undefined) return undefined;
+const placeGrid = (
+  area: string | [string, string] | undefined
+): Partial<JSX.CSSProperties> => {
+  if (area === undefined) return {};
   if (typeof area === 'string') {
-    return area;
+    return { 'grid-area': area };
   }
-  return `${area[0]} / ${area[0]} / ${area[0]} / ${area[1]}`;
+  return {
+    'grid-column-start': area[0],
+    'grid-column-end': area[1],
+  };
 };
 
 type CommonProps = {
@@ -43,7 +48,7 @@ export function Slot<T extends SlotElement = 'div'>(props: SlotProps<T>) {
       class={cn('entity-slot', local.class)}
       component={local.as ?? ('div' as SlotElement)}
       style={{
-        'grid-area': gridArea(),
+        ...gridArea(),
         ...(typeof local.style === 'object' ? local.style : {}),
       }}
       {...rest}
