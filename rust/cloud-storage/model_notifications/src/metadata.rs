@@ -1,4 +1,3 @@
-use crate::NotificationEventType;
 use doppleganger::Doppleganger;
 use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
 use mention_utils::parse::{ParsedXmlText, XmlFormatter};
@@ -10,7 +9,7 @@ use notification::domain::models::{
     NotifCollapseKey, NotificationExtIos,
     apple::{APNSPushNotification, AlertDictionary, Aps, PushNotificationData},
 };
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -324,54 +323,6 @@ pub struct TaskAssignedMetadata {
     #[schema(value_type = String)]
     pub assigned_by: MacroUserIdStr<'static>,
 }
-
-pub trait NotificationMetadata: Serialize + DeserializeOwned + Clone + Sized {
-    fn event_type() -> NotificationEventType;
-
-    fn to_json(&self) -> Option<serde_json::Value> {
-        serde_json::to_value(self).ok()
-    }
-
-    fn from_json(value: serde_json::Value) -> Option<Self> {
-        serde_json::from_value(value).ok()
-    }
-}
-
-macro_rules! impl_notification_metadata {
-    ($metadata_type:ty, $event_type:expr) => {
-        impl NotificationMetadata for $metadata_type {
-            fn event_type() -> NotificationEventType {
-                $event_type
-            }
-        }
-    };
-}
-
-impl_notification_metadata!(ChannelInviteMetadata, NotificationEventType::ChannelInvite);
-impl_notification_metadata!(
-    ChannelMessageSendMetadata,
-    NotificationEventType::ChannelMessageSend
-);
-impl_notification_metadata!(ItemSharedMetadata, NotificationEventType::ItemSharedUser);
-impl_notification_metadata!(
-    ItemSharedOrganizationMetadata,
-    NotificationEventType::ItemSharedOrganization
-);
-impl_notification_metadata!(InviteToTeamMetadata, NotificationEventType::InviteToTeam);
-impl_notification_metadata!(
-    ChannelMentionMetadata,
-    NotificationEventType::ChannelMention
-);
-impl_notification_metadata!(
-    DocumentMentionMetadata,
-    NotificationEventType::DocumentMention
-);
-impl_notification_metadata!(
-    ChannelReplyMetadata,
-    NotificationEventType::ChannelMessageReply
-);
-impl_notification_metadata!(NewEmailMetadata, NotificationEventType::NewEmail);
-impl_notification_metadata!(TaskAssignedMetadata, NotificationEventType::TaskAssigned);
 
 // Plain text formatter for converting XML message content to plain text for APNS payloads.
 struct PlainTextFormatter;
