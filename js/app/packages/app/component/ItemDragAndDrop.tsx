@@ -47,14 +47,7 @@ export function ItemDragOverlay() {
     }
 
     if (data.type === 'channel') {
-      switch (data.channelType) {
-        case 'direct_message':
-          return 'directMessage';
-        case 'organization':
-          return 'company';
-        default:
-          return 'channel';
-      }
+      return data.channelType || 'channel';
     }
 
     if (data.type === 'email') {
