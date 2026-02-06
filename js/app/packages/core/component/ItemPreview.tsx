@@ -18,7 +18,7 @@ import type { NamedSubType } from '@macro-entity';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import type { ItemType } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
-import { Match, Switch, Suspense } from 'solid-js';
+import { Match, Switch, Suspense, type ComponentProps } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { PopupPreview } from './DocumentPreview';
 import { HoverCard } from './HoverCard';
@@ -112,12 +112,43 @@ function useItemPreviewData(props: ItemPreviewProps) {
     }
   };
 
+  const targetType = () => {
+    const currentItem = item();
+    if (currentItem.loading || currentItem.access !== 'access') {
+      return undefined;
+    }
+
+    switch (currentItem.type) {
+      case 'document':
+        return currentItem.subType?.type ?? currentItem.fileType;
+      case 'channel':
+        switch (currentItem.channelType) {
+          case 'direct_message':
+            return 'directMessage';
+          case 'organization':
+            return 'company';
+          default:
+            return 'channel';
+        }
+      default:
+        return currentItem.type;
+    }
+  };
+
+  const ItemEntityIcon = (
+    localProps?: Partial<Omit<ComponentProps<typeof EntityIcon>, 'targetType'>>
+  ) => {
+    return <EntityIcon targetType={targetType()} {...localProps} />;
+  };
+
   return {
     item,
     name,
     onPreviewClick,
     className,
     channelTypeIcon,
+    targetType,
+    ItemEntityIcon,
   };
 }
 
@@ -200,7 +231,8 @@ export function ItemPreview(props: ItemPreviewProps) {
 }
 
 function ItemPreviewInner(props: ItemPreviewProps) {
-  const { item, name, onPreviewClick } = useItemPreviewData(props);
+  const { item, name, onPreviewClick, targetType, ItemEntityIcon } =
+    useItemPreviewData(props);
 
   return (
     <Switch>
@@ -212,27 +244,6 @@ function ItemPreviewInner(props: ItemPreviewProps) {
           <Switch>
             <Match when={matches(loadedItem(), isAccessiblePreviewItem)}>
               {(accessibleItem) => {
-                const targetType = () => {
-                  let accessibleItem_ = accessibleItem();
-                  switch (accessibleItem_.type) {
-                    case 'document':
-                      return (
-                        accessibleItem_.subType?.type ??
-                        accessibleItem_.fileType
-                      );
-                    case 'channel':
-                      switch (accessibleItem_.channelType) {
-                        case 'direct_message':
-                          return 'directMessage';
-                        case 'organization':
-                          return 'company';
-                        default:
-                          return 'channel';
-                      }
-                    default:
-                      return accessibleItem_.type;
-                  }
-                };
                 const blockName = () => {
                   const type = targetType();
                   const itemType = accessibleItem().type;
@@ -258,7 +269,7 @@ function ItemPreviewInner(props: ItemPreviewProps) {
                         {...navHandlers}
                       >
                         <div class="flex justify-start items-center h-3.5 mr-2">
-                          <EntityIcon targetType={targetType()} size="fill" />
+                          <ItemEntityIcon size="fill" />
                         </div>
                         <div class="flex-1 text-left leading-5 min-w-0 truncate">
                           {truncateString(name(), 80)}
@@ -296,7 +307,7 @@ function ItemPreviewInner(props: ItemPreviewProps) {
 }
 
 export function InlineItemPreview(props: ItemPreviewProps) {
-  const { item, name } = useItemPreviewData(props);
+  const { item, name, ItemEntityIcon } = useItemPreviewData(props);
 
   return (
     <Switch>
@@ -307,39 +318,14 @@ export function InlineItemPreview(props: ItemPreviewProps) {
         {(loadedItem) => (
           <Switch>
             <Match when={matches(loadedItem(), isAccessiblePreviewItem)}>
-              {(accessibleItem) => {
-                const targetType = () => {
-                  let accessibleItem_ = accessibleItem();
-                  switch (accessibleItem_.type) {
-                    case 'document':
-                      return (
-                        accessibleItem_.subType?.type ??
-                        accessibleItem_.fileType
-                      );
-                    case 'channel':
-                      switch (accessibleItem_.channelType) {
-                        case 'direct_message':
-                          return 'directMessage';
-                        case 'organization':
-                          return 'company';
-                        default:
-                          return 'channel';
-                      }
-                    default:
-                      return accessibleItem_.type;
-                  }
-                };
-                return (
-                  <span class="inline-flex items-center gap-1">
-                    <span class="w-4 h-4">
-                      <EntityIcon targetType={targetType()} size="xs" />
-                    </span>
-                    <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
-                      {truncateString(name(), 80)}
-                    </span>
-                  </span>
-                );
-              }}
+              <span class="inline-flex items-center gap-1">
+                <span class="w-4 h-4">
+                  <ItemEntityIcon size="xs" />
+                </span>
+                <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
+                  {truncateString(name(), 80)}
+                </span>
+              </span>
             </Match>
             <Match when={loadedItem().access === 'no_access'}>
               <InlineNoAccess />

@@ -95,6 +95,27 @@ function Loading() {
 }
 
 /**
+ * Computes the entity icon target type from a preview item
+ */
+export function getPreviewTargetType(item: AccessiblePreviewItem) {
+  switch (item.type) {
+    case 'document':
+      return item.subType?.type ?? item.fileType;
+    case 'channel':
+      switch (item.channelType) {
+        case 'direct_message':
+          return 'directMessage';
+        case 'organization':
+          return 'company';
+        default:
+          return 'channel';
+      }
+    default:
+      return item.type;
+  }
+}
+
+/**
  * Returns the appropriate icon component based on the icon name
  * @param icon - Icon identifier string
  * @returns JSX element for the icon or undefined
@@ -577,62 +598,42 @@ export function PopupPreview(props: {
 
             {/* Accessible preview */}
             <Match when={matches(props.item(), isAccessiblePreviewItem)}>
-              {(accessibleItem) => {
-                const targetType = () => {
-                  let accessibleItem_ = accessibleItem();
-                  switch (accessibleItem_.type) {
-                    case 'document':
-                      return (
-                        accessibleItem_.subType?.type ??
-                        accessibleItem_.fileType
-                      );
-                    case 'channel':
-                      switch (accessibleItem_.channelType) {
-                        case 'direct_message':
-                          return 'directMessage';
-                        case 'organization':
-                          return 'company';
-                        default:
-                          return 'channel';
-                      }
-                    default:
-                      return accessibleItem_.type;
-                  }
-                };
-                return (
-                  <div class="w-full h-full flex-col">
-                    {/* Header with icon and actions */}
-                    <div class="flex w-full mb-2">
-                      <div class="w-full size-10">
-                        <EntityIcon size="md" targetType={targetType()} />
-                      </div>
-                      <div class="flex w-fit h-full justify-right">
-                        {renderActionButtons()}
-                      </div>
+              {(accessibleItem) => (
+                <div class="w-full h-full flex-col">
+                  {/* Header with icon and actions */}
+                  <div class="flex w-full mb-2">
+                    <div class="w-full size-10">
+                      <EntityIcon
+                        size="md"
+                        targetType={getPreviewTargetType(accessibleItem())}
+                      />
                     </div>
-
-                    {/* Document metadata */}
-                    {renderDocumentMetadata(accessibleItem())}
-
-                    {/* Snapshot info */}
-                    <Show when={props.snapshotInfo}>
-                      {(snapshot) => (
-                        <div class="mt-3 pt-2 border-t border-edge">
-                          <div class="flex items-center gap-1.5 text-ink-muted">
-                            <ClockIcon class="size-4" />
-                            <span class="text-xs font-medium">
-                              Snapshot from{' '}
-                              {formatDate(isoToUnixTimestamp(snapshot().date), {
-                                showTime: true,
-                              })}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </Show>
+                    <div class="flex w-fit h-full justify-right">
+                      {renderActionButtons()}
+                    </div>
                   </div>
-                );
-              }}
+
+                  {/* Document metadata */}
+                  {renderDocumentMetadata(accessibleItem())}
+
+                  {/* Snapshot info */}
+                  <Show when={props.snapshotInfo}>
+                    {(snapshot) => (
+                      <div class="mt-3 pt-2 border-t border-edge">
+                        <div class="flex items-center gap-1.5 text-ink-muted">
+                          <ClockIcon class="size-4" />
+                          <span class="text-xs font-medium">
+                            Snapshot from{' '}
+                            {formatDate(isoToUnixTimestamp(snapshot().date), {
+                              showTime: true,
+                            })}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </Show>
+                </div>
+              )}
             </Match>
 
             {/* No access error */}

@@ -8,6 +8,7 @@ import {
   getMentionsIcon,
   mentionsAccessories,
   PopupPreview,
+  getPreviewTargetType,
 } from '@core/component/DocumentPreview';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { resolveBlockAlias, verifyBlockName } from '@core/constant/allBlocks';
@@ -107,71 +108,49 @@ function InlinePreview(props: {
         <Loading />
       </Match>
       <Match when={matches(props.item(), isAccessiblePreviewItem)}>
-        {(accessibleItem) => {
-          const targetType = () => {
-            let accessibleItem_ = accessibleItem();
-            switch (accessibleItem_.type) {
-              case 'document':
-                return (
-                  accessibleItem_.subType?.type ?? accessibleItem_.fileType
-                );
-              case 'channel':
-                switch (accessibleItem_.channelType) {
-                  case 'direct_message':
-                    return 'directMessage';
-                  case 'organization':
-                    return 'company';
-                  default:
-                    return 'channel';
+        {(accessibleItem) => (
+          <MentionContainer
+            icon={
+              <EntityIcon
+                size="fill"
+                targetType={getPreviewTargetType(accessibleItem())}
+                theme={
+                  accessibleItem().type !== 'channel' &&
+                  props.theme?.['document-mention'] === 'chat-blue'
+                    ? 'monochrome'
+                    : undefined
                 }
-              default:
-                return accessibleItem_.type;
+              />
             }
-          };
-          return (
-            <MentionContainer
-              icon={
-                <EntityIcon
-                  size="fill"
-                  targetType={targetType()}
-                  theme={
-                    accessibleItem().type !== 'channel' &&
-                    props.theme?.['document-mention'] === 'chat-blue'
-                      ? 'monochrome'
-                      : undefined
-                  }
-                />
-              }
-              text={
-                <span
-                  data-document-mention="true"
-                  data-document-id={accessibleItem().id}
-                  data-block-name={props.blockName}
-                  data-document-name={accessibleItem().name}
-                >
-                  {accessibleItem().name.replaceAll('\n', ' ').trim()}
-                  <span class="relative text-[0.8em] text-current/50 rounded-xs">
-                    {(() => {
-                      const accessories = mentionsAccessories(
-                        props.blockName as BlockName,
-                        props.blockParams
+            text={
+              <span
+                data-document-mention="true"
+                data-document-id={accessibleItem().id}
+                data-block-name={props.blockName}
+                data-document-name={accessibleItem().name}
+              >
+                {accessibleItem().name.replaceAll('\n', ' ').trim()}
+                <span class="relative text-[0.8em] text-current/50 rounded-xs">
+                  {(() => {
+                    const accessories = mentionsAccessories(
+                      props.blockName as BlockName,
+                      props.blockParams
+                    );
+                    if (accessories) {
+                      return (
+                        <>
+                          {` ${accessories.note ?? ''}`}
+                          {getMentionsIcon(accessories.icon)}
+                        </>
                       );
-                      if (accessories) {
-                        return (
-                          <>
-                            {` ${accessories.note ?? ''}`}
-                            {getMentionsIcon(accessories.icon)}
-                          </>
-                        );
-                      }
-                    })()}
-                  </span>
+                    }
+                  })()}
                 </span>
-              }
-              collapsed={props.collapsed}
-            />
-          );
-        }}
+              </span>
+            }
+            collapsed={props.collapsed}
+          />
+        )}
       </Match>
       <Match
         when={(props.item() as PreviewItemNoAccess).access === 'no_access'}
