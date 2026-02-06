@@ -7,7 +7,7 @@ import { Hotkey } from '@core/component/Hotkey';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { Message } from '@core/component/Message';
 import { UserIcon } from '@core/component/UserIcon';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { fileTypeToBlockName, itemToBlockName } from '@core/constant/allBlocks';
 import {
   ENABLE_GMAIL_BASED_CONTACTS,
   ENABLE_TASKS_TABS,
@@ -431,15 +431,11 @@ function getCommandItemBlockName(
   icon?: boolean
 ): BlockName | BlockAlias | undefined {
   if (item.type === 'item') {
-    if (item.data.itemType === 'document') {
-      if (item.data.subType && item.data.subType.type === 'task') {
-        return 'task';
-      }
-      if (item.data.fileType) {
-        return fileTypeToBlockName(item.data.fileType, icon);
-      }
-    }
-    return fileTypeToBlockName(item.data.itemType, icon) ?? 'unknown';
+    return itemToBlockName({
+      ...item.data,
+      type: item.data.itemType,
+      icon,
+    });
   } else if (item.type === 'channel') {
     return 'channel';
   } else if (item.type === 'email') {

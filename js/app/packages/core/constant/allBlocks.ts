@@ -209,6 +209,7 @@ type ItemLike = {
   fileType?: BasicDocumentFileType;
   subType?: SubType | BasicDocumentSubTypeProperty;
   name?: string;
+  icon?: boolean;
 };
 
 /**
@@ -231,9 +232,9 @@ export function itemToBlockName(
     return subTypeName;
   }
   if (item.fileType) {
-    return fileTypeToBlockName(item.fileType);
+    return fileTypeToBlockName(item.fileType, icon);
   }
-  return fileTypeToBlockName(item.type);
+  return fileTypeToBlockName(item.type, icon);
 }
 
 /**
