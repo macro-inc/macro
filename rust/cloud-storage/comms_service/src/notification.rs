@@ -41,25 +41,26 @@ pub struct ChannelInviteEvent<'a> {
 fn recipients_excluding<'a>(
     recipients: impl IntoIterator<Item = &'a str>,
     exclude: impl IntoIterator<Item = &'a str>,
-) -> Vec<String> {
+) -> Vec<MacroUserIdStr<'static>> {
     let exclude_set: HashSet<&str> = exclude.into_iter().collect();
     recipients
         .into_iter()
         .filter(|id| !exclude_set.contains(id))
-        .map(String::from)
+        .filter_map(|id| MacroUserIdStr::parse_from_str(id).ok())
+        .map(|u| u.into_owned())
         .collect()
 }
 
 fn create_notification_queue_message(
     channel_id: &Uuid,
     sender_id: MacroUserIdStr<'static>,
-    recipients: &[String],
+    recipients: Vec<MacroUserIdStr<'static>>,
     notification_event: impl Into<NotifEvent>,
 ) -> NotificationMsg {
     NotificationMsg {
         notification_entity: EntityType::Channel.with_entity_string(channel_id.to_string()),
         sender_id: Some(sender_id),
-        recipient_ids: recipients.to_vec(),
+        recipient_ids: recipients,
         notification_event: notification_event.into(),
     }
 }
@@ -72,7 +73,7 @@ impl<'a> ChannelInviteEvent<'a> {
             notifications.push(create_notification_queue_message(
                 self.channel_id,
                 self.invited_by_user_id.copied().into_owned(),
-                &recipients_excluding(
+                recipients_excluding(
                     self.recipient_user_ids.iter().map(|m| m.as_str()),
                     once(self.invited_by_user_id.as_ref()),
                 ),
@@ -95,7 +96,7 @@ impl ChannelMessageEvent<'_> {
             notifications.push(create_notification_queue_message(
                 self.channel_id,
                 self.message.sender_id.clone(),
-                &recipients_excluding(
+                recipients_excluding(
                     self.user_mentions.iter().map(|m| m.as_str()),
                     once(self.message.sender_id.0.as_ref()),
                 ),
@@ -118,7 +119,7 @@ impl ChannelMessageEvent<'_> {
                 notifications.push(create_notification_queue_message(
                     self.channel_id,
                     self.message.sender_id.clone(),
-                    &recipients_excluding_mentions,
+                    recipients_excluding_mentions.clone(),
                     DocumentMentionMetadata {
                         document_name: mention.item_name.clone(),
                         owner: mention.item_owner.clone(),
@@ -147,7 +148,7 @@ impl ChannelMessageEvent<'_> {
                     notifications.push(create_notification_queue_message(
                         self.channel_id,
                         self.message.sender_id.clone(),
-                        &recipients_excluding(
+                        recipients_excluding(
                             self.thread_participants.iter().map(|p| p.as_ref()),
                             sender_and_mentions,
                         ),
@@ -169,7 +170,7 @@ impl ChannelMessageEvent<'_> {
                 notifications.push(create_notification_queue_message(
                     self.channel_id,
                     self.message.sender_id.clone(),
-                    &recipients_without_sender_and_mentions,
+                    recipients_without_sender_and_mentions.clone(),
                     ChannelInviteMetadata {
                         invited_by: self.message.sender_id.clone(),
                         common: self.channel_metadata.clone(),
@@ -181,7 +182,7 @@ impl ChannelMessageEvent<'_> {
                 notifications.push(create_notification_queue_message(
                     self.channel_id,
                     self.message.sender_id.clone(),
-                    &recipients_without_sender_and_mentions,
+                    recipients_without_sender_and_mentions.clone(),
                     ChannelMessageSendMetadata {
                         message_id: self.message.id.to_string(),
                         sender: self.message.sender_id.clone(),
@@ -202,15 +203,7 @@ async fn send_notification_queue_message(
 ) -> anyhow::Result<()> {
     let entity = msg.notification_entity;
     let sender_id = msg.sender_id;
-    let recipient_ids: HashSet<MacroUserIdStr<'_>> = msg
-        .recipient_ids
-        .into_iter()
-        .filter_map(|id| {
-            MacroUserIdStr::parse_from_str(&id)
-                .ok()
-                .map(|u| u.into_owned())
-        })
-        .collect();
+    let recipient_ids: HashSet<MacroUserIdStr<'_>> = msg.recipient_ids.into_iter().collect();
 
     match msg.notification_event {
         NotifEvent::ChannelInvite(metadata) => {
@@ -455,9 +448,13 @@ mod tests {
         )
     }
 
+    fn uid(s: &str) -> MacroUserIdStr<'static> {
+        MacroUserIdStr::parse_from_str(s).unwrap().into_owned()
+    }
+
     // Ensures that each recipient receives only one message notification
     fn assert_single_message_notification_per_recipient(notifications: &[NotificationMsg]) {
-        let mut visited: HashMap<String, usize> = HashMap::new();
+        let mut visited: HashMap<MacroUserIdStr<'static>, usize> = HashMap::new();
 
         for n in notifications {
             if !is_message_notification(&n.notification_event) {
@@ -524,7 +521,7 @@ mod tests {
         for n in &notifications {
             let recipients = &n.recipient_ids;
             assert!(
-                !recipients.contains(&"sender".to_string()),
+                !recipients.contains(&uid("macro|sender@test.com")),
                 "sender should never receive their own notifications"
             );
         }
@@ -667,7 +664,7 @@ mod tests {
 
         let mention_recipients = &mention.recipient_ids;
 
-        assert!(mention_recipients.contains(&"macro|alice@test.com".to_string()));
+        assert!(mention_recipients.contains(&uid("macro|alice@test.com")));
 
         let send = notifications
             .iter()
@@ -675,8 +672,8 @@ mod tests {
             .expect("should have message send notification");
 
         let send_recipients = &send.recipient_ids;
-        assert!(!send_recipients.contains(&"macro|alice@test.com".to_string()));
-        assert!(send_recipients.contains(&"macro|bob@test.com".to_string()));
+        assert!(!send_recipients.contains(&uid("macro|alice@test.com")));
+        assert!(send_recipients.contains(&uid("macro|bob@test.com")));
     }
 
     #[test]
@@ -743,10 +740,10 @@ mod tests {
             .expect("should have reply notification");
 
         let recipients = &reply.recipient_ids;
-        assert!(!recipients.contains(&"macro|sender@test.com".to_string()));
-        assert!(!recipients.contains(&"macro|alice@test.com".to_string()));
-        assert!(recipients.contains(&"macro|bob@test.com".to_string()));
-        assert!(recipients.contains(&"macro|charlie@test.com".to_string()));
+        assert!(!recipients.contains(&uid("macro|sender@test.com")));
+        assert!(!recipients.contains(&uid("macro|alice@test.com")));
+        assert!(recipients.contains(&uid("macro|bob@test.com")));
+        assert!(recipients.contains(&uid("macro|charlie@test.com")));
     }
 
     #[test]
@@ -797,9 +794,9 @@ mod tests {
             .expect("should have document notification");
 
         let recipients = &doc_notif.recipient_ids;
-        assert!(!recipients.contains(&"macro|sender@test.com".to_string()));
-        assert!(recipients.contains(&"macro|alice@test.com".to_string()));
-        assert!(recipients.contains(&"macro|bob@test.com".to_string()));
+        assert!(!recipients.contains(&uid("macro|sender@test.com")));
+        assert!(recipients.contains(&uid("macro|alice@test.com")));
+        assert!(recipients.contains(&uid("macro|bob@test.com")));
     }
 
     #[test]

@@ -234,5 +234,5 @@ pub struct NotificationMsg {
     pub notification_entity: Entity<'static>,
     pub notification_event: NotifEvent,
     pub sender_id: Option<MacroUserIdStr<'static>>,
-    pub recipient_ids: Vec<String>,
+    pub recipient_ids: Vec<MacroUserIdStr<'static>>,
 }
