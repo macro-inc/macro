@@ -27,11 +27,7 @@ import { PopupPreview } from './DocumentPreview';
 import { HoverCard } from './HoverCard';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
 import { DeprecatedTextButton } from './DeprecatedTextButton';
-import {
-  ENTITY_ICON_CONFIGS,
-  EntityIcon,
-  ICON_SIZE_CLASSES,
-} from './EntityIcon';
+import { EntityIcon } from './EntityIcon';
 
 export function useItemPreviewData(entity: Accessor<ItemEntity>) {
   const [item] = useItemPreview(entity);
@@ -85,12 +81,6 @@ export function useItemPreviewData(entity: Accessor<ItemEntity>) {
     return baseName;
   };
 
-  const blockConfig = () => ENTITY_ICON_CONFIGS['channel'];
-  const sizeClass = () => ICON_SIZE_CLASSES['xs'];
-  const className = () => {
-    return `${sizeClass()} ${blockConfig().foreground}`;
-  };
-
   const targetType = () => {
     const currentItem = item();
     if (currentItem.loading || currentItem.access !== 'access') {
@@ -124,7 +114,6 @@ export function useItemPreviewData(entity: Accessor<ItemEntity>) {
     item,
     name,
     onPreviewClick,
-    className,
     targetType,
     ItemEntityIcon,
   };
