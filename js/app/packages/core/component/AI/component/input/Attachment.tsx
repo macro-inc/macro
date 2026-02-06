@@ -105,7 +105,10 @@ function ChatAttachment(props: {
     const attachment = props.attachment;
     if (!attachment.metadata) return null;
 
-    if (attachment.metadata.type === 'email') {
+    if (
+      attachment.metadata.type === 'email' ||
+      attachment.metadata.type === 'image'
+    ) {
       return null;
     }
 
@@ -139,7 +142,9 @@ function ChatAttachment(props: {
 
     return attachment.metadata.type === 'email'
       ? attachment.metadata.email_subject
-      : '';
+      : attachment.metadata.type === 'image'
+        ? attachment.metadata.image_name
+        : '';
   });
 
   const block = createMemo(() => {
