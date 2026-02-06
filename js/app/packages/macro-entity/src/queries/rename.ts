@@ -6,6 +6,7 @@ import {
 } from '@queries/channel/channel';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import type { ItemType } from '@service-storage/client';
+import { ChannelTypeEnum } from '@service-comms/client';
 import type { EntityData } from '../types/entity';
 import { queryClient } from './client';
 import { queryKeys } from './key';
@@ -79,7 +80,7 @@ const validateEntityRename = (entity: EntityData): void => {
   switch (entity.type) {
     case 'channel':
       // NOTE: channel type is undefined if provided from the split modal due to casting in createEntityData
-      if (entity.channelType === 'direct_message') {
+      if (entity.channelType === ChannelTypeEnum.DirectMessage) {
         throw new Error('Direct messages do not support renaming');
       }
       break;

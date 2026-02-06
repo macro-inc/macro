@@ -3,7 +3,9 @@ import {
   blockAcceptedFileExtensionSet,
   fileTypeToBlockName,
   isBlockAlias,
+  itemToBlockName,
 } from '@core/constant/allBlocks';
+import { match } from 'ts-pattern';
 import { USE_WIDE_ICONS } from '@core/constant/featureFlags';
 import Building from '@icon/duotone/building-duotone.svg';
 import Chat from '@icon/duotone/chat-duotone.svg';
@@ -46,6 +48,13 @@ import ThreeUsersIcon from '@icon/duotone/users-three-duotone.svg';
 import { FileTypeMap } from '@service-storage/fileTypeMap';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
+import type {
+  EntityData,
+  ChannelEntity,
+  DocumentEntity,
+  EmailEntity,
+} from '@macro-entity';
+import type { PreviewItem } from '@queries/preview';
 import type { Component, JSX } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
@@ -59,11 +68,9 @@ type IconConfig = {
 export type EntityWithValidIcon =
   | BlockName
   | BlockAlias
+  | ChannelType
   | 'default'
   | 'sharedProject'
-  | 'company'
-  | 'user'
-  | 'directMessage'
   | 'emailRead'
   | 'archive'
   | 'html';
@@ -93,11 +100,29 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-default-bg',
     prettyName: 'Channel',
   },
-  company: {
+  public: {
+    icon: GlobeIcon,
+    foreground: 'text-default',
+    background: 'bg-default-bg',
+    prettyName: 'Public Channel',
+  },
+  organization: {
     icon: Building,
     foreground: 'text-default',
     background: 'bg-default-bg',
-    prettyName: 'Company',
+    prettyName: 'Organization Channel',
+  },
+  private: {
+    icon: ThreeUsersIcon,
+    foreground: 'text-default',
+    background: 'bg-default-bg',
+    prettyName: 'Private Channel',
+  },
+  direct_message: {
+    icon: Users,
+    foreground: 'text-default',
+    background: 'bg-default-bg',
+    prettyName: 'Direct Message',
   },
   email: {
     icon: Email,
@@ -189,23 +214,11 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-default-bg',
     prettyName: 'File',
   },
-  directMessage: {
-    icon: Users,
-    foreground: 'text-default',
-    background: 'bg-default-bg',
-    prettyName: 'Direct Message',
-  },
-  user: {
-    icon: User,
-    foreground: 'text-default',
-    background: 'bg-default-bg',
-    prettyName: 'Direct Message',
-  },
   emailRead: {
     icon: EmailRead,
     foreground: 'text-default',
     background: 'bg-default-bg',
-    prettyName: 'Direct Message',
+    prettyName: 'Read Email',
   },
   task: {
     icon: Check,
@@ -244,7 +257,10 @@ export const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
   canvas: WideDiagram,
   html: WideFileCode,
   channel: WideChannel,
-  company: Building,
+  public: GlobeIcon,
+  organization: Building,
+  private: ThreeUsersIcon,
+  direct_message: WideChat,
   email: WideEmail,
   code: WideFileCode,
   csv: WideCsv,
@@ -260,8 +276,6 @@ export const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
   video: WideVideo,
   contact: WideUser,
   default: WideUnknown,
-  directMessage: WideChat,
-  user: WideUser,
   emailRead: WideEmail,
   task: WideTask,
 };
@@ -361,7 +375,7 @@ export function CustomEntityIcon(
 ) {
   const config = () =>
     ENTITY_ICON_CONFIGS[validateEntity(props.targetType || 'default')];
-  const sizeClass = () => ICON_SIZE_CLASSES[props.size ?? 'sm'];
+  const sizeClass = () => ICON_SIZE_CLASSES[props.size ?? 'xs'];
   const isMonochrome = () => props.theme === 'monochrome';
   return (
     <div
@@ -390,17 +404,32 @@ export function getIconConfig(
   return config;
 }
 
-export function channelTypeIcon(channelType: ChannelType | undefined) {
-  switch (channelType) {
-    case 'direct_message':
-      return User;
-    case 'private':
-      return ThreeUsersIcon;
-    case 'organization':
-      return Building;
-    case 'public':
-      return GlobeIcon;
-    default:
-      return Channel;
+type EntityIconData = Pick<EntityData, 'type'> & {
+  channelType?: ChannelEntity['channelType'];
+  fileType?: DocumentEntity['fileType'] | null;
+  subType?: DocumentEntity['subType'];
+  isRead?: EmailEntity['isRead'];
+};
+
+export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
+  const typeString = match(entity)
+    .with({ type: 'channel' }, (e) => e.channelType || 'channel')
+    .with({ type: 'document' }, (e) => itemToBlockName(e, true) ?? 'default')
+    .with({ type: 'email', isRead: true }, () => 'emailRead')
+    .with({ type: 'email' }, () => 'email')
+    .otherwise((e) => e.type);
+
+  return validateEntity(typeString);
+}
+
+export function getEntityIconConfig(entity: EntityData) {
+  return getIconConfig(getEntityIconType(entity));
+}
+
+export function getPreviewItemIconType(item: PreviewItem): EntityWithValidIcon {
+  if (item.loading || item.access !== 'access') {
+    return 'default';
   }
+
+  return getEntityIconType(item);
 }

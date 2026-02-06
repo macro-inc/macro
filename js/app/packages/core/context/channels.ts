@@ -3,6 +3,7 @@ import type {
   ApiActivity as ChannelsActivity,
   ApiChannelWithLatest,
 } from '@service-comms/generated/models';
+import { ChannelTypeEnum } from '@service-comms/client';
 import { useListChannelsQuery } from '@queries/channel/channels';
 import { useChannelsActivityQuery } from '@queries/channel/activity';
 import { queryReadyGate } from '@queries/gate';
@@ -88,7 +89,7 @@ export function useDmActivityByUserId(): Accessor<Map<string, number>> {
     const map = new Map<string, LastInteractionTimestamp>();
 
     for (const channel of allChannels) {
-      if (channel.channel_type !== 'direct_message') continue;
+      if (channel.channel_type !== ChannelTypeEnum.DirectMessage) continue;
 
       const otherParticipant = channel.participants.find(
         (p) => p.user_id !== currentUser

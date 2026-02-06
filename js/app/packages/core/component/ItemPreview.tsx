@@ -27,7 +27,7 @@ import { PopupPreview } from './DocumentPreview';
 import { HoverCard } from './HoverCard';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
 import { DeprecatedTextButton } from './DeprecatedTextButton';
-import { EntityIcon } from './EntityIcon';
+import { EntityIcon, getPreviewItemIconType } from './EntityIcon';
 
 export function useItemPreviewData(entity: Accessor<ItemEntity>) {
   const [item] = useItemPreview(entity);
@@ -82,26 +82,7 @@ export function useItemPreviewData(entity: Accessor<ItemEntity>) {
   };
 
   const targetType = () => {
-    const currentItem = item();
-    if (currentItem.loading || currentItem.access !== 'access') {
-      return undefined;
-    }
-
-    switch (currentItem.type) {
-      case 'document':
-        return currentItem.subType?.type ?? currentItem.fileType;
-      case 'channel':
-        switch (currentItem.channelType) {
-          case 'direct_message':
-            return 'directMessage';
-          case 'organization':
-            return 'company';
-          default:
-            return 'channel';
-        }
-      default:
-        return currentItem.type;
-    }
+    return getPreviewItemIconType(item());
   };
 
   const ItemEntityIcon = (

@@ -28,6 +28,7 @@ import {
 import { entityHasUnreadNotifications } from '@notifications';
 import type { PreviewViewStandardLabel } from '@service-email/generated/schemas';
 import type { PropertiesEntityType } from '@service-properties/client';
+import { ChannelTypeEnum } from '@service-comms/client';
 import { useSetPropertyStatusCompleteMutation } from '@queries/properties/entity';
 import { storageServiceClient } from '@service-storage/client';
 import { createLazyMemo } from '@solid-primitives/memo';
@@ -698,7 +699,8 @@ export function createNavigationEntityListShortcut({
     {
       canExecute: (entity) => {
         if (entity.type === 'channel') {
-          if (entity.channelType === 'direct_message') return false;
+          if (entity.channelType === ChannelTypeEnum.DirectMessage)
+            return false;
 
           const currentUserId = userId();
           if (!currentUserId) return false;

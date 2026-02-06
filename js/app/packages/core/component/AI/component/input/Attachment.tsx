@@ -4,7 +4,7 @@ import {
   isDssImage,
   isImageAttachment,
 } from '@core/component/AI/util/attachment';
-import { EntityIcon, channelTypeIcon } from '@core/component/EntityIcon';
+import { EntityIcon } from '@core/component/EntityIcon';
 import { ImagePreview } from '@core/component/ImagePreview';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
@@ -16,7 +16,6 @@ import Envelope from '@phosphor-icons/core/regular/envelope.svg';
 import Close from '@phosphor-icons/core/regular/x.svg?component-solid';
 import type { Accessor } from 'solid-js';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
 
 type AttachmentListProps = {
   removeAttachment: (id: string) => void;
@@ -162,11 +161,7 @@ function ChatAttachment(props: {
             >
               {(a) => (
                 <div class="flex gap-1 items-center">
-                  <Dynamic
-                    component={channelTypeIcon(a().channel_type)}
-                    width={14}
-                    height={14}
-                  />
+                  <EntityIcon targetType={a().channel_type || 'channel'} />
                   <div> {name()}</div>
                 </div>
               )}

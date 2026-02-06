@@ -16,6 +16,7 @@ import {
   type UnifiedNotification,
 } from '@notifications';
 import type { ApiChannelWithLatest as ChannelWithLatest } from '@service-comms/generated/models';
+import { ChannelTypeEnum } from '@service-comms/client';
 import { useUserId } from '@core/context/user';
 import { NotificationEventType } from '@service-notification/generated/schemas';
 import { createMemo, createSignal, For, Show } from 'solid-js';
@@ -132,7 +133,7 @@ function QuickAccessItem(props: QuickAccessItemProps) {
   };
 
   const getRecipientId = () => {
-    if (props.channel.channel_type === 'direct_message') {
+    if (props.channel.channel_type === ChannelTypeEnum.DirectMessage) {
       let userIdValue = userId();
       let recipient = props.channel.participants.find(
         (p) => p.user_id !== userIdValue
@@ -211,7 +212,8 @@ export function QuickAccess() {
             if (!isHighPriorityNotification(notification)) return false;
 
             // For DM channels, include all message notifications
-            if (channel.channel_type === 'direct_message') return true;
+            if (channel.channel_type === ChannelTypeEnum.DirectMessage)
+              return true;
 
             // For other channels, only include mentions and replies
             return (

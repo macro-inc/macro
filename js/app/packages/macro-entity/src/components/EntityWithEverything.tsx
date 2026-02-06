@@ -23,9 +23,10 @@ import {
 } from '@notifications';
 import { formatDocumentName } from '@service-storage/util/filename';
 import { syncServiceClient } from '@service-sync/client';
+import { ChannelTypeEnum } from '@service-comms/client';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable } from '@thisbeyond/solid-dnd';
-import { getIconConfig } from 'core/component/EntityIcon';
+import { getEntityIconConfig } from 'core/component/EntityIcon';
 import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import { UserIcon } from 'core/component/UserIcon';
@@ -762,29 +763,7 @@ export function EntityWithEverything(
   const { keydownDataDuringTask } = trackKeydownDuringTask();
   const userEmail = useEmail();
 
-  const getIcon = createMemo(() => {
-    switch (props.entity.type) {
-      case 'channel':
-        switch (props.entity.channelType) {
-          case 'direct_message':
-            return getIconConfig('directMessage');
-          case 'organization':
-            return getIconConfig('company');
-          default:
-            return getIconConfig('channel');
-        }
-      case 'document':
-        if (isTaskEntity(props.entity)) return getIconConfig('task');
-        if (props.entity.fileType) return getIconConfig(props.entity.fileType);
-        return getIconConfig('default');
-      case 'chat':
-        return getIconConfig('chat');
-      case 'project':
-        return getIconConfig('project');
-      case 'email':
-        return getIconConfig(props.entity.isRead ? 'emailRead' : 'email');
-    }
-  });
+  const getIcon = createMemo(() => getEntityIconConfig(props.entity));
 
   /**
    * TODO (seamus + teo) : These notifications are being attached to the wrong
@@ -1077,7 +1056,7 @@ export function EntityWithEverything(
                 <Show
                   when={
                     props.entity.type === 'channel' &&
-                    props.entity.channelType === 'direct_message'
+                    props.entity.channelType === ChannelTypeEnum.DirectMessage
                   }
                   fallback={
                     <Dynamic
@@ -1381,7 +1360,7 @@ export function EntityWithEverything(
               <Show
                 when={
                   props.entity.type === 'channel' &&
-                  props.entity.channelType === 'direct_message'
+                  props.entity.channelType === ChannelTypeEnum.DirectMessage
                 }
                 fallback={
                   <Dynamic
@@ -1539,7 +1518,7 @@ function DirectMessageIcon(props: { entity: EntityData }) {
           .at(0)
       : undefined;
 
-  const Fallback = () => <EntityIcon targetType="directMessage" />;
+  const Fallback = () => <EntityIcon targetType="direct_message" />;
 
   return (
     <div class="bg-panel size-5 rounded-full p-[2px]">

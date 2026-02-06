@@ -9,6 +9,7 @@ import {
 } from '@app/component/soupFilters';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { codeFileExtensions } from '@block-code/util/languageSupport';
+import { ChannelTypeEnum } from '@service-comms/client';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { DeprecatedButton } from '@core/component/FormControls/DeprecatedButton';
 import DropdownMenu from '@core/component/FormControls/DropdownMenu';
@@ -776,7 +777,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     if (channelCategoryFilter_.length > 0) {
       filterFns.push((entity) => {
         if (entity.type !== 'channel') return true;
-        const isDm = entity.channelType === 'direct_message';
+        const isDm = entity.channelType === ChannelTypeEnum.DirectMessage;
         const includePeople = channelCategoryFilter_.includes('people');
         const includeGroups = channelCategoryFilter_.includes('groups');
         // Defensive: if both are selected, behave like "no refinement".

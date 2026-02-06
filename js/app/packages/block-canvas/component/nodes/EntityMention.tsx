@@ -5,7 +5,7 @@ import { type BlockName, useBlockId } from '@core/block';
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { HoverCard } from '@core/component/HoverCard';
 import { PopupPreview } from '@core/component/DocumentPreview';
-import { EntityIcon } from '@core/component/EntityIcon';
+import { EntityIcon, getPreviewItemIconType } from '@core/component/EntityIcon';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type PreviewItemNoAccess, useItemPreview } from '@queries/preview';
@@ -124,46 +124,8 @@ export function File(props: { node: EntityMentionNode; mode: RenderMode }) {
     }
   });
 
-  // Get icon type using the same logic as EntityWithEverything
   const iconType = createMemo(() => {
-    const currentItem = item();
-    if (
-      !currentItem ||
-      currentItem.loading ||
-      currentItem.access !== 'access'
-    ) {
-      return 'default';
-    }
-
-    switch (currentItem.type) {
-      case 'channel':
-        switch (currentItem.channelType) {
-          case 'direct_message':
-            return 'directMessage';
-          case 'organization':
-            return 'company';
-          default:
-            return 'channel';
-        }
-      case 'document':
-        // TODO: consolidate is task logic, see isTaskEntity
-        if (
-          currentItem.fileType === 'md' &&
-          currentItem.subType?.type === 'task'
-        ) {
-          return 'task';
-        }
-        if (currentItem.fileType) return currentItem.fileType;
-        return 'default';
-      case 'chat':
-        return 'chat';
-      case 'project':
-        return 'project';
-      case 'email':
-        return 'email';
-      default:
-        return 'default';
-    }
+    return getPreviewItemIconType(item());
   });
 
   const fileName = createMemo(() => {

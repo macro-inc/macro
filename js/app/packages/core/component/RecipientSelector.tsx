@@ -1,4 +1,4 @@
-import { CustomEntityIcon, channelTypeIcon } from '@core/component/EntityIcon';
+import { EntityIcon } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
 import {
@@ -170,9 +170,8 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
             return (
               <Combobox.ItemLabel class="flex flex-row w-full gap-1.5 text-ink-muted select-none text-sm">
                 <div class="flex flex-col items-center justify-center p-1">
-                  <CustomEntityIcon
-                    icon={channelTypeIcon(item().data.channel_type)}
-                    size="xs"
+                  <EntityIcon
+                    targetType={item().data.channel_type || 'channel'}
                   />
                 </div>
                 <p class={'truncate my-auto'}>{item().data.name}</p>

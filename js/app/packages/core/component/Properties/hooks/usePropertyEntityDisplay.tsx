@@ -126,7 +126,9 @@ export function usePropertyEntityDisplay(
       })
       .with('PROJECT', () => <CoreEntityIcon targetType="project" size="xs" />)
       .with('CHAT', () => <CoreEntityIcon targetType="chat" size="xs" />)
-      .with('COMPANY', () => <CoreEntityIcon targetType="company" size="xs" />)
+      .with('COMPANY', () => (
+        <CoreEntityIcon targetType="organization" size="xs" />
+      ))
       .with('THREAD', () => <CoreEntityIcon targetType="email" size="xs" />)
       .otherwise(() => {
         if (options && 'fallbackIcon' in options) {

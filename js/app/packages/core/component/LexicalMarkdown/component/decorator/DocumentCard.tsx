@@ -4,12 +4,12 @@ import {
   useMaybeBlockName,
 } from '@core/block';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { EntityIcon } from '@core/component/EntityIcon';
 import {
   DropdownMenuContent,
   MenuItem,
   MenuSeparator,
 } from '@core/component/Menu';
+import { useItemPreviewData } from '@core/component/ItemPreview';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import { resolveBlockAlias, verifyBlockName } from '@core/constant/allBlocks';
@@ -18,7 +18,6 @@ import { canNestBlock, createBlockInstance } from '@core/orchestrator';
 import {
   isAccessiblePreviewItem,
   type AccessiblePreviewItem,
-  useItemPreview,
 } from '@queries/preview';
 import { matches } from '@core/util/match';
 import TrashSimple from '@icon/duotone/trash-simple-duotone.svg';
@@ -96,7 +95,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
   const previewType = () =>
     blockNameToItemType(verifyBlockName(props.blockName));
 
-  const [item] = useItemPreview(() => ({
+  const { item, ItemEntityIcon } = useItemPreviewData(() => ({
     id: props.documentId,
     type: previewType(),
   }));
@@ -336,30 +335,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
       <div class="p-2">
         <div class="flex center gap-2 items-center h-4">
           <div class="flex-shrink-0">
-            <Show
-              when={props.item.type === 'channel'}
-              fallback={
-                <EntityIcon
-                  targetType={
-                    props.item.type === 'document'
-                      ? (props.item.subType?.type ?? props.item.fileType)
-                      : props.item.type
-                  }
-                  size="sm"
-                />
-              }
-            >
-              <EntityIcon
-                size="sm"
-                targetType={
-                  props.item.channelType === 'direct_message'
-                    ? 'directMessage'
-                    : props.item.channelType === 'organization'
-                      ? 'company'
-                      : 'channel'
-                }
-              />
-            </Show>
+            <ItemEntityIcon size="sm" />
           </div>
           <div class="text-sm font-semibold truncate grow-1">
             <BlockLink id={props.item.id} blockOrFileName={props.blockName}>
