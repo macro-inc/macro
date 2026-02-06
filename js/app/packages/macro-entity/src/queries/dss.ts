@@ -62,7 +62,7 @@ const resolveDocumentEntityName = (
       entity.subType === null || entity.subType === undefined
         ? null
         : {
-            type: entity.subType.type as 'task',
+            type: entity.subType.type,
             is_completed: entity.subType.is_completed,
           },
   });
