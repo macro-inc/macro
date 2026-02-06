@@ -11,12 +11,20 @@ import type { Notification, WithNotification } from '../src/types/notification';
 import type { WithSearch } from '../src/types/search';
 
 export const MOCK_USER_IDS = {
-  owner: 'user_owner_123',
-  sharedUser: 'user_shared_456',
-  teamMember1: 'user_team_789',
-  teamMember2: 'user_team_012',
-  currentUser: 'user_current_345',
+  owner: 'macro|alex@example.com',
+  sharedUser: 'macro|sam@example.com',
+  teamMember1: 'macro|jordan@example.com',
+  teamMember2: 'macro|casey@example.com',
+  currentUser: 'macro|current@example.com',
 } as const;
+
+export const MOCK_USERS = [
+  { id: MOCK_USER_IDS.owner, firstName: 'Alex', lastName: 'Owner' },
+  { id: MOCK_USER_IDS.sharedUser, firstName: 'Sam', lastName: 'Shared' },
+  { id: MOCK_USER_IDS.teamMember1, firstName: 'Jordan', lastName: 'Team' },
+  { id: MOCK_USER_IDS.teamMember2, firstName: 'Casey', lastName: 'Member' },
+  { id: MOCK_USER_IDS.currentUser, firstName: 'Current', lastName: 'User' },
+] as const;
 
 export const MOCK_TIMESTAMPS = {
   now: Date.now(),

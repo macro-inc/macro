@@ -9,6 +9,7 @@ export { Entity } from './entity';
 export { createEntityDraggable } from './utils/draggable';
 
 export { InlineEntity } from './composed/InlineEntity';
+export { ListEntity } from './composed/ListEntity';
 
 export { UnreadIndicator } from './components/UnreadIndicator';
 export { MultiSelectCheckbox } from './components/MultiSelectCheckbox';
@@ -21,3 +22,5 @@ export {
   filterNotDoneNotifications,
   filterValidNotifications,
 } from './utils/notification';
+
+export { default as DebugEntityView } from './debug/DebugEntityView';

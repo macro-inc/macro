@@ -137,6 +137,11 @@ if (LOCAL_ONLY) {
     'properties-debug',
     lazy(() => import('@core/component/Properties/debug/PropertiesDebug'))
   );
+
+  registerComponent(
+    'entity-debug',
+    lazy(() => import('@entity/src/debug/DebugEntityView'))
+  );
 }
 
 if (DEV_MODE_ENV) {
