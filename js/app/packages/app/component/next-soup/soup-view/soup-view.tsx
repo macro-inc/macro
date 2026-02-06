@@ -21,15 +21,16 @@ import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
 import { useElementItemCount } from '@app/component/next-soup/use-element-item-count';
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { openEntityInNewTab } from '@app/component/next-soup/utils';
+import {
+  openEntityInNewTab,
+  openEntityInSplitFromUnifiedList,
+} from '@app/component/next-soup/utils';
 import {
   PreviewPanel,
   useMaybePreviewPanel,
 } from '@app/component/PreviewPanel';
-import { openEntityInSplitFromUnifiedList } from '@app/component/soupContextHelpers';
 import { SplitPanelContext } from '@app/component/split-layout/context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import { EmptyState } from '@app/component/UnifiedListEmptyState';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { useTaskProperties } from '@core/component/Properties/hooks';
@@ -80,6 +81,7 @@ import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
 import { soupKeys } from '@queries/soup/keys';
 import type { CacheSnapshot } from 'virtua/unstable_core';
+import { EmptyState } from '@app/component/next-soup/soup-view/empty-states';
 
 const DEFAULT_ENTITY_HEIGHT = 40;
 

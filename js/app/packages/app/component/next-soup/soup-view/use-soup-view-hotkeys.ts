@@ -10,7 +10,6 @@ import {
   setCommandCategoryIndex,
   setKonsoleContextInformation,
 } from '@app/component/command/KonsoleItem';
-import { openEntityInSplitFromUnifiedList } from '@app/component/soupContextHelpers';
 import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { registerHotkey } from '@core/hotkey/hotkeys';
@@ -24,6 +23,7 @@ import { isSearchEntity } from '@macro-entity';
 import type { Accessor } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { SoupState } from '../create-soup-state';
+import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 
 type UseSoupViewHotkeysOptions = {
   splitId: string;

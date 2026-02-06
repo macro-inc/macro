@@ -3,14 +3,7 @@ export { EntityWrapper } from './components/EntityWrapper';
 export { createFilter } from './components/Filter';
 export { Provider } from './components/Provider';
 export * from './components/Sort';
-export { createUnifiedInfiniteList } from './components/UnifiedInfiniteList';
-export {
-  createUnifiedList,
-  UnifiedList,
-  type UnifiedListComponent,
-} from './components/UnifiedList';
 export { UnreadIndicator } from './components/Unread';
-export * from './contexts/soup';
 export { useQueryClient } from './queries/client';
 export {
   createChatsInfiniteQuery,

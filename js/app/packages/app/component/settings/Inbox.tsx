@@ -1,13 +1,10 @@
+import { DEPRIORITY_LABEL_SIGNAL_TOGGLES, PRIORITY_LABEL_SIGNAL_TOGGLES } from '@app/component/next-soup/filters/signal-configs';
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { For } from 'solid-js';
-import {
-  DEPRIORITY_LABEL_SIGNAL_TOGGLES,
-  PRIORITY_LABEL_SIGNAL_TOGGLES,
-} from '../soupFilters';
 
 export function Inbox() {
-  const prioritySignals = [...PRIORITY_LABEL_SIGNAL_TOGGLES];
-  const deprioritySignals = [...DEPRIORITY_LABEL_SIGNAL_TOGGLES];
+  const prioritySignals = PRIORITY_LABEL_SIGNAL_TOGGLES;
+  const deprioritySignals = DEPRIORITY_LABEL_SIGNAL_TOGGLES;
 
   return (
       <div class="font-mono flex flex-col gap-3 text-sm p-2">
