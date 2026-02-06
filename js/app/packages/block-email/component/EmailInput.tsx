@@ -12,6 +12,7 @@ interface EmailInputProps {
   draft?: MessageWithBodyReplyless;
   setShowReply?: Setter<boolean>;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
+  onHasContentChange?: (hasContent: boolean) => void;
 }
 
 export function EmailInput(props: EmailInputProps) {
@@ -43,6 +44,7 @@ export function EmailInput(props: EmailInputProps) {
         setShowReply={props.setShowReply}
         markdownDomRef={props.markdownDomRef}
         isEditingExisting={props.replyingTo() == null && props.draft != null}
+        onHasContentChange={props.onHasContentChange}
       />
     </Show>
   );
