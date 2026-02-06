@@ -123,16 +123,39 @@ where
     }
 
     /// Deliver via iOS push (APNS).
+    ///
+    /// Best-effort: attempts all device endpoints and succeeds if at least one
+    /// delivery succeeds. Only fails (triggering the fallback chain) when every
+    /// endpoint fails or the endpoint list is empty.
     async fn deliver_ios(
         &self,
         apns: &crate::domain::models::queue_message::APNSTargets<serde_json::Value>,
     ) -> Result<DeliverySuccess, Report> {
+        let mut failures = 0usize;
+        let mut last_err: Option<Report> = None;
+
         for endpoint in &apns.ios_device_endpoints {
-            self.mobile
+            if let Err(e) = self
+                .mobile
                 .send_ios_push_notification(endpoint, &apns.notif, &apns.attributes)
-                .await?;
+                .await
+            {
+                tracing::warn!(endpoint, err = %e, "failed to deliver iOS push to endpoint");
+                failures += 1;
+                last_err = Some(e);
+            }
         }
-        Ok(DeliverySuccess::Ios)
+
+        // Succeed if at least one device was delivered to.
+        // Fail only if every endpoint failed (or there were none).
+        if failures == apns.ios_device_endpoints.len() {
+            match last_err {
+                Some(e) => Err(e),
+                None => Err(report!("no iOS device endpoints to deliver to")),
+            }
+        } else {
+            Ok(DeliverySuccess::Ios)
+        }
     }
 
     /// Deliver via email.
