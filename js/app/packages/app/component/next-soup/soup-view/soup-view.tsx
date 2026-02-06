@@ -81,6 +81,9 @@ import { invalidateEntityNotifications } from '@queries/notification/user-notifi
 import { soupKeys } from '@queries/soup/keys';
 import type { CacheSnapshot } from 'virtua/unstable_core';
 import { EmptyState } from '@app/component/next-soup/soup-view/empty-states';
+import { SoupChatInput } from '@app/component/SoupChatInput';
+import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
+import { isMobile } from '@core/mobile/isMobile';
 
 const DEFAULT_ENTITY_HEIGHT = 40;
 
@@ -153,6 +156,9 @@ export const SoupView = () => {
             <SoupViewList />
           </SoupViewFileDropzone>
         </div>
+        <Show when={ENABLE_UNIFIED_LIST_AI_INPUT && !isMobile()}>
+          <SoupChatInput />
+        </Show>
       </SoupViewContextProvider>
     </SplitPanelContext.Provider>
   );
