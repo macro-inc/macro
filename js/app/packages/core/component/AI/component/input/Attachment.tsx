@@ -16,7 +16,6 @@ import Envelope from '@phosphor-icons/core/regular/envelope.svg';
 import Close from '@phosphor-icons/core/regular/x.svg?component-solid';
 import type { Accessor } from 'solid-js';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
 
 type AttachmentListProps = {
   removeAttachment: (id: string) => void;

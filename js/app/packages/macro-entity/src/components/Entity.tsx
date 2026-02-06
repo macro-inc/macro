@@ -1,4 +1,4 @@
-import { getIconConfig } from 'core/component/EntityIcon';
+import { getEntityIconConfig } from 'core/component/EntityIcon';
 import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import type { Component, JSX, ParentProps, Ref } from 'solid-js';
@@ -21,18 +21,7 @@ interface EntityProps<T extends EntityData> extends ParentProps {
 export function Entity<T extends EntityData = EntityData>(
   props: EntityProps<T>
 ) {
-  const iconConfig = createMemo(() => {
-    switch (props.entity.type) {
-      case 'channel':
-        return getIconConfig(props.entity.channelType || 'channel');
-      case 'document':
-        return getIconConfig(props.entity.fileType || 'default');
-      case 'email':
-        return getIconConfig(props.entity.isRead ? 'emailRead' : 'email');
-      default:
-        return getIconConfig(props.entity.type);
-    }
-  });
+  const iconConfig = createMemo(() => getEntityIconConfig(props.entity));
 
   const content = children(() => {
     if (props.children) return props.children;

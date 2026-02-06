@@ -4,6 +4,7 @@ import {
   fileTypeToBlockName,
   isBlockAlias,
 } from '@core/constant/allBlocks';
+import { match } from 'ts-pattern';
 import { USE_WIDE_ICONS } from '@core/constant/featureFlags';
 import Building from '@icon/duotone/building-duotone.svg';
 import Chat from '@icon/duotone/chat-duotone.svg';
@@ -46,6 +47,7 @@ import ThreeUsersIcon from '@icon/duotone/users-three-duotone.svg';
 import { FileTypeMap } from '@service-storage/fileTypeMap';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
+import type { EntityData } from '@macro-entity';
 import type { Component, JSX } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
@@ -393,4 +395,15 @@ export function getIconConfig(
     config.icon = WIDE_ICONS[key];
   }
   return config;
+}
+
+export function getEntityIconConfig(entity: EntityData) {
+  return match(entity)
+    .with({ type: 'channel' }, (e) => getIconConfig(e.channelType || 'channel'))
+    .with({ type: 'document' }, (entity) =>
+      getIconConfig(entity.subType?.type ?? entity.fileType ?? 'default')
+    )
+    .with({ type: 'email', isRead: true }, () => getIconConfig('emailRead'))
+    .with({ type: 'email' }, () => getIconConfig('email'))
+    .otherwise((entity) => getIconConfig(entity.type));
 }

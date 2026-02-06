@@ -26,7 +26,7 @@ import { syncServiceClient } from '@service-sync/client';
 import { ChannelTypeEnum } from '@service-comms/client';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable } from '@thisbeyond/solid-dnd';
-import { getIconConfig } from 'core/component/EntityIcon';
+import { getEntityIconConfig } from 'core/component/EntityIcon';
 import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import { UserIcon } from 'core/component/UserIcon';
@@ -763,22 +763,7 @@ export function EntityWithEverything(
   const { keydownDataDuringTask } = trackKeydownDuringTask();
   const userEmail = useEmail();
 
-  const getIcon = createMemo(() => {
-    switch (props.entity.type) {
-      case 'channel':
-        return getIconConfig(props.entity.channelType || 'channel');
-      case 'document':
-        if (isTaskEntity(props.entity)) return getIconConfig('task');
-        if (props.entity.fileType) return getIconConfig(props.entity.fileType);
-        return getIconConfig('default');
-      case 'chat':
-        return getIconConfig('chat');
-      case 'project':
-        return getIconConfig('project');
-      case 'email':
-        return getIconConfig(props.entity.isRead ? 'emailRead' : 'email');
-    }
-  });
+  const getIcon = createMemo(() => getEntityIconConfig(props.entity));
 
   /**
    * TODO (seamus + teo) : These notifications are being attached to the wrong
