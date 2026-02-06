@@ -43,6 +43,8 @@ type EntityRenameData = {
   newName: string;
 };
 
+type EntityRenameOptimisticInfo = Omit<EntityRenameData, 'oldName'>;
+
 type EntityIdToNameMap = Map<string, string>;
 
 type RenameDssEntityMutationVariables = EntityRenameOperation;
@@ -107,7 +109,7 @@ function updateEntityNamesInDssQueryData(
         case 'channel': {
           const itemId = item.data.channel.id;
           const newName = updates.get(itemId);
-          if (!newName) return item;
+          if (newName === undefined) return item;
           item.data.channel.name = newName;
           break;
         }
@@ -116,7 +118,7 @@ function updateEntityNamesInDssQueryData(
         case 'project': {
           const itemId = item.data.id;
           const newName = updates.get(itemId);
-          if (!newName) return item;
+          if (newName === undefined) return item;
           item.data.name = newName;
           break;
         }
@@ -132,7 +134,7 @@ function updateEntityNamesInDssQueryData(
   };
 }
 
-const renameDssSetData = (entities: EntityRenameData[]) => {
+const renameDssSetData = (entities: EntityRenameOptimisticInfo[]) => {
   const updates: EntityIdToNameMap = new Map(
     entities.map((e) => [e.id, e.newName])
   );
@@ -149,7 +151,7 @@ const renameDssSetData = (entities: EntityRenameData[]) => {
 };
 
 const renameChannelSetData = (
-  entities: EntityRenameData[]
+  entities: EntityRenameOptimisticInfo[]
 ): ChannelRenameContexts => {
   const contexts: ChannelRenameContexts = new Map();
 
@@ -168,7 +170,7 @@ const renameChannelSetData = (
   return contexts;
 };
 
-const renamePreviewSetData = (entities: EntityRenameData[]) => {
+const renamePreviewSetData = (entities: EntityRenameOptimisticInfo[]) => {
   entities.forEach(({ id, newName, itemType }) => {
     setPreviewName({
       itemId: id,
@@ -178,14 +180,14 @@ const renamePreviewSetData = (entities: EntityRenameData[]) => {
   });
 };
 
-const renameHistorySetData = (entities: EntityRenameData[]) => {
+const renameHistorySetData = (entities: EntityRenameOptimisticInfo[]) => {
   entities.forEach(({ id, newName }) => {
     setHistoryItemName(id, newName);
   });
 };
 
 function performOptimisticRenameUpdates(
-  entities: EntityRenameData[]
+  entities: EntityRenameOptimisticInfo[]
 ): RenameRollbackContext {
   renamePreviewSetData(entities);
   renameHistorySetData(entities);
@@ -358,12 +360,9 @@ export function useWaitChatRename(chatId: string, noDispose?: boolean) {
 
   const dispose = createCognitionWebsocketEffect('chat_renamed', (data) => {
     if (data.chat_id !== chatId) return;
-    setHistoryItemName(chatId, data.name);
-    setPreviewName({
-      itemId: chatId,
-      name: data.name,
-      itemType: 'chat',
-    });
+    performOptimisticRenameUpdates([
+      { id: chatId, newName: data.name, itemType: 'chat' },
+    ]);
     if (!noDispose) {
       dispose();
     }
