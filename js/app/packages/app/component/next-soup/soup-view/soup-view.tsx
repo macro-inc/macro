@@ -96,9 +96,6 @@ const useSoupNotificationInvalidators = () => {
     'channel',
     (notification) => {
       entityQueryClient.invalidateQueries({
-        queryKey: queryKeys.all.channel,
-      });
-      entityQueryClient.invalidateQueries({
         queryKey: soupKeys._def,
       });
       invalidateEntityNotifications(notification.entity_id);
