@@ -146,6 +146,7 @@ export function registerSplitHotkeys(args: {
       focusAdjacentSplit('right');
       return true;
     },
+    registrationType: 'add',
   });
 
   registerHotkey({
@@ -158,6 +159,7 @@ export function registerSplitHotkeys(args: {
       focusAdjacentSplit('left');
       return true;
     },
+    registrationType: 'add',
   });
 
   return {};
