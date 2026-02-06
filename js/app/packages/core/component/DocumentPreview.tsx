@@ -578,37 +578,33 @@ export function PopupPreview(props: {
             {/* Accessible preview */}
             <Match when={matches(props.item(), isAccessiblePreviewItem)}>
               {(accessibleItem) => {
-                const { type, fileType, subType } = accessibleItem();
+                const targetType = () => {
+                  let accessibleItem_ = accessibleItem();
+                  switch (accessibleItem_.type) {
+                    case 'document':
+                      return (
+                        accessibleItem_.subType?.type ??
+                        accessibleItem_.fileType
+                      );
+                    case 'channel':
+                      switch (accessibleItem_.channelType) {
+                        case 'direct_message':
+                          return 'directMessage';
+                        case 'organization':
+                          return 'company';
+                        default:
+                          return 'channel';
+                      }
+                    default:
+                      return accessibleItem_.type;
+                  }
+                };
                 return (
                   <div class="w-full h-full flex-col">
                     {/* Header with icon and actions */}
                     <div class="flex w-full mb-2">
                       <div class="w-full size-10">
-                        <Show
-                          when={type === 'channel'}
-                          fallback={
-                            <EntityIcon
-                              targetType={
-                                type === 'document'
-                                  ? (subType?.type ?? fileType)
-                                  : type
-                              }
-                              size="md"
-                            />
-                          }
-                        >
-                          <EntityIcon
-                            size="md"
-                            targetType={
-                              accessibleItem().channelType === 'direct_message'
-                                ? 'directMessage'
-                                : accessibleItem().channelType ===
-                                    'organization'
-                                  ? 'company'
-                                  : 'channel'
-                            }
-                          />
-                        </Show>
+                        <EntityIcon size="md" targetType={targetType()} />
                       </div>
                       <div class="flex w-fit h-full justify-right">
                         {renderActionButtons()}
