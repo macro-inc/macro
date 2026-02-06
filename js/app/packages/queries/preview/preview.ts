@@ -9,12 +9,23 @@ import { previewKeys } from './keys';
 import type { ItemEntity, PreviewItem } from './types';
 import { queryReadyGate } from '@queries/gate';
 
+const PREVIEW_STALE_TIME = 60 * 1000 * 60 * 24; // 24 hours
+
+function itemPreviewQueryOptions(item: ItemEntity) {
+  return {
+    queryKey: previewKeys.item(item.id).queryKey,
+    queryFn: () => previewDataLoader.load(item),
+    staleTime: PREVIEW_STALE_TIME,
+  };
+}
+
+export async function getItemPreview(item: ItemEntity): Promise<PreviewItem> {
+  const preview = await queryClient.fetchQuery(itemPreviewQueryOptions(item));
+  return defaultNameTransform(preview);
+}
+
 export function useItemPreview(item: Accessor<ItemEntity>) {
-  const previewQuery = useQuery(() => ({
-    queryKey: previewKeys.item(item().id).queryKey,
-    queryFn: () => previewDataLoader.load(item()),
-    staleTime: 60 * 1000 * 60 * 24, // 24 hours
-  }));
+  const previewQuery = useQuery(() => itemPreviewQueryOptions(item()));
 
   const maybeChannelMessageQuery = useQuery(() => {
     const item_ = item();
@@ -23,7 +34,7 @@ export function useItemPreview(item: Accessor<ItemEntity>) {
       queryKey: previewKeys.item(item().id)._ctx.channelMessage(messageId!)
         .queryKey,
       queryFn: () => fetchMessageContext(messageId!),
-      staleTime: 60 * 1000 * 60 * 24, // 24 hours
+      staleTime: PREVIEW_STALE_TIME,
       enabled: !!messageId && previewQuery.isSuccess,
     };
   });

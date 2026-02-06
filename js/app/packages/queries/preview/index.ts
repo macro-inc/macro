@@ -1,5 +1,6 @@
 export { previewKeys } from './keys';
 export {
+  getItemPreview,
   useItemPreview,
   invalidatePreview,
   setPreviewData,
