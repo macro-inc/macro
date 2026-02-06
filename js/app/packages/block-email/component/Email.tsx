@@ -392,6 +392,15 @@ function EmailContent(props: EmailViewProps) {
         return true;
       }
 
+      // If message is expanded and not the last message, collapse it
+      if (context.messages.isBodyExpanded(focusedId)) {
+        const messages = context.messages.list();
+        const lastMessage = messages[messages.length - 1];
+        if (lastMessage?.db_id !== focusedId) {
+          context.messages.setExpandedBodyId(focusedId, false);
+          return true;
+        }
+      }
       return false;
     },
     hotkeyToken: TOKENS.email.cancelReply,
