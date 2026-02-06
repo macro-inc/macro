@@ -392,11 +392,6 @@ function EmailContent(props: EmailViewProps) {
         return true;
       }
 
-      // If message is expanded, collapse it
-      if (context.messages.isBodyExpanded(focusedId)) {
-        context.messages.setExpandedBodyId(focusedId, false);
-        return true;
-      }
       return false;
     },
     hotkeyToken: TOKENS.email.cancelReply,
