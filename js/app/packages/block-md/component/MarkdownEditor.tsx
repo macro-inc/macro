@@ -608,17 +608,19 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   }
 
   const [accessoryStore, setAccessoryStore] = createAccessoryStore();
-  plugins.use(
-    generatePlugin({
-      completionSignal: completionSignal,
-      isGeneratingSignal,
-      generatedAndWaitingSignal,
-      menuSignal: generateMenuSignal,
-      setContext: generateContextSignal[1],
-      accessories: accessoryStore,
-      setAccessories: setAccessoryStore,
-    })
-  );
+  if (ENABLE_MARKDOWN_AI_GENERATE) {
+    plugins.use(
+      generatePlugin({
+        completionSignal: completionSignal,
+        isGeneratingSignal,
+        generatedAndWaitingSignal,
+        menuSignal: generateMenuSignal,
+        setContext: generateContextSignal[1],
+        accessories: accessoryStore,
+        setAccessories: setAccessoryStore,
+      })
+    );
+  }
   plugins.use(
     codePlugin({
       accessories: accessoryStore,
