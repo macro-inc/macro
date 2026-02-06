@@ -81,6 +81,9 @@ import { invalidateEntityNotifications } from '@queries/notification/user-notifi
 import { soupKeys } from '@queries/soup/keys';
 import type { CacheSnapshot } from 'virtua/unstable_core';
 import { EmptyState } from '@app/component/next-soup/soup-view/empty-states';
+import { SoupChatInput } from '@app/component/SoupChatInput';
+import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
+import { isMobile } from '@core/mobile/isMobile';
 
 const DEFAULT_ENTITY_HEIGHT = 40;
 
@@ -92,9 +95,6 @@ const useSoupNotificationInvalidators = () => {
     notificationSource,
     'channel',
     (notification) => {
-      entityQueryClient.invalidateQueries({
-        queryKey: queryKeys.all.channel,
-      });
       entityQueryClient.invalidateQueries({
         queryKey: soupKeys._def,
       });
@@ -153,6 +153,9 @@ export const SoupView = () => {
             <SoupViewList />
           </SoupViewFileDropzone>
         </div>
+        <Show when={ENABLE_UNIFIED_LIST_AI_INPUT && !isMobile()}>
+          <SoupChatInput />
+        </Show>
       </SoupViewContextProvider>
     </SplitPanelContext.Provider>
   );
@@ -218,9 +221,13 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   const [attachHotkeys, soupViewScope] = useHotkeyDOMScope('soup-view');
 
+  const scopeId = createMemo(() => {
+    return previewPanel ? soupViewScope : panel.splitHotkeyScope;
+  });
+
   // Register navigation hotkeys
   useSoupNavigationHotkeys({
-    scopeId: soupViewScope,
+    scopeId: scopeId(),
     soup,
     virtualizerHandle,
     previewPanelRef,
@@ -228,14 +235,14 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   // Register entity action hotkeys
   useEntityActionHotkeys({
-    scopeId: panel.splitHotkeyScope,
+    scopeId: scopeId(),
     soup,
   });
 
   // Register soup view hotkeys (jump navigation, enter, escape, cmd+k, etc.)
   useSoupViewHotkeys({
     splitId: panel.handle.id,
-    scopeId: panel.splitHotkeyScope,
+    scopeId: scopeId(),
     domRef: soupViewRef,
     soup,
     splitHandle: panel.handle,
@@ -433,19 +440,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
     }
   });
 
-  createEffect(
-    on(panel.isPanelActive, () => {
-      if (!panel.isPanelActive()) {
-        return;
-      }
-      // if (activeSoupContext() !== soupContext) return;
-      // const domEl = activeSoupContext()?.domRef();
-      // setTimeout(() => {
-      //   domEl?.focus();
-      // });
-    })
-  );
-
   const [listRef, setListRef] = createSignal<HTMLDivElement>();
 
   const viewportItemCount = useElementItemCount({
@@ -524,7 +518,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   return (
     <div
-      class="size-full flex"
+      class="size-full flex bracket-never"
       ref={(el) => {
         setSoupViewRef(el);
         attachHotkeys(el);

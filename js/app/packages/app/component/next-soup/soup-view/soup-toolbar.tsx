@@ -240,7 +240,6 @@ const SoupFilters = () => {
         config.handler();
         return true;
       },
-      registrationType: 'add',
     })
   );
 
@@ -458,7 +457,6 @@ const SearchBar = () => {
       if (ref()?.value) ref()?.select();
       return true;
     },
-    registrationType: 'add',
   });
 
   onCleanup(searchHotkey.dispose);

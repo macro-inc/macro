@@ -138,6 +138,8 @@ export const useSoupNavigationHotkeys = (
 
       return true;
     },
+    registrationType: 'add',
+    handlerPriority: 4,
     hide: true,
   });
 
@@ -166,6 +168,8 @@ export const useSoupNavigationHotkeys = (
       previewPanelSoup.focus();
       return true;
     },
+    registrationType: 'add',
+    handlerPriority: 4,
     hide: true,
   });
 };
