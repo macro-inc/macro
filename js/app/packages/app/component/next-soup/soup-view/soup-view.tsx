@@ -218,9 +218,13 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   const [attachHotkeys, soupViewScope] = useHotkeyDOMScope('soup-view');
 
+  const scopeId = createMemo(() => {
+    return previewPanel ? soupViewScope : panel.splitHotkeyScope;
+  });
+
   // Register navigation hotkeys
   useSoupNavigationHotkeys({
-    scopeId: soupViewScope,
+    scopeId: scopeId(),
     soup,
     virtualizerHandle,
     previewPanelRef,
@@ -228,14 +232,14 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   // Register entity action hotkeys
   useEntityActionHotkeys({
-    scopeId: panel.splitHotkeyScope,
+    scopeId: scopeId(),
     soup,
   });
 
   // Register soup view hotkeys (jump navigation, enter, escape, cmd+k, etc.)
   useSoupViewHotkeys({
     splitId: panel.handle.id,
-    scopeId: panel.splitHotkeyScope,
+    scopeId: scopeId(),
     domRef: soupViewRef,
     soup,
     splitHandle: panel.handle,
@@ -432,19 +436,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
       lastClickedEntityId = -1;
     }
   });
-
-  createEffect(
-    on(panel.isPanelActive, () => {
-      if (!panel.isPanelActive()) {
-        return;
-      }
-      // if (activeSoupContext() !== soupContext) return;
-      // const domEl = activeSoupContext()?.domRef();
-      // setTimeout(() => {
-      //   domEl?.focus();
-      // });
-    })
-  );
 
   const [listRef, setListRef] = createSignal<HTMLDivElement>();
 
