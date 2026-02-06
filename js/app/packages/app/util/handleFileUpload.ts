@@ -1,9 +1,6 @@
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { type UploadInput, uploadFiles } from '@core/util/upload';
-import {
-  queryKeys,
-  useQueryClient as useEntityQueryClient,
-} from '@macro-entity';
+import { useQueryClient as useEntityQueryClient } from '@macro-entity';
 import { useSplitLayout } from '../component/split-layout/layout';
 import { soupKeys } from '@queries/soup/keys';
 

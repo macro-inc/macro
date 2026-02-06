@@ -29,7 +29,6 @@ import type { SoupProperty } from '../../service-clients/service-storage/generat
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { propertiesKeys } from './keys';
-import { queryKeys } from '../../macro-entity/src/queries/key';
 import { soupKeys } from '../soup/keys';
 import type { BulkEntityPropertiesData } from './bulk';
 
