@@ -107,7 +107,7 @@ function updateEntityNamesInDssQueryData(
         case 'channel': {
           const itemId = item.data.channel.id;
           const newName = updates.get(itemId);
-          if (!newName) return item;
+          if (newName === undefined) return item;
           item.data.channel.name = newName;
           break;
         }
@@ -116,7 +116,7 @@ function updateEntityNamesInDssQueryData(
         case 'project': {
           const itemId = item.data.id;
           const newName = updates.get(itemId);
-          if (!newName) return item;
+          if (newName === undefined) return item;
           item.data.name = newName;
           break;
         }
