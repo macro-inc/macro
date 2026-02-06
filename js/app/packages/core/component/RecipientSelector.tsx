@@ -1,4 +1,4 @@
-import { CustomEntityIcon } from '@core/component/EntityIcon';
+import { CustomEntityIcon, channelTypeIcon } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
 import {
@@ -12,9 +12,6 @@ import {
 import { matches } from '@core/util/match';
 import { clamp } from '@core/util/math';
 import { truncateString } from '@core/util/string';
-import BuildingIcon from '@icon/duotone/building-office-duotone.svg';
-import GlobeIcon from '@icon/duotone/globe-duotone.svg';
-import ThreeUsersIcon from '@icon/duotone/users-three-duotone.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import HashIcon from '@icon/regular/hash.svg';
 import XIcon from '@icon/regular/x.svg';
@@ -24,7 +21,6 @@ import {
   type ComboboxTriggerMode,
   useComboboxContext,
 } from '@kobalte/core/combobox';
-import type { Channel } from '@service-comms/generated/models/channel';
 import { useEmail, useUserId } from '@core/context/user';
 import { debounce } from '@solid-primitives/scheduled';
 import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
@@ -116,21 +112,6 @@ function getRecipientOptionTextValue(option: CombinedRecipientItem) {
 type RecipientComboboxItemProps = CollectionNode<CombinedRecipientItem>;
 
 function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
-  function channelTypeIcon(channel: Channel) {
-    switch (channel.channel_type) {
-      case 'direct_message':
-        return UserIcon;
-      case 'private':
-        return ThreeUsersIcon;
-      case 'organization':
-        return BuildingIcon;
-      case 'public':
-        return GlobeIcon;
-      default:
-        return HashIcon;
-    }
-  }
-
   const handleMouseEnter = () => {
     const items = document.querySelectorAll('[data-highlighted]');
     items.forEach((item) => {
@@ -190,7 +171,7 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
               <Combobox.ItemLabel class="flex flex-row w-full gap-1.5 text-ink-muted select-none text-sm">
                 <div class="flex flex-col items-center justify-center p-1">
                   <CustomEntityIcon
-                    icon={channelTypeIcon(item().data)}
+                    icon={channelTypeIcon(item().data.channel_type)}
                     size="xs"
                   />
                 </div>

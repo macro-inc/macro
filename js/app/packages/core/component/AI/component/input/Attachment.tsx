@@ -4,22 +4,16 @@ import {
   isDssImage,
   isImageAttachment,
 } from '@core/component/AI/util/attachment';
-import { EntityIcon } from '@core/component/EntityIcon';
+import { EntityIcon, channelTypeIcon } from '@core/component/EntityIcon';
 import { ImagePreview } from '@core/component/ImagePreview';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
-import BuildingIcon from '@icon/duotone/building-office-duotone.svg';
-import GlobeIcon from '@icon/duotone/globe-duotone.svg';
-import ChannelIcon from '@icon/duotone/hash-duotone.svg';
-import User from '@icon/duotone/user-duotone.svg';
-import ThreeUsersIcon from '@icon/duotone/users-three-duotone.svg';
 import XIcon from '@icon/regular/x.svg';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import Envelope from '@phosphor-icons/core/regular/envelope.svg';
 import Close from '@phosphor-icons/core/regular/x.svg?component-solid';
-import type { ChannelType } from '@service-cognition/generated/schemas';
 import type { Accessor } from 'solid-js';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -220,19 +214,4 @@ function ChatAttachment(props: {
       </Match>
     </Switch>
   );
-}
-
-function channelTypeIcon(channelType: ChannelType) {
-  switch (channelType) {
-    case 'direct_message':
-      return User;
-    case 'private':
-      return ThreeUsersIcon;
-    case 'organization':
-      return BuildingIcon;
-    case 'public':
-      return GlobeIcon;
-    default:
-      return ChannelIcon;
-  }
 }

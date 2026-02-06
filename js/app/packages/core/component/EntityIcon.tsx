@@ -41,7 +41,10 @@ import WideTask from '@macro-icons/wide/task.svg';
 import WideUnknown from '@macro-icons/wide/unknown.svg';
 import WideUser from '@macro-icons/wide/user.svg';
 import WideVideo from '@macro-icons/wide/video.svg';
+import GlobeIcon from '@icon/duotone/globe-duotone.svg';
+import ThreeUsersIcon from '@icon/duotone/users-three-duotone.svg';
 import { FileTypeMap } from '@service-storage/fileTypeMap';
+import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import type { Component, JSX } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -385,4 +388,19 @@ export function getIconConfig(
     config.icon = WIDE_ICONS[key];
   }
   return config;
+}
+
+export function channelTypeIcon(channelType: ChannelType | undefined) {
+  switch (channelType) {
+    case 'direct_message':
+      return User;
+    case 'private':
+      return ThreeUsersIcon;
+    case 'organization':
+      return Building;
+    case 'public':
+      return GlobeIcon;
+    default:
+      return Channel;
+  }
 }

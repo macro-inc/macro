@@ -10,16 +10,10 @@ import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { truncateString } from '@core/util/string';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
-import BuildingIcon from '@icon/duotone/building-office-duotone.svg';
 import EyeSlash from '@icon/duotone/eye-slash-duotone.svg';
-import GlobeIcon from '@icon/duotone/globe-duotone.svg';
-import ChannelIcon from '@icon/duotone/hash-duotone.svg';
 import TrashSimple from '@icon/duotone/trash-simple-duotone.svg';
-import User from '@icon/duotone/user-duotone.svg';
-import ThreeUsersIcon from '@icon/duotone/users-three-duotone.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import type { NamedSubType } from '@macro-entity';
-import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import type { ItemType } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import {
@@ -37,6 +31,7 @@ import {
   ENTITY_ICON_CONFIGS,
   EntityIcon,
   ICON_SIZE_CLASSES,
+  channelTypeIcon,
 } from './EntityIcon';
 
 export function useItemPreviewData(entity: Accessor<ItemEntity>) {
@@ -95,21 +90,6 @@ export function useItemPreviewData(entity: Accessor<ItemEntity>) {
   const sizeClass = () => ICON_SIZE_CLASSES['xs'];
   const className = () => {
     return `${sizeClass()} ${blockConfig().foreground}`;
-  };
-
-  const channelTypeIcon = (channelType: ChannelType | undefined) => {
-    switch (channelType) {
-      case 'direct_message':
-        return User;
-      case 'private':
-        return ThreeUsersIcon;
-      case 'organization':
-        return BuildingIcon;
-      case 'public':
-        return GlobeIcon;
-      default:
-        return ChannelIcon;
-    }
   };
 
   const targetType = () => {
