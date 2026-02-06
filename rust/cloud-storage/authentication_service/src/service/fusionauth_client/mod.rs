@@ -20,11 +20,15 @@ pub struct AuthedClient {
     inner: reqwest::Client,
 }
 
+/// Used to specify what tenant id we want to use
+const FUSIONAUTH_TENANT_ID_HEADER: &str = "X-FusionAuth-TenantId";
+
 impl AuthedClient {
-    pub fn new(api_key: String) -> Self {
+    pub fn new(api_key: String, tenant_id: String) -> Self {
         // Create authenticated client with default Authorization header
         let mut auth_headers = reqwest::header::HeaderMap::new();
         auth_headers.insert(reqwest::header::AUTHORIZATION, api_key.parse().unwrap());
+        auth_headers.insert(FUSIONAUTH_TENANT_ID_HEADER, tenant_id.parse().unwrap());
 
         let client = reqwest::Client::builder()
             .default_headers(auth_headers)
@@ -79,6 +83,7 @@ pub struct FusionAuthClient {
 impl FusionAuthClient {
     #[expect(clippy::too_many_arguments, reason = "too annoying to fix")]
     pub fn new(
+        tenant_id: String,
         api_key: String,
         client_id: String,
         client_secret: String,
@@ -88,7 +93,7 @@ impl FusionAuthClient {
         google_client_id: String,
         google_client_secret: String,
     ) -> Self {
-        let auth_client = AuthedClient::new(api_key);
+        let auth_client = AuthedClient::new(api_key, tenant_id);
         let unauth_client = UnauthedClient::new();
 
         Self {
