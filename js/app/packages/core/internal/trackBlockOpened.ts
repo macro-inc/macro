@@ -20,21 +20,16 @@ export function track({
   itemId,
   blockName,
   client,
-  isPreview,
 }: {
   itemId: string;
   blockName: BlockName;
   client: Accessor<QueryClient>;
-  isPreview?: boolean;
 }) {
   const itemType = blockNameToItemType(blockName);
 
   const inSoup = hasSoupItem(itemId);
   if (inSoup) {
-    // we don't want the list to update when in preview mode because it breaks scroll
-    if (!isPreview) {
-      optimisticUpdateDssItemViewedAt(itemId);
-    }
+    optimisticUpdateDssItemViewedAt(itemId);
   } else {
     invalidateSoup();
   }

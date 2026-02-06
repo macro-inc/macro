@@ -76,6 +76,8 @@ export function BlockLoader<
   const setHandle = blockHandleSignal.set;
   const isNested = useIsNestedBlock();
   const splitPanelContext = useContext(SplitPanelContext);
+  // NOTE: not reactive but PreviewPanel component manually creates a true signal for the context provider
+  const isPreview = splitPanelContext?.previewState?.[0]() ?? false;
 
   setLiveTrackingEnabled(props.definition.liveTrackingEnabled ?? false);
   setEditPermissionEnabled(props.definition.editPermissionEnabled ?? false);
@@ -135,15 +137,13 @@ Check that the load function does not return a preload source when the intent is
       return null;
     });
 
-    if (!isNested && data) {
-      const isPreview = splitPanelContext?.previewState?.[0]() ?? false;
+    if (!isNested && !isPreview && data) {
       // we need to pass in a client accessor since the mutation is dynamically imported outside a query context provider
       import('./trackBlockOpened').then(({ track }) => {
         track({
           itemId: props.id,
           blockName: data.__block,
           client: useQueryClient,
-          isPreview,
         });
       });
 
