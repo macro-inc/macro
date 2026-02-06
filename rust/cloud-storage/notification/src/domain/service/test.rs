@@ -3,7 +3,8 @@
 use crate::domain::models::apple::APNSPushNotification;
 use crate::domain::models::mobile::NotifCollapseKey;
 use crate::domain::models::queue_message::{
-    ConnGatewayNotification, EmailContent, Node, NotificationChannel, QueueMessage, RawQueueMessage,
+    ConnGatewayNotification, EmailContent, Node, Notif, NotificationChannel, QueueMessage,
+    RawQueueMessage,
 };
 use crate::domain::models::request::{NotificationStatus, UpdateNotificationsRequest};
 use crate::domain::models::{
@@ -833,7 +834,6 @@ struct MockWebSocketSender;
 impl WebSocketSender for MockWebSocketSender {
     async fn send_notifications<'a, T: Serialize + Send + Sync>(
         &self,
-        _message_type: &str,
         _recipients: &[MacroUserIdStr<'a>],
         _notification: &T,
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
@@ -934,6 +934,22 @@ fn create_egress_service<R: RateLimitPort>(
     )
 }
 
+fn create_mock_notif(meta: serde_json::Value) -> Notif<serde_json::Value> {
+    Notif {
+        notification_id: Uuid::nil(),
+        notification_event_type: "testing".to_string(),
+        entity: EntityType::Document.with_entity_str("testing"),
+        sent: false,
+        done: false,
+        created_at: None,
+        viewed_at: None,
+        updated_at: None,
+        deleted_at: None,
+        notification_metadata: meta,
+        sender_id: None,
+    }
+}
+
 #[tokio::test]
 async fn test_egress_rate_limit_exceeded() {
     let service = create_egress_service(MockRateLimiter::exceeding());
@@ -947,7 +963,7 @@ async fn test_egress_rate_limit_exceeded() {
         )),
         content: Node {
             notif: NotificationChannel::ConnGateway(ConnGatewayNotification {
-                notif: json!({"message": "Hello"}),
+                notif: create_mock_notif(json!({"message": "Hello"})),
                 recipients: vec![recipient],
             }),
             on_failure: None,
@@ -981,7 +997,8 @@ async fn test_egress_rate_limit_allowed() {
         )),
         content: Node {
             notif: NotificationChannel::ConnGateway(ConnGatewayNotification {
-                notif: json!({"message": "Hello"}),
+                notif: create_mock_notif(json!({"message": "Hello"})),
+
                 recipients: vec![recipient],
             }),
             on_failure: None,
@@ -1005,7 +1022,7 @@ async fn test_egress_no_rate_limit_configured() {
         rate_limit: None, // No rate limit configured
         content: Node {
             notif: NotificationChannel::ConnGateway(ConnGatewayNotification {
-                notif: json!({"message": "Hello"}),
+                notif: create_mock_notif(json!({"message": "Hello"})),
                 recipients: vec![recipient],
             }),
             on_failure: None,

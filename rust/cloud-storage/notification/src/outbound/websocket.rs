@@ -35,7 +35,6 @@ pub trait WebSocketGatewayOps {
     /// (i.e., users who had an active WebSocket connection).
     fn send_to_users<'a, T: Serialize + Send + Sync>(
         &self,
-        message_type: &str,
         user_ids: &[MacroUserIdStr<'a>],
         payload: &T,
     ) -> impl std::future::Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
@@ -96,7 +95,6 @@ impl WebSocketGatewayOps for ConnectionGatewayClient {
     #[tracing::instrument(err, skip(self, payload))]
     async fn send_to_users<'a, T: Serialize + Send + Sync>(
         &self,
-        message_type: &str,
         user_ids: &[MacroUserIdStr<'a>],
         payload: &T,
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
@@ -110,7 +108,7 @@ impl WebSocketGatewayOps for ConnectionGatewayClient {
             .collect();
 
         let body = BatchSendMessageBody {
-            message_type,
+            message_type: "notification",
             message: serde_json::to_value(payload)?,
             entities,
         };
@@ -150,12 +148,9 @@ impl<W: WebSocketGatewayOps + Send + Sync + 'static> WebSocketSender
 {
     async fn send_notifications<'a, T: Serialize + Send + Sync>(
         &self,
-        message_type: &str,
         recipients: &[MacroUserIdStr<'a>],
         notification: &T,
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
-        self.gateway
-            .send_to_users(message_type, recipients, notification)
-            .await
+        self.gateway.send_to_users(recipients, notification).await
     }
 }

@@ -40,11 +40,13 @@ pub struct UserNotificationRow<T> {
     /// The user who owns this notification.
     pub owner_id: MacroUserIdStr<'static>,
     /// The notification ID.
+    #[serde(rename = "id")]
     pub notification_id: uuid::Uuid,
     /// The notification event type string (e.g. "channel_mention").
     /// TODO make this a new type
     pub notification_event_type: String,
     /// The entity the notification is about.
+    #[serde(flatten)]
     pub entity: Entity<'static>,
     /// Whether the notification has been sent.
     pub sent: bool,

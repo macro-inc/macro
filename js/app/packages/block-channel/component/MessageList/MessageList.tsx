@@ -656,16 +656,13 @@ function MessageListImpl(props: MessageListProps) {
     return currentTypingId;
   });
 
-  const threadRows = createMemo<ThreadRow[]>(() => {
-    const list = filteredTopLevelMessages();
-    const out: ThreadRow[] = [];
-    for (let i = list.length - 1; i >= 0; i--) {
-      const message = list[i];
+  const threadRows = mapArray(
+    () => filteredTopLevelMessages().toReversed(),
+    (message) => {
       const children = (viewThreads[message.id] ?? []).filter(messageFilterFn);
-      out.push({ id: message.id, message, children });
+      return { id: message.id, message, children };
     }
-    return out;
-  });
+  );
 
   createEffect(() => {
     threadRows();

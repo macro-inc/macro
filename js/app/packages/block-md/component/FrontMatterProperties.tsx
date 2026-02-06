@@ -1,4 +1,5 @@
 import { useBlockAliasedName, useBlockId } from '@core/block';
+import { isMobile } from '@core/mobile/isMobile';
 import {
   $getPinnedProperties,
   ADD_PINNED_PROPERTY_COMMAND,
@@ -66,9 +67,10 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
   );
 
   // Track expanded/collapsed state from persisted preference
+  // Default to collapsed on mobile, expanded on desktop
   const isExpanded = createMemo(() => {
     const preference = frontMatterPreference[blockId];
-    return preference === undefined ? true : preference;
+    return preference === undefined ? !isMobile() : preference;
   });
 
   const toggleExpanded = () => {

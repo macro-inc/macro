@@ -108,6 +108,7 @@ import {
   createFilesReadyHandler,
   getDragDropPosition,
 } from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
+import { iosCursorScrollPlugin } from '@core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
@@ -176,6 +177,9 @@ import type { MarkdownRewriteOutput } from '../signal/rewriteSignal';
 import { useBlockSave, useSaveMarkdownDocument } from '../signal/save';
 import { MarkdownCollabProvider } from './MarkdownCollabProvider';
 import { MarkdownPopup } from './MarkdownPopup';
+import { isMobile } from '@core/mobile/isMobile';
+import { isIOS } from '@solid-primitives/platform';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 
 false && fileFolderDrop;
 
@@ -579,6 +583,12 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
       })
     )
     .use(pinnedPropertiesPlugin());
+
+  if (isIOS || isNativeMobilePlatform()) {
+    plugins.use(
+      iosCursorScrollPlugin({ scrollContainer: () => md.scrollContainer })
+    );
+  }
 
   if (ENABLE_MARKDOWN_LIVE_COLLABORATION) {
     const getBlockLoroManager = blockLoroManagerSignal.get;
@@ -991,7 +1001,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
         </Show>
 
         <ScopedPortal scope="block">
-          <Show when={!isBlankMarkdown()}>
+          <Show when={!isBlankMarkdown() && !isMobile()}>
             <div class="absolute bottom-2 left-2 w-fit h-fit">
               <Wordcount stats={wordcountStats} />
             </div>
@@ -1033,7 +1043,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
           />
         </Show>
 
-        <Show when={DEBUG}>
+        <Show when={DEBUG && !isMobile()}>
           <Show when={state()}>
             {(state) => (
               <LexicalStateDebugger state={state()}></LexicalStateDebugger>
