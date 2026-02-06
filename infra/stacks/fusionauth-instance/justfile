@@ -61,7 +61,6 @@ setup:
   just insert_local_fusionauth_variables
   just stop
   @echo "FusionAuth setup complete"
-  @echo "You can now run `just run_local` from the root"
 
 # Inserts local FusionAuth variables into root `.env` file
 insert_local_fusionauth_variables:
@@ -74,6 +73,7 @@ insert_local_fusionauth_variables:
 
   ENV_FILE="{{justfile_directory()}}/../../../.env"
 
+  echo "#AUTO-ADDED DO NOT MODIFY" >> "$ENV_FILE"
   echo "FUSIONAUTH_TENANT_ID=\"${TENANT_ID}\"" >> "$ENV_FILE"
   echo "AUDIENCE=\"${APPLICATION_ID}\"" >> "$ENV_FILE"
   echo "FUSIONAUTH_APPLICATION_ID=\"${APPLICATION_ID}\"" >> "$ENV_FILE"

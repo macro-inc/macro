@@ -184,7 +184,7 @@ const defaultTenant = new FusionAuthTenant(
   { provider: fusionAuthProvider }
 );
 
-export const defaultTentantId = defaultTenant.tenantId;
+export const defaultTenantId = defaultTenant.tenantId;
 
 // Lambda
 const populateLambdaBody = pulumi
