@@ -275,6 +275,7 @@ export function PopupPreview(props: {
   };
   documentInfo: {
     id: string;
+    name?: string;
     type: BlockName | BlockAlias;
     params: Record<string, string>;
     isOpenable?: boolean;
@@ -503,7 +504,7 @@ export function PopupPreview(props: {
     return (
       <>
         <div class="text-sm font-semibold select-text">
-          {accessibleItem.name}
+          {props.documentInfo.name || accessibleItem.name}
           {accessories && (
             <div class="relative text-[0.8em] text-current/60 rounded-md mt-1.5 select-none">
               {`${accessories.note} `}

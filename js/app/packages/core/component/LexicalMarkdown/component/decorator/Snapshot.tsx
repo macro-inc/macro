@@ -191,6 +191,7 @@ function SnapshotInner(props: SnapshotDecoratorProps) {
           delete={editor?.isEditable() ? deleteSnapshot : undefined}
           documentInfo={{
             id: props.documentId,
+            name: props.documentName,
             type: verifyBlockName(props.blockName),
             params: {},
             isOpenable: currentBlockId !== props.documentId,

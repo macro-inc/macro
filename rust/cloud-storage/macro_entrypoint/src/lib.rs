@@ -2,6 +2,8 @@
 //! This crate provides a standardized initialization process that should be used across entrypoint crates.
 //! This is used to provide consistent behaviour with e.g. tracing configurations
 
+mod datadog_fmt;
+
 use macro_env::Environment;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_otlp::WithExportConfig;
@@ -96,14 +98,20 @@ impl MacroEntrypoint {
                 let tracer = tracer_provider.tracer(service_name);
                 let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
 
-                let fmt_layer = tracing_subscriber::fmt::layer()
-                    .with_ansi(false)
-                    .with_file(true)
-                    .with_line_number(true)
+                // Build the JSON event format, then wrap it with DatadogFormat
+                // to inject dd.trace_id / dd.span_id for trace-log correlation.
+                let json_format = tracing_subscriber::fmt::format::Format::default()
                     .json()
                     .with_current_span(true)
                     .with_span_list(false)
                     .flatten_event(true);
+
+                let fmt_layer = tracing_subscriber::fmt::layer()
+                    .with_ansi(false)
+                    .with_file(true)
+                    .with_line_number(true)
+                    .fmt_fields(tracing_subscriber::fmt::format::JsonFields::new())
+                    .event_format(datadog_fmt::DatadogFormat { inner: json_format });
 
                 Registry::default()
                     .with(EnvFilter::from_default_env())

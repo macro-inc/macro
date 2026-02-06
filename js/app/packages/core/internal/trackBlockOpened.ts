@@ -16,11 +16,15 @@ import type { Accessor } from 'solid-js';
  * Tracks opening of a block and updates history accordingly.
  * We have this in a separate file to prevent cyclic dependencies.
  */
-export function track(
-  itemId: string,
-  blockName: BlockName,
-  client: Accessor<QueryClient>
-) {
+export function track({
+  itemId,
+  blockName,
+  client,
+}: {
+  itemId: string;
+  blockName: BlockName;
+  client: Accessor<QueryClient>;
+}) {
   const itemType = blockNameToItemType(blockName);
 
   const inSoup = hasSoupItem(itemId);

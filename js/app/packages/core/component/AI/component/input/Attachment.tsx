@@ -6,10 +6,12 @@ import {
 } from '@core/component/AI/util/attachment';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { ImagePreview } from '@core/component/ImagePreview';
+import { useItemPreviewData } from '@core/component/ItemPreview';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
+import type { ItemEntity } from '@queries/preview';
 import XIcon from '@icon/regular/x.svg';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import Envelope from '@phosphor-icons/core/regular/envelope.svg';
@@ -98,18 +100,51 @@ function ChatAttachment(props: {
   onRemove: () => void;
 }) {
   const { insertSplit, replaceOrInsertSplit } = useSplitLayout();
+
+  const itemEntity = createMemo((): ItemEntity | null => {
+    const attachment = props.attachment;
+    if (!attachment.metadata) return null;
+
+    if (
+      attachment.metadata.type === 'email' ||
+      attachment.metadata.type === 'image'
+    ) {
+      return null;
+    }
+
+    if (attachment.metadata.type === 'channel') {
+      return {
+        id: attachment.attachmentId,
+        type: 'channel',
+      };
+    }
+
+    return {
+      id: attachment.attachmentId,
+      type: attachment.metadata.type,
+    };
+  });
+
+  const previewData = createMemo(() => {
+    const entity = itemEntity();
+    if (!entity) return null;
+    return useItemPreviewData(() => entity);
+  });
+
   const name = createMemo(() => {
     const attachment = props.attachment;
     if (!attachment.metadata) return '';
-    return attachment.metadata.type === 'document'
-      ? attachment.metadata.document_name
+
+    const preview = previewData();
+    if (preview) {
+      return preview.name();
+    }
+
+    return attachment.metadata.type === 'email'
+      ? attachment.metadata.email_subject
       : attachment.metadata.type === 'image'
         ? attachment.metadata.image_name
-        : attachment.metadata.type === 'channel'
-          ? attachment.metadata.channel_name
-          : attachment.metadata.type === 'project'
-            ? attachment.metadata.project_name
-            : attachment.metadata.email_subject;
+        : '';
   });
 
   const block = createMemo(() => {

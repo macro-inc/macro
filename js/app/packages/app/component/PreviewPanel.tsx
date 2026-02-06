@@ -50,7 +50,7 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
   scopedLayoutRefs.headerRight = undefined;
 
   if (props.selectedEntity.type === 'project') {
-    const [previewState, setPreviewState] = createSignal(false);
+    const [previewState, setPreviewState] = createSignal(true);
     scopedSplitPanelContextType.previewState = [previewState, setPreviewState];
   }
 
