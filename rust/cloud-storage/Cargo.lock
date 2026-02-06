@@ -2730,7 +2730,6 @@ dependencies = [
  "mockall",
  "model",
  "model-entity",
- "model_file_type",
  "model_notifications",
  "model_user",
  "models_bulk_upload",

@@ -4,9 +4,6 @@ use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
 use mention_utils::parse::{ParsedXmlText, XmlFormatter};
 use model_entity::Entity;
 use model_entity::EntityType;
-use model_entity::as_owned::IntoOwned;
-use model_file_type::FileType;
-use std::str::FromStr;
 use notification::domain::models::RateLimitConfig;
 use notification::domain::models::RateLimitKey;
 use notification::domain::models::{
@@ -454,20 +451,6 @@ fn alert_apns(
     }
 }
 
-/// Build push notification data for a channel-related notification.
-fn channel_push_data(
-    entity: &Entity<'_>,
-    notification_id: Uuid,
-    sender_id: Option<String>,
-) -> PushNotificationData {
-    PushNotificationData {
-        notification_id,
-        notification_entity: entity.clone().into_owned(),
-        sender_id,
-        open_route: format!("/channel/{}", entity.entity_id),
-    }
-}
-
 impl NotificationExtIos for ChannelInviteMetadata {
     type NotifData = ::notification::domain::models::apple::PushNotificationData;
 
@@ -478,15 +461,14 @@ impl NotificationExtIos for ChannelInviteMetadata {
 
     fn into_apns<'a>(
         self,
-        sender_id: Option<MacroUserIdStr<'a>>,
-        entity: &Entity<'_>,
+        _sender_id: Option<MacroUserIdStr<'a>>,
+        _entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
-        let data = channel_push_data(entity, notification_id, sender_id.map(|s| s.to_string()));
         Some(alert_apns(
             format!("{} Invite", self.common.channel_name),
             format!("{} invited you to join the channel", self.invited_by),
-            data,
+            PushNotificationData { notification_id },
         ))
     }
 }
@@ -500,8 +482,8 @@ impl NotificationExtIos for ChannelMessageSendMetadata {
 
     fn into_apns<'a>(
         self,
-        sender_id: Option<MacroUserIdStr<'a>>,
-        entity: &Entity<'_>,
+        _sender_id: Option<MacroUserIdStr<'a>>,
+        _entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let title = match self.common.channel_type {
@@ -513,16 +495,11 @@ impl NotificationExtIos for ChannelMessageSendMetadata {
             ),
         };
         let body = parse_message_plain_text(&self.message_content)?;
-        let data = PushNotificationData {
-            notification_id,
-            notification_entity: entity.clone().into_owned(),
-            sender_id: sender_id.map(|s| s.to_string()),
-            open_route: format!(
-                "/channel/{}?channel_message_id={}",
-                entity.entity_id, self.message_id
-            ),
-        };
-        Some(alert_apns(title, body, data))
+        Some(alert_apns(
+            title,
+            body,
+            PushNotificationData { notification_id },
+        ))
     }
 }
 
@@ -536,7 +513,7 @@ impl NotificationExtIos for ChannelMentionMetadata {
     fn into_apns<'a>(
         self,
         sender_id: Option<MacroUserIdStr<'a>>,
-        entity: &Entity<'_>,
+        _entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let sender = sender_id?;
@@ -551,24 +528,11 @@ impl NotificationExtIos for ChannelMentionMetadata {
             ),
         };
         let body = parse_message_plain_text(&self.message_content)?;
-        let open_route = {
-            let base = format!(
-                "/channel/{}?channel_message_id={}",
-                entity.entity_id, self.message_id
-            );
-            if let Some(ref thread_id) = self.thread_id {
-                format!("{}&channel_thread_id={}", base, thread_id)
-            } else {
-                base
-            }
-        };
-        let data = PushNotificationData {
-            notification_id,
-            notification_entity: entity.clone().into_owned(),
-            sender_id: Some(sender.to_string()),
-            open_route,
-        };
-        Some(alert_apns(title, body, data))
+        Some(alert_apns(
+            title,
+            body,
+            PushNotificationData { notification_id },
+        ))
     }
 }
 
@@ -582,22 +546,17 @@ impl NotificationExtIos for ChannelReplyMetadata {
     fn into_apns<'a>(
         self,
         sender_id: Option<MacroUserIdStr<'a>>,
-        entity: &Entity<'_>,
+        _entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let sender = sender_id?;
         let title = format!("{} Replied", sender.0.email_part().email_str());
         let body = parse_message_plain_text(&self.message_content)?;
-        let data = PushNotificationData {
-            notification_id,
-            notification_entity: entity.clone().into_owned(),
-            sender_id: Some(sender.to_string()),
-            open_route: format!(
-                "/channel/{}?channel_message_id={}&channel_thread_id={}",
-                entity.entity_id, self.message_id, self.thread_id
-            ),
-        };
-        Some(alert_apns(title, body, data))
+        Some(alert_apns(
+            title,
+            body,
+            PushNotificationData { notification_id },
+        ))
     }
 }
 
@@ -612,23 +571,21 @@ impl NotificationExtIos for DocumentMentionMetadata {
     fn into_apns<'a>(
         self,
         sender_id: Option<MacroUserIdStr<'a>>,
-        entity: &Entity<'_>,
+        _entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let sender = sender_id?;
         let file_type_str = self.file_type.as_ref()?;
         let title = sender.0.email_part().email_str().to_string();
-        let body = format!("You were mentioned in {}.{}", self.document_name, file_type_str);
-
-        let file_type = FileType::from_str(file_type_str).ok()?;
-        let block_route = file_type.macro_app_path().to_string();
-        let data = PushNotificationData {
-            notification_id,
-            notification_entity: entity.clone().into_owned(),
-            sender_id: Some(sender.to_string()),
-            open_route: format!("/{}/{}", block_route, entity.entity_id),
-        };
-        Some(alert_apns(title, body, data))
+        let body = format!(
+            "You were mentioned in {}.{}",
+            self.document_name, file_type_str
+        );
+        Some(alert_apns(
+            title,
+            body,
+            PushNotificationData { notification_id },
+        ))
     }
 }
 
@@ -654,8 +611,8 @@ impl NotificationExtIos for TaskAssignedMetadata {
 
     fn into_apns<'a>(
         self,
-        sender_id: Option<MacroUserIdStr<'a>>,
-        entity: &Entity<'_>,
+        _sender_id: Option<MacroUserIdStr<'a>>,
+        _entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let title = self.assigned_by.email_part().email_str().to_string();
@@ -664,12 +621,10 @@ impl NotificationExtIos for TaskAssignedMetadata {
         } else {
             "assigned you a task".to_string()
         };
-        let data = PushNotificationData {
-            notification_id,
-            notification_entity: entity.clone().into_owned(),
-            sender_id: sender_id.map(|s| s.to_string()),
-            open_route: format!("/task/{}", self.task_id),
-        };
-        Some(alert_apns(title, body, data))
+        Some(alert_apns(
+            title,
+            body,
+            PushNotificationData { notification_id },
+        ))
     }
 }

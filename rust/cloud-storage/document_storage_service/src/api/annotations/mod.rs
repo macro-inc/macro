@@ -6,7 +6,7 @@ pub mod edit_anchor;
 pub mod edit_comment;
 pub mod get;
 
-use std::{collections::HashSet, fmt::Display, str::FromStr};
+use std::{collections::HashSet, fmt::Display};
 
 use super::context::ApiContext;
 use axum::{
@@ -21,8 +21,6 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model::{annotations::Comment, response::ErrorResponse};
 use model_entity::Entity;
 use model_entity::EntityType;
-use model_entity::as_owned::IntoOwned;
-use model_file_type::FileType;
 use notification::domain::models::{
     NotifCollapseKey, Notification, NotificationExtIos, RateLimitConfig, RateLimitKey,
     SendNotificationRequestBuilder,
@@ -31,6 +29,7 @@ use notification::domain::models::{
 use serde::{Deserialize, Serialize};
 use tower::ServiceBuilder;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 pub fn router(state: ApiContext) -> Router<ApiContext> {
     Router::new()
@@ -207,7 +206,7 @@ impl NotificationExtIos for DocumentMentionNotification {
     fn into_apns<'a>(
         self,
         sender_id: Option<MacroUserIdStr<'a>>,
-        entity: &Entity<'_>,
+        _entity: &Entity<'_>,
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let sender = sender_id?;
@@ -217,9 +216,6 @@ impl NotificationExtIos for DocumentMentionNotification {
             "You were mentioned in {}.{}",
             self.document_name, file_type_str
         );
-
-        let file_type = FileType::from_str(file_type_str).ok()?;
-        let block_route = file_type.macro_app_path().to_string();
 
         Some(APNSPushNotification {
             aps: Aps {
@@ -232,12 +228,7 @@ impl NotificationExtIos for DocumentMentionNotification {
                 )),
                 ..Default::default()
             },
-            push_notification_data: PushNotificationData {
-                notification_id,
-                notification_entity: entity.clone().into_owned(),
-                sender_id: Some(sender.to_string()),
-                open_route: format!("/{}/{}", block_route, entity.entity_id),
-            },
+            push_notification_data: PushNotificationData { notification_id },
         })
     }
 }
