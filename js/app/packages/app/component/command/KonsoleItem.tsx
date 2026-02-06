@@ -431,11 +431,13 @@ function getCommandItemBlockName(
   icon?: boolean
 ): BlockName | BlockAlias | undefined {
   if (item.type === 'item') {
-    return itemToBlockName({
-      ...item.data,
-      type: item.data.itemType,
-      icon,
-    });
+    return itemToBlockName(
+      {
+        ...item.data,
+        type: item.data.itemType,
+      },
+      icon
+    );
   } else if (item.type === 'channel') {
     return 'channel';
   } else if (item.type === 'email') {

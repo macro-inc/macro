@@ -209,7 +209,6 @@ type ItemLike = {
   fileType?: BasicDocumentFileType;
   subType?: SubType | BasicDocumentSubTypeProperty;
   name?: string;
-  icon?: boolean;
 };
 
 /**
@@ -222,7 +221,8 @@ type ItemLike = {
  * @return The block name or undefined if there is no appropriate block.
  */
 export function itemToBlockName(
-  item: ItemLike
+  item: ItemLike,
+  icon?: boolean
 ): BlockName | BlockAlias | undefined {
   const subTypeName =
     item.subType && 'type' in item.subType
