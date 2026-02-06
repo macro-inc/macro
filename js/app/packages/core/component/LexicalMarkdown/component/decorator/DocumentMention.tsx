@@ -108,37 +108,39 @@ function InlinePreview(props: {
       </Match>
       <Match when={matches(props.item(), isAccessiblePreviewItem)}>
         {(accessibleItem) => {
-          const { type, fileType, channelType, subType } = accessibleItem();
+          const targetType = () => {
+            let accessibleItem_ = accessibleItem();
+            switch (accessibleItem_.type) {
+              case 'document':
+                return (
+                  accessibleItem_.subType?.type ?? accessibleItem_.fileType
+                );
+              case 'channel':
+                switch (accessibleItem_.channelType) {
+                  case 'direct_message':
+                    return 'directMessage';
+                  case 'organization':
+                    return 'company';
+                  default:
+                    return 'channel';
+                }
+              default:
+                return accessibleItem_.type;
+            }
+          };
           return (
             <MentionContainer
               icon={
-                <Show
-                  when={type === 'channel'}
-                  fallback={
-                    <EntityIcon
-                      targetType={
-                        type === 'document' ? (subType?.type ?? fileType) : type
-                      }
-                      size="fill"
-                      theme={
-                        props.theme?.['document-mention'] === 'chat-blue'
-                          ? 'monochrome'
-                          : undefined
-                      }
-                    />
+                <EntityIcon
+                  size="fill"
+                  targetType={targetType()}
+                  theme={
+                    accessibleItem().type !== 'channel' &&
+                    props.theme?.['document-mention'] === 'chat-blue'
+                      ? 'monochrome'
+                      : undefined
                   }
-                >
-                  <EntityIcon
-                    size="fill"
-                    targetType={
-                      channelType === 'direct_message'
-                        ? 'directMessage'
-                        : channelType === 'organization'
-                          ? 'company'
-                          : 'channel'
-                    }
-                  />
-                </Show>
+                />
               }
               text={
                 <span
