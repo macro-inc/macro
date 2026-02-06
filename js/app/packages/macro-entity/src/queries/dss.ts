@@ -806,29 +806,33 @@ export function optimisticUpdateDssItemViewedAt(itemId: string): boolean {
     (prev: InfiniteData<SoupPage, unknown> | undefined) => {
       if (!prev) return prev;
 
-      const pages = prev.pages.map((page) => ({
-        ...page,
-        items: page.items.map((item): SoupApiItem => {
-          const currentItemId = getSoupItemId(item);
-          if (currentItemId !== itemId) return item;
+      const pages = prev.pages.map((page) => {
+        if (found) return page;
 
-          found = true;
+        return {
+          ...page,
+          items: page.items.map((item): SoupApiItem => {
+            const currentItemId = getSoupItemId(item);
+            if (currentItemId !== itemId) return item;
 
-          switch (item.tag) {
-            case 'document':
-            case 'chat':
-            case 'project':
-            case 'emailThread':
-              item.data.viewedAt = now.getTime();
-              break;
-            case 'channel':
-              item.data.viewed_at = now.toISOString();
-              break;
-          }
+            found = true;
 
-          return item;
-        }),
-      }));
+            switch (item.tag) {
+              case 'document':
+              case 'chat':
+              case 'project':
+              case 'emailThread':
+                item.data.viewedAt = now.getTime();
+                break;
+              case 'channel':
+                item.data.viewed_at = now.toISOString();
+                break;
+            }
+
+            return item;
+          }),
+        };
+      });
 
       return {
         ...prev,
