@@ -29,6 +29,7 @@ import {
   INTERNAL_TRANSFORMERS,
 } from '@lexical-core';
 import {
+  $addUpdateTag,
   $createParagraphNode,
   $createRangeSelection,
   $createTextNode,
@@ -63,6 +64,7 @@ import {
   type SerializedEditorState,
   type SerializedLexicalNode,
   type SerializedParagraphNode,
+  SKIP_DOM_SELECTION_TAG,
   type TextNode,
 } from 'lexical';
 import type { Setter } from 'solid-js';
@@ -236,6 +238,7 @@ export function initializeEditorEmpty(
   peerId?: () => string | undefined
 ) {
   editor.update(() => {
+    $addUpdateTag(SKIP_DOM_SELECTION_TAG);
     const root = $getRoot();
     root.clear();
     root.append($createParagraphNode().append($createTextNode('')));
@@ -345,9 +348,15 @@ export function setEditorStateFromMarkdown(
   const transformers = weakTransformersByEditor.get(editor)![target];
 
   if (!inUpdate) {
-    editor.update(() =>
-      $convertFromMarkdownString(markdown, transformers, node, preserveNewLines)
-    );
+    editor.update(() => {
+      $addUpdateTag(SKIP_DOM_SELECTION_TAG);
+      $convertFromMarkdownString(
+        markdown,
+        transformers,
+        node,
+        preserveNewLines
+      );
+    });
     editor.read(() => {});
     return editor.getEditorState();
   } else {

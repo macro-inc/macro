@@ -59,7 +59,7 @@ false && observedSize;
 type ThreadRow = {
   id: string;
   message: Message;
-  children: Message[];
+  children: Accessor<Message[]>;
 };
 
 type MessageListItemProps = {
@@ -659,7 +659,8 @@ function MessageListImpl(props: MessageListProps) {
   const threadRows = mapArray(
     () => filteredTopLevelMessages().toReversed(),
     (message) => {
-      const children = (viewThreads[message.id] ?? []).filter(messageFilterFn);
+      const children = () =>
+        (viewThreads[message.id] ?? []).filter(messageFilterFn);
       return { id: message.id, message, children };
     }
   );
@@ -881,7 +882,7 @@ function MessageListImpl(props: MessageListProps) {
 
   const ThreadRowItem = (rowProps: { row: ThreadRow }) => {
     const row = () => rowProps.row;
-    const threadChildren = () => row().children;
+    const threadChildren = () => row().children();
     const threadState = createMemo(() =>
       listContext.getThreadState(row().message.id)
     );
