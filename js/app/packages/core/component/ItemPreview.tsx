@@ -200,8 +200,7 @@ export function ItemPreview(props: ItemPreviewProps) {
 }
 
 function ItemPreviewInner(props: ItemPreviewProps) {
-  const { item, name, onPreviewClick, className, channelTypeIcon } =
-    useItemPreviewData(props);
+  const { item, name, onPreviewClick } = useItemPreviewData(props);
 
   return (
     <Switch>
@@ -213,51 +212,53 @@ function ItemPreviewInner(props: ItemPreviewProps) {
           <Switch>
             <Match when={matches(loadedItem(), isAccessiblePreviewItem)}>
               {(accessibleItem) => {
-                const itemData = accessibleItem();
-                const fileType = itemData.fileType;
-                const subType = itemData.subType?.type as
-                  | NamedSubType
-                  | undefined;
-                const blockName = fileTypeToBlockName(
-                  subType ?? fileType ?? itemData.type
-                );
+                const targetType = () => {
+                  let accessibleItem_ = accessibleItem();
+                  switch (accessibleItem_.type) {
+                    case 'document':
+                      return (
+                        accessibleItem_.subType?.type ??
+                        accessibleItem_.fileType
+                      );
+                    case 'channel':
+                      switch (accessibleItem_.channelType) {
+                        case 'direct_message':
+                          return 'directMessage';
+                        case 'organization':
+                          return 'company';
+                        default:
+                          return 'channel';
+                      }
+                    default:
+                      return accessibleItem_.type;
+                  }
+                };
+                const blockName = () => {
+                  const type = targetType();
+                  const itemType = accessibleItem().type;
+                  return fileTypeToBlockName(type ?? itemType);
+                };
                 const navHandlers =
-                  useSplitNavigationHandler<HTMLButtonElement>((e) =>
+                  useSplitNavigationHandler<HTMLButtonElement>((e) => {
+                    const item = accessibleItem();
                     onPreviewClick(
-                      itemData.type,
-                      itemData.id,
-                      fileType,
-                      subType,
+                      item.type,
+                      item.id,
+                      item.fileType,
+                      item.subType?.type as NamedSubType | undefined,
                       e.altKey
-                    )
-                  );
+                    );
+                  });
                 return (
                   <HoverCard
-                    disabled={isTouchDevice() || !blockName}
+                    disabled={isTouchDevice() || !blockName()}
                     trigger={
                       <button
                         class="text-ink-base text-sm ring-1 ring-edge-muted rounded-xs hover:bg-panel-hover flex flex-row h-6 px-2 justify-center items-center"
                         {...navHandlers}
                       >
                         <div class="flex justify-start items-center h-3.5 mr-2">
-                          {itemData.type === 'channel' ? (
-                            <div class={className()}>
-                              <Dynamic
-                                component={channelTypeIcon(
-                                  itemData.channelType
-                                )}
-                              />
-                            </div>
-                          ) : (
-                            <EntityIcon
-                              targetType={
-                                itemData.type === 'document'
-                                  ? (subType ?? fileType)
-                                  : itemData.type
-                              }
-                              size="fill"
-                            />
-                          )}
+                          <EntityIcon targetType={targetType()} size="fill" />
                         </div>
                         <div class="flex-1 text-left leading-5 min-w-0 truncate">
                           {truncateString(name(), 80)}
@@ -270,8 +271,8 @@ function ItemPreviewInner(props: ItemPreviewProps) {
                         mouseEnter={() => {}}
                         mouseLeave={() => {}}
                         documentInfo={{
-                          id: itemData.id,
-                          type: blockName as BlockName,
+                          id: accessibleItem().id,
+                          type: blockName() as BlockName,
                           params: {},
                           isOpenable: true,
                         }}
@@ -295,7 +296,7 @@ function ItemPreviewInner(props: ItemPreviewProps) {
 }
 
 export function InlineItemPreview(props: ItemPreviewProps) {
-  const { item, name, className, channelTypeIcon } = useItemPreviewData(props);
+  const { item, name } = useItemPreviewData(props);
 
   return (
     <Switch>
@@ -307,28 +308,31 @@ export function InlineItemPreview(props: ItemPreviewProps) {
           <Switch>
             <Match when={matches(loadedItem(), isAccessiblePreviewItem)}>
               {(accessibleItem) => {
-                const itemData = accessibleItem();
-                const fileType = itemData.fileType;
-                const subType = itemData.subType?.type;
+                const targetType = () => {
+                  let accessibleItem_ = accessibleItem();
+                  switch (accessibleItem_.type) {
+                    case 'document':
+                      return (
+                        accessibleItem_.subType?.type ??
+                        accessibleItem_.fileType
+                      );
+                    case 'channel':
+                      switch (accessibleItem_.channelType) {
+                        case 'direct_message':
+                          return 'directMessage';
+                        case 'organization':
+                          return 'company';
+                        default:
+                          return 'channel';
+                      }
+                    default:
+                      return accessibleItem_.type;
+                  }
+                };
                 return (
                   <span class="inline-flex items-center gap-1">
                     <span class="w-4 h-4">
-                      {itemData.type === 'channel' ? (
-                        <div class={className()}>
-                          <Dynamic
-                            component={channelTypeIcon(itemData.channelType)}
-                          />
-                        </div>
-                      ) : (
-                        <EntityIcon
-                          targetType={
-                            itemData.type === 'document'
-                              ? (subType ?? fileType)
-                              : itemData.type
-                          }
-                          size="xs"
-                        />
-                      )}
+                      <EntityIcon targetType={targetType()} size="xs" />
                     </span>
                     <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
                       {truncateString(name(), 80)}
