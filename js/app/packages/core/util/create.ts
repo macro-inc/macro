@@ -169,7 +169,9 @@ export async function createCodeFileFromText({
         `${language} is not supported by the code block`
       );
 
-    finalExtension = getExtensionForLanguage(language);
+    finalExtension = (getExtensionForLanguage(language) ?? undefined) as
+      | CodeFileExtension
+      | undefined;
     if (!finalExtension) {
       return err(
         'UNSUPPORTED_LANGUAGE',
