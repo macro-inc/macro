@@ -1268,3 +1268,164 @@ async fn test_mark_undone_updates_db_no_push_clear() {
         "Should not clear push when marking undone"
     );
 }
+
+/// Mock mobile sender that tracks attempted endpoints and can fail specific ones.
+struct TrackingMobileSender {
+    /// Endpoints that were attempted (for verification).
+    attempted_endpoints: Mutex<Vec<String>>,
+    /// Endpoints that should fail when attempted.
+    failing_endpoints: HashSet<String>,
+}
+
+impl TrackingMobileSender {
+    fn new(failing_endpoints: HashSet<String>) -> Self {
+        Self {
+            attempted_endpoints: Mutex::new(Vec::new()),
+            failing_endpoints,
+        }
+    }
+
+    fn get_attempted_endpoints(&self) -> Vec<String> {
+        self.attempted_endpoints.lock().unwrap().clone()
+    }
+}
+
+impl NotificationSender for TrackingMobileSender {
+    async fn send_ios_push_notification<T: Serialize + Send + Sync>(
+        &self,
+        endpoint_arn: &str,
+        _notification: &crate::domain::models::apple::APNSPushNotification<T>,
+        _attributes: &crate::domain::models::mobile::MessageAttributes,
+    ) -> Result<(), Report> {
+        // Track that this endpoint was attempted
+        self.attempted_endpoints
+            .lock()
+            .unwrap()
+            .push(endpoint_arn.to_string());
+
+        // Fail if this endpoint is in the failing set
+        if self.failing_endpoints.contains(endpoint_arn) {
+            rootcause::bail!("Simulated APNS failure for endpoint: {}", endpoint_arn);
+        }
+
+        Ok(())
+    }
+
+    async fn send_android_push_notification<T: Serialize + Send + Sync>(
+        &self,
+        _endpoint_arn: &str,
+        _notification: &crate::domain::models::android::FCMMessage<T>,
+        _attributes: &crate::domain::models::mobile::MessageAttributes,
+    ) -> Result<(), Report> {
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn test_egress_ios_attempts_all_endpoints_even_if_some_fail() {
+    use crate::domain::models::apple::{APNSPushNotification, Aps};
+    use crate::domain::models::mobile::{MessageAttributes, PushType};
+    use crate::domain::models::queue_message::APNSTargets;
+
+    let endpoint1 = "arn:aws:sns:us-east-1:111:endpoint/APNS/app/device1";
+    let endpoint2 = "arn:aws:sns:us-east-1:111:endpoint/APNS/app/device2";
+    let endpoint3 = "arn:aws:sns:us-east-1:111:endpoint/APNS/app/device3";
+    let endpoint4 = "arn:aws:sns:us-east-1:111:endpoint/APNS/app/device4";
+
+    // Configure endpoints 1 and 3 to fail
+    let failing_endpoints: HashSet<String> = [endpoint1.to_string(), endpoint3.to_string()].into();
+
+    let mobile_sender = std::sync::Arc::new(TrackingMobileSender::new(failing_endpoints));
+    let service = NotificationEgressService::new(
+        MockQueue::new(),
+        MockRepository::new(),
+        MockWebSocketSender,
+        mobile_sender.clone(),
+        MockEmailSender,
+        MockRateLimiter::allowing(),
+    );
+
+    let message = QueueMessage {
+        message_type: "test_notification".to_string(),
+        rate_limit: None,
+        content: Node {
+            notif: NotificationChannel::Ios(Box::new(APNSTargets {
+                notif: APNSPushNotification {
+                    aps: Aps::default(),
+                    push_notification_data: json!({"message": "Hello"}),
+                },
+                attributes: MessageAttributes {
+                    push_type: PushType::Alert,
+                    collapse_key: "test_collapse".to_string(),
+                },
+                ios_device_endpoints: vec![
+                    endpoint1.to_string(),
+                    endpoint2.to_string(),
+                    endpoint3.to_string(),
+                    endpoint4.to_string(),
+                ],
+            })),
+            on_failure: None,
+        },
+    };
+
+    let results = service.deliver_notification(message).await;
+
+    // Verify ALL 4 endpoints were attempted
+    let attempted = mobile_sender.get_attempted_endpoints();
+    assert_eq!(
+        attempted.len(),
+        4,
+        "Should attempt delivery to all 4 endpoints, but only attempted: {:?}",
+        attempted
+    );
+    assert!(
+        attempted.contains(&endpoint1.to_string()),
+        "Should attempt endpoint1"
+    );
+    assert!(
+        attempted.contains(&endpoint2.to_string()),
+        "Should attempt endpoint2"
+    );
+    assert!(
+        attempted.contains(&endpoint3.to_string()),
+        "Should attempt endpoint3"
+    );
+    assert!(
+        attempted.contains(&endpoint4.to_string()),
+        "Should attempt endpoint4"
+    );
+
+    // Verify we got 4 results (one per endpoint)
+    assert_eq!(results.len(), 4, "Should have 4 results (one per endpoint)");
+
+    // Verify 2 succeeded and 2 failed
+    let successes = results.iter().filter(|r| r.is_ok()).count();
+    let failures = results.iter().filter(|r| r.is_err()).count();
+    assert_eq!(successes, 2, "Should have 2 successful deliveries");
+    assert_eq!(failures, 2, "Should have 2 failed deliveries");
+}
+
+impl NotificationSender for std::sync::Arc<TrackingMobileSender> {
+    async fn send_ios_push_notification<T: Serialize + Send + Sync>(
+        &self,
+        endpoint_arn: &str,
+        notification: &crate::domain::models::apple::APNSPushNotification<T>,
+        attributes: &crate::domain::models::mobile::MessageAttributes,
+    ) -> Result<(), Report> {
+        (**self)
+            .send_ios_push_notification(endpoint_arn, notification, attributes)
+            .await
+    }
+
+    async fn send_android_push_notification<T: Serialize + Send + Sync>(
+        &self,
+        endpoint_arn: &str,
+        notification: &crate::domain::models::android::FCMMessage<T>,
+        attributes: &crate::domain::models::mobile::MessageAttributes,
+    ) -> Result<(), Report> {
+        (**self)
+            .send_android_push_notification(endpoint_arn, notification, attributes)
+            .await
+    }
+}
