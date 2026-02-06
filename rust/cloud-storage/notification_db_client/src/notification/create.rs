@@ -87,7 +87,7 @@ mod tests {
         let uuid = macro_uuid::generate_uuid_v7();
         let notification = RawNotification {
             id: uuid,
-            notification_event_type: NotificationEventType::ChannelInvite.to_string(),
+            notification_event_type: "channel_invite".to_string(),
             entity: EntityType::Document.with_entity_str("test"),
             service_sender: "test".to_string(),
             created_at: None,
@@ -107,7 +107,7 @@ mod tests {
         let uuid = macro_uuid::generate_uuid_v7();
         let notification = RawNotification {
             id: uuid,
-            notification_event_type: NotificationEventType::ChannelInvite.to_string(),
+            notification_event_type: "channel_invite".to_string(),
             entity: EntityType::Document.with_entity_str("test"),
             service_sender: "test".to_string(),
             created_at: None,
