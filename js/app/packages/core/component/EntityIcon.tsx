@@ -397,13 +397,20 @@ export function getIconConfig(
   return config;
 }
 
-export function getEntityIconConfig(entity: EntityData) {
-  return match(entity)
-    .with({ type: 'channel' }, (e) => getIconConfig(e.channelType || 'channel'))
-    .with({ type: 'document' }, (entity) =>
-      getIconConfig(entity.subType?.type ?? entity.fileType ?? 'default')
+export function getEntityIconType(entity: EntityData): EntityWithValidIcon {
+  const typeString = match(entity)
+    .with({ type: 'channel' }, (e) => e.channelType || 'channel')
+    .with(
+      { type: 'document' },
+      (e) => e.subType?.type ?? e.fileType ?? 'default'
     )
-    .with({ type: 'email', isRead: true }, () => getIconConfig('emailRead'))
-    .with({ type: 'email' }, () => getIconConfig('email'))
-    .otherwise((entity) => getIconConfig(entity.type));
+    .with({ type: 'email', isRead: true }, () => 'emailRead')
+    .with({ type: 'email' }, () => 'email')
+    .otherwise((e) => e.type);
+
+  return validateEntity(typeString);
+}
+
+export function getEntityIconConfig(entity: EntityData) {
+  return getIconConfig(getEntityIconType(entity));
 }
