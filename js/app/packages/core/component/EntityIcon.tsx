@@ -47,7 +47,13 @@ import ThreeUsersIcon from '@icon/duotone/users-three-duotone.svg';
 import { FileTypeMap } from '@service-storage/fileTypeMap';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
-import type { EntityData } from '@macro-entity';
+import type {
+  EntityData,
+  ChannelEntity,
+  DocumentEntity,
+  EmailEntity,
+} from '@macro-entity';
+import type { PreviewItem } from '@queries/preview';
 import type { Component, JSX } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
@@ -397,7 +403,14 @@ export function getIconConfig(
   return config;
 }
 
-export function getEntityIconType(entity: EntityData): EntityWithValidIcon {
+type EntityIconData = Pick<EntityData, 'type'> & {
+  channelType?: ChannelEntity['channelType'];
+  fileType?: DocumentEntity['fileType'];
+  subType?: DocumentEntity['subType'];
+  isRead?: EmailEntity['isRead'];
+};
+
+export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
   const typeString = match(entity)
     .with({ type: 'channel' }, (e) => e.channelType || 'channel')
     .with(
@@ -413,4 +426,12 @@ export function getEntityIconType(entity: EntityData): EntityWithValidIcon {
 
 export function getEntityIconConfig(entity: EntityData) {
   return getIconConfig(getEntityIconType(entity));
+}
+
+export function getPreviewItemIconType(item: PreviewItem): EntityWithValidIcon {
+  if (item.loading || item.access !== 'access') {
+    return 'default';
+  }
+
+  return getEntityIconType(item);
 }
