@@ -797,42 +797,61 @@ export function createBulkMoveToProjectDssEntityMutation() {
  * Updates the item across all DSS queries if it exists.
  * Returns true if the item was updated, i.e. found in the cache, false otherwise.
  */
-export function optimisticUpdateDssItemViewedAt(itemId: string): boolean {
+export function optimisticUpdateDssItemViewedAt(
+  itemId: string,
+  location?: { pageIndex: number; itemIndex: number }
+): boolean {
   const now = new Date();
   let found = false;
+
+  const updateItemViewedAt = (item: SoupApiItem): SoupApiItem => {
+    found = true;
+    switch (item.tag) {
+      case 'document':
+      case 'chat':
+      case 'project':
+      case 'emailThread':
+        item.data.viewedAt = now.getTime();
+        break;
+      case 'channel':
+        item.data.viewed_at = now.toISOString();
+        break;
+    }
+    return item;
+  };
 
   queryClient.setQueriesData(
     { queryKey: queryKeys.all.dss },
     (prev: InfiniteData<SoupPage, unknown> | undefined) => {
       if (!prev) return prev;
 
-      const pages = prev.pages.map((page) => {
-        if (found) return page;
+      const pages =
+        location !== undefined
+          ? prev.pages.map((page, idx) => {
+              if (idx !== location.pageIndex) return page;
 
-        return {
-          ...page,
-          items: page.items.map((item): SoupApiItem => {
-            const currentItemId = getSoupItemId(item);
-            if (currentItemId !== itemId) return item;
+              const items = page.items.map(
+                (item, itemIdx): SoupApiItem =>
+                  itemIdx === location.itemIndex
+                    ? updateItemViewedAt(item)
+                    : item
+              );
 
-            found = true;
+              return { ...page, items };
+            })
+          : prev.pages.map((page) => {
+              if (found) return page;
 
-            switch (item.tag) {
-              case 'document':
-              case 'chat':
-              case 'project':
-              case 'emailThread':
-                item.data.viewedAt = now.getTime();
-                break;
-              case 'channel':
-                item.data.viewed_at = now.toISOString();
-                break;
-            }
-
-            return item;
-          }),
-        };
-      });
+              return {
+                ...page,
+                items: page.items.map(
+                  (item): SoupApiItem =>
+                    getSoupItemId(item) === itemId
+                      ? updateItemViewedAt(item)
+                      : item
+                ),
+              };
+            });
 
       return {
         ...prev,
@@ -844,14 +863,35 @@ export function optimisticUpdateDssItemViewedAt(itemId: string): boolean {
   return found;
 }
 
-export function hasSoupItem(itemId: string) {
-  return queryClient
-    .getQueryData<InfiniteData<SoupPage, unknown>>(queryKeys.all.dss)
-    ?.pages.some((page) =>
-      page.items.some((item) => getSoupItemId(item) === itemId)
+/**
+ * Finds a soup item in the cache and returns its location.
+ * Returns the page and item indices if found, undefined otherwise.
+ */
+export function hasSoupItem(
+  itemId: string
+): { pageIndex: number; itemIndex: number } | undefined {
+  const data = queryClient.getQueryData<InfiniteData<SoupPage, unknown>>(
+    queryKeys.all.dss
+  );
+  if (!data) return undefined;
+
+  for (let pageIndex = 0; pageIndex < data.pages.length; pageIndex++) {
+    const page = data.pages[pageIndex];
+    const itemIndex = page.items.findIndex(
+      (item) => getSoupItemId(item) === itemId
     );
+    if (itemIndex >= 0) {
+      return { pageIndex, itemIndex };
+    }
+  }
+
+  return undefined;
 }
 
+/**
+ * Invalidates all DSS soup queries, marking them as stale.
+ * If the query is currently being rendered, it will also be refetched in the background
+ */
 export function invalidateSoup() {
   queryClient.invalidateQueries({
     queryKey: queryKeys.all.dss,
