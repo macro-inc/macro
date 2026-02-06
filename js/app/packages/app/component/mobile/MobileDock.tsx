@@ -47,7 +47,7 @@ export function MobileDock() {
     const id = splitContent().id;
     const type = splitContent().type;
 
-    return type === 'component' && (id === 'unified-list' || id === 'soup-v2');
+    return type === 'component' && id === 'unified-list';
   };
 
   const ensureUnifiedList = () => {
