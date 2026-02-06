@@ -14,6 +14,7 @@ import { toast } from '@core/component/Toast/Toast';
 import type { SoupPage } from '@service-storage/generated/schemas';
 import { setPreviewName } from '@queries/preview';
 import { setHistoryItemName } from '@queries/history/history';
+import { createCognitionWebsocketEffect } from '@service-cognition/websocket';
 
 type RenamableEntity = Pick<EntityData, 'id' | 'type' | 'name'> &
   Partial<EntityData>;
@@ -338,4 +339,34 @@ export function createBulkRenameDssEntityMutation() {
     onMutate: bulkRenameOnMutate,
     onSettled: bulkRenameOnSettled,
   }));
+}
+
+const CHAT_RENAME_TIMEOUT_MS = 20000;
+
+/**
+ * Waits for a chat rename to complete and updates the query cache(s).
+ * If noDispose is true, the effect will not be disposed after completion/timeout.
+ * Returns a dispose function to cancel the wait.
+ */
+export function useWaitChatRename(chatId: string, noDispose?: boolean) {
+  if (!noDispose) {
+    setTimeout(() => {
+      dispose();
+    }, CHAT_RENAME_TIMEOUT_MS);
+  }
+
+  const dispose = createCognitionWebsocketEffect('chat_renamed', (data) => {
+    if (data.chat_id !== chatId) return;
+    setHistoryItemName(chatId, data.name);
+    setPreviewName({
+      itemId: chatId,
+      name: data.name,
+      itemType: 'chat',
+    });
+    if (!noDispose) {
+      dispose();
+    }
+  });
+
+  return dispose;
 }
