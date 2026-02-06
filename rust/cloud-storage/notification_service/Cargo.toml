@@ -6,10 +6,6 @@ publish = false
 version = "0.1.0"
 
 [[bin]]
-name = "notification_email_poller_worker"
-path = "src/notification_email_poller_worker.rs"
-
-[[bin]]
 name = "notification_service"
 path = "src/main.rs"
 

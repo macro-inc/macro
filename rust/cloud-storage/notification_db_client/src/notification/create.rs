@@ -79,7 +79,6 @@ mod tests {
     use super::*;
     use macro_db_migrator::MACRO_DB_MIGRATIONS;
     use model_entity::EntityType;
-    use model_notifications::NotificationEventType;
     use serde_json::json;
     use sqlx::{Pool, Postgres};
 
