@@ -119,9 +119,7 @@ export function MessageList(props: MessageListProps) {
       <Show when={isMobile() && props.title}>
         <div class="shrink-0 w-full flex justify-center pb-0">
           <div class="macro-message-width w-full">
-            <h1 class="text-2xl font-semibold text-ink pb-2">
-              {props.title}
-            </h1>
+            <h1 class="text-2xl font-semibold text-ink pb-2">{props.title}</h1>
           </div>
         </div>
       </Show>
