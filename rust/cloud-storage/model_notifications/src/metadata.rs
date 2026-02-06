@@ -5,6 +5,8 @@ use mention_utils::parse::{ParsedXmlText, XmlFormatter};
 use model_entity::Entity;
 use model_entity::EntityType;
 use model_entity::as_owned::IntoOwned;
+use model_file_type::FileType;
+use std::str::FromStr;
 use notification::domain::models::RateLimitConfig;
 use notification::domain::models::RateLimitKey;
 use notification::domain::models::{
@@ -511,7 +513,15 @@ impl NotificationExtIos for ChannelMessageSendMetadata {
             ),
         };
         let body = parse_message_plain_text(&self.message_content)?;
-        let data = channel_push_data(entity, notification_id, sender_id.map(|s| s.to_string()));
+        let data = PushNotificationData {
+            notification_id,
+            notification_entity: entity.clone().into_owned(),
+            sender_id: sender_id.map(|s| s.to_string()),
+            open_route: format!(
+                "/channel/{}?channel_message_id={}",
+                entity.entity_id, self.message_id
+            ),
+        };
         Some(alert_apns(title, body, data))
     }
 }
@@ -541,7 +551,23 @@ impl NotificationExtIos for ChannelMentionMetadata {
             ),
         };
         let body = parse_message_plain_text(&self.message_content)?;
-        let data = channel_push_data(entity, notification_id, Some(sender.to_string()));
+        let open_route = {
+            let base = format!(
+                "/channel/{}?channel_message_id={}",
+                entity.entity_id, self.message_id
+            );
+            if let Some(ref thread_id) = self.thread_id {
+                format!("{}&channel_thread_id={}", base, thread_id)
+            } else {
+                base
+            }
+        };
+        let data = PushNotificationData {
+            notification_id,
+            notification_entity: entity.clone().into_owned(),
+            sender_id: Some(sender.to_string()),
+            open_route,
+        };
         Some(alert_apns(title, body, data))
     }
 }
@@ -562,7 +588,15 @@ impl NotificationExtIos for ChannelReplyMetadata {
         let sender = sender_id?;
         let title = format!("{} Replied", sender.0.email_part().email_str());
         let body = parse_message_plain_text(&self.message_content)?;
-        let data = channel_push_data(entity, notification_id, Some(sender.to_string()));
+        let data = PushNotificationData {
+            notification_id,
+            notification_entity: entity.clone().into_owned(),
+            sender_id: Some(sender.to_string()),
+            open_route: format!(
+                "/channel/{}?channel_message_id={}&channel_thread_id={}",
+                entity.entity_id, self.message_id, self.thread_id
+            ),
+        };
         Some(alert_apns(title, body, data))
     }
 }
@@ -582,10 +616,18 @@ impl NotificationExtIos for DocumentMentionMetadata {
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let sender = sender_id?;
-        let file_type = self.file_type.as_ref()?;
+        let file_type_str = self.file_type.as_ref()?;
         let title = sender.0.email_part().email_str().to_string();
-        let body = format!("You were mentioned in {}.{}", self.document_name, file_type);
-        let data = channel_push_data(entity, notification_id, Some(sender.to_string()));
+        let body = format!("You were mentioned in {}.{}", self.document_name, file_type_str);
+
+        let file_type = FileType::from_str(file_type_str).ok()?;
+        let block_route = file_type.macro_app_path().to_string();
+        let data = PushNotificationData {
+            notification_id,
+            notification_entity: entity.clone().into_owned(),
+            sender_id: Some(sender.to_string()),
+            open_route: format!("/{}/{}", block_route, entity.entity_id),
+        };
         Some(alert_apns(title, body, data))
     }
 }
@@ -622,7 +664,12 @@ impl NotificationExtIos for TaskAssignedMetadata {
         } else {
             "assigned you a task".to_string()
         };
-        let data = channel_push_data(entity, notification_id, sender_id.map(|s| s.to_string()));
+        let data = PushNotificationData {
+            notification_id,
+            notification_entity: entity.clone().into_owned(),
+            sender_id: sender_id.map(|s| s.to_string()),
+            open_route: format!("/task/{}", self.task_id),
+        };
         Some(alert_apns(title, body, data))
     }
 }

@@ -11,9 +11,9 @@ doppleganger = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 mention_utils = { path = "../mention_utils" }
 model-entity = { path = "../model-entity" }
-notification = { path = "../notification" }
 models_comms = { path = "../models_comms" }
 models_pagination = { path = "../models_pagination" }
+notification = { path = "../notification" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }

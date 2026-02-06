@@ -6,7 +6,7 @@ pub mod edit_anchor;
 pub mod edit_comment;
 pub mod get;
 
-use std::{collections::HashSet, fmt::Display};
+use std::{collections::HashSet, fmt::Display, str::FromStr};
 
 use super::context::ApiContext;
 use axum::{
@@ -22,6 +22,7 @@ use model::{annotations::Comment, response::ErrorResponse};
 use model_entity::Entity;
 use model_entity::EntityType;
 use model_entity::as_owned::IntoOwned;
+use model_file_type::FileType;
 use notification::domain::models::{
     NotifCollapseKey, Notification, NotificationExtIos, RateLimitConfig, RateLimitKey,
     SendNotificationRequestBuilder,
@@ -210,9 +211,16 @@ impl NotificationExtIos for DocumentMentionNotification {
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let sender = sender_id?;
-        let file_type = self.file_type.as_ref()?;
+        let file_type_str = self.file_type.as_ref()?;
         let title = sender.0.email_part().email_str().to_string();
-        let body = format!("You were mentioned in {}.{}", self.document_name, file_type);
+        let body = format!(
+            "You were mentioned in {}.{}",
+            self.document_name, file_type_str
+        );
+
+        let file_type = FileType::from_str(file_type_str).ok()?;
+        let block_route = file_type.macro_app_path().to_string();
+
         Some(APNSPushNotification {
             aps: Aps {
                 alert: Some(notification::domain::models::apple::Alert::Dictionary(
@@ -228,7 +236,7 @@ impl NotificationExtIos for DocumentMentionNotification {
                 notification_id,
                 notification_entity: entity.clone().into_owned(),
                 sender_id: Some(sender.to_string()),
-                open_route: format!("/document/{}", entity.entity_id),
+                open_route: format!("/{}/{}", block_route, entity.entity_id),
             },
         })
     }
