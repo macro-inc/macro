@@ -8,13 +8,9 @@ import { match } from 'ts-pattern';
 export function InlineEntity(props: { entity: EntityData }) {
   const iconConfig = createMemo<ReturnType<typeof getIconConfig>>(() => {
     return match(props.entity)
-      .with({ type: 'channel', channelType: 'direct_message' }, () =>
-        getIconConfig('directMessage')
+      .with({ type: 'channel' }, (entity) =>
+        getIconConfig(entity.channelType || 'channel')
       )
-      .with({ type: 'channel', channelType: 'organization' }, () =>
-        getIconConfig('company')
-      )
-      .with({ type: 'channel' }, () => getIconConfig('channel'))
       .with({ type: 'document' }, (entity) =>
         getIconConfig(entity.subType?.type ?? entity.fileType ?? 'default')
       )

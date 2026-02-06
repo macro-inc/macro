@@ -765,14 +765,7 @@ export function EntityWithEverything(
   const getIcon = createMemo(() => {
     switch (props.entity.type) {
       case 'channel':
-        switch (props.entity.channelType) {
-          case 'direct_message':
-            return getIconConfig('directMessage');
-          case 'organization':
-            return getIconConfig('company');
-          default:
-            return getIconConfig('channel');
-        }
+        return getIconConfig(props.entity.channelType || 'channel');
       case 'document':
         if (isTaskEntity(props.entity)) return getIconConfig('task');
         if (props.entity.fileType) return getIconConfig(props.entity.fileType);
@@ -1539,7 +1532,7 @@ function DirectMessageIcon(props: { entity: EntityData }) {
           .at(0)
       : undefined;
 
-  const Fallback = () => <EntityIcon targetType="directMessage" />;
+  const Fallback = () => <EntityIcon targetType="direct_message" />;
 
   return (
     <div class="bg-panel size-5 rounded-full p-[2px]">

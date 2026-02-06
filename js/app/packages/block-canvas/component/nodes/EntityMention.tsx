@@ -137,14 +137,7 @@ export function File(props: { node: EntityMentionNode; mode: RenderMode }) {
 
     switch (currentItem.type) {
       case 'channel':
-        switch (currentItem.channelType) {
-          case 'direct_message':
-            return 'directMessage';
-          case 'organization':
-            return 'company';
-          default:
-            return 'channel';
-        }
+        return currentItem.channelType || 'channel';
       case 'document':
         // TODO: consolidate is task logic, see isTaskEntity
         if (

@@ -599,8 +599,11 @@ export function CommandItemCard(props: CommandItemProps) {
                     />
                   );
                 }
-                targetType = 'directMessage';
+                targetType = 'direct_message';
               }
+            }
+            if (props.item.type === 'channel' && props.item.data.channel_type) {
+              targetType = props.item.data.channel_type;
             }
             return <EntityIcon targetType={targetType} size="sm" />;
           }}

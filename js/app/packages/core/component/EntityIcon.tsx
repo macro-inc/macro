@@ -59,11 +59,9 @@ type IconConfig = {
 export type EntityWithValidIcon =
   | BlockName
   | BlockAlias
+  | ChannelType
   | 'default'
   | 'sharedProject'
-  | 'company'
-  | 'user'
-  | 'directMessage'
   | 'emailRead'
   | 'archive'
   | 'html';
@@ -93,11 +91,29 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-default-bg',
     prettyName: 'Channel',
   },
-  company: {
+  public: {
+    icon: GlobeIcon,
+    foreground: 'text-default',
+    background: 'bg-default-bg',
+    prettyName: 'Public Channel',
+  },
+  organization: {
     icon: Building,
     foreground: 'text-default',
     background: 'bg-default-bg',
-    prettyName: 'Company',
+    prettyName: 'Organization Channel',
+  },
+  private: {
+    icon: ThreeUsersIcon,
+    foreground: 'text-default',
+    background: 'bg-default-bg',
+    prettyName: 'Private Channel',
+  },
+  direct_message: {
+    icon: Users,
+    foreground: 'text-default',
+    background: 'bg-default-bg',
+    prettyName: 'Direct Message',
   },
   email: {
     icon: Email,
@@ -189,23 +205,11 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-default-bg',
     prettyName: 'File',
   },
-  directMessage: {
-    icon: Users,
-    foreground: 'text-default',
-    background: 'bg-default-bg',
-    prettyName: 'Direct Message',
-  },
-  user: {
-    icon: User,
-    foreground: 'text-default',
-    background: 'bg-default-bg',
-    prettyName: 'Direct Message',
-  },
   emailRead: {
     icon: EmailRead,
     foreground: 'text-default',
     background: 'bg-default-bg',
-    prettyName: 'Direct Message',
+    prettyName: 'Read Email',
   },
   task: {
     icon: Check,
@@ -244,7 +248,10 @@ export const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
   canvas: WideDiagram,
   html: WideFileCode,
   channel: WideChannel,
-  company: Building,
+  public: GlobeIcon,
+  organization: Building,
+  private: ThreeUsersIcon,
+  direct_message: WideChat,
   email: WideEmail,
   code: WideFileCode,
   csv: WideCsv,
@@ -260,8 +267,6 @@ export const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
   video: WideVideo,
   contact: WideUser,
   default: WideUnknown,
-  directMessage: WideChat,
-  user: WideUser,
   emailRead: WideEmail,
   task: WideTask,
 };
@@ -388,19 +393,4 @@ export function getIconConfig(
     config.icon = WIDE_ICONS[key];
   }
   return config;
-}
-
-export function channelTypeIcon(channelType: ChannelType | undefined) {
-  switch (channelType) {
-    case 'direct_message':
-      return User;
-    case 'private':
-      return ThreeUsersIcon;
-    case 'organization':
-      return Building;
-    case 'public':
-      return GlobeIcon;
-    default:
-      return Channel;
-  }
 }

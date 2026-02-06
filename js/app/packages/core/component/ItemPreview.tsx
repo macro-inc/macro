@@ -91,14 +91,7 @@ export function useItemPreviewData(entity: Accessor<ItemEntity>) {
       case 'document':
         return currentItem.subType?.type ?? currentItem.fileType;
       case 'channel':
-        switch (currentItem.channelType) {
-          case 'direct_message':
-            return 'directMessage';
-          case 'organization':
-            return 'company';
-          default:
-            return 'channel';
-        }
+        return currentItem.channelType || 'channel';
       default:
         return currentItem.type;
     }

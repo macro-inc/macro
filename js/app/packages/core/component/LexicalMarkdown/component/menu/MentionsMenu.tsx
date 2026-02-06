@@ -376,13 +376,7 @@ export function MentionsMenuItem(props: {
         return (
           <EntityIcon
             size="xs"
-            targetType={
-              props.item.data.channel_type === 'direct_message'
-                ? 'directMessage'
-                : props.item.data.channel_type === 'organization'
-                  ? 'company'
-                  : 'channel'
-            }
+            targetType={props.item.data.channel_type || 'channel'}
           />
         );
 

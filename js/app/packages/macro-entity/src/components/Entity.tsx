@@ -24,13 +24,7 @@ export function Entity<T extends EntityData = EntityData>(
   const iconConfig = createMemo(() => {
     switch (props.entity.type) {
       case 'channel':
-        if (props.entity.channelType === 'direct_message')
-          return getIconConfig('directMessage');
-
-        if (props.entity.channelType === 'organization')
-          return getIconConfig('company');
-
-        return getIconConfig('channel');
+        return getIconConfig(props.entity.channelType || 'channel');
       case 'document':
         return getIconConfig(props.entity.fileType || 'default');
       case 'email':

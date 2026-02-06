@@ -369,14 +369,7 @@ export const MoveToProjectView = (props: {
   const getIcon = createMemo(() => {
     switch (props.entity.type) {
       case 'channel':
-        switch (props.entity.channelType) {
-          case 'direct_message':
-            return getIconConfig('directMessage');
-          case 'organization':
-            return getIconConfig('company');
-          default:
-            return getIconConfig('channel');
-        }
+        return getIconConfig(props.entity.channelType || 'channel');
       case 'document':
         return getIconConfig(props.entity.fileType || 'default');
       case 'chat':

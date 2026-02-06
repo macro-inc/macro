@@ -351,13 +351,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
             >
               <EntityIcon
                 size="sm"
-                targetType={
-                  props.item.channelType === 'direct_message'
-                    ? 'directMessage'
-                    : props.item.channelType === 'organization'
-                      ? 'company'
-                      : 'channel'
-                }
+                targetType={props.item.channelType || 'channel'}
               />
             </Show>
           </div>
