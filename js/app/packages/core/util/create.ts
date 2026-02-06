@@ -160,7 +160,7 @@ export async function createCodeFileFromText({
   const buffer = encoder.encode(code);
   const sha = await contentHash(buffer);
 
-  let finalExtension: CodeFileExtension | undefined = extension;
+  let finalExtension: string | undefined = extension;
 
   if (language && !extension) {
     if (!isCodeEditorLanguageSupported(language))
@@ -169,9 +169,7 @@ export async function createCodeFileFromText({
         `${language} is not supported by the code block`
       );
 
-    finalExtension = (getExtensionForLanguage(language) ?? undefined) as
-      | CodeFileExtension
-      | undefined;
+    finalExtension = getExtensionForLanguage(language) ?? undefined;
     if (!finalExtension) {
       return err(
         'UNSUPPORTED_LANGUAGE',
