@@ -2,6 +2,7 @@ import { useMaybeBlockId } from '@core/block';
 import { useChannelsContext } from '@core/context/channels';
 import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
+import { EntityDataTypeIcon } from '../../../utils/PropertyDataTypeIcon';
 import type { IUser } from '@core/user';
 import {
   idToEmail,
@@ -11,7 +12,6 @@ import {
   useDisplayName,
 } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
-import CompanyIcon from '@icon/duotone/building-duotone.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import {
   createEmailsInfiniteQuery,
@@ -60,8 +60,6 @@ type EntityInputProps = {
   onClose?: () => void;
 };
 
-const ICON_CLASSES = 'size-4 text-ink-muted';
-
 function getEntityTypePluralLabel(
   entityType: EntityType | null | undefined
 ): string {
@@ -104,25 +102,23 @@ function getEntityIcon(entity: CombinedEntity) {
         <EntityIcon
           targetType={entity.data.channel_type || 'channel'}
           size="xs"
-          theme="monochrome"
           class="text-ink-muted"
         />
       );
     case 'item':
       return (
-        <EntityIcon targetType={getEntityIconType(entity.data)} size="xs" />
-      );
-    case 'company':
-      return <CompanyIcon class={ICON_CLASSES} />;
-    case 'thread':
-      return (
         <EntityIcon
-          targetType="email"
+          targetType={getEntityIconType(entity.data)}
           size="xs"
-          theme="monochrome"
           class="text-ink-muted"
         />
       );
+    case 'company':
+      return (
+        <EntityDataTypeIcon property={{ specificEntityType: 'COMPANY' }} />
+      );
+    case 'thread':
+      return <EntityIcon targetType="email" size="xs" class="text-ink-muted" />;
   }
 }
 
