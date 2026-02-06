@@ -38,6 +38,7 @@ import type { PostMessageRequest } from './generated/models/postMessageRequest';
 import type { PostReactionRequest } from './generated/models/postReactionRequest';
 import type { PostTypingRequest } from './generated/models/postTypingRequest';
 import type { RemoveParticipantsRequest } from './generated/models/removeParticipantsRequest';
+import { ChannelType } from './generated/models/channelType';
 
 const commsHost: string = SERVER_HOSTS['document-storage-service'];
 
@@ -67,6 +68,13 @@ type WithChannelId = { channel_id: string };
 type WithMessageId = { message_id: string };
 type WithMentionId = { mention_id: string };
 type WithEntity = { entity_type: string; entity_id: string };
+
+export const ChannelTypeEnum = {
+  Public: ChannelType.public,
+  Organization: ChannelType.organization,
+  Private: ChannelType.private,
+  DirectMessage: ChannelType.direct_message,
+} as const satisfies Record<string, ChannelType>;
 
 export const commsServiceClient = {
   async getChannel(args: WithChannelId) {
