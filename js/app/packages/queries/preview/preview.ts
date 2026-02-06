@@ -94,8 +94,7 @@ export function setPreviewName({
   if (prev) return setPreviewData(itemId, (prev) => ({ ...prev, name }));
 
   if (!itemType) {
-    console.warn('no cache miss preview item provided, using default values');
-    return;
+    console.warn('no preview item type provided for cache miss, using default');
   }
 
   let defaultPreviewItem: AccessiblePreviewItem = {
@@ -103,20 +102,16 @@ export function setPreviewName({
     name,
     loading: false,
     access: 'access',
-    type: itemType,
+    type: itemType ?? DEFAULT_ITEM_TYPE,
   };
 
-  // if the item is in the cache, we can optimistically create a new preview item
+  // if the item isn't in the cache, we can optimistically create a new item
   const res = setPreviewData(itemId, (_prev) => defaultPreviewItem);
 
-  // then we fetch the item
-  queryClient.prefetchQuery({
+  // invalidate the item so that we can refetch on next render
+  // note that we cannot directly call the fetch here because the item name is not necessarily updated on the backend
+  queryClient.invalidateQueries({
     queryKey: previewKeys.item(itemId).queryKey,
-    queryFn: () =>
-      previewDataLoader.load({
-        id: itemId,
-        type: itemType,
-      }),
   });
 
   return res;
