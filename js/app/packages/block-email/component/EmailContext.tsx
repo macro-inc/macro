@@ -446,9 +446,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     });
   };
 
-  const filteredMessages = createMemo(
-    () => threadQuery.data?.filtered ?? []
-  );
+  const filteredMessages = createMemo(() => threadQuery.data?.filtered ?? []);
 
   // When the provider unmounts (user navigates away), clear the thread query
   // cache if a draft was saved during this session. This ensures the next visit
@@ -506,9 +504,8 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
               if (lastMsg?.db_id === id) return true;
               const msg = msgs.find((m) => m.db_id === id);
               return (
-                msg?.labels.some(
-                  (l) => l.provider_label_id === 'UNREAD'
-                ) ?? false
+                msg?.labels.some((l) => l.provider_label_id === 'UNREAD') ??
+                false
               );
             },
             replyingToMessageId,
