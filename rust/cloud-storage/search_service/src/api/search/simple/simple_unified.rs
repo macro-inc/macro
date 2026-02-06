@@ -469,7 +469,10 @@ pub(in crate::api::search) async fn perform_unified_search(
         let final_tagged: Vec<TaggedSearchHit> =
             combined.into_iter().take(page_size_usize).collect();
 
-        tracing::debug!(final_count = final_tagged.len(), "final results after pagination");
+        tracing::debug!(
+            final_count = final_tagged.len(),
+            "final results after pagination"
+        );
 
         final_tagged
     };
