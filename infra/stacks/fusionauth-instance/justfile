@@ -68,11 +68,14 @@ insert_local_fusionauth_variables:
   #!/usr/bin/env bash
   API_KEY="bf69486b-4733-4954-a44e-2e1b5f2c8a91"
   APPLICATION_ID=$(pulumi stack output macroApplicationClientId -s local)
+  TENANT_ID=$(pulumi stack output defaultTenantId -s local)
   CLIENT_SECRET=$(curl -s "http://localhost:9011/api/application/${APPLICATION_ID}" \
     -H "Authorization: ${API_KEY}" | jq -r '.application.oauthConfiguration.clientSecret')
 
   ENV_FILE="{{justfile_directory()}}/../../../.env"
 
+  echo "FUSIONAUTH_TENANT_ID=\"${TENANT_ID}\"" >> "$ENV_FILE"
+  echo "AUDIENCE=\"${APPLICATION_ID}\"" >> "$ENV_FILE"
   echo "FUSIONAUTH_APPLICATION_ID=\"${APPLICATION_ID}\"" >> "$ENV_FILE"
   echo "FUSIONAUTH_CLIENT_ID=\"${APPLICATION_ID}\"" >> "$ENV_FILE"
   echo "FUSIONAUTH_CLIENT_SECRET_KEY=\"${CLIENT_SECRET}\"" >> "$ENV_FILE"

@@ -184,6 +184,8 @@ const defaultTenant = new FusionAuthTenant(
   { provider: fusionAuthProvider }
 );
 
+export const defaultTentantId = defaultTenant.tenantId;
+
 // Lambda
 const populateLambdaBody = pulumi
   .output(AUTHENTICATION_SERVICE_INTERNAL_SECRET)
