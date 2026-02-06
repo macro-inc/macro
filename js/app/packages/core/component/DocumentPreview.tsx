@@ -14,14 +14,11 @@ import {
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { toast } from '@core/component/Toast/Toast';
 import {
+  type AccessiblePreviewItem,
   isAccessiblePreviewItem,
   isChannelPreviewItem,
-  type PreviewChannelAccess,
-  type PreviewDocumentAccess,
   type PreviewItem,
-  type PreviewItemAccess,
   type PreviewItemNoAccess,
-  type PreviewProjectAccess,
 } from '@queries/preview';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { matches } from '@core/util/match';
@@ -488,12 +485,7 @@ export function PopupPreview(props: {
    * Renders the metadata info for the document
    */
   const renderDocumentMetadata = (
-    accessibleItem: NonNullable<
-      | PreviewItemAccess
-      | PreviewDocumentAccess
-      | PreviewProjectAccess
-      | PreviewChannelAccess
-    >
+    accessibleItem: NonNullable<AccessiblePreviewItem>
   ) => {
     const accessories = mentionsAccessories(
       props.documentInfo.type,

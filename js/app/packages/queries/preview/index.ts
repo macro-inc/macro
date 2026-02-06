@@ -2,15 +2,12 @@ export { previewKeys } from './keys';
 export {
   useItemPreview,
   invalidatePreview,
-  setPreviewData,
+  setPreviewName,
 } from './preview';
 export type {
   PreviewItem,
   PreviewItemNoAccess,
-  PreviewItemAccess,
-  PreviewProjectAccess,
-  PreviewDocumentAccess,
-  PreviewChannelAccess,
+  AccessiblePreviewItem,
   ItemEntity,
   MessageContext,
 } from './types';

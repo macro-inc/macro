@@ -55,7 +55,11 @@ import {
   cognitionWebsocketServiceClient,
 } from '@service-cognition/client';
 import { createCognitionWebsocketEffect } from '@service-cognition/websocket';
-import { refetchHistory, useHistoryQuery } from '@queries/history/history';
+import {
+  refetchHistory,
+  setHistoryItemName,
+  useHistoryQuery,
+} from '@queries/history/history';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
 import type { LexicalEditor } from 'lexical';
 import {
@@ -74,7 +78,7 @@ import {
 import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
 import { Button } from '@ui/components/Button';
 import { Hotkey } from '@core/component/Hotkey';
-import { setPreviewData } from '@queries/preview';
+import { setPreviewName } from '@queries/preview';
 import { AccessLevel } from '@service-cognition/generated/schemas/accessLevel';
 
 type ChatData = {
@@ -601,13 +605,12 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
       // then rename again when the server provides a default name
       refetchHistory();
       waitChatRename(newChatId).then((name) => {
-        refetchHistory();
-        if (name) {
-          setPreviewData(newChatId, (prev) => ({
-            ...prev,
-            name,
-          }));
-        }
+        if (!name) return;
+        setHistoryItemName(newChatId, name);
+        setPreviewName({
+          itemId: newChatId,
+          name,
+        });
       });
       return await onSend(response);
     } else if (request.type === 'send') {

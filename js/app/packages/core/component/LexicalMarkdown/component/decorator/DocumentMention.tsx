@@ -16,12 +16,8 @@ import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import { canNestBlock } from '@core/orchestrator';
 import {
   isAccessiblePreviewItem,
-  type PreviewChannelAccess,
-  type PreviewDocumentAccess,
   type PreviewItem,
-  type PreviewItemAccess,
   type PreviewItemNoAccess,
-  type PreviewProjectAccess,
   useItemPreview,
   type ItemEntity,
 } from '@queries/preview';
@@ -98,16 +94,6 @@ function Loading(props: { collapsed?: boolean }) {
   );
 }
 
-type AccessiblePreviewItem =
-  | PreviewItemAccess
-  | PreviewProjectAccess
-  | PreviewDocumentAccess
-  | PreviewChannelAccess;
-
-function isAccessible(item: PreviewItem): item is AccessiblePreviewItem {
-  return isAccessiblePreviewItem(item);
-}
-
 function InlinePreview(props: {
   item: () => PreviewItem;
   blockName: BlockName | BlockAlias;
@@ -120,7 +106,7 @@ function InlinePreview(props: {
       <Match when={props.item().loading}>
         <Loading />
       </Match>
-      <Match when={matches(props.item(), isAccessible)}>
+      <Match when={matches(props.item(), isAccessiblePreviewItem)}>
         {(accessibleItem) => {
           const { type, fileType, channelType, subType } = accessibleItem();
           return (

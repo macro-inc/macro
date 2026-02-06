@@ -17,10 +17,7 @@ import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
 import { canNestBlock, createBlockInstance } from '@core/orchestrator';
 import {
   isAccessiblePreviewItem,
-  type PreviewChannelAccess,
-  type PreviewDocumentAccess,
-  type PreviewItemAccess,
-  type PreviewProjectAccess,
+  type AccessiblePreviewItem,
   useItemPreview,
 } from '@queries/preview';
 import { matches } from '@core/util/match';
@@ -332,11 +329,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
   });
 
   const DocumentInfo = (props: {
-    item:
-      | PreviewItemAccess
-      | PreviewProjectAccess
-      | PreviewDocumentAccess
-      | PreviewChannelAccess;
+    item: AccessiblePreviewItem;
     blockName: string;
   }) => {
     return (

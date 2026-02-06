@@ -2,12 +2,7 @@ import { useChannelName } from '@core/context/channels';
 import { EntityIcon as CoreEntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import {
-  isAccessiblePreviewItem,
-  type PreviewItem,
-  type PreviewItemAccess,
-  useItemPreview,
-} from '@queries/preview';
+import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { tryMacroId, useDisplayName } from '@core/user';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { type Accessor, createMemo, type JSX } from 'solid-js';
@@ -43,13 +38,6 @@ type PropertyEntityDisplayResult = {
   blockOrFileType: Accessor<string | null>;
   /** URL params for navigation (e.g., message ID for threads) */
   linkParams: Accessor<Record<string, string> | undefined>;
-};
-
-const checkPreviewItem = (item?: PreviewItem): item is PreviewItemAccess => {
-  if (!item) return false;
-  if (!isAccessiblePreviewItem(item)) return false;
-  if (item.loading) return false;
-  return true;
 };
 
 /**
@@ -129,7 +117,7 @@ export function usePropertyEntityDisplay(
       .with('TASK', () => <CoreEntityIcon targetType="task" size="xs" />)
       .with('DOCUMENT', () => {
         const item = preview();
-        if (!checkPreviewItem(item)) {
+        if (!item || !isAccessiblePreviewItem(item)) {
           return <CoreEntityIcon targetType="unknown" size="xs" />;
         }
         const { subType, fileType } = item;
@@ -157,7 +145,7 @@ export function usePropertyEntityDisplay(
       .with('THREAD', () => 'email')
       .with('DOCUMENT', () => {
         const item = preview();
-        if (!checkPreviewItem(item)) {
+        if (!item || !isAccessiblePreviewItem(item)) {
           return null;
         }
         if (item.subType?.type === 'task') {

@@ -12,7 +12,7 @@ import { queryKeys } from './key';
 import { type InfiniteData, useMutation } from '@tanstack/solid-query';
 import { toast } from '@core/component/Toast/Toast';
 import type { SoupPage } from '@service-storage/generated/schemas';
-import { setPreviewData } from '@queries/preview';
+import { setPreviewName } from '@queries/preview';
 import { setHistoryItemName } from '@queries/history/history';
 
 type RenamableEntity = Pick<EntityData, 'id' | 'type' | 'name'> &
@@ -167,11 +167,12 @@ const renameChannelSetData = (
 };
 
 const renamePreviewSetData = (entities: EntityRenameData[]) => {
-  entities.forEach(({ id, newName }) => {
-    setPreviewData(id, (prev) => ({
-      ...prev,
+  entities.forEach(({ id, newName, itemType }) => {
+    setPreviewName({
+      itemId: id,
       name: newName,
-    }));
+      itemType,
+    });
   });
 };
 
