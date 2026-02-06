@@ -6,11 +6,9 @@ use std::hash::{DefaultHasher, Hasher};
 use utoipa::ToSchema;
 mod device;
 mod metadata;
-mod raw;
 mod unsubscribe;
 pub use device::*;
 pub use metadata::*;
-pub use raw::*;
 pub use unsubscribe::*;
 
 // #[cfg(test)]
