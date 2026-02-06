@@ -65,6 +65,7 @@ where
         }
     }
 
+    #[tracing::instrument(err, skip(self, req))]
     async fn handle_simple_request(
         &self,
         soup_type: SoupType,
@@ -89,6 +90,7 @@ where
         }))
     }
 
+    #[tracing::instrument(skip(self, req))]
     async fn handle_soup_by_ids(
         &self,
         soup_type: SoupType,
@@ -101,6 +103,7 @@ where
     }
 
     /// enriches a frecency response with further soup data if the initial results length was not long enough
+    #[tracing::instrument(err, skip(self, frecency_items))]
     async fn fallback_soup_data(
         &self,
         soup_type: SoupType,
@@ -127,6 +130,7 @@ where
         Ok(frecency_items.chain(updated_at_soup))
     }
 
+    #[tracing::instrument(err, skip(self, cursor))]
     async fn handle_advanced_sort(
         &self,
         cursor: Query<Uuid, Frecency, Option<EntityFilterAst>>,
@@ -199,6 +203,7 @@ where
         ))
     }
 
+    #[tracing::instrument(err, skip(self, from_value))]
     async fn handle_frecency_cursor(
         &self,
         from_value: Option<(f64, Option<EntityFilterAst>)>,
@@ -253,6 +258,7 @@ where
         })
     }
 
+    #[tracing::instrument(err, skip(self, req))]
     async fn handle_email_request(
         &self,
         req: Option<GetEmailsRequest>,
@@ -309,6 +315,7 @@ where
         Ok(Either::Right(emails_with_props.into_iter()))
     }
 
+    #[tracing::instrument(err, skip(self, req))]
     async fn handle_comms_request(
         &self,
         req: Option<GetChannelsRequest>,

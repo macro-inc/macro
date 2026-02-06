@@ -110,7 +110,7 @@ impl EmailRepo for EmailPgRepo {
         .collect())
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, thread_ids))]
     async fn attachments_by_thread_ids(
         &self,
         thread_ids: &[Uuid],
@@ -148,7 +148,7 @@ impl EmailRepo for EmailPgRepo {
         .collect())
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, thread_ids))]
     async fn contacts_by_thread_ids(&self, thread_ids: &[Uuid]) -> Result<Vec<Contact>, Self::Err> {
         // Define a struct to hold the joined results
         #[derive(Debug, Doppleganger)]
@@ -182,7 +182,7 @@ impl EmailRepo for EmailPgRepo {
         .collect())
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, thread_ids))]
     async fn labels_by_thread_ids(&self, thread_ids: &[Uuid]) -> Result<Vec<Label>, Self::Err> {
         // Query all labels for email_messages in the provided threads
         // Include thread_id in the result set

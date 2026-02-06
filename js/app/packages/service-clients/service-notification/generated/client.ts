@@ -5,18 +5,18 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
-  BulkGetUserNotificationsByEventItemIdParams,
-  BulkGetUserNotificationsByEventItemIdRequest,
+  ApiUserNotification,
+  BulkGetByEventItemIdsRequest,
+  BulkGetTypedNotificationsByEventItemIdsParams,
   CreateNotification,
   DeviceRequest,
   EmptyResponse,
   ErrorResponse,
   GetAllUserNotificationsResponse,
-  GetUserNotificationParams,
-  GetUserNotificationsByEventItemIdParams,
+  GetTypedNotificationsByEventItemIdParams,
+  ListTypedNotificationsParams,
   Notification,
   NotificationBulkRequest,
-  UserNotification,
   UserUnsubscribe,
 } from './schemas';
 
@@ -555,46 +555,48 @@ export const removeUnsubscribeAll = async (
 };
 
 /**
- * @summary Gets the user's unseen notifications in a paginated format.
+ * Rows that fail to deserialize are dropped with a warning log.
+ * @summary Wrapper handler that calls the inner generic list handler with `serde_json::Value`,
+then converts each row to [`UserNotificationRow<NotifEvent>`].
  */
-export type getUserNotificationResponse200 = {
+export type listTypedNotificationsResponse200 = {
   data: GetAllUserNotificationsResponse;
   status: 200;
 };
 
-export type getUserNotificationResponse400 = {
+export type listTypedNotificationsResponse400 = {
   data: ErrorResponse;
   status: 400;
 };
 
-export type getUserNotificationResponse401 = {
+export type listTypedNotificationsResponse401 = {
   data: ErrorResponse;
   status: 401;
 };
 
-export type getUserNotificationResponse500 = {
+export type listTypedNotificationsResponse500 = {
   data: ErrorResponse;
   status: 500;
 };
 
-export type getUserNotificationResponseSuccess =
-  getUserNotificationResponse200 & {
+export type listTypedNotificationsResponseSuccess =
+  listTypedNotificationsResponse200 & {
     headers: Headers;
   };
-export type getUserNotificationResponseError = (
-  | getUserNotificationResponse400
-  | getUserNotificationResponse401
-  | getUserNotificationResponse500
+export type listTypedNotificationsResponseError = (
+  | listTypedNotificationsResponse400
+  | listTypedNotificationsResponse401
+  | listTypedNotificationsResponse500
 ) & {
   headers: Headers;
 };
 
-export type getUserNotificationResponse =
-  | getUserNotificationResponseSuccess
-  | getUserNotificationResponseError;
+export type listTypedNotificationsResponse =
+  | listTypedNotificationsResponseSuccess
+  | listTypedNotificationsResponseError;
 
-export const getGetUserNotificationUrl = (
-  params: GetUserNotificationParams
+export const getListTypedNotificationsUrl = (
+  params?: ListTypedNotificationsParams
 ) => {
   const normalizedParams = new URLSearchParams();
 
@@ -607,245 +609,74 @@ export const getGetUserNotificationUrl = (
   const stringifiedParams = normalizedParams.toString();
 
   return stringifiedParams.length > 0
-    ? `/user_notifications?${stringifiedParams}`
-    : `/user_notifications`;
+    ? `/v1/user_notifications?${stringifiedParams}`
+    : `/v1/user_notifications`;
 };
 
-export const getUserNotification = async (
-  params: GetUserNotificationParams,
+export const listTypedNotifications = async (
+  params?: ListTypedNotificationsParams,
   options?: RequestInit
-): Promise<getUserNotificationResponse> => {
-  const res = await fetch(getGetUserNotificationUrl(params), {
+): Promise<listTypedNotificationsResponse> => {
+  const res = await fetch(getListTypedNotificationsUrl(params), {
     ...options,
     method: 'GET',
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: getUserNotificationResponse['data'] = body
+  const data: listTypedNotificationsResponse['data'] = body
     ? JSON.parse(body)
     : {};
   return {
     data,
     status: res.status,
     headers: res.headers,
-  } as getUserNotificationResponse;
+  } as listTypedNotificationsResponse;
 };
 
 /**
- * @summary Marks the user's notifications as deleted
+ * Rows that fail to deserialize are dropped with a warning log.
+ * @summary Wrapper handler that calls the inner generic bulk-get handler with `serde_json::Value`,
+then converts each row to [`UserNotificationRow<NotifEvent>`].
  */
-export type bulkDeleteUserNotificationResponse200 = {
-  data: EmptyResponse;
-  status: 200;
-};
-
-export type bulkDeleteUserNotificationResponseSuccess =
-  bulkDeleteUserNotificationResponse200 & {
-    headers: Headers;
-  };
-
-export type bulkDeleteUserNotificationResponse =
-  bulkDeleteUserNotificationResponseSuccess;
-
-export const getBulkDeleteUserNotificationUrl = () => {
-  return `/user_notifications/bulk`;
-};
-
-export const bulkDeleteUserNotification = async (
-  notificationBulkRequest: NotificationBulkRequest,
-  options?: RequestInit
-): Promise<bulkDeleteUserNotificationResponse> => {
-  const res = await fetch(getBulkDeleteUserNotificationUrl(), {
-    ...options,
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(notificationBulkRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: bulkDeleteUserNotificationResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as bulkDeleteUserNotificationResponse;
-};
-
-/**
- * @summary Marks the user's notifications as done
- */
-export type bulkMarkUserNotificationDoneResponse200 = {
-  data: EmptyResponse;
-  status: 200;
-};
-
-export type bulkMarkUserNotificationDoneResponseSuccess =
-  bulkMarkUserNotificationDoneResponse200 & {
-    headers: Headers;
-  };
-
-export type bulkMarkUserNotificationDoneResponse =
-  bulkMarkUserNotificationDoneResponseSuccess;
-
-export const getBulkMarkUserNotificationDoneUrl = () => {
-  return `/user_notifications/bulk/done`;
-};
-
-export const bulkMarkUserNotificationDone = async (
-  notificationBulkRequest: NotificationBulkRequest,
-  options?: RequestInit
-): Promise<bulkMarkUserNotificationDoneResponse> => {
-  const res = await fetch(getBulkMarkUserNotificationDoneUrl(), {
-    ...options,
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(notificationBulkRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: bulkMarkUserNotificationDoneResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as bulkMarkUserNotificationDoneResponse;
-};
-
-/**
- * @summary Marks the user's notifications as seen
- */
-export type bulkMarkUserNotificationSeenResponse200 = {
-  data: EmptyResponse;
-  status: 200;
-};
-
-export type bulkMarkUserNotificationSeenResponseSuccess =
-  bulkMarkUserNotificationSeenResponse200 & {
-    headers: Headers;
-  };
-
-export type bulkMarkUserNotificationSeenResponse =
-  bulkMarkUserNotificationSeenResponseSuccess;
-
-export const getBulkMarkUserNotificationSeenUrl = () => {
-  return `/user_notifications/bulk/seen`;
-};
-
-export const bulkMarkUserNotificationSeen = async (
-  notificationBulkRequest: NotificationBulkRequest,
-  options?: RequestInit
-): Promise<bulkMarkUserNotificationSeenResponse> => {
-  const res = await fetch(getBulkMarkUserNotificationSeenUrl(), {
-    ...options,
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(notificationBulkRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: bulkMarkUserNotificationSeenResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as bulkMarkUserNotificationSeenResponse;
-};
-
-/**
- * @summary Marks the user's notifications as undone.
- */
-export type bulkMarkUserNotificationUndoneResponse200 = {
-  data: EmptyResponse;
-  status: 200;
-};
-
-export type bulkMarkUserNotificationUndoneResponseSuccess =
-  bulkMarkUserNotificationUndoneResponse200 & {
-    headers: Headers;
-  };
-
-export type bulkMarkUserNotificationUndoneResponse =
-  bulkMarkUserNotificationUndoneResponseSuccess;
-
-export const getBulkMarkUserNotificationUndoneUrl = () => {
-  return `/user_notifications/bulk/undone`;
-};
-
-export const bulkMarkUserNotificationUndone = async (
-  notificationBulkRequest: NotificationBulkRequest,
-  options?: RequestInit
-): Promise<bulkMarkUserNotificationUndoneResponse> => {
-  const res = await fetch(getBulkMarkUserNotificationUndoneUrl(), {
-    ...options,
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(notificationBulkRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: bulkMarkUserNotificationUndoneResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as bulkMarkUserNotificationUndoneResponse;
-};
-
-/**
- * @summary Gets the user's notifications for a provided event item ids in a paginated format.
-This will only return unseen notifications.
- */
-export type bulkGetUserNotificationsByEventItemIdResponse200 = {
+export type bulkGetTypedNotificationsByEventItemIdsResponse200 = {
   data: GetAllUserNotificationsResponse;
   status: 200;
 };
 
-export type bulkGetUserNotificationsByEventItemIdResponse400 = {
+export type bulkGetTypedNotificationsByEventItemIdsResponse400 = {
   data: ErrorResponse;
   status: 400;
 };
 
-export type bulkGetUserNotificationsByEventItemIdResponse401 = {
+export type bulkGetTypedNotificationsByEventItemIdsResponse401 = {
   data: ErrorResponse;
   status: 401;
 };
 
-export type bulkGetUserNotificationsByEventItemIdResponse500 = {
+export type bulkGetTypedNotificationsByEventItemIdsResponse500 = {
   data: ErrorResponse;
   status: 500;
 };
 
-export type bulkGetUserNotificationsByEventItemIdResponseSuccess =
-  bulkGetUserNotificationsByEventItemIdResponse200 & {
+export type bulkGetTypedNotificationsByEventItemIdsResponseSuccess =
+  bulkGetTypedNotificationsByEventItemIdsResponse200 & {
     headers: Headers;
   };
-export type bulkGetUserNotificationsByEventItemIdResponseError = (
-  | bulkGetUserNotificationsByEventItemIdResponse400
-  | bulkGetUserNotificationsByEventItemIdResponse401
-  | bulkGetUserNotificationsByEventItemIdResponse500
+export type bulkGetTypedNotificationsByEventItemIdsResponseError = (
+  | bulkGetTypedNotificationsByEventItemIdsResponse400
+  | bulkGetTypedNotificationsByEventItemIdsResponse401
+  | bulkGetTypedNotificationsByEventItemIdsResponse500
 ) & {
   headers: Headers;
 };
 
-export type bulkGetUserNotificationsByEventItemIdResponse =
-  | bulkGetUserNotificationsByEventItemIdResponseSuccess
-  | bulkGetUserNotificationsByEventItemIdResponseError;
+export type bulkGetTypedNotificationsByEventItemIdsResponse =
+  | bulkGetTypedNotificationsByEventItemIdsResponseSuccess
+  | bulkGetTypedNotificationsByEventItemIdsResponseError;
 
-export const getBulkGetUserNotificationsByEventItemIdUrl = (
-  params: BulkGetUserNotificationsByEventItemIdParams
+export const getBulkGetTypedNotificationsByEventItemIdsUrl = (
+  params?: BulkGetTypedNotificationsByEventItemIdsParams
 ) => {
   const normalizedParams = new URLSearchParams();
 
@@ -858,99 +689,102 @@ export const getBulkGetUserNotificationsByEventItemIdUrl = (
   const stringifiedParams = normalizedParams.toString();
 
   return stringifiedParams.length > 0
-    ? `/user_notifications/item/bulk?${stringifiedParams}`
-    : `/user_notifications/item/bulk`;
+    ? `/v1/user_notifications/item/bulk?${stringifiedParams}`
+    : `/v1/user_notifications/item/bulk`;
 };
 
-export const bulkGetUserNotificationsByEventItemId = async (
-  bulkGetUserNotificationsByEventItemIdRequest: BulkGetUserNotificationsByEventItemIdRequest,
-  params: BulkGetUserNotificationsByEventItemIdParams,
+export const bulkGetTypedNotificationsByEventItemIds = async (
+  bulkGetByEventItemIdsRequest: BulkGetByEventItemIdsRequest,
+  params?: BulkGetTypedNotificationsByEventItemIdsParams,
   options?: RequestInit
-): Promise<bulkGetUserNotificationsByEventItemIdResponse> => {
-  const res = await fetch(getBulkGetUserNotificationsByEventItemIdUrl(params), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(bulkGetUserNotificationsByEventItemIdRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: bulkGetUserNotificationsByEventItemIdResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as bulkGetUserNotificationsByEventItemIdResponse;
-};
-
-/**
- * @summary Gets the user's notifications for a given event item id in a paginated format.
- */
-export type getUserNotificationsByEventItemIdResponse200 = {
-  data: GetAllUserNotificationsResponse;
-  status: 200;
-};
-
-export type getUserNotificationsByEventItemIdResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type getUserNotificationsByEventItemIdResponse401 = {
-  data: ErrorResponse;
-  status: 401;
-};
-
-export type getUserNotificationsByEventItemIdResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type getUserNotificationsByEventItemIdResponseSuccess =
-  getUserNotificationsByEventItemIdResponse200 & {
-    headers: Headers;
-  };
-export type getUserNotificationsByEventItemIdResponseError = (
-  | getUserNotificationsByEventItemIdResponse400
-  | getUserNotificationsByEventItemIdResponse401
-  | getUserNotificationsByEventItemIdResponse500
-) & {
-  headers: Headers;
-};
-
-export type getUserNotificationsByEventItemIdResponse =
-  | getUserNotificationsByEventItemIdResponseSuccess
-  | getUserNotificationsByEventItemIdResponseError;
-
-export const getGetUserNotificationsByEventItemIdUrl = (
-  eventItemId: string,
-  params: GetUserNotificationsByEventItemIdParams
-) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString());
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0
-    ? `/user_notifications/item/${eventItemId}?${stringifiedParams}`
-    : `/user_notifications/item/${eventItemId}`;
-};
-
-export const getUserNotificationsByEventItemId = async (
-  eventItemId: string,
-  params: GetUserNotificationsByEventItemIdParams,
-  options?: RequestInit
-): Promise<getUserNotificationsByEventItemIdResponse> => {
+): Promise<bulkGetTypedNotificationsByEventItemIdsResponse> => {
   const res = await fetch(
-    getGetUserNotificationsByEventItemIdUrl(eventItemId, params),
+    getBulkGetTypedNotificationsByEventItemIdsUrl(params),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(bulkGetByEventItemIdsRequest),
+    }
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: bulkGetTypedNotificationsByEventItemIdsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as bulkGetTypedNotificationsByEventItemIdsResponse;
+};
+
+/**
+ * @summary Typed wrapper for getting notifications by a single event item ID.
+ */
+export type getTypedNotificationsByEventItemIdResponse200 = {
+  data: GetAllUserNotificationsResponse;
+  status: 200;
+};
+
+export type getTypedNotificationsByEventItemIdResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type getTypedNotificationsByEventItemIdResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getTypedNotificationsByEventItemIdResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getTypedNotificationsByEventItemIdResponseSuccess =
+  getTypedNotificationsByEventItemIdResponse200 & {
+    headers: Headers;
+  };
+export type getTypedNotificationsByEventItemIdResponseError = (
+  | getTypedNotificationsByEventItemIdResponse400
+  | getTypedNotificationsByEventItemIdResponse401
+  | getTypedNotificationsByEventItemIdResponse500
+) & {
+  headers: Headers;
+};
+
+export type getTypedNotificationsByEventItemIdResponse =
+  | getTypedNotificationsByEventItemIdResponseSuccess
+  | getTypedNotificationsByEventItemIdResponseError;
+
+export const getGetTypedNotificationsByEventItemIdUrl = (
+  eventItemId: string,
+  params?: GetTypedNotificationsByEventItemIdParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/v1/user_notifications/item/${eventItemId}?${stringifiedParams}`
+    : `/v1/user_notifications/item/${eventItemId}`;
+};
+
+export const getTypedNotificationsByEventItemId = async (
+  eventItemId: string,
+  params?: GetTypedNotificationsByEventItemIdParams,
+  options?: RequestInit
+): Promise<getTypedNotificationsByEventItemIdResponse> => {
+  const res = await fetch(
+    getGetTypedNotificationsByEventItemIdUrl(eventItemId, params),
     {
       ...options,
       method: 'GET',
@@ -959,123 +793,410 @@ export const getUserNotificationsByEventItemId = async (
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: getUserNotificationsByEventItemIdResponse['data'] = body
+  const data: getTypedNotificationsByEventItemIdResponse['data'] = body
     ? JSON.parse(body)
     : {};
   return {
     data,
     status: res.status,
     headers: res.headers,
-  } as getUserNotificationsByEventItemIdResponse;
+  } as getTypedNotificationsByEventItemIdResponse;
 };
 
 /**
- * @summary Gets a single user notification by id.
+ * @summary Typed wrapper for getting a single notification by ID.
  */
-export type getUserNotificationByIdResponse200 = {
-  data: UserNotification;
+export type getTypedNotificationByIdResponse200 = {
+  data: ApiUserNotification;
   status: 200;
 };
 
-export type getUserNotificationByIdResponse400 = {
+export type getTypedNotificationByIdResponse400 = {
   data: ErrorResponse;
   status: 400;
 };
 
-export type getUserNotificationByIdResponse401 = {
+export type getTypedNotificationByIdResponse401 = {
   data: ErrorResponse;
   status: 401;
 };
 
-export type getUserNotificationByIdResponse404 = {
+export type getTypedNotificationByIdResponse404 = {
   data: ErrorResponse;
   status: 404;
 };
 
-export type getUserNotificationByIdResponse500 = {
+export type getTypedNotificationByIdResponse500 = {
   data: ErrorResponse;
   status: 500;
 };
 
-export type getUserNotificationByIdResponseSuccess =
-  getUserNotificationByIdResponse200 & {
+export type getTypedNotificationByIdResponseSuccess =
+  getTypedNotificationByIdResponse200 & {
     headers: Headers;
   };
-export type getUserNotificationByIdResponseError = (
-  | getUserNotificationByIdResponse400
-  | getUserNotificationByIdResponse401
-  | getUserNotificationByIdResponse404
-  | getUserNotificationByIdResponse500
+export type getTypedNotificationByIdResponseError = (
+  | getTypedNotificationByIdResponse400
+  | getTypedNotificationByIdResponse401
+  | getTypedNotificationByIdResponse404
+  | getTypedNotificationByIdResponse500
 ) & {
   headers: Headers;
 };
 
-export type getUserNotificationByIdResponse =
-  | getUserNotificationByIdResponseSuccess
-  | getUserNotificationByIdResponseError;
+export type getTypedNotificationByIdResponse =
+  | getTypedNotificationByIdResponseSuccess
+  | getTypedNotificationByIdResponseError;
 
-export const getGetUserNotificationByIdUrl = (notificationId: string) => {
-  return `/user_notifications/${notificationId}`;
+export const getGetTypedNotificationByIdUrl = (notificationId: string) => {
+  return `/v1/user_notifications/${notificationId}`;
 };
 
-export const getUserNotificationById = async (
+export const getTypedNotificationById = async (
   notificationId: string,
   options?: RequestInit
-): Promise<getUserNotificationByIdResponse> => {
-  const res = await fetch(getGetUserNotificationByIdUrl(notificationId), {
+): Promise<getTypedNotificationByIdResponse> => {
+  const res = await fetch(getGetTypedNotificationByIdUrl(notificationId), {
     ...options,
     method: 'GET',
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: getUserNotificationByIdResponse['data'] = body
+  const data: getTypedNotificationByIdResponse['data'] = body
     ? JSON.parse(body)
     : {};
   return {
     data,
     status: res.status,
     headers: res.headers,
-  } as getUserNotificationByIdResponse;
+  } as getTypedNotificationByIdResponse;
 };
 
 /**
- * @summary Marks the user's notification as deleted.
+ * @summary Soft-delete multiple user notifications.
  */
-export type deleteUserNotificationResponse200 = {
-  data: EmptyResponse;
+export type bulkDeleteUserNotificationsV2Response200 = {
+  data: void;
   status: 200;
 };
 
-export type deleteUserNotificationResponseSuccess =
-  deleteUserNotificationResponse200 & {
-    headers: Headers;
-  };
-
-export type deleteUserNotificationResponse =
-  deleteUserNotificationResponseSuccess;
-
-export const getDeleteUserNotificationUrl = (notificationId: string) => {
-  return `/user_notifications/${notificationId}`;
+export type bulkDeleteUserNotificationsV2Response400 = {
+  data: ErrorResponse;
+  status: 400;
 };
 
-export const deleteUserNotification = async (
+export type bulkDeleteUserNotificationsV2Response401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type bulkDeleteUserNotificationsV2Response500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type bulkDeleteUserNotificationsV2ResponseSuccess =
+  bulkDeleteUserNotificationsV2Response200 & {
+    headers: Headers;
+  };
+export type bulkDeleteUserNotificationsV2ResponseError = (
+  | bulkDeleteUserNotificationsV2Response400
+  | bulkDeleteUserNotificationsV2Response401
+  | bulkDeleteUserNotificationsV2Response500
+) & {
+  headers: Headers;
+};
+
+export type bulkDeleteUserNotificationsV2Response =
+  | bulkDeleteUserNotificationsV2ResponseSuccess
+  | bulkDeleteUserNotificationsV2ResponseError;
+
+export const getBulkDeleteUserNotificationsV2Url = () => {
+  return `/v2/user_notifications/bulk`;
+};
+
+export const bulkDeleteUserNotificationsV2 = async (
+  notificationBulkRequest: NotificationBulkRequest,
+  options?: RequestInit
+): Promise<bulkDeleteUserNotificationsV2Response> => {
+  const res = await fetch(getBulkDeleteUserNotificationsV2Url(), {
+    ...options,
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(notificationBulkRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: bulkDeleteUserNotificationsV2Response['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as bulkDeleteUserNotificationsV2Response;
+};
+
+/**
+ * @summary Mark notifications as done.
+ */
+export type bulkMarkNotificationsDoneResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type bulkMarkNotificationsDoneResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type bulkMarkNotificationsDoneResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type bulkMarkNotificationsDoneResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type bulkMarkNotificationsDoneResponseSuccess =
+  bulkMarkNotificationsDoneResponse200 & {
+    headers: Headers;
+  };
+export type bulkMarkNotificationsDoneResponseError = (
+  | bulkMarkNotificationsDoneResponse400
+  | bulkMarkNotificationsDoneResponse401
+  | bulkMarkNotificationsDoneResponse500
+) & {
+  headers: Headers;
+};
+
+export type bulkMarkNotificationsDoneResponse =
+  | bulkMarkNotificationsDoneResponseSuccess
+  | bulkMarkNotificationsDoneResponseError;
+
+export const getBulkMarkNotificationsDoneUrl = () => {
+  return `/v2/user_notifications/bulk/done`;
+};
+
+export const bulkMarkNotificationsDone = async (
+  notificationBulkRequest: NotificationBulkRequest,
+  options?: RequestInit
+): Promise<bulkMarkNotificationsDoneResponse> => {
+  const res = await fetch(getBulkMarkNotificationsDoneUrl(), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(notificationBulkRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: bulkMarkNotificationsDoneResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as bulkMarkNotificationsDoneResponse;
+};
+
+/**
+ * @summary Mark notifications as seen.
+ */
+export type bulkMarkNotificationsSeenResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type bulkMarkNotificationsSeenResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type bulkMarkNotificationsSeenResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type bulkMarkNotificationsSeenResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type bulkMarkNotificationsSeenResponseSuccess =
+  bulkMarkNotificationsSeenResponse200 & {
+    headers: Headers;
+  };
+export type bulkMarkNotificationsSeenResponseError = (
+  | bulkMarkNotificationsSeenResponse400
+  | bulkMarkNotificationsSeenResponse401
+  | bulkMarkNotificationsSeenResponse500
+) & {
+  headers: Headers;
+};
+
+export type bulkMarkNotificationsSeenResponse =
+  | bulkMarkNotificationsSeenResponseSuccess
+  | bulkMarkNotificationsSeenResponseError;
+
+export const getBulkMarkNotificationsSeenUrl = () => {
+  return `/v2/user_notifications/bulk/seen`;
+};
+
+export const bulkMarkNotificationsSeen = async (
+  notificationBulkRequest: NotificationBulkRequest,
+  options?: RequestInit
+): Promise<bulkMarkNotificationsSeenResponse> => {
+  const res = await fetch(getBulkMarkNotificationsSeenUrl(), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(notificationBulkRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: bulkMarkNotificationsSeenResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as bulkMarkNotificationsSeenResponse;
+};
+
+/**
+ * @summary Mark notifications as not done.
+ */
+export type bulkMarkNotificationsUndoneResponse200 = {
+  data: void;
+  status: 200;
+};
+
+export type bulkMarkNotificationsUndoneResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type bulkMarkNotificationsUndoneResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type bulkMarkNotificationsUndoneResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type bulkMarkNotificationsUndoneResponseSuccess =
+  bulkMarkNotificationsUndoneResponse200 & {
+    headers: Headers;
+  };
+export type bulkMarkNotificationsUndoneResponseError = (
+  | bulkMarkNotificationsUndoneResponse400
+  | bulkMarkNotificationsUndoneResponse401
+  | bulkMarkNotificationsUndoneResponse500
+) & {
+  headers: Headers;
+};
+
+export type bulkMarkNotificationsUndoneResponse =
+  | bulkMarkNotificationsUndoneResponseSuccess
+  | bulkMarkNotificationsUndoneResponseError;
+
+export const getBulkMarkNotificationsUndoneUrl = () => {
+  return `/v2/user_notifications/bulk/undone`;
+};
+
+export const bulkMarkNotificationsUndone = async (
+  notificationBulkRequest: NotificationBulkRequest,
+  options?: RequestInit
+): Promise<bulkMarkNotificationsUndoneResponse> => {
+  const res = await fetch(getBulkMarkNotificationsUndoneUrl(), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(notificationBulkRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: bulkMarkNotificationsUndoneResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as bulkMarkNotificationsUndoneResponse;
+};
+
+/**
+ * @summary Soft-delete a single user notification.
+ */
+export type deleteUserNotificationV2Response200 = {
+  data: void;
+  status: 200;
+};
+
+export type deleteUserNotificationV2Response400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type deleteUserNotificationV2Response401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type deleteUserNotificationV2Response500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type deleteUserNotificationV2ResponseSuccess =
+  deleteUserNotificationV2Response200 & {
+    headers: Headers;
+  };
+export type deleteUserNotificationV2ResponseError = (
+  | deleteUserNotificationV2Response400
+  | deleteUserNotificationV2Response401
+  | deleteUserNotificationV2Response500
+) & {
+  headers: Headers;
+};
+
+export type deleteUserNotificationV2Response =
+  | deleteUserNotificationV2ResponseSuccess
+  | deleteUserNotificationV2ResponseError;
+
+export const getDeleteUserNotificationV2Url = (notificationId: string) => {
+  return `/v2/user_notifications/${notificationId}`;
+};
+
+export const deleteUserNotificationV2 = async (
   notificationId: string,
   options?: RequestInit
-): Promise<deleteUserNotificationResponse> => {
-  const res = await fetch(getDeleteUserNotificationUrl(notificationId), {
+): Promise<deleteUserNotificationV2Response> => {
+  const res = await fetch(getDeleteUserNotificationV2Url(notificationId), {
     ...options,
     method: 'DELETE',
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: deleteUserNotificationResponse['data'] = body
+  const data: deleteUserNotificationV2Response['data'] = body
     ? JSON.parse(body)
     : {};
   return {
     data,
     status: res.status,
     headers: res.headers,
-  } as deleteUserNotificationResponse;
+  } as deleteUserNotificationV2Response;
 };

@@ -1,7 +1,15 @@
 use crate::NotificationEventType;
 use doppleganger::Doppleganger;
-use macro_user_id::user_id::MacroUserIdStr;
+use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
+use mention_utils::parse::{ParsedXmlText, XmlFormatter};
+use model_entity::Entity;
 use model_entity::EntityType;
+use notification::domain::models::RateLimitConfig;
+use notification::domain::models::RateLimitKey;
+use notification::domain::models::{
+    NotifCollapseKey, NotificationExtIos,
+    apple::{APNSPushNotification, AlertDictionary, Aps},
+};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use utoipa::ToSchema;
 
@@ -216,6 +224,90 @@ pub struct NewEmailMetadata {
     pub snippet: String,
 }
 
+impl notification::domain::models::Notification for NewEmailMetadata {
+    const TYPE_NAME: &'static str = "new_email";
+
+    fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
+        None
+    }
+
+    fn rate_limit_key(&self) -> Option<notification::domain::models::RateLimitKey> {
+        None
+    }
+}
+
+impl notification::domain::models::Notification for ChannelInviteMetadata {
+    const TYPE_NAME: &'static str = "channel_invite";
+
+    fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
+        None
+    }
+
+    fn rate_limit_key(&self) -> Option<notification::domain::models::RateLimitKey> {
+        None
+    }
+}
+
+impl notification::domain::models::Notification for ChannelMessageSendMetadata {
+    const TYPE_NAME: &'static str = "channel_message_send";
+
+    fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
+        None
+    }
+
+    fn rate_limit_key(&self) -> Option<notification::domain::models::RateLimitKey> {
+        None
+    }
+}
+
+impl notification::domain::models::Notification for ChannelMentionMetadata {
+    const TYPE_NAME: &'static str = "channel_mention";
+
+    fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
+        None
+    }
+
+    fn rate_limit_key(&self) -> Option<notification::domain::models::RateLimitKey> {
+        None
+    }
+}
+
+impl notification::domain::models::Notification for ChannelReplyMetadata {
+    const TYPE_NAME: &'static str = "channel_message_reply";
+
+    fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
+        None
+    }
+
+    fn rate_limit_key(&self) -> Option<notification::domain::models::RateLimitKey> {
+        None
+    }
+}
+
+impl notification::domain::models::Notification for DocumentMentionMetadata {
+    const TYPE_NAME: &'static str = "document_mention";
+
+    fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
+        None
+    }
+
+    fn rate_limit_key(&self) -> Option<notification::domain::models::RateLimitKey> {
+        None
+    }
+}
+
+impl notification::domain::models::Notification for InviteToTeamMetadata {
+    const TYPE_NAME: &'static str = "invite_to_team";
+
+    fn rate_limit_config() -> Option<notification::domain::models::RateLimitConfig> {
+        None
+    }
+
+    fn rate_limit_key(&self) -> Option<notification::domain::models::RateLimitKey> {
+        None
+    }
+}
+
 /// Metadata for when a user is assigned to a task
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -279,3 +371,231 @@ impl_notification_metadata!(
 );
 impl_notification_metadata!(NewEmailMetadata, NotificationEventType::NewEmail);
 impl_notification_metadata!(TaskAssignedMetadata, NotificationEventType::TaskAssigned);
+
+// Plain text formatter for converting XML message content to plain text for APNS payloads.
+struct PlainTextFormatter;
+
+impl XmlFormatter for PlainTextFormatter {
+    fn format_plain_text(s: &str, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", s)
+    }
+
+    fn format_link(
+        link: &mention_utils::parse::ParsedLink<'_>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        write!(f, "{}", link.text)
+    }
+
+    fn format_doc(
+        doc: &mention_utils::parse::ParsedDocumentMention<'_>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        write!(f, "{}", doc.document_name)
+    }
+
+    fn format_user(
+        user: &mention_utils::parse::ParsedUserMention<'_>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        write!(f, "{}", user.user_id.0.email_part().email_str())
+    }
+
+    fn format_contact(
+        contact: &mention_utils::parse::ParsedContactMention<'_>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        write!(f, "{}", contact.name)
+    }
+
+    fn format_date(
+        date: &mention_utils::parse::ParsedDateMention<'_>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        write!(f, "{}", date.display_format)
+    }
+
+    fn format_group(
+        group: &mention_utils::parse::ParsedGroupMention<'_>,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
+        write!(f, "@{}", group.group_alias)
+    }
+}
+
+/// Helper to parse XML message content to plain text, returning None on failure.
+fn parse_message_plain_text(content: &str) -> Option<String> {
+    let parsed = ParsedXmlText::parse(content).ok()?;
+    Some(PlainTextFormatter::format_xml_text(parsed).0)
+}
+
+/// Helper to create an alert-style APNS notification with title and body.
+fn alert_apns(title: String, body: String) -> APNSPushNotification<()> {
+    APNSPushNotification {
+        aps: Aps {
+            alert: Some(notification::domain::models::apple::Alert::Dictionary(
+                AlertDictionary {
+                    title: Some(title),
+                    body: Some(body),
+                    ..Default::default()
+                },
+            )),
+            ..Default::default()
+        },
+        push_notification_data: (),
+    }
+}
+
+impl NotificationExtIos for ChannelInviteMetadata {
+    type NotifData = ();
+
+    fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
+        let entity_type: &'static str = entity.entity_type.into();
+        NotifCollapseKey::new(entity_type).append(&entity.entity_id)
+    }
+
+    fn into_apns<'a>(
+        self,
+        _sender_id: Option<MacroUserIdStr<'a>>,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        Some(alert_apns(
+            format!("{} Invite", self.common.channel_name),
+            format!("{} invited you to join the channel", self.invited_by),
+        ))
+    }
+}
+
+impl NotificationExtIos for ChannelMessageSendMetadata {
+    type NotifData = ();
+
+    fn collapse_key(&self, _entity: &Entity<'_>) -> NotifCollapseKey {
+        NotifCollapseKey::new(&self.message_id)
+    }
+
+    fn into_apns<'a>(
+        self,
+        _sender_id: Option<MacroUserIdStr<'a>>,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        let title = match self.common.channel_type {
+            ChannelType::DirectMessage => self.sender.email_part().local_part().to_string(),
+            _ => format!(
+                "{} <{}>",
+                self.sender.email_part().local_part(),
+                self.common.channel_name
+            ),
+        };
+        let body = parse_message_plain_text(&self.message_content)?;
+        Some(alert_apns(title, body))
+    }
+}
+
+impl NotificationExtIos for ChannelMentionMetadata {
+    type NotifData = ();
+
+    fn collapse_key(&self, _entity: &Entity<'_>) -> NotifCollapseKey {
+        NotifCollapseKey::new(&self.message_id)
+    }
+
+    fn into_apns<'a>(
+        self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        let sender = sender_id?;
+        let title = match self.common.channel_type {
+            ChannelType::DirectMessage => {
+                format!("{} mentioned you", sender.email_part().local_part())
+            }
+            _ => format!(
+                "{} mentioned you in #{}",
+                sender.email_part().local_part(),
+                self.common.channel_name
+            ),
+        };
+        let body = parse_message_plain_text(&self.message_content)?;
+        Some(alert_apns(title, body))
+    }
+}
+
+impl NotificationExtIos for ChannelReplyMetadata {
+    type NotifData = ();
+
+    fn collapse_key(&self, _entity: &Entity<'_>) -> NotifCollapseKey {
+        NotifCollapseKey::new(&self.message_id)
+    }
+
+    fn into_apns<'a>(
+        self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        let sender = sender_id?;
+        let title = format!("{} Replied", sender.0.email_part().email_str());
+        let body = parse_message_plain_text(&self.message_content)?;
+        Some(alert_apns(title, body))
+    }
+}
+
+impl NotificationExtIos for DocumentMentionMetadata {
+    type NotifData = ();
+
+    fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
+        let entity_type: &'static str = entity.entity_type.into();
+        NotifCollapseKey::new(entity_type).append(&entity.entity_id)
+    }
+
+    fn into_apns<'a>(
+        self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        let sender = sender_id?;
+        let file_type = self.file_type.as_ref()?;
+        let title = sender.0.email_part().email_str().to_string();
+        let body = format!("You were mentioned in {}.{}", self.document_name, file_type);
+        Some(alert_apns(title, body))
+    }
+}
+
+impl notification::domain::models::Notification for TaskAssignedMetadata {
+    const TYPE_NAME: &'static str = "task_assigned";
+
+    fn rate_limit_config() -> Option<RateLimitConfig> {
+        None
+    }
+
+    fn rate_limit_key(&self) -> Option<RateLimitKey> {
+        None
+    }
+}
+
+impl NotificationExtIos for TaskAssignedMetadata {
+    type NotifData = ();
+
+    fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
+        let entity_type: &'static str = entity.entity_type.into();
+        NotifCollapseKey::new(entity_type).append(&entity.entity_id)
+    }
+
+    fn into_apns<'a>(
+        self,
+        _sender_id: Option<MacroUserIdStr<'a>>,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        let title = self.assigned_by.email_part().email_str().to_string();
+        let body = if let Some(ref task_name) = self.task_name {
+            format!("assigned you to {}", task_name)
+        } else {
+            "assigned you a task".to_string()
+        };
+        Some(APNSPushNotification {
+            aps: Aps {
+                alert: Some(notification::domain::models::apple::Alert::Dictionary(
+                    AlertDictionary {
+                        title: Some(title),
+                        body: Some(body),
+                        ..Default::default()
+                    },
+                )),
+                ..Default::default()
+            },
+            push_notification_data: (),
+        })
+    }
+}

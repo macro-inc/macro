@@ -235,6 +235,7 @@ where
     T: AggregateFrecencyStorage,
     anyhow::Error: From<T::Err>,
 {
+    #[tracing::instrument(err, skip(self, query))]
     async fn get_frecency_page(
         &self,
         query: FrecencyPageRequest<'_>,
@@ -247,6 +248,7 @@ where
         Ok(FrecencyPageResponse::new(res))
     }
 
+    #[tracing::instrument(err, skip(self, request))]
     async fn get_frecencies_by_ids<'a>(
         &self,
         request: FrecencyByIdsRequest<'a>,

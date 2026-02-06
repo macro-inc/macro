@@ -1,20 +1,28 @@
 //! Unit tests for the notification services.
 
+use crate::domain::models::apple::APNSPushNotification;
+use crate::domain::models::mobile::NotifCollapseKey;
 use crate::domain::models::queue_message::{
-    ConnGatewayNotification, Node, NotificationChannel, QueueMessage, RawQueueMessage,
+    ConnGatewayNotification, EmailContent, Node, Notif, NotificationChannel, QueueMessage,
+    RawQueueMessage,
 };
+use crate::domain::models::request::{NotificationStatus, UpdateNotificationsRequest};
 use crate::domain::models::{
-    DeviceEndpoint, Notification, RateLimitConfig, RateLimitExceeded, RateLimitKey,
-    RateLimitResult, SendNotificationRequestBuilder,
+    DeviceEndpoint, Notification, NotificationExtEmail, NotificationExtIos,
+    NotificationIdAndCollapseKey, RateLimitConfig, RateLimitExceeded, RateLimitKey,
+    RateLimitResult, SendNotificationRequestBuilder, UserNotificationRow,
 };
 use crate::domain::ports::{
     EmailSender, NotificationQueue, NotificationRepository, NotificationSender, RateLimitPort,
     WebSocketSender,
 };
-use crate::domain::service::{NotificationEgressService, NotificationIngressService};
+use crate::domain::service::{
+    NotificationEgressService, NotificationIngress, NotificationIngressService,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use rootcause::Report;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
@@ -31,20 +39,39 @@ struct TestNotification {
 impl Notification for TestNotification {
     const TYPE_NAME: &'static str = "test_notification";
 
-    fn title(&self) -> String {
-        "Test".to_string()
-    }
-
-    fn body(&self) -> String {
-        self.message.clone()
-    }
-
     fn rate_limit_config() -> Option<RateLimitConfig> {
         None
     }
 
     fn rate_limit_key(&self) -> Option<RateLimitKey> {
         None
+    }
+}
+
+impl NotificationExtIos for TestNotification {
+    type NotifData = TestNotification;
+
+    fn collapse_key(&self, _entity: &model_entity::Entity<'_>) -> NotifCollapseKey {
+        NotifCollapseKey::new("test")
+    }
+
+    fn into_apns<'a>(
+        self,
+        _sender: Option<MacroUserIdStr<'a>>,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        Some(APNSPushNotification {
+            aps: Default::default(),
+            push_notification_data: self,
+        })
+    }
+}
+
+impl NotificationExtEmail for TestNotification {
+    fn into_email(self) -> crate::domain::models::queue_message::EmailContent {
+        EmailContent {
+            subject: "Test".to_string(),
+            body: self.message,
+        }
     }
 }
 
@@ -59,6 +86,10 @@ struct MockRepository {
     unsubscribed_users: HashSet<MacroUserIdStr<'static>>,
     device_endpoints: HashMap<MacroUserIdStr<'static>, Vec<DeviceEndpoint>>,
     created_notifications: Mutex<Vec<Uuid>>,
+    stored_collapse_keys: Mutex<Vec<(Uuid, Option<String>)>>,
+    basic_notifications: Vec<NotificationIdAndCollapseKey>,
+    mark_seen_calls: Mutex<Vec<(String, Vec<Uuid>)>>,
+    mark_done_calls: Mutex<Vec<(String, Vec<Uuid>, bool)>>,
 }
 
 impl MockRepository {
@@ -68,7 +99,19 @@ impl MockRepository {
             unsubscribed_users: HashSet::new(),
             device_endpoints: HashMap::new(),
             created_notifications: Mutex::new(Vec::new()),
+            stored_collapse_keys: Mutex::new(Vec::new()),
+            basic_notifications: Vec::new(),
+            mark_seen_calls: Mutex::new(Vec::new()),
+            mark_done_calls: Mutex::new(Vec::new()),
         }
+    }
+
+    fn with_basic_notification(mut self, id: Uuid, collapse_key: String) -> Self {
+        self.basic_notifications.push(NotificationIdAndCollapseKey {
+            id,
+            apns_collapse_key: collapse_key,
+        });
+        self
     }
 
     fn with_muted_user(mut self, user_id: MacroUserIdStr<'static>) -> Self {
@@ -115,12 +158,16 @@ impl NotificationRepository for MockRepository {
         _request: &SendNotificationRequestBuilder<'a, T>,
         notification_id: Uuid,
         _service_sender: &str,
-        _recipient_ids: &[MacroUserIdStr<'a>],
+        apns_collapse_key: Option<&str>,
     ) -> Result<Option<Uuid>, Report> {
         self.created_notifications
             .lock()
             .unwrap()
             .push(notification_id);
+        self.stored_collapse_keys
+            .lock()
+            .unwrap()
+            .push((notification_id, apns_collapse_key.map(String::from)));
         Ok(Some(notification_id))
     }
 
@@ -137,6 +184,207 @@ impl NotificationRepository for MockRepository {
         _user_ids: &[MacroUserIdStr<'a>],
     ) -> Result<HashMap<MacroUserIdStr<'static>, Vec<DeviceEndpoint>>, Report> {
         Ok(self.device_endpoints.clone())
+    }
+
+    async fn mark_notifications_seen(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+    ) -> Result<(), Report> {
+        self.mark_seen_calls
+            .lock()
+            .unwrap()
+            .push((user_id.to_string(), notification_ids.to_vec()));
+        Ok(())
+    }
+
+    async fn mark_notifications_done(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+        done: bool,
+    ) -> Result<(), Report> {
+        self.mark_done_calls.lock().unwrap().push((
+            user_id.to_string(),
+            notification_ids.to_vec(),
+            done,
+        ));
+        Ok(())
+    }
+
+    async fn get_basic_notifications(
+        &self,
+        _notification_ids: &[Uuid],
+    ) -> Result<Vec<NotificationIdAndCollapseKey>, Report> {
+        Ok(self.basic_notifications.clone())
+    }
+
+    async fn get_user_notifications<T: DeserializeOwned + Send>(
+        &self,
+        _user_id: &str,
+        _limit: u32,
+        _cursor: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
+    ) -> Result<Vec<UserNotificationRow<T>>, Report> {
+        Ok(vec![])
+    }
+
+    async fn get_user_notifications_by_event_item_ids<T: DeserializeOwned + Send>(
+        &self,
+        _user_id: &str,
+        _event_item_ids: &[Uuid],
+        _limit: u32,
+        _cursor: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
+    ) -> Result<Vec<UserNotificationRow<T>>, Report> {
+        Ok(vec![])
+    }
+
+    async fn get_user_notification_by_id<T: DeserializeOwned + Send>(
+        &self,
+        _user_id: &str,
+        _notification_id: Uuid,
+    ) -> Result<Option<UserNotificationRow<T>>, Report> {
+        Ok(None)
+    }
+
+    async fn delete_user_notification(
+        &self,
+        _user_id: &str,
+        _notification_id: Uuid,
+    ) -> Result<(), Report> {
+        Ok(())
+    }
+
+    async fn bulk_delete_user_notifications(
+        &self,
+        _user_id: &str,
+        _notification_ids: &[Uuid],
+    ) -> Result<(), Report> {
+        Ok(())
+    }
+}
+
+impl NotificationRepository for std::sync::Arc<MockRepository> {
+    async fn get_muted_users<'a>(
+        &self,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
+        (**self).get_muted_users(user_ids).await
+    }
+
+    async fn get_unsubscribed_users<'a>(
+        &self,
+        item_id: &str,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
+        (**self).get_unsubscribed_users(item_id, user_ids).await
+    }
+
+    async fn create_notification<'a, T: Notification + Send + Sync>(
+        &self,
+        request: &SendNotificationRequestBuilder<'a, T>,
+        notification_id: Uuid,
+        service_sender: &str,
+        apns_collapse_key: Option<&str>,
+    ) -> Result<Option<Uuid>, Report> {
+        (**self)
+            .create_notification(request, notification_id, service_sender, apns_collapse_key)
+            .await
+    }
+
+    async fn update_sent_status<'a>(
+        &self,
+        notification_id: Uuid,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> Result<(), Report> {
+        (**self).update_sent_status(notification_id, user_ids).await
+    }
+
+    async fn get_device_endpoints<'a>(
+        &self,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> Result<HashMap<MacroUserIdStr<'static>, Vec<DeviceEndpoint>>, Report> {
+        (**self).get_device_endpoints(user_ids).await
+    }
+
+    async fn mark_notifications_seen(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+    ) -> Result<(), Report> {
+        (**self)
+            .mark_notifications_seen(user_id, notification_ids)
+            .await
+    }
+
+    async fn mark_notifications_done(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+        done: bool,
+    ) -> Result<(), Report> {
+        (**self)
+            .mark_notifications_done(user_id, notification_ids, done)
+            .await
+    }
+
+    async fn get_basic_notifications(
+        &self,
+        notification_ids: &[Uuid],
+    ) -> Result<Vec<NotificationIdAndCollapseKey>, Report> {
+        (**self).get_basic_notifications(notification_ids).await
+    }
+
+    async fn get_user_notifications<T: DeserializeOwned + Send>(
+        &self,
+        user_id: &str,
+        limit: u32,
+        cursor: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
+    ) -> Result<Vec<UserNotificationRow<T>>, Report> {
+        (**self)
+            .get_user_notifications(user_id, limit, cursor)
+            .await
+    }
+
+    async fn get_user_notifications_by_event_item_ids<T: DeserializeOwned + Send>(
+        &self,
+        user_id: &str,
+        event_item_ids: &[Uuid],
+        limit: u32,
+        cursor: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
+    ) -> Result<Vec<UserNotificationRow<T>>, Report> {
+        (**self)
+            .get_user_notifications_by_event_item_ids(user_id, event_item_ids, limit, cursor)
+            .await
+    }
+
+    async fn get_user_notification_by_id<T: DeserializeOwned + Send>(
+        &self,
+        user_id: &str,
+        notification_id: Uuid,
+    ) -> Result<Option<UserNotificationRow<T>>, Report> {
+        (**self)
+            .get_user_notification_by_id(user_id, notification_id)
+            .await
+    }
+
+    async fn delete_user_notification(
+        &self,
+        user_id: &str,
+        notification_id: Uuid,
+    ) -> Result<(), Report> {
+        (**self)
+            .delete_user_notification(user_id, notification_id)
+            .await
+    }
+
+    async fn bulk_delete_user_notifications(
+        &self,
+        user_id: &str,
+        notification_ids: &[Uuid],
+    ) -> Result<(), Report> {
+        (**self)
+            .bulk_delete_user_notifications(user_id, notification_ids)
+            .await
     }
 }
 
@@ -159,9 +407,9 @@ impl MockQueue {
 }
 
 impl NotificationQueue for MockQueue {
-    async fn publish<T: serde::Serialize + Send + Sync>(
+    async fn publish<T: serde::Serialize + Send + Sync, U: serde::Serialize + Send + Sync>(
         &self,
-        messages: &[QueueMessage<'_, T>],
+        messages: &[QueueMessage<'_, T, U>],
     ) -> Result<(), Report> {
         let mut published = self.published.lock().unwrap();
         for message in messages {
@@ -181,9 +429,9 @@ impl NotificationQueue for MockQueue {
 }
 
 impl NotificationQueue for std::sync::Arc<MockQueue> {
-    async fn publish<T: serde::Serialize + Send + Sync>(
+    async fn publish<T: serde::Serialize + Send + Sync, U: serde::Serialize + Send + Sync>(
         &self,
-        messages: &[QueueMessage<'_, T>],
+        messages: &[QueueMessage<'_, T, U>],
     ) -> Result<(), Report> {
         (**self).publish(messages).await
     }
@@ -202,7 +450,7 @@ where
     N: NotificationRepository,
     Q: NotificationQueue,
 {
-    NotificationIngressService::new(repository, queue, "test_service")
+    NotificationIngressService::new(repository, queue)
 }
 
 #[tokio::test]
@@ -299,8 +547,7 @@ async fn test_queue_message_conn_gateway_only() {
     use std::sync::Arc;
 
     let queue = Arc::new(MockQueue::new());
-    let service =
-        NotificationIngressService::new(MockRepository::new(), queue.clone(), "test_service");
+    let service = NotificationIngressService::new(MockRepository::new(), queue.clone());
 
     let recipient = test_user_id("user@example.com");
     let request = SendNotificationRequestBuilder {
@@ -326,12 +573,10 @@ async fn test_queue_message_conn_gateway_only() {
 
 #[tokio::test]
 async fn test_queue_message_email_per_recipient() {
-    use crate::domain::models::queue_message::EmailContent;
     use std::sync::Arc;
 
     let queue = Arc::new(MockQueue::new());
-    let service =
-        NotificationIngressService::new(MockRepository::new(), queue.clone(), "test_service");
+    let service = NotificationIngressService::new(MockRepository::new(), queue.clone());
 
     let recipient1 = test_user_id("user1@example.com");
     let recipient2 = test_user_id("user2@example.com");
@@ -344,10 +589,7 @@ async fn test_queue_message_email_per_recipient() {
         recipient_ids: HashSet::from([recipient1.clone(), recipient2.clone()]),
     }
     .into_request()
-    .with_email(Box::new(|notif| EmailContent {
-        subject: "Test".to_string(),
-        body: notif.message,
-    }));
+    .with_email();
 
     service.send_notification(request).await.unwrap();
 
@@ -363,9 +605,6 @@ async fn test_queue_message_email_per_recipient() {
 
 #[tokio::test]
 async fn test_queue_message_multiple_channels() {
-    use crate::domain::models::apple::APNSPushNotification;
-    use crate::domain::models::mobile::{MessageAttributes, PushType};
-    use crate::domain::models::queue_message::EmailContent;
     use std::sync::Arc;
 
     let recipient = test_user_id("user@example.com");
@@ -374,7 +613,7 @@ async fn test_queue_message_multiple_channels() {
         recipient.clone(),
         DeviceEndpoint::Ios("arn:aws:sns:test".to_string()),
     );
-    let service = NotificationIngressService::new(repo, queue.clone(), "test_service");
+    let service = NotificationIngressService::new(repo, queue.clone());
 
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("entity_1"),
@@ -386,22 +625,8 @@ async fn test_queue_message_multiple_channels() {
     }
     .into_request()
     .with_conn_gateway()
-    .with_apns(Box::new(|notif| {
-        (
-            APNSPushNotification {
-                aps: Default::default(),
-                push_notification_data: notif,
-            },
-            MessageAttributes {
-                push_type: PushType::Alert,
-                collapse_key: "test".to_string(),
-            },
-        )
-    }))
-    .with_email(Box::new(|notif| EmailContent {
-        subject: "Test".to_string(),
-        body: notif.message,
-    }));
+    .with_apns()
+    .with_email();
 
     service.send_notification(request).await.unwrap();
 
@@ -424,6 +649,181 @@ async fn test_queue_message_multiple_channels() {
     assert!(has_email, "Should have Email message");
 }
 
+#[tokio::test]
+async fn test_apns_enqueues_correct_data_for_multiple_users() {
+    use std::sync::Arc;
+
+    let user1 = test_user_id("alice@example.com");
+    let user2 = test_user_id("bob@example.com");
+    let user3 = test_user_id("charlie@example.com");
+
+    let queue = Arc::new(MockQueue::new());
+    let repo = MockRepository::new()
+        .with_device_endpoint(
+            user1.clone(),
+            DeviceEndpoint::Ios(
+                "arn:aws:sns:us-east-1:111:endpoint/APNS/app/alice-device".to_string(),
+            ),
+        )
+        .with_device_endpoint(
+            user2.clone(),
+            DeviceEndpoint::Ios(
+                "arn:aws:sns:us-east-1:111:endpoint/APNS/app/bob-device".to_string(),
+            ),
+        )
+        .with_device_endpoint(
+            user2.clone(),
+            DeviceEndpoint::Ios(
+                "arn:aws:sns:us-east-1:111:endpoint/APNS/app/bob-device-2".to_string(),
+            ),
+        )
+        .with_device_endpoint(
+            user3.clone(),
+            DeviceEndpoint::Ios(
+                "arn:aws:sns:us-east-1:111:endpoint/APNS/app/charlie-device".to_string(),
+            ),
+        );
+
+    let service = NotificationIngressService::new(repo, queue.clone());
+
+    let request = SendNotificationRequestBuilder {
+        notification_entity: EntityType::Document.with_entity_str("doc_123"),
+        notification: TestNotification {
+            message: "You were mentioned".to_string(),
+        },
+        sender_id: None,
+        recipient_ids: HashSet::from([user1.clone(), user2.clone(), user3.clone()]),
+    }
+    .into_request()
+    .with_apns();
+
+    service.send_notification(request).await.unwrap();
+
+    let published = queue.get_published();
+    assert_eq!(
+        published.len(),
+        1,
+        "APNS produces a single queue message for all recipients"
+    );
+
+    let msg = &published[0];
+    assert_eq!(msg["message_type"], "test_notification");
+
+    // The message should be an Ios variant
+    let ios = &msg["content"]["notif"]["Ios"];
+    assert!(ios.is_object(), "Expected Ios notification channel");
+
+    // Verify the APNS notification payload contains the notification data
+    // push_notification_data is #[serde(flatten)]'d so fields appear directly on notif
+    let apns_notif = &ios["notif"];
+    assert_eq!(
+        apns_notif["message"], "You were mentioned",
+        "APNS payload should contain the flattened notification data"
+    );
+
+    // Verify message attributes
+    let attrs = &ios["attributes"];
+    assert_eq!(attrs["push_type"], "Alert");
+    let expected_key = NotifCollapseKey::new("test").into_hashed().into_inner();
+    assert_eq!(attrs["collapse_key"], expected_key);
+
+    // Verify all device endpoints from all users are included
+    let endpoints: Vec<&str> = ios["ios_device_endpoints"]
+        .as_array()
+        .expect("iosDeviceEndpoints should be an array")
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
+
+    assert_eq!(
+        endpoints.len(),
+        4,
+        "Should include all 4 device endpoints across 3 users"
+    );
+    assert!(
+        endpoints.contains(&"arn:aws:sns:us-east-1:111:endpoint/APNS/app/alice-device"),
+        "Should include alice's device"
+    );
+    assert!(
+        endpoints.contains(&"arn:aws:sns:us-east-1:111:endpoint/APNS/app/bob-device"),
+        "Should include bob's first device"
+    );
+    assert!(
+        endpoints.contains(&"arn:aws:sns:us-east-1:111:endpoint/APNS/app/bob-device-2"),
+        "Should include bob's second device"
+    );
+    assert!(
+        endpoints.contains(&"arn:aws:sns:us-east-1:111:endpoint/APNS/app/charlie-device"),
+        "Should include charlie's device"
+    );
+}
+
+#[tokio::test]
+async fn test_apns_collapse_key_stored_on_create() {
+    use std::sync::Arc;
+
+    let user = test_user_id("alice@example.com");
+
+    let repo = Arc::new(MockRepository::new().with_device_endpoint(
+        user.clone(),
+        DeviceEndpoint::Ios("arn:aws:sns:us-east-1:111:endpoint/APNS/app/alice".to_string()),
+    ));
+    let queue = Arc::new(MockQueue::new());
+    let service = NotificationIngressService::new(repo.clone(), queue);
+
+    let request = SendNotificationRequestBuilder {
+        notification_entity: EntityType::Document.with_entity_str("doc_1"),
+        notification: TestNotification {
+            message: "Hello".to_string(),
+        },
+        sender_id: None,
+        recipient_ids: HashSet::from([user]),
+    }
+    .into_request()
+    .with_apns();
+
+    service.send_notification(request).await.unwrap();
+
+    let collapse_keys = repo.stored_collapse_keys.lock().unwrap();
+    assert_eq!(collapse_keys.len(), 1);
+    assert_eq!(
+        collapse_keys[0].1,
+        Some(NotifCollapseKey::new("test").into_hashed().into_inner()),
+        "APNS collapse key should be stored when creating the notification"
+    );
+}
+
+#[tokio::test]
+async fn test_no_apns_collapse_key_when_apns_not_enabled() {
+    use std::sync::Arc;
+
+    let user = test_user_id("alice@example.com");
+
+    let repo = Arc::new(MockRepository::new());
+    let queue = Arc::new(MockQueue::new());
+    let service = NotificationIngressService::new(repo.clone(), queue);
+
+    let request = SendNotificationRequestBuilder {
+        notification_entity: EntityType::Document.with_entity_str("doc_1"),
+        notification: TestNotification {
+            message: "Hello".to_string(),
+        },
+        sender_id: None,
+        recipient_ids: HashSet::from([user]),
+    }
+    .into_request()
+    .with_conn_gateway();
+
+    service.send_notification(request).await.unwrap();
+
+    let collapse_keys = repo.stored_collapse_keys.lock().unwrap();
+    assert_eq!(collapse_keys.len(), 1);
+    assert_eq!(
+        collapse_keys[0].1, None,
+        "No APNS collapse key should be stored when APNS is not enabled"
+    );
+}
+
 // ============================================================================
 // Egress Service Tests
 // ============================================================================
@@ -434,8 +834,8 @@ struct MockWebSocketSender;
 impl WebSocketSender for MockWebSocketSender {
     async fn send_notifications<'a, T: Serialize + Send + Sync>(
         &self,
-        _message_type: &str,
-        _notifications: Vec<(MacroUserIdStr<'a>, &T)>,
+        _recipients: &[MacroUserIdStr<'a>],
+        _notification: &T,
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
         Ok(HashSet::new())
     }
@@ -517,6 +917,7 @@ impl RateLimitPort for MockRateLimiter {
 fn create_egress_service<R: RateLimitPort>(
     rate_limiter: R,
 ) -> NotificationEgressService<
+    MockQueue,
     MockRepository,
     MockWebSocketSender,
     MockMobileSender,
@@ -524,12 +925,29 @@ fn create_egress_service<R: RateLimitPort>(
     R,
 > {
     NotificationEgressService::new(
+        MockQueue::new(),
         MockRepository::new(),
         MockWebSocketSender,
         MockMobileSender,
         MockEmailSender,
         rate_limiter,
     )
+}
+
+fn create_mock_notif(meta: serde_json::Value) -> Notif<serde_json::Value> {
+    Notif {
+        notification_id: Uuid::nil(),
+        notification_event_type: "testing".to_string(),
+        entity: EntityType::Document.with_entity_str("testing"),
+        sent: false,
+        done: false,
+        created_at: None,
+        viewed_at: None,
+        updated_at: None,
+        deleted_at: None,
+        notification_metadata: meta,
+        sender_id: None,
+    }
 }
 
 #[tokio::test]
@@ -545,7 +963,7 @@ async fn test_egress_rate_limit_exceeded() {
         )),
         content: Node {
             notif: NotificationChannel::ConnGateway(ConnGatewayNotification {
-                notif: json!({"message": "Hello"}),
+                notif: create_mock_notif(json!({"message": "Hello"})),
                 recipients: vec![recipient],
             }),
             on_failure: None,
@@ -579,7 +997,8 @@ async fn test_egress_rate_limit_allowed() {
         )),
         content: Node {
             notif: NotificationChannel::ConnGateway(ConnGatewayNotification {
-                notif: json!({"message": "Hello"}),
+                notif: create_mock_notif(json!({"message": "Hello"})),
+
                 recipients: vec![recipient],
             }),
             on_failure: None,
@@ -603,7 +1022,7 @@ async fn test_egress_no_rate_limit_configured() {
         rate_limit: None, // No rate limit configured
         content: Node {
             notif: NotificationChannel::ConnGateway(ConnGatewayNotification {
-                notif: json!({"message": "Hello"}),
+                notif: create_mock_notif(json!({"message": "Hello"})),
                 recipients: vec![recipient],
             }),
             on_failure: None,
@@ -615,4 +1034,237 @@ async fn test_egress_no_rate_limit_configured() {
     // Should succeed even though rate limiter would exceed - because no rate limit is configured
     assert_eq!(results.len(), 1);
     assert!(results[0].is_ok());
+}
+
+// ============================================================================
+// Mark Notifications Seen Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_mark_seen_publishes_ios_clear_message() {
+    use std::sync::Arc;
+
+    let user = test_user_id("alice@example.com");
+    let notif_id = Uuid::now_v7();
+
+    let repo = Arc::new(
+        MockRepository::new()
+            .with_basic_notification(notif_id, "collapse_key_1".to_string())
+            .with_device_endpoint(
+                user.clone(),
+                DeviceEndpoint::Ios(
+                    "arn:aws:sns:us-east-1:111:endpoint/APNS/app/alice".to_string(),
+                ),
+            ),
+    );
+    let queue = Arc::new(MockQueue::new());
+    let service = NotificationIngressService::new(repo.clone(), queue.clone());
+
+    let notification_ids = [notif_id];
+    service
+        .update_notifications(UpdateNotificationsRequest {
+            user_id: user.clone(),
+            notification_ids: &notification_ids,
+            status: NotificationStatus::Seen,
+        })
+        .await
+        .unwrap();
+
+    // Verify DB was updated
+    let mark_seen_calls = repo.mark_seen_calls.lock().unwrap();
+    assert_eq!(mark_seen_calls.len(), 1);
+    assert_eq!(mark_seen_calls[0].1, vec![notif_id]);
+
+    // Verify queue message was published
+    let published = queue.get_published();
+    assert_eq!(published.len(), 1);
+
+    let msg = &published[0];
+    assert_eq!(msg["message_type"], "clear_push_notification");
+
+    // Should be an Ios variant with background push
+    let ios = &msg["content"]["notif"]["Ios"];
+    assert!(ios.is_object(), "Expected Ios notification channel");
+
+    // Verify silent background push payload
+    let aps = &ios["notif"]["aps"];
+    assert_eq!(aps["content-available"], 1);
+    assert!(aps.get("alert").is_none() || aps["alert"].is_null());
+
+    // Verify collapse key in attributes
+    let attrs = &ios["attributes"];
+    assert_eq!(attrs["push_type"], "Background");
+    assert_eq!(attrs["collapse_key"], "collapse_key_1");
+
+    // Verify identifier in custom data
+    assert_eq!(ios["notif"]["identifier"], "collapse_key_1");
+
+    // Verify device endpoint
+    let endpoints = ios["ios_device_endpoints"].as_array().unwrap();
+    assert_eq!(endpoints.len(), 1);
+    assert_eq!(
+        endpoints[0],
+        "arn:aws:sns:us-east-1:111:endpoint/APNS/app/alice"
+    );
+}
+
+#[tokio::test]
+async fn test_mark_seen_skips_push_when_no_collapse_key() {
+    use std::sync::Arc;
+
+    let user = test_user_id("bob@example.com");
+    let notif_id = Uuid::now_v7();
+
+    // No basic notifications with collapse keys (DB query filters them out)
+    let repo = Arc::new(MockRepository::new().with_device_endpoint(
+        user.clone(),
+        DeviceEndpoint::Ios("arn:aws:sns:us-east-1:111:endpoint/APNS/app/bob".to_string()),
+    ));
+    let queue = Arc::new(MockQueue::new());
+    let service = NotificationIngressService::new(repo.clone(), queue.clone());
+
+    let notification_ids = [notif_id];
+    service
+        .update_notifications(UpdateNotificationsRequest {
+            user_id: user.clone(),
+            notification_ids: &notification_ids,
+            status: NotificationStatus::Seen,
+        })
+        .await
+        .unwrap();
+
+    // DB should still be updated
+    let mark_seen_calls = repo.mark_seen_calls.lock().unwrap();
+    assert_eq!(mark_seen_calls.len(), 1);
+
+    // But no queue message should be published
+    let published = queue.get_published();
+    assert!(
+        published.is_empty(),
+        "Should not publish when no collapse keys"
+    );
+}
+
+#[tokio::test]
+async fn test_mark_seen_skips_push_when_no_device_endpoints() {
+    use std::sync::Arc;
+
+    let user = test_user_id("charlie@example.com");
+    let notif_id = Uuid::now_v7();
+
+    let repo = Arc::new(
+        MockRepository::new().with_basic_notification(notif_id, "collapse_key_1".to_string()),
+        // No device endpoints registered
+    );
+    let queue = Arc::new(MockQueue::new());
+    let service = NotificationIngressService::new(repo.clone(), queue.clone());
+
+    let notification_ids = [notif_id];
+    service
+        .update_notifications(UpdateNotificationsRequest {
+            user_id: user.clone(),
+            notification_ids: &notification_ids,
+            status: NotificationStatus::Seen,
+        })
+        .await
+        .unwrap();
+
+    // DB should still be updated
+    let mark_seen_calls = repo.mark_seen_calls.lock().unwrap();
+    assert_eq!(mark_seen_calls.len(), 1);
+
+    // But no queue message should be published
+    let published = queue.get_published();
+    assert!(
+        published.is_empty(),
+        "Should not publish when no device endpoints"
+    );
+}
+
+#[tokio::test]
+async fn test_mark_done_updates_db_and_clears_push() {
+    use std::sync::Arc;
+
+    let user = test_user_id("alice@example.com");
+    let notif_id = Uuid::now_v7();
+
+    let repo = Arc::new(
+        MockRepository::new()
+            .with_basic_notification(notif_id, "collapse_key_1".to_string())
+            .with_device_endpoint(
+                user.clone(),
+                DeviceEndpoint::Ios(
+                    "arn:aws:sns:us-east-1:111:endpoint/APNS/app/alice".to_string(),
+                ),
+            ),
+    );
+    let queue = Arc::new(MockQueue::new());
+    let service = NotificationIngressService::new(repo.clone(), queue.clone());
+
+    let notification_ids = [notif_id];
+    service
+        .update_notifications(UpdateNotificationsRequest {
+            user_id: user.clone(),
+            notification_ids: &notification_ids,
+            status: NotificationStatus::Done(true),
+        })
+        .await
+        .unwrap();
+
+    // Verify done was called (not seen)
+    let mark_seen_calls = repo.mark_seen_calls.lock().unwrap();
+    assert!(mark_seen_calls.is_empty(), "Should not call mark_seen");
+
+    let mark_done_calls = repo.mark_done_calls.lock().unwrap();
+    assert_eq!(mark_done_calls.len(), 1);
+    assert_eq!(mark_done_calls[0].1, vec![notif_id]);
+    assert!(mark_done_calls[0].2, "Should mark as done=true");
+
+    // Verify push clearing was published (Done(true) should clear push)
+    let published = queue.get_published();
+    assert_eq!(published.len(), 1);
+    assert_eq!(published[0]["message_type"], "clear_push_notification");
+}
+
+#[tokio::test]
+async fn test_mark_undone_updates_db_no_push_clear() {
+    use std::sync::Arc;
+
+    let user = test_user_id("alice@example.com");
+    let notif_id = Uuid::now_v7();
+
+    let repo = Arc::new(
+        MockRepository::new()
+            .with_basic_notification(notif_id, "collapse_key_1".to_string())
+            .with_device_endpoint(
+                user.clone(),
+                DeviceEndpoint::Ios(
+                    "arn:aws:sns:us-east-1:111:endpoint/APNS/app/alice".to_string(),
+                ),
+            ),
+    );
+    let queue = Arc::new(MockQueue::new());
+    let service = NotificationIngressService::new(repo.clone(), queue.clone());
+
+    let notification_ids = [notif_id];
+    service
+        .update_notifications(UpdateNotificationsRequest {
+            user_id: user.clone(),
+            notification_ids: &notification_ids,
+            status: NotificationStatus::Done(false),
+        })
+        .await
+        .unwrap();
+
+    // Verify done was called with false
+    let mark_done_calls = repo.mark_done_calls.lock().unwrap();
+    assert_eq!(mark_done_calls.len(), 1);
+    assert!(!mark_done_calls[0].2, "Should mark as done=false");
+
+    // Verify NO push clearing was published (Done(false) should not clear push)
+    let published = queue.get_published();
+    assert!(
+        published.is_empty(),
+        "Should not clear push when marking undone"
+    );
 }

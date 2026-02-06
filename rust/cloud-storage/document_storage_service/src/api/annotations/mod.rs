@@ -6,7 +6,7 @@ pub mod edit_anchor;
 pub mod edit_comment;
 pub mod get;
 
-use std::fmt::Display;
+use std::{collections::HashSet, fmt::Display};
 
 use super::context::ApiContext;
 use axum::{
@@ -16,11 +16,17 @@ use axum::{
     routing::{delete, get, patch, post},
 };
 use macro_db_client::annotations::CommentError;
+use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::{annotations::Comment, response::ErrorResponse};
+use model_entity::Entity;
 use model_entity::EntityType;
-use model_notifications::{DocumentMentionMetadata, NotificationQueueMessage};
-use serde::Serialize;
+use notification::domain::models::{
+    NotifCollapseKey, Notification, NotificationExtIos, RateLimitConfig, RateLimitKey,
+    SendNotificationRequestBuilder,
+    apple::{APNSPushNotification, AlertDictionary, Aps},
+};
+use serde::{Deserialize, Serialize};
 use tower::ServiceBuilder;
 use utoipa::ToSchema;
 
@@ -123,7 +129,7 @@ pub fn comment_error_response(e: anyhow::Error, default_msg: &str) -> Result<Res
     }
 }
 
-#[derive(ToSchema)]
+#[derive(Debug, Clone, Deserialize, ToSchema)]
 pub enum NotifLocationType {
     CreateComment,
     EditComment,
@@ -151,60 +157,112 @@ impl Display for NotifLocationType {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct Location {
+pub(in crate::api) struct Location {
     r#type: NotifLocationType,
     comment_id: Option<i64>,
     thread_id: i64,
     text: String,
 }
 
-// TODO: This is consumed in the frontend. It should be shared.
-#[derive(Serialize)]
+/// Notification sent when a user is mentioned in a document comment.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct Metadata {
-    mention_id: String,
-    location: Location,
+pub struct DocumentMentionNotification {
+    /// The name of the document.
+    pub document_name: String,
+    /// The owner of the document.
+    pub owner: MacroUserIdStr<'static>,
+    /// The file type of the document.
+    pub file_type: Option<String>,
+    /// The mention ID.
+    pub mention_id: String,
+    /// The location metadata for the mention.
+    pub location: Location,
+}
+
+impl Notification for DocumentMentionNotification {
+    const TYPE_NAME: &'static str = "document_mention";
+
+    fn rate_limit_config() -> Option<RateLimitConfig> {
+        None
+    }
+
+    fn rate_limit_key(&self) -> Option<RateLimitKey> {
+        None
+    }
+}
+
+impl NotificationExtIos for DocumentMentionNotification {
+    type NotifData = ();
+
+    fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
+        let entity_type: &'static str = entity.entity_type.into();
+        NotifCollapseKey::new(entity_type).append(&entity.entity_id)
+    }
+
+    fn into_apns<'a>(
+        self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        let sender = sender_id?;
+        let file_type = self.file_type.as_ref()?;
+        let title = sender.0.email_part().email_str().to_string();
+        let body = format!("You were mentioned in {}.{}", self.document_name, file_type);
+        Some(APNSPushNotification {
+            aps: Aps {
+                alert: Some(notification::domain::models::apple::Alert::Dictionary(
+                    AlertDictionary {
+                        title: Some(title),
+                        body: Some(body),
+                        ..Default::default()
+                    },
+                )),
+                ..Default::default()
+            },
+            push_notification_data: (),
+        })
+    }
 }
 
 #[expect(clippy::too_many_arguments)]
-fn build_mention_notif(
+fn build_mention_notif<'a>(
     notif_location_type: NotifLocationType,
     text: String,
     comment: Option<&Comment>,
     thread_id: i64,
-    mentions: &[String],
+    mentions: &'a [String],
     document_name: String,
     owner: MacroUserIdStr<'static>,
     file_type: Option<String>,
     sender_id: Option<MacroUserIdStr<'static>>,
     document_id: String,
     mention_id: &str,
-) -> NotificationQueueMessage {
-    let metadata = DocumentMentionMetadata {
+) -> SendNotificationRequestBuilder<'a, DocumentMentionNotification> {
+    let notification = DocumentMentionNotification {
         document_name,
         owner,
         file_type,
-        metadata: Some(
-            serde_json::to_value(Metadata {
-                mention_id: mention_id.to_string(),
-                location: Location {
-                    r#type: notif_location_type,
-                    comment_id: comment.map(|c| c.comment_id),
-                    thread_id,
-                    text,
-                },
-            })
-            .expect("always works"),
-        ),
+        mention_id: mention_id.to_string(),
+        location: Location {
+            r#type: notif_location_type,
+            comment_id: comment.map(|c| c.comment_id),
+            thread_id,
+            text,
+        },
     };
 
-    NotificationQueueMessage {
+    let recipient_ids: HashSet<MacroUserIdStr<'a>> = mentions
+        .iter()
+        .filter_map(|id| MacroUserIdStr::parse_from_str(id).ok())
+        .collect();
+
+    SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_string(document_id),
-        notification_event: metadata.into(),
+        notification,
         sender_id,
-        recipient_ids: Some(mentions.to_vec()),
+        recipient_ids,
     }
 }
 
@@ -224,7 +282,10 @@ mod tests {
     }
     #[test]
     fn check_ser_meta() -> Result<(), Box<dyn std::error::Error>> {
-        let m = Metadata {
+        let m = DocumentMentionNotification {
+            document_name: "test".to_string(),
+            owner: MacroUserIdStr::parse_from_str("macro|user@test.com").unwrap(),
+            file_type: None,
             mention_id: "xxx".to_string(),
             location: Location {
                 r#type: NotifLocationType::EditComment,

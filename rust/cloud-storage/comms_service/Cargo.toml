@@ -36,7 +36,6 @@ chrono = { workspace = true }
 comms = { path = "../comms", features = ["inbound", "outbound"] }
 comms_db_client = { path = "../comms_db_client", optional = true }
 connection_gateway = { path = "../connection_gateway" }
-macro_db_client = { path = "../macro_db_client" }
 doppleganger = { workspace = true }
 frecency = { path = "../frecency", features = ["postgres"] }
 futures = { workspace = true }
@@ -46,6 +45,7 @@ macro_auth = { path = "../macro_auth" }
 macro_aws_config = { path = "../macro_aws_config" }
 macro_axum_utils = { path = "../macro_axum_utils" }
 macro_cors = { path = "../macro_cors" }
+macro_db_client = { path = "../macro_db_client" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
@@ -53,15 +53,15 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
   "auth",
   "cloud_storage",
 ] }
-macro_uuid = { path = "../macro_uuid" }
-macro_notify = { path = "../macro_notify" }
 macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 model_notifications = { path = "../model_notifications" }
 models_comms = { path = "../models_comms" }
 models_opensearch = { path = "../models_opensearch" }
 models_permissions = { path = "../models_permissions" }
+notification_hex = { path = "../notification", package = "notification" }
 reqwest.workspace = true
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }

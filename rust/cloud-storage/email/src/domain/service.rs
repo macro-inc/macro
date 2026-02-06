@@ -39,6 +39,7 @@ where
     U: FrecencyQueryService,
     anyhow::Error: From<T::Err>,
 {
+    #[tracing::instrument(err, skip(self, req))]
     async fn get_email_thread_previews(
         &self,
         req: GetEmailsRequest,

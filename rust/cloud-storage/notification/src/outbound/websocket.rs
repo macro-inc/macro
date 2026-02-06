@@ -35,7 +35,6 @@ pub trait WebSocketGatewayOps {
     /// (i.e., users who had an active WebSocket connection).
     fn send_to_users<'a, T: Serialize + Send + Sync>(
         &self,
-        message_type: &str,
         user_ids: &[MacroUserIdStr<'a>],
         payload: &T,
     ) -> impl std::future::Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
@@ -93,9 +92,9 @@ struct BatchSendMessageBody<'a> {
 }
 
 impl WebSocketGatewayOps for ConnectionGatewayClient {
+    #[tracing::instrument(err, skip(self, payload))]
     async fn send_to_users<'a, T: Serialize + Send + Sync>(
         &self,
-        message_type: &str,
         user_ids: &[MacroUserIdStr<'a>],
         payload: &T,
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
@@ -109,7 +108,7 @@ impl WebSocketGatewayOps for ConnectionGatewayClient {
             .collect();
 
         let body = BatchSendMessageBody {
-            message_type,
+            message_type: "notification",
             message: serde_json::to_value(payload)?,
             entities,
         };
@@ -122,7 +121,8 @@ impl WebSocketGatewayOps for ConnectionGatewayClient {
             ))
             .json(&body)
             .send()
-            .await?;
+            .await?
+            .error_for_status()?;
 
         let json = res.json().await?;
         let response: GatewayResponse = serde_json::from_value(json)?;
@@ -143,21 +143,14 @@ impl WebSocketGatewayOps for ConnectionGatewayClient {
     }
 }
 
-impl<W: WebSocketGatewayOps + Send + Sync> WebSocketSender for WebSocketGatewayAdapter<W> {
+impl<W: WebSocketGatewayOps + Send + Sync + 'static> WebSocketSender
+    for WebSocketGatewayAdapter<W>
+{
     async fn send_notifications<'a, T: Serialize + Send + Sync>(
         &self,
-        message_type: &str,
-        notifications: Vec<(MacroUserIdStr<'a>, &T)>,
+        recipients: &[MacroUserIdStr<'a>],
+        notification: &T,
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
-        // Get the first notification to serialize, return empty if none
-        let Some((_, notification)) = notifications.first() else {
-            return Ok(HashSet::new());
-        };
-
-        let user_ids: Vec<_> = notifications.iter().map(|(id, _)| id.clone()).collect();
-
-        self.gateway
-            .send_to_users(message_type, &user_ids, *notification)
-            .await
+        self.gateway.send_to_users(recipients, notification).await
     }
 }

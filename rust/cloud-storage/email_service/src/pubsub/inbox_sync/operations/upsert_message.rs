@@ -11,7 +11,7 @@ use email_utils::dedupe_emails;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::contacts::ConnectionsMessage;
 use model_entity::EntityType;
-use model_notifications::{NewEmailMetadata, NotificationQueueMessage};
+use model_notifications::NewEmailMetadata;
 use models_email::db::address::EmailRecipientType;
 use models_email::email::service;
 use models_email::email::service::link;
@@ -21,6 +21,8 @@ use models_email::gmail::operations::GmailApiOperation;
 use models_email::service::attachment::{AttachmentUploadArgs, AttachmentUploadDestination};
 use models_email::service::message::{Message, is_spam_or_trash};
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use notification::domain::models::SendNotificationRequestBuilder;
+use notification::domain::service::NotificationIngress;
 use std::collections::HashSet;
 use std::result;
 use uuid::Uuid;
@@ -505,7 +507,7 @@ async fn send_notifications(
     let sender_id =
         sender_contact.and_then(|contact| MacroUserIdStr::try_from_email(&contact.email).ok());
 
-    let notification_metadata = NewEmailMetadata {
+    let notification = NewEmailMetadata {
         sender,
         to_email: link.email_address.0.as_ref().to_string(),
         thread_id: message.thread_db_id.to_string(),
@@ -513,16 +515,26 @@ async fn send_notifications(
         snippet: message.snippet.unwrap_or_default(),
     };
 
-    let notification_queue_message = NotificationQueueMessage {
+    let macro_id_str = link.macro_id.to_string();
+    let recipient = MacroUserIdStr::parse_from_str(&macro_id_str).map_err(|e| {
+        ProcessingError::NonRetryable(DetailedError {
+            reason: FailureReason::InvalidData,
+            source: anyhow::anyhow!("failed to parse macro user id: {}", e),
+        })
+    })?;
+
+    let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Email.with_entity_string(message.db_id.to_string()),
-        notification_event: notification_metadata.into(),
+        notification,
         sender_id,
-        recipient_ids: Some(vec![link.macro_id.to_string()]),
-    };
+        recipient_ids: HashSet::from([recipient]),
+    }
+    .into_request()
+    .with_conn_gateway();
 
     if let Err(e) = ctx
-        .macro_notify_client
-        .send_notification(notification_queue_message)
+        .notification_ingress_service
+        .send_notification(request)
         .await
     {
         tracing::error!(error=?e, "unable to send notification");

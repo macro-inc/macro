@@ -1,4 +1,5 @@
 use crate::api::context::ApiContext;
+use ::notification::inbound::http::NotificationRouterState;
 use anyhow::Context;
 use axum::Router;
 use macro_middleware::auth::internal_access::ValidInternalKey;
@@ -16,14 +17,17 @@ mod device;
 mod health;
 mod notification;
 mod unsubscribe;
-mod user_notification;
+pub(crate) mod user_notification;
 
 pub(crate) mod swagger;
 
-pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
+pub async fn setup_and_serve<S: ::notification::domain::service::NotificationIngress>(
+    state: ApiContext,
+    ingress_state: NotificationRouterState<S>,
+) -> anyhow::Result<()> {
     let port = state.config.port;
     let env = state.config.environment;
-    let app = api_router(state.clone())
+    let app = api_router(state.clone(), ingress_state)
         .with_state(state)
         .merge(health::router())
         .layer(
@@ -54,41 +58,29 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
         .context("error starting service")
 }
 
-fn api_router(state: ApiContext) -> Router<ApiContext> {
-    let internal_router = Router::new()
-        .nest(
-            "/device",
-            device::router().layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn_with_state(
-                        state.jwt_args.clone(),
-                        macro_middleware::auth::decode_jwt::handler,
-                    ))
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::connection_drop_prevention_handler,
-                    )),
-            ),
-        )
-        .nest(
-            "/user_notifications",
-            user_notification::router().layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn_with_state(
-                        state.jwt_args.clone(),
-                        macro_middleware::auth::decode_jwt::handler,
-                    ))
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::connection_drop_prevention_handler,
-                    )),
-            ),
-        )
-        .nest(
-            "/unsubscribe",
-            unsubscribe::router().layer(axum::middleware::from_fn_with_state(
+fn api_router<S: ::notification::domain::service::NotificationIngress>(
+    state: ApiContext,
+    ingress_state: NotificationRouterState<S>,
+) -> Router<ApiContext> {
+    let middleware = {
+        ServiceBuilder::new()
+            .layer(axum::middleware::from_fn_with_state(
                 state.jwt_args.clone(),
                 macro_middleware::auth::decode_jwt::handler,
-            )),
+            ))
+            .layer(axum::middleware::from_fn(
+                macro_middleware::connection_drop_prevention_handler,
+            ))
+    };
+
+    let internal_router = Router::new()
+        .nest("/device", device::router())
+        .nest(
+            "/user_notifications",
+            user_notification::router(ingress_state),
         )
+        .nest("/unsubscribe", unsubscribe::router())
+        .layer(middleware)
         .nest(
             "/notifications",
             notification::router().layer(

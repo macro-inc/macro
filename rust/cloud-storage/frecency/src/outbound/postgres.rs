@@ -51,6 +51,7 @@ impl FrecencyPgStorage {
         FrecencyPgStorage { pool }
     }
 
+    #[tracing::instrument(err, skip(self))]
     async fn static_get_top_entities(
         &self,
         user_id: MacroUserIdStr<'_>,
@@ -88,6 +89,7 @@ impl FrecencyPgStorage {
             .collect()
     }
 
+    #[tracing::instrument(err, skip(self, filter))]
     async fn dynamic_get_top_entities(
         &self,
         user_id: MacroUserIdStr<'_>,
@@ -244,6 +246,7 @@ impl AggregateRow {
 impl AggregateFrecencyStorage for FrecencyPgStorage {
     type Err = FrecencyStorageErr;
 
+    #[tracing::instrument(err, skip(self, req))]
     async fn get_top_entities(
         &self,
         req: FrecencyPageRequest<'_>,
@@ -307,6 +310,7 @@ impl AggregateFrecencyStorage for FrecencyPgStorage {
         Ok(())
     }
 
+    #[tracing::instrument(err, skip(self, entities))]
     async fn get_aggregate_for_user_entities<'a>(
         &self,
         user_id: MacroUserIdStr<'a>,

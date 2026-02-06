@@ -217,7 +217,7 @@ pub async fn fetch_unique_attachments(
     }
 
     let mut result: Vec<AttachmentUploadMetadata> = unique_attachments.into_values().collect();
-    result.sort_by(|a, b| b.internal_date_ts.cmp(&a.internal_date_ts));
+    result.sort_by_key(|b| std::cmp::Reverse(b.internal_date_ts));
 
     println!("Total unique rows: {}", result.len());
 

@@ -409,205 +409,18 @@
         }
       }
     },
-    "/user_notifications": {
+    "/v1/user_notifications": {
       "get": {
-        "tags": ["user_notification::get_user_notification"],
-        "summary": "Gets the user's unseen notifications in a paginated format.",
-        "operationId": "get_user_notification",
+        "tags": ["user_notification"],
+        "summary": "Wrapper handler that calls the inner generic list handler with `serde_json::Value`,\nthen converts each row to [`UserNotificationRow<NotifEvent>`].",
+        "description": "Rows that fail to deserialize are dropped with a warning log.",
+        "operationId": "list_typed_notifications",
         "parameters": [
           {
             "name": "limit",
             "in": "query",
-            "description": "Size limit per page. Default 20, max 500.",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          },
-          {
-            "name": "cursor",
-            "in": "query",
-            "description": "Base 64 encoded cursor",
+            "description": "Size limit per page.",
             "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetAllUserNotificationsResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/user_notifications/bulk": {
-      "delete": {
-        "tags": ["user_notification::bulk_delete_user_notification"],
-        "summary": "Marks the user's notifications as deleted",
-        "operationId": "bulk_delete_user_notification",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NotificationBulkRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmptyResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/user_notifications/bulk/done": {
-      "patch": {
-        "tags": ["user_notification::bulk_mark_user_notification_done"],
-        "summary": "Marks the user's notifications as done",
-        "operationId": "bulk_mark_user_notification_done",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NotificationBulkRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmptyResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/user_notifications/bulk/seen": {
-      "patch": {
-        "tags": ["user_notification::bulk_mark_user_notification_seen"],
-        "summary": "Marks the user's notifications as seen",
-        "operationId": "bulk_mark_user_notification_seen",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NotificationBulkRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmptyResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/user_notifications/bulk/undone": {
-      "patch": {
-        "tags": ["user_notification::bulk_mark_user_notification_undone"],
-        "summary": "Marks the user's notifications as undone.",
-        "operationId": "bulk_mark_user_notification_undone",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NotificationBulkRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmptyResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/user_notifications/item/bulk": {
-      "post": {
-        "tags": [
-          "user_notification::bulk_get_user_notifications_by_event_item_id"
-        ],
-        "summary": "Gets the user's notifications for a provided event item ids in a paginated format.\nThis will only return unseen notifications.",
-        "operationId": "bulk_get_user_notifications_by_event_item_id",
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Size limit per page. Default 20, max 500.",
-            "required": true,
             "schema": {
               "type": "integer",
               "format": "int32",
@@ -617,7 +430,79 @@
           {
             "name": "cursor",
             "in": "query",
-            "description": "Cursor value. Base64 encoded timestamp and item id, separated by |.",
+            "description": "Cursor value. Base64 encoded timestamp and item id.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetAllUserNotificationsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/user_notifications/item/bulk": {
+      "post": {
+        "tags": ["user_notification"],
+        "summary": "Wrapper handler that calls the inner generic bulk-get handler with `serde_json::Value`,\nthen converts each row to [`UserNotificationRow<NotifEvent>`].",
+        "description": "Rows that fail to deserialize are dropped with a warning log.",
+        "operationId": "bulk_get_typed_notifications_by_event_item_ids",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Size limit per page. Default 20, max 500.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Cursor value. Base64 encoded timestamp and item id.",
             "required": false,
             "schema": {
               "type": "string"
@@ -628,7 +513,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/BulkGetUserNotificationsByEventItemIdRequest"
+                "$ref": "#/components/schemas/BulkGetByEventItemIdsRequest"
               }
             }
           },
@@ -678,35 +563,37 @@
         }
       }
     },
-    "/user_notifications/item/{event_item_id}": {
+    "/v1/user_notifications/item/{event_item_id}": {
       "get": {
-        "tags": ["user_notification::get_user_notifications_by_event_item_id"],
-        "summary": "Gets the user's notifications for a given event item id in a paginated format.",
-        "operationId": "get_user_notifications_by_event_item_id",
+        "tags": ["user_notification"],
+        "summary": "Typed wrapper for getting notifications by a single event item ID.",
+        "operationId": "get_typed_notifications_by_event_item_id",
         "parameters": [
           {
             "name": "event_item_id",
             "in": "path",
-            "description": "The event item id",
+            "description": "The event item ID",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             }
           },
           {
             "name": "limit",
             "in": "query",
-            "description": "Size limit per page. Default 20, max 500.",
-            "required": true,
+            "description": "Size limit per page.",
+            "required": false,
             "schema": {
               "type": "integer",
-              "format": "int64"
+              "format": "int32",
+              "minimum": 0
             }
           },
           {
             "name": "cursor",
             "in": "query",
-            "description": "Cursor value. Base64 encoded timestamp and item id, separated by |.",
+            "description": "Cursor value. Base64 encoded timestamp and item id.",
             "required": false,
             "schema": {
               "type": "string"
@@ -757,11 +644,11 @@
         }
       }
     },
-    "/user_notifications/{notification_id}": {
+    "/v1/user_notifications/{notification_id}": {
       "get": {
-        "tags": ["user_notification::get_user_notification_by_id"],
-        "summary": "Gets a single user notification by id.",
-        "operationId": "get_user_notification_by_id",
+        "tags": ["user_notification"],
+        "summary": "Typed wrapper for getting a single notification by ID.",
+        "operationId": "get_typed_notification_by_id",
         "parameters": [
           {
             "name": "notification_id",
@@ -769,7 +656,8 @@
             "description": "ID of the notification",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -779,7 +667,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/UserNotification"
+                  "$ref": "#/components/schemas/ApiUserNotification"
                 }
               }
             }
@@ -825,11 +713,221 @@
             }
           }
         }
-      },
+      }
+    },
+    "/v2/user_notifications/bulk": {
       "delete": {
-        "tags": ["user_notification::delete_user_notification"],
-        "summary": "Marks the user's notification as deleted.",
-        "operationId": "delete_user_notification",
+        "tags": ["notification_crate::inbound::http"],
+        "summary": "Soft-delete multiple user notifications.",
+        "operationId": "bulk_delete_user_notifications_v2",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/user_notifications/bulk/done": {
+      "patch": {
+        "tags": ["notification_crate::inbound::http"],
+        "summary": "Mark notifications as done.",
+        "operationId": "bulk_mark_notifications_done",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/user_notifications/bulk/seen": {
+      "patch": {
+        "tags": ["notification_crate::inbound::http"],
+        "summary": "Mark notifications as seen.",
+        "operationId": "bulk_mark_notifications_seen",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/user_notifications/bulk/undone": {
+      "patch": {
+        "tags": ["notification_crate::inbound::http"],
+        "summary": "Mark notifications as not done.",
+        "operationId": "bulk_mark_notifications_undone",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v2/user_notifications/{notification_id}": {
+      "delete": {
+        "tags": ["notification_crate::inbound::http"],
+        "summary": "Soft-delete a single user notification.",
+        "operationId": "delete_user_notification_v2",
         "parameters": [
           {
             "name": "notification_id",
@@ -837,17 +935,41 @@
             "description": "ID of the notification",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
         "responses": {
           "200": {
+            "description": ""
+          },
+          "400": {
             "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EmptyResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -858,15 +980,92 @@
   },
   "components": {
     "schemas": {
-      "BulkGetUserNotificationsByEventItemIdRequest": {
+      "ApiUserNotification": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Entity",
+            "description": "The entity the notification is about."
+          },
+          {
+            "type": "object",
+            "required": [
+              "ownerId",
+              "id",
+              "notificationEventType",
+              "sent",
+              "done",
+              "createdAt",
+              "viewedAt",
+              "updatedAt",
+              "deletedAt",
+              "notificationMetadata"
+            ],
+            "properties": {
+              "createdAt": {
+                "type": "integer",
+                "format": "int64",
+                "description": "When the notification was created."
+              },
+              "deletedAt": {
+                "type": ["integer", "null"],
+                "format": "int64",
+                "description": "When the notification was deleted."
+              },
+              "done": {
+                "type": "boolean",
+                "description": "Whether the notification is marked as done."
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The notification ID."
+              },
+              "notificationEventType": {
+                "type": "string",
+                "description": "The notification event type string (e.g. \"channel_mention\").\nTODO make this a new type"
+              },
+              "notificationMetadata": {
+                "$ref": "#/components/schemas/NotifEvent",
+                "description": "Deserialized notification metadata."
+              },
+              "ownerId": {
+                "type": "string",
+                "description": "The user who owns this notification."
+              },
+              "senderId": {
+                "type": ["string", "null"],
+                "description": "The user who triggered the notification."
+              },
+              "sent": {
+                "type": "boolean",
+                "description": "Whether the notification has been sent."
+              },
+              "updatedAt": {
+                "type": ["integer", "null"],
+                "format": "int64",
+                "description": "When the notification was last updated."
+              },
+              "viewedAt": {
+                "type": ["integer", "null"],
+                "format": "int64",
+                "description": "When the notification was viewed/seen."
+              }
+            }
+          }
+        ]
+      },
+      "BulkGetByEventItemIdsRequest": {
         "type": "object",
+        "description": "Request body for bulk-fetching notifications by event item IDs.",
         "required": ["eventItemIds"],
         "properties": {
           "eventItemIds": {
             "type": "array",
             "items": {
-              "type": "string"
-            }
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The event item IDs to filter notifications by."
           }
         }
       },
@@ -1100,16 +1299,19 @@
       },
       "GetAllUserNotificationsResponse": {
         "type": "object",
+        "description": "The strongly typed response for listing user notifications.",
         "required": ["items"],
         "properties": {
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/UserNotification"
-            }
+              "$ref": "#/components/schemas/ApiUserNotification"
+            },
+            "description": "The list of items returned."
           },
           "next_cursor": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "description": "The next page cursor if it exists."
           }
         }
       },
@@ -1223,6 +1425,123 @@
           }
         }
       },
+      "NotifEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Someone mentioned you in a channel.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "description": "Someone mentioned you in a channel."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["channel_mention"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Someone mentioned you in a document.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "description": "Someone mentioned you in a document."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["document_mention"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The user was invited to a channel.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "description": "The user was invited to a channel."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["channel_invite"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A user sent a message in a channel.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "description": "A user sent a message in a channel."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["channel_message_send"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Someone replied to a thread in a channel that the user is part of.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "description": "Someone replied to a thread in a channel that the user is part of."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["channel_message_reply"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A new email has been sent to the user.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "description": "A new email has been sent to the user."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["new_email"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A user was invited to a team.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "description": "A user was invited to a team."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["invite_to_team"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A user was assigned to a task.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "description": "A user was assigned to a task."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["task_assigned"]
+              }
+            }
+          }
+        ],
+        "description": "Mirrors [`model_notifications::NotificationEvent`] but uses `tag` / `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait."
+      },
       "Notification": {
         "allOf": [
           {
@@ -1254,6 +1573,7 @@
       },
       "NotificationBulkRequest": {
         "type": "object",
+        "description": "the notification ids that we are bulk updating",
         "required": ["notificationIds"],
         "properties": {
           "notificationIds": {

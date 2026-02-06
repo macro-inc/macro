@@ -160,7 +160,6 @@ pub async fn create_document(
     // update project modified if necessary
     macro_project_utils::update_project_modified(
         &ctx.db,
-        &ctx.macro_notify_client,
         macro_project_utils::ProjectModifiedArgs {
             project_id,
             old_project_id: None,

@@ -54,7 +54,6 @@ members = [
   "macro_db_migrator",
   "macro_env",
   "macro_middleware",
-  "macro_notify",
   "macro_project_utils",
   "macro_redis",
   "macro_sha_count_client",

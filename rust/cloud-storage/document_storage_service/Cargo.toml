@@ -68,7 +68,7 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
   "cloud_storage",
   "user_permissions",
 ] }
-macro_notify = { path = "../macro_notify" }
+notification = { path = "../notification" }
 macro_project_utils = { path = "../macro_project_utils" }
 macro_sha_count_client = { path = "../macro_sha_count_client" }
 macro_share_permissions = { path = "../macro_share_permissions" }
