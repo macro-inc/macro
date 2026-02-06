@@ -58,7 +58,7 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
       `split=${splitPanelContext.splitHotkeyScope}`
     );
 
-    const [previewState, setPreviewState] = createSignal(false);
+    const [previewState, setPreviewState] = createSignal(true);
     const splitName = createMemo(() => {
       const { type, id } = splitPanelContext.handle.content();
       if (type === 'component') return id;
