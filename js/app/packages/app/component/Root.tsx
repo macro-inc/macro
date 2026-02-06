@@ -35,6 +35,7 @@ import {
   prefetchUserInfo,
   useUserInfoQuery,
 } from '@queries/auth/user-info';
+import { invalidateUserNotifications } from '@queries/notification/user-notifications';
 import { MetaProvider, Title } from '@solidjs/meta';
 import {
   HashRouter,
@@ -287,6 +288,18 @@ export function ConfiguredGlobalAppStateProvider(props: ParentProps) {
     connectionGatewayWebsocket,
     onNotification
   );
+
+  if (isNativeMobilePlatform()) {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        invalidateUserNotifications();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    onCleanup(() =>
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    );
+  }
 
   const blockOrchestrator = createBlockOrchestrator();
 
