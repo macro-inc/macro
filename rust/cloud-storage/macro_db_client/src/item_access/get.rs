@@ -349,11 +349,31 @@ pub async fn get_user_channel_role(
     Ok(role)
 }
 
+/// Returns true when a channel row exists for the provided id.
+#[tracing::instrument(skip(db), err)]
+pub async fn channel_exists(db: &Pool<Postgres>, channel_id: &Uuid) -> anyhow::Result<bool> {
+    let exists = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS(
+            SELECT 1
+            FROM comms_channels
+            WHERE id = $1
+        )
+        "#,
+    )
+    .bind(channel_id)
+    .fetch_one(db)
+    .await?;
+
+    Ok(exists)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::item_access::get::{
-        get_user_channel_role, get_user_item_access_for_chat, get_user_item_access_for_document,
-        get_user_item_access_for_project, get_user_item_access_for_thread,
+        channel_exists, get_user_channel_role, get_user_item_access_for_chat,
+        get_user_item_access_for_document, get_user_item_access_for_project,
+        get_user_item_access_for_thread,
     };
     use model::comms::ParticipantRole;
     use models_permissions::share_permission::access_level::AccessLevel;
@@ -828,6 +848,19 @@ mod tests {
         // Non-participant gets None
         let role = get_user_channel_role(&pool, &ch, "user-2", None).await?;
         assert_eq!(role, None);
+
+        Ok(())
+    }
+
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_channel_role")))]
+    async fn test_channel_exists_returns_expected_values(
+        pool: sqlx::Pool<sqlx::Postgres>,
+    ) -> anyhow::Result<()> {
+        let existing = Uuid::parse_str(PRIVATE_CH)?;
+        assert!(channel_exists(&pool, &existing).await?);
+
+        let missing = Uuid::parse_str("ffffffff-ffff-ffff-ffff-ffffffffffff")?;
+        assert!(!channel_exists(&pool, &missing).await?);
 
         Ok(())
     }

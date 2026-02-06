@@ -1,6 +1,7 @@
 use crate::cloud_storage::ensure_access::{AccessLevelErr, get_users_access_level_v2};
 use axum::async_trait;
 use axum::extract::FromRef;
+use axum::http::StatusCode;
 use axum::http::request::Parts;
 use axum::{
     Extension,
@@ -74,10 +75,9 @@ async fn resolve_item_permission(
         entity_type
     };
 
-    let access_level =
-        get_users_access_level_v2(db, &user_context.user_id, entity_id, item_type)
-            .await
-            .map_err(AccessLevelErr::DbErr)?;
+    let access_level = get_users_access_level_v2(db, &user_context.user_id, entity_id, item_type)
+        .await
+        .map_err(AccessLevelErr::DbErr)?;
 
     Ok(match access_level {
         Some(access_level) => EntityPermissionResponse::Access {
@@ -104,6 +104,20 @@ async fn resolve_channel_permission(
     .await
     .inspect_err(|e| tracing::error!(error=?e, "failed to get user channel role"))
     .map_err(|_| AccessLevelErr::InternalErr)?;
+
+    if role.is_none() {
+        let exists = macro_db_client::item_access::get::channel_exists(db, &channel_id)
+            .await
+            .inspect_err(|e| tracing::error!(error=?e, "failed to check channel existence"))
+            .map_err(|_| AccessLevelErr::InternalErr)?;
+
+        if !exists {
+            return Err(AccessLevelErr::DbErr((
+                StatusCode::NOT_FOUND,
+                "channel not found".to_string(),
+            )));
+        }
+    }
 
     Ok(match role {
         Some(role) => EntityPermissionResponse::Access {

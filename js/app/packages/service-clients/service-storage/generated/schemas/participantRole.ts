@@ -5,6 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Local copy of `model::comms::ParticipantRole` to avoid a cyclic dependency.
+ */
 export type ParticipantRole =
   (typeof ParticipantRole)[keyof typeof ParticipantRole];
 

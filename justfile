@@ -14,6 +14,7 @@ fix_environment *ARGS:
 
 get_environment *ARGS:
   sops --input-type dotenv --output-type dotenv -d .env-local{{ ARGS }}.enc > .env
+  ./scripts/inject_aws_creds.sh .env
 
 edit_environment *ARGS:
   sops --input-type dotenv --output-type dotenv .env-local{{ ARGS}}.enc

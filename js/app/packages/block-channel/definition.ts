@@ -1,6 +1,7 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
 import { isErr, ok } from '@core/util/maybeResult';
-import { fetchAndCacheChannel } from '@queries/channel/channel';
+import { fetchEntityPermissions } from '@queries/entity/permissions';
+import { getEntityChannelRole } from '@queries/entity/permissionUtils';
 import ChannelBlock from './component/Block';
 
 export const definition = defineBlock({
@@ -10,24 +11,29 @@ export const definition = defineBlock({
   liveTrackingEnabled: true,
   async load(source, _intent) {
     if (source.type === 'dss') {
-      const channel = await fetchAndCacheChannel(source.id);
+      const permissions = await fetchEntityPermissions('channel', source.id);
 
-      if (isErr(channel)) {
-        if (isErr(channel, 'MISSING')) {
+      if (isErr(permissions)) {
+        if (isErr(permissions, 'NOT_FOUND')) {
           return LoadErrors.MISSING;
-        } else if (isErr(channel, 'UNAUTHORIZED')) {
-          return LoadErrors.UNAUTHORIZED;
-        } else if (isErr(channel, 'GONE')) {
-          return LoadErrors.GONE;
-        } else {
-          return LoadErrors.INVALID;
         }
+        if (isErr(permissions, 'UNAUTHORIZED')) {
+          return LoadErrors.UNAUTHORIZED;
+        }
+        if (isErr(permissions, 'GONE')) {
+          return LoadErrors.GONE;
+        }
+        return LoadErrors.INVALID;
       }
 
-      const [, channelData] = channel;
+      const [, permission] = permissions;
+
+      if (getEntityChannelRole(permission) == null) {
+        return LoadErrors.UNAUTHORIZED;
+      }
 
       return ok({
-        ...channelData.channel,
+        id: source.id,
       });
     }
 
