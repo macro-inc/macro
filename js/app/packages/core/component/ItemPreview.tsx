@@ -31,7 +31,6 @@ import {
   ENTITY_ICON_CONFIGS,
   EntityIcon,
   ICON_SIZE_CLASSES,
-  channelTypeIcon,
 } from './EntityIcon';
 
 export function useItemPreviewData(entity: Accessor<ItemEntity>) {
@@ -126,7 +125,6 @@ export function useItemPreviewData(entity: Accessor<ItemEntity>) {
     name,
     onPreviewClick,
     className,
-    channelTypeIcon,
     targetType,
     ItemEntityIcon,
   };
