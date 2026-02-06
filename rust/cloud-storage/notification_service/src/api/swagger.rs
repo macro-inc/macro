@@ -14,7 +14,7 @@ use utoipa::OpenApi;
 
 use crate::{
     api::{
-        device, health, notification,
+        device, health,
         unsubscribe::{self, unsubscribe_item::UnsubscribeItemPathParams},
         user_notification,
     },
