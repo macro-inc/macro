@@ -3,6 +3,7 @@ import {
   blockAcceptedFileExtensionSet,
   fileTypeToBlockName,
   isBlockAlias,
+  itemToBlockName,
 } from '@core/constant/allBlocks';
 import { match } from 'ts-pattern';
 import { USE_WIDE_ICONS } from '@core/constant/featureFlags';
@@ -413,10 +414,7 @@ type EntityIconData = Pick<EntityData, 'type'> & {
 export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
   const typeString = match(entity)
     .with({ type: 'channel' }, (e) => e.channelType || 'channel')
-    .with(
-      { type: 'document' },
-      (e) => e.subType?.type ?? e.fileType ?? 'default'
-    )
+    .with({ type: 'document' }, (e) => itemToBlockName(e, true) ?? 'default')
     .with({ type: 'email', isRead: true }, () => 'emailRead')
     .with({ type: 'email' }, () => 'email')
     .otherwise((e) => e.type);
