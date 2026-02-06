@@ -92,10 +92,13 @@ export function MessageList(props: MessageListProps) {
               const messageID = message().db_id;
 
               if (!messageID) return false;
-              const manuallyExpanded =
-                context.messages.isBodyExpanded(messageID);
 
-              return manuallyExpanded || isLastMessage() || isNewMessage();
+              // If user has explicitly toggled, respect that
+              const manualState = context.messages.expandedBodyIds[messageID];
+              if (manualState !== undefined) return manualState;
+
+              // Default: expand last message and unread messages
+              return isLastMessage() || isNewMessage();
             });
 
             return (

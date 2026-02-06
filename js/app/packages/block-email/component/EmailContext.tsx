@@ -446,6 +446,10 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     });
   };
 
+  const filteredMessages = createMemo(
+    () => threadQuery.data?.filtered ?? []
+  );
+
   // When the provider unmounts (user navigates away), clear the thread query
   // cache if a draft was saved during this session. This ensures the next visit
   // fetches fresh data from the server (which includes the saved draft).
@@ -490,11 +494,23 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
             setFocused: setFocusedMessageId,
             targetMessageID: targetMessageId,
             setTargetMessageID: setTargetMessageId,
-            list: createMemo(() => threadQuery.data?.filtered ?? []),
+            list: filteredMessages,
             unfiltered: createMemo(() => threadQuery.data?.messages ?? []),
             expandedBodyIds: expandedMessageBodyIds,
             setExpandedBodyId: onExpandMessageBody,
-            isBodyExpanded: (id: string) => expandedMessageBodyIds[id] ?? false,
+            isBodyExpanded: (id: string) => {
+              const manualState = expandedMessageBodyIds[id];
+              if (manualState !== undefined) return manualState;
+              const msgs = filteredMessages();
+              const lastMsg = msgs[msgs.length - 1];
+              if (lastMsg?.db_id === id) return true;
+              const msg = msgs.find((m) => m.db_id === id);
+              return (
+                msg?.labels.some(
+                  (l) => l.provider_label_id === 'UNREAD'
+                ) ?? false
+              );
+            },
             replyingToMessageId,
             setReplyingToMessageId,
           },
