@@ -43,16 +43,25 @@ export type TypedNotification<
 
 /**
  * Extract the typed metadata content from a notification.
- * The API returns notificationMetadata in { tag, content } format - this extracts the content.
+ * The API returns notificationMetadata in { tag, content } format.
+ * The connection gateway returns notificationMetadata as a flat object.
+ * This function handles both formats.
  */
 export function getMetadata<T extends NotificationEventType>(
   n: TypedNotification<T>
 ): T extends keyof NotificationMetadataByType
   ? NotificationMetadataByType[T]
   : never {
-  // The notificationMetadata is { tag, content } format from the API
-  const metadata = n.notificationMetadata as { tag: string; content: unknown };
-  return metadata.content as T extends keyof NotificationMetadataByType
+  const metadata = n.notificationMetadata as
+    | { tag: string; content: unknown }
+    | Record<string, unknown>;
+
+  // Check if metadata is in { tag, content } format (from API)
+  // or flat format (from connection gateway)
+  const content =
+    'content' in metadata && 'tag' in metadata ? metadata.content : metadata;
+
+  return content as T extends keyof NotificationMetadataByType
     ? NotificationMetadataByType[T]
     : never;
 }
