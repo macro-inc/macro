@@ -795,11 +795,9 @@ export function createBulkMoveToProjectDssEntityMutation() {
 /**
  * Optimistically update the viewedAt timestamp for a DSS item.
  * Updates the item across all DSS queries if it exists.
- * Returns true if the item was updated, i.e. found in the cache, false otherwise.
  */
-export function optimisticUpdateDssItemViewedAt(itemId: string): boolean {
+export function optimisticUpdateDssItemViewedAt(itemId: string) {
   const now = new Date();
-  let found = false;
 
   queryClient.setQueriesData(
     { queryKey: queryKeys.all.dss },
@@ -807,15 +805,11 @@ export function optimisticUpdateDssItemViewedAt(itemId: string): boolean {
       if (!prev) return prev;
 
       const pages = prev.pages.map((page) => {
-        if (found) return page;
-
         return {
           ...page,
           items: page.items.map((item): SoupApiItem => {
             const currentItemId = getSoupItemId(item);
             if (currentItemId !== itemId) return item;
-
-            found = true;
 
             switch (item.tag) {
               case 'document':
@@ -840,18 +834,33 @@ export function optimisticUpdateDssItemViewedAt(itemId: string): boolean {
       };
     }
   );
-
-  return found;
 }
 
+/** Finds a soup item in the cache and returns its location. */
 export function hasSoupItem(itemId: string) {
-  return queryClient
-    .getQueryData<InfiniteData<SoupPage, unknown>>(queryKeys.all.dss)
-    ?.pages.some((page) =>
-      page.items.some((item) => getSoupItemId(item) === itemId)
-    );
+  const queries = queryClient.getQueriesData<InfiniteData<SoupPage, unknown>>({
+    queryKey: queryKeys.all.dss,
+  });
+
+  for (const [, data] of queries) {
+    if (!data) continue;
+
+    for (let pageIndex = 0; pageIndex < data.pages.length; pageIndex++) {
+      const page = data.pages[pageIndex];
+      const itemIndex = page.items.findIndex(
+        (item) => getSoupItemId(item) === itemId
+      );
+      if (itemIndex >= 0) return true;
+    }
+  }
+
+  return false;
 }
 
+/**
+ * Invalidates all DSS soup queries, marking them as stale.
+ * If the query is currently being rendered, it will also be refetched in the background
+ */
 export function invalidateSoup() {
   queryClient.invalidateQueries({
     queryKey: queryKeys.all.dss,
