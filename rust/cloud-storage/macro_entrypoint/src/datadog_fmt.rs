@@ -7,7 +7,7 @@ use opentelemetry::trace::TraceContextExt as _;
 use tracing::Subscriber;
 use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 use tracing_subscriber::{
-    fmt::{format, FmtContext, FormatEvent, FormatFields},
+    fmt::{FmtContext, FormatEvent, FormatFields, format},
     registry::LookupSpan,
 };
 
