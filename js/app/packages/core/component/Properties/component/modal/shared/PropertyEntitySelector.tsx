@@ -1,8 +1,7 @@
 import { useMaybeBlockId } from '@core/block';
 import { useChannelsContext } from '@core/context/channels';
-import { EntityIcon } from '@core/component/EntityIcon';
+import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { IUser } from '@core/user';
 import {
   idToEmail,
@@ -13,12 +12,6 @@ import {
 } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
 import CompanyIcon from '@icon/duotone/building-duotone.svg';
-import ChannelBuildingIcon from '@icon/duotone/building-office-duotone.svg';
-import ThreadIcon from '@icon/duotone/envelope-duotone.svg';
-import GlobeIcon from '@icon/duotone/globe-duotone.svg';
-import ChannelIcon from '@icon/duotone/hash-duotone.svg';
-import User from '@icon/duotone/user-duotone.svg';
-import ThreeUsersIcon from '@icon/duotone/users-three-duotone.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import {
   createEmailsInfiniteQuery,
@@ -107,37 +100,29 @@ function getEntityIcon(entity: CombinedEntity) {
         />
       );
     case 'channel':
-      switch (entity.data.channel_type) {
-        case 'direct_message':
-          return <User class={ICON_CLASSES} />;
-        case 'private':
-          return <ThreeUsersIcon class={ICON_CLASSES} />;
-        case 'organization':
-          return <ChannelBuildingIcon class={ICON_CLASSES} />;
-        case 'public':
-          return <GlobeIcon class={ICON_CLASSES} />;
-        default:
-          return <ChannelIcon class={ICON_CLASSES} />;
-      }
-    case 'item': {
-      const blockName =
-        entity.data.type === 'document'
-          ? entity.data.subType !== null &&
-            entity.data.subType !== undefined &&
-            entity.data.subType.type === 'task'
-            ? 'task'
-            : fileTypeToBlockName(entity.data.fileType, true)
-          : entity.data.type === 'chat'
-            ? 'chat'
-            : entity.data.type === 'project'
-              ? 'project'
-              : 'unknown';
-      return <EntityIcon targetType={blockName} size="xs" />;
-    }
+      return (
+        <EntityIcon
+          targetType={entity.data.channel_type || 'channel'}
+          size="xs"
+          theme="monochrome"
+          class="text-ink-muted"
+        />
+      );
+    case 'item':
+      return (
+        <EntityIcon targetType={getEntityIconType(entity.data)} size="xs" />
+      );
     case 'company':
       return <CompanyIcon class={ICON_CLASSES} />;
     case 'thread':
-      return <ThreadIcon class={ICON_CLASSES} />;
+      return (
+        <EntityIcon
+          targetType="email"
+          size="xs"
+          theme="monochrome"
+          class="text-ink-muted"
+        />
+      );
   }
 }
 

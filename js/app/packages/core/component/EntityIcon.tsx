@@ -405,7 +405,7 @@ export function getIconConfig(
 
 type EntityIconData = Pick<EntityData, 'type'> & {
   channelType?: ChannelEntity['channelType'];
-  fileType?: DocumentEntity['fileType'];
+  fileType?: DocumentEntity['fileType'] | null;
   subType?: DocumentEntity['subType'];
   isRead?: EmailEntity['isRead'];
 };
