@@ -547,6 +547,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   );
 
   const foundEmails = createLazyMemo((): Entity<'email'>[] => {
+    console.time('[MENTIONS] foundEmails');
     if (emailUnifiedSearchInfiniteQuery.status === 'success') {
       function isEmail(
         e: WithSearch<EntityData>
@@ -564,18 +565,25 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         };
       }
 
-      return emailUnifiedSearchInfiniteQuery.data
+      const result = emailUnifiedSearchInfiniteQuery.data
         .filter(isEmail)
         .map(entityDataToMentionEntity);
+      console.timeEnd('[MENTIONS] foundEmails');
+      return result;
     } else {
+      console.timeEnd('[MENTIONS] foundEmails');
       return [];
     }
   });
 
   // Get open tabs from split manager
   const openTabs = () => {
+    console.time('[MENTIONS] openTabs');
     const splitManager = globalSplitManager();
-    if (!splitManager) return [];
+    if (!splitManager) {
+      console.timeEnd('[MENTIONS] openTabs');
+      return [];
+    }
 
     const splits = splitManager.splits();
     const historyItems = history();
@@ -619,10 +627,13 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       }
     }
 
-    return tabItems.filter(allItemFilter);
+    const result = tabItems.filter(allItemFilter);
+    console.timeEnd('[MENTIONS] openTabs');
+    return result;
   };
 
   const historyAndChannels = createLazyMemo(() => {
+    console.time('[MENTIONS] historyAndChannels');
     const historyItems = history().filter(allItemFilter);
     const channelItems = channels();
     const currentBlockId = useMaybeBlockId();
@@ -647,7 +658,9 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     // Open tabs are already included in history/channels, so we don't need to add them separately
     // The prioritization happens in filteredItems instead
 
-    return Array.from(itemMap.values());
+    const result = Array.from(itemMap.values());
+    console.timeEnd('[MENTIONS] historyAndChannels');
+    return result;
   });
 
   const [menuOpen, setMenuOpen] = [props.menu.isOpen, props.menu.setIsOpen];
@@ -678,6 +691,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   );
 
   const filteredItems = createLazyMemo(() => {
+    console.time('[MENTIONS] filteredItems');
     const allResults = itemSearch(historyAndChannels(), searchTerm()).map(
       (result) => {
         return result.item;
@@ -698,7 +712,9 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     }
 
     // Return open tabs first, then other items
-    return [...tabResults, ...otherResults];
+    const result = [...tabResults, ...otherResults];
+    console.timeEnd('[MENTIONS] filteredItems');
+    return result;
   });
 
   const currentUserEmail = useEmail();
@@ -708,15 +724,20 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     return email ? email.split('@')[1] : undefined;
   });
 
-  const userSearch = createFreshSearch<Entity<'user'>>(
-    FreshSearchPresets.baseUserSearch<Entity<'user'>>(
-      currentUserDomain,
-      (item) => item.data.email
-    ),
-    getItemSearchText,
-    (_item) => false,
-    getItemTimestamp
-  );
+  const userSearch = (() => {
+    console.time('[MENTIONS] createUserSearch');
+    const search = createFreshSearch<Entity<'user'>>(
+      FreshSearchPresets.baseUserSearch<Entity<'user'>>(
+        currentUserDomain,
+        (item) => item.data.email
+      ),
+      getItemSearchText,
+      (_item) => false,
+      getItemTimestamp
+    );
+    console.timeEnd('[MENTIONS] createUserSearch');
+    return search;
+  })();
 
   // Group aliases available in channel context
   const specialGroups = createLazyMemo((): Entity<'group'>[] => {
@@ -735,12 +756,15 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   });
 
   const filteredUsers = createLazyMemo(() => {
+    console.time('[MENTIONS] filteredUsers');
     const searchedUsers = userSearch(users(), searchTerm()).map((result) => {
       return result.item;
     });
-    return [...specialGroups(), ...searchedUsers] as CombinedEntity<
+    const result = [...specialGroups(), ...searchedUsers] as CombinedEntity<
       'user' | 'group'
     >[];
+    console.timeEnd('[MENTIONS] filteredUsers');
+    return result;
   });
 
   const emailSearch = createFreshSearch<Entity<'email'>>(
@@ -751,6 +775,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   );
 
   const filteredEmails = createLazyMemo(() => {
+    console.time('[MENTIONS] filteredEmails');
     const mail = emailSearch(emails(), searchTerm()).map(
       (result) => result.item
     );
@@ -766,31 +791,47 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       return [...local, ...unifiedSearch.filter((e) => !ids.has(e.id))];
     }
 
-    return merge(mail, otherMail);
+    const result = merge(mail, otherMail);
+    console.timeEnd('[MENTIONS] filteredEmails');
+    return result;
   });
 
   const dateSuggestions = createLazyMemo(() => {
+    console.time('[MENTIONS] dateSuggestions');
     const suggestions = getDateSuggestions(searchTerm());
-    return suggestions
+    const result = suggestions
       .map((suggestion) => ({
         ...suggestion,
         id: `date-${suggestion.date.toISOString()}`,
       }))
       .map(entityMapper('date'));
+    console.timeEnd('[MENTIONS] dateSuggestions');
+    return result;
   });
 
   // The raw bins store the counts for all matching items
-  const rawBins = createLazyMemo<Record<MentionBins, number>>(() => ({
-    users: filteredUsers().length,
-    items: filteredItems().length,
-    dates: dateSuggestions().length,
-    emails: filteredEmails().length,
-  }));
+  const rawBins = createLazyMemo<Record<MentionBins, number>>(() => {
+    console.time('[MENTIONS] rawBins');
+    const result = {
+      users: filteredUsers().length,
+      items: filteredItems().length,
+      dates: dateSuggestions().length,
+      emails: filteredEmails().length,
+    };
+    console.timeEnd('[MENTIONS] rawBins');
+    return result;
+  });
 
   // The bins is the limited and rounded count for each bucket
-  const bins = createLazyMemo(() => computeBins(rawBins(), MAX_ITEMS));
+  const bins = createLazyMemo(() => {
+    console.time('[MENTIONS] computeBins');
+    const result = computeBins(rawBins(), MAX_ITEMS);
+    console.timeEnd('[MENTIONS] computeBins');
+    return result;
+  });
 
   const combinedItems = createLazyMemo<CombinedEntity[]>(() => {
+    console.time('[MENTIONS] combinedItems');
     const currentViewAllMode = viewAllMode();
 
     if (currentViewAllMode) {
@@ -822,6 +863,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       ...dateSuggestions().slice(0, bins().dates),
       ...filteredEmails().slice(0, bins().emails),
     ];
+    console.timeEnd('[MENTIONS] combinedItems');
     return result;
   });
 
@@ -836,7 +878,11 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   });
 
   const selectedCategory = createLazyMemo<SelectedCategory>(() => {
-    if (viewAllMode()) return null; // no category selection in view all mode
+    console.time('[MENTIONS] selectedCategory');
+    if (viewAllMode()) {
+      console.timeEnd('[MENTIONS] selectedCategory');
+      return null; // no category selection in view all mode
+    }
 
     const index = selectedIndex();
     const { users, items, dates, emails } = bins();
@@ -845,6 +891,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
     if (users > 0) {
       if (index < currentIndex + users) {
+        console.timeEnd('[MENTIONS] selectedCategory');
         return 'users';
       }
       currentIndex += users;
@@ -852,6 +899,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
     if (items > 0) {
       if (index < currentIndex + items) {
+        console.timeEnd('[MENTIONS] selectedCategory');
         return 'items';
       }
       currentIndex += items;
@@ -859,6 +907,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
     if (dates > 0) {
       if (index < currentIndex + dates) {
+        console.timeEnd('[MENTIONS] selectedCategory');
         return 'dates';
       }
       currentIndex += dates;
@@ -866,10 +915,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
     if (emails > 0) {
       if (index < currentIndex + emails) {
+        console.timeEnd('[MENTIONS] selectedCategory');
         return 'emails';
       }
     }
 
+    console.timeEnd('[MENTIONS] selectedCategory');
     return null;
   });
 
@@ -1083,6 +1134,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   });
 
   const inner = createLazyMemo(() => {
+    console.time('[MENTIONS] inner render');
     const currentViewAllMode = viewAllMode();
 
     // ---- SINGLE BUCKET MODE -------------------------------------------------
@@ -1150,7 +1202,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         );
       });
 
-      return (
+      const result = (
         <Show
           when={totalLength() > 0}
           fallback={<div class="px-2 text-ink-extra-muted">No results</div>}
@@ -1158,6 +1210,8 @@ function MentionsMenuInner(props: MentionsMenuProps) {
           {renderViewAllOptions()}
         </Show>
       );
+      console.timeEnd('[MENTIONS] inner render');
+      return result;
     }
 
     // ------ NORMAL MODE ------------------------------------------------------
@@ -1294,7 +1348,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       );
     };
 
-    return (
+    const result = (
       <Show
         when={totalLength() > 0}
         fallback={<div class="px-2 text-ink-extra-muted">No results</div>}
@@ -1304,6 +1358,8 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         </div>
       </Show>
     );
+    console.timeEnd('[MENTIONS] inner render');
+    return result;
   });
 
   const clickOutsideHandler = (e: MouseEvent) => {

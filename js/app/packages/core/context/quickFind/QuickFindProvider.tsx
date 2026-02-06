@@ -14,6 +14,7 @@ import type {
   QuickFindContextValue,
   QuickFindItem,
 } from './types';
+import { createLazyMemo } from '@solid-primitives/memo';
 
 type HistoryCategory = 'document' | 'note' | 'task' | 'chat' | 'folder';
 
@@ -83,19 +84,14 @@ function parseTimestamp(value: number | string | null | undefined): number {
 export const [QuickFindProvider, useQuickFind] = createAssertedContextProvider(
   'QuickFindContext',
   (): QuickFindContextValue => {
-    // Subscribe to underlying data sources
     const historyQuery = useHistoryQuery();
     const { channels, isLoading: channelsLoading } = useChannelsContext();
     const contacts = useContacts();
     const emails = useEmails();
     const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
 
-    // Pre-compute collections - only recomputes when underlying data changes
-    const collections = createMemo<QuickFindCollections>(() => {
+    const collections = createLazyMemo<QuickFindCollections>(() => {
       const all: QuickFindItem[] = [];
-      const byCategory = new Map<QuickFindCategory, QuickFindItem[]>();
-
-      // Initialize category arrays
       const categories: QuickFindCategory[] = [
         'user',
         'channel',
@@ -106,10 +102,12 @@ export const [QuickFindProvider, useQuickFind] = createAssertedContextProvider(
         'chat',
         'folder',
         'email',
-      ];
-      categories.forEach((c) => byCategory.set(c, []));
+      ] as const;
 
-      // Transform history items
+      const byCategory = new Map(
+        categories.map((c) => [c, [] as Array<QuickFindItem>])
+      );
+
       const historyData = historyQuery.data ?? [];
       for (const item of historyData) {
         if (item.deletedAt) continue;
@@ -200,7 +198,7 @@ export const [QuickFindProvider, useQuickFind] = createAssertedContextProvider(
       };
     });
 
-    // Pre-compute MentionEntities format (ready for MentionsMenu, no mapping needed)
+    // pre-compute mention entities format
     const mentionEntities = createMemo(() => {
       const c = collections();
 
@@ -213,7 +211,6 @@ export const [QuickFindProvider, useQuickFind] = createAssertedContextProvider(
         items: c.items.map((item) => ({
           kind: 'item' as const,
           id: item.id,
-          // Cast HistoryItem as Item - HistoryItem is a subset with all required fields
           data: item.data as any,
         })),
         channels: c.channels.map((item) => ({
