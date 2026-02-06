@@ -6,6 +6,7 @@ import {
   isItemSharedOrganization,
   isItemSharedUser,
   isNewEmail,
+  getMetadata,
   type UnifiedNotificationWithMetadata,
   type TypedNotification,
 } from '@notifications/notification-metadata';
@@ -83,38 +84,45 @@ export function getNotificationActionText(notification: Notification): string {
     .with('reject_team_invite', () => 'declined')
     .with('task_assigned', () => 'assigned')
     .with('channel_message_document', () => 'notified')
-    .exhaustive();
+    .otherwise(() => 'notified');
 }
 
 export function extractMessageContent(notification: Notification): string {
   const typed = notification as UnifiedNotificationWithMetadata;
 
   if (isChannelMention(typed)) {
-    return typed.notificationMetadata.messageContent || '';
+    const metadata = getMetadata(typed);
+    return metadata.messageContent || '';
   }
 
   if (isChannelMessageSend(typed)) {
-    return typed.notificationMetadata.messageContent || '';
+    const metadata = getMetadata(typed);
+    return metadata.messageContent || '';
   }
 
   if (isChannelMessageReply(typed)) {
-    return typed.notificationMetadata.messageContent || '';
+    const metadata = getMetadata(typed);
+    return metadata.messageContent || '';
   }
 
   if (isDocumentMention(typed)) {
-    return typed.notificationMetadata.documentName || '';
+    const metadata = getMetadata(typed);
+    return metadata.documentName || '';
   }
 
   if (isItemSharedUser(typed)) {
-    return typed.notificationMetadata.itemName || '';
+    const metadata = getMetadata(typed);
+    return metadata.itemName || '';
   }
 
   if (isItemSharedOrganization(typed)) {
-    return typed.notificationMetadata.itemName || '';
+    const metadata = getMetadata(typed);
+    return metadata.itemName || '';
   }
 
   if (isNewEmail(typed)) {
-    return typed.notificationMetadata.subject || '';
+    const metadata = getMetadata(typed);
+    return metadata.subject || '';
   }
 
   return '';

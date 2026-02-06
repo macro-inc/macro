@@ -129,6 +129,7 @@ export const createMockNotification = (
   updatedAt: MOCK_TIMESTAMPS.today,
   deletedAt: null,
   viewedAt: null,
+  notificationMetadata: { tag: 'document_mention', content: {} },
   ...overrides,
 });
 
