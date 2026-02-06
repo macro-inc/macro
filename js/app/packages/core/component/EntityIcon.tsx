@@ -374,7 +374,7 @@ export function CustomEntityIcon(
 ) {
   const config = () =>
     ENTITY_ICON_CONFIGS[validateEntity(props.targetType || 'default')];
-  const sizeClass = () => ICON_SIZE_CLASSES[props.size ?? 'sm'];
+  const sizeClass = () => ICON_SIZE_CLASSES[props.size ?? 'xs'];
   const isMonochrome = () => props.theme === 'monochrome';
   return (
     <div
