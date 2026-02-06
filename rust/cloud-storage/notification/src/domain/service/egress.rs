@@ -100,14 +100,12 @@ where
             NotificationChannel::Email(email) => Either::Left([self.deliver_email(email).await]),
             NotificationChannel::Ios(apns) => Either::Right(self.deliver_ios(apns).await),
         };
+        let all_failed = result.iter().all(Result::is_err);
         recursion_tail.extend(result.into_iter());
-        let res = recursion_tail
-            .last()
-            .expect("we just pushed, this cannot fail");
 
-        match (res, node.on_failure) {
-            (Ok(_), _) | (Err(_), None) => recursion_tail,
-            (Err(_), Some(fallback)) => {
+        match (all_failed, node.on_failure) {
+            (false, _) | (true, None) => recursion_tail,
+            (true, Some(fallback)) => {
                 Box::pin(self.deliver_notification_inner(message_type, *fallback, recursion_tail))
                     .await
             }
