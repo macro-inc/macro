@@ -1283,6 +1283,15 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     if (preview() && type === 'entity') {
       setSelectedEntity(entity);
 
+      // Move browser focus to the row
+      const target = event.target;
+      if (target instanceof HTMLElement) {
+        const row = target.closest('[data-entity]');
+        if (row instanceof HTMLElement) {
+          row.focus();
+        }
+      }
+
       return;
     }
 
