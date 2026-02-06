@@ -5026,6 +5026,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
+ "serde_json",
  "tracing",
  "tracing-opentelemetry",
  "tracing-panic",
