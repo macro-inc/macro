@@ -225,7 +225,7 @@ const ENTITY_TYPE_TO_ICON_TYPE: Record<EntityTypeFilters, EntityWithValidIcon> =
     email: 'email',
     task: 'task',
     people: 'channel',
-    teams: 'directMessage',
+    teams: 'direct_message',
     agent: 'chat',
     file: 'project',
   };
