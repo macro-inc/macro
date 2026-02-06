@@ -16,3 +16,14 @@ pub struct PushNotificationData {
     /// example: /channel/{channel_id}
     pub open_route: String,
 }
+
+impl PushNotificationData {
+    pub fn new_from_inner(val: notification::domain::models::apple::PushNotificationData) -> Self {
+        Self {
+            notification_id: val.notification_id,
+            notification_entity: val.notification_entity,
+            sender_id: val.sender_id,
+            open_route: val.open_route,
+        }
+    }
+}

@@ -46,7 +46,7 @@ impl<'a, T> SendNotificationRequestBuilder<'a, T> {
 }
 
 type BuildApns<T, U> =
-    Box<dyn FnMut(T) -> Option<(APNSPushNotification<U>, MessageAttributes)> + Send>;
+    Box<dyn FnMut(T, uuid::Uuid) -> Option<(APNSPushNotification<U>, MessageAttributes)> + Send>;
 
 /// Full notification request with optional delivery channel builders.
 ///
@@ -77,13 +77,13 @@ impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
 
         SendNotificationRequest {
             req,
-            build_apns: Some(Box::new(move |notif: T| {
+            build_apns: Some(Box::new(move |notif: T, notification_id: uuid::Uuid| {
                 let collapse_key = notif.collapse_key(&entity).into_hashed().into_inner();
                 let attrs = MessageAttributes {
                     push_type: mobile::PushType::Alert,
                     collapse_key,
                 };
-                let apns = notif.into_apns(sender.clone())?;
+                let apns = notif.into_apns(sender.clone(), &entity, notification_id)?;
 
                 Some((apns, attrs))
             })),

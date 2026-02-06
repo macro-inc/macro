@@ -4,14 +4,16 @@ use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
 use mention_utils::parse::{ParsedXmlText, XmlFormatter};
 use model_entity::Entity;
 use model_entity::EntityType;
+use model_entity::as_owned::IntoOwned;
 use notification::domain::models::RateLimitConfig;
 use notification::domain::models::RateLimitKey;
 use notification::domain::models::{
     NotifCollapseKey, NotificationExtIos,
-    apple::{APNSPushNotification, AlertDictionary, Aps},
+    apple::{APNSPushNotification, AlertDictionary, Aps, PushNotificationData},
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, ToSchema, Doppleganger, Serialize, Deserialize)]
 #[dg(backward = models_comms::channel::ChannelType)]
@@ -430,7 +432,11 @@ fn parse_message_plain_text(content: &str) -> Option<String> {
 }
 
 /// Helper to create an alert-style APNS notification with title and body.
-fn alert_apns(title: String, body: String) -> APNSPushNotification<()> {
+fn alert_apns(
+    title: String,
+    body: String,
+    data: PushNotificationData,
+) -> APNSPushNotification<PushNotificationData> {
     APNSPushNotification {
         aps: Aps {
             alert: Some(notification::domain::models::apple::Alert::Dictionary(
@@ -442,12 +448,26 @@ fn alert_apns(title: String, body: String) -> APNSPushNotification<()> {
             )),
             ..Default::default()
         },
-        push_notification_data: (),
+        push_notification_data: data,
+    }
+}
+
+/// Build push notification data for a channel-related notification.
+fn channel_push_data(
+    entity: &Entity<'_>,
+    notification_id: Uuid,
+    sender_id: Option<String>,
+) -> PushNotificationData {
+    PushNotificationData {
+        notification_id,
+        notification_entity: entity.clone().into_owned(),
+        sender_id,
+        open_route: format!("/channel/{}", entity.entity_id),
     }
 }
 
 impl NotificationExtIos for ChannelInviteMetadata {
-    type NotifData = ();
+    type NotifData = ::notification::domain::models::apple::PushNotificationData;
 
     fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
         let entity_type: &'static str = entity.entity_type.into();
@@ -456,17 +476,21 @@ impl NotificationExtIos for ChannelInviteMetadata {
 
     fn into_apns<'a>(
         self,
-        _sender_id: Option<MacroUserIdStr<'a>>,
+        sender_id: Option<MacroUserIdStr<'a>>,
+        entity: &Entity<'_>,
+        notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
+        let data = channel_push_data(entity, notification_id, sender_id.map(|s| s.to_string()));
         Some(alert_apns(
             format!("{} Invite", self.common.channel_name),
             format!("{} invited you to join the channel", self.invited_by),
+            data,
         ))
     }
 }
 
 impl NotificationExtIos for ChannelMessageSendMetadata {
-    type NotifData = ();
+    type NotifData = ::notification::domain::models::apple::PushNotificationData;
 
     fn collapse_key(&self, _entity: &Entity<'_>) -> NotifCollapseKey {
         NotifCollapseKey::new(&self.message_id)
@@ -474,7 +498,9 @@ impl NotificationExtIos for ChannelMessageSendMetadata {
 
     fn into_apns<'a>(
         self,
-        _sender_id: Option<MacroUserIdStr<'a>>,
+        sender_id: Option<MacroUserIdStr<'a>>,
+        entity: &Entity<'_>,
+        notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let title = match self.common.channel_type {
             ChannelType::DirectMessage => self.sender.email_part().local_part().to_string(),
@@ -485,12 +511,13 @@ impl NotificationExtIos for ChannelMessageSendMetadata {
             ),
         };
         let body = parse_message_plain_text(&self.message_content)?;
-        Some(alert_apns(title, body))
+        let data = channel_push_data(entity, notification_id, sender_id.map(|s| s.to_string()));
+        Some(alert_apns(title, body, data))
     }
 }
 
 impl NotificationExtIos for ChannelMentionMetadata {
-    type NotifData = ();
+    type NotifData = ::notification::domain::models::apple::PushNotificationData;
 
     fn collapse_key(&self, _entity: &Entity<'_>) -> NotifCollapseKey {
         NotifCollapseKey::new(&self.message_id)
@@ -499,6 +526,8 @@ impl NotificationExtIos for ChannelMentionMetadata {
     fn into_apns<'a>(
         self,
         sender_id: Option<MacroUserIdStr<'a>>,
+        entity: &Entity<'_>,
+        notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let sender = sender_id?;
         let title = match self.common.channel_type {
@@ -512,12 +541,13 @@ impl NotificationExtIos for ChannelMentionMetadata {
             ),
         };
         let body = parse_message_plain_text(&self.message_content)?;
-        Some(alert_apns(title, body))
+        let data = channel_push_data(entity, notification_id, Some(sender.to_string()));
+        Some(alert_apns(title, body, data))
     }
 }
 
 impl NotificationExtIos for ChannelReplyMetadata {
-    type NotifData = ();
+    type NotifData = ::notification::domain::models::apple::PushNotificationData;
 
     fn collapse_key(&self, _entity: &Entity<'_>) -> NotifCollapseKey {
         NotifCollapseKey::new(&self.message_id)
@@ -526,16 +556,19 @@ impl NotificationExtIos for ChannelReplyMetadata {
     fn into_apns<'a>(
         self,
         sender_id: Option<MacroUserIdStr<'a>>,
+        entity: &Entity<'_>,
+        notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let sender = sender_id?;
         let title = format!("{} Replied", sender.0.email_part().email_str());
         let body = parse_message_plain_text(&self.message_content)?;
-        Some(alert_apns(title, body))
+        let data = channel_push_data(entity, notification_id, Some(sender.to_string()));
+        Some(alert_apns(title, body, data))
     }
 }
 
 impl NotificationExtIos for DocumentMentionMetadata {
-    type NotifData = ();
+    type NotifData = ::notification::domain::models::apple::PushNotificationData;
 
     fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
         let entity_type: &'static str = entity.entity_type.into();
@@ -545,12 +578,15 @@ impl NotificationExtIos for DocumentMentionMetadata {
     fn into_apns<'a>(
         self,
         sender_id: Option<MacroUserIdStr<'a>>,
+        entity: &Entity<'_>,
+        notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let sender = sender_id?;
         let file_type = self.file_type.as_ref()?;
         let title = sender.0.email_part().email_str().to_string();
         let body = format!("You were mentioned in {}.{}", self.document_name, file_type);
-        Some(alert_apns(title, body))
+        let data = channel_push_data(entity, notification_id, Some(sender.to_string()));
+        Some(alert_apns(title, body, data))
     }
 }
 
@@ -567,7 +603,7 @@ impl notification::domain::models::Notification for TaskAssignedMetadata {
 }
 
 impl NotificationExtIos for TaskAssignedMetadata {
-    type NotifData = ();
+    type NotifData = ::notification::domain::models::apple::PushNotificationData;
 
     fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
         let entity_type: &'static str = entity.entity_type.into();
@@ -576,7 +612,9 @@ impl NotificationExtIos for TaskAssignedMetadata {
 
     fn into_apns<'a>(
         self,
-        _sender_id: Option<MacroUserIdStr<'a>>,
+        sender_id: Option<MacroUserIdStr<'a>>,
+        entity: &Entity<'_>,
+        notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let title = self.assigned_by.email_part().email_str().to_string();
         let body = if let Some(ref task_name) = self.task_name {
@@ -584,18 +622,7 @@ impl NotificationExtIos for TaskAssignedMetadata {
         } else {
             "assigned you a task".to_string()
         };
-        Some(APNSPushNotification {
-            aps: Aps {
-                alert: Some(notification::domain::models::apple::Alert::Dictionary(
-                    AlertDictionary {
-                        title: Some(title),
-                        body: Some(body),
-                        ..Default::default()
-                    },
-                )),
-                ..Default::default()
-            },
-            push_notification_data: (),
-        })
+        let data = channel_push_data(entity, notification_id, sender_id.map(|s| s.to_string()));
+        Some(alert_apns(title, body, data))
     }
 }

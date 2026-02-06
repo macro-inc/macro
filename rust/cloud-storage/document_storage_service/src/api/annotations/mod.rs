@@ -21,10 +21,11 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model::{annotations::Comment, response::ErrorResponse};
 use model_entity::Entity;
 use model_entity::EntityType;
+use model_entity::as_owned::IntoOwned;
 use notification::domain::models::{
     NotifCollapseKey, Notification, NotificationExtIos, RateLimitConfig, RateLimitKey,
     SendNotificationRequestBuilder,
-    apple::{APNSPushNotification, AlertDictionary, Aps},
+    apple::{APNSPushNotification, AlertDictionary, Aps, PushNotificationData},
 };
 use serde::{Deserialize, Serialize};
 use tower::ServiceBuilder;
@@ -195,7 +196,7 @@ impl Notification for DocumentMentionNotification {
 }
 
 impl NotificationExtIos for DocumentMentionNotification {
-    type NotifData = ();
+    type NotifData = ::notification::domain::models::apple::PushNotificationData;
 
     fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
         let entity_type: &'static str = entity.entity_type.into();
@@ -205,6 +206,8 @@ impl NotificationExtIos for DocumentMentionNotification {
     fn into_apns<'a>(
         self,
         sender_id: Option<MacroUserIdStr<'a>>,
+        entity: &Entity<'_>,
+        notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let sender = sender_id?;
         let file_type = self.file_type.as_ref()?;
@@ -221,7 +224,12 @@ impl NotificationExtIos for DocumentMentionNotification {
                 )),
                 ..Default::default()
             },
-            push_notification_data: (),
+            push_notification_data: PushNotificationData {
+                notification_id,
+                notification_entity: entity.clone().into_owned(),
+                sender_id: Some(sender.to_string()),
+                open_route: format!("/document/{}", entity.entity_id),
+            },
         })
     }
 }

@@ -233,5 +233,7 @@ pub trait NotificationExtIos: Notification {
     fn into_apns<'a>(
         self,
         sender_id: Option<MacroUserIdStr<'a>>,
+        entity: &Entity<'_>,
+        notification_id: uuid::Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>>;
 }
