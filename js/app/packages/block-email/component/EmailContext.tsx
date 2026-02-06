@@ -25,6 +25,8 @@ import {
   useArchiveThreadMutation,
   useThreadQuery,
 } from '@queries/email/thread';
+import { emailKeys } from '@queries/email/keys';
+import { queryClient } from '@queries/client';
 import type {
   APIThread,
   ContactInfo,
@@ -38,11 +40,24 @@ import {
   createMemo,
   createSignal,
   type FlowProps,
+  onCleanup,
   Suspense,
   untrack,
   useContext,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
+
+/**
+ * Tracks thread IDs that had a draft saved since the last query fetch.
+ * When the EmailProvider unmounts, threads in this set have their query
+ * cache cleared so the next visit fetches fresh data (with the draft).
+ * This avoids touching the active query during draft save, which would
+ * trigger Suspense DOM detach and reset scroll position.
+ */
+const draftSavedThreadIds = new Set<string>();
+export function markThreadDraftSaved(threadId: string) {
+  draftSavedThreadIds.add(threadId);
+}
 
 export type EmailRecipient = WithCustomUserInput<'user' | 'contact'>;
 
@@ -430,6 +445,21 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
       messagesListRef()?.scrollBy({ top: diff });
     });
   };
+
+  // When the provider unmounts (user navigates away), clear the thread query
+  // cache if a draft was saved during this session. This ensures the next visit
+  // fetches fresh data from the server (which includes the saved draft).
+  // We can't invalidate/refetch while mounted because any query state change
+  // triggers SolidQuery's createClientSubscriber → Resource.refetch() → Suspense
+  // DOM detach, which resets scroll position.
+  onCleanup(() => {
+    if (draftSavedThreadIds.has(props.threadID)) {
+      draftSavedThreadIds.delete(props.threadID);
+      queryClient.removeQueries({
+        queryKey: emailKeys.threadMessages(props.threadID).queryKey,
+      });
+    }
+  });
 
   return (
     <Suspense>

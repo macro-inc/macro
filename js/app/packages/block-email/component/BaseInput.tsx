@@ -98,7 +98,11 @@ import {
 } from '../util/prepareEmailBody';
 import { convertEmailRecipientToContactInfo } from '../util/recipientConversion';
 import { getReplyTypeFromDraft } from '../util/replyType';
-import { type EmailRecipient, useEmailContext } from './EmailContext';
+import {
+  type EmailRecipient,
+  markThreadDraftSaved,
+  useEmailContext,
+} from './EmailContext';
 import { getOrInitEmailFormContext } from './EmailFormContext';
 import {
   useRemoveDraftAttachmentMutation,
@@ -392,7 +396,10 @@ export function BaseInput(props: {
   const deleteDraftMutation = useDeleteDraftMutation();
 
   function refetchThreadMessages() {
-    ctx.query.refetch();
+    const threadId = ctx.thread()?.db_id;
+    if (threadId) {
+      markThreadDraftSaved(threadId);
+    }
   }
 
   // Attach side-effect handlers on mount; they replay against current state
