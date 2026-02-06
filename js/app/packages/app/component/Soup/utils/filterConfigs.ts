@@ -67,7 +67,7 @@ export const ENTITY_TYPE_FILTERS: EntityTypeFilterConfig[] = [
     kind: 'channelCategory',
     channelCategory: 'groups',
     label: 'Teams',
-    iconType: 'directMessage',
+    iconType: 'direct_message',
     enabled: true,
     shortcut: 'm',
   },
