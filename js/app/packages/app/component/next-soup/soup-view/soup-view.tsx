@@ -515,7 +515,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   return (
     <div
-      class="size-full flex"
+      class="size-full flex bracket-never"
       ref={(el) => {
         setSoupViewRef(el);
         attachHotkeys(el);
