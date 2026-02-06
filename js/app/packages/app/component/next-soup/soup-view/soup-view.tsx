@@ -22,7 +22,10 @@ import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
 import { useElementItemCount } from '@app/component/next-soup/use-element-item-count';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { openEntityInNewTab } from '@app/component/next-soup/utils';
-import { PreviewPanel } from '@app/component/PreviewPanel';
+import {
+  PreviewPanel,
+  useMaybePreviewPanel,
+} from '@app/component/PreviewPanel';
 import { openEntityInSplitFromUnifiedList } from '@app/component/soupContextHelpers';
 import { SplitPanelContext } from '@app/component/split-layout/context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
@@ -35,9 +38,12 @@ import {
   type EntityData,
   isTaskEntity,
   type Notification,
+  queryKeys,
   unreadFilterFn,
+  useQueryClient,
 } from '@macro-entity';
 import {
+  createEffectOnEntityTypeNotification,
   getMetadata,
   isChannelMention,
   isChannelMessageReply,
@@ -69,12 +75,68 @@ import {
   EntityWithEverything,
 } from '../../../../macro-entity/src/components/EntityWithEverything';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import { SoupViewFileDropzone } from '@app/component/next-soup/soup-view/soup-view-file-dropzone';
+import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
+import { soupKeys } from '@queries/soup/keys';
+import type { CacheSnapshot } from 'virtua/unstable_core';
 
 const DEFAULT_ENTITY_HEIGHT = 40;
+
+const useSoupNotificationInvalidators = () => {
+  const notificationSource = useGlobalNotificationSource();
+  const entityQueryClient = useQueryClient();
+
+  createEffectOnEntityTypeNotification(
+    notificationSource,
+    'channel',
+    (notification) => {
+      entityQueryClient.invalidateQueries({
+        queryKey: queryKeys.all.channel,
+      });
+      entityQueryClient.invalidateQueries({
+        queryKey: soupKeys._def,
+      });
+      invalidateEntityNotifications(notification.entity_id);
+    }
+  );
+
+  createEffectOnEntityTypeNotification(notificationSource, 'email', () => {
+    entityQueryClient.invalidateQueries({
+      // HACK: this needs to be improved, since we use a single query, per entity invalidations
+      // become a little more complicated.
+      queryKey: queryKeys.all.entity,
+    });
+  });
+
+  createEffectOnEntityTypeNotification(
+    notificationSource,
+    'document',
+    (notification) => {
+      if (notification.notificationEventType === 'task_assigned') {
+        entityQueryClient.invalidateQueries({
+          queryKey: soupKeys._def,
+        });
+        invalidateEntityNotifications(notification.entity_id);
+      }
+    }
+  );
+};
+
+const cacheMap = new Map<
+  string,
+  {
+    virtualCache: CacheSnapshot;
+    scrollOffset: number;
+  }
+>();
 
 export const SoupView = () => {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
+
+  useSoupNotificationInvalidators();
+
   return (
     <SplitPanelContext.Provider
       value={{
@@ -84,13 +146,22 @@ export const SoupView = () => {
       }}
     >
       <SoupViewContextProvider soup={soup}>
-        <SoupViewImpl />
+        <div class="relative flex-grow min-h-0 flex max-sm:flex-col flex-row size-full">
+          <SoupToolbar />
+          <SoupViewFileDropzone>
+            <SoupViewList />
+          </SoupViewFileDropzone>
+        </div>
       </SoupViewContextProvider>
     </SplitPanelContext.Provider>
   );
 };
 
-const SoupViewImpl = () => {
+interface SoupViewListProps {
+  customScrollbarHidden?: boolean;
+}
+
+export const SoupViewList = (props: SoupViewListProps) => {
   const panel = useSplitPanelOrThrow();
   const { soup, source, rows: _rows, searchText } = useSoupView();
   const { getSplitCount } = useSplitLayout();
@@ -102,8 +173,11 @@ const SoupViewImpl = () => {
   const [virtualizerHandle, setVirtualizerHandle] =
     createSignal<VirtualizerHandle>();
 
-  // DOM ref for the soup view (used for hotkey scoping)
   const [soupViewRef, setSoupViewRef] = createSignal<HTMLElement | undefined>();
+
+  const [previewPanelRef, setPreviewPanelRef] = createSignal<
+    HTMLElement | undefined
+  >();
 
   const focusFirstEntity = () => {
     const next = soup.navigate.toFirst();
@@ -132,11 +206,23 @@ const SoupViewImpl = () => {
     )
   );
 
+  const previewPanel = useMaybePreviewPanel();
+
+  // Auto focus the soup on mount except when it's in a preview panel
+  createEffect(() => {
+    if (previewPanel) return;
+
+    soupViewRef()?.focus();
+  });
+
+  const [attachHotkeys, soupViewScope] = useHotkeyDOMScope('soup-view');
+
   // Register navigation hotkeys
   useSoupNavigationHotkeys({
-    scopeId: panel.splitHotkeyScope,
+    scopeId: soupViewScope,
     soup,
     virtualizerHandle,
+    previewPanelRef,
   });
 
   // Register entity action hotkeys
@@ -406,13 +492,53 @@ const SoupViewImpl = () => {
     }
   );
 
+  const getCacheKey = () => {
+    let key = `soup-view-${panel.handle.id}`;
+
+    if (previewPanel) {
+      key += '-preview';
+    }
+
+    return key;
+  };
+
+  onCleanup(() => {
+    const virtualHandle = virtualizerHandle();
+
+    if (!virtualHandle) return;
+
+    cacheMap.set(getCacheKey(), {
+      virtualCache: virtualHandle.cache,
+      scrollOffset: virtualHandle.scrollOffset,
+    });
+  });
+
+  const registerVirtualizerHandler = (
+    handle: VirtualizerHandle | undefined
+  ) => {
+    setVirtualizerHandle(handle);
+
+    const cached = cacheMap.get(getCacheKey());
+
+    if (!cached) return;
+
+    handle?.scrollTo(cached.scrollOffset);
+  };
+
   return (
     <div
-      ref={setSoupViewRef}
-      class="relative flex-grow min-h-0 flex max-sm:flex-col flex-row size-full"
-      data-hotkey-scope={panel.splitHotkeyScope}
+      class="size-full flex"
+      ref={(el) => {
+        setSoupViewRef(el);
+        attachHotkeys(el);
+      }}
+      tabIndex={-1}
+      onFocusIn={(e) => {
+        e.stopPropagation();
+      }}
+      data-hotkey-scope={soupViewScope}
+      data-soup-view
     >
-      <SoupToolbar />
       <div
         ref={setListRef}
         class="@container/uList size-full unified-list-root flex flex-col"
@@ -444,10 +570,11 @@ const SoupViewImpl = () => {
                 setCollapseEntity={soup.collapseEntity.set}
               >
                 <SoupList
+                  cache={cacheMap.get(getCacheKey())?.virtualCache}
                   ref={setLocalEntityListRef}
                   virtualizerClass="scrollbar-hidden"
                   class="overflow-hidden flex min-w-0"
-                  virtualizerRef={setVirtualizerHandle}
+                  virtualizerRef={registerVirtualizerHandler}
                   onScrollBottom={debouncedFetchMore}
                   rows={rows()}
                 >
@@ -580,17 +707,19 @@ const SoupViewImpl = () => {
                 </SoupList>
               </EntityRowProvider>
 
-              <CustomScrollbar
-                scrollContainer={() => {
-                  // Find the actual scroll container (VList creates its own scroll container)
-                  const listEl = localEntityListRef();
-                  if (!listEl) return undefined;
-                  const scrollContainer = listEl.querySelector(
-                    '[data-soup-list-container]'
-                  ) as HTMLElement;
-                  return scrollContainer || undefined;
-                }}
-              />
+              <Show when={!props.customScrollbarHidden}>
+                <CustomScrollbar
+                  scrollContainer={() => {
+                    // Find the actual scroll container (VList creates its own scroll container)
+                    const listEl = localEntityListRef();
+                    if (!listEl) return undefined;
+                    const scrollContainer = listEl.querySelector(
+                      '[data-soup-list-container]'
+                    ) as HTMLElement;
+                    return scrollContainer || undefined;
+                  }}
+                />
+              </Show>
             </Match>
           </Switch>
         </StaticMarkdownContext>
@@ -604,9 +733,13 @@ const SoupViewImpl = () => {
       </Show>
       <Show when={soup.previewEntity()}>
         <PreviewPanel
+          ref={setPreviewPanelRef}
           selectedEntity={soup.focus.item()}
           orchestrator={orchestrator}
           splitPanelContext={panel}
+          onFocusOut={() => {
+            soupViewRef()?.focus();
+          }}
         />
       </Show>
     </div>
@@ -627,6 +760,7 @@ interface SoupListProps {
   onScrollBottom?: VoidFunction;
   scrollBottomOffset?: number;
   rows: SoupRow[];
+  cache?: CacheSnapshot;
 }
 
 const SoupList = (props: SoupListProps) => {
@@ -665,6 +799,7 @@ const SoupList = (props: SoupListProps) => {
       class={cn('unified-table-body size-full relative', props.class)}
     >
       <VList
+        cache={props.cache}
         ref={registerVirtualizerHandler}
         class={props.virtualizerClass}
         data={props.rows}

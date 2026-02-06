@@ -1,8 +1,4 @@
-import { useUpsertSavedViewMutation } from '@app/component/Soup';
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import type { ViewConfigBase } from '@app/component/ViewConfig';
-import { unwrapSignals } from '@core/util/unwrapSignals';
-import { createMemo, createSignal, onMount } from 'solid-js';
+import { createSignal, onMount } from 'solid-js';
 import { createRenameDssEntityMutation } from '../../../macro-entity/src/queries/rename';
 import type { EntityData } from '../../../macro-entity/src/types/entity';
 import { EntityModalActionFooter, EntityModalTitle } from './EntityModal';
@@ -15,31 +11,8 @@ export const RenameView = (props: {
 }) => {
   const renameMutation = createRenameDssEntityMutation();
   let inputRef: HTMLInputElement | undefined;
-  const saveViewMutation = useUpsertSavedViewMutation();
-  const {
-    soupContext: { viewsDataStore: viewsData },
-  } = useSplitPanelOrThrow();
 
-  const view = createMemo(() => {
-    if (props.viewId) {
-      return viewsData[props.viewId];
-    }
-    return null;
-  });
-
-  const [editValue, setEditValue] = createSignal(
-    props.entity?.name || view()?.view || ''
-  );
-
-  const currentViewConfigBase = createMemo(() => {
-    const foundView = view();
-    if (!foundView) return null;
-    return unwrapSignals<ViewConfigBase>({
-      display: foundView.display,
-      filters: foundView.filters,
-      sort: foundView.sort,
-    });
-  });
+  const [editValue, setEditValue] = createSignal(props.entity?.name || '');
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -53,18 +26,6 @@ export const RenameView = (props: {
 
   const finishEditing = async () => {
     const newValue = editValue().trim();
-
-    // Handle view renaming
-    if (props.viewId && newValue) {
-      const viewConfig = currentViewConfigBase();
-      if (viewConfig) {
-        saveViewMutation.mutate({
-          id: props.viewId,
-          name: newValue,
-          config: viewConfig,
-        });
-      }
-    }
 
     // Handle entity renaming
     if (newValue && props.entity) {

@@ -1,5 +1,4 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { registerEntityHotkey } from '../utils';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { EntityData } from '@macro-entity';
@@ -12,6 +11,7 @@ import {
   makeRenameAction,
 } from './index';
 import { useUserId } from '@core/context/user';
+import { registerHotkey } from '@core/hotkey/hotkeys';
 
 type UseEntityActionHotkeysOptions = {
   scopeId: string;
@@ -53,7 +53,7 @@ export const useEntityActionHotkeys = (
   };
 
   // Mark Done - 'e'
-  registerEntityHotkey({
+  registerHotkey({
     hotkey: ['e'],
     hotkeyToken: TOKENS.entity.action.markDone,
     scopeId,
@@ -66,7 +66,7 @@ export const useEntityActionHotkeys = (
       markDone.executeWithSoup(entities, soup);
       return true;
     },
-    canExecuteKeyDownHandler: () => {
+    condition: () => {
       if (condition && !condition()) return false;
       const entities = getEntitiesForAction();
       return entities.some(markDone.canExecute);
@@ -76,7 +76,7 @@ export const useEntityActionHotkeys = (
   });
 
   // Delete - 'delete', 'backspace'
-  registerEntityHotkey({
+  registerHotkey({
     hotkey: ['delete', 'backspace'],
     hotkeyToken: TOKENS.entity.action.delete,
     scopeId,
@@ -92,7 +92,7 @@ export const useEntityActionHotkeys = (
       deleteAction.executeWithSoup(entities, soup);
       return true;
     },
-    canExecuteKeyDownHandler: () => {
+    condition: () => {
       if (condition && !condition()) return false;
       const entities = getEntitiesForAction();
       return entities.length > 0 && entities.every(deleteAction.canExecute);
@@ -102,7 +102,7 @@ export const useEntityActionHotkeys = (
   });
 
   // Rename - 'r'
-  registerEntityHotkey({
+  registerHotkey({
     hotkey: ['r'],
     hotkeyToken: TOKENS.entity.action.rename,
     scopeId,
@@ -118,7 +118,7 @@ export const useEntityActionHotkeys = (
       renameAction.executeWithSoup(entities, soup);
       return true;
     },
-    canExecuteKeyDownHandler: () => {
+    condition: () => {
       if (condition && !condition()) return false;
       const entities = getEntitiesForAction();
       return entities.length > 0 && entities.every(renameAction.canExecute);
@@ -128,7 +128,7 @@ export const useEntityActionHotkeys = (
   });
 
   // Copy - 'cmd+d'
-  registerEntityHotkey({
+  registerHotkey({
     hotkey: ['cmd+d'],
     hotkeyToken: TOKENS.entity.action.copy,
     scopeId,
@@ -144,7 +144,7 @@ export const useEntityActionHotkeys = (
       copyAction.executeWithSoup(entities, soup);
       return true;
     },
-    canExecuteKeyDownHandler: () => {
+    condition: () => {
       if (condition && !condition()) return false;
       const entities = getEntitiesForAction();
       return entities.some(copyAction.canExecute);
@@ -154,7 +154,7 @@ export const useEntityActionHotkeys = (
   });
 
   // Move to folder - 'm'
-  registerEntityHotkey({
+  registerHotkey({
     hotkey: ['m'],
     hotkeyToken: TOKENS.entity.action.moveToFolder,
     scopeId,
@@ -170,7 +170,7 @@ export const useEntityActionHotkeys = (
       moveToProjectAction.executeWithSoup(entities, soup);
       return true;
     },
-    canExecuteKeyDownHandler: () => {
+    condition: () => {
       if (condition && !condition()) return false;
       const entities = getEntitiesForAction();
       return entities.some(moveToProjectAction.canExecute);

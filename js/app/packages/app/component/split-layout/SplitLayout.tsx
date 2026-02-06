@@ -19,10 +19,7 @@ import {
   Suspense,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import {
-  createNavigationEntityListShortcut,
-  createSoupContext,
-} from '../SoupContext';
+import { createSoupContext } from '../SoupContext';
 import { PopoverSplitRenderer } from './components/PopoverSplitRenderer';
 import { SplitContainer } from './components/SplitContainer';
 import { SplitLayoutContext, SplitPanelContext } from './context';
@@ -385,55 +382,39 @@ function SplitPanel(props: SplitPanelProps) {
     },
   });
 
-  const splitName = createMemo(() => {
-    const { type, id } = props.split.content;
-    if (type === 'component') return id;
-
-    return type;
-  });
-
-  createNavigationEntityListShortcut({
-    splitName,
-    splitHandle: props.handle,
-    splitHotkeyScope,
-    soupContext,
-    previewState: [previewState, setPreviewState],
-    getSplitCount: () => splitLayoutHelpers.getSplitCount(),
-  });
-
   const nextSoup = createSoupState({
     initialFilters: ['explicit-noise'],
   });
 
   return (
-    <SplitPanelContext.Provider
-      value={{
-        handle: props.handle,
-        splitHotkeyScope,
-        soupContext,
-        isPanelActive: () => props.active,
-        panelRef,
-        panelSize,
-        layoutRefs: {},
-        contentOffsetTop,
-        setContentOffsetTop,
-        previewState: [previewState, setPreviewState],
-      }}
-    >
-      <SplitContainer
-        id={props.split.id}
-        ref={(ref) => {
-          setPanelRef(ref);
-          props.setPanelRef(ref);
-          attachHotKeys(ref);
+    <SoupContextProvider soup={nextSoup}>
+      <SplitPanelContext.Provider
+        value={{
+          handle: props.handle,
+          splitHotkeyScope,
+          soupContext,
+          isPanelActive: () => props.active,
+          panelRef,
+          panelSize,
+          layoutRefs: {},
+          contentOffsetTop,
+          setContentOffsetTop,
+          previewState: [previewState, setPreviewState],
         }}
       >
-        <SoupContextProvider soup={nextSoup}>
+        <SplitContainer
+          id={props.split.id}
+          ref={(ref) => {
+            setPanelRef(ref);
+            props.setPanelRef(ref);
+            attachHotKeys(ref);
+          }}
+        >
           <Suspense>
             <Dynamic component={props.split.mount.element} />
           </Suspense>
-        </SoupContextProvider>
-      </SplitContainer>
-    </SplitPanelContext.Provider>
+        </SplitContainer>
+      </SplitPanelContext.Provider>
+    </SoupContextProvider>
   );
 }

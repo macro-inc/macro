@@ -14,6 +14,7 @@ import type {
   SplitId,
   SplitMount,
 } from '../layoutManager';
+import { SoupContextProvider } from '@app/component/next-soup/soup-context';
 
 false && clickOutside;
 
@@ -139,9 +140,11 @@ function PopoverSplitModal(props: {
             <Dialog.Content class="portal-scope">
               <ClippedPanel active tl ref={setPanelRef}>
                 <SplitPanelContext.Provider value={stubPanelContext}>
-                  <Show when={props.popover.mount}>
-                    <Dynamic component={props.popover.mount.element} />
-                  </Show>
+                  <SoupContextProvider>
+                    <Show when={props.popover.mount}>
+                      <Dynamic component={props.popover.mount.element} />
+                    </Show>
+                  </SoupContextProvider>
                 </SplitPanelContext.Provider>
               </ClippedPanel>
             </Dialog.Content>

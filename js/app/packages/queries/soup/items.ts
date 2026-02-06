@@ -18,22 +18,26 @@ import {
 } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 
+export type SoupItemsQueryFilters = {
+  /** the bundled [ChannelFilters] */
+  channel_filters?: ChannelFilters;
+  /** the bundled [ChatFilters] */
+  chat_filters?: ChatFilters;
+  /** the bundled [DocumentFilters] */
+  document_filters?: DocumentFilters;
+  /** the bundled [EmailFilters] */
+  email_filters?: EmailFilters;
+  /** the bundled [ProjectFilters] */
+  project_filters?: ProjectFilters;
+};
+
 export type SoupItemsQueryArgs = {
   params: {
     limit?: number;
     sort_method?: ParamsSortMethod;
   };
-  body: {
-    /** the bundled [ChannelFilters] */
-    channel_filters?: ChannelFilters;
-    /** the bundled [ChatFilters] */
-    chat_filters?: ChatFilters;
-    /** the bundled [DocumentFilters] */
-    document_filters?: DocumentFilters;
-    /** the bundled [EmailFilters] */
-    email_filters?: EmailFilters;
-    /** the bundled [ProjectFilters] */
-    project_filters?: ProjectFilters;
+  body: SoupItemsQueryFilters & {
+    emailView?: string;
   };
 };
 

@@ -1,3 +1,4 @@
+import { useSoup } from '@app/component/next-soup/soup-context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -7,35 +8,26 @@ import CaretUp from '@icon/regular/caret-up.svg';
 import { Show } from 'solid-js';
 
 const EntityNavigationIndicator = () => {
-  const {
-    soupContext: {
-      entitiesSignal: [entities],
-      selectedView,
-      viewsDataStore,
-    },
-    handle,
-  } = useSplitPanelOrThrow();
-  const selectedViewData = () => viewsDataStore[selectedView()];
-  const selectedEntity = () => selectedViewData().selectedEntity;
-  const selectedEntityIndex = () =>
-    entities()?.findIndex((item) => item.id === selectedEntity()?.id) ?? -1;
+  const soup = useSoup();
+  const panel = useSplitPanelOrThrow();
+  const selectedEntity = () => soup.focus.item();
+  const selectedEntityIndex = () => soup.focus.index();
 
   return (
     <Show
       when={
-        handle.referredFrom() === 'unified-list' &&
-        entities()?.length &&
+        panel.handle.referredFrom() === 'unified-list' &&
+        soup.data()?.length &&
         selectedEntity() &&
-        handle.content().type !== 'component' &&
-        handle.content().type !== 'project'
+        panel.handle.content().type !== 'component' &&
+        panel.handle.content().type !== 'project'
       }
     >
       <div class="flex gap-1 items-center font-mono text-xs text-ink/50 pl-2 pr-4">
         <div>
           [<span class="text-ink">{selectedEntityIndex() + 1}</span>/
-          {entities()?.length}]
+          {soup.data()?.length}]
         </div>
-        <div>{selectedViewData().view}</div>
         <div class="flex text-ink">
           <DeprecatedIconButton
             size="sm"
@@ -44,7 +36,7 @@ const EntityNavigationIndicator = () => {
               label: 'Navigate Down',
               hotkeyToken: TOKENS.entity.step.end,
             }}
-            disabled={selectedEntityIndex() >= entities()!.length - 1}
+            disabled={selectedEntityIndex() >= soup.data()!.length - 1}
             theme="current"
             onDeepClick={() => {
               const command = getActiveCommandByToken(TOKENS.entity.step.end);

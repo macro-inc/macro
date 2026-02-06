@@ -2,12 +2,14 @@ import { TOKENS } from '@core/hotkey/tokens';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { Accessor } from 'solid-js';
 import type { SoupState } from '../create-soup-state';
-import { registerEntityHotkey } from '../utils';
+import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
+import { registerHotkey } from '@core/hotkey/hotkeys';
 
 type UseSoupNavigationHotkeysOptions = {
   scopeId: string;
   soup: SoupState;
   virtualizerHandle: Accessor<VirtualizerHandle | undefined>;
+  previewPanelRef: Accessor<HTMLElement | undefined>;
 };
 
 export const useSoupNavigationHotkeys = (
@@ -63,7 +65,7 @@ export const useSoupNavigationHotkeys = (
   };
 
   // Navigate down - 'j', 'arrowdown'
-  registerEntityHotkey({
+  registerHotkey({
     hotkey: ['j', 'arrowdown'],
     scopeId,
     description: 'Down',
@@ -81,7 +83,7 @@ export const useSoupNavigationHotkeys = (
   });
 
   // Navigate up - 'k', 'arrowup'
-  registerEntityHotkey({
+  registerHotkey({
     hotkey: ['k', 'arrowup'],
     scopeId,
     hotkeyToken: TOKENS.entity.step.start,
@@ -99,7 +101,7 @@ export const useSoupNavigationHotkeys = (
   });
 
   // Select up - 'shift+arrowup', 'shift+k'
-  registerEntityHotkey({
+  registerHotkey({
     hotkey: ['shift+arrowup', 'shift+k'],
     scopeId,
     description: 'Select up',
@@ -111,13 +113,58 @@ export const useSoupNavigationHotkeys = (
   });
 
   // Select down - 'shift+arrowdown', 'shift+j'
-  registerEntityHotkey({
+  registerHotkey({
     hotkey: ['shift+arrowdown', 'shift+j'],
     scopeId,
     description: 'Select down',
     hotkeyToken: TOKENS.entity.select.end,
     keyDownHandler: () => {
       return handleNavigationSelection(1);
+    },
+    hide: true,
+  });
+
+  const previewPanel = useMaybePreviewPanel();
+
+  registerHotkey({
+    hotkey: ['h', 'arrowleft'],
+    scopeId,
+    description: 'Navigate to parent context',
+    hotkeyToken: TOKENS.unifiedList.navigation.parent,
+    keyDownHandler: () => {
+      if (!previewPanel) return false;
+
+      previewPanel.onFocusOut();
+
+      return true;
+    },
+    hide: true,
+  });
+
+  registerHotkey({
+    hotkey: ['l', 'arrowright'],
+    scopeId,
+    description: 'Navigate to child context',
+    hotkeyToken: TOKENS.unifiedList.navigation.child,
+    keyDownHandler: () => {
+      const previewPanelContent = options.previewPanelRef();
+      // If there is no preview or the preview already contains focus, skip
+      if (
+        !previewPanelContent ||
+        previewPanelContent.contains(document.activeElement)
+      )
+        return false;
+
+      const previewPanelSoup = previewPanelContent?.querySelector(
+        'div[data-soup-view]'
+      );
+
+      // If it doesn't contain soup, skip
+      if (!previewPanelSoup || !(previewPanelSoup instanceof HTMLElement))
+        return false;
+
+      previewPanelSoup.focus();
+      return true;
     },
     hide: true,
   });

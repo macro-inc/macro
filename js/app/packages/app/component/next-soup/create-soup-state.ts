@@ -5,7 +5,7 @@ import {
 } from '@app/component/next-soup/filters';
 import {
   FILTER_GROUPS,
-  type FilterID,
+  type FilterGroup,
   SOUP_FILTERS,
 } from '@app/component/next-soup/filters/filters';
 import { createSelectionState } from '@app/component/next-soup/selection-state';
@@ -29,14 +29,26 @@ export type SortConfig<T> = {
   desc?: boolean;
 };
 
-interface SoupContextOptions {
+interface SoupContextOptions<
+  TFilter extends Readonly<FilterConfig<SoupEntity>>,
+> {
   initialData?: SoupEntity[];
-  initialFilters?: FilterID[];
+  initialFilters?: TFilter['id'][];
+  filterConfigs?: TFilter[];
+  filterGroups?: FilterGroup[];
   wrapNavigation?: boolean;
 }
 
-export const createSoupState = (
-  { wrapNavigation, initialData, initialFilters }: SoupContextOptions = {
+export const createSoupState = <
+  TFilter extends Readonly<FilterConfig<SoupEntity>>,
+>(
+  {
+    wrapNavigation,
+    initialData,
+    initialFilters,
+    filterConfigs,
+    filterGroups,
+  }: SoupContextOptions<TFilter> = {
     wrapNavigation: false,
   }
 ) => {
@@ -45,8 +57,8 @@ export const createSoupState = (
   });
 
   const filters = createFilterState<SoupEntity, FilterConfig<SoupEntity>>({
-    filters: SOUP_FILTERS,
-    groups: FILTER_GROUPS,
+    filters: filterConfigs ?? SOUP_FILTERS,
+    groups: filterGroups ?? FILTER_GROUPS,
     initialFilters,
   });
 

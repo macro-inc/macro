@@ -37,10 +37,8 @@ import { buildSimpleEntityUrl } from '@core/util/url';
 import LinkIcon from '@icon/regular/link-simple.svg';
 import TrashIcon from '@icon/regular/trash.svg';
 import XIcon from '@icon/regular/x.svg';
-import {
-  queryKeys,
-  useQueryClient as useEntityQueryClient,
-} from '@macro-entity';
+import { useQueryClient } from '@queries/client';
+import { soupKeys } from '@queries/soup/keys';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
 import { useUserId } from '@core/context/user';
 import { propertiesServiceClient } from '@service-properties/client';
@@ -110,10 +108,10 @@ async function createTaskWithProperties(
     }
   );
 
-  // Invalidate queries to refresh DSS and add to history
-  const entityQueryClient = useEntityQueryClient();
-  entityQueryClient.invalidateQueries({
-    queryKey: queryKeys.all.dss,
+  // Invalidate queries to refresh soup items and add to history
+  const queryClient = useQueryClient();
+  queryClient.invalidateQueries({
+    queryKey: soupKeys.items._def,
   });
 
   // Upsert the new task to history

@@ -20,14 +20,10 @@ import {
   getScopeElement,
   runCommand,
 } from '@core/hotkey/utils';
-import { getActualTarget } from '@core/util/getActualTarget';
-import { isInteractiveElement } from '@core/util/isInteractiveElement';
 import { isSearchEntity } from '@macro-entity';
 import type { Accessor } from 'solid-js';
-import { onCleanup } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { SoupState } from '../create-soup-state';
-import { registerEntityHotkey, splitIdToSoupViewRef } from '../utils';
 
 type UseSoupViewHotkeysOptions = {
   splitId: string;
@@ -42,9 +38,7 @@ type UseSoupViewHotkeysOptions = {
 
 export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
   const {
-    splitId,
     scopeId,
-    domRef,
     soup,
     splitHandle,
     virtualizerHandle,
@@ -52,17 +46,10 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     getSplitCount,
   } = options;
 
-  // Register this soup view in the global map for hotkey forwarding
-  splitIdToSoupViewRef.set(splitId, { domRef, soup });
-
-  onCleanup(() => {
-    splitIdToSoupViewRef.delete(splitId);
-  });
-
   const splitIsUnifiedList = () => splitHandle.content().id === 'unified-list';
 
   // home - Jump to top of list
-  registerEntityHotkey({
+  registerHotkey({
     hotkey: ['home'],
     scopeId,
     hotkeyToken: TOKENS.entity.jump.home,
@@ -78,10 +65,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
   });
 
   // g g - Jump to top of list (vim-style command scope)
-  const {
-    registerHotkeyReturn: topGScope,
-    globalRegisterHotkeyReturn: topGScopeGlobal,
-  } = registerEntityHotkey({
+  const { commandScopeId } = registerHotkey({
     hotkey: ['g'],
     scopeId,
     description: 'Go to top of list',
@@ -90,10 +74,9 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     hide: true,
   });
 
-  registerEntityHotkey({
+  registerHotkey({
     hotkey: ['g'],
-    scopeId: topGScope.commandScopeId,
-    globalCommandScope: topGScopeGlobal.commandScopeId,
+    scopeId: commandScopeId,
     description: 'Go to top of list',
     keyDownHandler: () => {
       const next = soup.navigate.toFirst();
@@ -105,7 +88,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
   });
 
   // shift+g, end - Jump to bottom of list
-  registerEntityHotkey({
+  registerHotkey({
     hotkey: ['shift+g', 'end'],
     scopeId,
     hotkeyToken: TOKENS.entity.jump.end,
@@ -121,7 +104,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
   });
 
   // enter - Open entity in split
-  registerEntityHotkey({
+  registerHotkey({
     hotkey: ['enter'],
     hotkeyToken: TOKENS.entity.open,
     scopeId,
@@ -144,27 +127,11 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       });
       return true;
     },
-    canExecuteKeyDownHandler: ({ keyboardEvent }) => {
-      if (keyboardEvent) {
-        const target = getActualTarget(keyboardEvent);
-
-        const listEl = domRef();
-        if (listEl?.contains(target)) {
-          return true;
-        }
-
-        if (isInteractiveElement(target)) {
-          return false;
-        }
-      }
-      return true;
-    },
     displayPriority: 4,
-    registrationType: 'add',
   });
 
   // cmd+enter - Focus preview block
-  registerEntityHotkey({
+  registerHotkey({
     hotkey: ['cmd+enter'],
     scopeId,
     description: 'Focus Preview',
@@ -217,7 +184,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
   });
 
   // x - Toggle select item
-  registerEntityHotkey({
+  registerHotkey({
     hotkey: ['x'],
     scopeId,
     description: 'Toggle select item',

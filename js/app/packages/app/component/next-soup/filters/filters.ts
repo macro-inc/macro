@@ -12,6 +12,11 @@ import {
   type EntityWithValidIcon,
   getIconConfig,
 } from '@core/component/EntityIcon';
+import type {
+  SoupItemsQueryArgs,
+  SoupItemsQueryFilters,
+} from '@queries/soup/items';
+import { codeFileExtensions } from '@block-code/util/languageSupport';
 
 /**
  * Unread filter - entity has unread content.
@@ -114,6 +119,12 @@ export function fileFilter(entity: EntityData): boolean {
   return !['md', 'canvas'].includes(fileType);
 }
 
+export function teamsAndPeopleFilter(entity: EntityData): boolean {
+  if (entity.type !== 'channel') return false;
+
+  return true;
+}
+
 export const SOUP_FILTERS = [
   // Focus filters (mutually exclusive)
   {
@@ -190,6 +201,12 @@ export const SOUP_FILTERS = [
     predicate: fileFilter,
     group: 'type',
   },
+  {
+    id: 'teams-and-people',
+    label: 'Groups',
+    predicate: teamsAndPeopleFilter,
+    group: 'type',
+  },
 ] as const;
 
 export type FilterID = (typeof SOUP_FILTERS)[number]['id'];
@@ -242,58 +259,95 @@ export const getFilterWithID = (filterID: FilterID) => {
   return found;
 };
 
+export const FOLDER_DOCUMENT_TYPES = [
+  'code',
+  'image',
+  'pdf',
+  'unknown',
+] as const;
+
+export const getFolderFileTypes = (type: 'soup' | 'search') => {
+  return FOLDER_DOCUMENT_TYPES.flatMap((fileType) => {
+    if (fileType === 'code')
+      return type === 'soup' ? ['assoc:code'] : codeFileExtensions;
+    if (fileType === 'image')
+      return type === 'soup' ? ['assoc:image'] : [NIL_UUID];
+    if (fileType === 'unknown')
+      return type === 'soup' ? ['assoc:other'] : [NIL_UUID];
+    return [fileType];
+  });
+};
+
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+
+const buildDefaultValue = (entityTypes: string[], required: string[]) => {
+  const hasNoEntityTypes = entityTypes.length === 0;
+
+  const hasSomeRequiredType = required.some((t) => entityTypes.includes(t));
+
+  if (hasSomeRequiredType || hasNoEntityTypes) {
+    return [];
+  }
+
+  return [NIL_UUID];
+};
 
 export const buildDssFiltersRequest = (
   filters: FilterConfig<EntityData>[],
   context?: {
+    extra?: SoupItemsQueryFilters;
     isSearchActive?: boolean;
     emailActive?: boolean;
   }
-) => {
+): SoupItemsQueryArgs['body'] => {
   const entityTypes = filters
     .filter((f) => ENTITY_TYPE_FILTERS.includes(f.id as EntityTypeFilters))
     .map((f) => f.id);
 
+  const {
+    channel_filters,
+    document_filters,
+    chat_filters,
+    email_filters,
+    project_filters,
+  } = context?.extra ?? {};
+
   return {
     channel_filters: {
+      ...channel_filters,
       channel_ids:
-        entityTypes.includes('teams') ||
-        entityTypes.includes('people') ||
-        entityTypes.length === 0
-          ? []
-          : [NIL_UUID],
+        channel_filters?.channel_ids ??
+        buildDefaultValue(entityTypes, ['teams', 'people']),
     },
     document_filters: {
+      ...document_filters,
       document_ids:
-        entityTypes.includes('document') ||
-        entityTypes.includes('task') ||
-        entityTypes.length === 0
-          ? []
-          : [NIL_UUID],
-      project_ids: [],
-      file_types: [],
+        document_filters?.document_ids ??
+        buildDefaultValue(entityTypes, ['file', 'document', 'task']),
+      project_ids: document_filters?.project_ids ?? [],
+      file_types: document_filters?.file_types ?? [],
     },
     chat_filters: {
+      ...chat_filters,
       chat_ids:
-        entityTypes.includes('agent') || entityTypes.length === 0
-          ? []
-          : [NIL_UUID],
-      project_ids: [],
+        chat_filters?.chat_ids ?? buildDefaultValue(entityTypes, ['agent']),
+      project_ids: chat_filters?.project_ids ?? [],
     },
     email_filters: {
+      ...email_filters,
       recipients:
-        context?.emailActive &&
+        email_filters?.recipients ??
+        (context?.emailActive &&
         !context.isSearchActive &&
         (entityTypes.includes('email') || entityTypes.length === 0)
           ? []
-          : [NIL_UUID],
+          : [NIL_UUID]),
     },
     project_filters: {
+      ...project_filters,
       project_ids:
-        entityTypes.includes('project') || entityTypes.length === 0
-          ? []
-          : [NIL_UUID],
+        project_filters?.project_ids ??
+        buildDefaultValue(entityTypes, ['file']),
     },
     emailView: 'all',
   };

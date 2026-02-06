@@ -13,7 +13,8 @@ import { VideoPreview } from '@core/component/VideoPreview';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
-import { queryKeys, useQueryClient } from '@macro-entity';
+import { useQueryClient } from '@queries/client';
+import { soupKeys } from '@queries/soup/keys';
 import { logger } from '@observability';
 import { emailClient } from '@service-email/client';
 import type {
@@ -139,7 +140,7 @@ export function MessageContainer(props: MessageContainerProps) {
   });
 
   const { replaceOrInsertSplit } = useSplitLayout();
-  const entityQueryClient = useQueryClient();
+  const queryClient = useQueryClient();
 
   const onClickAttachment = async (
     attachment: Attachment,
@@ -177,8 +178,8 @@ export function MessageContainer(props: MessageContainerProps) {
       );
     }
 
-    entityQueryClient.invalidateQueries({
-      queryKey: queryKeys.all.dss,
+    queryClient.invalidateQueries({
+      queryKey: soupKeys.items._def,
     });
 
     const blockName = fileType ? fileTypeToBlockName(fileType) : 'unknown';

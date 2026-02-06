@@ -1,5 +1,6 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import { makeMarkDoneAction } from '@app/component/next-soup/actions';
+import { useMaybeSoup } from '@app/component/next-soup/soup-context';
 import { URL_PARAMS } from '@block-email/constants';
 import { convertContactInfoToEmailRecipient } from '@block-email/util/recipientConversion';
 import {
@@ -8,6 +9,7 @@ import {
   Permissions,
 } from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
+import { useUserId } from '@core/context/user';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import {
@@ -312,12 +314,14 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     return Array.from(optionsMap.values());
   };
 
-  const {
-    soupContext: {
-      entitiesSignal: [entities],
-      actionRegistry,
-    },
-  } = useSplitPanelOrThrow();
+  const soup = useMaybeSoup();
+
+  const userId = useUserId();
+
+  const markAsDoneAction = makeMarkDoneAction({
+    notificationSource: () => notificationSource,
+    userId,
+  });
 
   const archiveMutation = useArchiveThreadMutation({
     onError: () => {
@@ -337,12 +341,14 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
 
     if (!props) return false;
 
-    const selectedEntity = entities()?.find(
-      (entity) => entity.id === thread.db_id
-    );
+    const selectedEntity = soup?.items.get(thread.db_id);
 
     if (selectedEntity) {
-      actionRegistry.execute('mark_as_done', selectedEntity);
+      if (soup) {
+        markAsDoneAction.executeWithSoup([selectedEntity], soup);
+      } else {
+        markAsDoneAction.execute([selectedEntity]);
+      }
     } else {
       archiveMutation.mutate({
         threadId: thread.db_id,
