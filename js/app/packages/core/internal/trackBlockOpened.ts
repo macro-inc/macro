@@ -23,9 +23,9 @@ export function track(
 ) {
   const itemType = blockNameToItemType(blockName);
 
-  const location = hasSoupItem(itemId);
-  if (location !== undefined) {
-    optimisticUpdateDssItemViewedAt(itemId, location);
+  const inSoup = hasSoupItem(itemId);
+  if (inSoup) {
+    optimisticUpdateDssItemViewedAt(itemId);
   } else {
     invalidateSoup();
   }
