@@ -23,6 +23,7 @@ import {
 } from '@notifications';
 import { formatDocumentName } from '@service-storage/util/filename';
 import { syncServiceClient } from '@service-sync/client';
+import { ChannelTypeEnum } from '@service-comms/client';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable } from '@thisbeyond/solid-dnd';
 import { getIconConfig } from 'core/component/EntityIcon';
@@ -1070,7 +1071,7 @@ export function EntityWithEverything(
                 <Show
                   when={
                     props.entity.type === 'channel' &&
-                    props.entity.channelType === 'direct_message'
+                    props.entity.channelType === ChannelTypeEnum.DirectMessage
                   }
                   fallback={
                     <Dynamic
@@ -1374,7 +1375,7 @@ export function EntityWithEverything(
               <Show
                 when={
                   props.entity.type === 'channel' &&
-                  props.entity.channelType === 'direct_message'
+                  props.entity.channelType === ChannelTypeEnum.DirectMessage
                 }
                 fallback={
                   <Dynamic
