@@ -126,4 +126,4 @@ export const ENABLE_SNAPSHOT_NODE = true;
 
 export const ENABLE_EMAIL_SCHEDULED_SEND = false;
 
-export const ENABLE_AI_AUTO_TAB_ATTACHMENTS = false;
+export const ENABLE_AI_AUTO_TAB_ATTACHMENTS = true;
