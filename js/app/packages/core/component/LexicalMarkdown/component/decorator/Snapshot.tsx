@@ -186,7 +186,6 @@ function SnapshotInner(props: SnapshotDecoratorProps) {
       }
       content={
         <PopupPreview
-          item={item}
           mouseEnter={() => {}}
           mouseLeave={() => {}}
           delete={editor?.isEditable() ? deleteSnapshot : undefined}

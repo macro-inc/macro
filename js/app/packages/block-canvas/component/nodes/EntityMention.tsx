@@ -280,7 +280,6 @@ export function File(props: { node: EntityMentionNode; mode: RenderMode }) {
           }
           content={
             <PopupPreview
-              item={item}
               mouseEnter={() => {}}
               mouseLeave={() => {}}
               documentInfo={{

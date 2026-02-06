@@ -8,18 +8,15 @@ import {
   getMentionsIcon,
   mentionsAccessories,
   PopupPreview,
-  getPreviewTargetType,
 } from '@core/component/DocumentPreview';
-import { EntityIcon } from '@core/component/EntityIcon';
+import { useItemPreviewData } from '@core/component/ItemPreview';
 import { resolveBlockAlias, verifyBlockName } from '@core/constant/allBlocks';
 import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import { canNestBlock } from '@core/orchestrator';
 import {
   isAccessiblePreviewItem,
-  type PreviewItem,
   type PreviewItemNoAccess,
-  useItemPreview,
   type ItemEntity,
 } from '@queries/preview';
 import { matches } from '@core/util/match';
@@ -96,24 +93,25 @@ function Loading(props: { collapsed?: boolean }) {
 }
 
 function InlinePreview(props: {
-  item: () => PreviewItem;
+  entity: ItemEntity;
   blockName: BlockName | BlockAlias;
   blockParams: Record<string, string>;
   theme?: EditorThemeClasses;
   collapsed?: boolean;
 }) {
+  const { item, ItemEntityIcon } = useItemPreviewData(() => props.entity);
+
   return (
     <Switch>
-      <Match when={props.item().loading}>
+      <Match when={item().loading}>
         <Loading />
       </Match>
-      <Match when={matches(props.item(), isAccessiblePreviewItem)}>
+      <Match when={matches(item(), isAccessiblePreviewItem)}>
         {(accessibleItem) => (
           <MentionContainer
             icon={
-              <EntityIcon
+              <ItemEntityIcon
                 size="fill"
-                targetType={getPreviewTargetType(accessibleItem())}
                 theme={
                   accessibleItem().type !== 'channel' &&
                   props.theme?.['document-mention'] === 'chat-blue'
@@ -152,14 +150,10 @@ function InlinePreview(props: {
           />
         )}
       </Match>
-      <Match
-        when={(props.item() as PreviewItemNoAccess).access === 'no_access'}
-      >
+      <Match when={(item() as PreviewItemNoAccess).access === 'no_access'}>
         <MentionContainer icon={<EyeSlashDuo />} text="No Access" />
       </Match>
-      <Match
-        when={(props.item() as PreviewItemNoAccess).access === 'does_not_exist'}
-      >
+      <Match when={(item() as PreviewItemNoAccess).access === 'does_not_exist'}>
         <MentionContainer icon={<TrashSimple />} text="Deleted" />
       </Match>
     </Switch>
@@ -202,16 +196,14 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
     return canNestBlock(resolveBlockAlias(blockName), currentBlockName);
   });
 
-  const previewType = () =>
-    blockNameToItemType(verifyBlockName(props.blockName));
-
   const itemEntity = (): ItemEntity => {
+    const previewType = blockNameToItemType(verifyBlockName(props.blockName));
     const baseEntity = {
       id: props.documentId,
-      type: previewType(),
+      type: previewType,
     };
     if (
-      previewType() === 'channel' &&
+      previewType === 'channel' &&
       props.blockParams &&
       CHANNEL_URL_PARAMS.message in props.blockParams
     ) {
@@ -223,7 +215,7 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
     return baseEntity;
   };
 
-  const [item] = useItemPreview(itemEntity);
+  const { item } = useItemPreviewData(itemEntity);
 
   const isSelectedAsNode = createMemo(() => {
     const sel = selection();
@@ -328,7 +320,7 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
               </Match>
               <Match when={item()}>
                 <InlinePreview
-                  item={item}
+                  entity={itemEntity()}
                   blockName={verifyBlockName(props.blockName)}
                   blockParams={props.blockParams || {}}
                   theme={props.theme}
@@ -342,7 +334,6 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
       }
       content={
         <PopupPreview
-          item={item}
           mouseEnter={() => {}}
           mouseLeave={() => {}}
           delete={editor?.isEditable() ? deleteMention : undefined}

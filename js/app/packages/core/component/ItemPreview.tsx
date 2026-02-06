@@ -1,7 +1,11 @@
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
+import {
+  isAccessiblePreviewItem,
+  useItemPreview,
+  type ItemEntity,
+} from '@queries/preview';
 import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { truncateString } from '@core/util/string';
@@ -18,8 +22,13 @@ import type { NamedSubType } from '@macro-entity';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import type { ItemType } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
-import { Match, Switch, Suspense, type ComponentProps } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
+import {
+  Match,
+  Switch,
+  Suspense,
+  type ComponentProps,
+  type Accessor,
+} from 'solid-js';
 import { PopupPreview } from './DocumentPreview';
 import { HoverCard } from './HoverCard';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
@@ -30,17 +39,8 @@ import {
   ICON_SIZE_CLASSES,
 } from './EntityIcon';
 
-type ItemPreviewProps = {
-  itemId: string;
-  itemType?: ItemType;
-  cacheTimeSeconds?: number;
-};
-
-function useItemPreviewData(props: ItemPreviewProps) {
-  const [item] = useItemPreview(() => ({
-    id: props.itemId,
-    type: props.itemType,
-  }));
+export function useItemPreviewData(entity: Accessor<ItemEntity>) {
+  const [item] = useItemPreview(entity);
 
   const { replaceOrInsertSplit, insertSplit } = useSplitLayout();
 
@@ -68,7 +68,7 @@ function useItemPreviewData(props: ItemPreviewProps) {
   }
 
   async function onPreviewClick(
-    type: ItemPreviewProps['itemType'],
+    type: ItemType | undefined,
     id: string,
     fileType?: FileType,
     subType?: NamedSubType,
@@ -222,7 +222,7 @@ function InlineLoading() {
   );
 }
 
-export function ItemPreview(props: ItemPreviewProps) {
+export function ItemPreview(props: ItemEntity) {
   return (
     <Suspense>
       <ItemPreviewInner {...props} />
@@ -230,9 +230,9 @@ export function ItemPreview(props: ItemPreviewProps) {
   );
 }
 
-function ItemPreviewInner(props: ItemPreviewProps) {
+function ItemPreviewInner(props: ItemEntity) {
   const { item, name, onPreviewClick, targetType, ItemEntityIcon } =
-    useItemPreviewData(props);
+    useItemPreviewData(() => props);
 
   return (
     <Switch>
@@ -278,7 +278,6 @@ function ItemPreviewInner(props: ItemPreviewProps) {
                     }
                     content={
                       <PopupPreview
-                        item={item}
                         mouseEnter={() => {}}
                         mouseLeave={() => {}}
                         documentInfo={{
@@ -306,8 +305,8 @@ function ItemPreviewInner(props: ItemPreviewProps) {
   );
 }
 
-export function InlineItemPreview(props: ItemPreviewProps) {
-  const { item, name, ItemEntityIcon } = useItemPreviewData(props);
+export function InlineItemPreview(props: ItemEntity) {
+  const { item, name, ItemEntityIcon } = useItemPreviewData(() => props);
 
   return (
     <Switch>

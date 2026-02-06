@@ -167,8 +167,8 @@ function AttachmentItem(props: AttachmentItemProps) {
 
         <span class="text-ink-extra-muted">attached</span>
         <InlineItemPreview
-          itemId={props.attachment.entity_id}
-          itemType={props.attachment.entity_type as ItemType}
+          id={props.attachment.entity_id}
+          type={props.attachment.entity_type as ItemType}
         />
       </span>
     </button>

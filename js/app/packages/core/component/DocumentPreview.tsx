@@ -17,9 +17,9 @@ import {
   type AccessiblePreviewItem,
   isAccessiblePreviewItem,
   isChannelPreviewItem,
-  type PreviewItem,
   type PreviewItemNoAccess,
 } from '@queries/preview';
+import { blockNameToItemType } from '@service-storage/client';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { matches } from '@core/util/match';
 // Icon imports
@@ -45,14 +45,14 @@ import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
 import { globalSplitManager } from 'app/signal/splitLayout';
 import type { Component, JSX } from 'solid-js';
-import { type Accessor, Match, Show, Switch } from 'solid-js';
+import { Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
 import { formatDate, isoToUnixTimestamp } from '../util/date';
 import NotFound from './AccessErrorViews/NotFound';
 import Unauthorized from './AccessErrorViews/Unauthorized';
-import { EntityIcon } from './EntityIcon';
 import { Tooltip } from './Tooltip';
+import { useItemPreviewData } from './ItemPreview';
 
 /**
  * Container for displaying mentions with optional collapsing
@@ -92,27 +92,6 @@ function Spinner() {
  */
 function Loading() {
   return <MentionContainer icon={<Spinner />} text="Loading" />;
-}
-
-/**
- * Computes the entity icon target type from a preview item
- */
-export function getPreviewTargetType(item: AccessiblePreviewItem) {
-  switch (item.type) {
-    case 'document':
-      return item.subType?.type ?? item.fileType;
-    case 'channel':
-      switch (item.channelType) {
-        case 'direct_message':
-          return 'directMessage';
-        case 'organization':
-          return 'company';
-        default:
-          return 'channel';
-      }
-    default:
-      return item.type;
-  }
 }
 
 /**
@@ -286,7 +265,6 @@ function UserInfo(props: { userId: string }) {
  * Popup preview component for document references
  */
 export function PopupPreview(props: {
-  item: Accessor<PreviewItem>;
   mouseEnter: () => void;
   mouseLeave: () => void;
   delete?: () => void;
@@ -316,6 +294,11 @@ export function PopupPreview(props: {
 
   const blockName = useMaybeBlockName();
   const blockId = useMaybeBlockId();
+
+  const { item, ItemEntityIcon } = useItemPreviewData(() => ({
+    id: props.documentInfo.id,
+    type: blockNameToItemType(props.documentInfo.type),
+  }));
 
   // Derived state
   const canOpenInChat = createCallback(() => {
@@ -547,7 +530,7 @@ export function PopupPreview(props: {
           <Show
             when={messageContext}
             fallback={
-              <Show when={props.item().owner}>
+              <Show when={item().owner}>
                 {(owner) => (
                   <MetadataInfo icon={UserIcon} align="left">
                     {owner().replace('macro|', '')}
@@ -562,7 +545,7 @@ export function PopupPreview(props: {
           <Show
             when={messageContext}
             fallback={
-              <Show when={props.item().updatedAt}>
+              <Show when={item().updatedAt}>
                 {(time) => (
                   <MetadataInfo icon={ClockIcon} align="right">
                     {formatDate(time())}
@@ -592,21 +575,18 @@ export function PopupPreview(props: {
         <div class="p-3">
           <Switch>
             {/* Loading state */}
-            <Match when={props.item().loading}>
+            <Match when={item().loading}>
               <Loading />
             </Match>
 
             {/* Accessible preview */}
-            <Match when={matches(props.item(), isAccessiblePreviewItem)}>
+            <Match when={matches(item(), isAccessiblePreviewItem)}>
               {(accessibleItem) => (
                 <div class="w-full h-full flex-col">
                   {/* Header with icon and actions */}
                   <div class="flex w-full mb-2">
                     <div class="w-full size-10">
-                      <EntityIcon
-                        size="md"
-                        targetType={getPreviewTargetType(accessibleItem())}
-                      />
+                      <ItemEntityIcon size="md" />
                     </div>
                     <div class="flex w-fit h-full justify-right">
                       {renderActionButtons()}
@@ -638,9 +618,7 @@ export function PopupPreview(props: {
 
             {/* No access error */}
             <Match
-              when={
-                (props.item() as PreviewItemNoAccess).access === 'no_access'
-              }
+              when={(item() as PreviewItemNoAccess).access === 'no_access'}
             >
               <div class="text-sm p-4">
                 <Unauthorized />
@@ -649,10 +627,7 @@ export function PopupPreview(props: {
 
             {/* Does not exist error */}
             <Match
-              when={
-                (props.item() as PreviewItemNoAccess).access ===
-                'does_not_exist'
-              }
+              when={(item() as PreviewItemNoAccess).access === 'does_not_exist'}
             >
               <div class="text-sm p-4">
                 <NotFound />
