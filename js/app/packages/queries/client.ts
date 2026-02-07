@@ -1,9 +1,9 @@
 import { QueryClient } from '@tanstack/solid-query';
-import { createIDBPersister } from './storage/idb';
+import { createPerQueryIDBStore } from './storage/per-query-idb';
 import {
   createPersistenceKey,
   queryKeyHasPrefix,
-  setupQueryPersistence,
+  setupLazyQueryPersistence,
 } from './persistence';
 
 export const queryClient = new QueryClient({
@@ -17,25 +17,28 @@ export const queryClient = new QueryClient({
   },
 });
 
-setupQueryPersistence({
+const buster = import.meta.env.__APP_VERSION__ ?? 'dev';
+const SEVEN_DAYS_MS = 1000 * 60 * 60 * 24 * 7;
+
+setupLazyQueryPersistence({
   queryClient,
-  buster: import.meta.env.__APP_VERSION__ ?? 'dev',
   scopes: [
     {
-      persister: createIDBPersister({
-        key: createPersistenceKey('channels', 0),
+      store: createPerQueryIDBStore({
+        dbName: createPersistenceKey('channels', 1),
       }),
-      // 7 days in milliseconds
-      maxAgeMs: 1000 * 60 * 60 * 24 * 7,
-      shouldDehydrateQuery: (q) => queryKeyHasPrefix(q.queryKey, ['channel']),
+      maxAgeMs: SEVEN_DAYS_MS,
+      buster,
+      shouldPersist: (key) => queryKeyHasPrefix(key, ['channel']),
     },
     {
-      persister: createIDBPersister({
-        key: createPersistenceKey('email-threads', 0),
+      store: createPerQueryIDBStore({
+        dbName: createPersistenceKey('email-threads', 1),
       }),
-      maxAgeMs: 1000 * 60 * 60 * 24 * 7,
-      shouldDehydrateQuery: (q) =>
-        queryKeyHasPrefix(q.queryKey, ['email', 'threadMessages']),
+      maxAgeMs: SEVEN_DAYS_MS,
+      buster,
+      shouldPersist: (key) =>
+        queryKeyHasPrefix(key, ['email', 'threadMessages']),
     },
   ],
 });

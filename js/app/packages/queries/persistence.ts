@@ -5,6 +5,7 @@ import {
 } from '@tanstack/solid-query-persist-client';
 import type { Persister } from '@tanstack/solid-query-persist-client';
 import type { QueryKey } from '@tanstack/query-core';
+import type { PerQueryIDBStore } from './storage/per-query-idb';
 
 type Query = NonNullable<
   PersistQueryClientOptions['dehydrateOptions']
@@ -92,7 +93,7 @@ export function setupQueryPersistence(
       },
     } satisfies PersistQueryClientOptions;
 
-    void persistQueryClientRestore(persistOptions)
+    persistQueryClientRestore(persistOptions)
       .then(() => {
         params.queryClient.getQueryCache().subscribe((event) => {
           if (!shouldPersistForScopeEvent(event, scope)) return;
@@ -103,4 +104,105 @@ export function setupQueryPersistence(
         // Keep startup resilient if persistence restore fails.
       });
   }
+}
+
+// --- Lazy per-query persistence ---
+
+export type LazyPersistScope = Readonly<{
+  store: PerQueryIDBStore;
+  maxAgeMs: number;
+  buster: string;
+  shouldPersist: (queryKey: QueryKey) => boolean;
+}>;
+
+type LazyQueryClientLike = {
+  getQueryCache: () => QueryCacheLike;
+  getQueryState: (
+    queryKey: QueryKey
+  ) => { status: string; data: unknown; dataUpdatedAt: number } | undefined;
+  setQueryData: (
+    queryKey: QueryKey,
+    data: unknown,
+    options?: { updatedAt?: number }
+  ) => void;
+};
+
+type LazyCacheEvent = {
+  type?: string;
+  query?: {
+    queryHash: string;
+    queryKey: QueryKey;
+    state: { status: string; data: unknown; dataUpdatedAt: number };
+  };
+};
+
+const LAZY_EVENT_TYPES = new Set(['added', 'removed', 'updated']);
+
+export function setupLazyQueryPersistence(
+  params: Readonly<{
+    queryClient: LazyQueryClientLike;
+    scopes: readonly LazyPersistScope[];
+  }>
+): () => void {
+  const { queryClient, scopes } = params;
+
+  const findScope = (queryKey: QueryKey) =>
+    scopes.find((s) => s.shouldPersist(queryKey));
+
+  const unsubscribe = queryClient.getQueryCache().subscribe((raw) => {
+    const event = raw as LazyCacheEvent;
+    const { type, query } = event;
+    if (!type || !LAZY_EVENT_TYPES.has(type) || !query) return;
+
+    const scope = findScope(query.queryKey);
+    if (!scope) return;
+
+    const { queryHash, queryKey } = query;
+
+    if (type === 'added') {
+      const state = queryClient.getQueryState(queryKey);
+      if (state && state.status === 'success') return;
+
+      scope.store
+        .get(queryHash)
+        .then((entry) => {
+          if (!entry) return;
+
+          if (entry.buster !== scope.buster) {
+            scope.store.remove(queryHash);
+            return;
+          }
+
+          const age = Date.now() - entry.dataUpdatedAt;
+          if (age > scope.maxAgeMs) {
+            scope.store.remove(queryHash);
+            return;
+          }
+
+          const current = queryClient.getQueryState(queryKey);
+          if (current && current.status === 'success') return;
+
+          queryClient.setQueryData(queryKey, entry.data, {
+            updatedAt: entry.dataUpdatedAt,
+          });
+        })
+        .catch(() => {
+          // Keep resilient if IDB read fails.
+        });
+    } else if (type === 'updated') {
+      if (query.state.status !== 'success') return;
+      scope.store.set({
+        queryHash,
+        queryKey,
+        data: query.state.data,
+        dataUpdatedAt: query.state.dataUpdatedAt,
+        persistedAt: Date.now(),
+        buster: scope.buster,
+      });
+    } else if (type === 'removed') {
+      scope.store.remove(queryHash);
+    }
+  });
+
+  return unsubscribe;
 }
