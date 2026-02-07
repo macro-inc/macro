@@ -81,6 +81,7 @@ export function useChatInput(
     isGenerating?: boolean;
     initialAttachments?: Attachment[];
     initialValue?: string;
+    autoAttach?: boolean;
   } = {}
 ): ChatInput {
   const [chatId, setChatId] = createSignal<string | undefined>(args.chatId);
@@ -99,7 +100,7 @@ export function useChatInput(
   });
 
   const tabAttachments = useTabAttachments();
-  if (ENABLE_AI_AUTO_TAB_ATTACHMENTS) {
+  if (ENABLE_AI_AUTO_TAB_ATTACHMENTS && args.autoAttach !== false) {
     createEffect(
       on(tabAttachments, (tabs, p) => {
         for (const prev of p ?? []) {
