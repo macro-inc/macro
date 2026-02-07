@@ -173,34 +173,26 @@ define_notif_event!(
     #[serde(tag = "tag", content = "content", rename_all = "snake_case")]
     pub enum NotifEvent {
         /// Someone mentioned you in a channel.
-        #[schema(value_type = serde_json::Value)]
         ChannelMention(ChannelMentionMetadata),
 
         /// Someone mentioned you in a document.
-        #[schema(value_type = serde_json::Value)]
         DocumentMention(DocumentMentionMetadata),
         /// The user was invited to a channel.
-        #[schema(value_type = serde_json::Value)]
         ChannelInvite(ChannelInviteMetadata),
 
         /// A user sent a message in a channel.
-        #[schema(value_type = serde_json::Value)]
         ChannelMessageSend(ChannelMessageSendMetadata),
 
         /// Someone replied to a thread in a channel that the user is part of.
-        #[schema(value_type = serde_json::Value)]
         ChannelMessageReply(ChannelReplyMetadata),
 
         /// A new email has been sent to the user.
-        #[schema(value_type = serde_json::Value)]
         NewEmail(NewEmailMetadata),
 
         /// A user was invited to a team.
-        #[schema(value_type = serde_json::Value)]
         InviteToTeam(InviteToTeamMetadata),
 
         /// A user was assigned to a task.
-        #[schema(value_type = serde_json::Value)]
         TaskAssigned(TaskAssignedMetadata),
     }
 );
