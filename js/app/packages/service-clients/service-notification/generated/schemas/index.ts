@@ -104,8 +104,6 @@ export * from './notificationTemporalDataDeletedAt';
 export * from './notificationTemporalDataUpdatedAt';
 export * from './notificationTemporalDataViewedAt';
 export * from './pushNotificationData';
-export * from './pushNotificationDataAllOf';
-export * from './pushNotificationDataAllOfSenderId';
 export * from './taskAssignedMetadata';
 export * from './taskAssignedMetadataTaskName';
 export * from './unsubscribeItemPathParams';

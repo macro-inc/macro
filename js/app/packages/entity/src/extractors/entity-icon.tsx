@@ -25,7 +25,7 @@ function DirectMessageIcon(props: { entity: ChannelEntity }) {
     <div class="bg-panel size-full rounded-full">
       <Show
         when={participantId()}
-        fallback={<CoreEntityIcon targetType="directMessage" size="fill" />}
+        fallback={<CoreEntityIcon targetType="direct_message" size="fill" />}
       >
         {(id) => <UserIcon id={id()} isDeleted={false} size="fill" />}
       </Show>

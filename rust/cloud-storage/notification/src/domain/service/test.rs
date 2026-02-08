@@ -58,6 +58,8 @@ impl NotificationExtIos for TestNotification {
     fn into_apns<'a>(
         self,
         _sender: Option<MacroUserIdStr<'a>>,
+        _entity: &model_entity::Entity<'_>,
+        _notification_id: uuid::Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         Some(APNSPushNotification {
             aps: Default::default(),

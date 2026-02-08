@@ -144,6 +144,10 @@ pub trait NotificationService: Send + Sync + 'static {
     /// Returns the notification ID if successful.
     fn send_notification<'a>(
         &self,
-        message: SendNotificationRequest<'a, TaskAssignedMetadata, ()>,
+        message: SendNotificationRequest<
+            'a,
+            TaskAssignedMetadata,
+            notification::domain::models::apple::PushNotificationData,
+        >,
     ) -> impl Future<Output = Result<uuid::Uuid, Self::Err>> + Send;
 }

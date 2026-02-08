@@ -7,12 +7,12 @@ use uuid::Uuid;
 pub struct PushNotificationData {
     /// The id of the notification record (UserNotification.id)
     pub notification_id: Uuid,
-    #[serde(flatten)]
-    pub notification_entity: model_entity::Entity<'static>,
-    /// user id of the macro user who generated the notification
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub sender_id: Option<String>,
-    /// The route to open the notification in the app
-    /// example: /channel/{channel_id}
-    pub open_route: String,
+}
+
+impl PushNotificationData {
+    pub fn new_from_inner(val: notification::domain::models::apple::PushNotificationData) -> Self {
+        Self {
+            notification_id: val.notification_id,
+        }
+    }
 }

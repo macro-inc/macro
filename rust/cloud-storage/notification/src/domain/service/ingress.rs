@@ -417,7 +417,7 @@ where
 
             if !ios_endpoints.is_empty()
                 && let Some((apns_notif, attributes)) =
-                    build_apns(notification.req.notification.clone())
+                    build_apns(notification.req.notification.clone(), notification_id)
             {
                 apns_collapse_key = Some(attributes.collapse_key.clone());
                 messages.push(QueueMessage {

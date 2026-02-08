@@ -32,7 +32,11 @@ where
     #[tracing::instrument(skip(self, message), err)]
     async fn send_notification(
         &self,
-        message: SendNotificationRequest<'_, TaskAssignedMetadata, ()>,
+        message: SendNotificationRequest<
+            '_,
+            TaskAssignedMetadata,
+            notification::domain::models::apple::PushNotificationData,
+        >,
     ) -> Result<Uuid, Self::Err> {
         let result = self
             .notification_client

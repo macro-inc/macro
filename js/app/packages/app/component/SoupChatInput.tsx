@@ -13,7 +13,7 @@ export function SoupChatInput() {
   const splitPanelContext = useSplitPanelOrThrow();
   const soup = useSoup();
 
-  const { ChatInput } = useChatInput();
+  const { ChatInput } = useChatInput({ autoAttach: false });
   const [attachHotkeys] = useHotkeyDOMScope('soup.chatInput');
 
   onMount(() => {

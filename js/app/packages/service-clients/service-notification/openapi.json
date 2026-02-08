@@ -1812,30 +1812,15 @@
         }
       },
       "PushNotificationData": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/Entity"
-          },
-          {
-            "type": "object",
-            "required": ["notificationId", "openRoute"],
-            "properties": {
-              "notificationId": {
-                "type": "string",
-                "format": "uuid",
-                "description": "The id of the notification record (UserNotification.id)"
-              },
-              "openRoute": {
-                "type": "string",
-                "description": "The route to open the notification in the app\nexample: /channel/{channel_id}"
-              },
-              "senderId": {
-                "type": ["string", "null"],
-                "description": "user id of the macro user who generated the notification"
-              }
-            }
+        "type": "object",
+        "required": ["notificationId"],
+        "properties": {
+          "notificationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the notification record (UserNotification.id)"
           }
-        ]
+        }
       },
       "TaskAssignedMetadata": {
         "type": "object",

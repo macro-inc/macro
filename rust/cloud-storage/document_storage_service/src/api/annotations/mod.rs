@@ -24,11 +24,12 @@ use model_entity::EntityType;
 use notification::domain::models::{
     NotifCollapseKey, Notification, NotificationExtIos, RateLimitConfig, RateLimitKey,
     SendNotificationRequestBuilder,
-    apple::{APNSPushNotification, AlertDictionary, Aps},
+    apple::{APNSPushNotification, AlertDictionary, Aps, PushNotificationData},
 };
 use serde::{Deserialize, Serialize};
 use tower::ServiceBuilder;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 pub fn router(state: ApiContext) -> Router<ApiContext> {
     Router::new()
@@ -195,7 +196,7 @@ impl Notification for DocumentMentionNotification {
 }
 
 impl NotificationExtIos for DocumentMentionNotification {
-    type NotifData = ();
+    type NotifData = ::notification::domain::models::apple::PushNotificationData;
 
     fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
         let entity_type: &'static str = entity.entity_type.into();
@@ -205,11 +206,17 @@ impl NotificationExtIos for DocumentMentionNotification {
     fn into_apns<'a>(
         self,
         sender_id: Option<MacroUserIdStr<'a>>,
+        _entity: &Entity<'_>,
+        notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let sender = sender_id?;
-        let file_type = self.file_type.as_ref()?;
+        let file_type_str = self.file_type.as_ref()?;
         let title = sender.0.email_part().email_str().to_string();
-        let body = format!("You were mentioned in {}.{}", self.document_name, file_type);
+        let body = format!(
+            "You were mentioned in {}.{}",
+            self.document_name, file_type_str
+        );
+
         Some(APNSPushNotification {
             aps: Aps {
                 alert: Some(notification::domain::models::apple::Alert::Dictionary(
@@ -221,7 +228,7 @@ impl NotificationExtIos for DocumentMentionNotification {
                 )),
                 ..Default::default()
             },
-            push_notification_data: (),
+            push_notification_data: PushNotificationData { notification_id },
         })
     }
 }
