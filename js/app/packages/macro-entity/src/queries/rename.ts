@@ -9,7 +9,6 @@ import type { ItemType } from '@service-storage/client';
 import { ChannelTypeEnum } from '@service-comms/client';
 import type { EntityData } from '../types/entity';
 import { queryClient } from './client';
-import { queryKeys } from './key';
 import { type InfiniteData, useMutation } from '@tanstack/solid-query';
 import { toast } from '@core/component/Toast/Toast';
 import type { SoupPage } from '@service-storage/generated/schemas';
