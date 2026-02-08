@@ -394,7 +394,7 @@ export function createDeleteDssItemMutation() {
     },
     onMutate: async ({ id }: EntityData) => {
       queryClient.cancelQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
+        queryKey: soupKeys.items._def,
       });
 
       function removeEntityFromQueryData(
@@ -410,12 +410,10 @@ export function createDeleteDssItemMutation() {
           pages,
         };
       }
-      queryClient.setQueriesData(
-        { queryKey: queryKeys.dss({ infinite: true }) },
-        (prev) =>
-          removeEntityFromQueryData(
-            prev as { pages: { items: EntityData[] }[] } | undefined
-          )
+      queryClient.setQueriesData({ queryKey: soupKeys.items._def }, (prev) =>
+        removeEntityFromQueryData(
+          prev as { pages: { items: EntityData[] }[] } | undefined
+        )
       );
     },
     onSettled: (data, error, entity) => {
@@ -455,7 +453,7 @@ export function createBulkDeleteDssItemsMutation() {
         queryKey: soupKeys.items._def,
       });
       queryClient.cancelQueries({
-        queryKey: queryKeys.all.search,
+        queryKey: soupKeys.search._def,
       });
 
       function removeEntitiesFromQueryData(
@@ -517,7 +515,7 @@ export function createBulkDeleteDssItemsMutation() {
         )
       );
 
-      queryClient.setQueriesData({ queryKey: queryKeys.all.search }, (prev) =>
+      queryClient.setQueriesData({ queryKey: soupKeys.search._def }, (prev) =>
         removeEntitiesFromSearchData(
           prev as
             | InfiniteData<{ results: UnifiedSearchResponseItem[] }, unknown>
@@ -533,7 +531,7 @@ export function createBulkDeleteDssItemsMutation() {
         queryKey: soupKeys.items._def,
       });
       queryClient.invalidateQueries({
-        queryKey: queryKeys.all.search,
+        queryKey: soupKeys.search._def,
       });
     },
   }));
@@ -599,7 +597,7 @@ export function createMoveToProjectDssEntityMutation() {
       project: { id: string };
     }) => {
       queryClient.cancelQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
+        queryKey: soupKeys.items._def,
       });
 
       // Only do optimistic updates for documents and chats
@@ -643,7 +641,7 @@ export function createCopyDssEntityMutation() {
     },
     onMutate: async () => {
       queryClient.cancelQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
+        queryKey: soupKeys.items._def,
       });
       // For copy operations, we don't need optimistic updates since we're creating a new item
       // The new item will be added when the mutation completes and queries are invalidated
@@ -700,7 +698,7 @@ export function createBulkCopyDssEntityMutation() {
     onMutate: async () => {
       // For copy, no optimistic update — new IDs unknown until server
       queryClient.cancelQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
+        queryKey: soupKeys.items._def,
       });
     },
 
@@ -762,7 +760,7 @@ export function createBulkMoveToProjectDssEntityMutation() {
       project: { id: string; name: string };
     }) => {
       queryClient.cancelQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
+        queryKey: soupKeys.items._def,
       });
 
       // Only do optimistic updates for documents and chats
@@ -773,7 +771,7 @@ export function createBulkMoveToProjectDssEntityMutation() {
 
       if (nonProjectIds.length > 0) {
         queryClient.setQueriesData(
-          { queryKey: queryKeys.dss({ infinite: true }) },
+          { queryKey: soupKeys.items._def },
           createMoveOptimisticUpdate(nonProjectIds, project.id)
         );
       }
