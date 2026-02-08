@@ -5,6 +5,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { globalRemoveFromSplitHistory } from '@app/component/split-layout/layoutUtils';
 import type { SoupState } from '../create-soup-state';
 import { restoreSoupFocus } from '../utils';
+import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 
 type MakeDeleteOptions = {
   userId: () => string | undefined;
@@ -39,10 +40,14 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
     });
   };
 
+  const previewPanel = useMaybePreviewPanel();
+
   const executeWithSoup = async (entities: EntityData[], soup: SoupState) => {
     const currentIndex = soup.focus.index();
     const nextEntity =
       soup.items.at(currentIndex + 1) ?? soup.items.at(currentIndex - 1);
+
+    const inPreview = previewPanel !== undefined;
 
     openBulkEditModal({
       view: 'delete',
@@ -65,14 +70,14 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
           entities.length > 1 ? `Deleted ${entities.length} items` : 'Deleted'
         );
 
-        restoreSoupFocus(nextEntity?.id);
+        restoreSoupFocus(nextEntity?.id, inPreview);
       },
       onCancel: () => {
         const firstEntity = entities[0];
         if (firstEntity) {
           soup.focus.set(firstEntity.id);
         }
-        restoreSoupFocus(firstEntity?.id);
+        restoreSoupFocus(firstEntity?.id, inPreview);
       },
     });
   };

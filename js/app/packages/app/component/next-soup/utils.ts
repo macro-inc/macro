@@ -206,14 +206,23 @@ export const openEntityInNewTab = ({
  * like 'escape' won't work.
  *
  * @param entityId - Optional entity ID to focus on. If not provided, focuses the first entity in the list.
+ * @param inPreview - Whether to check for the soup view in a preview panel
  */
-export const restoreSoupFocus = async (entityId?: string): Promise<void> => {
+export const restoreSoupFocus = async (
+  entityId?: string,
+  inPreview = false
+): Promise<void> => {
   // Get the active split's soup view DOM reference
   const activeSplitId = globalSplitManager()?.activeSplitId();
   if (!activeSplitId) return;
 
-  const soupViewRef = splitIdToSoupViewRef.get(activeSplitId);
-  const domRef = soupViewRef?.domRef();
+  let domRef = document.querySelector(`[data-soup-view-id="${activeSplitId}"]`);
+
+  if (inPreview) {
+    domRef = document.querySelector(
+      `[data-soup-view-id="${activeSplitId}-preview"]`
+    );
+  }
 
   if (!domRef) return;
 

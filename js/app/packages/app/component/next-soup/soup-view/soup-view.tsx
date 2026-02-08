@@ -534,6 +534,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
       }}
       data-hotkey-scope={soupViewScope}
       data-soup-view
+      data-soup-view-id={panel.handle.id + (previewPanel ? '-preview' : '')}
     >
       <div
         ref={setListRef}

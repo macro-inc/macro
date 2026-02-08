@@ -3,6 +3,7 @@ import type { EntityData } from '@macro-entity';
 import { openBulkEditModal } from '@app/component/bulk-edit-entity/BulkEditEntityModal';
 import type { SoupState } from '../create-soup-state';
 import { restoreSoupFocus } from '../utils';
+import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 
 type MakeRenameOptions = {
   userId: () => string | undefined;
@@ -34,8 +35,12 @@ export const makeRenameAction = (options: MakeRenameOptions) => {
     });
   };
 
+  const previewPanel = useMaybePreviewPanel();
+
   const executeWithSoup = async (entities: EntityData[], soup: SoupState) => {
     const firstEntity = entities[0];
+
+    const inPreview = previewPanel !== undefined;
 
     openBulkEditModal({
       view: 'rename',
@@ -47,13 +52,13 @@ export const makeRenameAction = (options: MakeRenameOptions) => {
         if (firstEntity) {
           soup.focus.set(firstEntity.id);
         }
-        restoreSoupFocus(firstEntity?.id);
+        restoreSoupFocus(firstEntity?.id, inPreview);
       },
       onCancel: () => {
         if (firstEntity) {
           soup.focus.set(firstEntity.id);
         }
-        restoreSoupFocus(firstEntity?.id);
+        restoreSoupFocus(firstEntity?.id, inPreview);
       },
     });
   };
