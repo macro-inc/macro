@@ -25,6 +25,7 @@ import {
   PROPERTY_OPTION_IDS,
   SYSTEM_PROPERTY_IDS,
 } from '@core/component/Properties/constants';
+import { soupKeys } from '@queries/soup/keys';
 
 const mergeSearchEntities = <T extends EntityData>(
   first: WithSearch<T>,
@@ -425,7 +426,7 @@ export async function archiveEmail(
 ) {
   await Promise.all([
     queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
-    queryClient.cancelQueries({ queryKey: queryKeys.all.dss }),
+    queryClient.cancelQueries({ queryKey: soupKeys.items._def }),
   ]);
 
   const previousEmail = queryClient.getQueriesData<{
@@ -436,7 +437,7 @@ export async function archiveEmail(
   const previousEmailThreadItemFromDss = queryClient.getQueriesData<{
     pages: { items: EntityData[] }[];
   }>({
-    queryKey: queryKeys.all.dss,
+    queryKey: soupKeys.items._def,
   });
 
   const applyOptimistic = (data?: {
@@ -500,7 +501,7 @@ export async function archiveEmail(
     // revalidate
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.all.dss }),
+      queryClient.invalidateQueries({ queryKey: soupKeys.items._def }),
     ]);
   }
 }

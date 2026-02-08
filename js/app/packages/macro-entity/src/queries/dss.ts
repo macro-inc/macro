@@ -801,7 +801,7 @@ export function optimisticUpdateDssItemViewedAt(itemId: string) {
   const now = new Date();
 
   queryClient.setQueriesData(
-    { queryKey: queryKeys.all.dss },
+    { queryKey: soupKeys.items._def },
     (prev: InfiniteData<SoupPage, unknown> | undefined) => {
       if (!prev) return prev;
 
@@ -840,7 +840,7 @@ export function optimisticUpdateDssItemViewedAt(itemId: string) {
 /** Finds a soup item in the cache and returns its location. */
 export function hasSoupItem(itemId: string) {
   const queries = queryClient.getQueriesData<InfiniteData<SoupPage, unknown>>({
-    queryKey: queryKeys.all.dss,
+    queryKey: soupKeys.items._def,
   });
 
   for (const [, data] of queries) {
@@ -864,6 +864,6 @@ export function hasSoupItem(itemId: string) {
  */
 export function invalidateSoup() {
   queryClient.invalidateQueries({
-    queryKey: queryKeys.all.dss,
+    queryKey: soupKeys.items._def,
   });
 }
