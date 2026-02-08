@@ -5,11 +5,6 @@ import PreviewIcon from '@macro-icons/wide/preview.svg';
 import NoiseIcon from '@macro-icons/wide/noise.svg';
 import SignalIcon from '@macro-icons/wide/signal.svg';
 import {
-  FilterButton,
-  FilterDivider,
-  ShortcutLabel,
-} from '@app/component/Soup/components/FilterButton';
-import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
@@ -24,6 +19,7 @@ import {
   createSignal,
   onMount,
   createEffect,
+  type Component,
 } from 'solid-js';
 import {
   ENTITY_TYPE_FILTER_CONFIGS,
@@ -37,7 +33,8 @@ import type { ValidHotkey } from '@core/hotkey/types';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { IS_MAC } from '@core/constant/isMac';
 import { SortDropdown } from '@app/component/Soup/components/SortDropdown';
-import type { SystemSortOption } from '@app/component/ViewConfig';
+import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
+import { Dynamic } from 'solid-js/web';
 
 /**
  * Keyboard shortcuts for entity type filters.
@@ -512,3 +509,77 @@ const SearchBar = () => {
     </div>
   );
 };
+
+const SHORTCUT_SUFFIXES: Record<string, string> = { space: '␣', '/': '/' };
+
+export const ShortcutLabel: Component<{ label: string; shortcut: string }> = (
+  props
+) => {
+  const s = props.shortcut.trim();
+  if (!s) return <>{props.label}</>;
+
+  const suffix = SHORTCUT_SUFFIXES[s.toLowerCase()] ?? SHORTCUT_SUFFIXES[s];
+  if (suffix) {
+    return (
+      <>
+        {props.label}
+        <span class="ml-1 font-mono opacity-70">{suffix}</span>
+      </>
+    );
+  }
+
+  const idx = props.label.toLowerCase().indexOf(s.toLowerCase());
+  if (idx === -1) return <>{props.label}</>;
+
+  return (
+    <>
+      {props.label.slice(0, idx)}
+      <span class="underline underline-offset-2 decoration-current/60">
+        {props.label.slice(idx, idx + s.length)}
+      </span>
+      {props.label.slice(idx + s.length)}
+    </>
+  );
+};
+
+export interface FilterButtonProps {
+  icon: Component<{ class?: string }>;
+  label: string;
+  shortcut: string;
+  isActive: (() => boolean) | boolean;
+  onClick: () => void;
+  paddingClass?: string;
+}
+
+export const FilterButton: Component<FilterButtonProps> = (props) => (
+  <div class="flex items-center mr-0.5 shrink-0">
+    <Tooltip
+      tooltip={<LabelAndHotKey label={props.label} shortcut={props.shortcut} />}
+    >
+      <button
+        type="button"
+        class={`flex items-center gap-1 h-[22px] touch:mobile-width:h-9 ${props.paddingClass ?? 'pl-2 pr-2.5'} active:bg-accent active:text-panel rounded-full`}
+        classList={{
+          'bg-accent text-panel':
+            typeof props.isActive === 'function'
+              ? props.isActive()
+              : props.isActive,
+          'text-ink-muted hover:text-accent hover:bg-accent/20':
+            !(typeof props.isActive === 'function'
+              ? props.isActive()
+              : props.isActive),
+        }}
+        onClick={props.onClick}
+      >
+        <Dynamic component={props.icon} class="size-3.5" />
+        <span class="leading-none">
+          <ShortcutLabel label={props.label} shortcut={props.shortcut} />
+        </span>
+      </button>
+    </Tooltip>
+  </div>
+);
+
+export const FilterDivider: Component = () => (
+  <div class="mx-0.5 w-px h-5 bg-edge-muted/50 shrink-0" />
+);

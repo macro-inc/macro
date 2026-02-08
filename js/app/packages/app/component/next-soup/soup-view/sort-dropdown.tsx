@@ -2,8 +2,8 @@ import { type Component, createSignal, For, Show } from 'solid-js';
 import { Popover } from '@kobalte/core/popover';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import SortIcon from '@macro-icons/wide/sort.svg';
-import type { SystemSortOption } from '../../ViewConfig';
-import { ShortcutLabel } from './FilterButton';
+import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
+import { ShortcutLabel } from '@app/component/next-soup/soup-view/soup-toolbar';
 
 export interface SortOption {
   value: SystemSortOption;

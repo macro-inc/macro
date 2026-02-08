@@ -7,6 +7,12 @@ import {
   type WithNotification,
 } from '@macro-entity';
 
+export type SystemSortOption =
+  | 'updated_at'
+  | 'created_at'
+  | 'viewed_at'
+  | 'frecency';
+
 export function sortByNotifiedAt<T extends WithNotification<EntityData>>(
   a: T,
   b: T
