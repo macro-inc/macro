@@ -32,9 +32,9 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { IS_MAC } from '@core/constant/isMac';
-import { SortDropdown } from '@app/component/Soup/components/SortDropdown';
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { Dynamic } from 'solid-js/web';
+import { SortDropdown } from '@app/component/next-soup/soup-view/sort-dropdown';
 
 /**
  * Keyboard shortcuts for entity type filters.
