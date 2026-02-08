@@ -10,12 +10,12 @@ import {
 } from '@notifications';
 import { useSetPropertyStatusCompleteMutation } from '@queries/properties/entity';
 import type { PropertiesEntityType } from '@service-properties/client';
+import type { SoupState } from '../create-soup-state';
 import {
+  archiveEmail,
   isCurrentUserAssigned,
   isTaskClosed,
-} from '@app/component/Soup/utils/filterHelpers';
-import type { SoupState } from '../create-soup-state';
-import { archiveEmail } from '@app/component/next-soup/utils';
+} from '@app/component/next-soup/utils';
 
 type MakeMarkDoneOptions = {
   userId: () => string | undefined;

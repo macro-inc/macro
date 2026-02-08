@@ -3,16 +3,16 @@ import {
   type TaskEntityWithProperties,
   type EntityData,
 } from '@macro-entity';
-import {
-  getTaskAssigneeIds,
-  isTaskClosed,
-} from '@app/component/Soup/utils/filterHelpers';
 import { useUserId } from '@core/context/user';
 import { createMemo } from 'solid-js';
 import {
   DEPRIORITY_LABEL_SIGNAL_TOGGLES,
   PRIORITY_LABEL_SIGNAL_TOGGLES,
 } from '@app/component/next-soup/filters/signal-configs';
+import {
+  isCurrentUserAssigned,
+  isTaskClosed,
+} from '@app/component/next-soup/utils';
 
 /** Labels that indicate priority emails (signal) */
 const PRIORITY_LABELS = createMemo(
@@ -102,19 +102,6 @@ function isNoiseEmail(entity: EmailEntity): boolean {
   // Noise = has depriority indicators AND no priority indicators
   return hasDepriority && !hasPriority;
 }
-
-/**
- * checks if the current user is assigned to the task.
- */
-export const isCurrentUserAssigned = (
-  entity: TaskEntityWithProperties,
-  currentUserId: string | undefined
-): boolean => {
-  if (!currentUserId) return false;
-  const assigneeIds = getTaskAssigneeIds(entity);
-  if (assigneeIds.length === 0) return true;
-  return assigneeIds.includes(currentUserId);
-};
 
 /**
  * determines if a task should appear in the signal tab.
