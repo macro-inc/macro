@@ -38,6 +38,8 @@ export function registerSplitHotkeys(args: {
     goForward,
     splitName,
     getSplitCount,
+    isNotUnifiedList,
+    replaceSplit,
   } = args;
   const splitManager = globalSplitManager();
   registerHotkey({
