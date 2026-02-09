@@ -69,7 +69,7 @@ export const SoupToolbar = () => {
 
           <div
             ref={setScrollContainerRef}
-            class="flex items-center h-full overflow-x-auto scrollbar-hidden overscroll-none text-xs touch:mobile-width:text-sm"
+            class="flex items-center h-full overflow-x-auto scrollbar-hidden overscroll-none text-xs"
           >
             <SoupFilters />
             <SearchBar />
@@ -88,7 +88,7 @@ export const SoupToolbar = () => {
               onClick={soup.filters.clear}
             >
               <XIcon class="size-4.5" />
-              <span class="text-xs touch:mobile-width:text-sm leading-none">
+              <span class="text-xs leading-none">
                 Clear
                 <span class="ml-1 font-mono opacity-70">/</span>
               </span>

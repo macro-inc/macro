@@ -195,7 +195,7 @@ function CollapsedHeader(props: {
           hiddenActions={props.hiddenActions}
         />
         <Show when={props.message.internal_date_ts}>
-          <div class="text-xs touch:mobile-width:text-sm text-ink">
+          <div class="text-xs text-ink">
             {formatShortDate(props.message.internal_date_ts!)}
           </div>
         </Show>

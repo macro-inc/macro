@@ -492,6 +492,16 @@
 /** isolate the app-root stacking context from the kobalte dialog and modal stacking context */
 #root { isolation: isolate; }
 
+/* On mobile (width and touch) bump tailwind's font-sizes up 1px. Purposefully only changing the "reading" sizes, not the heading sizes. */
+@media (max-width: 639px) {
+  :root:where(html[data-touch-device="true"]) {
+    --text-xxs: 0.6875rem;
+    --text-xs: 0.8125rem;
+    --text-sm: 0.9375rem;
+    --text-base: 1.0625rem;
+  }
+}
+
 @theme default {
     /* Font families */
     --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";

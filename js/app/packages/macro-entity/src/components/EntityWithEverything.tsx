@@ -143,7 +143,7 @@ function ChannelMessageContentHit(props: { data: ChannelContentHitData }) {
       </div>
       <div class="flex gap-2 w-full min-w-0 overflow-hidden items-baseline">
         <div class="shrink-0 truncate min-w-0 font-medium">{userName()}</div>
-        <div class="shrink-0 font-mono text-xs touch:mobile-width:text-sm uppercase text-ink-extra-muted">
+        <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted">
           {createFormattedDate(props.data.sentAt)}
         </div>
         <div class="text-ink-muted truncate flex items-center flex-1 min-w-0">
@@ -192,7 +192,7 @@ function EmailMessageContentHit(props: {
           </div>
         </Show>
         <Show when={!isSingleMatch() && !isSingleSentAt()}>
-          <div class="shrink-0 font-mono text-xs touch:mobile-width:text-sm uppercase text-ink-extra-muted">
+          <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted">
             {createFormattedDate(props.data.sentAt)}
           </div>
         </Show>
@@ -401,7 +401,7 @@ function NotificationRow(props: {
         </div>
         <MessageContent />
       </div>
-      <div class="shrink-0 font-mono text-xs touch:mobile-width:text-sm uppercase text-ink-extra-muted ml-2">
+      <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted ml-2">
         {createFormattedDate(props.notification.createdAt)}
       </div>
     </CollapsibleListRow>
@@ -490,7 +490,7 @@ function StackedNotificationRow(props: {
           </div>
         </Show>
       </div>
-      <div class="shrink-0 font-mono text-xs touch:mobile-width:text-sm uppercase text-ink-extra-muted ml-2">
+      <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted ml-2">
         {createFormattedDate(mostRecent().createdAt)}
       </div>
     </CollapsibleListRow>
@@ -684,7 +684,7 @@ function ContentHitRow(props: {
             <Show when={match()}>
               {(match) => {
                 return (
-                  <span class="font-mono text-xs touch:mobile-width:text-sm text-ink-disabled/50">
+                  <span class="font-mono text-xs text-ink-disabled/50">
                     {match()[0] + 1}/{match()[1]}
                   </span>
                 );
@@ -980,14 +980,14 @@ export function EntityWithEverything(
               {/* Timestamp inline with subject in narrow mode */}
               <Show when={props.timestamp ?? props.entity.updatedAt}>
                 {(date) => (
-                  <span class="hidden @max-md/uList:inline shrink-0 whitespace-nowrap text-xs touch:mobile-width:text-sm font-mono uppercase text-ink-extra-muted">
+                  <span class="hidden @max-md/uList:inline shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted">
                     {createFormattedDate(date())}
                   </span>
                 )}
               </Show>
             </div>
             {/* Body snippet - below subject in narrow mode */}
-            <div class="hidden @max-md/uList:block truncate w-full text-xs touch:mobile-width:text-sm opacity-60">
+            <div class="hidden @max-md/uList:block truncate w-full text-xs opacity-60">
               {props.entity.snippet}
             </div>
           </div>
@@ -1091,7 +1091,7 @@ export function EntityWithEverything(
             {/* Timestamp inline with title in narrow mode */}
             <Show when={props.timestamp ?? props.entity.updatedAt}>
               {(date) => (
-                <span class="hidden @max-md/uList:inline shrink-0 whitespace-nowrap text-xs touch:mobile-width:text-sm font-mono uppercase text-ink-extra-muted">
+                <span class="hidden @max-md/uList:inline shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted">
                   {createFormattedDate(date())}
                 </span>
               )}
@@ -1106,7 +1106,7 @@ export function EntityWithEverything(
               </span>
               <Show when={latestMessage()}>
                 {(lastMessage) => (
-                  <div class="truncate shrink grow opacity-60 flex items-center @max-md/uList:w-full @max-md/uList:text-xs @max-md/uList:touch:mobile-width:text-sm">
+                  <div class="truncate shrink grow opacity-60 flex items-center @max-md/uList:w-full @max-md/uList:text-xs @max-md">
                     {/* TODO (seamus): Channels endpoint does not return any information about attachments. If we have an empty message, assume it's attachments.*/}
                     <Show
                       when={lastMessage().content.trim()}
@@ -1196,7 +1196,7 @@ export function EntityWithEverything(
     <div
       use:draggable
       data-checked={props.checked}
-      class="everything-entity w-full relative group/entity hover:bg-hover/30 text-sm touch:mobile-width:text-base"
+      class="everything-entity w-full relative group/entity hover:bg-hover/30 text-sm"
       style={{
         'min-height': `${ENTITY_HEIGHT}px`,
       }}
@@ -1405,7 +1405,7 @@ export function EntityWithEverything(
             </Show>
             <Show when={props.timestamp ?? props.entity.updatedAt}>
               {(date) => (
-                <span class="w-[8ch] text-right shrink-0 whitespace-nowrap text-xs touch:mobile-width:text-sm font-mono uppercase text-ink-extra-muted @max-md/uList:hidden">
+                <span class="w-[8ch] text-right shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted @max-md/uList:hidden">
                   {createFormattedDate(date())}
                 </span>
               )}
@@ -1620,7 +1620,7 @@ function EntityProject(props: {
       onPointerDown={(e) =>
         openProjectEntity({ event: e, eventHandler: props.onPointerdown })
       }
-      class="flex gap-1 items-center text-xs touch:mobile-width:text-sm text-ink-extra-muted min-w-0"
+      class="flex gap-1 items-center text-xs text-ink-extra-muted min-w-0"
       classList={{
         'hover:text-accent': projectQuery.isSuccess,
       }}
