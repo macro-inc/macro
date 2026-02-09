@@ -40,7 +40,7 @@ import {
 } from '@entity';
 import { queryKeys, useQueryClient } from '@macro-entity';
 import { createEffectOnEntityTypeNotification } from '@notifications';
-import { debounce, throttle } from '@solid-primitives/scheduled';
+import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui/utils/classname';
 import {
   type Accessor,
@@ -70,7 +70,6 @@ import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { usePropertyEditorHotkeys } from '@app/component/property-edit-modal/hooks/usePropertyEditorHotkeys';
-import { set } from 'colorjs.io/fn';
 
 const DEFAULT_ENTITY_HEIGHT = 40;
 
@@ -567,10 +566,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                 timestamp={timestamp()}
                                 highlighted={
                                   panel.isPanelActive() && row.isFocused()
-                                }
-                                hovered={
-                                  !!soup.previewEntity() &&
-                                  hoveredEntityId() === row.original.id
                                 }
                                 onMouseOver={() => {
                                   if (isKeypressActive()) return;
