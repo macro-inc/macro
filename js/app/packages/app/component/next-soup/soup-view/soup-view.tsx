@@ -20,7 +20,9 @@ import {
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
 import { useElementItemCount } from '@app/component/next-soup/use-element-item-count';
+import { registerPreviewEntity } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import {
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
@@ -85,6 +87,7 @@ import { EmptyState } from '@app/component/next-soup/soup-view/empty-states';
 import { SoupChatInput } from '@app/component/SoupChatInput';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
+import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 
 const DEFAULT_ENTITY_HEIGHT = 40;
 
@@ -125,9 +128,14 @@ const useSoupNotificationInvalidators = () => {
   );
 };
 
-const cacheMap = new Map<
+const stateCache = new Map<
   string,
   {
+    soup: {
+      focus: string | undefined;
+      filters: string[];
+      sort: SystemSortOption[];
+    };
     virtualCache: CacheSnapshot;
     scrollOffset: number;
   }
@@ -194,22 +202,27 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   let initialLoad = true;
 
-  createEffect(
-    on(rows, () => {
-      if (!initialLoad || source.isLoading()) return;
-      focusFirstEntity();
-      initialLoad = false;
-    })
-  );
+  const registerFocusEffects = (moveInitialFocus = true) => {
+    if (moveInitialFocus) {
+      createEffect(
+        on(rows, () => {
+          if (!initialLoad || source.isLoading()) return;
+          focusFirstEntity();
+          initialLoad = false;
+        })
+      );
+    }
 
-  createEffect(
-    on(
-      () => [soup.filters.activeIds(), searchText()] as const,
-      () => {
-        focusFirstEntity();
-      }
-    )
-  );
+    createEffect(
+      on(
+        () => [soup.filters.activeIds(), searchText()] as const,
+        () => {
+          focusFirstEntity();
+        },
+        { defer: true }
+      )
+    );
+  };
 
   const previewPanel = useMaybePreviewPanel();
 
@@ -244,12 +257,30 @@ export const SoupViewList = (props: SoupViewListProps) => {
   useSoupViewHotkeys({
     splitId: panel.handle.id,
     scopeId: scopeId(),
-    domRef: soupViewRef,
     soup,
     splitHandle: panel.handle,
     virtualizerHandle,
     previewState: () => !!soup.previewEntity(),
     getSplitCount,
+  });
+
+  // Register previewed entity for auto-attach
+  createEffect(() => {
+    const entity = soup.previewEntity() ? soup.focus.item() : undefined;
+    if (!entity) {
+      registerPreviewEntity(panel.handle.id, undefined);
+      return;
+    }
+    const type =
+      entity.type === 'document'
+        ? fileTypeToResolvedBlockName(
+            (entity as { fileType?: string }).fileType
+          )
+        : entity.type;
+    registerPreviewEntity(panel.handle.id, { type, id: entity.id });
+  });
+  onCleanup(() => {
+    registerPreviewEntity(panel.handle.id, undefined);
   });
 
   // Create markDone action for swipe/click handlers
@@ -289,7 +320,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     }
 
     await openEntityInSplitFromUnifiedList(entity, {
-      openInNewSplit: event.altKey,
+      openInNewSplit: event.shiftKey,
       location,
       splitHandle: panel.handle,
     });
@@ -303,7 +334,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     }
 
     await openEntityInSplitFromUnifiedList(entity, {
-      openInNewSplit: event.altKey,
+      openInNewSplit: event.shiftKey,
       location,
       splitHandle: panel.handle,
     });
@@ -503,7 +534,12 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
     if (!virtualHandle) return;
 
-    cacheMap.set(getCacheKey(), {
+    stateCache.set(getCacheKey(), {
+      soup: {
+        focus: soup.focus.id(),
+        filters: soup.filters.activeIds(),
+        sort: soup.sort.active().map((s) => s.id),
+      },
       virtualCache: virtualHandle.cache,
       scrollOffset: virtualHandle.scrollOffset,
     });
@@ -514,11 +550,22 @@ export const SoupViewList = (props: SoupViewListProps) => {
   ) => {
     setVirtualizerHandle(handle);
 
-    const cached = cacheMap.get(getCacheKey());
+    const cached = stateCache.get(getCacheKey());
 
-    if (!cached) return;
+    if (!cached) {
+      registerFocusEffects();
+      return;
+    }
+
+    soup.focus.set(cached.soup.focus);
+    for (const id of cached.soup.filters) {
+      soup.filters.toggle(id);
+    }
+
+    soup.sort.setAll(cached.soup.sort);
 
     handle?.scrollTo(cached.scrollOffset);
+    registerFocusEffects(false);
   };
 
   return (
@@ -567,7 +614,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                 setCollapseEntity={soup.collapseEntity.set}
               >
                 <SoupList
-                  cache={cacheMap.get(getCacheKey())?.virtualCache}
+                  cache={stateCache.get(getCacheKey())?.virtualCache}
                   ref={setLocalEntityListRef}
                   virtualizerClass="scrollbar-hidden"
                   class="overflow-hidden flex min-w-0"

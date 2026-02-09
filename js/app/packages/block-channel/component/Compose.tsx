@@ -4,7 +4,6 @@ import {
   StaticSplitLabel,
 } from '@app/component/split-layout/components/SplitLabel';
 import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
-import { isInBlock } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
@@ -18,10 +17,6 @@ import {
 import { handleFileFolderDrop } from '@core/util/upload';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import {
-  isDraggingOverChannelSignal,
-  isValidChannelDragSignal,
-} from '../signal/attachment';
 import { handleFileUpload } from '../utils/inputAttachments';
 import { DraftChannelInput } from './ChannelInput';
 
@@ -31,12 +26,6 @@ export function ChannelCompose() {
   const [channelName, setChannelName] = createSignal<string>('');
 
   const [isDraggedOver, setIsDraggedOver] = createSignal(false);
-  const [isValidChannelDrag] = isInBlock()
-    ? isValidChannelDragSignal
-    : createSignal(true);
-  const [isDraggingOverChannel, setIsDraggingOverChannel] = isInBlock()
-    ? isDraggingOverChannelSignal
-    : createSignal(false);
 
   const [channelInputAttachmentsStore, setChannelInputAttachmentsStore] =
     createStore<Record<string, InputAttachment[]>>({});
@@ -117,7 +106,6 @@ export function ChannelCompose() {
         class="relative flex flex-col w-full h-full panel"
         use:fileFolderDrop={{
           onDrop: (files, folders) => {
-            setIsDraggingOverChannel(false);
             handleFileFolderDrop(files, folders, (uploadEntries) =>
               handleFileUpload(uploadEntries, {
                 store: channelInputAttachmentsStore,
@@ -134,13 +122,8 @@ export function ChannelCompose() {
           },
         }}
       >
-        <Show when={isDraggedOver() || isDraggingOverChannel()}>
-          <FileDropOverlay valid={isValidChannelDrag()}>
-            <Show when={!isValidChannelDrag()}>
-              <div class="font-mono text-failure">
-                [!] Invalid attachment file
-              </div>
-            </Show>
+        <Show when={isDraggedOver()}>
+          <FileDropOverlay valid={true}>
             <div class="font-mono">
               Drop any file here to add it to the conversation
             </div>

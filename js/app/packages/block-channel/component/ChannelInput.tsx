@@ -11,7 +11,7 @@ import type { IUser } from '@core/user';
 import { channelParticipantInfo } from '@core/user/util';
 import { usePostTypingUpdateMutation } from '@queries/channel/typing';
 import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
-import { createMemo, createSignal, onMount } from 'solid-js';
+import { type Accessor, createMemo, createSignal, onMount } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
 import { BaseInput } from './BaseInput';
 import { useSendChannelMessage } from '@block-channel/hooks/message';
@@ -26,6 +26,8 @@ export type ChannelInputProps = {
   onFocusLeaveStart?: (e: KeyboardEvent) => void;
   autoFocusOnMount?: boolean;
   domRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
+  isDraggingOverChannel?: Accessor<boolean>;
+  isValidChannelDrag?: Accessor<boolean>;
 };
 
 export function ChannelInput(props: ChannelInputProps) {
@@ -83,6 +85,8 @@ export function ChannelInput(props: ChannelInputProps) {
       channelUsers={channelUsers}
       autoFocusOnMount={props.autoFocusOnMount}
       domRef={props.domRef}
+      isDraggingOverChannel={props.isDraggingOverChannel}
+      isValidChannelDrag={props.isValidChannelDrag}
     />
   );
 }

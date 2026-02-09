@@ -238,7 +238,7 @@ export function KommandMenuInner(props: {
   });
 
   registerHotkey({
-    hotkey: 'opt+enter',
+    hotkey: 'shift+enter',
     scopeId: konsoleHotkeyScopeId,
     description: 'Open in new split',
     keyDownHandler: () => {

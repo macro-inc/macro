@@ -3,15 +3,11 @@ import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
-import type {
-  SplitContent,
-  SplitHandle,
-} from '@app/component/split-layout/layoutManager';
+import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { waitForFrames } from '@core/util/sleep';
 import {
-  type DocumentEntity,
   type EntityData,
   isSearchEntity,
   queryKeys,
@@ -26,6 +22,7 @@ import {
   SYSTEM_PROPERTY_IDS,
 } from '@core/component/Properties/constants';
 import { soupKeys } from '@queries/soup/keys';
+import { match } from 'ts-pattern';
 
 const mergeSearchEntities = <T extends EntityData>(
   first: WithSearch<T>,
@@ -282,38 +279,7 @@ export const openEntityInSplitFromUnifiedList = async (
 
   const blockOrchestrator = splitManager.getOrchestrator();
 
-  // Create split functions
-  const insertSplit = (content: SplitContent) => {
-    return splitManager.createNewSplit({
-      content,
-      activate: true,
-      referredFrom: 'unified-list',
-    });
-  };
-
-  const replaceOrInsertSplit = (content: SplitContent) => {
-    const existingSplit = splitManager.getSplitByContent(
-      content.type,
-      content.id
-    );
-    if (existingSplit) {
-      return existingSplit;
-    }
-
-    splitHandle.replace({ next: content, referredFrom: 'unified-list' });
-    return splitHandle;
-  };
-
-  // Handle document entities separately
-  if (entity.type === 'document') {
-    return openDocument(entity as DocumentEntity, {
-      openInNewSplit,
-      blockOrchestrator,
-      location,
-      insertSplit,
-      replaceOrInsertSplit,
-    });
-  }
+  const content = getEntitySplitContent(entity);
 
   // Build params for channel entities with location
   const params =
@@ -324,12 +290,15 @@ export const openEntityInSplitFromUnifiedList = async (
         }
       : undefined;
 
-  // Create or replace split based on openInNewSplit option
-  const handle = openInNewSplit
-    ? insertSplit({ type: entity.type, id: entity.id, params })
-    : replaceOrInsertSplit({ type: entity.type, id: entity.id, params });
-
-  handle?.activate();
+  splitManager.openWithSplit(
+    { ...content, params },
+    {
+      referredFrom: 'unified-list',
+      activate: true,
+      preferNewSplit: openInNewSplit,
+      handle: splitHandle,
+    }
+  );
 
   // Navigate to specific location if provided
   if (!location) return;
@@ -337,41 +306,17 @@ export const openEntityInSplitFromUnifiedList = async (
   await navigateToLocation(entity.id, location, blockOrchestrator);
 };
 
-/**
- * Opens a document entity in a split.
- */
-async function openDocument(
-  entity: DocumentEntity,
-  options: {
-    openInNewSplit?: boolean;
-    blockOrchestrator: BlockOrchestrator;
-    location?: SearchLocation;
-    insertSplit: (content: SplitContent) => SplitHandle | undefined;
-    replaceOrInsertSplit: (content: SplitContent) => SplitHandle | undefined;
-  }
-): Promise<void> {
-  const {
-    openInNewSplit,
-    blockOrchestrator,
-    location,
-    insertSplit,
-    replaceOrInsertSplit,
-  } = options;
+function getEntitySplitContent(entity: EntityData) {
+  return match(entity)
+    .with({ type: 'document' }, (entity) => {
+      const { id, fileType, subType } = entity;
+      const blockName = fileTypeToBlockName(subType?.type ?? fileType);
 
-  const { id, fileType, subType } = entity;
-  const blockName = fileTypeToBlockName(subType?.type ?? fileType);
-
-  // Create or replace split based on openInNewSplit option
-  const handle = openInNewSplit
-    ? insertSplit({ type: blockName, id })
-    : replaceOrInsertSplit({ type: blockName, id });
-
-  handle?.activate();
-
-  // Navigate to specific location if provided
-  if (!location) return;
-
-  await navigateToLocation(id, location, blockOrchestrator);
+      return { type: blockName, id };
+    })
+    .otherwise((entity) => {
+      return { type: entity.type, id: entity.id };
+    });
 }
 
 /**

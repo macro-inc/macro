@@ -1,7 +1,7 @@
 import { type Accessor, createSignal } from 'solid-js';
 
-export type SortConfig<T> = {
-  id: string;
+export type SortConfig<T, TId extends string = string> = {
+  id: TId;
   fn: (a: T, b: T) => number;
   desc?: boolean;
 };
@@ -9,7 +9,7 @@ export type SortConfig<T> = {
 /** Sort state return type with strongly typed IDs */
 export type SortState<T, TId extends string = string> = {
   /** Currently active sort configs (ordered by priority) */
-  active: Accessor<SortConfig<T>[]>;
+  active: Accessor<SortConfig<T, TId>[]>;
   isActive: (id: TId) => boolean;
   /** Toggle a sort on/off */
   toggle: (id: TId, value?: boolean) => void;
