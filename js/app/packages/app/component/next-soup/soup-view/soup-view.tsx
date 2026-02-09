@@ -85,6 +85,7 @@ import { EmptyState } from '@app/component/next-soup/soup-view/empty-states';
 import { SoupChatInput } from '@app/component/SoupChatInput';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
+import { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 
 const DEFAULT_ENTITY_HEIGHT = 40;
 
@@ -125,9 +126,14 @@ const useSoupNotificationInvalidators = () => {
   );
 };
 
-const cacheMap = new Map<
+const stateCache = new Map<
   string,
   {
+    soup: {
+      focus: string | undefined;
+      filters: string[];
+      sort: SystemSortOption[];
+    };
     virtualCache: CacheSnapshot;
     scrollOffset: number;
   }
@@ -503,7 +509,12 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
     if (!virtualHandle) return;
 
-    cacheMap.set(getCacheKey(), {
+    stateCache.set(getCacheKey(), {
+      soup: {
+        focus: soup.focus.id(),
+        filters: soup.filters.activeIds(),
+        sort: soup.sort.active().map((s) => s.id),
+      },
       virtualCache: virtualHandle.cache,
       scrollOffset: virtualHandle.scrollOffset,
     });
