@@ -11,9 +11,6 @@ pub use device::*;
 pub use metadata::*;
 pub use unsubscribe::*;
 
-// #[cfg(test)]
-// mod tests;
-
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(transparent)]
 pub struct ChannelMessageDocumentMetadata(pub DocumentMentionMetadata);
