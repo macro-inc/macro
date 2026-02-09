@@ -14,6 +14,8 @@ type NotificationRendererProps = {
   mode: 'preview' | 'full';
 };
 
+const EPOCH_ZERO = new Date(0);
+
 export function NotificationRenderer(props: NotificationRendererProps) {
   const typed = () => tryToTypedNotification(props.notification);
   const data = () => {
@@ -26,7 +28,7 @@ export function NotificationRenderer(props: NotificationRendererProps) {
     return result;
   };
 
-  const time = () => formatDate(props.notification.createdAt);
+  const time = () => formatDate(props.notification.createdAt ?? EPOCH_ZERO);
 
   return (
     <Show when={data()}>

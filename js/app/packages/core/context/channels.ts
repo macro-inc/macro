@@ -72,7 +72,7 @@ export function useChannelActivity(channelId: string) {
 }
 
 /**
- * Get a reactive map of userId -> Unix timestamp for the most recent DM
+ * Get a reactive map of userId -> Date for the most recent DM
  * activity with that user. Useful for ranking/sorting users by recency of
  * interaction.
  */
@@ -82,7 +82,7 @@ export function useDmActivityByUserId(): Accessor<Map<string, Date>> {
 
   return createMemo(() => {
     const currentUser = currentUserId();
-    if (!currentUser) return new Map<string, Date>();
+    if (!currentUser) return new Map();
 
     const allChannels = channels();
     const map = new Map<string, Date>();
@@ -96,11 +96,7 @@ export function useDmActivityByUserId(): Accessor<Map<string, Date>> {
       if (!otherParticipant) continue;
 
       const timestamp = channel.updated_at;
-      if (timestamp) {
-        const date = new Date(timestamp);
-        const unixTimestamp = date.getTime();
-        map.set(otherParticipant.user_id, unixTimestamp);
-      }
+      map.set(otherParticipant.user_id, timestamp);
     }
 
     return map;

@@ -1,4 +1,5 @@
 import type { Property } from '@core/component/Properties/types';
+import { applyDurationToDate } from '@core/util/dateSearch/dateParser';
 import type {
   ChannelEntity,
   ChatEntity,
@@ -26,13 +27,14 @@ export const MOCK_USERS = [
   { id: MOCK_USER_IDS.currentUser, firstName: 'Current', lastName: 'User' },
 ] as const;
 
+const now = new Date();
 export const MOCK_TIMESTAMPS = {
-  now: Date.now(),
-  today: Date.now() - 1000 * 60 * 30, // 30 minutes ago
-  yesterday: Date.now() - 1000 * 60 * 60 * 24, // 1 day ago
-  lastWeek: Date.now() - 1000 * 60 * 60 * 24 * 7, // 7 days ago
-  lastMonth: Date.now() - 1000 * 60 * 60 * 24 * 30, // 30 days ago
-  lastYear: Date.now() - 1000 * 60 * 60 * 24 * 365, // 365 days ago
+  now,
+  today: applyDurationToDate(now, { value: -30, unit: 'min' }),
+  yesterday: applyDurationToDate(now, { value: -1, unit: 'd' }),
+  lastWeek: applyDurationToDate(now, { value: -7, unit: 'd' }),
+  lastMonth: applyDurationToDate(now, { value: -30, unit: 'd' }),
+  lastYear: applyDurationToDate(now, { value: -365, unit: 'd' }),
 } as const;
 
 export const MOCK_PROPERTIES: Property[] = [
@@ -116,7 +118,7 @@ export const MOCK_PROPERTIES: Property[] = [
     displayName: 'Due Date',
     isMultiSelect: false,
     valueType: 'DATE',
-    value: new Date(MOCK_TIMESTAMPS.now + 1000 * 60 * 60 * 24 * 7), // 7 days from now
+    value: applyDurationToDate(MOCK_TIMESTAMPS.now, { value: 7, unit: 'd' }), // 7 days from now
     owner: { scope: 'organization', organization_id: 1 },
     createdAt: new Date(MOCK_TIMESTAMPS.lastMonth).toISOString(),
     updatedAt: new Date(MOCK_TIMESTAMPS.today).toISOString(),
@@ -656,8 +658,8 @@ export const MOCK_ENTITY_VERY_OLD: DocumentEntity = {
   name: 'Archive Document 2020',
   ownerId: MOCK_USER_IDS.owner,
   fileType: 'md',
-  createdAt: new Date('2020-01-01').getTime(),
-  updatedAt: new Date('2020-06-15').getTime(),
+  createdAt: new Date('2020-01-01'),
+  updatedAt: new Date('2020-06-15'),
   frecencyScore: 0.12,
 };
 

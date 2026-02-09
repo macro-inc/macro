@@ -243,7 +243,7 @@ export async function handleEmailMention(
  * Converts a UploadSuccess to an Item. Folder UploadSuccesses contain a promise for the projectId, so we need to wait for that to resolve.
  */
 export async function documentUploadToItem(upload: UploadSuccess) {
-  const now = Date.now();
+  const now = new Date();
 
   if (upload.type === 'document') {
     return {

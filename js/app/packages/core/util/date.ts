@@ -128,3 +128,37 @@ export const formatEmailDate = (date: Date | number) => {
 export const isoToUnixTimestamp = (isoString: string): number => {
   return Math.floor(new Date(isoString).getTime() / 1000);
 };
+
+const EPOCH_ZERO = new Date(0);
+
+/**
+ * Compares two dates in descending order (most recent first).
+ * Handles undefined/null dates by treating them as epoch zero.
+ * @param a - First date (undefined/null treated as epoch zero)
+ * @param b - Second date (undefined/null treated as epoch zero)
+ * @returns Positive if a > b, negative if a < b, zero if equal
+ */
+export const compareDateDesc = (
+  a: Date | null | undefined | string,
+  b: Date | null | undefined | string
+): number => {
+  const dateA = a ? (typeof a === 'string' ? new Date(a) : a) : EPOCH_ZERO;
+  const dateB = b ? (typeof b === 'string' ? new Date(b) : b) : EPOCH_ZERO;
+  return dateB.getTime() - dateA.getTime();
+};
+
+/**
+ * Compares two dates in ascending order (oldest first).
+ * Handles undefined/null dates by treating them as epoch zero.
+ * @param a - First date (undefined/null treated as epoch zero)
+ * @param b - Second date (undefined/null treated as epoch zero)
+ * @returns Positive if a > b, negative if a < b, zero if equal
+ */
+export const compareDateAsc = (
+  a: Date | null | undefined | string,
+  b: Date | null | undefined | string
+): number => {
+  const dateA = a ? (typeof a === 'string' ? new Date(a) : a) : EPOCH_ZERO;
+  const dateB = b ? (typeof b === 'string' ? new Date(b) : b) : EPOCH_ZERO;
+  return dateA.getTime() - dateB.getTime();
+};

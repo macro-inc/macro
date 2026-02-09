@@ -56,7 +56,7 @@ const getFreeCommentThread = (
     replies.push({
       ...commentBase,
       id: comment.commentId,
-      createdAt: comment.createdAt,
+      createdAt: comment.createdAt ?? undefined,
       owner: comment.owner,
       author: comment.sender || comment.owner,
       text: comment.text,
@@ -66,7 +66,7 @@ const getFreeCommentThread = (
   const root: PdfRoot = {
     ...commentBase,
     id: rootComment.commentId,
-    createdAt: rootComment.createdAt,
+    createdAt: rootComment.createdAt ?? undefined,
     owner: rootComment.owner,
     author: rootComment.sender || rootComment.owner,
     text: rootComment.text,
@@ -180,7 +180,7 @@ export const freeComments = createBlockMemo(() => {
         text: '',
         owner: userId,
         author: userId,
-        createdAt: Date.now(),
+        createdAt: new Date(),
         isNew: true,
         children: [],
         threadId: -1,

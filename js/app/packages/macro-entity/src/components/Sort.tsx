@@ -5,6 +5,7 @@ import SortAscendingIcon from '@phosphor-icons/core/assets/regular/sort-ascendin
 import SortDescendingIcon from '@phosphor-icons/core/assets/regular/sort-descending.svg';
 import XIcon from '@phosphor-icons/core/assets/regular/x.svg';
 import { propertiesServiceClient } from '@service-properties/client';
+import { compareDateDesc } from '@core/util/date';
 import { SegmentedControl } from 'core/component/FormControls/SegmentControls';
 import { ToggleButton } from 'core/component/FormControls/ToggleButton';
 import type { PropertyDefinitionDomain } from 'core/component/Properties/types';
@@ -198,7 +199,7 @@ export function notifiedSortFn<T extends WithNotification<EntityData>>(
   const bNotification = b.notifications?.()[0];
 
   if (aNotification && bNotification) {
-    return bNotification.createdAt - aNotification.createdAt;
+    return compareDateDesc(aNotification.createdAt, bNotification.createdAt);
   } else if (aNotification) {
     return -1;
   } else if (bNotification) {
@@ -209,15 +210,15 @@ export function notifiedSortFn<T extends WithNotification<EntityData>>(
 }
 
 export function sortByCreatedAt<T extends EntityData>(a: T, b: T): number {
-  return (b.createdAt ?? 0) - (a.createdAt ?? 0);
+  return compareDateDesc(a.createdAt, b.createdAt);
 }
 
 export function sortByUpdatedAt<T extends EntityData>(a: T, b: T) {
-  return (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
+  return compareDateDesc(a.updatedAt, b.updatedAt);
 }
 
 export function sortByViewedAt<T extends EntityData>(a: T, b: T) {
-  return (b.viewedAt ?? 0) - (a.viewedAt ?? 0);
+  return compareDateDesc(a.viewedAt, b.viewedAt);
 }
 
 export function sortByFrecencyScore<T extends EntityData>(a: T, b: T): number {

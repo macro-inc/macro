@@ -141,7 +141,7 @@ export const highlightComments = createBlockMemo(() => {
         text: '',
         owner: userId,
         author: userId,
-        createdAt: Date.now(),
+        createdAt: new Date(),
         isNew: true,
         children: [],
         threadId: -1,
@@ -184,7 +184,7 @@ const getHighlightThread = (
     replies.push({
       ...commentBase,
       id: comment.commentId,
-      createdAt: comment.createdAt,
+      createdAt: comment.createdAt ?? undefined,
       owner: comment.owner,
       author: comment.sender || comment.owner,
       text: comment.text,
@@ -194,7 +194,7 @@ const getHighlightThread = (
   const root: Root = {
     ...commentBase,
     id: rootComment.commentId,
-    createdAt: rootComment.createdAt,
+    createdAt: rootComment.createdAt ?? undefined,
     owner: rootComment.owner,
     author: rootComment.sender || rootComment.owner,
     text: rootComment.text,

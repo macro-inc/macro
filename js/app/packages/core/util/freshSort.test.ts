@@ -6,9 +6,9 @@ interface MockItem {
   id: string;
   name: string;
   type: 'item' | 'channel';
-  viewedAt?: Date | number;
-  updatedAt?: Date | number;
-  lastInteraction?: Date | number;
+  viewedAt?: Date;
+  updatedAt?: Date;
+  lastInteraction?: Date;
 }
 
 interface User extends MockItem {
@@ -37,7 +37,7 @@ describe('freshSort ordering', () => {
         id: '1',
         name: 'Meeting Notes',
         type: 'item',
-        viewedAt: applyDurationToDate(now, { value: -1, unit: 'h' }).getTime(),
+        viewedAt: applyDurationToDate(now, { value: -1, unit: 'h' }),
       },
       {
         id: '2',
@@ -46,13 +46,13 @@ describe('freshSort ordering', () => {
         viewedAt: applyDurationToDate(now, {
           value: -1,
           unit: 'min',
-        }).getTime(),
+        }),
       },
       {
         id: '3',
         name: 'Old Draft',
         type: 'item',
-        viewedAt: applyDurationToDate(now, { value: -1, unit: 'd' }).getTime(),
+        viewedAt: applyDurationToDate(now, { value: -1, unit: 'd' }),
       },
     ];
 
@@ -72,7 +72,7 @@ describe('freshSort ordering', () => {
         viewedAt: applyDurationToDate(now, {
           value: -1,
           unit: 'min',
-        }).getTime(),
+        }),
       },
       {
         id: '2',
@@ -81,7 +81,7 @@ describe('freshSort ordering', () => {
         viewedAt: applyDurationToDate(now, {
           value: -5,
           unit: 'min',
-        }).getTime(),
+        }),
       },
     ];
 
@@ -98,7 +98,7 @@ describe('freshSort ordering', () => {
         id: '1',
         name: 'Doc A',
         type: 'item',
-        viewedAt: applyDurationToDate(now, { value: -1, unit: 'h' }).getTime(),
+        viewedAt: applyDurationToDate(now, { value: -1, unit: 'h' }),
       },
       {
         id: '2',
@@ -107,13 +107,13 @@ describe('freshSort ordering', () => {
         viewedAt: applyDurationToDate(now, {
           value: -1,
           unit: 'min',
-        }).getTime(),
+        }),
       },
       {
         id: '3',
         name: 'Doc C',
         type: 'item',
-        viewedAt: applyDurationToDate(now, { value: -1, unit: 'd' }).getTime(),
+        viewedAt: applyDurationToDate(now, { value: -1, unit: 'd' }),
       },
     ];
 
@@ -139,7 +139,7 @@ describe('createFreshSearch with comma-separated channel matching', () => {
   }
 
   it('matches channel with comma-separated query', () => {
-    const now = Date.now();
+    const now = new Date();
     const items: MockItem[] = [
       { id: '1', name: 'Nick Noble,teo,hutch', type: 'channel', viewedAt: now },
       { id: '2', name: 'Alice,Bob', type: 'channel', viewedAt: now },
@@ -153,7 +153,7 @@ describe('createFreshSearch with comma-separated channel matching', () => {
   });
 
   it('matches channel regardless of query order', () => {
-    const now = Date.now();
+    const now = new Date();
     const items: MockItem[] = [
       { id: '1', name: 'Nick Noble,teo,hutch', type: 'channel', viewedAt: now },
     ];
@@ -166,7 +166,7 @@ describe('createFreshSearch with comma-separated channel matching', () => {
   });
 
   it('uses regular fuzzy search when query has no commas', () => {
-    const now = Date.now();
+    const now = new Date();
     const items: MockItem[] = [
       { id: '1', name: 'Nick Noble,teo,hutch', type: 'channel', viewedAt: now },
       { id: '2', name: 'Design Doc', type: 'item', viewedAt: now },
@@ -180,7 +180,7 @@ describe('createFreshSearch with comma-separated channel matching', () => {
   });
 
   it('still matches non-channel items with comma queries', () => {
-    const now = Date.now();
+    const now = new Date();
     const items: MockItem[] = [
       { id: '1', name: 'Nick Noble,teo,hutch', type: 'channel', viewedAt: now },
       {
@@ -199,7 +199,7 @@ describe('createFreshSearch with comma-separated channel matching', () => {
   });
 
   it('matches channel with space-separated query in any order', () => {
-    const now = Date.now();
+    const now = new Date();
     const items: MockItem[] = [
       {
         id: '1',
@@ -266,7 +266,7 @@ describe('freshSort with all exact matches', () => {
         id: '1',
         name: 'Design',
         type: 'item',
-        viewedAt: applyDurationToDate(now, { value: -1, unit: 'h' }).getTime(),
+        viewedAt: applyDurationToDate(now, { value: -1, unit: 'h' }),
       },
       {
         id: '2',
@@ -275,15 +275,15 @@ describe('freshSort with all exact matches', () => {
         viewedAt: applyDurationToDate(now, {
           value: -1,
           unit: 'min',
-        }).getTime(),
+        }),
       },
       {
         id: '3',
         name: 'Design',
         type: 'item',
-        viewedAt: applyDurationToDate(now, { value: -1, unit: 'd' }).getTime(),
+        viewedAt: applyDurationToDate(now, { value: -1, unit: 'd' }),
       },
-      { id: '4', name: 'Design', type: 'item', viewedAt: now.getTime() },
+      { id: '4', name: 'Design', type: 'item', viewedAt: now },
     ];
 
     const search = createFreshSearch<MockItem>(
@@ -318,13 +318,13 @@ describe('freshSort with all exact matches', () => {
         id: '1',
         name: 'Design',
         type: 'item',
-        viewedAt: applyDurationToDate(now, { value: -1, unit: 's' }).getTime(),
+        viewedAt: applyDurationToDate(now, { value: -1, unit: 's' }),
       },
       {
         id: '2',
         name: 'Design',
         type: 'channel',
-        viewedAt: applyDurationToDate(now, { value: -5, unit: 's' }).getTime(),
+        viewedAt: applyDurationToDate(now, { value: -5, unit: 's' }),
       },
     ];
 
@@ -360,21 +360,21 @@ describe('boostFn functionality', () => {
         name: 'Alice Johnson',
         type: 'item',
         email: 'alice@example.com',
-        viewedAt: applyDurationToDate(now, { value: -1, unit: 's' }).getTime(),
+        viewedAt: applyDurationToDate(now, { value: -1, unit: 's' }),
       },
       {
         id: '2',
         name: 'Bob Smith',
         type: 'item',
         email: 'bob@macro.com',
-        viewedAt: applyDurationToDate(now, { value: -5, unit: 's' }).getTime(),
+        viewedAt: applyDurationToDate(now, { value: -5, unit: 's' }),
       },
       {
         id: '3',
         name: 'Charlie Brown',
         type: 'item',
         email: 'charlie@example.com',
-        viewedAt: applyDurationToDate(now, { value: -3, unit: 's' }).getTime(),
+        viewedAt: applyDurationToDate(now, { value: -3, unit: 's' }),
       },
     ];
 
@@ -407,14 +407,14 @@ describe('boostFn functionality', () => {
         name: 'Alice Johnson',
         type: 'item',
         email: 'alice@example.com',
-        viewedAt: applyDurationToDate(now, { value: -1, unit: 's' }).getTime(),
+        viewedAt: applyDurationToDate(now, { value: -1, unit: 's' }),
       },
       {
         id: '2',
         name: 'Alicia Smith',
         type: 'item',
         email: 'alicia@macro.com',
-        viewedAt: applyDurationToDate(now, { value: -1, unit: 's' }).getTime(),
+        viewedAt: applyDurationToDate(now, { value: -1, unit: 's' }),
       },
     ];
 
@@ -450,7 +450,7 @@ describe('boostFn functionality', () => {
         viewedAt: applyDurationToDate(now, {
           value: -1,
           unit: 'min',
-        }).getTime(),
+        }),
       },
       {
         id: '2',
@@ -459,7 +459,7 @@ describe('boostFn functionality', () => {
         viewedAt: applyDurationToDate(now, {
           value: -2,
           unit: 'min',
-        }).getTime(),
+        }),
       },
     ];
 
@@ -488,14 +488,14 @@ describe('boostFn functionality', () => {
         name: 'Design Doc',
         type: 'item',
         email: 'alice@macro.com',
-        viewedAt: applyDurationToDate(now, { value: -1, unit: 's' }).getTime(),
+        viewedAt: applyDurationToDate(now, { value: -1, unit: 's' }),
       },
       {
         id: '2',
         name: 'Design Channel',
         type: 'channel',
         email: 'system@example.com',
-        viewedAt: applyDurationToDate(now, { value: -1, unit: 's' }).getTime(),
+        viewedAt: applyDurationToDate(now, { value: -1, unit: 's' }),
       },
     ];
 
@@ -530,7 +530,7 @@ describe('boostFn functionality', () => {
         viewedAt: applyDurationToDate(now, {
           value: -1,
           unit: 'min',
-        }).getTime(),
+        }),
       },
       {
         id: '2',
@@ -539,7 +539,7 @@ describe('boostFn functionality', () => {
         viewedAt: applyDurationToDate(now, {
           value: -2,
           unit: 'min',
-        }).getTime(),
+        }),
       },
     ];
 
@@ -573,7 +573,7 @@ describe('DM activity timestamps for user ranking', () => {
         lastInteraction: applyDurationToDate(now, {
           value: -1,
           unit: 'd',
-        }).getTime(),
+        }),
       },
       {
         id: '2',
@@ -583,7 +583,7 @@ describe('DM activity timestamps for user ranking', () => {
         lastInteraction: applyDurationToDate(now, {
           value: -1,
           unit: 'h',
-        }).getTime(),
+        }),
       },
       {
         id: '3',
@@ -626,7 +626,7 @@ describe('DM activity timestamps for user ranking', () => {
         lastInteraction: applyDurationToDate(now, {
           value: -1,
           unit: 'd',
-        }).getTime(),
+        }),
       },
       {
         id: '2',
@@ -636,7 +636,7 @@ describe('DM activity timestamps for user ranking', () => {
         lastInteraction: applyDurationToDate(now, {
           value: -1,
           unit: 'h',
-        }).getTime(),
+        }),
       },
       {
         id: '3',
@@ -646,7 +646,7 @@ describe('DM activity timestamps for user ranking', () => {
         lastInteraction: applyDurationToDate(now, {
           value: -1,
           unit: 'min',
-        }).getTime(),
+        }),
       },
     ];
 
