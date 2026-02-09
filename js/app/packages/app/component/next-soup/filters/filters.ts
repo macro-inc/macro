@@ -12,10 +12,7 @@ import {
   type EntityWithValidIcon,
   getIconConfig,
 } from '@core/component/EntityIcon';
-import type {
-  SoupItemsQueryArgs,
-  SoupItemsQueryFilters,
-} from '@queries/soup/items';
+import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import { codeFileExtensions } from '@block-code/util/languageSupport';
 import type { FilterConfig } from './create-filters-state';
 
@@ -359,76 +356,3 @@ export const QUERY_FILTERS = {
 } satisfies Record<string, SoupItemsQueryFilters>;
 
 export type QueryFilterKey = keyof typeof QUERY_FILTERS;
-
-const buildDefaultValue = (entityTypes: string[], required: string[]) => {
-  const hasNoEntityTypes = entityTypes.length === 0;
-
-  const hasSomeRequiredType = required.some((t) => entityTypes.includes(t));
-
-  if (hasSomeRequiredType || hasNoEntityTypes) {
-    return [];
-  }
-
-  return [NIL_UUID];
-};
-
-export const buildDssFiltersRequest = (
-  filters: FilterConfig<EntityData>[],
-  context?: {
-    extra?: SoupItemsQueryFilters;
-    isSearchActive?: boolean;
-    emailActive?: boolean;
-  }
-): SoupItemsQueryArgs['body'] => {
-  const entityTypes = filters
-    .filter((f) => ENTITY_TYPE_FILTERS.includes(f.id as EntityTypeFilters))
-    .map((f) => f.id);
-
-  const {
-    channel_filters,
-    document_filters,
-    chat_filters,
-    email_filters,
-    project_filters,
-  } = context?.extra ?? {};
-
-  return {
-    channel_filters: {
-      ...channel_filters,
-      channel_ids:
-        channel_filters?.channel_ids ??
-        buildDefaultValue(entityTypes, ['teams', 'people']),
-    },
-    document_filters: {
-      ...document_filters,
-      document_ids:
-        document_filters?.document_ids ??
-        buildDefaultValue(entityTypes, ['file', 'document', 'task']),
-      project_ids: document_filters?.project_ids ?? [],
-      file_types: document_filters?.file_types ?? [],
-    },
-    chat_filters: {
-      ...chat_filters,
-      chat_ids:
-        chat_filters?.chat_ids ?? buildDefaultValue(entityTypes, ['agent']),
-      project_ids: chat_filters?.project_ids ?? [],
-    },
-    email_filters: {
-      ...email_filters,
-      recipients:
-        email_filters?.recipients ??
-        (context?.emailActive &&
-        !context.isSearchActive &&
-        (entityTypes.includes('email') || entityTypes.length === 0)
-          ? []
-          : [NIL_UUID]),
-    },
-    project_filters: {
-      ...project_filters,
-      project_ids:
-        project_filters?.project_ids ??
-        buildDefaultValue(entityTypes, ['file']),
-    },
-    emailView: 'all',
-  };
-};
