@@ -544,7 +544,7 @@ export function CommandItemCard(props: CommandItemProps) {
 
   const CommandItemContainer = ({ children }: { children?: JSXElement }) => {
     const optionKeyPressed = createMemo(() => {
-      return pressedKeys().has('opt');
+      return pressedKeys().has('shift');
     });
     return (
       <div
