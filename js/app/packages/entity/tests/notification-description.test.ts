@@ -161,7 +161,9 @@ describe('notification-description helpers', () => {
       });
 
       it('returns plural for count greater than 1', () => {
-        expect(getTypeNoun('mentioned_in_document_comment', 2)).toBe('mentions');
+        expect(getTypeNoun('mentioned_in_document_comment', 2)).toBe(
+          'mentions'
+        );
       });
     });
 

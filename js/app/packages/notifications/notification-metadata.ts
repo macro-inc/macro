@@ -9,7 +9,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
     case 'document_mention':
       return 'sent a document';
     case 'mentioned_in_document_comment':
-      return 'mentioned you in'
+      return 'mentioned you in';
     case 'channel_message_send':
       return 'sent a message in';
     case 'channel_message_reply':

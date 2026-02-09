@@ -44,9 +44,8 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     .with('channel_message_send', () => (count === 1 ? 'message' : 'messages'))
     .with('channel_mention', () => (count === 1 ? 'mention' : 'mentions'))
     .with('document_mention', () => (count === 1 ? 'mention' : 'mentions'))
-    .with(
-      'mentioned_in_document_comment',
-      () => (count === 1 ? 'mention' : 'mentions')
+    .with('mentioned_in_document_comment', () =>
+      count === 1 ? 'mention' : 'mentions'
     )
     .with('new_email', () => (count === 1 ? 'email' : 'emails'))
     .with('channel_invite', () => (count === 1 ? 'invite' : 'invites'))
