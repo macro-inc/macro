@@ -64,10 +64,6 @@ export const SORT_CONFIGS = {
     id: 'frecency',
     fn: sortByFrecencyScore,
   },
-  notified_at: {
-    id: 'notified_at',
-    fn: sortByNotifiedAt,
-  },
 } satisfies Record<string, SortConfig<SoupEntity>>;
 
 export const sortEntitiesForSearch = <T extends EntityData>(

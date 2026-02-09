@@ -1,83 +1,29 @@
-# Gets the .env variables for the FusionAuth docker-compose.
 get_fusionauth_env:
-  @echo "Getting fusionauth .env file for docker-compose"
-  curl -o .env https://raw.githubusercontent.com/FusionAuth/fusionauth-containers/452efcac5c60f6a3a734947b1a8eefaae6f811fa/docker/fusionauth/.env
+    curl -o .env https://raw.githubusercontent.com/FusionAuth/fusionauth-containers/452efcac5c60f6a3a734947b1a8eefaae6f811fa/docker/fusionauth/.env
 
-# Starts up the local FusionAuth instance. This should only be used during setup/testing.
-start *ARGS:
-  @echo "Starting fusionauth"
-  docker-compose up {{ ARGS }}
+start_fusionauth:
+    docker-compose up
 
-# Stops the local FusionAuth instance. This should only be used for setup/testing.
-stop *ARGS:
-  @echo "Stopping fusionauth"
-  docker-compose stop {{ ARGS }}
+destroy_fusionauth:
+    docker-compose down -v
 
-# Destroys the local pulumi stack.
-destroy_local_stack:
+destroy_stack:
   cp Pulumi.local.yaml Pulumi.local.yaml.bak
   pulumi stack rm local --yes --force
   mv Pulumi.local.yaml.bak Pulumi.local.yaml
 
-# Destroys the local FusionAuth instance and pulumi stack.
-destroy:
-  just destroy_local_stack || true
-  docker-compose down -v
-
-# Creates the local pulumi stack and updates FusionAuth with components.
-setup_local_stack:
-  @echo "Initializing local stack"
-  pulumi stack init local || true
-  pulumi import --stack local \
-    fusionauth:index/fusionAuthKey:FusionAuthKey jwt-signing-key d7d09513-a3f5-401c-9685-34ab6c552453 \
-    --yes || true # Note: This command appears to fail but actually doesn't
-  @echo "Local stack initialized"
-  pulumi up --stack local --yes
-  @echo "FusionAuth local stack deployed"
-
-# Imports all pre-existing dev FusionAuth assets into pulumi.
-import_dev:
-  pulumi import --stack macro-inc/dev \
-    fusionauth:index/fusionAuthKey:FusionAuthKey jwt-signing-key aea64fc1-84f6-89ab-fb7c-08a21556263e \
-    fusionauth:index/fusionAuthApplication:FusionAuthApplication macro-application eb75fe7a-0ef1-4186-96d9-cc62cfb1d10c \
-    fusionauth:index/fusionAuthTenant:FusionAuthTenant default-tenant 5e13f524-8d32-0454-81f8-061936256aa4 \
-    fusionauth:index/fusionAuthLambda:FusionAuthLambda populate-jwt-lambda a7f3e8d2-4b91-4c5a-9e6f-1a2b3c4d5e6f
-
-# Performs a healthcheck on local FusionAuth.
-healthcheck:
+setup_fusionauth:
+  # Get .env for fusionauth
+  just get_fusionauth_env
+  @echo "Launching fusionauth"
+  docker-compose up -d --wait
   @echo "Waiting for FusionAuth to be healthy..."
   @until curl -s http://localhost:9011/api/status | grep -q '{"status":"Ok"}'; do \
     echo "FusionAuth not ready, waiting..."; \
     sleep 3; \
   done
-  @echo "FusionAuth healthy"
-
-# Sets up the local FusionAuth stack.
-setup:
-  just get_fusionauth_env
-  just start -d --wait
-  just healthcheck
-  just setup_local_stack
-  just insert_local_fusionauth_variables
-  just stop
-  @echo "FusionAuth setup complete"
-
-# Inserts local FusionAuth variables into root `.env` file
-insert_local_fusionauth_variables:
-  #!/usr/bin/env bash
-  API_KEY="bf69486b-4733-4954-a44e-2e1b5f2c8a91"
-  APPLICATION_ID=$(pulumi stack output macroApplicationClientId -s local)
-  TENANT_ID=$(pulumi stack output defaultTenantId -s local)
-  CLIENT_SECRET=$(curl -s "http://localhost:9011/api/application/${APPLICATION_ID}" \
-    -H "Authorization: ${API_KEY}" | jq -r '.application.oauthConfiguration.clientSecret')
-
-  ENV_FILE="{{justfile_directory()}}/../../../.env"
-
-  echo "#AUTO-ADDED DO NOT MODIFY" >> "$ENV_FILE"
-  echo "FUSIONAUTH_TENANT_ID=\"${TENANT_ID}\"" >> "$ENV_FILE"
-  echo "AUDIENCE=\"${APPLICATION_ID}\"" >> "$ENV_FILE"
-  echo "FUSIONAUTH_APPLICATION_ID=\"${APPLICATION_ID}\"" >> "$ENV_FILE"
-  echo "FUSIONAUTH_CLIENT_ID=\"${APPLICATION_ID}\"" >> "$ENV_FILE"
-  echo "FUSIONAUTH_CLIENT_SECRET_KEY=\"${CLIENT_SECRET}\"" >> "$ENV_FILE"
-
-  echo "Appended FusionAuth local values to .env"
+  @echo "FusionAuth is healthy, running Pulumi..."
+  # Deploy pulumi stack
+  pulumi up --stack local --yes
+  @echo "FusionAuth setup complete!"
+  docker-compose stop

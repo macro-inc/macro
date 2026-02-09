@@ -11,6 +11,8 @@ import {
 import { $createMarkNode, MarkNode } from '@lexical/mark';
 import type {
   ElementTransformer,
+  MultilineElementTransformer,
+  TextFormatTransformer,
   TextMatchTransformer,
 } from '@lexical/markdown';
 import {
@@ -39,8 +41,24 @@ export function xmlMatcher(tag: string, flags?: string) {
   return new RegExp(`<${tag}>(.*?)<\/${tag}>`, flags ?? 's');
 }
 
+type LexicalTransformer =
+  | ElementTransformer
+  | MultilineElementTransformer
+  | TextMatchTransformer
+  | TextFormatTransformer;
+
+export type ConversionOnlyTransformer<T extends LexicalTransformer> = T & {
+  conversionOnly: true;
+};
+
+export function isConversionOnlyTransformer<T extends LexicalTransformer>(
+  transformer: T
+): transformer is ConversionOnlyTransformer<T> {
+  return 'conversionOnly' in transformer;
+}
+
 // See https://github.com/facebook/lexical/issues/4271/ for the reasoning behind this.
-export const PRESERVE_LINES: ElementTransformer = {
+export const PRESERVE_LINES: ConversionOnlyTransformer<ElementTransformer> = {
   type: 'element',
   dependencies: [ParagraphNode],
   export: (node) => {
@@ -58,45 +76,50 @@ export const PRESERVE_LINES: ElementTransformer = {
       textNode.append($createTextNode(''));
     }
   },
+  conversionOnly: true,
 };
 
 // Strip br tags from external markdown.
-export const BR_TAG_TO_SPACE: TextMatchTransformer = {
-  dependencies: [],
-  export: () => {
-    return null;
-  },
-  importRegExp: /<br\s*\/?>/i,
-  regExp: /<br\s*\/?>/i,
-  replace: (textNode, _) => {
-    const fullText = textNode.getTextContent();
-    const replacement = ' ';
-    const newText = fullText.replace(/<br\s*\/?>/gi, replacement);
-    if (newText !== fullText) {
-      textNode.setTextContent(newText);
-    }
-    return textNode;
-  },
-  type: 'text-match',
-};
+export const BR_TAG_TO_SPACE: ConversionOnlyTransformer<TextMatchTransformer> =
+  {
+    dependencies: [],
+    export: () => {
+      return null;
+    },
+    importRegExp: /<br\s*\/?>/i,
+    regExp: /<br\s*\/?>/i,
+    replace: (textNode, _) => {
+      const fullText = textNode.getTextContent();
+      const replacement = ' ';
+      const newText = fullText.replace(/<br\s*\/?>/gi, replacement);
+      if (newText !== fullText) {
+        textNode.setTextContent(newText);
+      }
+      return textNode;
+    },
+    type: 'text-match',
+    conversionOnly: true,
+  };
 
-export const BR_TAG_TO_LINE_BREAK: TextMatchTransformer = {
-  dependencies: [LineBreakNode],
-  export: () => {
-    return null;
-  },
-  importRegExp: /<br\s*\/?>/i,
-  regExp: /<br\s*\/?>/i,
-  replace: (textNode, _) => {
-    textNode.replace($createLineBreakNode());
-  },
-  type: 'text-match',
-};
+export const BR_TAG_TO_LINE_BREAK: ConversionOnlyTransformer<TextMatchTransformer> =
+  {
+    dependencies: [LineBreakNode],
+    export: () => {
+      return null;
+    },
+    importRegExp: /<br\s*\/?>/i,
+    regExp: /<br\s*\/?>/i,
+    replace: (textNode, _) => {
+      textNode.replace($createLineBreakNode());
+    },
+    type: 'text-match',
+    conversionOnly: true,
+  };
 
 function createEntityToUnicodeTransformer(
   entity: string,
   unicodeChar: string
-): TextMatchTransformer {
+): ConversionOnlyTransformer<TextMatchTransformer> {
   const safeEntity = entity.replace(/([.*+?^=!:${}()|[\]/\\])/g, '\\$1');
   const re = new RegExp(safeEntity, 'i');
   return {
@@ -107,6 +130,7 @@ function createEntityToUnicodeTransformer(
       textNode.replace($createTextNode(unicodeChar));
     },
     type: 'text-match',
+    conversionOnly: true,
   };
 }
 
