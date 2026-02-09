@@ -3,12 +3,8 @@ use chrono::{DateTime, Utc, serde::ts_seconds_option};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use model_error_response::ErrorResponse;
-use model_notifications::{
-    ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
-    ChannelReplyMetadata, DocumentMentionMetadata, InviteToTeamMetadata, NewEmailMetadata,
-    NotifEvent, TaskAssignedMetadata,
-};
-use serde::{Deserialize, Serialize};
+use model_notifications::NotifEvent;
+use serde::Serialize;
 use utoipa::ToSchema;
 
 #[cfg(test)]

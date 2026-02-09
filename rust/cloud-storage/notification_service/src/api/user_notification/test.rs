@@ -2,6 +2,7 @@ use super::*;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
+use model_notifications::ChannelMentionMetadata;
 use notification::domain::models::UserNotificationRow;
 
 /// Build a [`UserNotificationRow<serde_json::Value>`] with the given event type
@@ -191,4 +192,59 @@ fn to_typed_row_preserves_row_fields() {
         }
         _ => panic!("expected TaskAssigned variant"),
     }
+}
+
+/// Verifies that `TaggedContent<T>` (used by ConnGatewayInnerNotif for WebSocket delivery)
+/// and `NotifEvent` (used by ApiUserNotification for HTTP API) serialize identically.
+/// This ensures frontend code can use the same parsing logic for both delivery methods.
+#[test]
+fn conn_gateway_inner_val_has_identical_serialization() {
+    use notification::domain::models::TaggedContent;
+
+    // Create test notification metadata
+    let notif_metadata = ChannelMentionMetadata {
+        message_id: "testing".to_string(),
+        message_content: "some data".to_string(),
+        thread_id: Some("threadid".to_string()),
+        common: model_notifications::CommonChannelMetadata {
+            channel_type: model_notifications::ChannelType::Public,
+            channel_name: "my channel".to_string(),
+        },
+    };
+
+    // TaggedContent<T> is what ConnGatewayInnerNotif uses for notification_metadata
+    // when sending via WebSocket
+    let tagged_content = TaggedContent::new(notif_metadata.clone());
+    let tagged_content_json = serde_json::to_value(&tagged_content).unwrap();
+
+    // NotifEvent is what ApiUserNotification uses for notification_metadata
+    // when returning via HTTP API
+    let notif_event = NotifEvent::ChannelMention(notif_metadata);
+    let notif_event_json = serde_json::to_value(&notif_event).unwrap();
+
+    // Both should serialize to the same JSON structure:
+    // { "tag": "channel_mention", "content": { "messageId": "...", ... } }
+    assert_eq!(
+        tagged_content_json,
+        notif_event_json,
+        "TaggedContent and NotifEvent should serialize identically.\n\
+         TaggedContent (WebSocket): {}\n\
+         NotifEvent (HTTP API): {}",
+        serde_json::to_string_pretty(&tagged_content_json).unwrap(),
+        serde_json::to_string_pretty(&notif_event_json).unwrap(),
+    );
+
+    // Verify the expected structure
+    assert_eq!(tagged_content_json["tag"], "channel_mention");
+    assert_eq!(notif_event_json["tag"], "channel_mention");
+
+    // Verify content fields are serialized in camelCase as expected
+    assert_eq!(tagged_content_json["content"]["messageId"], "testing");
+    assert_eq!(
+        tagged_content_json["content"]["messageContent"],
+        "some data"
+    );
+    assert_eq!(tagged_content_json["content"]["threadId"], "threadid");
+    assert_eq!(tagged_content_json["content"]["channelType"], "public");
+    assert_eq!(tagged_content_json["content"]["channelName"], "my channel");
 }
