@@ -998,6 +998,10 @@ export function createSplitLayout(
     );
 
     if (!options.allowDuplicate && existingSplit) {
+      if (options.activate !== false) {
+        existingSplit.activate();
+      }
+
       return existingSplit;
     }
 
@@ -1019,7 +1023,7 @@ export function createSplitLayout(
         mergeHistory: options.mergeHistory,
       });
 
-      if (options.activate) {
+      if (options.activate !== false) {
         splitHandle.activate();
       }
 
