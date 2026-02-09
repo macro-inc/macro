@@ -1,10 +1,7 @@
 import { QueryClient } from '@tanstack/solid-query';
 import { createPerQueryIDBStore } from './persistence/per-query-idb';
-import {
-  createPersistenceKey,
-  queryKeyHasPrefix,
-  setupQueryPersistence,
-} from './persistence';
+import { partialMatchKey } from '@tanstack/query-core';
+import { createPersistenceKey, setupQueryPersistence } from './persistence';
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -29,7 +26,7 @@ setupQueryPersistence({
       }),
       maxAgeMs: SEVEN_DAYS_MS,
       buster,
-      shouldPersist: (key) => queryKeyHasPrefix(key, ['channel']),
+      shouldPersist: (key) => partialMatchKey(key, ['channel']),
     },
     {
       store: createPerQueryIDBStore({
@@ -38,7 +35,7 @@ setupQueryPersistence({
       maxAgeMs: SEVEN_DAYS_MS,
       buster,
       shouldPersist: (key) =>
-        queryKeyHasPrefix(key, ['email', 'threadMessages']),
+        partialMatchKey(key, ['email', 'threadMessages']),
     },
   ],
 });

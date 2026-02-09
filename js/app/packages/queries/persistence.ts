@@ -1,28 +1,12 @@
-import type { QueryKey } from '@tanstack/query-core';
+import type {
+  Query,
+  QueryCacheNotifyEvent,
+  QueryKey,
+} from '@tanstack/query-core';
 import type {
   PerQueryPersistence,
   PersistedQueryEntry,
 } from './persistence/per-query-idb';
-
-type QueryCacheLike = {
-  subscribe: (listener: (event: unknown) => void) => () => void;
-};
-
-/** Cache event types that trigger persistence. */
-const PERSIST_EVENT_TYPES = new Set(['added', 'removed', 'updated']);
-
-/** Checks if a query key starts with the given prefix tuple. */
-export function queryKeyHasPrefix(
-  key: QueryKey,
-  prefix: readonly unknown[]
-): boolean {
-  if (!Array.isArray(key)) return false;
-  if (prefix.length > key.length) return false;
-  for (let i = 0; i < prefix.length; i++) {
-    if (key[i] !== prefix[i]) return false;
-  }
-  return true;
-}
 
 type PersistenceKey = `${string}-persist-v${number}`;
 
@@ -42,7 +26,9 @@ export type PersistScope = Readonly<{
 }>;
 
 type QueryClientLike = {
-  getQueryCache: () => QueryCacheLike;
+  getQueryCache: () => {
+    subscribe: (listener: (event: QueryCacheNotifyEvent) => void) => () => void;
+  };
   getQueryState: (
     queryKey: QueryKey
   ) => { status: string; data: unknown; dataUpdatedAt: number } | undefined;
@@ -51,15 +37,6 @@ type QueryClientLike = {
     data: unknown,
     options?: { updatedAt?: number }
   ) => void;
-};
-
-type CacheEvent = {
-  type?: string;
-  query?: {
-    queryHash: string;
-    queryKey: QueryKey;
-    state: { status: string; data: unknown; dataUpdatedAt: number };
-  };
 };
 
 /**
@@ -85,28 +62,27 @@ export function validatePersistedEntry(
 function handleRestore(
   queryClient: QueryClientLike,
   scope: PersistScope,
-  queryHash: string,
-  queryKey: QueryKey
+  query: Query
 ): void {
-  const state = queryClient.getQueryState(queryKey);
+  const state = queryClient.getQueryState(query.queryKey);
   if (state && state.status === 'success') return;
 
   scope.store
-    .get(queryHash)
+    .get(query.queryHash)
     .then((entry) => {
       if (!entry) return;
 
       if (
         validatePersistedEntry(entry, scope.buster, scope.maxAgeMs) !== 'valid'
       ) {
-        scope.store.remove(queryHash);
+        scope.store.remove(query.queryHash);
         return;
       }
 
-      const current = queryClient.getQueryState(queryKey);
+      const current = queryClient.getQueryState(query.queryKey);
       if (current && current.status === 'success') return;
 
-      queryClient.setQueryData(queryKey, entry.data, {
+      queryClient.setQueryData(query.queryKey, entry.data, {
         updatedAt: entry.dataUpdatedAt,
       });
     })
@@ -118,10 +94,7 @@ function handleRestore(
 /**
  * Persists a query's current data to IDB when the query updates successfully.
  */
-function handleUpdate(
-  scope: PersistScope,
-  query: NonNullable<CacheEvent['query']>
-): void {
+function handleUpdate(scope: PersistScope, query: Query): void {
   if (query.state.status !== 'success') return;
   scope.store.set({
     queryHash: query.queryHash,
@@ -155,22 +128,20 @@ export function setupQueryPersistence(
   const findScope = (queryKey: QueryKey) =>
     scopes.find((s) => s.shouldPersist(queryKey));
 
-  const unsubscribe = queryClient.getQueryCache().subscribe((raw) => {
-    const event = raw as CacheEvent;
-    const { type, query } = event;
-    if (!type || !PERSIST_EVENT_TYPES.has(type) || !query) return;
+  const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+    const { type } = event;
+    if (type !== 'added' && type !== 'updated' && type !== 'removed') return;
 
+    const { query } = event;
     const scope = findScope(query.queryKey);
     if (!scope) return;
 
-    const { queryHash, queryKey } = query;
-
     if (type === 'added') {
-      handleRestore(queryClient, scope, queryHash, queryKey);
+      handleRestore(queryClient, scope, query);
     } else if (type === 'updated') {
       handleUpdate(scope, query);
-    } else if (type === 'removed') {
-      scope.store.remove(queryHash);
+    } else {
+      scope.store.remove(query.queryHash);
     }
   });
 

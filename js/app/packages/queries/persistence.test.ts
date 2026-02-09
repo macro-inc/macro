@@ -1,14 +1,11 @@
+import { partialMatchKey } from '@tanstack/query-core';
 import { QueryClient } from '@tanstack/solid-query';
 import { describe, expect, it, vi } from 'vitest';
 import type {
   PerQueryPersistence,
   PersistedQueryEntry,
 } from './persistence/per-query-idb';
-import {
-  queryKeyHasPrefix,
-  setupQueryPersistence,
-  type PersistScope,
-} from './persistence';
+import { setupQueryPersistence, type PersistScope } from './persistence';
 
 function createMockStore(): PerQueryPersistence & {
   entries: Map<string, PersistedQueryEntry>;
@@ -38,7 +35,7 @@ function createScope(
     store,
     maxAgeMs: 1000 * 60 * 60 * 24 * 7,
     buster: 'test',
-    shouldPersist: (key) => queryKeyHasPrefix(key, prefix),
+    shouldPersist: (key) => partialMatchKey(key, prefix),
     ...overrides,
   };
 }
