@@ -63,7 +63,7 @@ pub async fn edit_comment_handler(
                 let request = build_mention_notif(
                     NotifLocationType::EditComment,
                     req.text.clone().unwrap_or_else(|| "".to_string()),
-                    Some(&res.comment),
+                    &res.comment,
                     req.thread_id,
                     &users,
                     res.document_name.clone(),

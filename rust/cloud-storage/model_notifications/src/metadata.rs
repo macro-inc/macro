@@ -165,6 +165,7 @@ pub struct ChannelReplyMetadata {
     pub common: CommonChannelMetadata,
 }
 
+/// Someone mentioned a document in a channel
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentMentionMetadata {
@@ -557,12 +558,13 @@ impl NotificationExtIos for TaskAssignedMetadata {
 }
 
 /// Notification sent when a user is mentioned in a document comment.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MentionedInDocumentCommentMetadata {
     /// The name of the document.
     pub document_name: String,
     /// The owner of the document.
+    #[schema(value_type = String)]
     pub owner: MacroUserIdStr<'static>,
     /// The file type of the document.
     pub file_type: Option<String>,
