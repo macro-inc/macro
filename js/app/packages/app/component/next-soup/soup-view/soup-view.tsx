@@ -200,22 +200,27 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   let initialLoad = true;
 
-  createEffect(
-    on(rows, () => {
-      if (!initialLoad || source.isLoading()) return;
-      focusFirstEntity();
-      initialLoad = false;
-    })
-  );
+  const initialize = (moveInitialFocus = true) => {
+    if (moveInitialFocus) {
+      createEffect(
+        on(rows, () => {
+          if (!initialLoad || source.isLoading()) return;
+          focusFirstEntity();
+          initialLoad = false;
+        })
+      );
+    }
 
-  createEffect(
-    on(
-      () => [soup.filters.activeIds(), searchText()] as const,
-      () => {
-        focusFirstEntity();
-      }
-    )
-  );
+    createEffect(
+      on(
+        () => [soup.filters.activeIds(), searchText()] as const,
+        () => {
+          focusFirstEntity();
+        },
+        { defer: true }
+      )
+    );
+  };
 
   const previewPanel = useMaybePreviewPanel();
 
@@ -525,11 +530,22 @@ export const SoupViewList = (props: SoupViewListProps) => {
   ) => {
     setVirtualizerHandle(handle);
 
-    const cached = cacheMap.get(getCacheKey());
+    const cached = stateCache.get(getCacheKey());
 
-    if (!cached) return;
+    if (!cached) {
+      initialize();
+      return;
+    }
+
+    soup.focus.set(cached.soup.focus);
+    for (const id of cached.soup.filters) {
+      soup.filters.toggle(id);
+    }
+
+    soup.sort.setAll(cached.soup.sort);
 
     handle?.scrollTo(cached.scrollOffset);
+    initialize(false);
   };
 
   return (
@@ -578,7 +594,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                 setCollapseEntity={soup.collapseEntity.set}
               >
                 <SoupList
-                  cache={cacheMap.get(getCacheKey())?.virtualCache}
+                  cache={stateCache.get(getCacheKey())?.virtualCache}
                   ref={setLocalEntityListRef}
                   virtualizerClass="scrollbar-hidden"
                   class="overflow-hidden flex min-w-0"
