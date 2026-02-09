@@ -26,7 +26,7 @@ export function MessageList(props: MessageListProps) {
 
   return (
     <div
-      class="pt-3 w-full flex flex-col-reverse items-center overflow-y-scroll overflow-x-hidden suppress-css-brackets hide-scrollbar text-sm touch:mobile-width:text-base"
+      class="pt-3 w-full flex-1 min-h-0 flex flex-col-reverse items-center overflow-y-scroll overflow-x-hidden suppress-css-brackets hide-scrollbar text-sm touch:mobile-width:text-base"
       ref={context.registerMessagesList}
       onscroll={(e) => {
         // Since the list is reversed, calculate scroll from visual top
@@ -53,6 +53,7 @@ export function MessageList(props: MessageListProps) {
       }}
     >
       {props.composeSlot}
+      <div class="flex-grow" />
       <StaticMarkdownContext>
         {/* We use Index because the index of the messages should always be stable and
           only the value changes. This also helps prevent nested inputs from rerendering
