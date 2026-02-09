@@ -2401,12 +2401,10 @@ export const getItemsSoupResponse = zod.object({
               .describe(
                 'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on the file type'
               ),
-            createdAt: zod
-              .number()
-              .describe('The time the document was created'),
+            createdAt: zod.date().describe('The time the document was created'),
             deletedAt: zod
-              .number()
-              .nullable()
+              .date()
+              .nullish()
               .describe('The time the document was deleted'),
             documentFamilyId: zod
               .number()
@@ -2676,23 +2674,23 @@ export const getItemsSoupResponse = zod.object({
               ])
               .optional(),
             updatedAt: zod
-              .number()
+              .date()
               .describe(
                 'The time the document instance / document BOM was updated'
               ),
             viewedAt: zod
-              .number()
-              .nullable()
+              .date()
+              .nullish()
               .describe('The time the document was last viewed'),
           }),
           tag: zod.enum(['document']),
         }),
         zod.object({
           data: zod.object({
-            createdAt: zod.number().describe('The time the chat was created'),
+            createdAt: zod.date().describe('The time the chat was created'),
             deletedAt: zod
-              .number()
-              .nullable()
+              .date()
+              .nullish()
               .describe('The time the chat was deleted'),
             id: zod.string().uuid().describe('The chat uuid'),
             isPersistent: zod
@@ -2926,23 +2924,21 @@ export const getItemsSoupResponse = zod.object({
               )
               .describe('Properties'),
             updatedAt: zod
-              .number()
+              .date()
               .describe('The time the chat was last updated'),
             viewedAt: zod
-              .number()
-              .nullable()
+              .date()
+              .nullish()
               .describe('The time the chat was last viewed'),
           }),
           tag: zod.enum(['chat']),
         }),
         zod.object({
           data: zod.object({
-            createdAt: zod
-              .number()
-              .describe('The time the project was created'),
+            createdAt: zod.date().describe('The time the project was created'),
             deletedAt: zod
-              .number()
-              .nullable()
+              .date()
+              .nullish()
               .describe('The time the project was deleted'),
             id: zod.string().uuid().describe('The id of the project'),
             name: zod.string().describe('The name of the project'),
@@ -3174,12 +3170,10 @@ export const getItemsSoupResponse = zod.object({
                   )
               )
               .describe('Properties'),
-            updatedAt: zod
-              .number()
-              .describe('The time the project was updated'),
+            updatedAt: zod.date().describe('The time the project was updated'),
             viewedAt: zod
-              .number()
-              .nullable()
+              .date()
+              .nullish()
               .describe('The time the document was last viewed'),
           }),
           tag: zod.enum(['project']),
@@ -3187,7 +3181,7 @@ export const getItemsSoupResponse = zod.object({
         zod.object({
           data: zod
             .object({
-              createdAt: zod.number(),
+              createdAt: zod.date(),
               id: zod.string().uuid(),
               inboxVisible: zod.boolean(),
               isDraft: zod.boolean(),
@@ -3200,16 +3194,16 @@ export const getItemsSoupResponse = zod.object({
               senderName: zod.string().nullish(),
               senderPhotoUrl: zod.string().nullish(),
               snippet: zod.string().nullish(),
-              sortTs: zod.number(),
-              updatedAt: zod.number(),
-              viewedAt: zod.number().nullable(),
+              sortTs: zod.date(),
+              updatedAt: zod.date(),
+              viewedAt: zod.date().nullish(),
             })
             .and(
               zod.object({
                 attachments: zod.array(
                   zod.object({
                     contentId: zod.string().nullish(),
-                    createdAt: zod.number(),
+                    createdAt: zod.date(),
                     filename: zod.string().nullish(),
                     id: zod.string().uuid(),
                     messageId: zod.string().uuid(),
@@ -3802,12 +3796,10 @@ export const postItemsSoupResponse = zod.object({
               .describe(
                 'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on the file type'
               ),
-            createdAt: zod
-              .number()
-              .describe('The time the document was created'),
+            createdAt: zod.date().describe('The time the document was created'),
             deletedAt: zod
-              .number()
-              .nullable()
+              .date()
+              .nullish()
               .describe('The time the document was deleted'),
             documentFamilyId: zod
               .number()
@@ -4077,23 +4069,23 @@ export const postItemsSoupResponse = zod.object({
               ])
               .optional(),
             updatedAt: zod
-              .number()
+              .date()
               .describe(
                 'The time the document instance / document BOM was updated'
               ),
             viewedAt: zod
-              .number()
-              .nullable()
+              .date()
+              .nullish()
               .describe('The time the document was last viewed'),
           }),
           tag: zod.enum(['document']),
         }),
         zod.object({
           data: zod.object({
-            createdAt: zod.number().describe('The time the chat was created'),
+            createdAt: zod.date().describe('The time the chat was created'),
             deletedAt: zod
-              .number()
-              .nullable()
+              .date()
+              .nullish()
               .describe('The time the chat was deleted'),
             id: zod.string().uuid().describe('The chat uuid'),
             isPersistent: zod
@@ -4327,23 +4319,21 @@ export const postItemsSoupResponse = zod.object({
               )
               .describe('Properties'),
             updatedAt: zod
-              .number()
+              .date()
               .describe('The time the chat was last updated'),
             viewedAt: zod
-              .number()
-              .nullable()
+              .date()
+              .nullish()
               .describe('The time the chat was last viewed'),
           }),
           tag: zod.enum(['chat']),
         }),
         zod.object({
           data: zod.object({
-            createdAt: zod
-              .number()
-              .describe('The time the project was created'),
+            createdAt: zod.date().describe('The time the project was created'),
             deletedAt: zod
-              .number()
-              .nullable()
+              .date()
+              .nullish()
               .describe('The time the project was deleted'),
             id: zod.string().uuid().describe('The id of the project'),
             name: zod.string().describe('The name of the project'),
@@ -4575,12 +4565,10 @@ export const postItemsSoupResponse = zod.object({
                   )
               )
               .describe('Properties'),
-            updatedAt: zod
-              .number()
-              .describe('The time the project was updated'),
+            updatedAt: zod.date().describe('The time the project was updated'),
             viewedAt: zod
-              .number()
-              .nullable()
+              .date()
+              .nullish()
               .describe('The time the document was last viewed'),
           }),
           tag: zod.enum(['project']),
@@ -4588,7 +4576,7 @@ export const postItemsSoupResponse = zod.object({
         zod.object({
           data: zod
             .object({
-              createdAt: zod.number(),
+              createdAt: zod.date(),
               id: zod.string().uuid(),
               inboxVisible: zod.boolean(),
               isDraft: zod.boolean(),
@@ -4601,16 +4589,16 @@ export const postItemsSoupResponse = zod.object({
               senderName: zod.string().nullish(),
               senderPhotoUrl: zod.string().nullish(),
               snippet: zod.string().nullish(),
-              sortTs: zod.number(),
-              updatedAt: zod.number(),
-              viewedAt: zod.number().nullable(),
+              sortTs: zod.date(),
+              updatedAt: zod.date(),
+              viewedAt: zod.date().nullish(),
             })
             .and(
               zod.object({
                 attachments: zod.array(
                   zod.object({
                     contentId: zod.string().nullish(),
-                    createdAt: zod.number(),
+                    createdAt: zod.date(),
                     filename: zod.string().nullish(),
                     id: zod.string().uuid(),
                     messageId: zod.string().uuid(),
