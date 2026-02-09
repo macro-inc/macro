@@ -244,7 +244,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
   useSoupViewHotkeys({
     splitId: panel.handle.id,
     scopeId: scopeId(),
-    domRef: soupViewRef,
     soup,
     splitHandle: panel.handle,
     virtualizerHandle,
