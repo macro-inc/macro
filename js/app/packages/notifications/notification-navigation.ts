@@ -150,7 +150,7 @@ export function openNotification(
   if (!handler) {
     return errAsync({
       tag: 'NotSupportedError',
-      notificationType: notification.notificationEventType as NotificationType,
+      notificationType: notification.notificationMetadata.tag,
     });
   }
   return ResultAsync.fromSafePromise(handler(layoutManager));
