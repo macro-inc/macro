@@ -3,8 +3,6 @@ import {
   isChannelMessageReply,
   isChannelMessageSend,
   isDocumentMention,
-  isItemSharedOrganization,
-  isItemSharedUser,
   isNewEmail,
   getMetadata,
   type UnifiedNotificationWithMetadata,
@@ -16,7 +14,6 @@ import { match } from 'ts-pattern';
 
 /**
  * Filters out invalid notification types that shouldn't be displayed
- * Currently filters out 'channel_message_document' notifications.
  */
 export function filterValidNotifications(
   notifications: Notification[] | undefined
@@ -24,10 +21,7 @@ export function filterValidNotifications(
   if (!notifications) return [];
 
   return notifications.filter((n) => {
-    return (
-      n.notificationEventType !== 'channel_message_document' &&
-      n.notificationEventType !== undefined
-    );
+    return n.notificationEventType !== undefined;
   });
 }
 
@@ -76,14 +70,10 @@ export function getNotificationActionText(notification: Notification): string {
     .with('channel_message_send', () => 'sent')
     .with('channel_message_reply', () => 'replied')
     .with('document_mention', () => 'mentioned')
-    .with('item_shared_user', () => 'shared')
-    .with('item_shared_organization', () => 'shared')
     .with('channel_invite', () => 'invited')
     .with('new_email', () => 'emailed')
     .with('invite_to_team', () => 'invited')
-    .with('reject_team_invite', () => 'declined')
     .with('task_assigned', () => 'assigned')
-    .with('channel_message_document', () => 'notified')
     .otherwise(() => 'notified');
 }
 
@@ -108,16 +98,6 @@ export function extractMessageContent(notification: Notification): string {
   if (isDocumentMention(typed)) {
     const metadata = getMetadata(typed);
     return metadata.documentName || '';
-  }
-
-  if (isItemSharedUser(typed)) {
-    const metadata = getMetadata(typed);
-    return metadata.itemName || '';
-  }
-
-  if (isItemSharedOrganization(typed)) {
-    const metadata = getMetadata(typed);
-    return metadata.itemName || '';
   }
 
   if (isNewEmail(typed)) {

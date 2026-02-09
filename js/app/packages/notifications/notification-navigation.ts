@@ -127,26 +127,7 @@ function getSupportedHandler(
         openSplitIfNotOpen(lm, 'channel', n.entity_id)
     )
     .with(
-      {
-        notificationEventType: P.union(
-          'item_shared_user',
-          'item_shared_organization'
-        ),
-      },
-      (n) => async (lm: SplitManager) =>
-        openSplitIfNotOpen(
-          lm,
-          safeFileTypeToBlockName(getMetadata(n).itemType),
-          n.entity_id
-        )
-    )
-    .with(
-      {
-        notificationEventType: P.union(
-          'document_mention',
-          'channel_message_document'
-        ),
-      },
+      { notificationEventType: 'document_mention' },
       (n) => async (lm: SplitManager) =>
         openSplitIfNotOpen(
           lm,
@@ -154,12 +135,7 @@ function getSupportedHandler(
           n.entity_id
         )
     )
-    .with(
-      {
-        notificationEventType: P.union('invite_to_team', 'reject_team_invite'),
-      },
-      () => null
-    )
+    .with({ notificationEventType: 'invite_to_team' }, () => null)
     .with(
       { notificationEventType: 'task_assigned' },
       (n) => async (lm: SplitManager) => {

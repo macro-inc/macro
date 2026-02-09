@@ -137,7 +137,10 @@ export const createMockNotification = (
   updatedAt: MOCK_TIMESTAMPS.today,
   deletedAt: null,
   viewedAt: null,
-  notificationMetadata: { tag: 'document_mention', content: {} },
+  notificationMetadata: {
+    tag: 'document_mention',
+    content: { documentName: 'Test Document', owner: 'user_123' },
+  },
   ...overrides,
 });
 
@@ -156,7 +159,7 @@ export const MOCK_NOTIFICATIONS: Notification[] = [
   }),
   createMockNotification({
     id: 'notif_channel_1',
-    notificationEventType: 'channel_message_document',
+    notificationEventType: 'channel_message_send',
     senderId: MOCK_USER_IDS.sharedUser,
     createdAt: MOCK_TIMESTAMPS.lastWeek,
     entity_type: 'channel',

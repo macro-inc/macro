@@ -44,16 +44,12 @@ export {
   getMetadata,
   isChannelInvite,
   isChannelMention,
-  isChannelMessageDocument,
   isChannelMessageReply,
   isChannelMessageSend,
   isDocumentMention,
   isInviteToTeam,
-  isItemSharedOrganization,
-  isItemSharedUser,
   isNewEmail,
   isNotificationWithMetadata,
-  isRejectTeamInvite,
   tryToTypedNotification,
 } from './notification-metadata';
 export { openNotification } from './notification-navigation';
