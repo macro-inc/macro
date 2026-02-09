@@ -27,6 +27,7 @@ import {
   createSignal,
   type FlowComponent,
   on,
+  type Setter,
   Suspense,
   useContext,
 } from 'solid-js';
@@ -65,6 +66,7 @@ interface SoupViewContextValues {
   setSearchText: (value: string) => void;
   isSearchDisabled: Accessor<boolean>;
   rows: Accessor<SoupRow[]>;
+  setQueryFilters: Setter<SoupItemsQueryFilters>;
 }
 
 export const SoupViewContext = createContext<SoupViewContextValues>();
@@ -96,6 +98,8 @@ export const SoupViewContextProvider: FlowComponent<
   const emailActive = useEmailLinksStatus();
 
   const [searchText, setSearchText] = createSignal('');
+  const [internalQueryFilters, setQueryFilters] =
+    createSignal<SoupItemsQueryFilters>({});
 
   const debouncedSearchForLocal = debouncedDependent(
     searchText,
@@ -168,7 +172,7 @@ export const SoupViewContextProvider: FlowComponent<
   );
 
   const queryFilters = createMemo(() => {
-    const base = soup.filters.query();
+    const base = internalQueryFilters();
 
     return {
       ...base,
@@ -390,6 +394,7 @@ export const SoupViewContextProvider: FlowComponent<
     searchText,
     setSearchText,
     isSearchDisabled,
+    setQueryFilters,
   };
 
   return (

@@ -9,7 +9,6 @@ import { createSelectionState } from '@app/component/next-soup/selection-state';
 import { SORT_CONFIGS } from '@app/component/next-soup/soup-view/sort-options';
 import { isModality } from '@core/mobile/inputModality';
 import type { EntityData, WithSearch } from '@macro-entity';
-import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import { createMemo, createSignal } from 'solid-js';
 
 type SoupEntity = EntityData | WithSearch<EntityData>;
@@ -32,7 +31,6 @@ interface SoupContextOptions<
 > {
   initialData?: SoupEntity[];
   initialFilters?: TFilter['id'][];
-  initialQueryFilters?: SoupItemsQueryFilters;
   filterConfigs?: readonly TFilter[];
   wrapNavigation?: boolean;
 }
@@ -44,7 +42,6 @@ export const createSoupState = <
     wrapNavigation,
     initialData,
     initialFilters,
-    initialQueryFilters,
     filterConfigs,
   }: SoupContextOptions<TFilter> = {
     wrapNavigation: false,
@@ -58,7 +55,6 @@ export const createSoupState = <
     configs: filterConfigs ?? SOUP_FILTERS,
     groups: FILTER_GROUPS,
     initialPredicates: initialFilters,
-    initialQuery: initialQueryFilters,
   });
 
   const sort = createSortState(SORT_CONFIGS, ['updated_at']);

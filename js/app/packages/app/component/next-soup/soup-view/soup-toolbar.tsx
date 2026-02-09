@@ -19,6 +19,7 @@ import {
   createSignal,
   onMount,
   createEffect,
+  batch,
   type Component,
 } from 'solid-js';
 import {
@@ -57,11 +58,18 @@ const ENTITY_TYPE_SHORTCUTS: Record<
 };
 
 export const SoupToolbar = () => {
-  const { soup } = useSoupView();
+  const { soup, setQueryFilters } = useSoupView();
 
   const [scrollContainerRef, setScrollContainerRef] = createSignal<
     HTMLDivElement | undefined
   >(undefined);
+
+  const handleClear = () => {
+    batch(() => {
+      soup.filters.clear();
+      setQueryFilters(QUERY_FILTERS.default);
+    });
+  };
 
   return (
     <>
@@ -87,7 +95,7 @@ export const SoupToolbar = () => {
             <button
               type="button"
               class="flex items-center gap-1.5 px-2.5 rounded-full text-ink-muted hover:text-accent hover:bg-accent/20 active:bg-accent active:text-panel"
-              onClick={soup.filters.clear}
+              onClick={handleClear}
             >
               <XIcon class="size-4.5" />
               <span class="text-xs touch:mobile-width:text-sm leading-none">
@@ -112,92 +120,53 @@ type EntityTypeFilterId =
   | 'agent'
   | 'file';
 
-const FOCUS_FILTERS = ['signal', 'noise', 'explicit-noise', 'not-done'];
-const ENTITY_TYPE_FILTERS = [
-  'document',
-  'task',
-  'email',
-  'people',
-  'teams',
-  'agent',
-  'file',
-];
-const NOTIFICATION_FILTERS = ['unread'];
-
 const SoupFilters = () => {
-  const { soup, setSearchText, isSearchDisabled } = useSoupView();
+  const { soup, setSearchText, isSearchDisabled, setQueryFilters } =
+    useSoupView();
   const panel = useSplitPanelOrThrow();
   const emailActive = useEmailLinksStatus();
 
   const [sortDropdownOpen, setSortDropdownOpen] = createSignal(false);
 
-  const predicatesWithoutGroup = (group: string[]) =>
-    soup.filters.predicates().filter((id) => !group.includes(id));
-
+  // === Focus filters (signal/noise) ===
+  // These don't have query filters, just predicates.
+  // The primitive handles mutual exclusivity via the 'focus' group.
   const toggleFocus = (id: 'signal' | 'noise') => {
-    const otherPredicates = predicatesWithoutGroup(FOCUS_FILTERS);
-
-    if (soup.filters.isActive(id)) {
-      soup.filters.set({
-        predicates: [...otherPredicates, 'explicit-noise', 'not-done'],
-      });
-    } else {
-      soup.filters.set({
-        predicates: [...otherPredicates, id, 'not-done'],
-      });
-    }
+    soup.filters.toggle(id);
   };
 
+  // === Notification filters ===
   const toggleUnread = () => {
-    const otherPredicates = predicatesWithoutGroup(NOTIFICATION_FILTERS);
-
-    if (soup.filters.isActive('unread')) {
-      soup.filters.set({ predicates: otherPredicates });
-    } else {
-      soup.filters.set({ predicates: [...otherPredicates, 'unread'] });
-    }
+    soup.filters.toggle('unread');
   };
 
+  // === Entity type filters ===
+  // These have associated query filters that need to be set/cleared
   const toggleEntityType = (id: EntityTypeFilterId) => {
-    const otherPredicates = predicatesWithoutGroup(ENTITY_TYPE_FILTERS);
-
-    if (soup.filters.isActive(id)) {
-      // Remove entity type filter, reset query
-      soup.filters.set({
-        predicates: otherPredicates,
-        query: QUERY_FILTERS.default,
-      });
-    } else {
-      soup.filters.set({
-        predicates: [...otherPredicates, id],
-        query: QUERY_FILTERS[id],
-      });
-    }
+    const willBeActive = !soup.filters.isActive(id);
+    batch(() => {
+      soup.filters.toggle(id);
+      setQueryFilters(willBeActive ? QUERY_FILTERS[id] : QUERY_FILTERS.default);
+    });
   };
 
   // Email has special handling for email integration status
   const toggleEmail = () => {
-    const otherPredicates = predicatesWithoutGroup(ENTITY_TYPE_FILTERS);
-
-    if (soup.filters.isActive('email')) {
-      soup.filters.set({
-        predicates: otherPredicates,
-        query: QUERY_FILTERS.default,
-      });
-    } else {
-      // Include emails (recipients: []) only if email integration is active AND not searching
-      // Otherwise exclude emails (recipients: EXCLUDE)
-      const shouldIncludeEmails = emailActive() && isSearchDisabled();
-      soup.filters.set({
-        predicates: [...otherPredicates, 'email'],
-        query: {
+    const willBeActive = !soup.filters.isActive('email');
+    batch(() => {
+      soup.filters.toggle('email');
+      if (willBeActive) {
+        const shouldIncludeEmails = emailActive() && isSearchDisabled();
+        setQueryFilters({
           ...QUERY_FILTERS.email,
           email_filters: {
             recipients: shouldIncludeEmails ? [] : EXCLUDE,
           },
-        },
-      });
-    }
+        });
+      } else {
+        setQueryFilters(QUERY_FILTERS.default);
+      }
+    });
   };
 
   const entityTypeToggleHandlers: Record<
@@ -292,8 +261,11 @@ const SoupFilters = () => {
       hotkey: '/',
       description: 'Clear filters',
       handler: () => {
-        soup.filters.clear();
-        setSearchText('');
+        batch(() => {
+          soup.filters.clear();
+          setQueryFilters(QUERY_FILTERS.default);
+          setSearchText('');
+        });
       },
     },
     {

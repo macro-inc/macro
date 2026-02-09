@@ -33,14 +33,6 @@ describe('createFiltersState', () => {
       });
     });
 
-    it('should start with empty query by default', () => {
-      createRoot((dispose) => {
-        const filters = createFiltersState({ configs: mockConfigs });
-        expect(filters.query()).toEqual({});
-        dispose();
-      });
-    });
-
     it('should accept initial predicates', () => {
       createRoot((dispose) => {
         const filters = createFiltersState({
@@ -52,64 +44,14 @@ describe('createFiltersState', () => {
         dispose();
       });
     });
-
-    it('should accept initial query filters', () => {
-      createRoot((dispose) => {
-        const filters = createFiltersState({
-          configs: mockConfigs,
-          initialQuery: { document_filters: { project_ids: ['p1'] } },
-        });
-        expect(filters.query()).toEqual({
-          document_filters: { project_ids: ['p1'] },
-        });
-        dispose();
-      });
-    });
-
-    it('should accept both initial predicates and query', () => {
-      createRoot((dispose) => {
-        const filters = createFiltersState({
-          configs: mockConfigs,
-          initialPredicates: ['even'],
-          initialQuery: { chat_filters: { chat_ids: ['c1'] } },
-        });
-        expect(filters.predicates()).toEqual(['even']);
-        expect(filters.query()).toEqual({ chat_filters: { chat_ids: ['c1'] } });
-        dispose();
-      });
-    });
   });
 
   describe('set', () => {
     it('should set predicates', () => {
       createRoot((dispose) => {
         const filters = createFiltersState({ configs: mockConfigs });
-        filters.set({ predicates: ['even', 'small'] });
+        filters.set(['even', 'small']);
         expect(filters.predicates()).toEqual(['even', 'small']);
-        dispose();
-      });
-    });
-
-    it('should set query filters', () => {
-      createRoot((dispose) => {
-        const filters = createFiltersState({ configs: mockConfigs });
-        filters.set({ query: { chat_filters: { chat_ids: ['c1'] } } });
-        expect(filters.query()).toEqual({ chat_filters: { chat_ids: ['c1'] } });
-        dispose();
-      });
-    });
-
-    it('should set both predicates and query', () => {
-      createRoot((dispose) => {
-        const filters = createFiltersState({ configs: mockConfigs });
-        filters.set({
-          predicates: ['positive'],
-          query: { email_filters: { recipients: ['a@b.com'] } },
-        });
-        expect(filters.predicates()).toEqual(['positive']);
-        expect(filters.query()).toEqual({
-          email_filters: { recipients: ['a@b.com'] },
-        });
         dispose();
       });
     });
@@ -120,50 +62,11 @@ describe('createFiltersState', () => {
           configs: mockConfigs,
           initialPredicates: ['even', 'positive'],
         });
-        filters.set({ predicates: ['small'] });
+        filters.set(['small']);
         expect(filters.predicates()).toEqual(['small']);
         dispose();
       });
     });
-
-    it('should replace query filters, not merge', () => {
-      createRoot((dispose) => {
-        const filters = createFiltersState({
-          configs: mockConfigs,
-          initialQuery: { document_filters: { project_ids: ['p1'] } },
-        });
-        filters.set({ query: { chat_filters: { chat_ids: ['c1'] } } });
-        expect(filters.query()).toEqual({ chat_filters: { chat_ids: ['c1'] } });
-        dispose();
-      });
-    });
-
-    it('should not change predicates if only query provided', () => {
-      createRoot((dispose) => {
-        const filters = createFiltersState({
-          configs: mockConfigs,
-          initialPredicates: ['even'],
-        });
-        filters.set({ query: { chat_filters: { chat_ids: ['c1'] } } });
-        expect(filters.predicates()).toEqual(['even']);
-        dispose();
-      });
-    });
-
-    it('should not change query if only predicates provided', () => {
-      createRoot((dispose) => {
-        const filters = createFiltersState({
-          configs: mockConfigs,
-          initialQuery: { document_filters: { project_ids: ['p1'] } },
-        });
-        filters.set({ predicates: ['small'] });
-        expect(filters.query()).toEqual({
-          document_filters: { project_ids: ['p1'] },
-        });
-        dispose();
-      });
-    });
-
   });
 
   describe('isActive', () => {
@@ -183,7 +86,7 @@ describe('createFiltersState', () => {
       createRoot((dispose) => {
         const filters = createFiltersState({ configs: mockConfigs });
         expect(filters.isActive('even')).toBe(false);
-        filters.set({ predicates: ['even'] });
+        filters.set(['even']);
         expect(filters.isActive('even')).toBe(true);
         dispose();
       });
@@ -373,25 +276,23 @@ describe('createFiltersState', () => {
   });
 
   describe('clear', () => {
-    it('should clear predicates and query', () => {
+    it('should clear all predicates', () => {
       createRoot((dispose) => {
         const filters = createFiltersState({
           configs: mockConfigs,
-          initialPredicates: ['even'],
-          initialQuery: { document_filters: { project_ids: ['p1'] } },
+          initialPredicates: ['even', 'positive'],
         });
 
         // Verify initial state
-        expect(filters.predicates()).toEqual(['even']);
-        expect(filters.query()).toEqual({
-          document_filters: { project_ids: ['p1'] },
-        });
+        expect(filters.predicates()).toEqual(['even', 'positive']);
+        expect(filters.isActive('even')).toBe(true);
 
         filters.clear();
 
-        // After clear, signals should be empty
+        // After clear, predicates should be empty
         expect(filters.predicates()).toEqual([]);
-        expect(filters.query()).toEqual({});
+        expect(filters.isActive('even')).toBe(false);
+        expect(filters.isActive('positive')).toBe(false);
 
         dispose();
       });
