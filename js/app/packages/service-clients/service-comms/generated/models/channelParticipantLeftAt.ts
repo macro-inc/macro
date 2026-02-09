@@ -8,4 +8,4 @@
 /**
  * timestamp of when the user left the channel
  */
-export type ChannelParticipantLeftAt = string | null;
+export type ChannelParticipantLeftAt = Date | null;

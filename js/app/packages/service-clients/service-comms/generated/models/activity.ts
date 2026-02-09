@@ -12,12 +12,12 @@ import type { ActivityViewedAt } from './activityViewedAt';
  */
 export interface Activity {
   channel_id: string;
-  created_at: string;
+  created_at: Date;
   id: string;
   /** the last time the user intereacted with the channel
 eg. reacting, replying, sending a message */
   interacted_at?: ActivityInteractedAt;
-  updated_at: string;
+  updated_at: Date;
   user_id: string;
   /** the last time the user viewed the channel */
   viewed_at?: ActivityViewedAt;

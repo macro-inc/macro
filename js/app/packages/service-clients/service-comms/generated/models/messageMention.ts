@@ -6,7 +6,7 @@
  */
 
 export interface MessageMention {
-  created_at: string;
+  created_at: Date;
   entity_id: string;
   entity_type: string;
   message_id: string;

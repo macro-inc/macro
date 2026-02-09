@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type MessageEditedAt = string | null;
+export type MessageEditedAt = Date | null;

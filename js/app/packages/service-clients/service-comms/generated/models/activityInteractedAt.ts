@@ -9,4 +9,4 @@
  * the last time the user intereacted with the channel
 eg. reacting, replying, sending a message
  */
-export type ActivityInteractedAt = string | null;
+export type ActivityInteractedAt = Date | null;

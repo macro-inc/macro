@@ -13,7 +13,7 @@ import type { ChannelReferenceThreadId } from './channelReferenceThreadId';
 export interface ChannelReference {
   /** When the attachment row was created (normally identical to message
 creation, but stored separately just in case) */
-  attachment_created_at: string;
+  attachment_created_at: Date;
   /** Channel that contains the message */
   channel_id: string;
   /** Optional channel name (DMs do not have a name) */
@@ -21,7 +21,7 @@ creation, but stored separately just in case) */
   /** Full message content (might be used for preview/snippet) */
   message_content: string;
   /** When the message itself was created */
-  message_created_at: string;
+  message_created_at: Date;
   /** Message that contains the attachment reference */
   message_id: string;
   /** Sender of the message */

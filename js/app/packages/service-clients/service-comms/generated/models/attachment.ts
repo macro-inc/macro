@@ -9,7 +9,7 @@ import type { AttachmentWidth } from './attachmentWidth';
 
 export interface Attachment {
   channel_id: string;
-  created_at: string;
+  created_at: Date;
   entity_id: string;
   entity_type: string;
   height?: AttachmentHeight;

@@ -7,7 +7,7 @@
 import type { CreateEntityMentionResponseUserId } from './createEntityMentionResponseUserId';
 
 export interface CreateEntityMentionResponse {
-  created_at: string;
+  created_at: Date;
   entity_id: string;
   entity_type: string;
   id: string;
