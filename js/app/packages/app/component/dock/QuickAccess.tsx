@@ -18,7 +18,7 @@ import {
 import type { ApiChannelWithLatest as ChannelWithLatest } from '@service-comms/generated/models';
 import { ChannelTypeEnum } from '@service-comms/client';
 import { useUserId } from '@core/context/user';
-import { NotificationEventType } from '@service-notification/generated/schemas';
+import { NotificationEventType } from '@service-notification/types';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 
 // Helper functions for notification processing

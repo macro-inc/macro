@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { NotificationEventType } from '@service-notification/generated/schemas';
+import type { NotificationEventType } from '@service-notification/types';
 import { extractNotificationData } from '../notification-preview';
 import { tryToTypedNotification } from '../notification-metadata';
 import type { UnifiedNotification } from '../types';

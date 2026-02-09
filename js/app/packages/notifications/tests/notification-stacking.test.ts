@@ -1,4 +1,4 @@
-import type { NotificationEventType } from '@service-notification/generated/schemas';
+import type { NotificationEventType } from '@service-notification/types';
 import { describe, expect, it } from 'vitest';
 import {
   getAllNotificationsFromGroup,

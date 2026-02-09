@@ -15,7 +15,7 @@ export type Entity = {
 };
 
 export type { ApiPaginatedThreadCursor as ThreadPreview } from '@service-email/generated/schemas/apiPaginatedThreadCursor';
-export { NotificationEventType as NotificationType } from '@service-notification/generated/schemas/notificationEventType';
+export { NotificationEventType as NotificationType } from '@service-notification/types';
 
 export type Nullable<T> = T | null;
 export type Maybe<T> = T | undefined;
