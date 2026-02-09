@@ -34,8 +34,7 @@ setupQueryPersistence({
       }),
       maxAgeMs: SEVEN_DAYS_MS,
       buster,
-      shouldPersist: (key) =>
-        partialMatchKey(key, ['email', 'threadMessages']),
+      shouldPersist: (key) => partialMatchKey(key, ['email', 'threadMessages']),
     },
   ],
 });
