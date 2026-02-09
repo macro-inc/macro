@@ -1,22 +1,6 @@
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import { createMemo, createSignal, type Accessor } from 'solid-js';
 
-export const NIL_UUID = '00000000-0000-0000-0000-000000000000';
-
-/**
- * Array containing NIL_UUID, used to exclude an entity type from query results.
- *
- * @example
- * ```ts
- * filters.set({
- *   query: {
- *     chat_filters: { chat_ids: EXCLUDE },  // Exclude all chats
- *   }
- * });
- * ```
- */
-export const EXCLUDE = [NIL_UUID] as const;
-
 export type FilterPredicate<T> = (entity: T) => boolean;
 
 export type FilterConfig<T> = {
@@ -26,8 +10,16 @@ export type FilterConfig<T> = {
   readonly group?: string;
 };
 
+export type FilterGroupConfig = {
+  readonly id: string;
+  /** If false, only one filter from this group can be active at a time */
+  readonly allowMultiple?: boolean;
+};
+
 export type FiltersStateOptions<T, TConfig extends FilterConfig<T>> = {
   configs: readonly TConfig[];
+  /** Group configurations for mutual exclusivity */
+  groups?: readonly FilterGroupConfig[];
   /** Initial active predicate IDs */
   initialPredicates?: string[];
   /** Initial query filters */
@@ -72,9 +64,15 @@ export type FiltersState<T, TConfig extends FilterConfig<T>> = {
 export function createFiltersState<T, TConfig extends FilterConfig<T>>(
   options: FiltersStateOptions<T, TConfig>
 ): FiltersState<T, TConfig> {
-  const { configs, initialPredicates = [], initialQuery = {} } = options;
+  const {
+    configs,
+    groups = [],
+    initialPredicates = [],
+    initialQuery = {},
+  } = options;
 
   const configMap = new Map(configs.map((c) => [c.id, c]));
+  const groupMap = new Map(groups.map((g) => [g.id, g]));
 
   const [activeIds, setActiveIds] = createSignal<string[]>(initialPredicates);
   const [queryFilters, setQueryFilters] =
@@ -87,6 +85,39 @@ export function createFiltersState<T, TConfig extends FilterConfig<T>>(
   );
 
   const isActive = (id: string): boolean => activeIds().includes(id);
+
+  /** Get filter config by ID */
+  const getConfig = (id: string): TConfig | undefined => configMap.get(id);
+
+  /** Check if a group allows multiple selections */
+  const isGroupExclusive = (groupId: string): boolean => {
+    const group = groupMap.get(groupId);
+    return group ? group.allowMultiple !== true : false;
+  };
+
+  /** Get IDs of other filters in the same exclusive group */
+  const getExclusiveGroupMembers = (id: string): string[] => {
+    const config = getConfig(id);
+    if (!config?.group) return [];
+
+    if (!isGroupExclusive(config.group)) return [];
+
+    return configs
+      .filter((c) => c.group === config.group && c.id !== id)
+      .map((c) => c.id);
+  };
+
+  /** Apply group exclusivity and return new predicate list */
+  const applyGroupExclusivity = (
+    currentIds: string[],
+    newId: string
+  ): string[] => {
+    const toRemove = getExclusiveGroupMembers(newId);
+    if (toRemove.length === 0) {
+      return [...currentIds, newId];
+    }
+    return [...currentIds.filter((id) => !toRemove.includes(id)), newId];
+  };
 
   const set = (opts: {
     predicates?: string[];
@@ -104,13 +135,13 @@ export function createFiltersState<T, TConfig extends FilterConfig<T>>(
     if (isActive(id)) {
       setActiveIds((prev) => prev.filter((x) => x !== id));
     } else {
-      setActiveIds((prev) => [...prev, id]);
+      setActiveIds(applyGroupExclusivity(activeIds(), id));
     }
   };
 
   const activate = (id: string) => {
     if (!isActive(id)) {
-      setActiveIds((prev) => [...prev, id]);
+      setActiveIds(applyGroupExclusivity(activeIds(), id));
     }
   };
 

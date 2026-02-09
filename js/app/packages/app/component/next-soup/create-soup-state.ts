@@ -3,6 +3,7 @@ import {
   createFiltersState,
   type FilterConfig,
   SOUP_FILTERS,
+  FILTER_GROUPS,
 } from '@app/component/next-soup/filters';
 import { createSelectionState } from '@app/component/next-soup/selection-state';
 import { SORT_CONFIGS } from '@app/component/next-soup/soup-view/sort-options';
@@ -55,6 +56,7 @@ export const createSoupState = <
 
   const filters = createFiltersState<SoupEntity, FilterConfig<SoupEntity>>({
     configs: filterConfigs ?? SOUP_FILTERS,
+    groups: FILTER_GROUPS,
     initialPredicates: initialFilters,
     initialQuery: initialQueryFilters,
   });

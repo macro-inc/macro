@@ -1,11 +1,6 @@
 import { createRoot } from 'solid-js';
 import { describe, expect, it } from 'vitest';
-import {
-  createFiltersState,
-  EXCLUDE,
-  NIL_UUID,
-  type FilterConfig,
-} from './create-filters-state';
+import { createFiltersState, type FilterConfig } from './create-filters-state';
 
 type TestEntity = { id: string; value: number; type: string };
 
@@ -28,13 +23,6 @@ const mockConfigs: FilterConfig<TestEntity>[] = [
 ];
 
 describe('createFiltersState', () => {
-  describe('EXCLUDE constant', () => {
-    it('should be an array with NIL_UUID', () => {
-      expect(EXCLUDE).toEqual([NIL_UUID]);
-      expect(EXCLUDE[0]).toBe('00000000-0000-0000-0000-000000000000');
-    });
-  });
-
   describe('initialization', () => {
     it('should start with empty predicates by default', () => {
       createRoot((dispose) => {
@@ -176,22 +164,6 @@ describe('createFiltersState', () => {
       });
     });
 
-    it('should support EXCLUDE constant in query', () => {
-      createRoot((dispose) => {
-        const filters = createFiltersState({ configs: mockConfigs });
-        filters.set({
-          query: {
-            document_filters: { document_ids: [] },
-            chat_filters: { chat_ids: [...EXCLUDE] },
-          },
-        });
-        expect(filters.query()).toEqual({
-          document_filters: { document_ids: [] },
-          chat_filters: { chat_ids: [NIL_UUID] },
-        });
-        dispose();
-      });
-    });
   });
 
   describe('isActive', () => {
@@ -289,6 +261,63 @@ describe('createFiltersState', () => {
         filters.toggle('even');
         expect(filters.predicates()).toEqual(['positive']);
         expect(filters.isActive('even')).toBe(false);
+        dispose();
+      });
+    });
+
+    it('should remove other filters in exclusive group when activating', () => {
+      createRoot((dispose) => {
+        const filters = createFiltersState({
+          configs: mockConfigs,
+          groups: [{ id: 'type', allowMultiple: false }],
+          initialPredicates: ['typeA'],
+        });
+
+        // typeA is active, toggle typeB
+        filters.toggle('typeB');
+
+        // typeA should be removed, typeB should be active
+        expect(filters.predicates()).toEqual(['typeB']);
+        expect(filters.isActive('typeA')).toBe(false);
+        expect(filters.isActive('typeB')).toBe(true);
+        dispose();
+      });
+    });
+
+    it('should not remove other filters in non-exclusive group', () => {
+      createRoot((dispose) => {
+        const filters = createFiltersState({
+          configs: mockConfigs,
+          groups: [{ id: 'type', allowMultiple: true }],
+          initialPredicates: ['typeA'],
+        });
+
+        // typeA is active, toggle typeB
+        filters.toggle('typeB');
+
+        // Both should be active
+        expect(filters.predicates()).toEqual(['typeA', 'typeB']);
+        expect(filters.isActive('typeA')).toBe(true);
+        expect(filters.isActive('typeB')).toBe(true);
+        dispose();
+      });
+    });
+
+    it('should not affect filters without groups', () => {
+      createRoot((dispose) => {
+        const filters = createFiltersState({
+          configs: mockConfigs,
+          groups: [{ id: 'type', allowMultiple: false }],
+          initialPredicates: ['even', 'typeA'],
+        });
+
+        // Toggle typeB - should remove typeA but not even
+        filters.toggle('typeB');
+
+        expect(filters.predicates()).toEqual(['even', 'typeB']);
+        expect(filters.isActive('even')).toBe(true);
+        expect(filters.isActive('typeA')).toBe(false);
+        expect(filters.isActive('typeB')).toBe(true);
         dispose();
       });
     });

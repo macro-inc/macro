@@ -17,7 +17,23 @@ import type {
   SoupItemsQueryFilters,
 } from '@queries/soup/items';
 import { codeFileExtensions } from '@block-code/util/languageSupport';
-import { type FilterConfig, NIL_UUID } from './create-filters-state';
+import type { FilterConfig } from './create-filters-state';
+
+export const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+
+/**
+ * Array containing NIL_UUID, used to exclude an entity type from query results.
+ *
+ * @example
+ * ```ts
+ * filters.set({
+ *   query: {
+ *     chat_filters: { chat_ids: EXCLUDE },  // Exclude all chats
+ *   }
+ * });
+ * ```
+ */
+export const EXCLUDE: string[] = [NIL_UUID];
 
 /**
  * Unread filter - entity has unread content.
@@ -109,10 +125,8 @@ export function fileFilter(entity: EntityData): boolean {
   return !['md', 'canvas'].includes(fileType);
 }
 
-export function teamsAndPeopleFilter(entity: EntityData): boolean {
-  if (entity.type !== 'channel') return false;
-
-  return true;
+export function channelsFilter(entity: EntityData): boolean {
+  return entity.type === 'channel';
 }
 
 export const SOUP_FILTERS = [
@@ -192,9 +206,9 @@ export const SOUP_FILTERS = [
     group: 'type',
   },
   {
-    id: 'teams-and-people',
-    label: 'Groups',
-    predicate: teamsAndPeopleFilter,
+    id: 'channels',
+    label: 'Channels',
+    predicate: channelsFilter,
     group: 'type',
   },
 ] as const;
