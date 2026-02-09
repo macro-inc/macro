@@ -17,9 +17,8 @@ export const FUSIONAUTH_ISSUER = config.require('fusionauth-issuer');
 export const FUSIONAUTH_APPLICATION_CLIENT_ID =
   stack === 'local' ? undefined : config.require('fusionauth-client-id');
 
-export const FUSIONAUTH_SIGNING_KEY_ID = config.require(
-  'fusionauth-signing-key-id'
-);
+export const FUSIONAUTH_SIGNING_KEY_ID =
+  stack === 'local' ? undefined : config.require('fusionauth-signing-key-id');
 
 // The potential pre-defined client secret for the fusionauth application
 // This is only predefined for existing infra (dev and prod)

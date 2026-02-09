@@ -9,10 +9,10 @@ x-common-env: &common-env
 
 services:
   # ============================================================================
-  # authentication-service (Port 8080)
+  # authentication_service (Port 8080)
   # Primary auth service - depends on FusionAuth, Redis, MacroDB
   # ============================================================================
-  authentication-service:
+  authentication_service:
     <<: *common-env
     build:
       context: ./rust/cloud-storage
@@ -145,7 +145,7 @@ services:
     depends_on:
       - redis
       - connection_gateway
-      - authentication-service
+      - authentication_service
     networks:
       - databases
       - services
@@ -169,7 +169,7 @@ services:
     ports:
       - "8087:8080"
     depends_on:
-      - authentication-service
+      - authentication_service
       - document_storage_service
       - connection_gateway
       - static_file_service
@@ -199,7 +199,7 @@ services:
     depends_on:
       - redis
       - document_cognition_service
-      - authentication-service
+      - authentication_service
       - connection_gateway
       - document_storage_service
     networks:

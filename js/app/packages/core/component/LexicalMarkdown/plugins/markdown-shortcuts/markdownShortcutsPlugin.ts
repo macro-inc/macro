@@ -1,3 +1,4 @@
+import { isConversionOnlyTransformer } from '@lexical-core';
 import { registerMarkdownShortcuts, type Transformer } from '@lexical/markdown';
 import { mergeRegister } from '@lexical/utils';
 import {
@@ -34,6 +35,7 @@ function registerMarkdownShortcutsPlugins(
   // Not all editor flavors support all nodes. Filter the available markdown shortcuts
   // to only those with all dependencies available.
   const transformers = props.transformers.filter((transformer) => {
+    if (isConversionOnlyTransformer(transformer)) return false;
     if (
       transformer.type === 'element' ||
       transformer.type === 'multiline-element'
