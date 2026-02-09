@@ -18,7 +18,7 @@ use crate::{
                 validate_permissions_token::DocumentPermissionsTokenRequest,
             },
         },
-        health, history, instructions, permissions, pins,
+        entity, health, history, instructions, pins,
         projects::{
             self,
             delete_project::{ProjectDeleteResponse, ProjectDeleteResponseData},
@@ -203,8 +203,8 @@ use utoipa::OpenApi;
         // threads
         threads::edit_thread::edit_thread_handler,
 
-        // permissions
-        permissions::get_entity_permission::handler,
+        // entity
+        entity::get_entity_permission::handler,
 
         // /recents
         recents::recently_deleted::handler,
