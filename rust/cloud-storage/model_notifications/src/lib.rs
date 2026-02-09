@@ -1,5 +1,5 @@
 use anyhow::Context;
-use chrono::{DateTime, serde::ts_seconds_option};
+use chrono::DateTime;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use models_pagination::{CreatedAt, Identify, SortOn};
@@ -162,23 +162,13 @@ impl NotificationEvent {
     }
 }
 
-type TimestampOption = Option<chrono::DateTime<chrono::Utc>>;
-
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct NotificationTemporalData {
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable = false)]
-    pub created_at: TimestampOption,
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable = true)]
-    pub viewed_at: TimestampOption,
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable = true)]
-    pub updated_at: TimestampOption,
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable = true)]
-    pub deleted_at: TimestampOption,
+    pub created_at: Option<DateTime<chrono::Utc>>,
+    pub viewed_at: Option<DateTime<chrono::Utc>>,
+    pub updated_at: Option<DateTime<chrono::Utc>>,
+    pub deleted_at: Option<DateTime<chrono::Utc>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema, Clone)]
@@ -326,6 +316,7 @@ pub struct NotificationWithRecipient {
     // USER-SPECIFIC FIELDS
     /// The user actually receiving the notification. used in intermediary processing
     #[serde(skip_serializing)]
+    #[schema(value_type = String)]
     pub recipient_id: MacroUserIdStr<'static>,
 }
 

@@ -1,4 +1,4 @@
-use chrono::serde::ts_seconds_option;
+use chrono::{DateTime, Utc};
 use utoipa::ToSchema;
 
 use models_permissions::share_permission::SharePermissionV2;
@@ -34,8 +34,6 @@ pub struct ChatPreviewData {
     pub chat_id: String,
     pub chat_name: String,
     pub owner: String,
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 

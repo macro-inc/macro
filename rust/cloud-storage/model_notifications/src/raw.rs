@@ -3,7 +3,7 @@ use crate::{
     UserNotification,
 };
 use anyhow::Context;
-use chrono::{DateTime, serde::ts_seconds_option};
+use chrono::DateTime;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
@@ -27,8 +27,6 @@ pub struct RawNotification {
     /// The service that created the notification
     pub service_sender: String,
     /// The time the notification was created
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     /// Custom metadata that may be needed for the notification
     pub metadata: Option<serde_json::Value>,
@@ -56,16 +54,10 @@ pub struct RawUserNotification {
     /// If the notification is "done"
     pub done: bool,
     /// The time the notification was created
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable = false)]
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     /// The time the notification was seen
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable = true)]
     pub viewed_at: Option<chrono::DateTime<chrono::Utc>>,
     /// The time the notification was deleted
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable = true)]
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
     /// Custom metadata that may be provided from the notification
     pub notification_metadata: Option<serde_json::Value>,
@@ -75,8 +67,6 @@ pub struct RawUserNotification {
     /// The time the notification was updated.
     /// This is the exact same as created_at and only used to make soup
     /// bettter on the frontend.
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable = true)]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
