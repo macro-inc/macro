@@ -17,6 +17,7 @@ import type {
   SoupItemsQueryFilters,
 } from '@queries/soup/items';
 import { codeFileExtensions } from '@block-code/util/languageSupport';
+import { type FilterConfig, NIL_UUID } from './create-filters-state';
 
 /**
  * Unread filter - entity has unread content.
@@ -48,17 +49,6 @@ export function notDoneFilter(entity: WithNotification<EntityData>) {
     !!entity.notifications && entity.notifications().some(({ done }) => !done)
   );
 }
-
-/** Filter predicate function */
-export type FilterPredicate<T> = (entity: T) => boolean;
-
-/** Filter configuration */
-export type FilterConfig<T> = {
-  readonly id: string;
-  readonly label: string;
-  readonly predicate: FilterPredicate<T>;
-  readonly group?: string;
-};
 
 /** Filter group configuration */
 export type FilterGroup = {
@@ -277,8 +267,6 @@ export const getFolderFileTypes = (type: 'soup' | 'search') => {
     return [fileType];
   });
 };
-
-const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
 const buildDefaultValue = (entityTypes: string[], required: string[]) => {
   const hasNoEntityTypes = entityTypes.length === 0;

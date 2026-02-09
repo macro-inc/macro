@@ -4,12 +4,11 @@ export {
   emailFilter,
   fileFilter,
   FILTER_GROUPS,
-  type FilterConfig,
   type FilterGroup,
-  type FilterPredicate,
   notDoneFilter,
   peopleFilter,
   projectFilter,
+  SOUP_FILTERS,
   taskFilter,
   teamsFilter,
   unreadFilter,
@@ -21,4 +20,12 @@ export {
   explicitNoiseFilter,
 } from './signal-filters';
 
-export { createFilterState } from './create-filter-state';
+export {
+  createFiltersState,
+  EXCLUDE,
+  type FilterConfig,
+  type FilterPredicate,
+  type FiltersState,
+  type FiltersStateOptions,
+  NIL_UUID,
+} from './create-filters-state';
