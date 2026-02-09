@@ -15,7 +15,6 @@ import type { SoupState } from '@app/component/next-soup/create-soup-state';
 interface PropertyEditorHotkeyOptions {
   scopeId: string;
   soup: SoupState;
-  enabled?: Accessor<boolean>;
 }
 
 /**
@@ -26,7 +25,7 @@ interface PropertyEditorHotkeyOptions {
  * - `cmd-shift-a`: Direct edit assignees property
  */
 export function usePropertyEditorHotkeys(options: PropertyEditorHotkeyOptions) {
-  const { scopeId, soup, enabled = () => true } = options;
+  const { scopeId, soup } = options;
   const allProperties = useAllProperties();
 
   const propertyById = (propertyId: string) => {
@@ -50,10 +49,6 @@ export function usePropertyEditorHotkeys(options: PropertyEditorHotkeyOptions) {
     mode: 'selector' | 'direct' = 'selector',
     property?: Property | PropertyDefinitionDomain
   ) => {
-    if (!enabled()) {
-      console.log('[PropertyEditor] Hotkey disabled');
-      return;
-    }
     const entities = getEntitiesForAction();
     if (entities && entities.length > 0) {
       openPropertyEditor(entities, mode, property);
@@ -70,14 +65,10 @@ export function usePropertyEditorHotkeys(options: PropertyEditorHotkeyOptions) {
     displayPriority: 10,
     description: 'Open property editor',
     keyDownHandler: () => {
-      const entities = getEntitiesForAction();
-      if (entities.length === 0) return false;
-      if (!entities.every(isTaskEntity)) return false;
       openIfSelected('selector');
       return true;
     },
     condition: () => {
-      if (!enabled()) return false;
       const entities = getEntitiesForAction();
       return entities.length > 0 && entities.every(isTaskEntity);
     },
@@ -92,15 +83,10 @@ export function usePropertyEditorHotkeys(options: PropertyEditorHotkeyOptions) {
     displayPriority: 10,
     description: 'Set priority',
     keyDownHandler: () => {
-      const property = priority();
-      const entities = getEntitiesForAction();
-      if (entities.length === 0 || !property) return false;
-      if (!entities.every(isTaskEntity)) return false;
-      openIfSelected('direct', property);
+      openIfSelected('direct', priority());
       return true;
     },
     condition: () => {
-      if (!enabled()) return false;
       const entities = getEntitiesForAction();
       return (
         entities.length > 0 &&
@@ -119,15 +105,10 @@ export function usePropertyEditorHotkeys(options: PropertyEditorHotkeyOptions) {
     displayPriority: 10,
     description: 'Set assignee',
     keyDownHandler: () => {
-      const property = assignees();
-      const entities = getEntitiesForAction();
-      if (entities.length === 0 || !property) return false;
-      if (!entities.every(isTaskEntity)) return false;
-      openIfSelected('direct', property);
+      openIfSelected('direct', assignees());
       return true;
     },
     condition: () => {
-      if (!enabled()) return false;
       const entities = getEntitiesForAction();
       return (
         entities.length > 0 &&
@@ -146,15 +127,10 @@ export function usePropertyEditorHotkeys(options: PropertyEditorHotkeyOptions) {
     displayPriority: 10,
     description: 'Set status',
     keyDownHandler: () => {
-      const property = status();
-      const entities = getEntitiesForAction();
-      if (entities.length === 0 || !property) return false;
-      if (!entities.every(isTaskEntity)) return false;
-      openIfSelected('direct', property);
+      openIfSelected('direct', status());
       return true;
     },
     condition: () => {
-      if (!enabled()) return false;
       const entities = getEntitiesForAction();
       return (
         entities.length > 0 && entities.every(isTaskEntity) && Boolean(status())
