@@ -3,7 +3,7 @@ import { entityPropertyFromApi } from '@core/component/Properties/api/converters
 import type { Property } from '@core/component/Properties/types';
 import { trackMention } from '@core/signal/mention';
 import { isErr, isOk } from '@core/util/maybeResult';
-import { fetchDocumentAsMarkdown } from '@queries/storage/markdownText';
+import { fetchDocumentAsMarkdown } from '@queries/sync/markdownText';
 import { propertiesServiceClient } from '@service-properties/client';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { storageServiceClient } from '@service-storage/client';

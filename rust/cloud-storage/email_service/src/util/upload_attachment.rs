@@ -289,6 +289,7 @@ async fn create_dss_document_record(
         created_at,
         email_attachment_id: Some(p.attachment_db_id),
         is_task: false,
+        skip_history: true,
     };
 
     dss_client

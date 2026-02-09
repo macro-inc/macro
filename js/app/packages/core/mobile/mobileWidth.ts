@@ -9,8 +9,6 @@ if (typeof window !== 'undefined') {
     setIsMobileWidth(window.innerWidth < 640);
   };
 
-  setIsMobileWidth(window.innerWidth < 640);
-
   window.addEventListener('resize', handleResize);
 }
 

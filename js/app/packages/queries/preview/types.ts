@@ -1,5 +1,6 @@
 import type { SubType } from '@macro-entity';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
+import type { Message } from '@service-comms/generated/models';
 import type { ItemType } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 
@@ -19,16 +20,17 @@ type BasePreviewItem<T extends ItemType = ItemType> = {
   updatedAt?: number;
 };
 
-export type PreviewItemAccess = {
+/** this is a catch-all type for access items that do not have a more specific type */
+type PreviewItemAccess = {
   access: Extract<AccessType, 'access'>;
   loading: false;
   name: string;
   fileType?: FileType;
   subType?: SubType;
   channelType?: never;
-} & BasePreviewItem<Exclude<ItemType, 'project'>>;
+} & BasePreviewItem<Exclude<ItemType, 'project' | 'document' | 'channel'>>;
 
-export type PreviewProjectAccess = {
+type PreviewProjectAccess = {
   access: Extract<AccessType, 'access'>;
   loading: false;
   name: string;
@@ -37,14 +39,16 @@ export type PreviewProjectAccess = {
   channelType?: never;
 } & BasePreviewItem<'project'>;
 
-export type PreviewDocumentAccess = {
+type PreviewDocumentAccess = {
   access: Extract<AccessType, 'access'>;
   loading: false;
   name: string;
-  fileType: FileType;
+  fileType?: FileType;
   subType?: SubType;
   channelType?: never;
 } & BasePreviewItem<'document'>;
+
+export type MessageContext = Message;
 
 export type PreviewChannelAccess = {
   access: Extract<AccessType, 'access'>;
@@ -53,21 +57,41 @@ export type PreviewChannelAccess = {
   fileType?: never;
   subType?: never;
   channelType?: ChannelType;
-} & BasePreviewItem<Exclude<ItemType, 'project'>>;
+  messageContext?: MessageContext | undefined;
+} & BasePreviewItem<'channel'>;
 
-export type PreviewItem =
-  | PreviewItemLoading
-  | PreviewItemNoAccess
+export type AccessiblePreviewItem =
   | PreviewItemAccess
   | PreviewProjectAccess
   | PreviewDocumentAccess
   | PreviewChannelAccess;
 
-export interface ItemEntity {
-  id: string;
-  type?: ItemType;
-}
+export type PreviewItem =
+  | PreviewItemLoading
+  | PreviewItemNoAccess
+  | AccessiblePreviewItem;
 
-export const isAccessiblePreviewItem = (item: PreviewItem) => {
+type BaseItemEntity = {
+  id: string;
+  type?: Exclude<ItemType, 'channel'>;
+};
+
+type ChannelItemEntity = {
+  id: string;
+  type: 'channel';
+  messageId?: string;
+};
+
+export type ItemEntity = BaseItemEntity | ChannelItemEntity;
+
+export const isAccessiblePreviewItem = (
+  item: PreviewItem
+): item is AccessiblePreviewItem => {
   return !item.loading && item.access === 'access';
+};
+
+export const isChannelPreviewItem = (
+  item: PreviewItem
+): item is PreviewChannelAccess => {
+  return isAccessiblePreviewItem(item) && item.type === 'channel';
 };

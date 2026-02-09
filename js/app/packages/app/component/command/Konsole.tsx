@@ -142,7 +142,9 @@ export function KommandMenuInner(props: {
   const searchItems = createMemo(() => {
     const freshSearch = createFreshSearch<CommandItemCard>(
       freshSearchConfig(),
-      (item) => item.data.name
+      (item) => item.data.name,
+      (item) => item.type === 'channel',
+      (_item) => ({})
     );
     return freshSearch(allItems(), debouncedLocalQuery()).map(
       (result) => result.item

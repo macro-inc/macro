@@ -49,6 +49,7 @@ pub struct TypingData<'a> {
     pub thread_id: Option<&'a Uuid>,
 }
 
+#[tracing::instrument(skip(ctx, update), err)]
 pub async fn notify_typing(ctx: &AppState, update: WithNonce<'_, TypingData<'_>>) -> Result<()> {
     let participants = get_participants(&ctx.db, update.data.channel_id).await?;
 

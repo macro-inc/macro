@@ -15,13 +15,15 @@ import { UserIcon } from '@core/component/UserIcon';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import HashIcon from '@icon/regular/hash.svg';
 import LinkIcon from '@icon/regular/link.svg';
-import { useChannelQuery } from '@queries/channel/channel';
 import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
 import type { ChannelType } from '@service-comms/generated/models/channelType';
+import { ChannelTypeEnum } from '@service-comms/client';
 import { useUserId } from '@core/context/user';
-import { Show } from 'solid-js';
+import { createMemo, Show } from 'solid-js';
 import { AttachmentsModal } from './AttachmentsModal';
 import { ParticipantManager } from './ParticipantManager';
+import { useChannelContext } from '@block-channel/hooks/channel';
+import { isChannelAdminOrOwner } from '@queries/channel/derived';
 
 type TopIconProps = {
   channelType: ChannelType;
@@ -36,7 +38,7 @@ function TopIcon(props: TopIconProps) {
 
   return (
     <Show
-      when={props.channelType === 'direct_message' && recipient()}
+      when={props.channelType === ChannelTypeEnum.DirectMessage && recipient()}
       fallback={<HashIcon class="w-4 h-4" />}
     >
       {(recipient) => {
@@ -48,14 +50,23 @@ function TopIcon(props: TopIconProps) {
   );
 }
 
-export function Top(props: { channelID: string }) {
-  const channel = useChannelQuery(() => props.channelID);
+type TopProps = {
+  channelType: ChannelType;
+  participants: ChannelParticipant[];
+  channelName: string;
+  channelId: string;
+};
 
-  const channelType = () => channel.data?.channel?.channel_type ?? 'private';
-  const participantCount = () => channel.data?.participants.length ?? 0;
-  const participants = () => channel.data?.participants ?? [];
+export function Top(props: TopProps) {
+  const participantCount = () => props.participants.length;
   const blockId = useBlockId();
   const notificationSource = useGlobalNotificationSource();
+  const channelContext = useChannelContext();
+
+  const isAdminOrOwner = createMemo(() => {
+    const channelData = channelContext.channel();
+    return isChannelAdminOrOwner(channelData);
+  });
 
   function handleCopyLink() {
     navigator.clipboard.writeText(
@@ -69,14 +80,10 @@ export function Top(props: { channelID: string }) {
     );
     toast.success('Link copied to clipboard');
   }
-  const _channelName = useChannelName(
+  const channelName = useChannelName(
     blockId,
-    channel.data?.channel?.name ?? 'New Channel'
+    props.channelName ?? 'New Channel'
   );
-
-  const channelName = () => {
-    return channel.data?.channel?.name ?? _channelName() ?? 'New Channel';
-  };
 
   return (
     <>
@@ -84,13 +91,17 @@ export function Top(props: { channelID: string }) {
         <div class="h-full my-auto flex gap-2 justify-center items-center">
           <div class="z-3 relative flex items-center gap-2 max-w-full h-full shrink">
             <TopIcon
-              channelType={channelType()}
-              participants={participants()}
+              channelType={props.channelType}
+              participants={props.participants}
             />
             <SplitLabel
-              label={channelName()}
-              id={channel.data?.channel.id}
+              label={channelName() ?? 'New Channel'}
+              id={props.channelId}
               itemType="channel"
+              lockRename={
+                props.channelType === ChannelTypeEnum.DirectMessage ||
+                !isAdminOrOwner()
+              }
             />
           </div>
         </div>
@@ -100,7 +111,7 @@ export function Top(props: { channelID: string }) {
       </SplitHeaderRight>
       <SplitToolbarRight>
         <div class="p-1 flex flex-row gap-1 items-center h-full">
-          <Show when={channelType() === 'public'}>
+          <Show when={props.channelType === ChannelTypeEnum.Public}>
             <DeprecatedIconButton
               theme="clear"
               size="sm"
@@ -115,11 +126,11 @@ export function Top(props: { channelID: string }) {
             buttonSize="sm"
           />
           <AttachmentsModal />
-          <Show when={channelType() !== 'direct_message'}>
+          <Show when={props.channelType !== ChannelTypeEnum.DirectMessage}>
             <ParticipantManager
-              channelId={props.channelID}
-              channelType={channelType()}
-              participants={participants()}
+              channelId={props.channelId}
+              channelType={props.channelType}
+              participants={props.participants}
               participantCount={participantCount()}
             />
           </Show>

@@ -41,6 +41,7 @@ pub struct UserNames {
 }
 
 impl UserRepo for UserRepoImpl {
+    #[tracing::instrument(err, skip(self, user_ids))]
     async fn get_names_for_ids(
         &self,
         user_ids: std::collections::HashSet<macro_user_id::user_id::MacroUserIdStr<'_>>,

@@ -5,17 +5,18 @@ import {
   addMonths,
   addWeeks,
   addYears,
+  addSeconds,
 } from 'date-fns';
 import { match } from 'ts-pattern';
 
-export type TimeUnit = 'h' | 'd' | 'w' | 'm' | 'y' | 'min';
+export type TimeUnit = 'h' | 'd' | 'w' | 'm' | 'y' | 'min' | 's';
 
 export interface ParsedDuration {
   value: number;
   unit: TimeUnit;
 }
 
-const UNITS = new Set<TimeUnit>(['h', 'd', 'w', 'm', 'y', 'min']);
+const UNITS = new Set<TimeUnit>(['h', 'd', 'w', 'm', 'y', 'min', 's']);
 
 /**
  * Parses a duration string like "3d", "1w", "36h", "2m", "1y", "30min"
@@ -50,6 +51,7 @@ export function applyDurationToDate(
   const unit = duration.unit;
 
   return match(unit)
+    .with('s', () => addSeconds(baseDate, value))
     .with('min', () => addMinutes(baseDate, value))
     .with('h', () => addHours(baseDate, value))
     .with('d', () => addDays(baseDate, value))
@@ -101,6 +103,7 @@ export function formatDuration(duration: ParsedDuration): string {
   const { value, unit } = duration;
 
   const unitLabels: Record<TimeUnit, string> = {
+    s: value === 1 ? 'second' : 'seconds',
     min: value === 1 ? 'minute' : 'minutes',
     h: value === 1 ? 'hour' : 'hours',
     d: value === 1 ? 'day' : 'days',

@@ -41,7 +41,7 @@ pub struct PatchMessageParams {
         patch,
         tag = "channels",
         operation_id = "patch_message",
-        path = "/channels/{channel_id}/message/{message_id}",
+        path = "/comms/channels/{channel_id}/message/{message_id}",
         params(
             ("channel_id" = String, Path, description = "id of the channel"),
             ("message_id" = String, Path, description = "id of the message")

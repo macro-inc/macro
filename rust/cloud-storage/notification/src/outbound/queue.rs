@@ -8,6 +8,7 @@ use crate::domain::models::queue_message::{QueueMessage, RawQueueMessage};
 use crate::domain::ports::NotificationQueue;
 
 /// SQS-backed implementation of the notification queue port.
+#[derive(Clone)]
 pub struct SqsNotificationQueue {
     client: SqsClient,
     queue_url: String,
@@ -21,9 +22,9 @@ impl SqsNotificationQueue {
 }
 
 impl NotificationQueue for SqsNotificationQueue {
-    async fn publish<T: Serialize + Send + Sync>(
+    async fn publish<T: Serialize + Send + Sync, U: Serialize + Send + Sync>(
         &self,
-        messages: &[QueueMessage<'_, T>],
+        messages: &[QueueMessage<'_, T, U>],
     ) -> Result<(), Report> {
         for message in messages {
             let body = serde_json::to_string(message)?;
@@ -72,6 +73,91 @@ impl NotificationQueue for SqsNotificationQueue {
             .receipt_handle(receipt_handle)
             .send()
             .await?;
+        Ok(())
+    }
+}
+
+/// File-based queue for local development across multiple processes.
+/// Each message is stored as a separate JSON file in a directory.
+pub struct FileQueue {
+    dir: std::path::PathBuf,
+}
+
+impl FileQueue {
+    /// Create a new file-based queue at the given directory path.
+    /// Creates the directory if it doesn't exist.
+    pub fn new(dir: impl Into<std::path::PathBuf>) -> Result<Self, Report> {
+        let dir = dir.into();
+        std::fs::create_dir_all(&dir)?;
+        tracing::info!(path = ?dir, "initialized file queue");
+        Ok(Self { dir })
+    }
+
+    /// Create a new file-based queue in /tmp.
+    pub fn new_in_temp() -> Result<Self, Report> {
+        Self::new("/tmp/macro-notification-queue")
+    }
+}
+
+impl NotificationQueue for FileQueue {
+    async fn publish<T: Serialize + Send + Sync, U: Serialize + Send + Sync>(
+        &self,
+        messages: &[QueueMessage<'_, T, U>],
+    ) -> Result<(), Report> {
+        for message in messages {
+            let id = uuid::Uuid::new_v4();
+            let filename = format!("{}.json", id);
+            let path = self.dir.join(&filename);
+            let content = serde_json::to_string_pretty(message)?;
+            tokio::fs::write(&path, content).await?;
+        }
+        Ok(())
+    }
+
+    async fn receive_messages(&self) -> Result<Vec<RawQueueMessage>, Report> {
+        let mut messages = Vec::new();
+        let mut entries = tokio::fs::read_dir(&self.dir).await?;
+
+        while let Some(entry) = entries.next_entry().await? {
+            if messages.len() >= 10 {
+                break;
+            }
+
+            let path = entry.path();
+            if path.extension().is_some_and(|ext| ext == "json") {
+                let filename = path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or_default()
+                    .to_string();
+
+                match tokio::fs::read_to_string(&path).await {
+                    Ok(content) => match serde_json::from_str(&content) {
+                        Ok(body) => {
+                            messages.push(RawQueueMessage {
+                                body,
+                                receipt_handle: filename,
+                            });
+                        }
+                        Err(e) => {
+                            tracing::warn!(error = ?e, path = ?path, "failed to parse queue message");
+                        }
+                    },
+                    Err(e) => {
+                        tracing::warn!(error = ?e, path = ?path, "failed to read queue message");
+                    }
+                }
+            }
+        }
+
+        Ok(messages)
+    }
+
+    async fn delete_message(&self, receipt_handle: &str) -> Result<(), Report> {
+        let path = self.dir.join(receipt_handle);
+        if path.exists() {
+            tokio::fs::remove_file(&path).await?;
+        }
         Ok(())
     }
 }

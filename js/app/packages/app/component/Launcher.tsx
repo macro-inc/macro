@@ -297,7 +297,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
 
   const textFg = () =>
     USE_ENTITY_COLORS
-      ? getIconConfig(props.creatableBlock.blockName ?? 'pdf').foreground
+      ? getIconConfig(props.creatableBlock.blockName).foreground
       : 'text-accent';
 
   const Icon = props.creatableBlock.icon;
@@ -343,8 +343,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
       <div
         class="absolute size-full inset-0 transition-transform origin-top opacity-20 ease duration-200 mix-blend-color"
         classList={{
-          [getIconConfig(props.creatableBlock.blockName ?? 'pdf').background]:
-            true,
+          [getIconConfig(props.creatableBlock.blockName).background]: true,
           'scale-y-0': !props.focused,
           'scale-y-100': props.focused,
         }}

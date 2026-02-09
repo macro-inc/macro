@@ -1,8 +1,8 @@
 import { useMessageListContext } from '@block-channel/component/MessageList/MessageList';
 import {
   type SendMessageArgs,
-  useSendChannelMessageAction,
-} from '@block-channel/signal/channel';
+  useSendChannelMessage,
+} from '@block-channel/hooks/message';
 import type { MessageWithThreadId } from '@block-channel/signal/threads';
 import {
   clearDraftMessage,
@@ -40,7 +40,7 @@ export type ReplyInputsPortalerProps = {
 
 export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
   const listContext = useMessageListContext();
-  const sendMessage = useSendChannelMessageAction(() => props.channelId);
+  const sendMessage = useSendChannelMessage(() => props.channelId);
   const typingMutation = usePostTypingUpdateMutation();
 
   const blockRef = blockElementSignal.get;
@@ -52,7 +52,15 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
 
   const onSend = (threadId: string) => async (args: SendMessageArgs) => {
     clearDraftMessage(props.channelId, threadId);
-    await sendMessage({ ...args, threadId });
+    listContext.closeThreadReply(threadId, true);
+
+    try {
+      await sendMessage({ ...args, threadId });
+    } catch {
+      listContext.createReply(threadId, true);
+      return;
+    }
+
     // After sending, focus the message immediately after the current one in the
     // flattened list.
     // Use a timeout to ensure the new message mounts in the DOM first.
@@ -76,10 +84,6 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
         el?.focus();
       }, 0);
     }, 100);
-  };
-
-  const onAfterSend = (threadId: string) => () => {
-    listContext.closeThreadReply(threadId, true);
   };
 
   const closeDraft = (threadId: string) => () => {
@@ -134,7 +138,6 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
             >
               <BaseInput
                 onSend={onSend(threadId)}
-                afterSend={onAfterSend(threadId)}
                 placeholder={`Send a reply`}
                 autoFocusOnMount={false}
                 shouldFocus={threadState()?.replyInputShouldFocus}

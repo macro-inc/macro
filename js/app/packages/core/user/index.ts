@@ -7,8 +7,10 @@ export {
   type WithCustomUserInput,
 } from './combinedRecipient';
 export { useContacts } from './contactService';
+export { useAugmentUserWithDmActivity } from './dmActivity';
 export {
   type DisplayNameParts,
+  seedMockDisplayNames,
   useDisplayName,
   useDisplayNameParts,
 } from './displayName';
@@ -19,10 +21,5 @@ export {
   macroIdToEmail,
   tryMacroId,
 } from './macroId';
-export {
-  useOrganizationId,
-  useOrganizationName,
-  useOrganizationUsers,
-} from './organization';
 export type * from './types';
 export { emailToId, idToDisplayName, idToEmail } from './util';

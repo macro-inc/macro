@@ -356,24 +356,6 @@ export const StorageService = new Svc('Document++ Storage Service API')
     access: { exclude: ['ai'] },
     throws: withFetchErrors(),
   })
-  .fn('trackOpenedDocument', {
-    description: schemas.upsertHistoryHandlerResponse.description!,
-    args: {
-      documentId: schemas.upsertHistoryHandlerParams.shape.item_id,
-    },
-    result: schemas.upsertHistoryHandlerResponse.shape.data.shape,
-    modifies: true,
-    throws: withFetchErrors(),
-  })
-  .fn('trackOpenedChat', {
-    description: schemas.upsertHistoryHandlerResponse.description!,
-    args: {
-      chatId: schemas.upsertHistoryHandlerParams.shape.item_id,
-    },
-    result: schemas.upsertHistoryHandlerResponse.shape.data.shape,
-    modifies: true,
-    throws: withFetchErrors(),
-  })
   .fn('getPins', {
     description: schemas.getPinsHandlerResponse.description!,
     args: schemas.getRecentActivityHandlerQueryParams.shape,
@@ -436,22 +418,6 @@ export const StorageService = new Svc('Document++ Storage Service API')
       fileType:
         schemas.createDocumentHandlerResponse.shape.data._def.right.shape
           .fileType,
-    },
-    modifies: true,
-    throws: withFetchErrors('INVALID_RESPONSE'),
-  })
-  .fn('createTextDocument', {
-    description: 'Creates a new text document',
-    args: {
-      ...schemas.createDocumentHandlerBody.omit({
-        sha: true,
-      }).shape,
-      text: z.string().describe('The text content of the document'),
-    },
-    result: {
-      metadata:
-        schemas.createDocumentHandlerResponse.shape.data._def.left.shape
-          .documentMetadata,
     },
     modifies: true,
     throws: withFetchErrors('INVALID_RESPONSE'),

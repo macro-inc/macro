@@ -4641,6 +4641,10 @@
             },
             "description": "Channel IDs to search within. Examples: ['general']. Empty to search all accessible channels."
           },
+          "importance": {
+            "type": ["boolean", "null"],
+            "description": "Filter by channel importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
+          },
           "mentions": {
             "type": "array",
             "items": {
@@ -4839,6 +4843,10 @@
               "type": "string"
             },
             "description": "Chat ids to search over. Examples: ['chat1'], ['chat1', 'chat2']. When provided, chat search will only match results on these chats. Empty to search all accessible chats."
+          },
+          "importance": {
+            "type": ["boolean", "null"],
+            "description": "Filter by chat importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
           },
           "owners": {
             "type": "array",
@@ -5128,6 +5136,10 @@
           "sha": {
             "type": "string",
             "description": "The sha of the document."
+          },
+          "skipHistory": {
+            "type": "boolean",
+            "description": "Whether to add a viewed_at record for this document upon creation."
           }
         }
       },
@@ -5444,6 +5456,10 @@
               "type": "string"
             },
             "description": "Document file types to search. Examples: ['pdf'], ['md', 'txt']. Empty to search all file types."
+          },
+          "importance": {
+            "type": ["boolean", "null"],
+            "description": "Filter by document importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
           },
           "owners": {
             "type": "array",
@@ -6022,6 +6038,10 @@
               "type": "string"
             },
             "description": "Email CC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by CC."
+          },
+          "importance": {
+            "type": ["boolean", "null"],
+            "description": "Filter by email importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
           },
           "recipients": {
             "type": "array",
@@ -7570,6 +7590,10 @@
         "type": "object",
         "description": "The project filters used to filter down what projects you search over.",
         "properties": {
+          "importance": {
+            "type": ["boolean", "null"],
+            "description": "Filter by project importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."
+          },
           "owners": {
             "type": "array",
             "items": {
@@ -8586,33 +8610,6 @@
           }
         }
       },
-      "SoupEmailThreadPreviewMetadata": {
-        "type": "object",
-        "required": [
-          "knownSender",
-          "tabular",
-          "calendarInvite",
-          "genericSender"
-        ],
-        "properties": {
-          "calendarInvite": {
-            "type": "boolean",
-            "description": "if any email contains a calendar invite"
-          },
-          "genericSender": {
-            "type": "boolean",
-            "description": "if any sender is a generic email"
-          },
-          "knownSender": {
-            "type": "boolean",
-            "description": "if user has previously emailed any sender"
-          },
-          "tabular": {
-            "type": "boolean",
-            "description": "if any email contains a <table> html tag"
-          }
-        }
-      },
       "SoupEnrichedEmailThreadPreview": {
         "allOf": [
           {
@@ -8620,13 +8617,7 @@
           },
           {
             "type": "object",
-            "required": [
-              "attachments",
-              "participants",
-              "metadata",
-              "labels",
-              "properties"
-            ],
+            "required": ["attachments", "participants", "labels", "properties"],
             "properties": {
               "attachments": {
                 "type": "array",
@@ -8639,9 +8630,6 @@
                 "items": {
                   "$ref": "#/components/schemas/SoupLabel"
                 }
-              },
-              "metadata": {
-                "$ref": "#/components/schemas/SoupEmailThreadPreviewMetadata"
               },
               "participants": {
                 "type": "array",

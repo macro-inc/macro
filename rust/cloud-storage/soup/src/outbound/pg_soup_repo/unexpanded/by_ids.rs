@@ -18,6 +18,7 @@ use uuid::Uuid;
 /// be included in the results unless the user has been explicitly granted permissions on them.
 /// This ensures that only directly authorized items are returned, not those with implicit
 /// (inherited) access. Results are sorted to match the input entity order.
+#[tracing::instrument(err, skip(db, entities))]
 pub async fn unexpanded_soup_by_ids<'a>(
     db: &PgPool,
     user_id: MacroUserIdStr<'_>,

@@ -3,7 +3,6 @@ import {
   useEmailContext,
 } from '@block-email/component/EmailContext';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
-import { FloatingInputLoader } from '@core/component/FloatingInputLoader';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
 import {
@@ -29,10 +28,11 @@ import { isScrollingToMessage } from '../signal/scrollState';
 import { registerEmailHotkeys } from '../util/emailHotkeys';
 import { scrollToMessage } from '../util/scrollToMessage';
 import { EmailFormContextProvider } from './EmailFormContext';
-import { EmailInput } from './EmailInput';
 import { MessageList } from './MessageList';
 import { TopBar } from './TopBar';
 import { EmailCompose } from '@block-email/component/Compose';
+import { EmailInput } from '@block-email/component/EmailInput';
+import { FloatingInputLoader } from '@core/component/FloatingInputLoader';
 
 const TARGET_MESSAGE_HIGHLIGHT_MS = 800;
 const SCROLL_ANIMATION_MS = 1000;

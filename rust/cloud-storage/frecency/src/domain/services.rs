@@ -13,6 +13,7 @@ use chrono::{DateTime, Utc};
 use macro_user_id::cowlike::CowLike;
 use std::{collections::HashMap, sync::Arc};
 use tokio::task::JoinHandle;
+use tracing::Level;
 
 /// concrete struct which implements [EventIngestorService]
 #[derive(Clone)]
@@ -173,7 +174,7 @@ where
     anyhow::Error: From<S::Err>,
     T: TimeGetter,
 {
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err(level = Level::WARN), skip(self))]
     async fn append_events_to_aggregate(&self) -> Result<EventAggregationStats, anyhow::Error> {
         let events: Vec<_> = self.event_storage.get_unprocessed_events().await?;
 
@@ -234,6 +235,7 @@ where
     T: AggregateFrecencyStorage,
     anyhow::Error: From<T::Err>,
 {
+    #[tracing::instrument(err, skip(self, query))]
     async fn get_frecency_page(
         &self,
         query: FrecencyPageRequest<'_>,
@@ -246,6 +248,7 @@ where
         Ok(FrecencyPageResponse::new(res))
     }
 
+    #[tracing::instrument(err, skip(self, request))]
     async fn get_frecencies_by_ids<'a>(
         &self,
         request: FrecencyByIdsRequest<'a>,

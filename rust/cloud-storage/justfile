@@ -79,10 +79,11 @@ setup_test_envs:
     echo "DATABASE_URL={{ MACRODB }}" >> ./name_search/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./email_contact_search/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./email_scheduled_handler/.env
+    echo "DATABASE_URL={{ MACRODB }}" >> ./saved_views/.env
+    echo "DATABASE_URL={{ MACRODB }}" >> ./comms_service/.env
 
 setup_macrodb:
     just macro_db_client/create_db
     just macro_db_client/migrate_db
-    just document_cognition_service/prepare-test
 
 initialize_dbs: setup_macrodb

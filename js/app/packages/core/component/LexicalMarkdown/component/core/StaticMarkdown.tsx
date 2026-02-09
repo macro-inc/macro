@@ -22,6 +22,8 @@ import {
   type GroupMentionNode,
   type HorizontalRuleNode,
   type ImageNode,
+  type ThemeMentionNode,
+  type UnknownMentionNode,
   isSupportedLanguage,
   normalizedLanguage,
   SupportedNodeTypes,
@@ -75,6 +77,8 @@ import { Equation as EquationDecorator } from '../decorator/Equation';
 import { MarkdownImage as ImageDecorator } from '../decorator/MarkdownImage';
 import { MarkdownVideo as VideoDecorator } from '../decorator/MarkdownVideo';
 import { UserMention as UserMentionDecorator } from '../decorator/UserMention';
+import { ThemeMention as ThemeMentionDecorator } from '../decorator/ThemeMention';
+import { UnknownMention as UnknownMentionDecorator } from '../decorator/UnknownMention';
 import { Watermark as WatermarkDecorator } from '../decorator/Watermark';
 import { LinkWithPreview } from './LinkWithPreview';
 
@@ -276,6 +280,20 @@ const DocumentMention: RenderableEntity<DocumentMentionNode> = {
   ),
 };
 
+const ThemeMention: RenderableEntity<ThemeMentionNode> = {
+  guard: (node: LexicalNode): node is ThemeMentionNode =>
+    node.__type === 'theme-mention',
+  render: (props) => (
+    <span>
+      {ThemeMentionDecorator({
+        ...props.node.exportComponentProps(),
+        key: props.node.getKey(),
+        theme: props.theme,
+      })}
+    </span>
+  ),
+};
+
 const Watermark: RenderableEntity<WatermarkNode> = {
   guard: (node: LexicalNode): node is WatermarkNode =>
     node.__type === 'watermark',
@@ -338,6 +356,20 @@ const Snapshot: RenderableEntity<SnapshotNode> = {
   render: (props) => (
     <span>
       {SnapshotDecorator({
+        ...props.node.exportComponentProps(),
+        key: props.node.getKey(),
+        theme: props.theme,
+      })}
+    </span>
+  ),
+};
+
+const UnknownMention: RenderableEntity<UnknownMentionNode> = {
+  guard: (node: LexicalNode): node is UnknownMentionNode =>
+    node.__type === 'unknown-mention',
+  render: (props) => (
+    <span>
+      {UnknownMentionDecorator({
         ...props.node.exportComponentProps(),
         key: props.node.getKey(),
         theme: props.theme,
@@ -658,6 +690,8 @@ const InlineEntities: Array<RenderableEntity> = [
   Video,
   HorizontalRule,
   Equation,
+  ThemeMention,
+  UnknownMention,
   Watermark,
 ] as const;
 

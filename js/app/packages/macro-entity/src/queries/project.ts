@@ -37,8 +37,7 @@ const fetchProjectData = async (
   if (!apiToken) throw new Error('No API token provided');
 
   const dssHost = SERVER_HOSTS['document-storage-service'];
-  const apiVersion = 'v2';
-  const url = `${dssHost}/${apiVersion}/projects/preview`;
+  const url = `${dssHost}/projects/preview`;
 
   const response = await fetch(url, {
     method: 'POST',

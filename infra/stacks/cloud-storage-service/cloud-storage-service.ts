@@ -31,14 +31,12 @@ type CreateCloudStorageServiceServiceArgs = {
   platform: { family: string; architecture: 'amd64' | 'arm64' };
   documentStorageBucketArn: pulumi.Output<string> | string;
   docxUploadBucketArn: pulumi.Output<string> | string;
-  deleteDocumentQueueArn: pulumi.Output<string> | string;
   serviceContainerPort: number;
   isPrivate?: boolean;
   containerEnvVars?: { name: string; value: pulumi.Output<string> | string }[];
   healthCheckPath: string;
   secretKeyArns: (pulumi.Output<string> | string)[];
-  notificationQueueArn: pulumi.Output<string> | string;
-  searchEventQueueArn: pulumi.Output<string> | string;
+  queueArns: (pulumi.Output<string> | string)[];
   tags: { [key: string]: string };
 };
 
@@ -68,10 +66,8 @@ export class CloudStorageService extends pulumi.ComponentResource {
       isPrivate,
       containerEnvVars,
       cloudStorageClusterName,
-      deleteDocumentQueueArn,
       secretKeyArns,
-      notificationQueueArn,
-      searchEventQueueArn,
+      queueArns,
       tags,
     }: CreateCloudStorageServiceServiceArgs,
     opts?: pulumi.ComponentResourceOptions
@@ -147,11 +143,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
           Statement: [
             {
               Action: ['sqs:SendMessage'],
-              Resource: [
-                pulumi.interpolate`${notificationQueueArn}`,
-                pulumi.interpolate`${searchEventQueueArn}`,
-                pulumi.interpolate`${deleteDocumentQueueArn}`,
-              ],
+              Resource: queueArns,
               Effect: 'Allow',
             },
           ],
@@ -279,7 +271,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
               name: BASE_NAME,
               image: image.image.imageUri,
               stopTimeout: 10, // 10 seconds to force kill the task
-              cpu: stack === 'prod' ? 1024 : 512,
+              cpu: stack === 'prod' ? 2048 : 512,
               memory: stack === 'prod' ? 4096 : 2048,
               environment: containerEnvVars,
               logConfiguration: {
@@ -288,7 +280,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
                   Name: 'datadog',
                   Host: 'http-intake.logs.us5.datadoghq.com',
                   apikey: DATADOG_API_KEY,
-                  dd_service: `cloud-storage-service-${stack}`,
+                  dd_service: `cloud-storage-service`,
                   dd_source: 'fargate',
                   dd_tags: `project:cloudstorage, env:${stack}`,
                   provider: 'ecs',
@@ -455,7 +447,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
     const serviceScalableTarget = new aws.appautoscaling.Target(
       `${BASE_NAME}-service-scalable-target-${stack}`,
       {
-        maxCapacity: stack === 'prod' ? 15 : 3,
+        maxCapacity: stack === 'prod' ? 7 : 3,
         minCapacity: stack === 'prod' ? 3 : 1,
         resourceId: pulumi.interpolate`service/${this.cloudStorageClusterName}/${this.service.service.name}`,
         scalableDimension: 'ecs:service:DesiredCount',

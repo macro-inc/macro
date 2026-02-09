@@ -1,9 +1,8 @@
+import { ROUTER_BASE } from '@app/constants/routerBase';
 import { SERVER_HOSTS } from '@core/constant/servers';
 
 const GOOGLE_GMAIL_IDP = 'google_gmail';
 type IDPName = 'google_gmail';
-
-const DEFAULT_RETURN_PATH = '/app';
 
 type EmailAuthParams = {
   idpName?: IDPName;
@@ -12,7 +11,7 @@ type EmailAuthParams = {
 
 function emailAuthUrl(params: EmailAuthParams) {
   const idpName = params.idpName ?? GOOGLE_GMAIL_IDP;
-  const returnUrl = `${window.location.origin}${params.returnPath ?? DEFAULT_RETURN_PATH}`;
+  const returnUrl = `${window.location.origin}${params.returnPath ?? ROUTER_BASE}`;
 
   return `${SERVER_HOSTS['auth-service']}/login/sso?idp_name=${idpName}&original_url=${returnUrl}`;
 }

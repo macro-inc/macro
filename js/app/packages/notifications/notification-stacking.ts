@@ -1,4 +1,5 @@
 import {
+  getMetadata,
   isChannelMention,
   isChannelMessageReply,
   isChannelMessageSend,
@@ -36,7 +37,10 @@ export function getAllNotificationsFromGroup(
 export function getThreadId(group: NotificationStack): string {
   const notification = group.notifications[0];
   if (notification.notificationEventType === 'channel_message_reply') {
-    return notification.notificationMetadata?.threadId ?? '';
+    const metadata = getMetadata(
+      notification as TypedNotification<'channel_message_reply'>
+    );
+    return metadata?.threadId ?? '';
   }
   return '';
 }
@@ -51,13 +55,18 @@ export function stackNotifications(
   const mentionedMsgIds = new Set(
     notifications
       .filter(isChannelMention)
-      .map((n) => n.notificationMetadata?.messageId)
+      .map((n) => getMetadata(n).messageId)
       .filter(Boolean)
   );
 
-  const isShadowed = (n: { notificationMetadata?: { messageId?: string } }) =>
-    n.notificationMetadata?.messageId &&
-    mentionedMsgIds.has(n.notificationMetadata.messageId);
+  const isShadowed = (
+    n:
+      | TypedNotification<'channel_message_send'>
+      | TypedNotification<'channel_message_reply'>
+  ) => {
+    const metadata = getMetadata(n);
+    return metadata.messageId && mentionedMsgIds.has(metadata.messageId);
+  };
 
   // Partition by type
   const mentions = notifications.filter(isChannelMention);
@@ -126,10 +135,7 @@ function makeStack(
 function makeReplyStacks(
   replies: TypedNotification<'channel_message_reply'>[]
 ): NotificationStack[] {
-  const byThread = groupBy(
-    replies,
-    (r) => r.notificationMetadata?.threadId ?? ''
-  );
+  const byThread = groupBy(replies, (r) => getMetadata(r)?.threadId ?? '');
   return [...byThread.entries()]
     .filter(([threadId]) => threadId !== '')
     .map(([, group]) => ({

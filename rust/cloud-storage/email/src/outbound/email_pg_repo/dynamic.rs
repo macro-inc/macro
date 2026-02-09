@@ -109,6 +109,42 @@ fn build_email_filter(ast: &Expr<EmailLiteral>) -> String {
                 escape_like_pattern(&s)
             ),
         },
+        filter_ast::ExprFrame::Literal(EmailLiteral::Importance(true)) => {
+            // Signal: has a priority label OR does not have a depriority label
+            r#"(
+                EXISTS (
+                    SELECT 1 FROM email_message_labels ml
+                    JOIN email_labels l ON ml.label_id = l.id
+                    WHERE ml.message_id = m.id
+                    AND l.name IN ('CATEGORY_PERSONAL', 'SENT')
+                )
+                OR NOT EXISTS (
+                    SELECT 1 FROM email_message_labels ml
+                    JOIN email_labels l ON ml.label_id = l.id
+                    WHERE ml.message_id = m.id
+                    AND l.name IN ('CATEGORY_UPDATES', 'CATEGORY_PROMOTIONS', 'CATEGORY_SOCIAL', 'CATEGORY_FORUMS')
+                )
+            )"#
+            .to_string()
+        }
+        filter_ast::ExprFrame::Literal(EmailLiteral::Importance(false)) => {
+            // Opposite of Importance(true)
+            r#"(
+                NOT EXISTS (
+                    SELECT 1 FROM email_message_labels ml
+                    JOIN email_labels l ON ml.label_id = l.id
+                    WHERE ml.message_id = m.id
+                    AND l.name IN ('CATEGORY_PERSONAL', 'SENT')
+                )
+                AND EXISTS (
+                    SELECT 1 FROM email_message_labels ml
+                    JOIN email_labels l ON ml.label_id = l.id
+                    WHERE ml.message_id = m.id
+                    AND l.name IN ('CATEGORY_UPDATES', 'CATEGORY_PROMOTIONS', 'CATEGORY_SOCIAL', 'CATEGORY_FORUMS')
+                )
+            )"#
+                .to_string()
+        }
     });
 
     if formatting.is_empty() {

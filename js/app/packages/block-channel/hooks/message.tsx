@@ -25,7 +25,7 @@ export type SendMessageArgs = {
   mentions?: SimpleMention[];
 };
 
-export function useSendChannelMessageAction(channelID: Accessor<string>) {
+export function useSendChannelMessage(channelID: Accessor<string>) {
   const userId = useUserId();
 
   const mutation = useSendMessageMutation({

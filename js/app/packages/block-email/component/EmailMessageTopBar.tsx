@@ -52,8 +52,16 @@ function formatFullDate(timestamp: string): string {
     .replace(',', '');
 }
 
-function formatShortDate(timestamp: string): string {
-  return new Date(timestamp).toLocaleDateString('en-US', {
+export function formatShortDate(timestamp: string): string {
+  const date = new Date(timestamp);
+  if (date.getFullYear() !== new Date().getFullYear()) {
+    return date.toLocaleDateString('en-US', {
+      month: 'numeric',
+      day: 'numeric',
+      year: '2-digit',
+    });
+  }
+  return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
   });

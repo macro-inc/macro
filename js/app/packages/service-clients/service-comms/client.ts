@@ -26,6 +26,8 @@ import type { GetAttachmentReferencesResponse } from './generated/models/getAtta
 import type { GetBatchChannelPreviewRequest } from './generated/models/getBatchChannelPreviewRequest';
 import type { GetBatchChannelPreviewResponse } from './generated/models/getBatchChannelPreviewResponse';
 import type { GetChannelResponse } from './generated/models/getChannelResponse';
+import type { GetMessageWithContextParams } from './generated/models/getMessageWithContextParams';
+import type { GetMessageWithContextResponse } from './generated/models/getMessageWithContextResponse';
 import type { GetOrCreateDmRequest } from './generated/models/getOrCreateDmRequest';
 import type { GetOrCreateDmResponse } from './generated/models/getOrCreateDmResponse';
 import type { GetOrCreatePrivateRequest } from './generated/models/getOrCreatePrivateRequest';
@@ -36,8 +38,9 @@ import type { PostMessageRequest } from './generated/models/postMessageRequest';
 import type { PostReactionRequest } from './generated/models/postReactionRequest';
 import type { PostTypingRequest } from './generated/models/postTypingRequest';
 import type { RemoveParticipantsRequest } from './generated/models/removeParticipantsRequest';
+import { ChannelType } from './generated/models/channelType';
 
-const commsHost: string = SERVER_HOSTS['comms-service'];
+const commsHost: string = SERVER_HOSTS['document-storage-service'];
 
 export function commsFetch(
   url: string,
@@ -66,11 +69,18 @@ type WithMessageId = { message_id: string };
 type WithMentionId = { mention_id: string };
 type WithEntity = { entity_type: string; entity_id: string };
 
+export const ChannelTypeEnum = {
+  Public: ChannelType.public,
+  Organization: ChannelType.organization,
+  Private: ChannelType.private,
+  DirectMessage: ChannelType.direct_message,
+} as const satisfies Record<string, ChannelType>;
+
 export const commsServiceClient = {
   async getChannel(args: WithChannelId) {
     const { channel_id } = args;
     return mapOk(
-      await commsFetch<GetChannelResponse>(`/channels/${channel_id}`, {
+      await commsFetch<GetChannelResponse>(`/comms/channels/${channel_id}`, {
         method: 'GET',
       }),
       (result) => result
@@ -78,10 +88,20 @@ export const commsServiceClient = {
   },
   async getChannels() {
     return mapOk(
-      await commsFetch<ApiChannelWithLatest[]>(`/channels`, {
+      await commsFetch<ApiChannelWithLatest[]>(`/comms/channels`, {
         method: 'GET',
       }),
       (result) => result
+    );
+  },
+  async getMessageWithContext(args: GetMessageWithContextParams) {
+    const { message_id, before, after } = args;
+    const params = new URLSearchParams();
+    params.append('message_id', message_id);
+    if (before !== undefined) params.append('before', before.toString());
+    if (after !== undefined) params.append('after', after.toString());
+    return await commsFetch<GetMessageWithContextResponse>(
+      `/comms/channels/messages/context?${params.toString()}`
     );
   },
   async postMessage(
@@ -92,7 +112,7 @@ export const commsServiceClient = {
     const sendMessage = { ...message, mentions: uniqueMentions, nonce };
     return mapOk(
       await commsFetch<IdResponse & { nonce?: string }>(
-        `/channels/${channel_id}/message`,
+        `/comms/channels/${channel_id}/message`,
         {
           method: 'POST',
           body: JSON.stringify(sendMessage),
@@ -103,7 +123,7 @@ export const commsServiceClient = {
   },
   async createChannel(args: CreateChannelRequest) {
     return mapOk(
-      await commsFetch<CreateChannelResponse>(`/channels`, {
+      await commsFetch<CreateChannelResponse>(`/comms/channels`, {
         method: 'POST',
         body: JSON.stringify(args),
       }),
@@ -115,10 +135,13 @@ export const commsServiceClient = {
   ) {
     const { channel_id, action, thread_id, nonce } = args;
     return mapOk(
-      await commsFetch<MessageResponse>(`/channels/${channel_id}/typing`, {
-        method: 'POST',
-        body: JSON.stringify({ action, thread_id, nonce }),
-      }),
+      await commsFetch<MessageResponse>(
+        `/comms/channels/${channel_id}/typing`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ action, thread_id, nonce }),
+        }
+      ),
       (result) => result
     );
   },
@@ -127,10 +150,13 @@ export const commsServiceClient = {
   ) {
     const { channel_id, action, emoji, message_id, nonce } = args;
     return mapOk(
-      await commsFetch<MessageResponse>(`/channels/${channel_id}/reaction`, {
-        method: 'POST',
-        body: JSON.stringify({ action, emoji, message_id, nonce }),
-      }),
+      await commsFetch<MessageResponse>(
+        `/comms/channels/${channel_id}/reaction`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ action, emoji, message_id, nonce }),
+        }
+      ),
       (result) => result
     );
   },
@@ -143,7 +169,7 @@ export const commsServiceClient = {
       args;
     return mapOk(
       await commsFetch<MessageResponse>(
-        `/channels/${channel_id}/message/${message_id}`,
+        `/comms/channels/${channel_id}/message/${message_id}`,
         {
           method: 'PATCH',
           body: JSON.stringify({ content, attachment_ids_to_delete, nonce }),
@@ -157,8 +183,8 @@ export const commsServiceClient = {
   ) {
     const { channel_id, message_id, nonce } = args;
     const url = nonce
-      ? `/channels/${channel_id}/message/${message_id}?nonce=${encodeURIComponent(nonce)}`
-      : `/channels/${channel_id}/message/${message_id}`;
+      ? `/comms/channels/${channel_id}/message/${message_id}?nonce=${encodeURIComponent(nonce)}`
+      : `/comms/channels/${channel_id}/message/${message_id}`;
     return mapOk(
       await commsFetch<MessageResponse>(url, {
         method: 'DELETE',
@@ -169,7 +195,7 @@ export const commsServiceClient = {
   async postActivity(args: PostActivityRequest) {
     const { activity_type, channel_id } = args;
     return mapOk(
-      await commsFetch<Activity>(`/activity`, {
+      await commsFetch<Activity>(`/comms/activity`, {
         method: 'POST',
         body: JSON.stringify({ activity_type, channel_id }),
       }),
@@ -178,7 +204,7 @@ export const commsServiceClient = {
   },
   async getActivity() {
     return mapOk(
-      await commsFetch<ApiActivity[]>(`/activity`, {
+      await commsFetch<ApiActivity[]>(`/comms/activity`, {
         method: 'GET',
       }),
       (result) => result
@@ -187,7 +213,7 @@ export const commsServiceClient = {
   async joinChannel(args: WithChannelId) {
     const { channel_id } = args;
     return mapOk(
-      await commsFetch<MessageResponse>(`/channels/${channel_id}/join`, {
+      await commsFetch<MessageResponse>(`/comms/channels/${channel_id}/join`, {
         method: 'POST',
       }),
       (result) => result
@@ -196,7 +222,7 @@ export const commsServiceClient = {
   async leaveChannel(args: WithChannelId) {
     const { channel_id } = args;
     return mapOk(
-      await commsFetch<MessageResponse>(`/channels/${channel_id}/leave`, {
+      await commsFetch<MessageResponse>(`/comms/channels/${channel_id}/leave`, {
         method: 'POST',
       }),
       (result) => result
@@ -205,7 +231,7 @@ export const commsServiceClient = {
   async getBatchChannelPreviews(args: GetBatchChannelPreviewRequest) {
     const { channel_ids } = args;
     return mapOk(
-      await commsFetch<GetBatchChannelPreviewResponse>(`/preview`, {
+      await commsFetch<GetBatchChannelPreviewResponse>(`/comms/preview`, {
         body: JSON.stringify({ channel_ids }),
         method: 'POST',
       }),
@@ -216,7 +242,7 @@ export const commsServiceClient = {
     const { channel_id, participants } = args;
     return mapOk(
       await commsFetch<MessageResponse>(
-        `/channels/${channel_id}/participants`,
+        `/comms/channels/${channel_id}/participants`,
         {
           method: 'POST',
           body: JSON.stringify({ participants }),
@@ -228,10 +254,13 @@ export const commsServiceClient = {
   async getOrCreateDirectMessage(args: GetOrCreateDmRequest) {
     const { recipient_id } = args;
     return mapOk(
-      await commsFetch<GetOrCreateDmResponse>(`/channels/get_or_create_dm`, {
-        method: 'POST',
-        body: JSON.stringify({ recipient_id }),
-      }),
+      await commsFetch<GetOrCreateDmResponse>(
+        `/comms/channels/get_or_create_dm`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ recipient_id }),
+        }
+      ),
       (result) => result
     );
   },
@@ -239,7 +268,7 @@ export const commsServiceClient = {
     const { recipients } = args;
     return mapOk(
       await commsFetch<GetOrCreatePrivateResponse>(
-        `/channels/get_or_create_private`,
+        `/comms/channels/get_or_create_private`,
         {
           method: 'POST',
           body: JSON.stringify({ recipients }),
@@ -254,7 +283,7 @@ export const commsServiceClient = {
     const { channel_id, participants } = args;
     return mapOk(
       await commsFetch<MessageResponse>(
-        `/channels/${channel_id}/participants`,
+        `/comms/channels/${channel_id}/participants`,
         {
           method: 'DELETE',
           body: JSON.stringify({ participants }),
@@ -266,7 +295,7 @@ export const commsServiceClient = {
   async deleteChannel(args: WithChannelId) {
     const { channel_id } = args;
     return mapOk(
-      await commsFetch<MessageResponse>(`/channels/${channel_id}`, {
+      await commsFetch<MessageResponse>(`/comms/channels/${channel_id}`, {
         method: 'DELETE',
       }),
       (result) => result
@@ -275,7 +304,7 @@ export const commsServiceClient = {
   async patchChannel(args: WithChannelId & { channel_name: string }) {
     const { channel_id, channel_name } = args;
     return mapOk(
-      await commsFetch<MessageResponse>(`/channels/${channel_id}`, {
+      await commsFetch<MessageResponse>(`/comms/channels/${channel_id}`, {
         method: 'PATCH',
         body: JSON.stringify({ channel_name }),
       }),
@@ -286,7 +315,7 @@ export const commsServiceClient = {
     const { entity_type, entity_id } = args;
     return mapOk(
       await commsFetch<GetAttachmentReferencesResponse>(
-        `/attachments/${entity_type}/${entity_id}/references`,
+        `/comms/attachments/${entity_type}/${entity_id}/references`,
         {
           method: 'GET',
         }
@@ -296,7 +325,7 @@ export const commsServiceClient = {
   },
   async createEntityMention(args: CreateEntityMentionRequest, token?: string) {
     return mapOk(
-      await commsFetch<CreateEntityMentionResponse>('/mentions', {
+      await commsFetch<CreateEntityMentionResponse>('/comms/mentions', {
         method: 'POST',
         body: JSON.stringify(args),
         headers: token
@@ -311,7 +340,7 @@ export const commsServiceClient = {
   async deleteEntityMention(args: WithMentionId, token?: string) {
     return mapOk(
       await commsFetch<DeleteEntityMentionResponse>(
-        `/mentions/${args.mention_id}`,
+        `/comms/mentions/${args.mention_id}`,
         {
           method: 'DELETE',
           headers: token ? { 'x-permissions-token': `${token}` } : undefined,
@@ -323,7 +352,7 @@ export const commsServiceClient = {
   async getMentions(args: WithChannelId) {
     return mapOk(
       await commsFetch<GetMentionsResponse>(
-        `/channels/${args.channel_id}/mentions`,
+        `/comms/channels/${args.channel_id}/mentions`,
         {
           method: 'GET',
         }

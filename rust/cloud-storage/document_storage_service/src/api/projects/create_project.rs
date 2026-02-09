@@ -82,7 +82,6 @@ async fn create_project_v2(
         tracing::trace!("updating project modified date");
         macro_project_utils::update_project_modified(
             &ctx.db,
-            &ctx.macro_notify_client,
             macro_project_utils::ProjectModifiedArgs {
                 project_id: None,
                 old_project_id: Some(project_id.to_string()),

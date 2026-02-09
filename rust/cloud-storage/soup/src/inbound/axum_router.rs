@@ -17,10 +17,7 @@ use email::{
     },
     inbound::{EmailLinkErr, EmailLinkExtractor, EmailPreviewState},
 };
-use item_filters::{
-    EntityFilters,
-    ast::{EntityFilterAst, ExpandErr},
-};
+use item_filters::{EntityFilters, ast::ExpandErr};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
@@ -122,8 +119,6 @@ where
         }: PostSoupRequest,
         cursor: SoupCursor,
     ) -> Result<Json<PaginatedOpaqueCursor<SoupApiItem>>, SoupHandlerErr> {
-        let filters = EntityFilterAst::new_from_filters(filters)?;
-
         let create_fallback = move || {
             let params_sort = params
                 .sort_method
@@ -131,24 +126,20 @@ where
                 .unwrap_or(SortMethod::Simple(SimpleSortMethod::ViewedAt));
             match params_sort {
                 SortMethod::Simple(simple_sort_method) => {
-                    SoupQuery::Simple(models_pagination::Query::Sort(simple_sort_method, filters))
+                    SoupQuery::new_sort_simple(simple_sort_method, filters)
                 }
-                SortMethod::Advanced(frecency) => {
-                    SoupQuery::Frecency(models_pagination::Query::Sort(frecency, filters))
-                }
+                SortMethod::Advanced(frecency) => SoupQuery::new_sort_frecency(frecency, filters),
             }
         };
 
         let cursor = match cursor {
             Either::E1(l) => l
                 .into_option()
-                .map(models_pagination::Query::Cursor)
-                .map(SoupQuery::Simple)
+                .map(SoupQuery::new_cursor_simple)
                 .unwrap_or_else(create_fallback),
             Either::E2(r) => r
                 .into_option()
-                .map(models_pagination::Query::Cursor)
-                .map(SoupQuery::Frecency)
+                .map(SoupQuery::new_cursor_frecency)
                 .unwrap_or_else(create_fallback),
         };
 
@@ -210,11 +201,20 @@ impl SoupApiItem {
 #[derive(Debug, Error)]
 pub enum SoupHandlerErr {
     #[error("An internal server error has occurred")]
-    Internal(#[from] SoupErr),
+    Internal(SoupErr),
     #[error("An internal email server error has occurred")]
     EmailLinkErr(#[from] EmailLinkErr),
     #[error("Invalid filter arguments provided")]
-    ExpandErr(#[from] ExpandErr),
+    ExpandErr(ExpandErr),
+}
+
+impl From<SoupErr> for SoupHandlerErr {
+    fn from(value: SoupErr) -> Self {
+        match value {
+            SoupErr::AstErr(expand_err) => SoupHandlerErr::ExpandErr(expand_err),
+            err => SoupHandlerErr::Internal(err),
+        }
+    }
 }
 
 impl IntoResponse for SoupHandlerErr {
@@ -287,8 +287,8 @@ pub struct PostSoupRequest {
 }
 
 type SoupCursor = axum_extra::either::Either<
-    CursorExtractor<Uuid, SimpleSortMethod, Option<EntityFilterAst>>,
-    CursorExtractor<Uuid, Frecency, Option<EntityFilterAst>>,
+    CursorExtractor<Uuid, SimpleSortMethod, EntityFilters>,
+    CursorExtractor<Uuid, Frecency, EntityFilters>,
 >;
 
 /// Gets the items the user has access to

@@ -5,7 +5,7 @@ import {
   MODEL_PROVIDER_ICON,
 } from '@core/component/AI/constant/model';
 import { replaceCitations } from '@core/component/LexicalMarkdown/citationsUtils';
-import { createFromMarkdownText } from '@core/util/md';
+import { createMarkdownFile } from '@core/util/create';
 import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
 import NotesIcon from '@phosphor-icons/core/bold/file-md-bold.svg?component-solid';
@@ -97,20 +97,13 @@ export function AssistantMessageActionAndMetadata(props: AssistantActionProps) {
       content.replace(/\[\[.*?\]\]/g, '')
     );
 
-    const maybeDoc = await createFromMarkdownText({
-      markdown: content,
+    const documentId = await createMarkdownFile({
+      content,
       title: title ?? `AI Message`,
-      preserveNewLines: false,
     });
 
-    if ('error' in maybeDoc) {
-      console.error('Error opening AI message in Notes', maybeDoc.error);
-      setIsLoading(false);
-      return;
-    }
-
-    const documentId = maybeDoc.documentId;
     if (!documentId) {
+      console.error('Error opening AI message in Notes');
       setIsLoading(false);
       return;
     }

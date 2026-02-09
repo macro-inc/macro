@@ -4,7 +4,6 @@ import {
   editorStateAsMarkdown,
   getSaveState,
 } from '@core/component/LexicalMarkdown/utils';
-import { renameItem } from '@core/component/FileList/itemOperations';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { isErr } from '@core/util/maybeResult';
 import { utf8Encode } from '@core/util/string';
@@ -13,6 +12,7 @@ import { refetchHistory } from '@queries/history/history';
 import { createCallback } from '@solid-primitives/rootless';
 import { createMemo } from 'solid-js';
 import { mdStore } from './markdownBlockData';
+import { createRenameDssEntityMutation } from '../../macro-entity/src/queries/rename';
 
 export const useBlockSave = () => {
   const pendingComment = createMemo(() => activeCommentThreadSignal() === -1);
@@ -45,14 +45,18 @@ export function useSaveMarkdownDocument() {
 
 export function useRenameMarkdownDocument() {
   const documentId = useBlockId();
+  const renameMutation = createRenameDssEntityMutation();
 
-  return createCallback(async (documentName: string) => {
-    await renameItem({
-      itemType: 'document',
-      id: documentId,
-      newName: documentName,
+  return async (newName: string, oldName: string) => {
+    await renameMutation.mutateAsync({
+      entity: {
+        type: 'document',
+        name: oldName,
+        id: documentId,
+      },
+      newName,
     });
-  });
+  };
 }
 
 export function useDownloadDocumentAsMarkdownText() {

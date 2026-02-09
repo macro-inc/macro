@@ -41,6 +41,7 @@ export type {
 } from './notification-metadata';
 export {
   extractMetadata,
+  getMetadata,
   isChannelInvite,
   isChannelMention,
   isChannelMessageDocument,

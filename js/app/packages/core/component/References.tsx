@@ -24,6 +24,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 
 export type ReferenceProps = {
   documentId: string;
+  entityType?: ItemType;
 };
 
 function isChannelReference(ref: EntityReference): ref is EntityReference & {
@@ -55,8 +56,9 @@ function isGenericReference(
 
 export function References(props: ReferenceProps) {
   const [references] = createResource(async () => {
+    const entityType = props.entityType ?? 'document';
     const response = await commsServiceClient.attachmentReferences({
-      entity_type: 'document',
+      entity_type: entityType,
       entity_id: props.documentId,
     });
 
@@ -219,10 +221,7 @@ export function References(props: ReferenceProps) {
                     <span class="text-ink-extra-muted">
                       {hasMessageContent ? 'referenced in' : 'attached in'}
                     </span>
-                    <InlineItemPreview
-                      itemId={ref.channel_id}
-                      itemType="channel"
-                    />
+                    <InlineItemPreview id={ref.channel_id} type="channel" />
                   </span>
                   <Show when={hasMessageContent}>
                     <div class="pl-4 text-ink-muted text-xs">
@@ -262,8 +261,8 @@ export function References(props: ReferenceProps) {
                     <span class="font-medium text-ink">{userName()}</span>
                     <span class="text-ink-extra-muted">mentioned in</span>
                     <InlineItemPreview
-                      itemId={ref.source_entity_id}
-                      itemType={ref.source_entity_type as ItemType}
+                      id={ref.source_entity_id}
+                      type={ref.source_entity_type as ItemType}
                     />
                   </span>
                 </button>

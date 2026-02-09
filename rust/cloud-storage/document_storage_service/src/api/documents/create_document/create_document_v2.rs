@@ -23,6 +23,7 @@ pub struct CreateDocumentParams<'a> {
     pub email_attachment_id: Option<Uuid>,
     pub created_at: Option<&'a DateTime<Utc>>,
     pub is_task: bool,
+    pub skip_history: bool,
 }
 
 /// Creates a document in the database
@@ -45,6 +46,7 @@ pub async fn create_document(
         email_attachment_id,
         created_at,
         is_task,
+        skip_history,
     } = params;
 
     let owner = owner.into_owned();
@@ -65,7 +67,7 @@ pub async fn create_document(
             project_id,
             project_name: None,
             share_permission: &share_permission,
-            skip_history: false,
+            skip_history,
             email_attachment_id,
             created_at,
             is_task,
@@ -158,7 +160,6 @@ pub async fn create_document(
     // update project modified if necessary
     macro_project_utils::update_project_modified(
         &ctx.db,
-        &ctx.macro_notify_client,
         macro_project_utils::ProjectModifiedArgs {
             project_id,
             old_project_id: None,

@@ -24,14 +24,15 @@ import { ShortcutsHelper } from './settings/ShortcutsHelper';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { cn } from '@ui/utils/classname';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
+import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 
 const AUTH_URLS = [
-  '/app/login',
-  '/app/login/popup',
-  '/app/login/popup/success',
-  '/app/onboarding',
-  '/app/signup',
-  '/app/email-signup-callback',
+  `${ROUTER_BASE_CONCAT}login`,
+  `${ROUTER_BASE_CONCAT}login/popup`,
+  `${ROUTER_BASE_CONCAT}login/popup/success`,
+  `${ROUTER_BASE_CONCAT}onboarding`,
+  `${ROUTER_BASE_CONCAT}signup`,
+  `${ROUTER_BASE_CONCAT}email-signup-callback`,
 ];
 
 export function Layout(props: RouteSectionProps) {

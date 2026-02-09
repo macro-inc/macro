@@ -174,11 +174,10 @@ export function MessageContainer(props: MessageProps) {
   });
 
   // We're only checking new messages that are not part of a thread
-  const isNewMessage = () => props.listContext?.isNewMessage ?? false;
+  const isNewMessage = () => props.listContext.isNewMessage;
 
   // Works for one-level of nesting. In the future we'll need to track at which depths a message is part of a new message chain.
-  const isParentNewMessage = () =>
-    props.listContext?.isParentNewMessage ?? false;
+  const isParentNewMessage = () => props.listContext.isParentNewMessage;
 
   const previousMessage = () => {
     return props.index() > 0
@@ -187,7 +186,7 @@ export function MessageContainer(props: MessageProps) {
   };
 
   const newDayPreviousNonThreadMessage = () => {
-    const prev = props.listContext?.previousNonThreadedMessage;
+    const prev = props.listContext.previousNonThreadedMessage;
     if (!prev) return false;
     return !isSameDay(new Date(message.created_at), new Date(prev.created_at));
   };
@@ -330,7 +329,7 @@ export function MessageContainer(props: MessageProps) {
   const onCreateReply = () => {
     listContext.createReply(message.id, true);
     listContext.scrollToIndex(props.index(), {
-      align: 'end',
+      align: 'nearest',
     });
   };
 

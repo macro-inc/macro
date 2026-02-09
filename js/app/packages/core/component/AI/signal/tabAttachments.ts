@@ -17,7 +17,6 @@ import type { SplitContent } from 'app/component/split-layout/layoutManager';
 import { globalSplitManager } from 'app/signal/splitLayout';
 import type { Accessor } from 'solid-js';
 import { createMemo } from 'solid-js';
-
 import type { HistoryItem } from '@queries/history/history';
 
 type Item = HistoryItem | null;

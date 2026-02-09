@@ -54,7 +54,6 @@ members = [
   "macro_db_migrator",
   "macro_env",
   "macro_middleware",
-  "macro_notify",
   "macro_project_utils",
   "macro_redis",
   "macro_sha_count_client",
@@ -153,7 +152,7 @@ hex = "0.4.3"
 http = "1"
 http-body-util = "0.1.2"
 itertools = "0.14"
-jsonwebtoken = "9.3.1"
+jsonwebtoken = { version = "9.3.1" }
 lambda_runtime = "0.13.0"
 lazy_static = "1.5.0"
 log = "0.4.26"
@@ -165,7 +164,7 @@ pdfium-render = { version = "0.8.28" }
 quote = "1"
 rand = "0.9.0"
 recursion = "0.5.4"
-redis = "1.0.3"
+redis = "0.29.0"
 regex = "1.11.1"
 reqwest = { version = "0.12.12", features = ["json"] }
 reqwest-middleware = { git = "https://github.com/seanaye/reqwest-middleware" }
@@ -196,7 +195,11 @@ tower-http = { version = "0.6.1", features = [
   "cors",
   "trace",
 ] }
+opentelemetry = "0.31.0"
+opentelemetry_sdk = { version = "0.31.0", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.31.0", features = ["grpc-tonic"] }
 tracing = "0.1.44"
+tracing-opentelemetry = "0.32.1"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
 tracing-tree = "0.4.0"
 unsynn = "0.3"
@@ -216,7 +219,7 @@ async-stripe = { version = "0.41", default-features = false, features = [
   "runtime-tokio-hyper",
 ] }
 axum-macros = "0.4.2"
-bytes = "1.10.1"
+bytes = "1.11.1"
 bzip2 = { version = "0.5.1", default-features = false, features = [
   "libbz2-rs-sys",
 ] }

@@ -7,7 +7,7 @@ import { Hotkey } from '@core/component/Hotkey';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { Message } from '@core/component/Message';
 import { UserIcon } from '@core/component/UserIcon';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { fileTypeToBlockName, itemToBlockName } from '@core/constant/allBlocks';
 import {
   ENABLE_GMAIL_BASED_CONTACTS,
   ENABLE_TASKS_TABS,
@@ -24,6 +24,7 @@ import type { BlockOrchestrator } from '@core/orchestrator';
 import { type ChannelWithParticipants, idToDisplayName } from '@core/user';
 import Terminal from '@phosphor-icons/core/regular/terminal.svg?component-solid';
 import type { Channel } from '@service-comms/generated/models/channel';
+import { ChannelTypeEnum } from '@service-comms/client';
 import type { Attachment } from '@service-email/generated/schemas';
 import { useUserId } from '@core/context/user';
 import type { BasicDocumentSubTypeProperty } from '@service-storage/generated/schemas';
@@ -82,7 +83,7 @@ export function hydrateChannel(
     const chan = lookup[item.data.id];
     if (!chan) return item;
     item.data.channel_type = chan.channel_type;
-    if (item.data.channel_type === 'direct_message') {
+    if (item.data.channel_type === ChannelTypeEnum.DirectMessage) {
       item.data.participants = (chan as ChannelWithParticipants).participants;
     }
   }
@@ -430,15 +431,13 @@ function getCommandItemBlockName(
   icon?: boolean
 ): BlockName | BlockAlias | undefined {
   if (item.type === 'item') {
-    if (item.data.itemType === 'document') {
-      if (item.data.subType && item.data.subType.type === 'task') {
-        return 'task';
-      }
-      if (item.data.fileType) {
-        return fileTypeToBlockName(item.data.fileType, icon);
-      }
-    }
-    return fileTypeToBlockName(item.data.itemType, icon) ?? 'unknown';
+    return itemToBlockName(
+      {
+        ...item.data,
+        type: item.data.itemType,
+      },
+      icon
+    );
   } else if (item.type === 'channel') {
     return 'channel';
   } else if (item.type === 'email') {
@@ -482,12 +481,13 @@ export function filterItemByCategory(item: CommandItemCard) {
     case 'Channels':
       return (
         item.type === 'channel' &&
-        (item.data.channel_type === 'organization' ||
-          item.data.channel_type === 'private')
+        (item.data.channel_type === ChannelTypeEnum.Organization ||
+          item.data.channel_type === ChannelTypeEnum.Private)
       );
     case 'DMs':
       return (
-        item.type === 'channel' && item.data.channel_type === 'direct_message'
+        item.type === 'channel' &&
+        item.data.channel_type === ChannelTypeEnum.DirectMessage
       );
     case 'Documents':
       return (
@@ -582,7 +582,7 @@ export function CommandItemCard(props: CommandItemProps) {
 
             if (
               props.item.type === 'channel' &&
-              props.item.data.channel_type === 'direct_message'
+              props.item.data.channel_type === ChannelTypeEnum.DirectMessage
             ) {
               const participants = props.item.data.participants;
               if (participants && participants.length > 0) {
@@ -599,8 +599,11 @@ export function CommandItemCard(props: CommandItemProps) {
                     />
                   );
                 }
-                targetType = 'directMessage';
+                targetType = 'direct_message';
               }
+            }
+            if (props.item.type === 'channel' && props.item.data.channel_type) {
+              targetType = props.item.data.channel_type;
             }
             return <EntityIcon targetType={targetType} size="sm" />;
           }}

@@ -158,6 +158,23 @@ const cloudfronSignerPublicKeyId: pulumi.Output<string> = linksharingStack
   .getOutput('cloudfrontDistributionPublicKeyId')
   .apply((key) => key as string);
 
+// Retrieve name of queue used Contacts Service
+const contactsServiceStack: pulumi.StackReference = new pulumi.StackReference(
+  'contacts-service-stack',
+  {
+    name: `macro-inc/contacts-service/${stack}`,
+  }
+);
+
+const contactsQueueName: pulumi.Output<string> = contactsServiceStack
+  .getOutput('contactsQueueName')
+  .apply((arn) => arn as string);
+
+// Get ARN to allow sending messages to contacts Queue
+const contactsQueueArn: pulumi.Output<string> = contactsServiceStack
+  .getOutput('contactsQueueArn')
+  .apply((arn) => arn as string);
+
 const { notificationQueueName, notificationQueueArn } = getMacroNotify();
 
 // To re-use this secret name after a destroy, you will need to delete the secret without recovery to prevent conflict:
@@ -232,7 +249,12 @@ const cloudStorageService = new CloudStorageService(
   {
     ecsClusterArn: cloudStorageClusterArn,
     cloudStorageClusterName: cloudStorageClusterName,
-    searchEventQueueArn,
+    queueArns: [
+      searchEventQueueArn,
+      deleteDocumentHandler.queue.arn,
+      notificationQueueArn,
+      contactsQueueArn,
+    ],
     vpc: coparse_api_vpc,
     platform: {
       family: 'linux',
@@ -242,7 +264,6 @@ const cloudStorageService = new CloudStorageService(
     docxUploadBucketArn,
     serviceContainerPort: 8080,
     healthCheckPath: '/health',
-    deleteDocumentQueueArn: deleteDocumentHandler.queue.arn,
     secretKeyArns: [
       jwtSecretKeyArn,
       documentStoragePermissionsKeyArn,
@@ -253,7 +274,6 @@ const cloudStorageService = new CloudStorageService(
       MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
       opensearchPasswordArn,
     ],
-    notificationQueueArn,
     containerEnvVars: [
       {
         name: 'OPENSEARCH_URL',
@@ -281,11 +301,7 @@ const cloudStorageService = new CloudStorageService(
       },
       {
         name: 'RUST_LOG',
-        value: `warn,document_storage_service=${
-          stack === 'prod' ? 'debug' : 'trace'
-        },tower_http=info,macro_share_permissions=${
-          stack === 'prod' ? 'error' : 'trace'
-        },macro_project_utils=info,macro_notify=info`,
+        value: 'info',
       },
       {
         name: 'DOCUMENT_STORAGE_BUCKET',
@@ -395,6 +411,19 @@ const cloudStorageService = new CloudStorageService(
       {
         name: 'FRECENCY_TABLE_NAME',
         value: `frecency-${stack}`,
+      },
+      {
+        name: 'CONTACTS_QUEUE',
+        value: pulumi.interpolate`${contactsQueueName}`,
+      },
+      // OpenTelemetry / Datadog tracing configuration
+      {
+        name: 'DD_SERVICE',
+        value: 'cloud-storage-service',
+      },
+      {
+        name: 'DD_ENV',
+        value: stack,
       },
     ],
     isPrivate: false,

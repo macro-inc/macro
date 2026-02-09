@@ -4,6 +4,8 @@ use email_service::config::{Config, EmailServiceCloudfrontSignerPrivateKey};
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
+use notification::domain::service::NotificationIngressService;
+use notification::outbound::{queue::SqsNotificationQueue, repository::DbNotificationRepository};
 use secretsmanager_client::SecretManager;
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;
@@ -82,11 +84,13 @@ async fn main() -> anyhow::Result<()> {
         .contacts_queue(&config.contacts_queue)
         .email_link_manager_queue(&config.link_manager_queue);
 
-    let macro_notify_client = macro_notify::MacroNotify::new(
-        config.notification_queue.clone(),
-        "email_service".to_string(),
-    )
-    .await;
+    let notification_ingress_service = Arc::new(NotificationIngressService::new(
+        DbNotificationRepository::new(db.clone()),
+        SqsNotificationQueue::new(
+            aws_sdk_sqs::Client::new(&aws_config),
+            config.notification_queue.clone(),
+        ),
+    ));
 
     let link_manager_worker = sqs_worker::SQSWorker::new(
         aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
@@ -207,7 +211,7 @@ async fn main() -> anyhow::Result<()> {
         let gmail_client_inbox_sync = gmail_client.clone();
         let auth_service_client_inbox_sync = auth_service_client.clone();
         let redis_client_inbox_sync = redis_client.clone();
-        let macro_notify_client_inbox_sync = macro_notify_client.clone();
+        let notification_ingress_service_inbox_sync = notification_ingress_service.clone();
         let sfs_client_inbox_sync = sfs_client.clone();
         let connection_gateway_client_inbox_sync = connection_gateway_client.clone();
         let dss_client_inbox_sync = dss_client.clone();
@@ -220,7 +224,7 @@ async fn main() -> anyhow::Result<()> {
                 gmail_client_inbox_sync,
                 auth_service_client_inbox_sync,
                 redis_client_inbox_sync,
-                macro_notify_client_inbox_sync,
+                notification_ingress_service_inbox_sync,
                 sfs_client_inbox_sync,
                 connection_gateway_client_inbox_sync,
                 dss_client_inbox_sync,
@@ -243,7 +247,7 @@ async fn main() -> anyhow::Result<()> {
         let gmail_client_inbox_sync = gmail_client.clone();
         let auth_service_client_inbox_sync = auth_service_client.clone();
         let redis_client_inbox_sync = redis_client.clone();
-        let macro_notify_client_inbox_sync = macro_notify_client.clone();
+        let notification_ingress_service_inbox_sync = notification_ingress_service.clone();
         let sfs_client_inbox_sync = sfs_client.clone();
         let connection_gateway_client_inbox_sync = connection_gateway_client.clone();
         let dss_client_inbox_sync = dss_client.clone();
@@ -256,7 +260,7 @@ async fn main() -> anyhow::Result<()> {
                 gmail_client_inbox_sync,
                 auth_service_client_inbox_sync,
                 redis_client_inbox_sync,
-                macro_notify_client_inbox_sync,
+                notification_ingress_service_inbox_sync,
                 sfs_client_inbox_sync,
                 connection_gateway_client_inbox_sync,
                 dss_client_inbox_sync,
@@ -279,7 +283,7 @@ async fn main() -> anyhow::Result<()> {
         let gmail_client_backfill = gmail_client.clone();
         let auth_service_client_backfill = auth_service_client.clone();
         let redis_client_backfill = redis_client.clone();
-        let macro_notify_client_backfill = macro_notify_client.clone();
+        let notification_ingress_service_backfill = notification_ingress_service.clone();
         let sfs_client_backfill = sfs_client.clone();
         let connection_gateway_client_backfill = connection_gateway_client.clone();
         let dss_client_backfill = dss_client.clone();
@@ -292,7 +296,7 @@ async fn main() -> anyhow::Result<()> {
                 gmail_client_backfill,
                 auth_service_client_backfill,
                 redis_client_backfill,
-                macro_notify_client_backfill,
+                notification_ingress_service_backfill,
                 sfs_client_backfill,
                 connection_gateway_client_backfill,
                 dss_client_backfill,

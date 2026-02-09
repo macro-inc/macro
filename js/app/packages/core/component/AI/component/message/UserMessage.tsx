@@ -99,9 +99,9 @@ export function UserMessage(props: {
           <For each={itemPreviewAttachments()}>
             {(attachment) => (
               <ItemPreview
-                itemId={attachment.attachmentId}
+                id={attachment.attachmentId}
                 // TODO: improve typing for item preview attachments
-                itemType={
+                type={
                   attachment.attachmentType as
                     | 'channel'
                     | 'document'

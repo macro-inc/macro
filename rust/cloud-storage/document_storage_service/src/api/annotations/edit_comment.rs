@@ -20,6 +20,8 @@ use model::{
     response::ErrorResponse,
     user::UserContext,
 };
+use notification::domain::service::{NotificationIngress, NotificationIngressService};
+use notification::outbound::{queue::SqsNotificationQueue, repository::DbNotificationRepository};
 use sqlx::PgPool;
 
 use super::comment_error_response;
@@ -46,7 +48,9 @@ pub struct Params {
     )]
 pub async fn edit_comment_handler(
     State(db): State<PgPool>,
-    State(macro_notify_client): State<Arc<macro_notify::MacroNotify>>,
+    State(notification_ingress_service): State<
+        Arc<NotificationIngressService<DbNotificationRepository<PgPool>, SqsNotificationQueue>>,
+    >,
     State(conn_gateway_client): State<Arc<ConnectionGatewayClient>>,
     Extension(UserContext { user_id, .. }): Extension<UserContext>,
     Path(Params { comment_id }): Path<Params>,
@@ -56,7 +60,7 @@ pub async fn edit_comment_handler(
     match edit_document_comment(&db, comment_id, &user_id, &req).await {
         Ok(res) => {
             if let Some(Mentions { users, mention_id }) = req.mentions {
-                let notif = build_mention_notif(
+                let request = build_mention_notif(
                     NotifLocationType::EditComment,
                     req.text.clone().unwrap_or_else(|| "".to_string()),
                     Some(&res.comment),
@@ -68,11 +72,15 @@ pub async fn edit_comment_handler(
                     user_id.clone().try_into().ok(),
                     res.document_id.to_string(),
                     &mention_id,
-                );
-                _ = macro_notify_client
-                    .send_notification(notif)
+                )
+                .into_request()
+                .with_apns()
+                .with_conn_gateway();
+
+                _ = notification_ingress_service
+                    .send_notification(request)
                     .await
-                    .inspect_err(|e| tracing::error!(error =? e, "coundn't send document mention notification"));
+                    .inspect_err(|e| tracing::error!(error =? e, "couldn't send document mention notification"));
             }
             update_live_comment_state(
                 &conn_gateway_client,

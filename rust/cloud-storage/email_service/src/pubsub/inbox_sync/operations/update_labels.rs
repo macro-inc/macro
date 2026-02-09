@@ -152,7 +152,13 @@ pub async fn update_labels(
     }
 
     if has_label_changes {
-        notify_search(ctx, link, db_message.db_id).await?;
+        let is_spam_or_trash = gmail_message_labels.iter().any(|label| {
+            label == service::label::system_labels::SPAM
+                || label == service::label::system_labels::TRASH
+        });
+
+        notify_search(ctx, link, db_message.db_id, is_spam_or_trash).await?;
+
         // tell FE to refresh user's inbox
         cg_refresh_email(
             &ctx.connection_gateway_client,

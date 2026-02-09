@@ -452,7 +452,6 @@ where
 }
 
 #[derive(Clone, Debug)]
-#[expect(dead_code)]
 pub enum MessageSenderOrAdmin {
     MessageSender(MessageSender),
     ChannelAdmin(ChannelAdmin),

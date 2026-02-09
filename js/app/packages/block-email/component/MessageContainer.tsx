@@ -13,7 +13,8 @@ import { VideoPreview } from '@core/component/VideoPreview';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
-import { queryKeys, useQueryClient } from '@macro-entity';
+import { useQueryClient } from '@queries/client';
+import { soupKeys } from '@queries/soup/keys';
 import { logger } from '@observability';
 import { emailClient } from '@service-email/client';
 import type {
@@ -135,7 +136,10 @@ export function MessageContainer(props: MessageContainerProps) {
   });
 
   const { openWithSplit } = useSplitLayout();
-  const entityQueryClient = useQueryClient();
+  const queryClient = useQueryClient();
+  const draftAttachments = createMemo(() => {
+    return props.message.attachments_draft ?? [];
+  });
 
   const onClickAttachment = async (
     event: MouseEvent,
@@ -174,8 +178,8 @@ export function MessageContainer(props: MessageContainerProps) {
       );
     }
 
-    entityQueryClient.invalidateQueries({
-      queryKey: queryKeys.all.dss,
+    queryClient.invalidateQueries({
+      queryKey: soupKeys.items._def,
     });
 
     const blockName = fileType ? fileTypeToBlockName(fileType) : 'unknown';
@@ -286,6 +290,22 @@ export function MessageContainer(props: MessageContainerProps) {
                       onClick={(event, fileType) =>
                         onClickAttachment(event, attachment, fileType)
                       }
+                    />
+                  )}
+                </For>
+              </div>
+            </Show>
+
+            {/* Draft attachments. Needed to display attachments of sent messages before they actually get sent (undo window). */}
+            <Show when={draftAttachments().length > 0}>
+              <div class="flex flex-row overflow-x-scroll mt-2 gap-2">
+                <For each={draftAttachments()}>
+                  {(attachment) => (
+                    <EmailAttachmentPill
+                      attachment={{
+                        fileName: attachment.file_name,
+                        mimeType: attachment.content_type,
+                      }}
                     />
                   )}
                 </For>

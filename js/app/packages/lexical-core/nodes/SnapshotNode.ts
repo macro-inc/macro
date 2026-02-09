@@ -259,7 +259,7 @@ export class SnapshotNode extends DecoratorNode<
   }
 
   decorate(_: LexicalEditor, config: EditorConfig) {
-    const decorator = getDecorator<SnapshotNode>(SnapshotNode);
+    const decorator = getDecorator<SnapshotDecoratorProps>(SnapshotNode);
     if (decorator) {
       return () =>
         decorator({

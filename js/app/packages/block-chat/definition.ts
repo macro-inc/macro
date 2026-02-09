@@ -1,10 +1,8 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
 import { isErr, ok } from '@core/util/maybeResult';
-import { optimisticUpdateViewedAt } from '@queries/history/history';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { AllModels } from '@service-cognition/generated/schemas';
 import type { ChatAttachmentWithName } from '@service-cognition/generated/schemas/chatAttachmentWithName';
-import { storageServiceClient } from '@service-storage/client';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import BlockChat from './component/Block';
 
@@ -32,14 +30,6 @@ export const definition = defineBlock({
           origin: source,
         });
       }
-
-      optimisticUpdateViewedAt(source.id);
-
-      storageServiceClient
-        .trackOpenedChat({
-          chatId: source.id,
-        })
-        .catch((err) => console.error(err));
 
       return ok({
         ...chat,

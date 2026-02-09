@@ -6,13 +6,14 @@ import { cognitionApiServiceClient } from '@service-cognition/client';
 import { useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import { onMount, Show } from 'solid-js';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
+import { useSoup } from '@app/component/next-soup/soup-context';
 
 export function SoupChatInput() {
   let containerRef!: HTMLDivElement;
   const splitPanelContext = useSplitPanelOrThrow();
-  const [preview] = splitPanelContext.previewState;
+  const soup = useSoup();
 
-  const { ChatInput } = useChatInput();
+  const { ChatInput } = useChatInput({ autoAttach: false });
   const [attachHotkeys] = useHotkeyDOMScope('soup.chatInput');
 
   onMount(() => {
@@ -46,7 +47,7 @@ export function SoupChatInput() {
   };
 
   return (
-    <Show when={!preview()}>
+    <Show when={!soup.previewEntity()}>
       <div
         ref={containerRef}
         class="absolute z-10 bottom-0 pb-2 px-2 flex justify-center w-full pointer-events-none"

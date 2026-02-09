@@ -151,7 +151,7 @@ export class WatermarkNode extends DecoratorNode<
   }
 
   decorate(_: LexicalEditor, config: EditorConfig) {
-    const decorator = getDecorator<WatermarkNode>(WatermarkNode);
+    const decorator = getDecorator<WatermarkDecoratorProps>(WatermarkNode);
     if (decorator) {
       return () =>
         decorator({

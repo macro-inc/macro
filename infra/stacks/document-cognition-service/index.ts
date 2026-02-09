@@ -259,12 +259,6 @@ const documentCognitionService = new DocumentCognitionService(
         }.macro.com`,
       },
       {
-        name: 'COMMS_SERVICE_URL',
-        value: `https://comms-service${
-          stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
-      },
-      {
         name: 'CONNECTION_GATEWAY_URL',
         value: `https://connection-gateway${
           stack === 'prod' ? '' : `-${stack}`
@@ -317,6 +311,15 @@ const documentCognitionService = new DocumentCognitionService(
       {
         name: 'AUTHENTICATION_SERVICE_SECRET_KEY',
         value: AUTHENTICATION_SERVICE_INTERNAL_API_KEY_SECRET_NAME,
+      },
+      // OpenTelemetry / Datadog tracing configuration
+      {
+        name: 'DD_SERVICE',
+        value: 'document-cognition-service',
+      },
+      {
+        name: 'DD_ENV',
+        value: stack,
       },
     ],
     isPrivate: false,

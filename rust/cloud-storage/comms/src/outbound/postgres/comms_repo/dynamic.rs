@@ -97,6 +97,9 @@ fn build_channel_filter(ast: Option<&Expr<ChannelLiteral>>) -> String {
         filter_ast::ExprFrame::Literal(ChannelLiteral::ThreadId(_)) => String::new(),
         filter_ast::ExprFrame::Literal(ChannelLiteral::Mention(_)) => String::new(),
         filter_ast::ExprFrame::Literal(ChannelLiteral::Sender(_)) => String::new(),
+        filter_ast::ExprFrame::Literal(ChannelLiteral::Importance(true)) => String::new(),
+        // all channels are important, so if importance is false, exclude them
+        filter_ast::ExprFrame::Literal(ChannelLiteral::Importance(false)) => "1=0".to_string(),
     });
     if formatting.is_empty() {
         String::new()

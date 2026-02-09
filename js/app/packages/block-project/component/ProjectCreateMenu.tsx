@@ -25,7 +25,7 @@ type MenuItemProps = {
 };
 
 function MenuItem(props: MenuItemProps) {
-  const selectedColor = getIconConfig(props.blockName ?? 'pdf').foreground;
+  const selectedColor = getIconConfig(props.blockName).foreground;
 
   return (
     <DropdownMenu.Item

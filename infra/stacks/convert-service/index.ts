@@ -103,6 +103,15 @@ let containerEnvVars = [
     name: 'WEB_SOCKET_RESPONSE_LAMBDA',
     value: pulumi.interpolate`${jobUpdateHandlerLambdaName}`,
   },
+  // OpenTelemetry / Datadog tracing configuration
+  {
+    name: 'DD_SERVICE',
+    value: 'convert-service',
+  },
+  {
+    name: 'DD_ENV',
+    value: stack,
+  },
 ];
 
 const convertService = new ConvertService('convert-service', {

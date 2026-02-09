@@ -8,6 +8,7 @@ use crate::{
 use anyhow::Context;
 use comms::{
     domain::service::ChannelServiceImpl,
+    inbound::CommsRouterState,
     outbound::{http::user_repo::UserRepoImpl, postgres::comms_repo::PgCommsRepo},
 };
 use config::{Config, Environment};
@@ -19,6 +20,8 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use macro_sha_count_client::Redis;
+use notification::domain::service::NotificationIngressService;
+use notification::outbound::{queue::SqsNotificationQueue, repository::DbNotificationRepository};
 use opensearch_client::OpensearchClient;
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
@@ -60,6 +63,11 @@ async fn main() -> anyhow::Result<()> {
         .get_maybe_secret_value(env, DocumentPermissionJwtSecretKey::new()?)
         .await?;
 
+    // Also get it with the comms_service type for CommsHandlerState
+    let comms_permissions_token_secret = secretsmanager_client
+        .get_maybe_secret_value(env, comms_service::DocumentPermissionJwtSecretKey::new()?)
+        .await?;
+
     // Parse our configuration from the environment.
     let config = Config::from_env(
         cloudfront_signer_private_key,
@@ -70,9 +78,9 @@ async fn main() -> anyhow::Result<()> {
     tracing::trace!("initialized config");
 
     let (min_connections, max_connections): (u32, u32) = match config.environment {
-        Environment::Production => (10, 50),
-        Environment::Develop => (3, 20),
-        Environment::Local => (3, 10),
+        Environment::Production => (50, 150),
+        Environment::Develop => (15, 50),
+        Environment::Local => (15, 50),
     };
 
     let db = PgPoolOptions::new()
@@ -101,6 +109,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::trace!("initialized s3 client");
 
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
+        .contacts_queue(&config.vars.contacts_queue)
         .search_event_queue(&config.vars.search_event_queue)
         .document_delete_queue(&config.vars.document_delete_queue);
 
@@ -123,13 +132,6 @@ async fn main() -> anyhow::Result<()> {
     let internal_api_secret = secretsmanager_client
         .get_maybe_secret_value(config.environment, InternalApiSecretKey::new()?)
         .await?;
-
-    let macro_notify_client = macro_notify::MacroNotify::new(
-        config.vars.notification_queue.as_ref().to_string(),
-        "document_storage_service".to_string(),
-    )
-    .await;
-    tracing::trace!("initialized macro_notify client");
 
     let dss_auth_key = DocumentStorageServiceAuthKey::new()?;
 
@@ -192,41 +194,63 @@ async fn main() -> anyhow::Result<()> {
     }
     tracing::trace!("initialized opensearch client");
 
-    let frecency_service = FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone()));
+    let frecency_storage = FrecencyPgStorage::new(db.clone());
+    let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
     let email_service =
         EmailServiceImpl::new(EmailPgRepo::new(db.clone()), frecency_service.clone());
     let system_properties_service =
         SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(db.clone()));
+    let make_notification_ingress = || {
+        let notification_repository = DbNotificationRepository::new(db.clone());
+        let notification_queue = SqsNotificationQueue::new(
+            aws_sdk_sqs::Client::new(&aws_config),
+            config.vars.notification_queue.as_ref().to_string(),
+        );
+        NotificationIngressService::new(notification_repository, notification_queue)
+    };
+    let notification_ingress_service = Arc::new(make_notification_ingress());
+    tracing::trace!("initialized notification ingress service");
+
     let permission_checker = PermissionServiceImpl::new(db.clone());
-    let notification_service = NotificationServiceImpl::new(Arc::new(macro_notify_client.clone()));
+    let notification_service = NotificationServiceImpl::new(make_notification_ingress());
     let properties_service = PropertiesServiceImpl::new(
         PropertiesPgRepo::new(db.clone()),
         Some(permission_checker),
         Some(notification_service),
     );
+
+    // Create the ChannelServiceImpl - we need to create separate instances as it doesn't impl Clone
+    let auth_service_url: reqwest::Url = config
+        .vars
+        .authentication_service_url
+        .as_ref()
+        .parse()
+        .context("AUTHENTICATION_SERVICE_URL must be a valid url")?;
+    let channel_service_for_soup = ChannelServiceImpl::new(
+        PgCommsRepo { pool: db.clone() },
+        UserRepoImpl::new(auth_service_secret_key.clone(), auth_service_url.clone()),
+        frecency_storage.clone(),
+    );
+    let channel_service_for_comms = ChannelServiceImpl::new(
+        PgCommsRepo { pool: db.clone() },
+        UserRepoImpl::new(auth_service_secret_key, auth_service_url),
+        frecency_storage.clone(),
+    );
+
+    // Create the CommsRouterState for comms_service routes
+    let comms_state = CommsRouterState::new(channel_service_for_comms);
+
     let api_context = ApiContext {
         soup_router_state: SoupRouterState::new(
             SoupImpl::new(
                 PgSoupRepo::new(db.clone()),
                 frecency_service,
                 email_service.clone(),
-                ChannelServiceImpl::new(
-                    PgCommsRepo { pool: db.clone() },
-                    UserRepoImpl::new(
-                        auth_service_secret_key,
-                        config
-                            .vars
-                            .authentication_service_url
-                            .as_ref()
-                            .parse()
-                            .context("AUTHENTICATION_SERVICE_URL must be a valid url")?,
-                    ),
-                    FrecencyPgStorage::new(db.clone()),
-                ),
+                channel_service_for_soup,
             ),
             email_service,
         ),
-        db,
+        db: db.clone(),
         redis_client: Arc::new(Redis::new(redis_client)),
         s3_client: Arc::new(S3::new(
             s3_client,
@@ -237,7 +261,7 @@ async fn main() -> anyhow::Result<()> {
         dynamodb_client: Arc::new(dynamodb_client),
         dynamo_db,
         sqs_client: Arc::new(sqs_client),
-        macro_notify_client: Arc::new(macro_notify_client),
+        notification_ingress_service,
         conn_gateway_client: Arc::new(conn_gateway_client),
         sync_service_client: Arc::new(sync_service_client),
         system_properties_service: Arc::new(system_properties_service),
@@ -246,6 +270,10 @@ async fn main() -> anyhow::Result<()> {
         config: Arc::new(config),
         jwt_validation_args,
         dss_auth_key,
+        // Comms service fields
+        frecency_storage,
+        comms_state,
+        permissions_token_secret: comms_permissions_token_secret,
     };
 
     api::setup_and_serve(api_context).await?;

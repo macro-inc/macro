@@ -1,5 +1,4 @@
 import { TruncatedText } from '@core/component/FileList/TruncatedText';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import {
   DragDropProvider,
   DragDropSensors,
@@ -7,7 +6,8 @@ import {
   mostIntersecting,
   useDragDropContext,
 } from '@thisbeyond/solid-dnd';
-import { EntityIcon } from 'core/component/EntityIcon';
+import { EntityIcon, getEntityIconType } from 'core/component/EntityIcon';
+import type { EntityDragData } from '@macro-entity';
 import {
   createContext,
   createMemo,
@@ -38,36 +38,16 @@ export function ItemDragOverlay() {
     return state?.active.draggable;
   });
 
-  const getEntityIconType = () => {
-    const data = activeDraggable()?.data;
+  const iconType = createMemo(() => {
+    const data = activeDraggable()?.data as EntityDragData | undefined;
     if (!data) return 'default';
-
-    if (data.type === 'document') {
-      return fileTypeToBlockName(data.subType?.type ?? data.fileType, true);
-    }
-
-    if (data.type === 'channel') {
-      switch (data.channelType) {
-        case 'direct_message':
-          return 'directMessage';
-        case 'organization':
-          return 'company';
-        default:
-          return 'channel';
-      }
-    }
-
-    if (data.type === 'email') {
-      return data.isRead ? 'emailRead' : 'email';
-    }
-
-    return data.type ?? 'default';
-  };
+    return getEntityIconType(data);
+  });
 
   return (
     <div class="w-auto max-w-[300px] flex flex-col gap-2 bg-active p-2 rounded-md z-drag shadow-sm pointer-events-none">
       <div class="flex flex-row items-center gap-2">
-        <EntityIcon size="sm" targetType={getEntityIconType()} />
+        <EntityIcon size="sm" targetType={iconType()} />
         <TruncatedText size="sm">{activeDraggable()?.data.name}</TruncatedText>
       </div>
       {/* TODO: when multiselect exists */}

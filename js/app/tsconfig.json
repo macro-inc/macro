@@ -195,7 +195,13 @@
       ],
       "@ui/*": [
         "./packages/ui/*"
-      ]
+      ],
+      "@block-theme/*": [
+        "./packages/block-theme/*"
+      ],
+      "@entity/*": [
+        "./packages/entity/*"
+      ],
     },
     "rootDir": ".",
     "outDir": "./dist"
@@ -227,6 +233,9 @@
     },
     {
       "path": "./packages/service-clients"
+    },
+    {
+      "path": "./packages/entity"
     }
   ]
 }

@@ -8,6 +8,7 @@ import IconMail from '@macro-icons/macro-mail.svg';
 import { useLocation } from '@solidjs/router';
 import { type JSX, type Setter, Show } from 'solid-js';
 import { Stage } from './Shared';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 function LoginOption(props: {
   icon: JSX.Element;
@@ -16,7 +17,17 @@ function LoginOption(props: {
 }) {
   return (
     <div
-      onClick={props.onClick}
+      onClick={(_e) => {
+        if (isTouchDevice()) return;
+        props.onClick();
+      }}
+      // Using onPointerDown so that on touch device able to interact with button before closing virtual keyboard
+      onPointerDown={(e) => {
+        if (!isTouchDevice()) return;
+        e.stopPropagation();
+        e.preventDefault();
+        props.onClick();
+      }}
       class="grid items-center justify-center p-5 border border-dashed border-ink border-t-0 [transition:color_var(--transition)] hover:text-accent hover:transition-none cursor-pointer"
     >
       <div class="grid grid-cols-[min-content_180px] gap-2.5 items-center justify-center">

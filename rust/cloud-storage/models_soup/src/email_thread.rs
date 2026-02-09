@@ -22,22 +22,6 @@ pub struct SoupContact {
 #[derive(Debug, Doppleganger, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
-#[dg(backward = email::domain::models::EmailThreadPreviewMetadata)]
-#[serde(rename_all = "camelCase")]
-pub struct SoupEmailThreadPreviewMetadata {
-    /// if user has previously emailed any sender
-    pub known_sender: bool,
-    /// if any email contains a <table> html tag
-    pub tabular: bool,
-    /// if any email contains a calendar invite
-    pub calendar_invite: bool,
-    /// if any sender is a generic email
-    pub generic_sender: bool,
-}
-
-#[derive(Debug, Doppleganger, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
 #[dg(backward = email::domain::models::Label)]
 #[serde(rename_all = "camelCase")]
 pub struct SoupLabel {
@@ -141,7 +125,6 @@ pub struct SoupEnrichedEmailThreadPreview {
     pub thread: SoupEmailThreadPreview,
     pub attachments: Vec<SoupAttachment>,
     pub participants: Vec<SoupContact>,
-    pub metadata: SoupEmailThreadPreviewMetadata,
     pub labels: Vec<SoupLabel>,
     pub properties: Vec<SoupProperty>,
 }

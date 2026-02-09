@@ -1972,33 +1972,6 @@
   },
   "components": {
     "schemas": {
-      "APIEmailThreadPreviewMetadata": {
-        "type": "object",
-        "required": [
-          "known_sender",
-          "tabular",
-          "calendar_invite",
-          "generic_sender"
-        ],
-        "properties": {
-          "calendar_invite": {
-            "type": "boolean",
-            "description": "if any email contains a calendar invite"
-          },
-          "generic_sender": {
-            "type": "boolean",
-            "description": "if any sender in the thread is a generic email"
-          },
-          "known_sender": {
-            "type": "boolean",
-            "description": "if user has previously emailed any sender in the thread"
-          },
-          "tabular": {
-            "type": "boolean",
-            "description": "if any email contains a <table> html tag"
-          }
-        }
-      },
       "APIThread": {
         "type": "object",
         "description": "Thread object exposed to the FE in Get Threads Call",
@@ -2243,7 +2216,7 @@
           },
           {
             "type": "object",
-            "required": ["attachments", "contacts", "labels", "metadata"],
+            "required": ["attachments", "contacts", "labels"],
             "properties": {
               "attachments": {
                 "type": "array",
@@ -2266,9 +2239,6 @@
                 "items": {
                   "$ref": "#/components/schemas/ApiLabel"
                 }
-              },
-              "metadata": {
-                "$ref": "#/components/schemas/APIEmailThreadPreviewMetadata"
               }
             }
           }

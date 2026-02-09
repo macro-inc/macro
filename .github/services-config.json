@@ -13,12 +13,6 @@
       ],
       "stack_path": "infra/stacks/bulk-upload/**"
     },
-    "comms-service": {
-      "source_paths": [
-        "rust/cloud-storage/comms_service/**"
-      ],
-      "stack_path": "infra/stacks/comms-service/**"
-    },
     "connection-gateway": {
       "source_paths": [
         "rust/cloud-storage/connection_gateway/**"

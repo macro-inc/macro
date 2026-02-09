@@ -14,7 +14,7 @@ impl CommsServiceClient {
         jwt_token: &str,
     ) -> Result<GetMessageWithContextResponse, ClientError> {
         let url = format!(
-            "{}/channels/messages/context?message_id={}&before={}&after={}",
+            "{}/comms/channels/messages/context?message_id={}&before={}&after={}",
             self.url, message_id, before, after
         );
 

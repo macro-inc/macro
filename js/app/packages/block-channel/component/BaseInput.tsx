@@ -2,7 +2,6 @@ import {
   isDraggingOverChannelSignal,
   isValidChannelDragSignal,
 } from '@block-channel/signal/attachment';
-import type { SendMessageArgs } from '@block-channel/signal/channel';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
 import {
   $convertSingleMentionToCard,
@@ -71,6 +70,7 @@ import { TaskPreviewPanel } from './TaskPreviewPanel';
 import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { ENABLE_STATIC_DOCUMENT_CARDS } from '@core/constant/featureFlags';
+import type { SendMessageArgs } from '@block-channel/hooks/message';
 
 false && fileFolderDrop;
 
@@ -129,7 +129,6 @@ export function BaseInput(props: BaseInputProps) {
   const key = props.inputAttachments.key;
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(false);
   const [isDraggedOver, setIsDraggedOver] = createSignal(false);
-  const [isPendingSend, setIsPendingSend] = createSignal(false);
   const [isValidChannelDrag] = isInBlock()
     ? isValidChannelDragSignal
     : createSignal(false);
@@ -363,9 +362,6 @@ export function BaseInput(props: BaseInputProps) {
   }
 
   async function handleSend() {
-    if (isPendingSend()) return false;
-    setIsPendingSend(true);
-
     const statePromise = pendingEditorState(editor);
     editor.update(
       () => {
@@ -419,9 +415,6 @@ export function BaseInput(props: BaseInputProps) {
           });
         }
         focusMarkdownArea();
-      })
-      .finally(() => {
-        setIsPendingSend(false);
       });
 
     return true;
@@ -521,7 +514,7 @@ export function BaseInput(props: BaseInputProps) {
             isMobile()
               ? (_e) => false
               : (_e) => {
-                  if (hasPendingAttachments() || isPendingSend()) {
+                  if (hasPendingAttachments()) {
                     return true;
                   }
                   handleSend();
@@ -655,7 +648,7 @@ export function BaseInput(props: BaseInputProps) {
           class="group transition ease-in-out hover:bg-transparent"
         >
           <Show
-            when={!hasPendingAttachments() && !isPendingSend()}
+            when={!hasPendingAttachments()}
             fallback={<Spinner class="size-6 animate-spin cursor-disabled" />}
           >
             <div class="group-hover:scale-115 group-hover:bg-accent transition ease-in-out size-6 touch:size-8 border border-accent rounded-full flex items-center justify-center">

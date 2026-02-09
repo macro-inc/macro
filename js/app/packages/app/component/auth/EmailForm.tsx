@@ -14,6 +14,9 @@ import {
   untrack,
 } from 'solid-js';
 import { ErrorMsg, Input, Stage } from './Shared';
+import { cn } from '@ui/utils/classname';
+import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 // Construct the redirect uri to use for passwordless login.
 // This will send us back to the application after clicking the magic link.
@@ -120,7 +123,12 @@ export function EmailForm(props: { setStage: Setter<Stage> }) {
   return (
     <div class="grid select-none">
       <form action={sendEmailCode} method="post" class="m-0">
-        <div class="flex items-center justify-center text-center py-5 px-10 border border-dashed border-ink border-t-0">
+        <div
+          class={cn(
+            'flex items-center justify-center text-center py-5 px-10 border border-dashed border-ink border-t-0',
+            virtualKeyboardVisible() && 'border-t'
+          )}
+        >
           <Input
             value={searchParamsEmail}
             placeholder="Email Address"
@@ -143,7 +151,17 @@ export function EmailForm(props: { setStage: Setter<Stage> }) {
         <div class="border border-dashed border-ink border-t-0 py-5 px-10 flex flex-none justify-between items-center">
           <button
             class="hover:text-accent hover:transition-none cursor-pointer transition-colors duration-300 grid grid-cols-[min-content_min-content] items-center w-min"
-            onClick={handleBack}
+            onClick={() => {
+              if (isTouchDevice()) return;
+              handleBack();
+            }}
+            // Using onPointerDown so that on touch device able to interact with button before closing virtual keyboard
+            onPointerDown={(e) => {
+              if (!isTouchDevice()) return;
+              e.stopPropagation();
+              e.preventDefault();
+              handleBack();
+            }}
             type="button"
           >
             <ArrowLeft class="w-5 h-5" />
@@ -154,6 +172,16 @@ export function EmailForm(props: { setStage: Setter<Stage> }) {
             class="hover:text-accent hover:transition-none cursor-pointer transition-colors duration-300 grid grid-cols-[min-content_min-content] items-center w-min"
             type="submit"
             disabled={submission.pending}
+            onClick={(e) => {
+              if (isTouchDevice()) e.preventDefault();
+            }}
+            // Using onPointerDown so that on touch device able to interact with button before closing virtual keyboard
+            onPointerDown={(e) => {
+              if (!isTouchDevice()) return;
+              e.stopPropagation();
+              e.preventDefault();
+              e.currentTarget.form?.requestSubmit();
+            }}
           >
             <span>Continue</span>
             <ArrowRight class="w-5 h-5" />

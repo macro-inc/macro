@@ -70,7 +70,6 @@ pub async fn edit_document(
     // update project modified if necessary
     macro_project_utils::update_project_modified(
         &ctx.db,
-        &ctx.macro_notify_client,
         macro_project_utils::ProjectModifiedArgs {
             project_id: req.project_id,
             old_project_id: document_context.project_id,

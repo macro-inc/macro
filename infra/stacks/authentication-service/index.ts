@@ -47,6 +47,8 @@ const FUSIONAUTH_CLIENT_SECRET_KEY = config.require(
 const STRIPE_SECRET_KEY = config.require(`stripe_secret_key`);
 const fusionauthClientIdSecretKey = config.require(`fusionauth_client_id`);
 
+const FUSIONAUTH_TENANT_ID = config.require('fusionauth_tenant_id');
+
 const FUSIONAUTH_CLIENT_ID = aws.secretsmanager
   .getSecretVersionOutput({
     secretId: fusionauthClientIdSecretKey,
@@ -194,6 +196,10 @@ const service = new AuthenticationService('authentication-service', {
       name: 'FUSIONAUTH_APPLICATION_ID',
       value: pulumi.interpolate`${FUSIONAUTH_CLIENT_ID}`,
     },
+    {
+      name: 'FUSIONAUTH_TENANT_ID',
+      value: FUSIONAUTH_TENANT_ID,
+    },
     { name: 'ISSUER', value: pulumi.interpolate`${FUSIONAUTH_ISSUER}` },
     {
       name: 'JWT_SECRET_KEY',
@@ -230,12 +236,6 @@ const service = new AuthenticationService('authentication-service', {
     {
       name: 'SERVICE_INTERNAL_AUTH_KEY',
       value: pulumi.interpolate`${SERVICE_INTERNAL_AUTH_KEY}`,
-    },
-    {
-      name: 'COMMS_SERVICE_URL',
-      value: `https://comms-service${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
     },
     {
       name: 'DOCUMENT_STORAGE_SERVICE_URL',
@@ -286,6 +286,15 @@ const service = new AuthenticationService('authentication-service', {
       // from above. Will unify these in a separate PR.
       name: 'STRIPE_PREMIUM_PRICE_ID',
       value: pulumi.interpolate`${STRIPE_PREMIUM_PRICE_ID}`,
+    },
+    // OpenTelemetry / Datadog tracing configuration
+    {
+      name: 'DD_SERVICE',
+      value: 'authentication-service',
+    },
+    {
+      name: 'DD_ENV',
+      value: stack,
     },
   ],
 });

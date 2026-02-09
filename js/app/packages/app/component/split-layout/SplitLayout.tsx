@@ -19,10 +19,6 @@ import {
   Suspense,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import {
-  createNavigationEntityListShortcut,
-  createSoupContext,
-} from '../SoupContext';
 import { PopoverSplitRenderer } from './components/PopoverSplitRenderer';
 import { SplitContainer } from './components/SplitContainer';
 import { SplitLayoutContext, SplitPanelContext } from './context';
@@ -39,6 +35,8 @@ import {
 } from './layoutManager';
 import { decodePairs } from './layoutUtils';
 import { registerSplitHotkeys } from './registerSplitHotkeys';
+import { SoupContextProvider } from '@app/component/next-soup/soup-context';
+import { createSoupState } from '@app/component/next-soup/create-soup-state';
 
 type SplitLayoutContainerProps = {
   pairs: string[];
@@ -356,11 +354,6 @@ function SplitPanel(props: SplitPanelProps) {
   const panelSize = createElementSize(panelRef);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
 
-  const soupContext = createSoupContext({
-    splitId: props.split.id,
-    domRef: panelRef,
-  });
-
   const [previewState, setPreviewState] = createSignal(false);
 
   const splitLayoutHelpers = useSplitLayout();
@@ -373,7 +366,6 @@ function SplitPanel(props: SplitPanelProps) {
     goBack: () => props.handle.goBack(),
     canGoForward: () => props.handle.canGoForward(),
     goForward: () => props.handle.goForward(),
-    setSelectedView: (view) => soupContext.setSelectedView(view),
     replaceSplit: splitLayoutHelpers.replaceSplit,
     splitName: () => props.handle.displayName(),
     getSplitCount: () => splitLayoutHelpers.getSplitCount(),
@@ -383,49 +375,38 @@ function SplitPanel(props: SplitPanelProps) {
     },
   });
 
-  const splitName = createMemo(() => {
-    const { type, id } = props.split.content;
-    if (type === 'component') return id;
-
-    return type;
-  });
-
-  createNavigationEntityListShortcut({
-    splitName,
-    splitHandle: props.handle,
-    splitHotkeyScope,
-    soupContext,
-    previewState: [previewState, setPreviewState],
-    getSplitCount: () => splitLayoutHelpers.getSplitCount(),
+  const nextSoup = createSoupState({
+    initialFilters: ['explicit-noise'],
   });
 
   return (
-    <SplitPanelContext.Provider
-      value={{
-        handle: props.handle,
-        splitHotkeyScope,
-        soupContext,
-        isPanelActive: () => props.active,
-        panelRef,
-        panelSize,
-        layoutRefs: {},
-        contentOffsetTop,
-        setContentOffsetTop,
-        previewState: [previewState, setPreviewState],
-      }}
-    >
-      <SplitContainer
-        id={props.split.id}
-        ref={(ref) => {
-          setPanelRef(ref);
-          props.setPanelRef(ref);
-          attachHotKeys(ref);
+    <SoupContextProvider soup={nextSoup}>
+      <SplitPanelContext.Provider
+        value={{
+          handle: props.handle,
+          splitHotkeyScope,
+          isPanelActive: () => props.active,
+          panelRef,
+          panelSize,
+          layoutRefs: {},
+          contentOffsetTop,
+          setContentOffsetTop,
+          previewState: [previewState, setPreviewState],
         }}
       >
-        <Suspense>
-          <Dynamic component={props.split.mount.element} />
-        </Suspense>
-      </SplitContainer>
-    </SplitPanelContext.Provider>
+        <SplitContainer
+          id={props.split.id}
+          ref={(ref) => {
+            setPanelRef(ref);
+            props.setPanelRef(ref);
+            attachHotKeys(ref);
+          }}
+        >
+          <Suspense>
+            <Dynamic component={props.split.mount.element} />
+          </Suspense>
+        </SplitContainer>
+      </SplitPanelContext.Provider>
+    </SoupContextProvider>
   );
 }

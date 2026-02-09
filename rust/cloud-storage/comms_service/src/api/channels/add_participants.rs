@@ -28,7 +28,7 @@ pub struct AddParticipantsRequest {
     tag = "channels",
     operation_id = "add_participants",
     description = "adds a list of participants to the channel, user must be a participant",
-    path = "/channels/{channel_id}/participants",
+    path = "/comms/channels/{channel_id}/participants",
     params(
         ("channel_id" = String, Path, description = "channel id"),
     ),

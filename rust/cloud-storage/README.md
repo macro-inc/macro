@@ -28,7 +28,7 @@ To start with a fresh database in docker clear it with: `docker-compose down && 
 
 ## Deployment
 
-To learn more read the [infra](./infra/README.md) documentation.
+To learn more read the [infra](../../infra/README.md) documentation.
 
 ## Instructions
 

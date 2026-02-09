@@ -7,13 +7,8 @@ import { impactFeedback } from '@tauri-apps/plugin-haptics';
 import { batch, type Component, type JSX } from 'solid-js';
 import { setCreateMenuOpen } from '../Launcher';
 import { useSplitPanelOrThrow } from '../split-layout/layoutUtils';
-import { VIEWCONFIG_BASE } from '../ViewConfig';
-import { FOCUS_FILTER_CONFIGS } from '../Soup/utils/filterConfigs';
-import {
-  isEntityTypeFilterActive,
-  isFocusFilterActive,
-  sameSet,
-} from '../Soup/utils/filterHelpers';
+import { useSoup } from '@app/component/next-soup/soup-context';
+import type { FilterID } from '@app/component/next-soup/filters/filters';
 
 type MobileDockButtonProps = {
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
@@ -25,6 +20,7 @@ type MobileDockButtonProps = {
 function MobileDockButton(props: MobileDockButtonProps) {
   return (
     <button
+      type="button"
       onClick={() => {
         impactFeedback('light');
         props.onClick();
@@ -43,18 +39,16 @@ function MobileDockButton(props: MobileDockButtonProps) {
 
 export function MobileDock() {
   const splitContext = useSplitPanelOrThrow();
-  const { selectedView, setViewDataStore, viewsDataStore } =
-    splitContext.soupContext;
+  const soup = useSoup();
 
   const splitContent = () => splitContext.handle.content();
-  const view = () => viewsDataStore[selectedView()];
-  const filters = () => view()?.filters ?? VIEWCONFIG_BASE.filters;
-  const typeFilter = () => filters().typeFilter ?? [];
-  const channelCategoryFilter = () => filters().channelCategoryFilter ?? [];
-  const focusFilters = () => filters().focusFilters ?? [];
 
-  const splitIsUnifiedList = () =>
-    splitContent().type === 'component' && splitContent().id === 'unified-list';
+  const splitIsUnifiedList = () => {
+    const id = splitContent().id;
+    const type = splitContent().type;
+
+    return type === 'component' && id === 'unified-list';
+  };
 
   const ensureUnifiedList = () => {
     if (splitIsUnifiedList()) return;
@@ -64,64 +58,35 @@ export function MobileDock() {
   };
 
   const isInboxActive = () =>
-    isFocusFilterActive(focusFilters(), 'signal') && splitIsUnifiedList();
+    soup.filters.isActive('signal') && splitIsUnifiedList();
   const isPeopleTeamsActive = () =>
-    isEntityTypeFilterActive(typeFilter(), 'channel') &&
-    sameSet(channelCategoryFilter(), ['people', 'groups']) &&
-    splitIsUnifiedList();
+    soup.filters.isActive('teams-and-people') && splitIsUnifiedList();
   const isTasksActive = () =>
-    isEntityTypeFilterActive(typeFilter(), 'task') && splitIsUnifiedList();
+    soup.filters.isActive('task') && splitIsUnifiedList();
   const isAllActive = () =>
     !isInboxActive() &&
     !isPeopleTeamsActive() &&
     !isTasksActive() &&
     splitIsUnifiedList();
 
-  const setFocusFilter = (target: 'signal' | 'noise' | 'none') => {
-    const config =
-      target === 'none'
-        ? FOCUS_FILTER_CONFIGS.none
-        : FOCUS_FILTER_CONFIGS[target];
-    const viewId = selectedView();
-    setViewDataStore(viewId, 'filters', 'focusFilters', [
-      ...config.focusFilters,
-    ]);
-    setViewDataStore(
-      viewId,
-      'filters',
-      'notificationFilter',
-      config.notificationFilter
-    );
-    setViewDataStore(
-      viewId,
-      'display',
-      'unrollNotifications',
-      config.unrollNotifications
-    );
+  const activateFilter = (filter: FilterID) => {
+    soup.filters.activate(filter);
   };
 
-  const setTypeFilters = ({
-    type,
-    channelCategories = [],
-  }: {
-    type: Array<'channel' | 'chat' | 'document' | 'email' | 'project' | 'task'>;
-    channelCategories?: Array<'people' | 'groups'>;
-  }) => {
-    const viewId = selectedView();
-    setViewDataStore(viewId, 'filters', 'typeFilter', type);
-    setViewDataStore(viewId, 'filters', 'documentTypeFilter', []);
-    setViewDataStore(viewId, 'filters', 'channelCategoryFilter', [
-      ...channelCategories,
-    ]);
+  const toggleSignalFilter = (value: boolean) => {
+    // If we're going to be removing the signal filter,
+    // we should replace it with the explicit-noise filter
+    if (!value) {
+      activateFilter('explicit-noise');
+      soup.filters.deactivate('not-done');
+    } else {
+      activateFilter('signal');
+      activateFilter('not-done');
+    }
   };
 
   const clearSearchFilters = () => {
-    const viewId = selectedView();
-    batch(() => {
-      setTypeFilters({ type: [], channelCategories: [] });
-      setFocusFilter('none');
-      setViewDataStore(viewId, 'filters', 'unreadOnly', false);
-    });
+    soup.filters.clear();
   };
 
   return (
@@ -142,8 +107,8 @@ export function MobileDock() {
         onClick={() => {
           ensureUnifiedList();
           batch(() => {
-            setFocusFilter('signal');
-            setTypeFilters({ type: [] });
+            clearSearchFilters();
+            toggleSignalFilter(true);
           });
         }}
       />
@@ -154,11 +119,8 @@ export function MobileDock() {
         onClick={() => {
           ensureUnifiedList();
           batch(() => {
-            setFocusFilter('none');
-            setTypeFilters({
-              type: ['channel'],
-              channelCategories: ['people', 'groups'],
-            });
+            toggleSignalFilter(false);
+            activateFilter('teams-and-people');
           });
         }}
       />
@@ -169,8 +131,8 @@ export function MobileDock() {
         onClick={() => {
           ensureUnifiedList();
           batch(() => {
-            setFocusFilter('none');
-            setTypeFilters({ type: ['task'] });
+            toggleSignalFilter(false);
+            activateFilter('task');
           });
         }}
       />

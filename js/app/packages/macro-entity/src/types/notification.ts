@@ -1,8 +1,8 @@
 // Temporarily use the generated types for now
-import type { UserNotification } from '@service-notification/generated/schemas/userNotification';
+import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
 import type { Accessor } from 'solid-js';
 
-export type Notification = Omit<UserNotification, 'ownerId'>;
+export type Notification = Omit<ApiUserNotification, 'ownerId'>;
 
 export type WithNotification<T> = T & {
   notifications?: Accessor<Notification[]>;

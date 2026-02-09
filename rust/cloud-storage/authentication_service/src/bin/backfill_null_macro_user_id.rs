@@ -30,6 +30,7 @@ pub async fn main() -> anyhow::Result<()> {
     let mut total = 0;
 
     let auth_client = authentication_service::FusionAuthClient::new(
+        std::env::var("FUSIONAUTH_TENANT_ID").context("FUSIONAUTH_TENANT_ID env var not set")?,
         std::env::var("FUSIONAUTH_API_KEY").context("FUSIONAUTH_API_KEY env var not set")?,
         std::env::var("FUSIONAUTH_CLIENT_ID").context("FUSIONAUTH_CLIENT_ID env var not set")?,
         std::env::var("FUSIONAUTH_CLIENT_SECRET")

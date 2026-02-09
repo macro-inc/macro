@@ -135,6 +135,7 @@ impl AttachmentProcessor {
                     created_at: Some(attachment.internal_date_ts),
                     email_attachment_id: Some(attachment.attachment_db_id),
                     is_task: false,
+                    skip_history: true,
                 },
                 &self.macro_id_destination,
             )

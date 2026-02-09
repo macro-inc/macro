@@ -21,6 +21,20 @@ import { queryClient } from '../client';
 import { channelKeys, ChannelNonceKeys } from './keys';
 import { createMutationNonce, registerNonce } from '../nonce';
 
+/**
+ * Register nonces for both message and attachment deduplication.
+ * The server echoes the same nonce for both message and attachment WebSocket events.
+ */
+function registerMessageNonces(
+  optimisticId: string,
+  hasAttachments: boolean
+): void {
+  registerNonce(ChannelNonceKeys.MESSAGE, optimisticId);
+  if (hasAttachments) {
+    registerNonce(ChannelNonceKeys.ATTACHMENT, optimisticId);
+  }
+}
+
 type WithChannelId<T> = T & { channelId: string };
 type WithOptimisticId<T> = T & { optimisticId: string };
 type WithSenderId<T> = T & { senderId: string };
@@ -74,9 +88,18 @@ export function optimisticInsertChannelMessage(
         edited_at: undefined,
       };
 
+      const newAttachments: Attachment[] = vars.attachments.map((a) => ({
+        id: crypto.randomUUID(),
+        channel_id: vars.channelId,
+        created_at: String(Date.now()),
+        message_id: vars.optimisticId,
+        ...a,
+      }));
+
       return {
         ...prev,
         messages: [...prev.messages, newMessage],
+        attachments: [...prev.attachments, ...newAttachments],
       };
     }
   );
@@ -101,6 +124,9 @@ export function rollbackInsertChannelMessage(
       return {
         ...prev,
         messages: prev.messages.filter((m) => m.id !== context.optimisticId),
+        attachments: prev.attachments.filter(
+          (a) => a.message_id !== context.optimisticId
+        ),
       };
     }
   );
@@ -135,6 +161,11 @@ export function replaceOptimisticMessage(
       return {
         ...prev,
         messages: updatedMessages,
+        attachments: prev.attachments.map((a) =>
+          a.message_id === vars.optimisticId
+            ? { ...a, message_id: vars.realId }
+            : a
+        ),
       };
     }
   );
@@ -336,8 +367,11 @@ export function useSendMessageMutation(
     ...withCallbacks<IdResponse, Error, SendMessageParams, SendMessageContext>(
       {
         onMutate: (vars) => {
-          // Register nonce for deduplication when WebSocket event arrives
-          registerNonce(ChannelNonceKeys.MESSAGE, vars.optimisticId);
+          // Register nonces for deduplication when WebSocket events arrive
+          registerMessageNonces(
+            vars.optimisticId,
+            vars.message.attachments.length > 0
+          );
           return optimisticInsertChannelMessage({
             channelId: vars.channelID,
             optimisticId: vars.optimisticId,

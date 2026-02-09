@@ -61,7 +61,6 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
   "cloud_storage",
   "user_permissions",
 ] }
-macro_notify = { path = "../macro_notify" }
 macro_project_utils = { path = "../macro_project_utils" }
 macro_share_permissions = { path = "../macro_share_permissions" }
 macro_user_id = { path = "../macro_user_id" }
@@ -108,3 +107,4 @@ uuid = { workspace = true }
 
 [dev-dependencies]
 macro_auth = { path = "../macro_auth", features = ["testing"] }
+macro_db_migrator = { path = "../macro_db_migrator" }

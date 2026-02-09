@@ -1,38 +1,35 @@
-import { deleteTheme, exportTheme, invertTheme, saveTheme } from '../utils/themeUtils';
-import { currentThemeId, isThemeSaved, themes } from '../signals/themeSignals';
+import { deleteTheme, exportTheme, importTheme, invertTheme, saveTheme } from '../utils/themeUtils';
+import { currentThemeId, isThemeSaved, themes, userThemes } from '../signals/themeSignals';
 import { createEffect, createMemo, createSignal, Show } from 'solid-js';
 import IconLightDark from '@macro-icons/macro-light-dark.svg';
 import IconClipboard from '@macro-icons/macro-clipboard.svg';
-import { DEV_MODE_ENV } from '@core/constant/featureFlags';
+import IconImport from '@macro-icons/macro-import.svg';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-// import IconFigma from '@macro-icons/macro-figma.svg';
 import IconTrash from '@macro-icons/macro-trash.svg';
 import { randomizeTheme } from './ThemeEditorBasic';
 import IconDice from '@macro-icons/macro-dice.svg';
 import IconSave from '@macro-icons/macro-save.svg';
-// import { copyTokens } from './ComputeTokens';
-import { DEFAULT_THEMES } from '../constants';
 
 export function ThemeTools() {
   let themeName!: HTMLDivElement;
+  
+  const defaultThemeName = 'New Theme';
 
   const currentThemeName = createMemo(() => {
     const theme = themes().find((theme) => theme.id === currentThemeId());
     if(isThemeSaved()){return theme?.name}
-    else{return 'Theme Name'}
+    else{return defaultThemeName}
   });
 
   const [showTrash, setShowTrash] = createSignal<boolean>(true);
   createEffect(() => {
-    if(isThemeSaved() && !DEFAULT_THEMES.find((t) => t.id === currentThemeId())){setShowTrash(true)}
+    if(isThemeSaved() && userThemes().some((t) => t.id === currentThemeId())){setShowTrash(true)}
     else{setShowTrash(false)}
   });
 
   const [columnCount, setColumnCount] = createSignal(0);
   createEffect(() => {
-    let count = 3;
-    if(!isThemeSaved()){count++}
-    if(DEV_MODE_ENV){count++}
+    let count = 5;
     if(showTrash()){count++}
     setColumnCount(count);
   });
@@ -54,7 +51,29 @@ export function ThemeTools() {
         'width': '100%',
       }}
     >
-      <div ref={themeName} contentEditable style="white-space: nowrap;">
+      <div
+        ref={themeName}
+        contentEditable
+        style="white-space: nowrap;"
+        onBlur={() => {
+          if(!themeName.innerText.trim()){
+            themeName.innerText = defaultThemeName;
+          }
+        }}
+        onKeyDown={(e) => {
+          if(e.key === 'Enter'){
+            e.preventDefault();
+            const name = themeName.innerText.trim();
+            if(name){
+              saveTheme(name);
+              themeName.blur();
+            }
+            else {
+              themeName.innerText = defaultThemeName;
+            }
+          }
+        }}
+      >
         {currentThemeName()}
       </div>
 
@@ -72,7 +91,7 @@ export function ThemeTools() {
           onPointerDown={() => {
             deleteTheme(currentThemeId());
           }}
-          // tooltip={{label: "Delete Theme"}}
+          tooltip={{label: "Delete Theme"}}
           icon={IconTrash}
           theme="clear"
           size="sm"
@@ -84,7 +103,7 @@ export function ThemeTools() {
           onPointerDown={() => {
             saveTheme(themeName.innerText);
           }}
-          // tooltip={{label: "Save Theme"}}
+          tooltip={{label: "Save Theme"}}
           icon={IconSave}
           theme="clear"
           size="sm"
@@ -101,9 +120,9 @@ export function ThemeTools() {
         />
       </Show>*/}
 
-      <Show when={DEV_MODE_ENV}>
+      <Show when={isThemeSaved()}>
         <DeprecatedIconButton
-          // tooltip={{label: "Copy To Clipboard"}}
+          tooltip={{label: "Copy To Clipboard"}}
           onPointerDown={exportTheme}
           icon={IconClipboard}
           theme="clear"
@@ -111,8 +130,16 @@ export function ThemeTools() {
         />
       </Show>
 
+        <DeprecatedIconButton
+          tooltip={{label: "Import From Clipboard"}}
+          onPointerDown={importTheme}
+          icon={IconImport}
+          theme="clear"
+          size="sm"
+        />
+
       <DeprecatedIconButton
-        // tooltip={{label: "Toggle Light / Dark"}}
+        tooltip={{label: "Toggle Light / Dark"}}
         onPointerDown={invertTheme}
         icon={IconLightDark}
         theme="clear"
@@ -120,7 +147,7 @@ export function ThemeTools() {
       />
 
       <DeprecatedIconButton
-        // tooltip={{label: "Randomize Theme"}}
+        tooltip={{label: "Randomize Theme"}}
         onPointerDown={randomizeTheme}
         icon={IconDice}
         theme="clear"

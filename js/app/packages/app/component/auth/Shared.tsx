@@ -4,7 +4,6 @@ import { authServiceClient } from '@service-auth/client';
 import { detect } from 'detect-browser';
 import type { JSX } from 'solid-js';
 import { createSignal, onMount, Show } from 'solid-js';
-import { invalidateOrganization } from '@queries/auth';
 
 const { track, identify, TrackingEvents } = withAnalytics();
 
@@ -16,7 +15,6 @@ export function setCookie(name: string, value: string, days: number) {
 }
 
 export const identifyUser = async () => {
-  invalidateOrganization();
   await invalidateUserInfo();
   // Use fetchUserInfo which leverages the query cache instead of direct API call
   const userInfo = await fetchUserInfo();

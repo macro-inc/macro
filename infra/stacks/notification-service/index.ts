@@ -209,12 +209,6 @@ const notificationService = new NotificationService('notification-service', {
       }.macro.com`,
     },
     {
-      name: 'COMMS_SERVICE_URL',
-      value: `https://comms-service${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
-    },
-    {
       name: 'CONNECTION_GATEWAY_URL',
       value: `https://connection-gateway${
         stack === 'prod' ? '' : `-${stack}`
@@ -261,6 +255,15 @@ const notificationService = new NotificationService('notification-service', {
     {
       name: 'AUTHENTICATION_SERVICE_SECRET_KEY',
       value: pulumi.interpolate`${AUTHENTICATION_SERVICE_INTERNAL_API_KEY}`,
+    },
+    // OpenTelemetry / Datadog tracing configuration
+    {
+      name: 'DD_SERVICE',
+      value: 'notification-service',
+    },
+    {
+      name: 'DD_ENV',
+      value: stack,
     },
   ],
 });

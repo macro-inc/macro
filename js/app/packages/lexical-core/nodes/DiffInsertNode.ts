@@ -98,7 +98,7 @@ export class DiffInsertNode extends DecoratorNode<
   }
 
   decorate(_: LexicalEditor, config: EditorConfig) {
-    const decorator = getDecorator<DiffInsertNode>(DiffInsertNode);
+    const decorator = getDecorator<DiffInsertDecoratorProps>(DiffInsertNode);
     if (decorator) {
       return () =>
         decorator({

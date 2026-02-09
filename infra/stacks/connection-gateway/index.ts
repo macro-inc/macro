@@ -138,6 +138,15 @@ const connectionGateway = new ConnectionGateway(`connection-gateway-${stack}`, {
       name: 'MACRO_DB_URL',
       value: pulumi.interpolate`${MACRO_DB_URL}`,
     },
+    // OpenTelemetry / Datadog tracing configuration
+    {
+      name: 'DD_SERVICE',
+      value: 'connection-gateway',
+    },
+    {
+      name: 'DD_ENV',
+      value: stack,
+    },
   ],
   isPrivate: false,
   tags,

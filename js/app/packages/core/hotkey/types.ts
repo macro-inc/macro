@@ -174,7 +174,6 @@ export type ScopeNodeBase = {
 
 export type DOMScopeNode = {
   type: 'dom';
-  element: Element;
 };
 
 export type CommandScopeNode = {

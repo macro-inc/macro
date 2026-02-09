@@ -2,6 +2,7 @@ import { AsyncBatcher } from '@tanstack/pacer';
 import { DEFAULT_ITEM_TYPE } from '@service-storage/client';
 import type { ItemEntity, PreviewItem } from './types';
 import { fetchPreviewBatch } from './fetchers';
+import { previewKeys } from './keys';
 
 type PendingRequest = {
   item: ItemEntity;
@@ -86,7 +87,7 @@ class PreviewDataLoader {
   }
 
   private getCacheKey(item: ItemEntity): string {
-    return `${item.id}`;
+    return previewKeys.item(item.id).queryKey.join(':');
   }
 }
 

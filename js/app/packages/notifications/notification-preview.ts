@@ -1,7 +1,7 @@
 import type { BlockName } from '@core/block';
 import { type EntityType, NotificationType } from '@core/types';
 import type { NotificationEventType } from '@service-notification/generated/schemas';
-import type { TypedNotification } from './notification-metadata';
+import { getMetadata, type TypedNotification } from './notification-metadata';
 
 export type NotificationData = {
   actor?: { id: string };
@@ -49,7 +49,7 @@ const extractors: {
   ) => NotificationData | null;
 } = {
   item_shared_user: (n) => {
-    const m = n.notificationMetadata;
+    const m = getMetadata(n);
     if (!m) return null;
     return {
       type: n.notificationEventType,
@@ -69,7 +69,7 @@ const extractors: {
     };
   },
   item_shared_organization: (n) => {
-    const m = n.notificationMetadata;
+    const m = getMetadata(n);
     if (!m) return null;
     return {
       type: n.notificationEventType,
@@ -89,7 +89,7 @@ const extractors: {
     };
   },
   channel_mention: (n) => {
-    const m = n.notificationMetadata;
+    const m = getMetadata(n);
     if (!m) return null;
     return {
       type: n.notificationEventType,
@@ -98,7 +98,7 @@ const extractors: {
       target: {
         type: 'channel',
         id: n.entity_id,
-        show: n.notificationMetadata.channelType !== 'directMessage',
+        show: m.channelType !== 'directMessage',
       },
       content: m.messageContent,
       meta: {
@@ -107,7 +107,7 @@ const extractors: {
     };
   },
   document_mention: (n) => {
-    const m = n.notificationMetadata;
+    const m = getMetadata(n);
     if (!m) return null;
     return {
       type: n.notificationEventType,
@@ -121,7 +121,7 @@ const extractors: {
     };
   },
   channel_invite: (n) => {
-    const m = n.notificationMetadata;
+    const m = getMetadata(n);
     if (!m) return null;
     return {
       type: n.notificationEventType,
@@ -132,7 +132,7 @@ const extractors: {
     };
   },
   channel_message_send: (n) => {
-    const m = n.notificationMetadata;
+    const m = getMetadata(n);
     if (!m) return null;
     return {
       type: n.notificationEventType,
@@ -141,7 +141,7 @@ const extractors: {
       target: {
         type: 'channel',
         id: n.entity_id,
-        show: n.notificationMetadata.channelType !== 'directMessage',
+        show: m.channelType !== 'directMessage',
       },
       content: m.messageContent,
       meta: {
@@ -150,7 +150,7 @@ const extractors: {
     };
   },
   channel_message_reply: (n) => {
-    const m = n.notificationMetadata;
+    const m = getMetadata(n);
     if (!m) return null;
     return {
       type: n.notificationEventType,
@@ -159,7 +159,7 @@ const extractors: {
       target: {
         type: 'channel',
         id: n.entity_id,
-        show: n.notificationMetadata.channelType !== 'directMessage',
+        show: m.channelType !== 'directMessage',
       },
       content: m.messageContent,
       meta: {
@@ -169,7 +169,7 @@ const extractors: {
     };
   },
   channel_message_document: (n) => {
-    const m = n.notificationMetadata;
+    const m = getMetadata(n);
     if (!m) return null;
     return {
       type: n.notificationEventType,
@@ -183,7 +183,7 @@ const extractors: {
     };
   },
   new_email: (n) => {
-    const m = n.notificationMetadata;
+    const m = getMetadata(n);
     if (!m) return null;
     const actorId = n.senderId ?? m.sender;
     return {
@@ -200,7 +200,7 @@ const extractors: {
     };
   },
   invite_to_team: (n) => {
-    const m = n.notificationMetadata;
+    const m = getMetadata(n);
     if (!m) return null;
     return {
       type: n.notificationEventType,
@@ -211,7 +211,7 @@ const extractors: {
     };
   },
   reject_team_invite: (n) => {
-    const m = n.notificationMetadata;
+    const m = getMetadata(n);
     if (!m) return null;
     return {
       type: n.notificationEventType,
@@ -222,7 +222,7 @@ const extractors: {
     };
   },
   task_assigned: (n) => {
-    const m = n.notificationMetadata;
+    const m = getMetadata(n);
     if (!m) return null;
     return {
       type: n.notificationEventType,

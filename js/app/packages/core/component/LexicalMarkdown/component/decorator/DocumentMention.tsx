@@ -9,20 +9,15 @@ import {
   mentionsAccessories,
   PopupPreview,
 } from '@core/component/DocumentPreview';
-import { EntityIcon } from '@core/component/EntityIcon';
+import { useItemPreviewData } from '@core/component/ItemPreview';
 import { resolveBlockAlias, verifyBlockName } from '@core/constant/allBlocks';
 import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import { canNestBlock } from '@core/orchestrator';
 import {
   isAccessiblePreviewItem,
-  type PreviewChannelAccess,
-  type PreviewDocumentAccess,
-  type PreviewItem,
-  type PreviewItemAccess,
   type PreviewItemNoAccess,
-  type PreviewProjectAccess,
-  useItemPreview,
+  type ItemEntity,
 } from '@queries/preview';
 import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
@@ -38,7 +33,6 @@ import {
 } from '@lexical-core';
 import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
-import { debounce } from '@solid-primitives/scheduled';
 import {
   $getNodeByKey,
   COMMAND_PRIORITY_NORMAL,
@@ -56,13 +50,11 @@ import {
   Switch,
   useContext,
 } from 'solid-js';
+import { HoverCard } from '@core/component/HoverCard';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
-import { floatWithElement } from '../../directive/floatWithElement';
 import { autoRegister, UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';
 import { openDocument } from '../core/BlockLink';
 import { MentionTooltip } from './MentionTooltip';
-
-false && floatWithElement;
 
 function MentionContainer(props: {
   icon: JSX.Element;
@@ -100,101 +92,68 @@ function Loading(props: { collapsed?: boolean }) {
   );
 }
 
-type AccessiblePreviewItem =
-  | PreviewItemAccess
-  | PreviewProjectAccess
-  | PreviewDocumentAccess
-  | PreviewChannelAccess;
-
-function isAccessible(item: PreviewItem): item is AccessiblePreviewItem {
-  return isAccessiblePreviewItem(item);
-}
-
 function InlinePreview(props: {
-  item: () => PreviewItem;
+  entity: ItemEntity;
   blockName: BlockName | BlockAlias;
   blockParams: Record<string, string>;
   theme?: EditorThemeClasses;
   collapsed?: boolean;
 }) {
+  const { item, ItemEntityIcon } = useItemPreviewData(() => props.entity);
+
   return (
     <Switch>
-      <Match when={props.item().loading}>
+      <Match when={item().loading}>
         <Loading />
       </Match>
-      <Match when={matches(props.item(), isAccessible)}>
-        {(accessibleItem) => {
-          const { type, fileType, channelType, subType } = accessibleItem();
-          return (
-            <MentionContainer
-              icon={
-                <Show
-                  when={type === 'channel'}
-                  fallback={
-                    <EntityIcon
-                      targetType={
-                        type === 'document' ? (subType?.type ?? fileType) : type
-                      }
-                      size="fill"
-                      theme={
-                        props.theme?.['document-mention'] === 'chat-blue'
-                          ? 'monochrome'
-                          : undefined
-                      }
-                    />
-                  }
-                >
-                  <EntityIcon
-                    size="fill"
-                    targetType={
-                      channelType === 'direct_message'
-                        ? 'directMessage'
-                        : channelType === 'organization'
-                          ? 'company'
-                          : 'channel'
-                    }
-                  />
-                </Show>
-              }
-              text={
-                <span
-                  data-document-mention="true"
-                  data-document-id={accessibleItem().id}
-                  data-block-name={props.blockName}
-                  data-document-name={accessibleItem().name}
-                >
-                  {accessibleItem().name.replaceAll('\n', ' ').trim()}
-                  <span class="relative text-[0.8em] text-current/50 rounded-xs">
-                    {(() => {
-                      const accessories = mentionsAccessories(
-                        props.blockName as BlockName,
-                        props.blockParams
+      <Match when={matches(item(), isAccessiblePreviewItem)}>
+        {(accessibleItem) => (
+          <MentionContainer
+            icon={
+              <ItemEntityIcon
+                size="fill"
+                theme={
+                  accessibleItem().type !== 'channel' &&
+                  props.theme?.['document-mention'] === 'chat-blue'
+                    ? 'monochrome'
+                    : undefined
+                }
+              />
+            }
+            text={
+              <span
+                data-document-mention="true"
+                data-document-id={accessibleItem().id}
+                data-block-name={props.blockName}
+                data-document-name={accessibleItem().name}
+              >
+                {accessibleItem().name.replaceAll('\n', ' ').trim()}
+                <span class="relative text-[0.8em] text-current/50 rounded-xs">
+                  {(() => {
+                    const accessories = mentionsAccessories(
+                      props.blockName as BlockName,
+                      props.blockParams
+                    );
+                    if (accessories) {
+                      return (
+                        <>
+                          {` ${accessories.note ?? ''}`}
+                          {getMentionsIcon(accessories.icon)}
+                        </>
                       );
-                      if (accessories) {
-                        return (
-                          <>
-                            {` ${accessories.note ?? ''}`}
-                            {getMentionsIcon(accessories.icon)}
-                          </>
-                        );
-                      }
-                    })()}
-                  </span>
+                    }
+                  })()}
                 </span>
-              }
-              collapsed={props.collapsed}
-            />
-          );
-        }}
+              </span>
+            }
+            collapsed={props.collapsed}
+          />
+        )}
       </Match>
-      <Match
-        when={(props.item() as PreviewItemNoAccess).access === 'no_access'}
-      >
+      <Match when={(item() as PreviewItemNoAccess).access === 'no_access'}>
         <MentionContainer icon={<EyeSlashDuo />} text="No Access" />
       </Match>
-      <Match
-        when={(props.item() as PreviewItemNoAccess).access === 'does_not_exist'}
-      >
+      <Match when={(item() as PreviewItemNoAccess).access === 'does_not_exist'}>
         <MentionContainer icon={<TrashSimple />} text="Deleted" />
       </Match>
     </Switch>
@@ -217,8 +176,6 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
   const editor = lexicalWrapper?.editor;
   const selection = () => lexicalWrapper?.selection;
 
-  let inlinePreviewRef!: HTMLSpanElement;
-
   const [isCollapsed, setIsCollapsed] = createSignal<boolean>(
     props.collapsed ?? false
   );
@@ -239,16 +196,26 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
     return canNestBlock(resolveBlockAlias(blockName), currentBlockName);
   });
 
-  const previewType = () =>
-    blockNameToItemType(verifyBlockName(props.blockName));
+  const itemEntity = (): ItemEntity => {
+    const previewType = blockNameToItemType(verifyBlockName(props.blockName));
+    const baseEntity = {
+      id: props.documentId,
+      type: previewType,
+    };
+    if (
+      previewType === 'channel' &&
+      props.blockParams &&
+      CHANNEL_URL_PARAMS.message in props.blockParams
+    ) {
+      return {
+        ...baseEntity,
+        messageId: props.blockParams[CHANNEL_URL_PARAMS.message],
+      };
+    }
+    return baseEntity;
+  };
 
-  const [item] = useItemPreview(() => ({
-    id: props.documentId,
-    type: previewType(),
-  }));
-
-  const [popupOpen, setPopupOpen] = createSignal(false);
-  const debouncedSetPreviewOpen = debounce(setPopupOpen, 100);
+  const { item } = useItemPreviewData(itemEntity);
 
   const isSelectedAsNode = createMemo(() => {
     const sel = selection();
@@ -334,72 +301,41 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
   });
 
   return (
-    <>
-      <span class="relative">
-        <span
-          class="w-full h-full py-0.5 cursor-default rounded-xs hover:bg-hover focus:bg-active"
-          classList={{
-            'bg-active text-ink bracket bracket-offset-2': isSelectedAsNode(),
-          }}
-          style={{
-            'user-select': 'inherit',
-          }}
-          ref={inlinePreviewRef}
-          onMouseEnter={() => {
-            if (!isTouchDevice()) {
-              debouncedSetPreviewOpen(true);
-            }
-          }}
-          onMouseLeave={() => {
-            if (!isTouchDevice()) {
-              debouncedSetPreviewOpen.clear();
-              debouncedSetPreviewOpen(false);
-            }
-          }}
-          ontouchstart={(e) => {
-            if (isTouchDevice()) {
-              e.preventDefault();
-            }
-          }}
-          ontouchend={(e) => {
-            if (isTouchDevice()) {
-              e.preventDefault();
-              if (matches(item(), (i) => !i.loading && i.access === 'access')) {
-                open(null);
-              }
-            }
-          }}
-          {...navHandlers}
-        >
-          <Switch>
-            <Match when={item().loading}>
-              <Loading collapsed={isCollapsed()} />
-            </Match>
-            <Match when={item()}>
-              <InlinePreview
-                item={item}
-                blockName={verifyBlockName(props.blockName)}
-                blockParams={props.blockParams || {}}
-                theme={props.theme}
-                collapsed={isCollapsed()}
-              />
-            </Match>
-          </Switch>
+    <HoverCard
+      trigger={
+        <span class="relative">
+          <span
+            class="w-full h-full py-0.5 cursor-default rounded-xs hover:bg-hover focus:bg-active"
+            classList={{
+              'bg-active text-ink bracket bracket-offset-2': isSelectedAsNode(),
+            }}
+            style={{
+              'user-select': 'inherit',
+            }}
+            {...navHandlers}
+          >
+            <Switch>
+              <Match when={item().loading}>
+                <Loading collapsed={isCollapsed()} />
+              </Match>
+              <Match when={item()}>
+                <InlinePreview
+                  entity={itemEntity()}
+                  blockName={verifyBlockName(props.blockName)}
+                  blockParams={props.blockParams || {}}
+                  theme={props.theme}
+                  collapsed={isCollapsed()}
+                />
+              </Match>
+            </Switch>
+          </span>
+          <MentionTooltip show={isSelectedAsNode()} text="Open" />
         </span>
-        <MentionTooltip show={isSelectedAsNode()} text="Open" />
-      </span>
-
-      <Show when={popupOpen()}>
+      }
+      content={
         <PopupPreview
-          item={item}
-          floatRef={inlinePreviewRef}
-          mouseEnter={() => {
-            debouncedSetPreviewOpen(true);
-          }}
-          mouseLeave={() => {
-            debouncedSetPreviewOpen.clear();
-            debouncedSetPreviewOpen(false);
-          }}
+          mouseEnter={() => {}}
+          mouseLeave={() => {}}
           delete={editor?.isEditable() ? deleteMention : undefined}
           collapseInfo={{
             isCollapsed: isCollapsed(),
@@ -427,7 +363,7 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
             handlePreviewToggle: convertToCard,
           }}
         />
-      </Show>
-    </>
+      }
+    />
   );
 }

@@ -98,7 +98,7 @@ macro_rules! env_var {
                 #[doc = "Attempt to create a new instance of [Self] by reading `" $n:snake:upper "` from the environment variables.
                      If this value does not exist this returns a [std::env::VarError]"]
                 #[allow(dead_code)]
-                #[tracing::instrument(err)]
+                #[tracing::instrument(err, level = tracing::Level::TRACE)]
                 $v fn new() -> Result<Self, $crate::VarNameErr> {
                     let res = $crate::read_env($crate::paste::paste! { stringify!([<$n:snake:upper>]) })?;
                     Ok(Self::Runtime(std::sync::Arc::from(res)))

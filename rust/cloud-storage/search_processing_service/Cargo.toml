@@ -45,6 +45,7 @@ macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 mention_utils = { path = "../mention_utils" }
 model = { path = "../model" }
+models_email = { path = "../models_email" }
 model_file_type = { path = "../model_file_type" }
 models_opensearch = { path = "../models_opensearch" }
 models_search = { path = "../models_search" }

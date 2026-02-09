@@ -1,3 +1,5 @@
+extern crate notification as notification_crate;
+
 use crate::notification::send::push::PushNotificationData;
 use model::{
     response::{EmptyResponse, ErrorResponse},
@@ -15,12 +17,9 @@ use crate::{
     api::{
         device, health, notification,
         unsubscribe::{self, unsubscribe_item::UnsubscribeItemPathParams},
-        user_notification::{self, get_user_notification::GetAllUserNotificationsResponse},
+        user_notification,
     },
-    model::{
-        device::DeviceRequest, notification::CreateNotification,
-        user_notification::NotificationBulkRequest,
-    },
+    model::{device::DeviceRequest, notification::CreateNotification},
 };
 
 #[derive(OpenApi)]
@@ -40,15 +39,15 @@ use crate::{
                 notification::create_notification::handler,
 
                 /// /user_notifications
-                user_notification::get_user_notification::handler,
-                user_notification::get_user_notification_by_id::handler,
-                user_notification::delete_user_notification::handler,
-                user_notification::bulk_delete_user_notification::handler,
-                user_notification::bulk_mark_user_notification_seen::handler,
-                user_notification::bulk_mark_user_notification_done::handler,
-                user_notification::get_user_notifications_by_event_item_id::handler,
-                user_notification::bulk_get_user_notifications_by_event_item_id::handler,
-                user_notification::bulk_mark_user_notification_undone::handler,
+                user_notification::list_typed_notifications,
+                user_notification::bulk_get_typed_notifications_by_event_item_ids,
+                user_notification::get_typed_by_event_item_id,
+                user_notification::get_typed_notification_by_id,
+                notification_crate::inbound::http::delete_notification,
+                notification_crate::inbound::http::bulk_delete_notifications,
+                notification_crate::inbound::http::bulk_mark_seen,
+                notification_crate::inbound::http::bulk_mark_done,
+                notification_crate::inbound::http::bulk_mark_undone,
 
                 /// /unsubscribe
                 unsubscribe::get_unsubscribes::handler,
@@ -66,8 +65,6 @@ use crate::{
                         Notification,
                         CreateNotification,
                         UserNotification,
-                        GetAllUserNotificationsResponse,
-                        NotificationBulkRequest,
                         UnsubscribeItemPathParams,
                         UserUnsubscribe,
                         DeviceType,
@@ -87,6 +84,12 @@ use crate::{
                         ChannelMentionMetadata,
                         ChannelReplyMetadata,
                         DocumentMentionMetadata,
+
+                        // v2 typed notifications
+                        user_notification::NotifEvent,
+                        user_notification::ApiUserNotification,
+                        user_notification::GetAllUserNotificationsResponse,
+                        notification_crate::inbound::http::BulkGetByEventItemIdsRequest,
                 ),
         ),
         tags(

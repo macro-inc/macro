@@ -8,12 +8,15 @@ import { useChannelsContext } from '@core/context/channels';
 import { Tooltip } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
 import {
+  getMetadata,
   isChannelMention,
   isChannelMessageReply,
   notificationIsRead,
+  tryToTypedNotification,
   type UnifiedNotification,
 } from '@notifications';
 import type { ApiChannelWithLatest as ChannelWithLatest } from '@service-comms/generated/models';
+import { ChannelTypeEnum } from '@service-comms/client';
 import { useUserId } from '@core/context/user';
 import { NotificationEventType } from '@service-notification/generated/schemas';
 import { createMemo, createSignal, For, Show } from 'solid-js';
@@ -99,13 +102,21 @@ function QuickAccessItem(props: QuickAccessItemProps) {
     const channelId = notification.entity_id;
 
     if (isChannelMention(notification) || isChannelMessageReply(notification)) {
-      const metadata = notification.notificationMetadata;
-      if (metadata && metadata.messageId) {
-        navigateToMessage(
-          channelId,
-          metadata.messageId,
-          metadata.threadId || undefined
-        );
+      const typed = tryToTypedNotification(notification);
+      if (typed) {
+        const metadata = getMetadata(typed);
+        if (metadata && 'messageId' in metadata && metadata.messageId) {
+          navigateToMessage(
+            channelId,
+            metadata.messageId,
+            ('threadId' in metadata && metadata.threadId) || undefined
+          );
+        } else {
+          replaceOrInsertSplit(
+            { type: 'channel', id: channelId },
+            'quick-access'
+          );
+        }
       } else {
         replaceOrInsertSplit(
           { type: 'channel', id: channelId },
@@ -122,7 +133,7 @@ function QuickAccessItem(props: QuickAccessItemProps) {
   };
 
   const getRecipientId = () => {
-    if (props.channel.channel_type === 'direct_message') {
+    if (props.channel.channel_type === ChannelTypeEnum.DirectMessage) {
       let userIdValue = userId();
       let recipient = props.channel.participants.find(
         (p) => p.user_id !== userIdValue
@@ -201,7 +212,8 @@ export function QuickAccess() {
             if (!isHighPriorityNotification(notification)) return false;
 
             // For DM channels, include all message notifications
-            if (channel.channel_type === 'direct_message') return true;
+            if (channel.channel_type === ChannelTypeEnum.DirectMessage)
+              return true;
 
             // For other channels, only include mentions and replies
             return (
