@@ -18,7 +18,10 @@ export function useSplitLayout() {
       return;
     }
 
-    return splitManager.openWithSplit(options);
+    return splitManager.openWithSplit({
+      ...options,
+      force: isMobile() ? 'replace' : options.force,
+    });
   }
 
   function replaceOrInsertSplit(
