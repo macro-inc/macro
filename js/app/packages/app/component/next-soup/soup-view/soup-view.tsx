@@ -45,9 +45,6 @@ import {
 } from '@macro-entity';
 import {
   createEffectOnEntityTypeNotification,
-  isChannelMention,
-  isChannelMessageReply,
-  isChannelMessageSend,
   type UnifiedNotification,
 } from '@notifications';
 import { debounce } from '@solid-primitives/scheduled';
@@ -334,17 +331,15 @@ export const SoupViewList = (props: SoupViewListProps) => {
     let message_id: string | undefined;
     let thread_id: string | undefined;
 
-    if (isChannelMention(notification)) {
-      const content = notification.notificationMetadata.content;
-      message_id = content.messageId;
-      thread_id = content.threadId ?? undefined;
-    } else if (isChannelMessageReply(notification)) {
-      const content = notification.notificationMetadata.content;
-      message_id = content.messageId;
-      thread_id = content.threadId ?? undefined;
-    } else if (isChannelMessageSend(notification)) {
-      const content = notification.notificationMetadata.content;
-      message_id = content.messageId;
+    const meta = notification.notificationMetadata;
+    if (meta.tag === 'channel_mention') {
+      message_id = meta.content.messageId;
+      thread_id = meta.content.threadId ?? undefined;
+    } else if (meta.tag === 'channel_message_reply') {
+      message_id = meta.content.messageId;
+      thread_id = meta.content.threadId;
+    } else if (meta.tag === 'channel_message_send') {
+      message_id = meta.content.messageId;
     } else {
       return;
     }

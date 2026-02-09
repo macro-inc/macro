@@ -37,14 +37,6 @@ export {
   getNotificationAction,
   getNotificationContent,
   getNotificationTargetName,
-  isChannelInvite,
-  isChannelMention,
-  isChannelMessageReply,
-  isChannelMessageSend,
-  isDocumentMention,
-  isInviteToTeam,
-  isNewEmail,
-  isTaskAssigned,
   shouldShowNotificationTarget,
 } from './notification-metadata';
 export { openNotificationFromId } from './notification-navigation';

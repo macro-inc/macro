@@ -7,12 +7,7 @@ import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import { useChannelsContext } from '@core/context/channels';
 import { Tooltip } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
-import {
-  isChannelMention,
-  isChannelMessageReply,
-  notificationIsRead,
-  type UnifiedNotification,
-} from '@notifications';
+import { notificationIsRead, type UnifiedNotification } from '@notifications';
 import type { ApiChannelWithLatest as ChannelWithLatest } from '@service-comms/generated/models';
 import { ChannelTypeEnum } from '@service-comms/client';
 import { useUserId } from '@core/context/user';
@@ -20,15 +15,24 @@ import { createMemo, createSignal, For, Show } from 'solid-js';
 
 // Helper functions for notification processing
 function getNotificationDescription(notification: UnifiedNotification): string {
-  switch (notification.notificationEventType) {
+  const tag = notification.notificationMetadata.tag;
+  switch (tag) {
     case 'channel_mention':
       return 'mentioned in';
     case 'channel_message_reply':
       return 'replied in thread';
     case 'channel_message_send':
       return 'new messages in';
-    default:
+    case 'document_mention':
+    case 'mentioned_in_document_comment':
+    case 'channel_invite':
+    case 'new_email':
+    case 'invite_to_team':
+    case 'task_assigned':
       return 'new activity in';
+    default:
+      const _exhaustive: never = tag;
+      throw new Error(`Unhandled notification type: ${_exhaustive}`);
   }
 }
 
@@ -95,13 +99,13 @@ function QuickAccessItem(props: QuickAccessItemProps) {
     const notification = notifications[index] || notifications[0];
     const channelId = notification.entity_id;
 
-    if (isChannelMention(notification)) {
-      const content = notification.notificationMetadata.content;
-      if (content.messageId) {
+    const meta = notification.notificationMetadata;
+    if (meta.tag === 'channel_mention') {
+      if (meta.content.messageId) {
         navigateToMessage(
           channelId,
-          content.messageId,
-          content.threadId ?? undefined
+          meta.content.messageId,
+          meta.content.threadId ?? undefined
         );
       } else {
         replaceOrInsertSplit(
@@ -109,13 +113,12 @@ function QuickAccessItem(props: QuickAccessItemProps) {
           'quick-access'
         );
       }
-    } else if (isChannelMessageReply(notification)) {
-      const content = notification.notificationMetadata.content;
-      if (content.messageId) {
+    } else if (meta.tag === 'channel_message_reply') {
+      if (meta.content.messageId) {
         navigateToMessage(
           channelId,
-          content.messageId,
-          content.threadId ?? undefined
+          meta.content.messageId,
+          meta.content.threadId
         );
       } else {
         replaceOrInsertSplit(
