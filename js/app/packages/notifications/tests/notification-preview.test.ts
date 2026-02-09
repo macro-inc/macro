@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import type { NotificationType } from '@core/types';
 import type { UnifiedNotification } from '../types';
 
 function createEmailNotification(
