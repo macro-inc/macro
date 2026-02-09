@@ -568,7 +568,7 @@ export function PopupPreview(props: {
 
   return (
     <div
-      class="select-none overflow-hidden w-80 bg-dialog text-ink"
+      class="select-none overflow-hidden w-80 text-ink"
       onMouseEnter={props.mouseEnter}
       onMouseLeave={props.mouseLeave}
     >
