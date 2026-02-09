@@ -299,8 +299,6 @@ struct ChannelRoleRow {
     org_id: Option<i64>,
 }
 
-/// Looks up a user's effective role in a channel by querying the channel type
-/// and participant record, then applying channel-type-specific defaulting logic.
 #[tracing::instrument(skip(db), err)]
 pub async fn get_user_channel_role(
     db: &Pool<Postgres>,
@@ -349,7 +347,6 @@ pub async fn get_user_channel_role(
     Ok(role)
 }
 
-/// Returns true when a channel row exists for the provided id.
 #[tracing::instrument(skip(db), err)]
 pub async fn channel_exists(db: &Pool<Postgres>, channel_id: &Uuid) -> anyhow::Result<bool> {
     let exists = sqlx::query_scalar::<_, bool>(
@@ -797,8 +794,6 @@ mod tests {
         Ok(())
     }
 
-    // ── get_user_channel_role tests ──────────────────────────────────────
-
     const PUBLIC_CH: &str = "a0000000-0000-0000-0000-000000000001";
     const ORG_CH: &str = "a0000000-0000-0000-0000-000000000002";
     const PRIVATE_CH: &str = "a0000000-0000-0000-0000-000000000003";
@@ -807,7 +802,6 @@ mod tests {
     async fn test_public_channel_non_participant_defaults_to_member(
         pool: sqlx::Pool<sqlx::Postgres>,
     ) -> anyhow::Result<()> {
-        // user-1 is NOT a participant in the public channel → defaults to Member
         let role =
             get_user_channel_role(&pool, &Uuid::parse_str(PUBLIC_CH)?, "user-1", Some(1)).await?;
         assert_eq!(role, Some(ParticipantRole::Member));
@@ -820,15 +814,12 @@ mod tests {
     ) -> anyhow::Result<()> {
         let ch = Uuid::parse_str(ORG_CH)?;
 
-        // Non-participant with matching org → defaults to Member
         let role = get_user_channel_role(&pool, &ch, "user-2", Some(1)).await?;
         assert_eq!(role, Some(ParticipantRole::Member));
 
-        // Non-participant with wrong org → None
         let role = get_user_channel_role(&pool, &ch, "user-2", Some(999)).await?;
         assert_eq!(role, None);
 
-        // Explicit participant returns their actual role regardless
         let role = get_user_channel_role(&pool, &ch, "user-1", Some(1)).await?;
         assert_eq!(role, Some(ParticipantRole::Admin));
 
@@ -841,11 +832,9 @@ mod tests {
     ) -> anyhow::Result<()> {
         let ch = Uuid::parse_str(PRIVATE_CH)?;
 
-        // Participant gets their role
         let role = get_user_channel_role(&pool, &ch, "user-1", Some(1)).await?;
         assert_eq!(role, Some(ParticipantRole::Owner));
 
-        // Non-participant gets None
         let role = get_user_channel_role(&pool, &ch, "user-2", None).await?;
         assert_eq!(role, None);
 

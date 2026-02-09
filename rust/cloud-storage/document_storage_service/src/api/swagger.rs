@@ -203,7 +203,6 @@ use utoipa::OpenApi;
         // threads
         threads::edit_thread::edit_thread_handler,
 
-        // entity
         entity::get_entity_permission::handler,
 
         // /recents
@@ -309,7 +308,7 @@ use utoipa::OpenApi;
             models_permissions::share_permission::channel_share_permission::ChannelSharePermission,
             models_permissions::share_permission::channel_share_permission::UpdateChannelSharePermission, // Channel share permissions
             macro_middleware::cloud_storage::ensure_access::entity_permission::EntityPermissionResponse,
-            macro_middleware::cloud_storage::ensure_access::entity_permission::EntityPermission, // Entity permissions
+            macro_middleware::cloud_storage::ensure_access::entity_permission::EntityPermission,
 
             // Chat
             Chat,
