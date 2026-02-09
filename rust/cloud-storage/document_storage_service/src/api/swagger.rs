@@ -308,8 +308,8 @@ use utoipa::OpenApi;
             models_permissions::share_permission::channel_share_permission::ChannelSharePermission,
             models_permissions::share_permission::channel_share_permission::UpdateChannelSharePermission, // Channel share permissions
             entity::get_entity_permission::EntityPermissionResponse,
-            entity::get_entity_permission::EntityPermissionSchema,
-            entity::get_entity_permission::ParticipantRoleSchema,
+            entity_access::domain::models::EntityPermission,
+            entity_access::domain::models::ParticipantRole,
 
             // Chat
             Chat,

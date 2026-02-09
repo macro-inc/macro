@@ -7,6 +7,7 @@ pub use models_permissions::share_permission::access_level::AccessLevel;
 
 /// The role a user has within a channel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum ParticipantRole {
     /// Channel owner with full control.
@@ -23,6 +24,7 @@ pub enum ParticipantRole {
 /// Items (documents, chats, projects, threads) use access levels.
 /// Channels use participant roles.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum EntityPermission {
     /// Permission for item-based entities (document, chat, project, thread).

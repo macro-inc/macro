@@ -57,7 +57,7 @@ type PropertiesService = PropertiesServiceImpl<
 >;
 
 /// Type alias for the entity access service.
-pub(crate) type DssEntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
+pub(crate) type EntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
 
 /// Type alias for the ChannelServiceImpl used by comms
 pub(crate) type CommsChannelService =
@@ -89,7 +89,7 @@ pub(crate) struct ApiContext {
     pub comms_state: CommsState,
     pub permissions_token_secret:
         LocalOrRemoteSecret<comms_service::DocumentPermissionJwtSecretKey>,
-    pub entity_access_service: Arc<DssEntityAccessService>,
+    pub entity_access_service: Arc<EntityAccessService>,
 }
 
 env_var! {
