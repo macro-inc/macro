@@ -104,6 +104,14 @@ export const SoupToolbar = () => {
   );
 };
 
+type EntityTypeFilterId =
+  | 'document'
+  | 'task'
+  | 'people'
+  | 'teams'
+  | 'agent'
+  | 'file';
+
 const SoupFilters = () => {
   const { soup, setSearchText, isSearchDisabled } = useSoupView();
   const panel = useSplitPanelOrThrow();
@@ -111,25 +119,13 @@ const SoupFilters = () => {
 
   const [sortDropdownOpen, setSortDropdownOpen] = createSignal(false);
 
-  // === Focus filters (signal/noise) ===
-
-  const toggleSignal = () => {
-    if (soup.filters.isActive('signal')) {
+  const toggleFocus = (id: 'signal' | 'noise') => {
+    if (soup.filters.isActive(id)) {
       soup.filters.set({ predicates: ['explicit-noise', 'not-done'] });
     } else {
-      soup.filters.set({ predicates: ['signal', 'not-done'] });
+      soup.filters.set({ predicates: [id, 'not-done'] });
     }
   };
-
-  const toggleNoise = () => {
-    if (soup.filters.isActive('noise')) {
-      soup.filters.set({ predicates: ['explicit-noise', 'not-done'] });
-    } else {
-      soup.filters.set({ predicates: ['noise', 'not-done'] });
-    }
-  };
-
-  // === Notification filters ===
 
   const toggleUnread = () => {
     if (soup.filters.isActive('unread')) {
@@ -139,24 +135,11 @@ const SoupFilters = () => {
     }
   };
 
-  // === Entity type filters (mutually exclusive) ===
-
-  const toggleDocument = () => {
-    if (soup.filters.isActive('document')) {
+  const toggleEntityType = (id: EntityTypeFilterId) => {
+    if (soup.filters.isActive(id)) {
       soup.filters.set({ predicates: [], query: QUERY_FILTERS.default });
     } else {
-      soup.filters.set({
-        predicates: ['document'],
-        query: QUERY_FILTERS.document,
-      });
-    }
-  };
-
-  const toggleTask = () => {
-    if (soup.filters.isActive('task')) {
-      soup.filters.set({ predicates: [], query: QUERY_FILTERS.default });
-    } else {
-      soup.filters.set({ predicates: ['task'], query: QUERY_FILTERS.task });
+      soup.filters.set({ predicates: [id], query: QUERY_FILTERS[id] });
     }
   };
 
@@ -164,7 +147,6 @@ const SoupFilters = () => {
     if (soup.filters.isActive('email')) {
       soup.filters.set({ predicates: [], query: QUERY_FILTERS.default });
     } else {
-      // Special email handling:
       // Include emails (recipients: []) only if email integration is active AND not searching
       // Otherwise exclude emails (recipients: EXCLUDE)
       const shouldIncludeEmails = emailActive() && isSearchDisabled();
@@ -180,50 +162,17 @@ const SoupFilters = () => {
     }
   };
 
-  const togglePeople = () => {
-    if (soup.filters.isActive('people')) {
-      soup.filters.set({ predicates: [], query: QUERY_FILTERS.default });
-    } else {
-      soup.filters.set({ predicates: ['people'], query: QUERY_FILTERS.people });
-    }
-  };
-
-  const toggleTeams = () => {
-    if (soup.filters.isActive('teams')) {
-      soup.filters.set({ predicates: [], query: QUERY_FILTERS.default });
-    } else {
-      soup.filters.set({ predicates: ['teams'], query: QUERY_FILTERS.teams });
-    }
-  };
-
-  const toggleAgent = () => {
-    if (soup.filters.isActive('agent')) {
-      soup.filters.set({ predicates: [], query: QUERY_FILTERS.default });
-    } else {
-      soup.filters.set({ predicates: ['agent'], query: QUERY_FILTERS.agent });
-    }
-  };
-
-  const toggleFile = () => {
-    if (soup.filters.isActive('file')) {
-      soup.filters.set({ predicates: [], query: QUERY_FILTERS.default });
-    } else {
-      soup.filters.set({ predicates: ['file'], query: QUERY_FILTERS.file });
-    }
-  };
-
-  // Map filter IDs to their toggle handlers
   const entityTypeToggleHandlers: Record<
     (typeof ENTITY_TYPE_FILTER_CONFIGS)[number]['id'],
     () => void
   > = {
-    document: toggleDocument,
-    task: toggleTask,
+    document: () => toggleEntityType('document'),
+    task: () => toggleEntityType('task'),
     email: toggleEmail,
-    people: togglePeople,
-    teams: toggleTeams,
-    agent: toggleAgent,
-    file: toggleFile,
+    people: () => toggleEntityType('people'),
+    teams: () => toggleEntityType('teams'),
+    agent: () => toggleEntityType('agent'),
+    file: () => toggleEntityType('file'),
   };
 
   const togglePreview = () => {
@@ -248,23 +197,23 @@ const SoupFilters = () => {
     {
       hotkey: 'i',
       description: 'Toggle Inbox',
-      handler: toggleSignal,
+      handler: () => toggleFocus('signal'),
     },
     {
       hotkey: 'o',
       description: 'Toggle Other',
-      handler: toggleNoise,
+      handler: () => toggleFocus('noise'),
     },
     // Entity type filter hotkeys
     {
       hotkey: ENTITY_TYPE_SHORTCUTS.document,
       description: 'Filter by Docs',
-      handler: toggleDocument,
+      handler: () => toggleEntityType('document'),
     },
     {
       hotkey: ENTITY_TYPE_SHORTCUTS.task,
       description: 'Filter by Tasks',
-      handler: toggleTask,
+      handler: () => toggleEntityType('task'),
     },
     {
       hotkey: ENTITY_TYPE_SHORTCUTS.email,
@@ -274,22 +223,22 @@ const SoupFilters = () => {
     {
       hotkey: ENTITY_TYPE_SHORTCUTS.people,
       description: 'Filter by People',
-      handler: togglePeople,
+      handler: () => toggleEntityType('people'),
     },
     {
       hotkey: ENTITY_TYPE_SHORTCUTS.teams,
       description: 'Filter by Teams',
-      handler: toggleTeams,
+      handler: () => toggleEntityType('teams'),
     },
     {
       hotkey: ENTITY_TYPE_SHORTCUTS.agent,
       description: 'Filter by Agents',
-      handler: toggleAgent,
+      handler: () => toggleEntityType('agent'),
     },
     {
       hotkey: ENTITY_TYPE_SHORTCUTS.file,
       description: 'Filter by Files',
-      handler: toggleFile,
+      handler: () => toggleEntityType('file'),
     },
     {
       hotkey: 'u',
@@ -342,7 +291,7 @@ const SoupFilters = () => {
         label="Inbox"
         shortcut="i"
         isActive={soup.filters.isActive('signal')}
-        onClick={toggleSignal}
+        onClick={() => toggleFocus('signal')}
       />
       {/* Other toggle */}
       <FilterButton
@@ -350,7 +299,7 @@ const SoupFilters = () => {
         label="Other"
         shortcut="o"
         isActive={soup.filters.isActive('noise')}
-        onClick={toggleNoise}
+        onClick={() => toggleFocus('noise')}
       />
       <FilterDivider />
       {/* Unread filter */}

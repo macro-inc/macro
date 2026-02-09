@@ -86,16 +86,13 @@ export function createFiltersState<T, TConfig extends FilterConfig<T>>(
 
   const isActive = (id: string): boolean => activeIds().includes(id);
 
-  /** Get filter config by ID */
   const getConfig = (id: string): TConfig | undefined => configMap.get(id);
 
-  /** Check if a group allows multiple selections */
   const isGroupExclusive = (groupId: string): boolean => {
     const group = groupMap.get(groupId);
     return group ? group.allowMultiple !== true : false;
   };
 
-  /** Get IDs of other filters in the same exclusive group */
   const getExclusiveGroupMembers = (id: string): string[] => {
     const config = getConfig(id);
     if (!config?.group) return [];
@@ -107,7 +104,6 @@ export function createFiltersState<T, TConfig extends FilterConfig<T>>(
       .map((c) => c.id);
   };
 
-  /** Apply group exclusivity and return new predicate list */
   const applyGroupExclusivity = (
     currentIds: string[],
     newId: string
