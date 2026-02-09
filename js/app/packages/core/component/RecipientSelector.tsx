@@ -480,7 +480,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                                 {truncateString(displayText ?? '', 20)}
                               </p>
                               <XIcon
-                                class="w-5 h-5 cursor-pointer hover:bg-hover hover-transition-bg p-1 "
+                                class="w-5 h-5 hover:bg-hover hover-transition-bg p-1 "
                                 onClick={() => state.remove(option)}
                               />
                             </div>
@@ -502,7 +502,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                                 )}
                               </p>
                               <XIcon
-                                class="w-5 h-5 cursor-pointer hover:bg-hover hover-transition-bg p-1 "
+                                class="w-5 h-5 hover:bg-hover hover-transition-bg p-1 "
                                 onClick={() => state.remove(option)}
                               />
                             </div>
@@ -523,7 +523,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                                 {truncateString(email, 20)}
                               </p>
                               <XIcon
-                                class="w-5 h-5 cursor-pointer hover:bg-hover hover-transition-bg p-1 "
+                                class="w-5 h-5 hover:bg-hover hover-transition-bg p-1 "
                                 onClick={() => state.remove(option)}
                               />
                             </div>
