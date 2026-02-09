@@ -5,11 +5,14 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ParticipantRole =
-  (typeof ParticipantRole)[keyof typeof ParticipantRole];
+/**
+ * API-facing participant role with OpenAPI schema.
+ */
+export type ParticipantRoleSchema =
+  (typeof ParticipantRoleSchema)[keyof typeof ParticipantRoleSchema];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const ParticipantRole = {
+export const ParticipantRoleSchema = {
   owner: 'owner',
   admin: 'admin',
   member: 'member',

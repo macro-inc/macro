@@ -5,9 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AccessLevel } from './accessLevel';
-import type { EntityPermissionOneOfType } from './entityPermissionOneOfType';
+import type { EntityPermissionSchemaOneOfType } from './entityPermissionSchemaOneOfType';
 
-export type EntityPermissionOneOf = {
+export type EntityPermissionSchemaOneOf = {
   access_level: AccessLevel;
-  type: EntityPermissionOneOfType;
+  type: EntityPermissionSchemaOneOfType;
 };

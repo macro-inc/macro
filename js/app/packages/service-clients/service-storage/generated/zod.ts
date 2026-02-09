@@ -2145,6 +2145,45 @@ export const getDocumentVersionResponse = zod.object({
 });
 
 /**
+ * @summary Get the current user's permission for a given entity.
+ */
+export const handlerParams = zod.object({
+  entity_type: zod
+    .string()
+    .describe(
+      'Entity type (document, chat, project, thread, email_thread, channel)'
+    ),
+  entity_id: zod.string().describe('Entity ID'),
+});
+
+export const handlerResponse = zod
+  .union([
+    zod.object({
+      permission: zod
+        .union([
+          zod.object({
+            access_level: zod
+              .enum(['view', 'comment', 'edit', 'owner'])
+              .describe('Ordered from least to most access top -> bottom'),
+            type: zod.enum(['access_level']),
+          }),
+          zod.object({
+            role: zod
+              .enum(['owner', 'admin', 'member'])
+              .describe('API-facing participant role with OpenAPI schema.'),
+            type: zod.enum(['channel_role']),
+          }),
+        ])
+        .describe('API-facing entity permission with OpenAPI schema.'),
+      status: zod.enum(['access']),
+    }),
+    zod.object({
+      status: zod.enum(['no_access']),
+    }),
+  ])
+  .describe('API response envelope for entity permissions.');
+
+/**
  * @summary Gets the users history
  */
 export const getHistoryHandlerResponse = zod.object({
@@ -3446,11 +3485,7 @@ export const getItemsSoupResponse = zod.object({
                   channel_id: zod.string().uuid(),
                   joined_at: zod.string().datetime({}),
                   left_at: zod.string().datetime({}).nullish(),
-                  role: zod
-                    .enum(['owner', 'admin', 'member'])
-                    .describe(
-                      'Local copy of `model::comms::ParticipantRole` to avoid a cyclic dependency.'
-                    ),
+                  role: zod.enum(['owner', 'admin', 'member']),
                   user_id: zod.string(),
                 })
               ),
@@ -4855,11 +4890,7 @@ export const postItemsSoupResponse = zod.object({
                   channel_id: zod.string().uuid(),
                   joined_at: zod.string().datetime({}),
                   left_at: zod.string().datetime({}).nullish(),
-                  role: zod
-                    .enum(['owner', 'admin', 'member'])
-                    .describe(
-                      'Local copy of `model::comms::ParticipantRole` to avoid a cyclic dependency.'
-                    ),
+                  role: zod.enum(['owner', 'admin', 'member']),
                   user_id: zod.string(),
                 })
               ),
@@ -6304,40 +6335,3 @@ export const editThreadV2Response = zod.object({
   }),
   error: zod.boolean().describe('Indicates if an error occurred'),
 });
-
-/**
- * @summary Get the current user's permission for a given entity.
- */
-export const handlerParams = zod.object({
-  entity_type: zod
-    .string()
-    .describe(
-      'Entity type (document, chat, project, thread, email_thread, channel)'
-    ),
-  entity_id: zod.string().describe('Entity ID'),
-});
-
-export const handlerResponse = zod.union([
-  zod.object({
-    permission: zod.union([
-      zod.object({
-        access_level: zod
-          .enum(['view', 'comment', 'edit', 'owner'])
-          .describe('Ordered from least to most access top -> bottom'),
-        type: zod.enum(['access_level']),
-      }),
-      zod.object({
-        role: zod
-          .enum(['owner', 'admin', 'member'])
-          .describe(
-            'Local copy of `model::comms::ParticipantRole` to avoid a cyclic dependency.'
-          ),
-        type: zod.enum(['channel_role']),
-      }),
-    ]),
-    status: zod.enum(['access']),
-  }),
-  zod.object({
-    status: zod.enum(['no_access']),
-  }),
-]);

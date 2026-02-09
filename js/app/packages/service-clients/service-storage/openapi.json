@@ -2095,6 +2095,51 @@
         }
       }
     },
+    "/entity/{entity_type}/{entity_id}/permissions": {
+      "get": {
+        "tags": ["entity::get_entity_permission"],
+        "summary": "Get the current user's permission for a given entity.",
+        "operationId": "handler",
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "description": "Entity type (document, chat, project, thread, email_thread, channel)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "description": "Entity ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityPermissionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": ["health"],
@@ -4210,65 +4255,6 @@
           }
         }
       }
-    },
-    "/{entity_type}/{entity_id}/permissions": {
-      "get": {
-        "tags": ["permissions::get_entity_permission"],
-        "summary": "Get the current user's permission for a given entity.",
-        "operationId": "handler",
-        "parameters": [
-          {
-            "name": "entity_type",
-            "in": "path",
-            "description": "Entity type (document, chat, project, thread, email_thread, channel)",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "entity_id",
-            "in": "path",
-            "description": "Entity ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EntityPermissionResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
     }
   },
   "components": {
@@ -6148,7 +6134,35 @@
           }
         }
       },
-      "EntityPermission": {
+      "EntityPermissionResponse": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["permission", "status"],
+            "properties": {
+              "permission": {
+                "$ref": "#/components/schemas/EntityPermissionSchema"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["access"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["status"],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["no_access"]
+              }
+            }
+          }
+        ],
+        "description": "API response envelope for entity permissions."
+      },
+      "EntityPermissionSchema": {
         "oneOf": [
           {
             "type": "object",
@@ -6168,7 +6182,7 @@
             "required": ["role", "type"],
             "properties": {
               "role": {
-                "$ref": "#/components/schemas/ParticipantRole"
+                "$ref": "#/components/schemas/ParticipantRoleSchema"
               },
               "type": {
                 "type": "string",
@@ -6176,34 +6190,8 @@
               }
             }
           }
-        ]
-      },
-      "EntityPermissionResponse": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": ["permission", "status"],
-            "properties": {
-              "permission": {
-                "$ref": "#/components/schemas/EntityPermission"
-              },
-              "status": {
-                "type": "string",
-                "enum": ["access"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": ["status"],
-            "properties": {
-              "status": {
-                "type": "string",
-                "enum": ["no_access"]
-              }
-            }
-          }
-        ]
+        ],
+        "description": "API-facing entity permission with OpenAPI schema."
       },
       "EntityReference": {
         "type": "object",
@@ -7007,7 +6995,11 @@
       },
       "ParticipantRole": {
         "type": "string",
-        "description": "Local copy of `model::comms::ParticipantRole` to avoid a cyclic dependency.",
+        "enum": ["owner", "admin", "member"]
+      },
+      "ParticipantRoleSchema": {
+        "type": "string",
+        "description": "API-facing participant role with OpenAPI schema.",
         "enum": ["owner", "admin", "member"]
       },
       "PatchProjectRequestV2": {

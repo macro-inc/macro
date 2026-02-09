@@ -7,6 +7,9 @@
 import type { EntityPermissionResponseOneOf } from './entityPermissionResponseOneOf';
 import type { EntityPermissionResponseOneOfThree } from './entityPermissionResponseOneOfThree';
 
+/**
+ * API response envelope for entity permissions.
+ */
 export type EntityPermissionResponse =
   | EntityPermissionResponseOneOf
   | EntityPermissionResponseOneOfThree;
