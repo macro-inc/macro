@@ -68,6 +68,34 @@ const applicationLogGroup = new aws.cloudwatch.LogGroup(
   }
 );
 
+// Create CloudWatch Logs Resource Policy to allow OpenSearch to write logs
+const opensearchLogsPolicy = new aws.cloudwatch.LogResourcePolicy(
+  `opensearch-logs-policy-${stack}`,
+  {
+    policyName: `opensearch-logs-policy-${stack}`,
+    policyDocument: JSON.stringify({
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Effect: 'Allow',
+          Principal: {
+            Service: 'es.amazonaws.com',
+          },
+          Action: [
+            'logs:CreateLogStream',
+            'logs:PutLogEvents',
+          ],
+          Resource: [
+            indexSlowLogGroup.arn.apply(arn => `${arn}:*`),
+            searchSlowLogGroup.arn.apply(arn => `${arn}:*`),
+            applicationLogGroup.arn.apply(arn => `${arn}:*`),
+          ],
+        },
+      ],
+    }),
+  }
+);
+
 // Create an OpenSearch domain
 const opensearchDomain = new aws.opensearch.Domain(
   `macro-opensearch-${stack}`,
@@ -162,7 +190,8 @@ const opensearchDomain = new aws.opensearch.Domain(
       },
     ],
     tags,
-  }
+  },
+  { dependsOn: [opensearchLogsPolicy] }
 );
 
 // export the domain endpoint
