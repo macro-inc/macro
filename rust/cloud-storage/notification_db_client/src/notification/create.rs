@@ -80,6 +80,7 @@ mod tests {
     use macro_db_migrator::MACRO_DB_MIGRATIONS;
     use model_entity::EntityType;
     use model_notifications::NotificationEventType;
+    use serde_json::json;
     use sqlx::{Pool, Postgres};
 
     #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -91,7 +92,7 @@ mod tests {
             entity: EntityType::Document.with_entity_str("test"),
             service_sender: "test".to_string(),
             created_at: None,
-            metadata: None,
+            metadata: Some(json!({})),
             sender_id: None,
         };
 
@@ -111,7 +112,7 @@ mod tests {
             entity: EntityType::Document.with_entity_str("test"),
             service_sender: "test".to_string(),
             created_at: None,
-            metadata: None,
+            metadata: Some(json!({})),
             sender_id: None,
         };
 

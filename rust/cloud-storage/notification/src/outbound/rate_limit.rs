@@ -63,7 +63,7 @@ impl RedisRateLimitOps for redis::Client {
     }
 }
 
-impl<R: RedisRateLimitOps + Send + Sync> RateLimitPort for RedisRateLimitAdapter<R> {
+impl<R: RedisRateLimitOps + Send + Sync + 'static> RateLimitPort for RedisRateLimitAdapter<R> {
     async fn check_and_increment(
         &self,
         key: RateLimitKey,

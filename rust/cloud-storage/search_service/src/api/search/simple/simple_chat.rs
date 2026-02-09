@@ -13,6 +13,7 @@ pub(in crate::api::search) struct FilterChatResponse {
     pub ids_only: bool,
 }
 
+#[tracing::instrument(skip(ctx, filters), err)]
 pub(in crate::api::search) async fn filter_chats(
     ctx: &SearchHandlerState,
     user_id: &str,

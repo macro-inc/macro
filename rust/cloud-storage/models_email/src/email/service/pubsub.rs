@@ -36,6 +36,7 @@ pub enum FailureReason {
     OutdatedHistoryId,
     AttachmentParsingFailed,
     DSSUploadFailed,
+    InvalidData,
 }
 
 /// The message we send from the email_refresh_handler lambda to the service via SQS to refresh

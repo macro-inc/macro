@@ -13,6 +13,8 @@ use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::F
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_env_var::env_var;
 use macro_sha_count_client::Redis;
+use notification::domain::service::NotificationIngressService;
+use notification::outbound::{queue::SqsNotificationQueue, repository::DbNotificationRepository};
 use opensearch_client::OpensearchClient;
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
@@ -45,8 +47,13 @@ type DssSoupState = SoupRouterState<
 >;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
-type PropertiesService =
-    PropertiesServiceImpl<PropertiesPgRepo, PermissionServiceImpl, NotificationServiceImpl>;
+type NotificationIngressType =
+    NotificationIngressService<DbNotificationRepository<PgPool>, SqsNotificationQueue>;
+type PropertiesService = PropertiesServiceImpl<
+    PropertiesPgRepo,
+    PermissionServiceImpl,
+    NotificationServiceImpl<NotificationIngressType>,
+>;
 
 /// Type alias for the ChannelServiceImpl used by comms
 pub(crate) type CommsChannelService =
@@ -64,7 +71,7 @@ pub(crate) struct ApiContext {
     pub dynamo_db: aws_sdk_dynamodb::Client,
     pub soup_router_state: DssSoupState,
     pub sqs_client: Arc<sqs_client::SQS>,
-    pub macro_notify_client: Arc<macro_notify::MacroNotify>,
+    pub notification_ingress_service: Arc<NotificationIngressType>,
     pub conn_gateway_client: Arc<ConnectionGatewayClient>,
     pub sync_service_client: Arc<SyncServiceClient>,
     pub system_properties_service: Arc<SystemPropertiesService>,
@@ -121,7 +128,7 @@ impl From<&ApiContext> for CommsHandlerState {
             jwt_validation_args: ctx.jwt_validation_args.clone(),
             db: ctx.db.clone(),
             connection_gateway_client: ctx.conn_gateway_client.clone(),
-            macro_notify_client: ctx.macro_notify_client.clone(),
+            notification_ingress_service: ctx.notification_ingress_service.clone(),
             sqs_client: ctx.sqs_client.clone(),
             permissions_token_secret: ctx.permissions_token_secret.clone(),
             frecency_storage: ctx.frecency_storage.clone(),

@@ -18,6 +18,7 @@ import { useUploadAttachment } from '@core/component/AI/util/uploadToChat';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { Hotkey, modifierMap } from '@core/component/Hotkey';
 import { Tooltip } from '@core/component/Tooltip';
+import { ENABLE_AI_AUTO_TAB_ATTACHMENTS } from '@core/constant/featureFlags';
 import { pressedKeys } from '@core/hotkey/state';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ArrowUp from '@icon/bold/arrow-up-bold.svg';
@@ -80,6 +81,7 @@ export function useChatInput(
     isGenerating?: boolean;
     initialAttachments?: Attachment[];
     initialValue?: string;
+    autoAttach?: boolean;
   } = {}
 ): ChatInput {
   const [chatId, setChatId] = createSignal<string | undefined>(args.chatId);
@@ -98,19 +100,21 @@ export function useChatInput(
   });
 
   const tabAttachments = useTabAttachments();
-  createEffect(
-    on(tabAttachments, (tabs, p) => {
-      for (const prev of p ?? []) {
-        // remove stuff from closed tabs
-        if (!tabs.find((t) => t.attachmentId === prev.attachmentId)) {
-          attachments.removeAttachment(prev.attachmentId);
+  if (ENABLE_AI_AUTO_TAB_ATTACHMENTS && args.autoAttach !== false) {
+    createEffect(
+      on(tabAttachments, (tabs, p) => {
+        for (const prev of p ?? []) {
+          // remove stuff from closed tabs
+          if (!tabs.find((t) => t.attachmentId === prev.attachmentId)) {
+            attachments.removeAttachment(prev.attachmentId);
+          }
         }
-      }
-      for (const tab of tabs) {
-        attachments.addAttachment(tab);
-      }
-    })
-  );
+        for (const tab of tabs) {
+          attachments.addAttachment(tab);
+        }
+      })
+    );
+  }
 
   const ChatInputComponent = (innerProps: ChatInputProps) => (
     <ChatInput

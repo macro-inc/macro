@@ -1,10 +1,8 @@
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { type UploadInput, uploadFiles } from '@core/util/upload';
-import {
-  queryKeys,
-  useQueryClient as useEntityQueryClient,
-} from '@macro-entity';
+import { useQueryClient as useEntityQueryClient } from '@macro-entity';
 import { useSplitLayout } from '../component/split-layout/layout';
+import { soupKeys } from '@queries/soup/keys';
 
 export function useHandleFileUpload({
   projectId,
@@ -38,7 +36,7 @@ export function useHandleFileUpload({
         );
         if (uploaded.length > 0) {
           entityQueryClient.invalidateQueries({
-            queryKey: queryKeys.all.dss,
+            queryKey: soupKeys.items._def,
           });
         }
       }
@@ -51,7 +49,7 @@ export function useHandleFileUpload({
 
     // this refreshes the uploaded data into the soup list
     entityQueryClient.invalidateQueries({
-      queryKey: queryKeys.all.dss,
+      queryKey: soupKeys.items._def,
     });
 
     const upload = successfulUploads[0];

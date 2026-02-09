@@ -1,5 +1,5 @@
 import { createAssertedContextProvider } from '@core/context/createContext';
-import { useChannelQuery } from '@queries/channel/channel';
+import type { useChannelQuery } from '@queries/channel/channel';
 import {
   getThreadMessages,
   getTopLevelMessages,
@@ -27,15 +27,14 @@ type ChannelContextValue = {
 };
 
 type ChannelContextProps = {
-  channelId: Accessor<string>;
+  query: ReturnType<typeof useChannelQuery>;
 };
 
 export const [ChannelContextProvider, useChannelContext] =
   createAssertedContextProvider<ChannelContextValue>(
     'ChannelContext',
     (props: ChannelContextProps): ChannelContextValue => {
-      const channelQuery = useChannelQuery(props.channelId);
-      const channel = createMemo(() => channelQuery.data);
+      const channel = createMemo(() => props.query.data);
       const channelType = createMemo(() => channel().channel.channel_type);
       const channelName = createMemo(() => channel().channel.name ?? '');
       const messages = createMemo(() => getTopLevelMessages(channel()));

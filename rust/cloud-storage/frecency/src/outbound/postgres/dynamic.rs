@@ -246,6 +246,7 @@ impl AggregateRow {
     }
 }
 
+#[tracing::instrument(err, skip(db, filter))]
 pub async fn dynamic_get_top_entities(
     db: &PgPool,
     user_id: MacroUserIdStr<'_>,

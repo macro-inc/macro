@@ -6,7 +6,7 @@
 
 -- Expected Order for CreatedAt:   doc-B, chat-A, doc-A
 -- Expected Order for UpdatedAt:   chat-A, doc-A, doc-B
--- Expected Order for LastViewed:  doc-A, doc-B, chat-A (chat-B is filtered out)
+-- Expected Order for LastViewed:  doc-A, doc-B, chat-A, project-B, chat-B, project-A (epoch items tiebroken by id DESC)
 
 SET session_replication_role = 'replica';
 

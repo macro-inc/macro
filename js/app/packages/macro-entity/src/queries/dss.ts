@@ -41,6 +41,7 @@ import {
 } from './auth';
 import { queryClient } from './client';
 import { type DssQueryKey, dssQueryKeyHashFn, queryKeys } from './key';
+import { soupKeys } from '@queries/soup/keys';
 
 const getSoupItemId = (item: SoupApiItem): string => {
   switch (item.tag) {
@@ -62,7 +63,7 @@ const resolveDocumentEntityName = (
       entity.subType === null || entity.subType === undefined
         ? null
         : {
-            type: entity.subType.type as 'task',
+            type: entity.subType.type,
             is_completed: entity.subType.is_completed,
           },
   });
@@ -205,6 +206,7 @@ export function createDssInfiniteQuery(
     };
   });
 }
+
 const selectData: (
   data: InfiniteData<
     SoupPage,
@@ -392,7 +394,7 @@ export function createDeleteDssItemMutation() {
     },
     onMutate: async ({ id }: EntityData) => {
       queryClient.cancelQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
+        queryKey: soupKeys.items._def,
       });
 
       function removeEntityFromQueryData(
@@ -408,12 +410,10 @@ export function createDeleteDssItemMutation() {
           pages,
         };
       }
-      queryClient.setQueriesData(
-        { queryKey: queryKeys.dss({ infinite: true }) },
-        (prev) =>
-          removeEntityFromQueryData(
-            prev as { pages: { items: EntityData[] }[] } | undefined
-          )
+      queryClient.setQueriesData({ queryKey: soupKeys.items._def }, (prev) =>
+        removeEntityFromQueryData(
+          prev as { pages: { items: EntityData[] }[] } | undefined
+        )
       );
     },
     onSettled: (data, error, entity) => {
@@ -423,7 +423,7 @@ export function createDeleteDssItemMutation() {
       }
 
       queryClient.invalidateQueries({
-        queryKey: queryKeys.all.dss,
+        queryKey: soupKeys.items._def,
       });
     },
   }));
@@ -450,10 +450,10 @@ export function createBulkDeleteDssItemsMutation() {
       const deletedIDs = entities.map((e) => e.id);
 
       queryClient.cancelQueries({
-        queryKey: queryKeys.all.dss,
+        queryKey: soupKeys.items._def,
       });
       queryClient.cancelQueries({
-        queryKey: queryKeys.all.search,
+        queryKey: soupKeys.search._def,
       });
 
       function removeEntitiesFromQueryData(
@@ -509,13 +509,13 @@ export function createBulkDeleteDssItemsMutation() {
         };
       }
 
-      queryClient.setQueriesData({ queryKey: queryKeys.all.dss }, (prev) =>
+      queryClient.setQueriesData({ queryKey: soupKeys.items._def }, (prev) =>
         removeEntitiesFromQueryData(
           prev as InfiniteData<SoupPage, unknown> | undefined
         )
       );
 
-      queryClient.setQueriesData({ queryKey: queryKeys.all.search }, (prev) =>
+      queryClient.setQueriesData({ queryKey: soupKeys.search._def }, (prev) =>
         removeEntitiesFromSearchData(
           prev as
             | InfiniteData<{ results: UnifiedSearchResponseItem[] }, unknown>
@@ -528,10 +528,10 @@ export function createBulkDeleteDssItemsMutation() {
       toast.failure('Failed to delete items');
       // Rollback on error - restore the deleted items
       queryClient.invalidateQueries({
-        queryKey: queryKeys.all.dss,
+        queryKey: soupKeys.items._def,
       });
       queryClient.invalidateQueries({
-        queryKey: queryKeys.all.search,
+        queryKey: soupKeys.search._def,
       });
     },
   }));
@@ -561,7 +561,7 @@ function invalidateAfterMove(hasProjects: boolean, failed?: boolean) {
   }
 
   queryClient.invalidateQueries({
-    queryKey: queryKeys.all.dss,
+    queryKey: soupKeys.items._def,
   });
   queryClient.invalidateQueries({ queryKey: ['entity'] });
   // If moving a project, invalidate all project queries since nested projects' breadcrumbs change too
@@ -597,14 +597,14 @@ export function createMoveToProjectDssEntityMutation() {
       project: { id: string };
     }) => {
       queryClient.cancelQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
+        queryKey: soupKeys.items._def,
       });
 
       // Only do optimistic updates for documents and chats
       // Projects have complex path data that we can't compute client-side
       if (type !== 'project') {
         queryClient.setQueriesData(
-          { queryKey: queryKeys.all.dss },
+          { queryKey: soupKeys.items._def },
           createMoveOptimisticUpdate([id], projectId)
         );
       }
@@ -641,7 +641,7 @@ export function createCopyDssEntityMutation() {
     },
     onMutate: async () => {
       queryClient.cancelQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
+        queryKey: soupKeys.items._def,
       });
       // For copy operations, we don't need optimistic updates since we're creating a new item
       // The new item will be added when the mutation completes and queries are invalidated
@@ -652,7 +652,7 @@ export function createCopyDssEntityMutation() {
         toast.failure('Failed to copy item');
       }
       queryClient.invalidateQueries({
-        queryKey: queryKeys.all.dss,
+        queryKey: soupKeys.items._def,
       });
       queryClient.invalidateQueries({ queryKey: ['entity'] });
     },
@@ -698,7 +698,7 @@ export function createBulkCopyDssEntityMutation() {
     onMutate: async () => {
       // For copy, no optimistic update — new IDs unknown until server
       queryClient.cancelQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
+        queryKey: soupKeys.items._def,
       });
     },
 
@@ -710,7 +710,7 @@ export function createBulkCopyDssEntityMutation() {
 
       // Trigger refetch so new items appear
       queryClient.invalidateQueries({
-        queryKey: queryKeys.all.dss,
+        queryKey: soupKeys.items._def,
       });
       queryClient.invalidateQueries({ queryKey: ['entity'] });
     },
@@ -760,7 +760,7 @@ export function createBulkMoveToProjectDssEntityMutation() {
       project: { id: string; name: string };
     }) => {
       queryClient.cancelQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
+        queryKey: soupKeys.items._def,
       });
 
       // Only do optimistic updates for documents and chats
@@ -771,7 +771,7 @@ export function createBulkMoveToProjectDssEntityMutation() {
 
       if (nonProjectIds.length > 0) {
         queryClient.setQueriesData(
-          { queryKey: queryKeys.dss({ infinite: true }) },
+          { queryKey: soupKeys.items._def },
           createMoveOptimisticUpdate(nonProjectIds, project.id)
         );
       }
@@ -793,39 +793,39 @@ export function createBulkMoveToProjectDssEntityMutation() {
 
 /**
  * Optimistically update the viewedAt timestamp for a DSS item.
- * Updates the item across all DSS queries.
+ * Updates the item across all DSS queries if it exists.
  */
-export function optimisticUpdateDssItemViewedAt(itemId: string): void {
-  const now = new Date().toISOString();
+export function optimisticUpdateDssItemViewedAt(itemId: string) {
+  const now = new Date();
 
   queryClient.setQueriesData(
-    { queryKey: queryKeys.all.dss },
+    { queryKey: soupKeys.items._def },
     (prev: InfiniteData<SoupPage, unknown> | undefined) => {
       if (!prev) return prev;
 
-      const pages = prev.pages.map((page) => ({
-        ...page,
-        items: page.items.map((item): SoupApiItem => {
-          // Get the item ID based on its type
-          const currentItemId = getSoupItemId(item);
+      const pages = prev.pages.map((page) => {
+        return {
+          ...page,
+          items: page.items.map((item): SoupApiItem => {
+            const currentItemId = getSoupItemId(item);
+            if (currentItemId !== itemId) return item;
 
-          if (currentItemId !== itemId) return item;
+            switch (item.tag) {
+              case 'document':
+              case 'chat':
+              case 'project':
+              case 'emailThread':
+                item.data.viewedAt = now.getTime();
+                break;
+              case 'channel':
+                item.data.viewed_at = now.toISOString();
+                break;
+            }
 
-          switch (item.tag) {
-            case 'document':
-            case 'chat':
-            case 'project':
-            case 'emailThread':
-              item.data.viewedAt = Date.parse(now);
-              break;
-            case 'channel':
-              item.data.viewed_at = now;
-              break;
-          }
-
-          return item;
-        }),
-      }));
+            return item;
+          }),
+        };
+      });
 
       return {
         ...prev,
@@ -833,4 +833,35 @@ export function optimisticUpdateDssItemViewedAt(itemId: string): void {
       };
     }
   );
+}
+
+/** Finds a soup item in the cache and returns its location. */
+export function hasSoupItem(itemId: string) {
+  const queries = queryClient.getQueriesData<InfiniteData<SoupPage, unknown>>({
+    queryKey: soupKeys.items._def,
+  });
+
+  for (const [, data] of queries) {
+    if (!data) continue;
+
+    for (let pageIndex = 0; pageIndex < data.pages.length; pageIndex++) {
+      const page = data.pages[pageIndex];
+      const itemIndex = page.items.findIndex(
+        (item) => getSoupItemId(item) === itemId
+      );
+      if (itemIndex >= 0) return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Invalidates all DSS soup queries, marking them as stale.
+ * If the query is currently being rendered, it will also be refetched in the background
+ */
+export function invalidateSoup() {
+  queryClient.invalidateQueries({
+    queryKey: soupKeys.items._def,
+  });
 }

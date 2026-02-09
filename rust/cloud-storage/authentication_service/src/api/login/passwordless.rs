@@ -108,24 +108,6 @@ pub async fn handler(
                     })?;
 
                     tracing::trace!(fusionauth_user_id, "created new fusionauth user");
-
-                    // Register user in fusionauth application
-                    match ctx.auth_client.register_user(&fusionauth_user_id).await {
-                        Ok(_) => {}
-                        Err(e) => {
-                            tracing::error!(error=?e, email=%lowercase_email, "unable to register user in fusionauth");
-                            match e {
-                                FusionAuthClientError::UserAlreadyRegistered => {
-                                    tracing::trace!(fusionauth_user_id=?fusionauth_user_id, "user already registered");
-                                }
-                                _ => {
-                                    tracing::error!(error=?e, "unable to register user in fusionauth");
-                                    return Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-                                        .into_response());
-                                }
-                            }
-                        }
-                    }
                 }
                 _ => {
                     tracing::error!(error=?e, email=%lowercase_email, "unable to get user id");

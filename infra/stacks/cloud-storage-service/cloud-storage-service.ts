@@ -280,7 +280,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
                   Name: 'datadog',
                   Host: 'http-intake.logs.us5.datadoghq.com',
                   apikey: DATADOG_API_KEY,
-                  dd_service: `cloud-storage-service-${stack}`,
+                  dd_service: `cloud-storage-service`,
                   dd_source: 'fargate',
                   dd_tags: `project:cloudstorage, env:${stack}`,
                   provider: 'ecs',
@@ -447,7 +447,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
     const serviceScalableTarget = new aws.appautoscaling.Target(
       `${BASE_NAME}-service-scalable-target-${stack}`,
       {
-        maxCapacity: stack === 'prod' ? 15 : 3,
+        maxCapacity: stack === 'prod' ? 7 : 3,
         minCapacity: stack === 'prod' ? 3 : 1,
         resourceId: pulumi.interpolate`service/${this.cloudStorageClusterName}/${this.service.service.name}`,
         scalableDimension: 'ecs:service:DesiredCount',

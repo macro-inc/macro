@@ -29,7 +29,7 @@ import type { SoupProperty } from '../../service-clients/service-storage/generat
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { propertiesKeys } from './keys';
-import { queryKeys } from '../../macro-entity/src/queries/key';
+import { soupKeys } from '../soup/keys';
 import type { BulkEntityPropertiesData } from './bulk';
 
 export function useEntityPropertiesQuery(
@@ -136,7 +136,7 @@ export function useSaveEntityPropertyMutation(
             variables.property.propertyDefinitionId ===
             SYSTEM_PROPERTY_IDS.STATUS
           ) {
-            queryClient.invalidateQueries({ queryKey: queryKeys.all.dss });
+            queryClient.invalidateQueries({ queryKey: soupKeys.items._def });
           }
         },
       },
@@ -343,7 +343,7 @@ export function useSetPropertyStatusCompleteMutation(
           predicate: ({ queryKey }) =>
             bulkIncludesEntityPredicate(queryKey, vars.entityId),
         }),
-        queryClient.cancelQueries({ queryKey: queryKeys.all.dss }),
+        queryClient.cancelQueries({ queryKey: soupKeys.items._def }),
       ]);
 
       // Snapshot previous data for rollback
@@ -363,7 +363,7 @@ export function useSetPropertyStatusCompleteMutation(
       const previousDss = queryClient.getQueriesData<
         InfiniteData<SoupPage, unknown>
       >({
-        queryKey: queryKeys.all.dss,
+        queryKey: soupKeys.items._def,
       });
 
       // Optimistically update entity properties query
@@ -394,9 +394,9 @@ export function useSetPropertyStatusCompleteMutation(
         }
       );
 
-      // Optimistically update DSS queries (embedded properties on entities)
+      // Optimistically update soup queries (embedded properties on entities)
       queryClient.setQueriesData<InfiniteData<SoupPage, unknown>>(
-        { queryKey: queryKeys.all.dss },
+        { queryKey: soupKeys.items._def },
         (old) => updateDssStatusToCompleted(old, vars.entityId)
       );
 
@@ -428,8 +428,8 @@ export function useSetPropertyStatusCompleteMutation(
     },
     onSettled: (_data, _error, variables) => {
       invalidatePropertiesForEntity(variables.entityType, variables.entityId);
-      // Also invalidate DSS to ensure consistency
-      queryClient.invalidateQueries({ queryKey: queryKeys.all.dss });
+      // Also invalidate soup items to ensure consistency
+      queryClient.invalidateQueries({ queryKey: soupKeys.items._def });
     },
     ...(callbacks
       ? withCallbacks<

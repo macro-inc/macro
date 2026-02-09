@@ -56,6 +56,11 @@ import {
 import { Top } from './Top';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { useChannelContext } from '@block-channel/hooks/channel';
+import { FloatingInputLoader } from '@core/component/FloatingInputLoader';
+import {
+  invalidateChannelWithID,
+  useChannelQuery,
+} from '@queries/channel/channel';
 
 false && fileFolderDrop;
 
@@ -83,6 +88,7 @@ export function Channel(props: {
   const [_activeThreadId, setActiveThreadId] = activeThreadIdSignal;
 
   const channelContext = useChannelContext();
+  const channelQuery = useChannelQuery(() => props.channelId);
   const latestActivity = useChannelActivity(props.channelId);
 
   const [openedChannel, setOpenedChannel] = createSignal<Date>();
@@ -165,6 +171,12 @@ export function Channel(props: {
     updateActivityOnOpen();
 
     track(TrackingEvents.BLOCKCHANNEL.CHANNEL.OPEN);
+
+    const STALE_THRESHOLD_MS = 1_000;
+    const age = Date.now() - channelQuery.dataUpdatedAt;
+    if (age > STALE_THRESHOLD_MS) {
+      invalidateChannelWithID(props.channelId);
+    }
   });
 
   createChannelTrackingEffect(props.channelId);
@@ -406,6 +418,13 @@ export function Channel(props: {
             class="absolute pointer-events-none top-1/2 left-1/2 w-[60%] h-full -translate-x-1/2 -translate-y-1/2"
             use:droppable
             ref={containerRef}
+          />
+          <FloatingInputLoader
+            minShowTime={200}
+            successDuration={100}
+            isLoading={() => channelQuery.isFetching}
+            loadingText="Refreshing messages"
+            class="top-0 bottom-auto mt-2 mb-0 z-10"
           />
           <MessageList
             channelId={props.channelId}

@@ -1,6 +1,6 @@
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
 import { catchToResult, isErr, ok, throwOnErr } from '@core/util/maybeResult';
-import { queryKeys } from '@macro-entity';
+import { soupKeys } from '../soup/keys';
 import { emailClient } from '@service-email/client';
 import type {
   MessageToSend,
@@ -158,7 +158,7 @@ type MarkThreadAsSeenParams = { threadId: string };
  */
 function threadSeenOnMutate(params: MarkThreadAsSeenParams): void {
   queryClient.setQueriesData<InfiniteData<SoupPage, unknown>>(
-    { queryKey: queryKeys.all.dss },
+    { queryKey: soupKeys.items._def },
     (old) => {
       if (!old) return old;
       return {

@@ -186,12 +186,12 @@ function SnapshotInner(props: SnapshotDecoratorProps) {
       }
       content={
         <PopupPreview
-          item={item}
           mouseEnter={() => {}}
           mouseLeave={() => {}}
           delete={editor?.isEditable() ? deleteSnapshot : undefined}
           documentInfo={{
             id: props.documentId,
+            name: props.documentName,
             type: verifyBlockName(props.blockName),
             params: {},
             isOpenable: currentBlockId !== props.documentId,

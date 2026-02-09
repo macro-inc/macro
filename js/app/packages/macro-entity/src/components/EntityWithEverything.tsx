@@ -13,6 +13,7 @@ import ChatIcon from '@icon/regular/chat.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import {
   getAllNotificationsFromGroup,
+  getMetadata,
   getMostRecentNotification,
   isChannelMessageReply,
   type NotificationStack,
@@ -22,9 +23,10 @@ import {
 } from '@notifications';
 import { formatDocumentName } from '@service-storage/util/filename';
 import { syncServiceClient } from '@service-sync/client';
+import { ChannelTypeEnum } from '@service-comms/client';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable } from '@thisbeyond/solid-dnd';
-import { getIconConfig } from 'core/component/EntityIcon';
+import { getEntityIconConfig } from 'core/component/EntityIcon';
 import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import { UserIcon } from 'core/component/UserIcon';
@@ -337,9 +339,9 @@ function NotificationRow(props: {
       return '';
     }
 
-    const metadata = tryToTypedNotification(
-      props.notification
-    )?.notificationMetadata;
+    const typed = tryToTypedNotification(props.notification);
+    if (!typed) return '';
+    const metadata = getMetadata(typed);
     if (
       !metadata ||
       !('messageContent' in metadata) ||
@@ -347,9 +349,10 @@ function NotificationRow(props: {
     )
       return '';
 
+    const content = metadata.messageContent;
     return (
       <Show
-        when={metadata.messageContent.trim()}
+        when={content?.trim()}
         fallback={<span class="italic text-ink-disabled">Attached items</span>}
       >
         {(content) => (
@@ -435,9 +438,14 @@ function StackedNotificationRow(props: {
   );
 
   const messageContent = createMemo(() => {
-    const metadata = mostRecent()?.notificationMetadata;
+    const notification = mostRecent();
+    if (!notification) return '';
+    const typed = tryToTypedNotification(notification);
+    if (!typed) return '';
+    const metadata = getMetadata(typed);
     if (metadata && 'messageContent' in metadata) {
-      return metadata.messageContent?.trim() ?? '';
+      const content = metadata.messageContent as string | null | undefined;
+      return content?.trim() ?? '';
     }
     return '';
   });
@@ -533,9 +541,11 @@ function StackedRepliesRow(props: {
     const notification = props.group.notifications[0];
     if (!notification) return '';
     const typed = tryToTypedNotification(notification);
-    if (!typed || !isChannelMessageReply(typed) || !typed.notificationMetadata)
-      return '';
-    return typed.notificationMetadata.threadParentSenderId ?? '';
+    if (!typed || !isChannelMessageReply(typed)) return '';
+    const metadata = getMetadata(
+      typed as TypedNotification<'channel_message_reply'>
+    );
+    return metadata?.threadParentSenderId ?? '';
   };
 
   const { firstName } = useDisplayNameParts(tryMacroId(threadParentSenderId()));
@@ -753,29 +763,7 @@ export function EntityWithEverything(
   const { keydownDataDuringTask } = trackKeydownDuringTask();
   const userEmail = useEmail();
 
-  const getIcon = createMemo(() => {
-    switch (props.entity.type) {
-      case 'channel':
-        switch (props.entity.channelType) {
-          case 'direct_message':
-            return getIconConfig('directMessage');
-          case 'organization':
-            return getIconConfig('company');
-          default:
-            return getIconConfig('channel');
-        }
-      case 'document':
-        if (isTaskEntity(props.entity)) return getIconConfig('task');
-        if (props.entity.fileType) return getIconConfig(props.entity.fileType);
-        return getIconConfig('default');
-      case 'chat':
-        return getIconConfig('chat');
-      case 'project':
-        return getIconConfig('project');
-      case 'email':
-        return getIconConfig(props.entity.isRead ? 'emailRead' : 'email');
-    }
-  });
+  const getIcon = createMemo(() => getEntityIconConfig(props.entity));
 
   /**
    * TODO (seamus + teo) : These notifications are being attached to the wrong
@@ -1068,7 +1056,7 @@ export function EntityWithEverything(
                 <Show
                   when={
                     props.entity.type === 'channel' &&
-                    props.entity.channelType === 'direct_message'
+                    props.entity.channelType === ChannelTypeEnum.DirectMessage
                   }
                   fallback={
                     <Dynamic
@@ -1208,7 +1196,7 @@ export function EntityWithEverything(
     <div
       use:draggable
       data-checked={props.checked}
-      class="everything-entity w-full relative group/entity hover:bg-hover/30 text-sm touch:mobile-width:text-base mx-[1px]"
+      class="everything-entity w-full relative group/entity hover:bg-hover/30 text-sm touch:mobile-width:text-base"
       style={{
         'min-height': `${ENTITY_HEIGHT}px`,
       }}
@@ -1372,7 +1360,7 @@ export function EntityWithEverything(
               <Show
                 when={
                   props.entity.type === 'channel' &&
-                  props.entity.channelType === 'direct_message'
+                  props.entity.channelType === ChannelTypeEnum.DirectMessage
                 }
                 fallback={
                   <Dynamic
@@ -1530,7 +1518,7 @@ function DirectMessageIcon(props: { entity: EntityData }) {
           .at(0)
       : undefined;
 
-  const Fallback = () => <EntityIcon targetType="directMessage" />;
+  const Fallback = () => <EntityIcon targetType="direct_message" />;
 
   return (
     <div class="bg-panel size-5 rounded-full p-[2px]">

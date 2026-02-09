@@ -5,7 +5,6 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { Dialog } from '@kobalte/core/dialog';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { createStubSoupContext } from '../../SoupContext';
 import { SplitPanelContext, type SplitPanelContextType } from '../context';
 import type {
   PopoverSplitOptions,
@@ -14,6 +13,7 @@ import type {
   SplitId,
   SplitMount,
 } from '../layoutManager';
+import { SoupContextProvider } from '@app/component/next-soup/soup-context';
 
 false && clickOutside;
 
@@ -91,7 +91,6 @@ function PopoverSplitModal(props: {
     handle: stubHandle,
     splitHotkeyScope: `popover-${props.popover.id}`,
     isPanelActive: () => true,
-    soupContext: createStubSoupContext(),
     panelRef,
     panelSize: { width: null, height: null },
     contentOffsetTop,
@@ -139,9 +138,11 @@ function PopoverSplitModal(props: {
             <Dialog.Content class="portal-scope">
               <ClippedPanel active tl ref={setPanelRef}>
                 <SplitPanelContext.Provider value={stubPanelContext}>
-                  <Show when={props.popover.mount}>
-                    <Dynamic component={props.popover.mount.element} />
-                  </Show>
+                  <SoupContextProvider>
+                    <Show when={props.popover.mount}>
+                      <Dynamic component={props.popover.mount.element} />
+                    </Show>
+                  </SoupContextProvider>
                 </SplitPanelContext.Provider>
               </ClippedPanel>
             </Dialog.Content>

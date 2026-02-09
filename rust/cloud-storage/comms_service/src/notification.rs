@@ -14,6 +14,8 @@ use model_notifications::{
     ChannelMessageSendMetadata, ChannelReplyMetadata, CommonChannelMetadata,
     DocumentMentionMetadata, NotificationEvent, NotificationQueueMessage,
 };
+use notification_hex::domain::models::SendNotificationRequestBuilder;
+use notification_hex::domain::service::NotificationIngress;
 use std::{collections::HashSet, iter::once};
 use uuid::Uuid;
 
@@ -194,6 +196,107 @@ impl ChannelMessageEvent<'_> {
     }
 }
 
+async fn send_notification_queue_message(
+    ingress: &impl NotificationIngress,
+    msg: NotificationQueueMessage,
+) -> anyhow::Result<()> {
+    let entity = msg.notification_entity;
+    let sender_id = msg.sender_id;
+    let recipient_ids: HashSet<MacroUserIdStr<'_>> = msg
+        .recipient_ids
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|id| {
+            MacroUserIdStr::parse_from_str(&id)
+                .ok()
+                .map(|u| u.into_owned())
+        })
+        .collect();
+
+    match msg.notification_event {
+        NotificationEvent::ChannelInvite(metadata) => {
+            let req = SendNotificationRequestBuilder {
+                notification_entity: entity,
+                notification: metadata,
+                sender_id,
+                recipient_ids,
+            }
+            .into_request()
+            .with_apns()
+            .with_conn_gateway();
+            ingress
+                .send_notification(req)
+                .await
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
+        }
+        NotificationEvent::ChannelMessageSend(metadata) => {
+            let req = SendNotificationRequestBuilder {
+                notification_entity: entity,
+                notification: metadata,
+                sender_id,
+                recipient_ids,
+            }
+            .into_request()
+            .with_apns()
+            .with_conn_gateway();
+            ingress
+                .send_notification(req)
+                .await
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
+        }
+        NotificationEvent::ChannelMention(metadata) => {
+            let req = SendNotificationRequestBuilder {
+                notification_entity: entity,
+                notification: metadata,
+                sender_id,
+                recipient_ids,
+            }
+            .into_request()
+            .with_apns()
+            .with_conn_gateway();
+            ingress
+                .send_notification(req)
+                .await
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
+        }
+        NotificationEvent::ChannelMessageReply(metadata) => {
+            let req = SendNotificationRequestBuilder {
+                notification_entity: entity,
+                notification: metadata,
+                sender_id,
+                recipient_ids,
+            }
+            .into_request()
+            .with_apns()
+            .with_conn_gateway();
+            ingress
+                .send_notification(req)
+                .await
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
+        }
+        NotificationEvent::ChannelMessageDocument(ChannelMessageDocumentMetadata(metadata)) => {
+            let req = SendNotificationRequestBuilder {
+                notification_entity: entity,
+                notification: metadata,
+                sender_id,
+                recipient_ids,
+            }
+            .into_request()
+            .with_apns()
+            .with_conn_gateway();
+            ingress
+                .send_notification(req)
+                .await
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
+        }
+        other => {
+            tracing::warn!(?other, "unhandled notification event type in comms_service");
+        }
+    }
+
+    Ok(())
+}
+
 pub async fn dispatch_notifications_for_invite(
     api_context: &AppState,
     channel_id: &Uuid,
@@ -211,9 +314,7 @@ pub async fn dispatch_notifications_for_invite(
     let notifications = event.generate_notifications();
 
     for notification in notifications {
-        api_context
-            .macro_notify_client
-            .send_notification(notification)
+        send_notification_queue_message(&*api_context.notification_ingress_service, notification)
             .await?;
     }
 
@@ -286,9 +387,7 @@ pub async fn dispatch_notifications_for_message(
     let notifications = channel_message_event.generate_notifications();
 
     for notification in notifications {
-        api_context
-            .macro_notify_client
-            .send_notification(notification)
+        send_notification_queue_message(&*api_context.notification_ingress_service, notification)
             .await?;
     }
 

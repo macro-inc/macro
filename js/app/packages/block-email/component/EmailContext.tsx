@@ -1,5 +1,6 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import { makeMarkDoneAction } from '@app/component/next-soup/actions';
+import { useMaybeSoup } from '@app/component/next-soup/soup-context';
 import { URL_PARAMS } from '@block-email/constants';
 import { convertContactInfoToEmailRecipient } from '@block-email/util/recipientConversion';
 import {
@@ -8,6 +9,7 @@ import {
   Permissions,
 } from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
+import { useUserId } from '@core/context/user';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import {
@@ -18,12 +20,15 @@ import {
 import { whenSettled } from '@core/util/whenSettled';
 import {
   createEffectOnEntityTypeNotification,
+  getMetadata,
   isNewEmail,
 } from '@notifications';
 import {
   useArchiveThreadMutation,
   useThreadQuery,
 } from '@queries/email/thread';
+import { emailKeys } from '@queries/email/keys';
+import { queryClient } from '@queries/client';
 import type {
   APIThread,
   ContactInfo,
@@ -37,11 +42,24 @@ import {
   createMemo,
   createSignal,
   type FlowProps,
+  onCleanup,
   Suspense,
   untrack,
   useContext,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
+
+/**
+ * Tracks thread IDs that had a draft saved since the last query fetch.
+ * When the EmailProvider unmounts, threads in this set have their query
+ * cache cleared so the next visit fetches fresh data (with the draft).
+ * This avoids touching the active query during draft save, which would
+ * trigger Suspense DOM detach and reset scroll position.
+ */
+const draftSavedThreadIds = new Set<string>();
+export function markThreadDraftSaved(threadId: string) {
+  draftSavedThreadIds.add(threadId);
+}
 
 export type EmailRecipient = WithCustomUserInput<'user' | 'contact'>;
 
@@ -156,7 +174,8 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     'email',
     (notification) => {
       if (!isNewEmail(notification)) return;
-      const notificationThreadId = notification.notificationMetadata.threadId;
+      const metadata = getMetadata(notification);
+      const notificationThreadId = metadata.threadId;
       if (notificationThreadId === threadQuery.data?.db_id) {
         threadQuery.refetch();
       }
@@ -295,12 +314,14 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     return Array.from(optionsMap.values());
   };
 
-  const {
-    soupContext: {
-      entitiesSignal: [entities],
-      actionRegistry,
-    },
-  } = useSplitPanelOrThrow();
+  const soup = useMaybeSoup();
+
+  const userId = useUserId();
+
+  const markAsDoneAction = makeMarkDoneAction({
+    notificationSource: () => notificationSource,
+    userId,
+  });
 
   const archiveMutation = useArchiveThreadMutation({
     onError: () => {
@@ -320,12 +341,14 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
 
     if (!props) return false;
 
-    const selectedEntity = entities()?.find(
-      (entity) => entity.id === thread.db_id
-    );
+    const selectedEntity = soup?.items.get(thread.db_id);
 
     if (selectedEntity) {
-      actionRegistry.execute('mark_as_done', selectedEntity);
+      if (soup) {
+        markAsDoneAction.executeWithSoup([selectedEntity], soup);
+      } else {
+        markAsDoneAction.execute([selectedEntity]);
+      }
     } else {
       archiveMutation.mutate({
         threadId: thread.db_id,
@@ -428,6 +451,21 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
       messagesListRef()?.scrollBy({ top: diff });
     });
   };
+
+  // When the provider unmounts (user navigates away), clear the thread query
+  // cache if a draft was saved during this session. This ensures the next visit
+  // fetches fresh data from the server (which includes the saved draft).
+  // We can't invalidate/refetch while mounted because any query state change
+  // triggers SolidQuery's createClientSubscriber → Resource.refetch() → Suspense
+  // DOM detach, which resets scroll position.
+  onCleanup(() => {
+    if (draftSavedThreadIds.has(props.threadID)) {
+      draftSavedThreadIds.delete(props.threadID);
+      queryClient.removeQueries({
+        queryKey: emailKeys.threadMessages(props.threadID).queryKey,
+      });
+    }
+  });
 
   return (
     <Suspense>

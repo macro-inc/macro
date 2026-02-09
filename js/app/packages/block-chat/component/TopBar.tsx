@@ -19,11 +19,9 @@ import { ShareButton } from '@core/component/TopBar/ShareButton';
 import { useGetPermissions } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import Notepad from '@icon/regular/notepad.svg';
-import { createCognitionWebsocketEffect } from '@service-cognition/websocket';
-import { refetchHistory } from '@queries/history/history';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
 import { onCleanup, onMount } from 'solid-js';
-import { setPreviewData } from '@queries/preview';
+import { useWaitChatRename } from '../../macro-entity/src/queries/rename';
 
 export function TopBar() {
   const blockId = useBlockId();
@@ -33,16 +31,7 @@ export function TopBar() {
 
   onMount(() => {
     if (!name() || name() === DEFAULT_CHAT_NAME) {
-      const dispose = createCognitionWebsocketEffect('chat_renamed', (data) => {
-        if (data.chat_id === blockId) {
-          refetchHistory();
-          setPreviewData(data.chat_id, (prev) => ({
-            ...prev,
-            name: data.name,
-          }));
-          dispose();
-        }
-      });
+      const dispose = useWaitChatRename(blockId, true);
 
       onCleanup(() => {
         dispose();

@@ -76,13 +76,6 @@ async fn main() -> anyhow::Result<()> {
         InternalApiSecretKey::new().context("failed to create internal auth key")?,
     );
 
-    let macro_notify_client = macro_notify::MacroNotify::new(
-        config.notification_queue.clone(),
-        "document_cognition_service".to_string(),
-    )
-    .await;
-    tracing::info!("initialized macro_notify client");
-
     let document_storage_client = DocumentStorageServiceClient::new(
         internal_auth_key.as_ref().to_string(),
         config.document_storage_service_url.clone(),
@@ -200,7 +193,6 @@ async fn main() -> anyhow::Result<()> {
         ),
         sqs_client: Arc::new(sqs_client),
         document_storage_client: Arc::new(document_storage_client),
-        macro_notify_client: Arc::new(macro_notify_client),
         comms_service_client: Arc::new(comms_service_client),
         search_service_client: Arc::new(search_service_client),
         jwt_args,

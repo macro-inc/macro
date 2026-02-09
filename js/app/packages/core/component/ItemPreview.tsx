@@ -1,50 +1,36 @@
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
+import {
+  isAccessiblePreviewItem,
+  useItemPreview,
+  type ItemEntity,
+} from '@queries/preview';
 import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { truncateString } from '@core/util/string';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
-import BuildingIcon from '@icon/duotone/building-office-duotone.svg';
 import EyeSlash from '@icon/duotone/eye-slash-duotone.svg';
-import GlobeIcon from '@icon/duotone/globe-duotone.svg';
-import ChannelIcon from '@icon/duotone/hash-duotone.svg';
 import TrashSimple from '@icon/duotone/trash-simple-duotone.svg';
-import User from '@icon/duotone/user-duotone.svg';
-import ThreeUsersIcon from '@icon/duotone/users-three-duotone.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import type { NamedSubType } from '@macro-entity';
-import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import type { ItemType } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import {
-  insertProjectIntoHistory,
-  postNewHistoryItem,
-} from '@queries/history/history';
-import { Match, Switch, Suspense } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
+  Match,
+  Switch,
+  Suspense,
+  type ComponentProps,
+  type Accessor,
+} from 'solid-js';
 import { PopupPreview } from './DocumentPreview';
 import { HoverCard } from './HoverCard';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
 import { DeprecatedTextButton } from './DeprecatedTextButton';
-import {
-  ENTITY_ICON_CONFIGS,
-  EntityIcon,
-  ICON_SIZE_CLASSES,
-} from './EntityIcon';
+import { EntityIcon, getPreviewItemIconType } from './EntityIcon';
 
-type ItemPreviewProps = {
-  itemId: string;
-  itemType?: ItemType;
-  cacheTimeSeconds?: number;
-};
-
-function useItemPreviewData(props: ItemPreviewProps) {
-  const [item] = useItemPreview(() => ({
-    id: props.itemId,
-    type: props.itemType,
-  }));
+export function useItemPreviewData(entity: Accessor<ItemEntity>) {
+  const [item] = useItemPreview(entity);
 
   const { replaceOrInsertSplit, insertSplit } = useSplitLayout();
 
@@ -72,16 +58,12 @@ function useItemPreviewData(props: ItemPreviewProps) {
   }
 
   async function onPreviewClick(
-    type: ItemPreviewProps['itemType'],
+    type: ItemType | undefined,
     id: string,
     fileType?: FileType,
     subType?: NamedSubType,
     altKey?: boolean
   ) {
-    if (type === 'project') {
-      insertProjectIntoHistory(id);
-      await postNewHistoryItem('project', id);
-    }
     const _type = subType ?? fileType ?? type;
     if (!_type) return;
     openItem(_type, id, openInNewSplitForMention(altKey, true));
@@ -99,33 +81,22 @@ function useItemPreviewData(props: ItemPreviewProps) {
     return baseName;
   };
 
-  const blockConfig = () => ENTITY_ICON_CONFIGS['channel'];
-  const sizeClass = () => ICON_SIZE_CLASSES['xs'];
-  const className = () => {
-    return `${sizeClass()} ${blockConfig().foreground}`;
+  const targetType = () => {
+    return getPreviewItemIconType(item());
   };
 
-  const channelTypeIcon = (channelType: ChannelType | undefined) => {
-    switch (channelType) {
-      case 'direct_message':
-        return User;
-      case 'private':
-        return ThreeUsersIcon;
-      case 'organization':
-        return BuildingIcon;
-      case 'public':
-        return GlobeIcon;
-      default:
-        return ChannelIcon;
-    }
+  const ItemEntityIcon = (
+    localProps?: Partial<Omit<ComponentProps<typeof EntityIcon>, 'targetType'>>
+  ) => {
+    return <EntityIcon targetType={targetType()} {...localProps} />;
   };
 
   return {
     item,
     name,
     onPreviewClick,
-    className,
-    channelTypeIcon,
+    targetType,
+    ItemEntityIcon,
   };
 }
 
@@ -199,7 +170,7 @@ function InlineLoading() {
   );
 }
 
-export function ItemPreview(props: ItemPreviewProps) {
+export function ItemPreview(props: ItemEntity) {
   return (
     <Suspense>
       <ItemPreviewInner {...props} />
@@ -207,9 +178,9 @@ export function ItemPreview(props: ItemPreviewProps) {
   );
 }
 
-function ItemPreviewInner(props: ItemPreviewProps) {
-  const { item, name, onPreviewClick, className, channelTypeIcon } =
-    useItemPreviewData(props);
+function ItemPreviewInner(props: ItemEntity) {
+  const { item, name, onPreviewClick, targetType, ItemEntityIcon } =
+    useItemPreviewData(() => props);
 
   return (
     <Switch>
@@ -221,51 +192,32 @@ function ItemPreviewInner(props: ItemPreviewProps) {
           <Switch>
             <Match when={matches(loadedItem(), isAccessiblePreviewItem)}>
               {(accessibleItem) => {
-                const itemData = accessibleItem();
-                const fileType = itemData.fileType;
-                const subType = itemData.subType?.type as
-                  | NamedSubType
-                  | undefined;
-                const blockName = fileTypeToBlockName(
-                  subType ?? fileType ?? itemData.type
-                );
+                const blockName = () => {
+                  const type = targetType();
+                  const itemType = accessibleItem().type;
+                  return fileTypeToBlockName(type ?? itemType);
+                };
                 const navHandlers =
-                  useSplitNavigationHandler<HTMLButtonElement>((e) =>
+                  useSplitNavigationHandler<HTMLButtonElement>((e) => {
+                    const item = accessibleItem();
                     onPreviewClick(
-                      itemData.type,
-                      itemData.id,
-                      fileType,
-                      subType,
+                      item.type,
+                      item.id,
+                      item.fileType,
+                      item.subType?.type as NamedSubType | undefined,
                       e.altKey
-                    )
-                  );
+                    );
+                  });
                 return (
                   <HoverCard
-                    disabled={isTouchDevice() || !blockName}
+                    disabled={isTouchDevice() || !blockName()}
                     trigger={
                       <button
                         class="text-ink-base text-sm ring-1 ring-edge-muted rounded-xs hover:bg-panel-hover flex flex-row h-6 px-2 justify-center items-center"
                         {...navHandlers}
                       >
                         <div class="flex justify-start items-center h-3.5 mr-2">
-                          {itemData.type === 'channel' ? (
-                            <div class={className()}>
-                              <Dynamic
-                                component={channelTypeIcon(
-                                  itemData.channelType
-                                )}
-                              />
-                            </div>
-                          ) : (
-                            <EntityIcon
-                              targetType={
-                                itemData.type === 'document'
-                                  ? (subType ?? fileType)
-                                  : itemData.type
-                              }
-                              size="fill"
-                            />
-                          )}
+                          <ItemEntityIcon size="fill" />
                         </div>
                         <div class="flex-1 text-left leading-5 min-w-0 truncate">
                           {truncateString(name(), 80)}
@@ -274,12 +226,11 @@ function ItemPreviewInner(props: ItemPreviewProps) {
                     }
                     content={
                       <PopupPreview
-                        item={item}
                         mouseEnter={() => {}}
                         mouseLeave={() => {}}
                         documentInfo={{
-                          id: itemData.id,
-                          type: blockName as BlockName,
+                          id: accessibleItem().id,
+                          type: blockName() as BlockName,
                           params: {},
                           isOpenable: true,
                         }}
@@ -302,8 +253,8 @@ function ItemPreviewInner(props: ItemPreviewProps) {
   );
 }
 
-export function InlineItemPreview(props: ItemPreviewProps) {
-  const { item, name, className, channelTypeIcon } = useItemPreviewData(props);
+export function InlineItemPreview(props: ItemEntity) {
+  const { item, name, ItemEntityIcon } = useItemPreviewData(() => props);
 
   return (
     <Switch>
@@ -314,36 +265,14 @@ export function InlineItemPreview(props: ItemPreviewProps) {
         {(loadedItem) => (
           <Switch>
             <Match when={matches(loadedItem(), isAccessiblePreviewItem)}>
-              {(accessibleItem) => {
-                const itemData = accessibleItem();
-                const fileType = itemData.fileType;
-                const subType = itemData.subType?.type;
-                return (
-                  <span class="inline-flex items-center gap-1">
-                    <span class="w-4 h-4">
-                      {itemData.type === 'channel' ? (
-                        <div class={className()}>
-                          <Dynamic
-                            component={channelTypeIcon(itemData.channelType)}
-                          />
-                        </div>
-                      ) : (
-                        <EntityIcon
-                          targetType={
-                            itemData.type === 'document'
-                              ? (subType ?? fileType)
-                              : itemData.type
-                          }
-                          size="xs"
-                        />
-                      )}
-                    </span>
-                    <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
-                      {truncateString(name(), 80)}
-                    </span>
-                  </span>
-                );
-              }}
+              <span class="inline-flex items-center gap-1">
+                <span class="w-4 h-4">
+                  <ItemEntityIcon size="xs" />
+                </span>
+                <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
+                  {truncateString(name(), 80)}
+                </span>
+              </span>
             </Match>
             <Match when={loadedItem().access === 'no_access'}>
               <InlineNoAccess />

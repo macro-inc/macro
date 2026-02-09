@@ -5,9 +5,9 @@ import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
 import type { ViewId } from '@core/types/view';
 import { type JSXElement, lazy } from 'solid-js';
 import { EmailCompose } from '../../../block-email/component/Compose';
-import { Soup } from '../Soup';
 import { SettingsPanel } from '../settings/Settings';
 import NotificationRoute from '@notifications/components/NotificationRoute';
+import { SoupView } from '@app/component/next-soup/soup-view/soup-view';
 
 export type ComponentFactory = (params?: Record<string, any>) => JSXElement;
 
@@ -55,7 +55,7 @@ export function resolveComponent(
   };
 }
 
-registerComponent('unified-list', () => <Soup />, { viewId: 'signal' });
+registerComponent('unified-list', () => <SoupView />);
 registerComponent('loading', () => <LoadingBlock />);
 registerComponent('channel-compose', () => <ChannelCompose />);
 registerComponent('email-compose', () => <EmailCompose />);
@@ -136,6 +136,11 @@ if (LOCAL_ONLY) {
   registerComponent(
     'properties-debug',
     lazy(() => import('@core/component/Properties/debug/PropertiesDebug'))
+  );
+
+  registerComponent(
+    'entity-debug',
+    lazy(() => import('@entity/src/debug/DebugEntityView'))
   );
 }
 

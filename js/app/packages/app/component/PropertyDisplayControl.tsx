@@ -19,7 +19,14 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import type { DisplayOptions } from './ViewConfig';
+
+export type DisplayOptions = {
+  layout: 'compact' | 'expanded' | 'visual';
+  unrollNotifications: boolean;
+  showUnreadIndicator: boolean;
+  displayProperties: string[];
+  limit?: number;
+};
 
 const MAX_DISPLAY_PROPERTIES = 4;
 

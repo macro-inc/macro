@@ -184,9 +184,7 @@ const App: Component = () => {
       <div class="w-full flex gap-2 justify-center flex-wrap">
         <For each={testIds}>
           {(item) => {
-            return (
-              <ItemPreview itemId={item.id} itemType={item.type as ItemType} />
-            );
+            return <ItemPreview id={item.id} type={item.type as ItemType} />;
           }}
         </For>
       </div>

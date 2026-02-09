@@ -1,0 +1,40 @@
+import { Show } from 'solid-js';
+import type { EntityData } from '../types/entity';
+import type { SearchLocation } from '../types/search';
+import { isSearchEntity } from '../types/search';
+import { CollapsibleList } from '../components/CollapsibleList';
+import { SearchContentHitRow } from './search-content-hit-row';
+
+interface ExtractorContentHitsProps {
+  entity: EntityData;
+  onClick?: (location?: SearchLocation) => void;
+  visibleCount?: number;
+}
+
+/**
+ * Renders collapsible list of content hit rows
+ */
+export function ContentHits(props: ExtractorContentHitsProps) {
+  const contentHits = () => {
+    if (!isSearchEntity(props.entity)) return [];
+    return props.entity.search.contentHitData ?? [];
+  };
+
+  return (
+    <Show when={contentHits().length > 0}>
+      <CollapsibleList
+        items={contentHits()}
+        visibleCount={props.visibleCount ?? 1}
+      >
+        {(hit, index, count) => (
+          <SearchContentHitRow
+            hit={hit}
+            onClick={props.onClick}
+            index={index}
+            count={count}
+          />
+        )}
+      </CollapsibleList>
+    </Show>
+  );
+}
