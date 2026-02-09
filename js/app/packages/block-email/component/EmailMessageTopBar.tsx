@@ -38,8 +38,8 @@ interface Recipient {
   email?: string | null;
 }
 
-function formatFullDate(timestamp: string): string {
-  return new Date(timestamp)
+function formatFullDate(date: Date): string {
+  return date
     .toLocaleString('en-US', {
       weekday: 'long',
       year: 'numeric',
@@ -52,8 +52,7 @@ function formatFullDate(timestamp: string): string {
     .replace(',', '');
 }
 
-export function formatShortDate(timestamp: string): string {
-  const date = new Date(timestamp);
+export function formatShortDate(date: Date): string {
   if (date.getFullYear() !== new Date().getFullYear()) {
     return date.toLocaleDateString('en-US', {
       month: 'numeric',
