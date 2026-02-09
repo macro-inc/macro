@@ -6,8 +6,14 @@ import type {
 } from '@service-storage/generated/schemas';
 
 type AccessResponse = Extract<EntityPermissionResponse, { status: 'access' }>;
-type AccessLevelPermission = Extract<EntityPermission, { type: 'access_level' }>;
-type ChannelRolePermission = Extract<EntityPermission, { type: 'channel_role' }>;
+type AccessLevelPermission = Extract<
+  EntityPermission,
+  { type: 'access_level' }
+>;
+type ChannelRolePermission = Extract<
+  EntityPermission,
+  { type: 'channel_role' }
+>;
 
 export function hasEntityAccess(
   response: EntityPermissionResponse
