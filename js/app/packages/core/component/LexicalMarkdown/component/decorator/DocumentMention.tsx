@@ -228,7 +228,7 @@ export function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
       props.blockName,
       props.documentId,
       props.blockParams,
-      openInNewSplitForMention(e?.altKey, e != null)
+      openInNewSplitForMention(e?.shiftKey, e != null)
     );
   });
 

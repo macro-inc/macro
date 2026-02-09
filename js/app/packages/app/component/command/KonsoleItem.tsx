@@ -351,27 +351,26 @@ export function useCommandItemAction(args: {
   setCommandScopeCommands: Setter<CommandWithInfo[]>;
 }) {
   const { setCommandScopeCommands } = args;
-  const { replaceSplit, insertSplit } = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
   const blockOrchestrator = useGlobalBlockOrchestrator();
 
   return function itemAction(
     item: CommandItemCard | undefined,
     action: ItemAction
   ) {
-    console.log('ITEM ACTION', item, action);
     if (!item) return;
     const blockName = getCommandItemBlockName(item);
     const id = item.data.id;
 
     if (blockName) {
-      if (action === 'new-split') {
-        insertSplit({ type: blockName, id }, 'kommand-menu');
-      } else {
-        replaceSplit({
-          content: { type: blockName, id },
+      openWithSplit(
+        { type: blockName, id },
+        {
           referredFrom: 'kommand-menu',
-        });
-      }
+          preferNewSplit: action === 'new-split',
+        }
+      );
+
       if (item.snippet) {
         gotoSnippetLocation(blockOrchestrator, id, item.snippet, cleanQuery());
       }
@@ -544,7 +543,7 @@ export function CommandItemCard(props: CommandItemProps) {
 
   const CommandItemContainer = ({ children }: { children?: JSXElement }) => {
     const optionKeyPressed = createMemo(() => {
-      return pressedKeys().has('opt');
+      return pressedKeys().has('shift');
     });
     return (
       <div

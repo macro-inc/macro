@@ -294,8 +294,8 @@ pub async fn handle_send_chat_message(
             }
         })?;
     let is_first_message = chat.messages.is_empty();
-    let model = if incoming_message.model == Model::Claude45Opus {
-        Model::Claude45Opus
+    let model = if incoming_message.model == Model::Claude46Opus {
+        Model::Claude46Opus
     } else {
         FALLBACK_MODEL
     };

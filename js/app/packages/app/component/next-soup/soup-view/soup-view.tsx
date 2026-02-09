@@ -18,7 +18,9 @@ import {
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
 import { useElementItemCount } from '@app/component/next-soup/use-element-item-count';
+import { registerPreviewEntity } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import {
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
@@ -245,12 +247,30 @@ export const SoupViewList = (props: SoupViewListProps) => {
   useSoupViewHotkeys({
     splitId: panel.handle.id,
     scopeId: scopeId(),
-    domRef: soupViewRef,
     soup,
     splitHandle: panel.handle,
     virtualizerHandle,
     previewState: () => !!soup.previewEntity(),
     getSplitCount,
+  });
+
+  // Register previewed entity for auto-attach
+  createEffect(() => {
+    const entity = soup.previewEntity() ? soup.focus.item() : undefined;
+    if (!entity) {
+      registerPreviewEntity(panel.handle.id, undefined);
+      return;
+    }
+    const type =
+      entity.type === 'document'
+        ? fileTypeToResolvedBlockName(
+            (entity as { fileType?: string }).fileType
+          )
+        : entity.type;
+    registerPreviewEntity(panel.handle.id, { type, id: entity.id });
+  });
+  onCleanup(() => {
+    registerPreviewEntity(panel.handle.id, undefined);
   });
 
   // Create markDone action for swipe/click handlers
@@ -296,7 +316,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     }
 
     await openEntityInSplitFromUnifiedList(entity, {
-      openInNewSplit: event.altKey,
+      openInNewSplit: event.shiftKey,
       location,
       splitHandle: panel.handle,
     });
@@ -389,6 +409,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
   );
 
   onCleanup(() => debouncedFetchMore.clear());
+
+  const [entityContextMenuOpen, setEntityContextMenuOpen] = createSignal<
+    string | undefined
+  >(undefined);
 
   const [localEntityListRef, setLocalEntityListRef] = createSignal<
     HTMLDivElement | undefined

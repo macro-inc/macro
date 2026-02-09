@@ -135,14 +135,14 @@ export function MessageContainer(props: MessageContainerProps) {
     );
   });
 
+  const { openWithSplit } = useSplitLayout();
+  const queryClient = useQueryClient();
   const draftAttachments = createMemo(() => {
     return props.message.attachments_draft ?? [];
   });
 
-  const { replaceOrInsertSplit } = useSplitLayout();
-  const queryClient = useQueryClient();
-
   const onClickAttachment = async (
+    event: MouseEvent,
     attachment: Attachment,
     fileType: FileType | undefined
   ) => {
@@ -183,10 +183,10 @@ export function MessageContainer(props: MessageContainerProps) {
     });
 
     const blockName = fileType ? fileTypeToBlockName(fileType) : 'unknown';
-    replaceOrInsertSplit({
-      type: blockName,
-      id: document_id,
-    })?.activate?.();
+    openWithSplit(
+      { type: blockName, id: document_id },
+      { preferNewSplit: event.shiftKey }
+    );
   };
 
   const handleExpand = () => {
@@ -284,8 +284,8 @@ export function MessageContainer(props: MessageContainerProps) {
                         fileName: attachment.filename ?? '',
                         mimeType: attachment.mime_type ?? undefined,
                       }}
-                      onClick={(fileType) =>
-                        onClickAttachment(attachment, fileType)
+                      onClick={(event, fileType) =>
+                        onClickAttachment(event, attachment, fileType)
                       }
                     />
                   )}

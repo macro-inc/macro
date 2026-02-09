@@ -25,7 +25,7 @@ const DRAWER_ID = 'attachments';
 export function AttachmentsModal() {
   const drawerControl = useDrawerControl(DRAWER_ID);
   const currentBlockId = useBlockId();
-  const { replaceOrInsertSplit } = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
   const channelContext = useChannelContext();
 
   const mentionsQuery = useMentionsQuery(() => currentBlockId);
@@ -51,8 +51,14 @@ export function AttachmentsModal() {
       );
   });
 
-  const navigateToItem = (blockName: BlockName, blockId: string) => {
-    replaceOrInsertSplit({ type: blockName, id: blockId });
+  const onClickAttachment = (
+    event: MouseEvent,
+    details: { blockName: BlockName; blockId: string }
+  ) => {
+    openWithSplit(
+      { type: details.blockName, id: details.blockId },
+      { preferNewSplit: !event.shiftKey }
+    );
   };
 
   return (
@@ -93,7 +99,7 @@ export function AttachmentsModal() {
                     <Suspense>
                       <AttachmentItem
                         attachment={attachment}
-                        onNavigate={navigateToItem}
+                        onNavigate={onClickAttachment}
                         senderId={channelContext
                           .messageSenderMap()
                           .get(attachment.message_id)}
@@ -126,7 +132,10 @@ function makeAttachmentFromMention(
 
 type AttachmentItemProps = {
   attachment: Attachment;
-  onNavigate: (blockName: BlockName | BlockAlias, blockId: string) => void;
+  onNavigate: (
+    event: MouseEvent,
+    details: { blockName: BlockName | BlockAlias; blockId: string }
+  ) => void;
   senderId: string | undefined;
 };
 
@@ -139,10 +148,13 @@ function AttachmentItem(props: AttachmentItemProps) {
     type: props.attachment.entity_type as ItemType,
   }));
 
-  const handleClick = () => {
+  const handleClick = (event: MouseEvent) => {
     const item = preview();
     if (isAccessiblePreviewItem(item) && item.type === 'document') {
-      props.onNavigate(fileTypeToBlockName(item.fileType), item.id);
+      props.onNavigate(event, {
+        blockName: fileTypeToBlockName(item.fileType),
+        blockId: item.id,
+      });
     } else {
       toast.failure('Failed to open attachment');
     }

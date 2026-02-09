@@ -5,6 +5,11 @@ import type { SoupState } from '../create-soup-state';
 import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 
+const DEFAULT_ENTITY_SIZE = 40;
+const CONTEXT_ENTITIES_COUNT = 3;
+
+const CONTEXT_OFFSET = DEFAULT_ENTITY_SIZE * CONTEXT_ENTITIES_COUNT;
+
 type UseSoupNavigationHotkeysOptions = {
   scopeId: string;
   soup: SoupState;
@@ -17,21 +22,44 @@ export const useSoupNavigationHotkeys = (
 ) => {
   const { scopeId, soup, virtualizerHandle } = options;
 
+  const scrollTo = (index: number) => {
+    const handle = virtualizerHandle();
+
+    if (!handle) return;
+
+    // We add some space between the top and bottom when scrolling up/down
+
+    const scrollOffset = handle.getItemOffset(index);
+
+    // How many items should we show above/below the index we want to scroll to
+    let contextOffset = CONTEXT_ENTITIES_COUNT;
+
+    // If we're going to end up scrolling out of the top of scroll area,
+    // we set our offset to be negative
+    if (scrollOffset - CONTEXT_OFFSET < handle.scrollOffset) {
+      contextOffset *= -1;
+    }
+
+    virtualizerHandle()?.scrollToIndex(index + contextOffset, {
+      align: 'nearest',
+    });
+  };
+
   const navigateAndSelectEntity = (offset: number) => {
     const nextRow = soup.navigate.by(offset);
     if (!nextRow) return true;
     soup.selection.select(nextRow.item);
-    virtualizerHandle()?.scrollToIndex(nextRow.index, { align: 'nearest' });
+    scrollTo(nextRow.index);
     return true;
   };
 
   const handleNavigationSelection = (offset: number) => {
     const focusedEntity = soup.focus.item();
-    const nextIndex = soup.navigate.peekOffset(offset);
+    const next = soup.navigate.peekOffset(offset);
 
     const selection = soup.selection;
 
-    const nextRow = nextIndex?.item;
+    const nextRow = next?.item;
     if (!nextRow) return true;
 
     if (!focusedEntity) {
@@ -56,6 +84,7 @@ export const useSoupNavigationHotkeys = (
     if (selection.isSelected(nextRow.id)) {
       selection.toggle(focusedEntity);
       soup.navigate.by(offset);
+      scrollTo(next.index);
       return true;
     }
 
@@ -75,7 +104,7 @@ export const useSoupNavigationHotkeys = (
 
       if (!next) return true;
 
-      virtualizerHandle()?.scrollToIndex(next.index, { align: 'nearest' });
+      scrollTo(next.index);
 
       return true;
     },
@@ -93,7 +122,7 @@ export const useSoupNavigationHotkeys = (
 
       if (!next) return true;
 
-      virtualizerHandle()?.scrollToIndex(next.index, { align: 'nearest' });
+      scrollTo(next.index);
 
       return true;
     },

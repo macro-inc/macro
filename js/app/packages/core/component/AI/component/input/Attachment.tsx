@@ -162,7 +162,7 @@ function ChatAttachment(props: {
     if (isImageAttachment(attachment)) return;
     const block_ = block();
     if (!block_) return;
-    const inNewSplit = openInNewSplitForMention(e.altKey, true);
+    const inNewSplit = openInNewSplitForMention(e.shiftKey, true);
     const open = inNewSplit ? insertSplit : replaceOrInsertSplit;
     open({
       id: attachment.attachmentId,
