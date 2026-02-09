@@ -48,7 +48,7 @@ import type { Component, JSX } from 'solid-js';
 import { Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
-import { formatDate, isoToUnixTimestamp } from '../util/date';
+import { formatDate } from '../util/date';
 import NotFound from './AccessErrorViews/NotFound';
 import Unauthorized from './AccessErrorViews/Unauthorized';
 import { Tooltip } from './Tooltip';
@@ -557,7 +557,7 @@ export function PopupPreview(props: {
           >
             {(context) => (
               <MetadataInfo icon={ClockIcon} align="right">
-                {formatDate(isoToUnixTimestamp(context().created_at))}
+                {formatDate(context().created_at)}
               </MetadataInfo>
             )}
           </Show>
@@ -605,7 +605,7 @@ export function PopupPreview(props: {
                           <ClockIcon class="size-4" />
                           <span class="text-xs font-medium">
                             Snapshot from{' '}
-                            {formatDate(isoToUnixTimestamp(snapshot().date), {
+                            {formatDate(new Date(snapshot().date), {
                               showTime: true,
                             })}
                           </span>
