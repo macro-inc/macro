@@ -207,9 +207,8 @@ export type SearchSnippet = {
 type CommandItemBase = {
   snippet?: SearchSnippet;
   height?: number;
-  // Add an optional timestamp to pass to fresh search/sort
-  updatedAt?: number | string;
-  viewedAt?: number | string;
+  updatedAt?: Date;
+  viewedAt?: Date;
 };
 
 type SimpleText = {
@@ -229,7 +228,7 @@ export type EmailPreview = {
   id: string;
   name: string; // subject
   sender: string;
-  timestamp: string;
+  timestamp: Date;
   is_read: boolean;
   attachments: Attachment[];
 };
