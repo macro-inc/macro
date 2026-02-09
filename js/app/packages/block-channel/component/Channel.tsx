@@ -1,11 +1,6 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import { URL_PARAMS } from '@block-channel/constants';
-import {
-  isDraggingOverChannelSignal,
-  isValidChannelDragSignal,
-} from '@block-channel/signal/attachment';
-import { activeThreadIdSignal } from '@block-channel/signal/threads';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
 import { withAnalytics } from '@coparse/analytics';
 import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
@@ -85,8 +80,6 @@ export function Channel(props: {
   channelId: string;
   target?: TargetMessageInfo;
 }) {
-  const [_activeThreadId, setActiveThreadId] = activeThreadIdSignal;
-
   const channelContext = useChannelContext();
   const channelQuery = useChannelQuery(() => props.channelId);
   const latestActivity = useChannelActivity(props.channelId);
@@ -118,8 +111,8 @@ export function Channel(props: {
   const [orderedMessages, setOrderedMessages] = createSignal<Message[]>([]);
   const scopeId = blockHotkeyScopeSignal.get;
   const blockRef = blockElementSignal.get;
-  const setIsDraggingOverChannel = isDraggingOverChannelSignal.set;
-  const setIsValidChannelDrag = isValidChannelDragSignal.set;
+  const [isDraggingOverChannel, setIsDraggingOverChannel] = createSignal(false);
+  const [isValidChannelDrag, setIsValidChannelDrag] = createSignal(true);
   const notificationSource = useGlobalNotificationSource();
 
   const blockHandle = blockHandleSignal.get;
@@ -148,9 +141,6 @@ export function Channel(props: {
     goToLocationFromParams: async (params: Record<string, unknown>) => {
       const threadId = params[URL_PARAMS.thread] as string | undefined;
       const messageId = params[URL_PARAMS.message] as string | undefined;
-      if (threadId) {
-        setActiveThreadId(threadId);
-      }
       if (messageId) {
         setTargetMessage({
           messageId,
@@ -456,6 +446,8 @@ export function Channel(props: {
                   onFocusLeaveStart={onChannelInputFocusLeaveStart}
                   autoFocusOnMount={autoFocusOnMount()}
                   domRef={setChannelInputRef}
+                  isDraggingOverChannel={isDraggingOverChannel}
+                  isValidChannelDrag={isValidChannelDrag}
                 />
               </Suspense>
             </div>
