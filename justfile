@@ -14,7 +14,6 @@ fix_environment *ARGS:
 
 get_environment *ARGS:
   sops --input-type dotenv --output-type dotenv -d .env-local{{ ARGS }}.enc > .env
-  ./scripts/inject_aws_creds.sh .env
 
 edit_environment *ARGS:
   sops --input-type dotenv --output-type dotenv .env-local{{ ARGS}}.enc
@@ -53,7 +52,6 @@ stop-databases:
 import 'local_stack.just'
 
 # Sets up local database
-# Assumes postgres is running locally via `just run_dbs`
 setup_local_dbs:
   # run dbs detached
   just run_dbs -d
