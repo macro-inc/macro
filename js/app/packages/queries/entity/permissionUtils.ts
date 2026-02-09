@@ -1,17 +1,17 @@
 import type {
   AccessLevel,
-  EntityPermission,
+  EntityPermissionSchema,
   EntityPermissionResponse,
   ParticipantRole,
 } from '@service-storage/generated/schemas';
 
 type AccessResponse = Extract<EntityPermissionResponse, { status: 'access' }>;
 type AccessLevelPermission = Extract<
-  EntityPermission,
+  EntityPermissionSchema,
   { type: 'access_level' }
 >;
 type ChannelRolePermission = Extract<
-  EntityPermission,
+  EntityPermissionSchema,
   { type: 'channel_role' }
 >;
 
@@ -22,13 +22,13 @@ export function hasEntityAccess(
 }
 
 export function isAccessLevelPermission(
-  permission: EntityPermission
+  permission: EntityPermissionSchema
 ): permission is AccessLevelPermission {
   return permission.type === 'access_level';
 }
 
 export function isChannelRolePermission(
-  permission: EntityPermission
+  permission: EntityPermissionSchema
 ): permission is ChannelRolePermission {
   return permission.type === 'channel_role';
 }
