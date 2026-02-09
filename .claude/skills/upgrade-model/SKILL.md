@@ -93,22 +93,12 @@ Fix any compilation errors before proceeding.
 
 ### 6. Generate frontend types
 
-Run the type generation script from `js/app/`:
+Run from `js/app/`:
 ```bash
-cd js/app && bun scripts/generate-dcs-models.ts
+cd js/app && bun install && bun run gen-api
 ```
 
-This fetches from the dev/prod DCS service. If the backend changes are **not yet deployed** (which is the typical case), the script will regenerate types from the OLD models. In that case, manually update the generated file:
-
-File: `js/app/packages/service-clients/service-cognition/generated/schemas/model.ts`
-
-Replace the old model string with the new one in the `Model` object and `AllModels` array.
-
-Also update the OpenAPI spec:
-
-File: `js/app/packages/service-clients/service-cognition/openapi.json`
-
-Add the new model string to the `Model` enum array in the schema definitions.
+This builds all Rust OpenAPI and models binaries from local code, generates `openapi.json`, runs orval for TypeScript types, and generates `model.ts` from the local models binary. All generated files will reflect your local Rust changes.
 
 ### 7. Run `bun check` to find frontend usages
 
@@ -131,6 +121,13 @@ cd js/app && bun format && bun check
 ```
 
 The only errors remaining should be **pre-existing** ones unrelated to models (e.g. `three`, `@aws-crypto/sha256-js` type issues). All model-related errors must be resolved.
+
+Finally, run the CI check:
+```bash
+cd js/app && bun run gen-api -- --check
+```
+
+This must pass.
 
 ## Notes
 
