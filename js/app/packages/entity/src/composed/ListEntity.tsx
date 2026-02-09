@@ -5,6 +5,7 @@ import {
   isProjectContainedEntity,
   type ProjectEntity,
   type EntityData,
+  isTaskEntity,
 } from '../types/entity';
 import { Match, Show, Switch, type Ref } from 'solid-js';
 import {
@@ -291,6 +292,9 @@ function WideLayout(props: LayoutProps) {
               />
             </span>
           )}
+        </Show>
+        <Show when={isTaskEntity(props.entity) && props.entity}>
+          {(entity) => <Entity.Properties entity={entity()} />}
         </Show>
         <Show when={props.isShared}>
           <SharedBadge ownerId={props.entity.ownerId} />
