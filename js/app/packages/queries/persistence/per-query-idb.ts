@@ -9,13 +9,15 @@ export type PersistedQueryEntry = Readonly<{
   buster: string;
 }>;
 
-export type PerQueryIDBStore = {
+export type PerQueryPersistence = {
   get: (queryHash: string) => Promise<PersistedQueryEntry | undefined>;
   set: (entry: PersistedQueryEntry) => void;
   remove: (queryHash: string) => void;
 };
 
-type PerQueryIDBOptions = Readonly<{
+export type PerQueryIDBStore = PerQueryPersistence;
+
+type PerQueryPersistenceOptions = Readonly<{
   dbName: string;
   debounceMs?: number;
 }>;
@@ -62,8 +64,8 @@ async function withStore<T>(
 }
 
 export function createPerQueryIDBStore(
-  options: PerQueryIDBOptions
-): PerQueryIDBStore {
+  options: PerQueryPersistenceOptions
+): PerQueryPersistence {
   const { dbName } = options;
   const debounceMs = options.debounceMs ?? DEFAULT_DEBOUNCE_MS;
 

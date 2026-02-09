@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type {
   PerQueryIDBStore,
   PersistedQueryEntry,
-} from './storage/per-query-idb';
+} from './persistence/per-query-idb';
 import {
   queryKeyHasPrefix,
   setupQueryPersistence,

@@ -5,7 +5,7 @@ import {
 } from '@tanstack/solid-query-persist-client';
 import type { Persister } from '@tanstack/solid-query-persist-client';
 import type { QueryKey } from '@tanstack/query-core';
-import type { PerQueryIDBStore } from './storage/per-query-idb';
+import type { PerQueryIDBStore } from './persistence/per-query-idb';
 
 type Query = NonNullable<
   PersistQueryClientOptions['dehydrateOptions']

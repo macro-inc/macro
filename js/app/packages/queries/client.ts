@@ -1,5 +1,5 @@
 import { QueryClient } from '@tanstack/solid-query';
-import { createPerQueryIDBStore } from './storage/per-query-idb';
+import { createPerQueryIDBStore } from './persistence/per-query-idb';
 import {
   createPersistenceKey,
   queryKeyHasPrefix,
