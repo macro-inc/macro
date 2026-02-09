@@ -1,7 +1,7 @@
 //! Entity access service implementation.
 
 use crate::domain::{
-    models::{AccessError, AccessLevel, EntityType},
+    models::{AccessError, AccessLevel, EntityPermission, EntityType},
     ports::{AccessRepository, EntityAccessService},
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
@@ -110,6 +110,53 @@ where
             Some(level) if level >= required_level => Ok(level),
             Some(_) => Err(AccessError::Unauthorized),
             None => Err(AccessError::Unauthorized),
+        }
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_entity_permission(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        entity_id: &str,
+        entity_type: EntityType,
+        user_org_id: Option<i64>,
+    ) -> Result<EntityPermission, AccessError> {
+        match entity_type {
+            EntityType::Document
+            | EntityType::Chat
+            | EntityType::Project
+            | EntityType::EmailThread => {
+                let access = self
+                    .get_optimized_access(entity_id, user_id, entity_type)
+                    .await?;
+                match access {
+                    Some(level) => Ok(EntityPermission::AccessLevel {
+                        access_level: level,
+                    }),
+                    None => Err(AccessError::Unauthorized),
+                }
+            }
+            EntityType::Channel => {
+                let channel_uuid = Uuid::from_str(entity_id)
+                    .map_err(|_| AccessError::BadRequest("Invalid channel ID format"))?;
+
+                let role = self
+                    .repo
+                    .get_channel_role(&channel_uuid, user_id, user_org_id)
+                    .await?;
+
+                match role {
+                    Some(role) => Ok(EntityPermission::ChannelRole { role }),
+                    None => {
+                        if self.repo.channel_exists(&channel_uuid).await? {
+                            Err(AccessError::Unauthorized)
+                        } else {
+                            Err(AccessError::BadRequest("Channel not found"))
+                        }
+                    }
+                }
+            }
+            _ => Err(AccessError::BadRequest("Unsupported entity type")),
         }
     }
 }

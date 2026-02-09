@@ -307,8 +307,9 @@ use utoipa::OpenApi;
             models_permissions::share_permission::UpdateSharePermissionRequestV2, // Share permission
             models_permissions::share_permission::channel_share_permission::ChannelSharePermission,
             models_permissions::share_permission::channel_share_permission::UpdateChannelSharePermission, // Channel share permissions
-            macro_middleware::cloud_storage::ensure_access::entity_permission::EntityPermissionResponse,
-            macro_middleware::cloud_storage::ensure_access::entity_permission::EntityPermission,
+            entity::get_entity_permission::EntityPermissionResponse,
+            entity::get_entity_permission::EntityPermissionSchema,
+            entity::get_entity_permission::ParticipantRoleSchema,
 
             // Chat
             Chat,
