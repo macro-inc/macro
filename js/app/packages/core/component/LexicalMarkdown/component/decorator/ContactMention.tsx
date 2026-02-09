@@ -34,13 +34,7 @@ export function ContactMention(props: ContactMentionDecoratorProps) {
     // The contactId is the email or @domain
     const contactId = encodeURIComponent(props.emailOrDomain);
     const inNewSplit = openInNewSplitForMention(e?.shiftKey, e != null);
-    openWithSplit({
-      content: {
-        type: 'contact',
-        id: contactId,
-      },
-      force: inNewSplit ? 'insert' : undefined,
-    });
+    openWithSplit({ type: 'contact', id: contactId }, { newSplit: inNewSplit });
   };
 
   const displayName = () => {

@@ -50,19 +50,20 @@ const createBlock = async (spec: {
 
     const block = { type: blockName, id };
 
-    openWithSplit({
-      content: block,
+    openWithSplit(block, {
       referredFrom: 'launcher',
-      force: spec.shouldInsert ? 'insert' : undefined,
+      newSplit: spec.shouldInsert,
     });
 
     return;
   } else {
-    const split = openWithSplit({
-      content: { type: 'component', id: 'loading' },
-      referredFrom: 'launcher',
-      force: spec.shouldInsert ? 'insert' : undefined,
-    });
+    const split = openWithSplit(
+      { type: 'component', id: 'loading' },
+      {
+        referredFrom: 'launcher',
+        newSplit: spec.shouldInsert,
+      }
+    );
 
     const id = await createFn();
     if (!id) {
@@ -91,11 +92,13 @@ const createComponent = async (spec: {
     return;
   }
 
-  openWithSplit({
-    content: { type: 'component', id: spec.componentId },
-    referredFrom: 'launcher',
-    force: spec.shouldInsert ? 'insert' : undefined,
-  });
+  openWithSplit(
+    { type: 'component', id: spec.componentId },
+    {
+      referredFrom: 'launcher',
+      newSplit: spec.shouldInsert,
+    }
+  );
 };
 
 type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {

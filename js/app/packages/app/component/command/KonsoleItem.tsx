@@ -363,14 +363,13 @@ export function useCommandItemAction(args: {
     const id = item.data.id;
 
     if (blockName) {
-      openWithSplit({
-        content: {
-          type: blockName,
-          id,
-        },
-        referredFrom: 'kommand-menu',
-        force: action === 'new-split' ? 'insert' : undefined,
-      });
+      openWithSplit(
+        { type: blockName, id },
+        {
+          referredFrom: 'kommand-menu',
+          newSplit: action === 'new-split',
+        }
+      );
 
       if (item.snippet) {
         gotoSnippetLocation(blockOrchestrator, id, item.snippet, cleanQuery());

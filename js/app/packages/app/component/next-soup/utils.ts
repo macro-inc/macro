@@ -290,16 +290,15 @@ export const openEntityInSplitFromUnifiedList = async (
         }
       : undefined;
 
-  splitManager.openWithSplit({
-    content: {
-      ...content,
-      params,
-    },
-    referredFrom: 'unified-list',
-    activate: true,
-    force: openInNewSplit ? 'insert' : undefined,
-    handle: splitHandle,
-  });
+  splitManager.openWithSplit(
+    { ...content, params },
+    {
+      referredFrom: 'unified-list',
+      activate: true,
+      newSplit: openInNewSplit,
+      handle: splitHandle,
+    }
+  );
 
   // Navigate to specific location if provided
   if (!location) return;

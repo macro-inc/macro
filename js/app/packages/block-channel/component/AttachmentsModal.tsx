@@ -55,10 +55,10 @@ export function AttachmentsModal() {
     event: MouseEvent,
     details: { blockName: BlockName; blockId: string }
   ) => {
-    openWithSplit({
-      content: { type: details.blockName, id: details.blockId },
-      force: event.shiftKey ? 'replace' : 'insert',
-    });
+    openWithSplit(
+      { type: details.blockName, id: details.blockId },
+      { newSplit: !event.shiftKey }
+    );
   };
 
   return (

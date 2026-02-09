@@ -103,13 +103,13 @@ export function Attachment(props: AttachmentProps) {
               onClick={(e) => {
                 if (props.attachment.pending) return;
                 const inNewSplit = openInNewSplitForMention(e.altKey, true);
-                openWithSplit({
-                  content: {
+                openWithSplit(
+                  {
                     type: fileTypeToBlockName(blockName()),
                     id: props.attachment.id,
                   },
-                  force: inNewSplit ? 'insert' : undefined,
-                })?.activate?.();
+                  { newSplit: inNewSplit }
+                );
               }}
             />
           )}

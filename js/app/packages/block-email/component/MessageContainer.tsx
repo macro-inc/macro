@@ -183,13 +183,10 @@ export function MessageContainer(props: MessageContainerProps) {
     });
 
     const blockName = fileType ? fileTypeToBlockName(fileType) : 'unknown';
-    openWithSplit({
-      content: {
-        type: blockName,
-        id: document_id,
-      },
-      force: event.shiftKey ? 'insert' : undefined,
-    })?.activate?.();
+    openWithSplit(
+      { type: blockName, id: document_id },
+      { newSplit: event.shiftKey }
+    );
   };
 
   const handleExpand = () => {

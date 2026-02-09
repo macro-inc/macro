@@ -92,13 +92,10 @@ export function References(props: ReferenceProps) {
     blockName: BlockName | BlockAlias;
     blockId: string;
   }) => {
-    openWithSplit({
-      content: {
-        type: blockName,
-        id: blockId,
-      },
-      force: event?.shiftKey === true ? 'replace' : 'insert',
-    });
+    openWithSplit(
+      { type: blockName, id: blockId },
+      { newSplit: event?.shiftKey !== true }
+    );
   };
 
   const navigateToMessage = ({

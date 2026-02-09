@@ -36,13 +36,10 @@ export function UserTooltip(props: UserTooltipProps) {
         });
         const channelId = isOk(result) && result[1]?.channel_id;
         if (channelId) {
-          openWithSplit({
-            content: {
-              type: 'channel',
-              id: channelId,
-            },
-            force: e.shiftKey ? 'insert' : undefined,
-          });
+          openWithSplit(
+            { type: 'channel', id: channelId },
+            { newSplit: e.shiftKey }
+          );
         } else {
           toast.failure('Failed to open direct message');
         }

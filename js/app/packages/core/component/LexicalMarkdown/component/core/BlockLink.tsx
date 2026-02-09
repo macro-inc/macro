@@ -53,15 +53,7 @@ export function openDocument(
     return;
   }
 
-  const handle = openWithSplit({
-    content: {
-      type: targetBlock,
-      id,
-    },
-    force: inNewSplit ? 'insert' : undefined,
-  });
-
-  handle?.activate();
+  openWithSplit({ type: targetBlock, id }, { newSplit: inNewSplit });
 
   if (isBlockNameWithLocation(targetBlock)) {
     openLocation(targetBlock, id, params);

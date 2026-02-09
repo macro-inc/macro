@@ -123,13 +123,13 @@ export type CreateNewSplitOptions = {
 };
 
 export type OpenWithSplitOptions = {
-  content: SplitContent;
   mergeHistory?: boolean;
   activate?: boolean;
   referredFrom?: ReferredFrom;
   allowDuplicate?: boolean;
   replaceWhenFull?: boolean;
-  force?: 'replace' | 'insert';
+  /** If true, opens in a new split. If false/undefined, replaces current split. */
+  newSplit?: boolean;
   handle?: SplitHandle;
 };
 
@@ -214,7 +214,10 @@ export type SplitManager = {
   /** Create a new split with the provided initial content and activate it */
   createNewSplit: (options: CreateNewSplitOptions) => SplitHandle;
 
-  openWithSplit: (options: OpenWithSplitOptions) => SplitHandle;
+  openWithSplit: (
+    content: SplitContent,
+    options?: OpenWithSplitOptions
+  ) => SplitHandle;
 
   /** Set a split as active by its split id  */
   activateSplit: (id: SplitId) => void;
@@ -991,11 +994,11 @@ export function createSplitLayout(
     });
   }
 
-  function openWithSplit(options: OpenWithSplitOptions) {
-    const existingSplit = getSplitByContent(
-      options.content.type,
-      options.content.id
-    );
+  function openWithSplit(
+    content: SplitContent,
+    options: OpenWithSplitOptions = {}
+  ): SplitHandle {
+    const existingSplit = getSplitByContent(content.type, content.id);
 
     if (!options.allowDuplicate && existingSplit) {
       if (options.activate !== false) {
@@ -1008,17 +1011,19 @@ export function createSplitLayout(
     let splitHandle = options.handle;
 
     if (!splitHandle) {
-      splitHandle = state.activeSplitId && getSplit(state.activeSplitId);
+      splitHandle = state.activeSplitId
+        ? getSplit(state.activeSplitId)
+        : undefined;
     }
 
-    const shouldReplaceOnEdge =
+    const shouldReplaceWhenFull =
       options.replaceWhenFull !== false && !canAppendSplit();
 
-    const shouldReplace = options.force !== 'insert' || shouldReplaceOnEdge;
+    const shouldReplace = !options.newSplit || shouldReplaceWhenFull;
 
     if (splitHandle && shouldReplace) {
       splitHandle.replace({
-        next: options.content,
+        next: content,
         referredFrom: options.referredFrom ?? null,
         mergeHistory: options.mergeHistory,
       });
@@ -1030,7 +1035,7 @@ export function createSplitLayout(
       return splitHandle;
     } else {
       return createNewSplit({
-        content: options.content,
+        content,
         activate: options.activate ?? true,
         referredFrom: options.referredFrom ?? null,
       });

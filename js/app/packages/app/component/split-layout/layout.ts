@@ -11,16 +11,22 @@ import { isMobile } from '@core/mobile/isMobile';
 export function useSplitLayout() {
   const splitPanelContext = useContext(SplitPanelContext);
 
-  function openWithSplit(options: OpenWithSplitOptions) {
+  function openWithSplit(
+    content: SplitContent,
+    options?: OpenWithSplitOptions
+  ) {
     const splitManager = globalSplitManager();
     if (!splitManager) {
       console.error('No split manager found');
       return;
     }
 
-    return splitManager.openWithSplit({
+    // On mobile, never open in new split
+    const newSplit = isMobile() ? false : options?.newSplit;
+
+    return splitManager.openWithSplit(content, {
       ...options,
-      force: isMobile() ? 'replace' : options.force,
+      newSplit,
     });
   }
 
@@ -34,8 +40,7 @@ export function useSplitLayout() {
       return;
     }
 
-    return openWithSplit({
-      content,
+    return openWithSplit(content, {
       referredFrom,
       handle: splitPanelContext?.handle,
       activate: true,
@@ -49,12 +54,11 @@ export function useSplitLayout() {
   }) {
     const { content, mergeHistory, referredFrom } = options;
 
-    return openWithSplit({
-      content: content,
+    return openWithSplit(content, {
       mergeHistory,
       referredFrom,
       handle: splitPanelContext?.handle,
-      force: 'replace',
+      newSplit: false,
     });
   }
 
@@ -62,16 +66,10 @@ export function useSplitLayout() {
     content: SplitContent,
     referredFrom: ReferredFrom = null
   ) {
-    // On mobile, replace instead of inserting a new split
-    if (isMobile()) {
-      return replaceSplit({ content, referredFrom });
-    }
-
-    return openWithSplit({
-      content,
+    return openWithSplit(content, {
       activate: true,
       referredFrom,
-      force: 'insert',
+      newSplit: true,
     });
   }
 
