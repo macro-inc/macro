@@ -67,26 +67,17 @@ export function extractMessageContent(notification: Notification): string {
   const n = notification as UnifiedNotification;
   const meta = n.notificationMetadata;
 
-  switch (meta.tag) {
-    case 'channel_mention':
-    case 'channel_message_send':
-    case 'channel_message_reply':
-      return meta.content.messageContent || '';
-    case 'document_mention':
-      return meta.content.documentName || '';
-    case 'mentioned_in_document_comment':
-      return meta.content.text || '';
-    case 'new_email':
-      return meta.content.subject || '';
-    case 'task_assigned':
-      return meta.content.taskName ?? '';
-    case 'channel_invite':
-    case 'invite_to_team':
-      return '';
-    default:
-      const _exhaustive: never = meta;
-      throw new Error(`Unhandled case: ${_exhaustive}`);
-  }
+  return match(meta)
+    .with({ tag: 'channel_mention' }, (m) => m.content.messageContent || '')
+    .with({ tag: 'channel_message_send' }, (m) => m.content.messageContent || '')
+    .with({ tag: 'channel_message_reply' }, (m) => m.content.messageContent || '')
+    .with({ tag: 'document_mention' }, (m) => m.content.documentName || '')
+    .with({ tag: 'mentioned_in_document_comment' }, (m) => m.content.text || '')
+    .with({ tag: 'new_email' }, (m) => m.content.subject || '')
+    .with({ tag: 'task_assigned' }, (m) => m.content.taskName ?? '')
+    .with({ tag: 'channel_invite' }, () => '')
+    .with({ tag: 'invite_to_team' }, () => '')
+    .exhaustive();
 }
 
 /**

@@ -1,102 +1,67 @@
 import type { UnifiedNotification } from '@service-notification/client';
+import { match } from 'ts-pattern';
 
 // Helper functions for derived notification data
 
 export function getNotificationAction(n: UnifiedNotification): string {
-  switch (n.notificationMetadata.tag) {
-    case 'channel_mention':
-      return 'mentioned you in';
-    case 'document_mention':
-      return 'sent a document';
-    case 'mentioned_in_document_comment':
-      return 'mentioned you in';
-    case 'channel_message_send':
-      return 'sent a message in';
-    case 'channel_message_reply':
-      return 'replied in';
-    case 'channel_invite':
-      return 'invited you to';
-    case 'new_email':
-      return 'sent a new email';
-    case 'invite_to_team':
-      return 'invited you to';
-    case 'task_assigned':
-      return 'assigned you a task';
-    default:
-      const _exhaustive: never = n.notificationMetadata;
-      throw new Error(`Unhandled case: ${_exhaustive}`);
-  }
+  return match(n.notificationMetadata.tag)
+    .with('channel_mention', () => 'mentioned you in')
+    .with('document_mention', () => 'sent a document')
+    .with('mentioned_in_document_comment', () => 'mentioned you in')
+    .with('channel_message_send', () => 'sent a message in')
+    .with('channel_message_reply', () => 'replied in')
+    .with('channel_invite', () => 'invited you to')
+    .with('new_email', () => 'sent a new email')
+    .with('invite_to_team', () => 'invited you to')
+    .with('task_assigned', () => 'assigned you a task')
+    .exhaustive();
 }
 
 export function getNotificationTargetName(
   n: UnifiedNotification
 ): string | undefined {
   const m = n.notificationMetadata;
-  switch (m.tag) {
-    case 'channel_invite':
-      return m.content.channelName;
-    case 'document_mention':
-      return m.content.documentName;
-    case 'mentioned_in_document_comment':
-      return m.content.documentName;
-    case 'invite_to_team':
-      return m.content.teamName;
-    case 'task_assigned':
-      return m.content.taskName ?? undefined;
-    case 'channel_mention':
-    case 'channel_message_send':
-    case 'channel_message_reply':
-    case 'new_email':
-      return undefined;
-    default:
-      const _exhaustive: never = m;
-      throw new Error(`Unhandled case: ${_exhaustive}`);
-  }
+  return match(m)
+    .with({ tag: 'channel_invite' }, (m) => m.content.channelName)
+    .with({ tag: 'document_mention' }, (m) => m.content.documentName)
+    .with({ tag: 'mentioned_in_document_comment' }, (m) => m.content.documentName)
+    .with({ tag: 'invite_to_team' }, (m) => m.content.teamName)
+    .with({ tag: 'task_assigned' }, (m) => m.content.taskName ?? undefined)
+    .with({ tag: 'channel_mention' }, () => undefined)
+    .with({ tag: 'channel_message_send' }, () => undefined)
+    .with({ tag: 'channel_message_reply' }, () => undefined)
+    .with({ tag: 'new_email' }, () => undefined)
+    .exhaustive();
 }
 
 export function getNotificationContent(
   n: UnifiedNotification
 ): string | undefined {
   const m = n.notificationMetadata;
-  switch (m.tag) {
-    case 'channel_mention':
-    case 'channel_message_send':
-    case 'channel_message_reply':
-      return m.content.messageContent;
-    case 'document_mention':
-      return m.content.documentName;
-    case 'mentioned_in_document_comment':
-      return m.content.text;
-    case 'new_email':
-      return m.content.subject;
-    case 'task_assigned':
-      return m.content.taskName ?? undefined;
-    case 'channel_invite':
-    case 'invite_to_team':
-      return undefined;
-    default:
-      const _exhaustive: never = m;
-      throw new Error(`Unhandled case: ${_exhaustive}`);
-  }
+  return match(m)
+    .with({ tag: 'channel_mention' }, (m) => m.content.messageContent)
+    .with({ tag: 'channel_message_send' }, (m) => m.content.messageContent)
+    .with({ tag: 'channel_message_reply' }, (m) => m.content.messageContent)
+    .with({ tag: 'document_mention' }, (m) => m.content.documentName)
+    .with({ tag: 'mentioned_in_document_comment' }, (m) => m.content.text)
+    .with({ tag: 'new_email' }, (m) => m.content.subject)
+    .with({ tag: 'task_assigned' }, (m) => m.content.taskName ?? undefined)
+    .with({ tag: 'channel_invite' }, () => undefined)
+    .with({ tag: 'invite_to_team' }, () => undefined)
+    .exhaustive();
 }
 
 export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
   const m = n.notificationMetadata;
-  switch (m.tag) {
-    case 'channel_mention':
-    case 'channel_message_send':
-    case 'channel_message_reply':
-      return m.content.channelType !== 'directMessage';
-    case 'new_email':
-      return false;
-    case 'task_assigned':
-    case 'document_mention':
-    case 'mentioned_in_document_comment':
-    case 'channel_invite':
-    case 'invite_to_team':
-      return true;
-    default:
-      const _exhaustive: never = m;
-      throw new Error(`Unhandled case: ${_exhaustive}`);
-  }
+  return match(m)
+    .with({ tag: 'channel_mention' }, (m) => m.content.channelType !== 'directMessage')
+    .with({ tag: 'channel_message_send' }, (m) => m.content.channelType !== 'directMessage')
+    .with({ tag: 'channel_message_reply' }, (m) => m.content.channelType !== 'directMessage')
+    .with({ tag: 'new_email' }, () => false)
+    .with({ tag: 'task_assigned' }, () => true)
+    .with({ tag: 'document_mention' }, () => true)
+    .with({ tag: 'mentioned_in_document_comment' }, () => true)
+    .with({ tag: 'channel_invite' }, () => true)
+    .with({ tag: 'invite_to_team' }, () => true)
+    .exhaustive();
 }
