@@ -44,6 +44,5 @@ tokio = { workspace = true }
 tower = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true, optional = true }
-utoipa = { workspace = true }
 user_quota = { path = "../user_quota", optional = true }
 uuid = { workspace = true }

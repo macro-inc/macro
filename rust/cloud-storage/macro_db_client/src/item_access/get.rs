@@ -1,9 +1,6 @@
 use chrono::{DateTime, Utc};
-use model::comms::{ChannelType, ParticipantRole};
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::user_item_access::UserItemAccess;
-use sqlx::{Pool, Postgres};
-use uuid::Uuid;
 
 /// Gets the items owner and whether it's deleted
 #[tracing::instrument(skip(db), err)]
@@ -293,86 +290,12 @@ pub async fn get_user_item_access_for_thread(
     Ok(access_records)
 }
 
-struct ChannelRoleRow {
-    role: Option<ParticipantRole>,
-    channel_type: ChannelType,
-    org_id: Option<i64>,
-}
-
-#[tracing::instrument(skip(db), err)]
-pub async fn get_user_channel_role(
-    db: &Pool<Postgres>,
-    channel_id: &Uuid,
-    user_id: &str,
-    user_org_id: Option<i64>,
-) -> anyhow::Result<Option<ParticipantRole>> {
-    let row = sqlx::query_as!(
-        ChannelRoleRow,
-        r#"
-        SELECT
-            cp.role as "role?: ParticipantRole",
-            c.channel_type as "channel_type!: ChannelType",
-            c.org_id
-        FROM comms_channels c
-        LEFT JOIN comms_channel_participants cp
-            ON cp.channel_id = c.id AND cp.user_id = $2 AND cp.left_at IS NULL
-        WHERE c.id = $1
-        "#,
-        channel_id,
-        user_id,
-    )
-    .fetch_optional(db)
-    .await?;
-
-    let Some(row) = row else {
-        return Ok(None);
-    };
-
-    let role = match row.channel_type {
-        ChannelType::Public => Some(row.role.unwrap_or(ParticipantRole::Member)),
-        ChannelType::Organization => {
-            let org_match = user_org_id
-                .zip(row.org_id)
-                .is_some_and(|(user_org, ch_org)| user_org == ch_org);
-
-            if org_match {
-                Some(row.role.unwrap_or(ParticipantRole::Member))
-            } else {
-                row.role
-            }
-        }
-        ChannelType::Private | ChannelType::DirectMessage => row.role,
-    };
-
-    Ok(role)
-}
-
-#[tracing::instrument(skip(db), err)]
-pub async fn channel_exists(db: &Pool<Postgres>, channel_id: &Uuid) -> anyhow::Result<bool> {
-    let exists = sqlx::query_scalar::<_, bool>(
-        r#"
-        SELECT EXISTS(
-            SELECT 1
-            FROM comms_channels
-            WHERE id = $1
-        )
-        "#,
-    )
-    .bind(channel_id)
-    .fetch_one(db)
-    .await?;
-
-    Ok(exists)
-}
-
 #[cfg(test)]
 mod tests {
     use crate::item_access::get::{
-        channel_exists, get_user_channel_role, get_user_item_access_for_chat,
-        get_user_item_access_for_document, get_user_item_access_for_project,
-        get_user_item_access_for_thread,
+        get_user_item_access_for_chat, get_user_item_access_for_document,
+        get_user_item_access_for_project, get_user_item_access_for_thread,
     };
-    use model::comms::ParticipantRole;
     use models_permissions::share_permission::access_level::AccessLevel;
     use models_permissions::user_item_access::UserItemAccess;
     use std::collections::HashSet;
@@ -790,66 +713,6 @@ mod tests {
             permissions.is_empty(),
             "Expected no permissions to be returned"
         );
-
-        Ok(())
-    }
-
-    const PUBLIC_CH: &str = "a0000000-0000-0000-0000-000000000001";
-    const ORG_CH: &str = "a0000000-0000-0000-0000-000000000002";
-    const PRIVATE_CH: &str = "a0000000-0000-0000-0000-000000000003";
-
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_channel_role")))]
-    async fn test_public_channel_non_participant_defaults_to_member(
-        pool: sqlx::Pool<sqlx::Postgres>,
-    ) -> anyhow::Result<()> {
-        let role =
-            get_user_channel_role(&pool, &Uuid::parse_str(PUBLIC_CH)?, "user-1", Some(1)).await?;
-        assert_eq!(role, Some(ParticipantRole::Member));
-        Ok(())
-    }
-
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_channel_role")))]
-    async fn test_org_channel_matching_org_defaults_non_matching_org_rejected(
-        pool: sqlx::Pool<sqlx::Postgres>,
-    ) -> anyhow::Result<()> {
-        let ch = Uuid::parse_str(ORG_CH)?;
-
-        let role = get_user_channel_role(&pool, &ch, "user-2", Some(1)).await?;
-        assert_eq!(role, Some(ParticipantRole::Member));
-
-        let role = get_user_channel_role(&pool, &ch, "user-2", Some(999)).await?;
-        assert_eq!(role, None);
-
-        let role = get_user_channel_role(&pool, &ch, "user-1", Some(1)).await?;
-        assert_eq!(role, Some(ParticipantRole::Admin));
-
-        Ok(())
-    }
-
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_channel_role")))]
-    async fn test_private_channel_requires_participation(
-        pool: sqlx::Pool<sqlx::Postgres>,
-    ) -> anyhow::Result<()> {
-        let ch = Uuid::parse_str(PRIVATE_CH)?;
-
-        let role = get_user_channel_role(&pool, &ch, "user-1", Some(1)).await?;
-        assert_eq!(role, Some(ParticipantRole::Owner));
-
-        let role = get_user_channel_role(&pool, &ch, "user-2", None).await?;
-        assert_eq!(role, None);
-
-        Ok(())
-    }
-
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_channel_role")))]
-    async fn test_channel_exists_returns_expected_values(
-        pool: sqlx::Pool<sqlx::Postgres>,
-    ) -> anyhow::Result<()> {
-        let existing = Uuid::parse_str(PRIVATE_CH)?;
-        assert!(channel_exists(&pool, &existing).await?);
-
-        let missing = Uuid::parse_str("ffffffff-ffff-ffff-ffff-ffffffffffff")?;
-        assert!(!channel_exists(&pool, &missing).await?);
 
         Ok(())
     }

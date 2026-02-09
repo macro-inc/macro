@@ -5085,7 +5085,6 @@ dependencies = [
  "tracing",
  "url",
  "user_quota",
- "utoipa",
  "uuid",
 ]
 
