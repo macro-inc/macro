@@ -61,7 +61,9 @@ export function isNewEmail(
 
 export function isInviteToTeam(
   n: UnifiedNotification
-): n is UnifiedNotification & { notificationMetadata: NotifEventOneOfOnethree } {
+): n is UnifiedNotification & {
+  notificationMetadata: NotifEventOneOfOnethree;
+} {
   return n.notificationMetadata.tag === 'invite_to_team';
 }
 
@@ -96,7 +98,9 @@ export function getNotificationAction(n: UnifiedNotification): string {
   }
 }
 
-export function getNotificationTargetName(n: UnifiedNotification): string | undefined {
+export function getNotificationTargetName(
+  n: UnifiedNotification
+): string | undefined {
   const m = n.notificationMetadata;
   switch (m.tag) {
     case 'channel_invite':
@@ -112,7 +116,9 @@ export function getNotificationTargetName(n: UnifiedNotification): string | unde
   }
 }
 
-export function getNotificationContent(n: UnifiedNotification): string | undefined {
+export function getNotificationContent(
+  n: UnifiedNotification
+): string | undefined {
   const m = n.notificationMetadata;
   switch (m.tag) {
     case 'channel_mention':

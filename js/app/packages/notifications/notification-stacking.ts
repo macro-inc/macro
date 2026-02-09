@@ -82,9 +82,7 @@ export function stackNotifications(
     ...mentions.flatMap((n) => makeStack('channel_mention', [n])),
     ...makeStack('channel_message_send', newMsgs),
     ...makeReplyStacks(replies),
-    ...others.flatMap((n) =>
-      makeStack(n.notificationMetadata.tag, [n])
-    ),
+    ...others.flatMap((n) => makeStack(n.notificationMetadata.tag, [n])),
   ];
 
   // Sort: mentions first, then by recency
@@ -124,9 +122,7 @@ function makeStack(
   return [{ type, notifications: sortByRecency(notifications) }];
 }
 
-function makeReplyStacks(
-  replies: UnifiedNotification[]
-): NotificationStack[] {
+function makeReplyStacks(replies: UnifiedNotification[]): NotificationStack[] {
   const byThread = groupBy(replies, (r) => {
     if (r.notificationMetadata.tag === 'channel_message_reply') {
       return r.notificationMetadata.content.threadId ?? '';

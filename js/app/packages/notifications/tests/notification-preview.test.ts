@@ -48,7 +48,9 @@ describe('new_email notification', () => {
     // When senderId is null, the metadata sender can be used
     expect(notification.senderId).toBeNull();
     // Access the sender field after type assertion since we know this is a new_email notification
-    const content = notification.notificationMetadata.content as { sender?: string | null };
+    const content = notification.notificationMetadata.content as {
+      sender?: string | null;
+    };
     expect(content.sender).toBe('fallback@example.com');
   });
 });

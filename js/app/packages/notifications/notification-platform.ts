@@ -44,7 +44,8 @@ export async function toPlatformNotificationData(
 ): Promise<PlatformNotificationData | null> {
   const actorId = notification.senderId;
   const actor =
-    (actorId ? await resolveUserName(actorId) : undefined) ?? USER_NAME_FALLBACK;
+    (actorId ? await resolveUserName(actorId) : undefined) ??
+    USER_NAME_FALLBACK;
 
   const showTarget = shouldShowNotificationTarget(notification);
   const targetName =
