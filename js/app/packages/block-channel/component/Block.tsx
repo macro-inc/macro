@@ -1,5 +1,6 @@
 import { useBlockId } from '@core/block';
 import { useChannelName } from '@core/context/channels';
+import { EntityPermissionsGate } from '@core/component/EntityPermissionsGate';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { type JSXElement, Suspense } from 'solid-js';
 import { Channel } from './Channel';
@@ -33,12 +34,14 @@ export default function BlockChannel(props: BlockChannelProps) {
   };
 
   return (
-    <Suspense>
-      <DocumentBlockContainer title={channelName() ?? 'Channel'}>
-        <ChannelContextProvider channelId={() => channelId}>
-          <Channel channelId={channelId} target={targetMessage()} />
-        </ChannelContextProvider>
-      </DocumentBlockContainer>
-    </Suspense>
+    <EntityPermissionsGate entityType="channel" entityId={channelId}>
+      <Suspense>
+        <DocumentBlockContainer title={channelName() ?? 'Channel'}>
+          <ChannelContextProvider channelId={() => channelId}>
+            <Channel channelId={channelId} target={targetMessage()} />
+          </ChannelContextProvider>
+        </DocumentBlockContainer>
+      </Suspense>
+    </EntityPermissionsGate>
   );
 }
