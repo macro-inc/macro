@@ -32,7 +32,7 @@ import {
 } from '@lexical-core';
 import {
   $getNodeByKey,
-  LexicalEditor,
+  type LexicalEditor,
   type EditorThemeClasses,
   type NodeKey,
 } from 'lexical';
