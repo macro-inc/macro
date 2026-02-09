@@ -69,6 +69,7 @@ import { SoupChatInput } from '@app/component/SoupChatInput';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
+import { usePropertyEditorHotkeys } from '@app/component/property-edit-modal/hooks/usePropertyEditorHotkeys';
 
 const DEFAULT_ENTITY_HEIGHT = 40;
 
@@ -256,6 +257,12 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   // Register entity action hotkeys
   useEntityActionHotkeys({
+    scopeId: scopeId(),
+    soup,
+  });
+
+  // Property editor
+  usePropertyEditorHotkeys({
     scopeId: scopeId(),
     soup,
   });

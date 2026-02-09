@@ -637,6 +637,9 @@ export function useBulkSaveEntityPropertiesMutation(
               invalidatePropertiesForEntity(entityType, entityId);
             });
           });
+
+          // Invalidate soup/DSS queries to ensure UI updates reactively
+          queryClient.invalidateQueries({ queryKey: soupKeys.items._def });
         },
       },
       callbacks
