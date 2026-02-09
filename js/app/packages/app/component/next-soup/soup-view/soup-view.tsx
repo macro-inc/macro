@@ -410,10 +410,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   onCleanup(() => debouncedFetchMore.clear());
 
-  const [entityContextMenuOpen, setEntityContextMenuOpen] = createSignal<
-    string | undefined
-  >(undefined);
-
   const [localEntityListRef, setLocalEntityListRef] = createSignal<
     HTMLDivElement | undefined
   >();
