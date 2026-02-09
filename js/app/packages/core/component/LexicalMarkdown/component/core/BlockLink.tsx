@@ -76,7 +76,7 @@ export function BlockLink(
   }>
 ) {
   const open = createCallback((e: MouseEvent) => {
-    let newSplit = e.altKey;
+    let newSplit = e.shiftKey;
     openDocument(props.blockOrFileName, props.id, props.params, newSplit);
   });
   const navHandlers = useSplitNavigationHandler<HTMLSpanElement>(open);

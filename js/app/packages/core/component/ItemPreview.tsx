@@ -62,11 +62,11 @@ export function useItemPreviewData(entity: Accessor<ItemEntity>) {
     id: string,
     fileType?: FileType,
     subType?: NamedSubType,
-    altKey?: boolean
+    shiftKey?: boolean
   ) {
     const _type = subType ?? fileType ?? type;
     if (!_type) return;
-    openItem(_type, id, openInNewSplitForMention(altKey, true));
+    openItem(_type, id, openInNewSplitForMention(shiftKey, true));
   }
 
   const name = () => {
@@ -205,7 +205,7 @@ function ItemPreviewInner(props: ItemEntity) {
                       item.id,
                       item.fileType,
                       item.subType?.type as NamedSubType | undefined,
-                      e.altKey
+                      e.shiftKey
                     );
                   });
                 return (

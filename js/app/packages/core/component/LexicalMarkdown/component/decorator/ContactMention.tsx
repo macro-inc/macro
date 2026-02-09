@@ -33,7 +33,7 @@ export function ContactMention(props: ContactMentionDecoratorProps) {
   const openContact = (e: MouseEvent | KeyboardEvent | null) => {
     // The contactId is the email or @domain
     const contactId = encodeURIComponent(props.emailOrDomain);
-    const inNewSplit = openInNewSplitForMention(e?.altKey, e != null);
+    const inNewSplit = openInNewSplitForMention(e?.shiftKey, e != null);
     openWithSplit({
       content: {
         type: 'contact',

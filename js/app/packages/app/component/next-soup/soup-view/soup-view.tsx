@@ -288,7 +288,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     }
 
     await openEntityInSplitFromUnifiedList(entity, {
-      openInNewSplit: event.altKey,
+      openInNewSplit: event.shiftKey,
       location,
       splitHandle: panel.handle,
     });
@@ -302,7 +302,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     }
 
     await openEntityInSplitFromUnifiedList(entity, {
-      openInNewSplit: event.altKey,
+      openInNewSplit: event.shiftKey,
       location,
       splitHandle: panel.handle,
     });

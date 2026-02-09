@@ -27,7 +27,7 @@ type AttachmentProps = {
 };
 
 export function Attachment(props: AttachmentProps) {
-  const { insertSplit, replaceOrInsertSplit } = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
   const [hover, setHover] = createSignal(false);
 
   const attachmentName = () => {
@@ -103,10 +103,12 @@ export function Attachment(props: AttachmentProps) {
               onClick={(e) => {
                 if (props.attachment.pending) return;
                 const inNewSplit = openInNewSplitForMention(e.altKey, true);
-                const open = inNewSplit ? insertSplit : replaceOrInsertSplit;
-                open({
-                  type: fileTypeToBlockName(blockName()),
-                  id: props.attachment.id,
+                openWithSplit({
+                  content: {
+                    type: fileTypeToBlockName(blockName()),
+                    id: props.attachment.id,
+                  },
+                  force: inNewSplit ? 'insert' : undefined,
                 })?.activate?.();
               }}
             />
