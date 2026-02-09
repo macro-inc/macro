@@ -4,11 +4,10 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { EntityPermission } from './entityPermission';
 import type { EntityPermissionResponseOneOfStatus } from './entityPermissionResponseOneOfStatus';
-import type { EntityPermissionSchema } from './entityPermissionSchema';
 
 export type EntityPermissionResponseOneOf = {
-  permission: EntityPermissionSchema;
+  permission: EntityPermission;
   status: EntityPermissionResponseOneOfStatus;
 };

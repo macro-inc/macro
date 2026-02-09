@@ -5,10 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type EntityPermissionSchemaOneOfThreeType =
-  (typeof EntityPermissionSchemaOneOfThreeType)[keyof typeof EntityPermissionSchemaOneOfThreeType];
+export type EntityPermissionOneOfThreeType =
+  (typeof EntityPermissionOneOfThreeType)[keyof typeof EntityPermissionOneOfThreeType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const EntityPermissionSchemaOneOfThreeType = {
+export const EntityPermissionOneOfThreeType = {
   channel_role: 'channel_role',
 } as const;

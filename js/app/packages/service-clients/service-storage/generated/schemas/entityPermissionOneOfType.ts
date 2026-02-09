@@ -5,10 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type EntityPermissionSchemaOneOfType =
-  (typeof EntityPermissionSchemaOneOfType)[keyof typeof EntityPermissionSchemaOneOfType];
+export type EntityPermissionOneOfType =
+  (typeof EntityPermissionOneOfType)[keyof typeof EntityPermissionOneOfType];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const EntityPermissionSchemaOneOfType = {
+export const EntityPermissionOneOfType = {
   access_level: 'access_level',
 } as const;
