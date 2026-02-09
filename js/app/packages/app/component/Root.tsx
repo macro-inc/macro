@@ -4,6 +4,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { withAnalytics } from '@coparse/analytics';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { QuickFindProvider } from '@core/context/quickFind';
+import { QuickAccessProvider } from '@core/context/quickAccess';
 import { UserContextProvider, useUserId } from '@core/context/user';
 import { QuerySyncProvider } from '@queries/sync/SyncProvider';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
@@ -398,30 +399,32 @@ export function Root() {
             <UserInfoSideEffects />
             <ConfiguredGlobalAppStateProvider>
               <ChannelsContextProvider>
-                <QuickFindProvider>
-                  <ReactiveFavicon />
-                  <Title>{tabTitle()}</Title>
-                  <MacroJump />
-                  <Visor />
-                  <SuspenseContextComp fallback={<RootSuspenseFallback />}>
-                    <IsomorphicRouter
-                      transformUrl={transformShortIdInUrlPathname}
-                      root={Layout}
-                      rootPreload={rootPreload}
-                      base={ROUTER_BASE}
-                    >
-                      {{
-                        path: '/',
-                        component: TauriRouteListener,
-                        children: ROUTES,
-                      }}
-                    </IsomorphicRouter>
-                  </SuspenseContextComp>
-                  <ToastRegion />
-                  <Show when={ENABLE_WEBSOCKET_DEBUGGER}>
-                    <WebsocketDebugger />
-                  </Show>
-                </QuickFindProvider>
+                <QuickAccessProvider>
+                  <QuickFindProvider>
+                    <ReactiveFavicon />
+                    <Title>{tabTitle()}</Title>
+                    <MacroJump />
+                    <Visor />
+                    <SuspenseContextComp fallback={<RootSuspenseFallback />}>
+                      <IsomorphicRouter
+                        transformUrl={transformShortIdInUrlPathname}
+                        root={Layout}
+                        rootPreload={rootPreload}
+                        base={ROUTER_BASE}
+                      >
+                        {{
+                          path: '/',
+                          component: TauriRouteListener,
+                          children: ROUTES,
+                        }}
+                      </IsomorphicRouter>
+                    </SuspenseContextComp>
+                    <ToastRegion />
+                    <Show when={ENABLE_WEBSOCKET_DEBUGGER}>
+                      <WebsocketDebugger />
+                    </Show>
+                  </QuickFindProvider>
+                </QuickAccessProvider>
               </ChannelsContextProvider>
             </ConfiguredGlobalAppStateProvider>
           </UserContextProvider>

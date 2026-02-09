@@ -9,7 +9,7 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import { UserIcon } from '@core/component/UserIcon';
 import { ENABLE_CHAT_CHANNEL_ATTACHMENT } from '@core/constant/featureFlags';
-import { useQuickFind } from '@core/context/quickFind';
+import { useQuickAccess } from '@core/context/quickAccess';
 import { useEmail } from '@core/context/user';
 import clickOutside from '@core/directive/clickOutside';
 import type { ChannelWithParticipants, IUser } from '@core/user';
@@ -470,8 +470,8 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     console.timeEnd('[MENTIONS MENU]: component invocation');
   });
 
-  const quickFind = useQuickFind();
-  const mentionEntities = () => quickFind.mentionEntities();
+  const quickAccess = useQuickAccess();
+  const mentionEntities = () => quickAccess.mentionEntities();
 
   const history = createLazyMemo(() => {
     if (props.history) {
