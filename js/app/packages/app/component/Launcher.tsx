@@ -568,7 +568,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
         </For>
       </div>
       <div class="col-span-full text-sm text-ink-muted text-center pt-4">
-        Hold option to open in current split
+        Hold shift to open in current split
       </div>
     </div>
   );
