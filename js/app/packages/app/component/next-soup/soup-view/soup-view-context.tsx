@@ -3,10 +3,7 @@ import {
   createSoupState,
   type SoupState,
 } from '@app/component/next-soup/create-soup-state';
-import {
-  buildDssFiltersRequest,
-  getFolderFileTypes,
-} from '@app/component/next-soup/filters/filters';
+import { getFolderFileTypes } from '@app/component/next-soup/filters/filters';
 import { sortEntitiesForSearch } from '@app/component/next-soup/soup-view/sort-options';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
 import { useEmailLinksStatus } from '@core/email-link';
@@ -171,25 +168,33 @@ export const SoupViewContextProvider: FlowComponent<
   );
 
   const queryFilters = createMemo(() => {
-    const base = buildDssFiltersRequest(soup.filters.active(), {
-      extra: props.queryFilters,
-      isSearchActive: !isSearchDisabled(),
-      emailActive: emailActive(),
-    });
+    const base = soup.filters.query();
 
-    if (soup.filters.isActive('file')) {
-      if (base.document_filters?.file_types) {
-        base.document_filters.file_types = getFolderFileTypes('soup');
-      }
-    }
-
-    if (soup.filters.isActive('task')) {
-      if (base.document_filters?.file_types) {
-        base.document_filters.file_types = ['md'];
-      }
-    }
-
-    return base;
+    return {
+      ...base,
+      ...props.queryFilters,
+      // Deep merge individual filter objects if both exist
+      channel_filters: {
+        ...base.channel_filters,
+        ...props.queryFilters?.channel_filters,
+      },
+      chat_filters: {
+        ...base.chat_filters,
+        ...props.queryFilters?.chat_filters,
+      },
+      document_filters: {
+        ...base.document_filters,
+        ...props.queryFilters?.document_filters,
+      },
+      email_filters: {
+        ...base.email_filters,
+        ...props.queryFilters?.email_filters,
+      },
+      project_filters: {
+        ...base.project_filters,
+        ...props.queryFilters?.project_filters,
+      },
+    };
   });
 
   const searchFilters = createMemo(() => {

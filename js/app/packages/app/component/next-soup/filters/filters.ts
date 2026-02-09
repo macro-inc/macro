@@ -282,6 +282,84 @@ export const getFolderFileTypes = (type: 'soup' | 'search') => {
   });
 };
 
+export const QUERY_FILTERS = {
+  /** Docs filter - markdown and canvas documents (excludes tasks) */
+  document: {
+    channel_filters: { channel_ids: EXCLUDE },
+    chat_filters: { chat_ids: EXCLUDE },
+    email_filters: { recipients: EXCLUDE },
+    project_filters: { project_ids: EXCLUDE },
+    document_filters: { file_types: ['md', 'canvas'] },
+  },
+
+  /** Tasks filter - markdown documents with task subType */
+  task: {
+    channel_filters: { channel_ids: EXCLUDE },
+    chat_filters: { chat_ids: EXCLUDE },
+    email_filters: { recipients: EXCLUDE },
+    project_filters: { project_ids: EXCLUDE },
+    document_filters: { file_types: ['md'] },
+  },
+
+  /** Mail filter - emails */
+  email: {
+    channel_filters: { channel_ids: EXCLUDE },
+    chat_filters: { chat_ids: EXCLUDE },
+    document_filters: { document_ids: EXCLUDE },
+    project_filters: { project_ids: EXCLUDE },
+    email_filters: {},
+  },
+
+  /** People filter - direct message channels */
+  people: {
+    chat_filters: { chat_ids: EXCLUDE },
+    document_filters: { document_ids: EXCLUDE },
+    email_filters: { recipients: EXCLUDE },
+    project_filters: { project_ids: EXCLUDE },
+    channel_filters: {},
+  },
+
+  /** Teams filter - group channels (non-DM) */
+  teams: {
+    chat_filters: { chat_ids: EXCLUDE },
+    document_filters: { document_ids: EXCLUDE },
+    email_filters: { recipients: EXCLUDE },
+    project_filters: { project_ids: EXCLUDE },
+    channel_filters: {},
+  },
+
+  /** Agents filter - chats */
+  agent: {
+    channel_filters: { channel_ids: EXCLUDE },
+    document_filters: { document_ids: EXCLUDE },
+    email_filters: { recipients: EXCLUDE },
+    project_filters: { project_ids: EXCLUDE },
+    chat_filters: {},
+  },
+
+  /** Files filter - non-markdown documents (code, images, pdfs, etc.) */
+  file: {
+    channel_filters: { channel_ids: EXCLUDE },
+    chat_filters: { chat_ids: EXCLUDE },
+    email_filters: { recipients: EXCLUDE },
+    document_filters: { file_types: getFolderFileTypes('soup') },
+  },
+
+  /** Channels filter - all channels (teams and people) */
+  channels: {
+    chat_filters: { chat_ids: EXCLUDE },
+    document_filters: { document_ids: EXCLUDE },
+    email_filters: { recipients: EXCLUDE },
+    project_filters: { project_ids: EXCLUDE },
+    channel_filters: {},
+  },
+
+  /** Default - include all entity types (no filter active) */
+  default: {},
+} satisfies Record<string, SoupItemsQueryFilters>;
+
+export type QueryFilterKey = keyof typeof QUERY_FILTERS;
+
 const buildDefaultValue = (entityTypes: string[], required: string[]) => {
   const hasNoEntityTypes = entityTypes.length === 0;
 

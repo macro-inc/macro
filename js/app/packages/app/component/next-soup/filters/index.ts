@@ -2,12 +2,16 @@ export {
   agentFilter,
   documentFilter,
   emailFilter,
+  EXCLUDE,
   fileFilter,
   FILTER_GROUPS,
   type FilterGroup,
+  NIL_UUID,
   notDoneFilter,
   peopleFilter,
   projectFilter,
+  QUERY_FILTERS,
+  type QueryFilterKey,
   SOUP_FILTERS,
   taskFilter,
   teamsFilter,
@@ -22,10 +26,9 @@ export {
 
 export {
   createFiltersState,
-  EXCLUDE,
   type FilterConfig,
+  type FilterGroupConfig,
   type FilterPredicate,
   type FiltersState,
   type FiltersStateOptions,
-  NIL_UUID,
 } from './create-filters-state';

@@ -23,11 +23,13 @@ import {
 } from 'solid-js';
 import {
   ENTITY_TYPE_FILTER_CONFIGS,
-  type FilterID,
+  EXCLUDE,
   getEntityTypeFilterIcon,
+  QUERY_FILTERS,
 } from '@app/component/next-soup/filters/filters';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
+import { useEmailLinksStatus } from '@core/email-link';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { createElementSize } from '@solid-primitives/resize-observer';
@@ -103,37 +105,125 @@ export const SoupToolbar = () => {
 };
 
 const SoupFilters = () => {
-  const { soup, setSearchText } = useSoupView();
+  const { soup, setSearchText, isSearchDisabled } = useSoupView();
   const panel = useSplitPanelOrThrow();
+  const emailActive = useEmailLinksStatus();
 
   const [sortDropdownOpen, setSortDropdownOpen] = createSignal(false);
 
-  const toggleFilter = (filter: FilterID) => {
-    soup.filters.toggle(filter);
-  };
+  // === Focus filters (signal/noise) ===
 
-  const toggleSignalFilter = () => {
-    // If we're going to be removing the signal filter,
-    // we should replace it with the explicit-noise filter
+  const toggleSignal = () => {
     if (soup.filters.isActive('signal')) {
-      toggleFilter('explicit-noise');
+      soup.filters.set({ predicates: ['explicit-noise', 'not-done'] });
     } else {
-      toggleFilter('signal');
+      soup.filters.set({ predicates: ['signal', 'not-done'] });
     }
-
-    toggleFilter('not-done');
   };
 
-  const toggleNoiseFilter = () => {
-    // If we're going to be removing the noise filter,
-    // we should replace it with the explicit-noise filter
+  const toggleNoise = () => {
     if (soup.filters.isActive('noise')) {
-      toggleFilter('explicit-noise');
+      soup.filters.set({ predicates: ['explicit-noise', 'not-done'] });
     } else {
-      toggleFilter('noise');
+      soup.filters.set({ predicates: ['noise', 'not-done'] });
     }
+  };
 
-    toggleFilter('not-done');
+  // === Notification filters ===
+
+  const toggleUnread = () => {
+    if (soup.filters.isActive('unread')) {
+      soup.filters.set({ predicates: [] });
+    } else {
+      soup.filters.set({ predicates: ['unread'] });
+    }
+  };
+
+  // === Entity type filters (mutually exclusive) ===
+
+  const toggleDocument = () => {
+    if (soup.filters.isActive('document')) {
+      soup.filters.set({ predicates: [], query: QUERY_FILTERS.default });
+    } else {
+      soup.filters.set({
+        predicates: ['document'],
+        query: QUERY_FILTERS.document,
+      });
+    }
+  };
+
+  const toggleTask = () => {
+    if (soup.filters.isActive('task')) {
+      soup.filters.set({ predicates: [], query: QUERY_FILTERS.default });
+    } else {
+      soup.filters.set({ predicates: ['task'], query: QUERY_FILTERS.task });
+    }
+  };
+
+  const toggleEmail = () => {
+    if (soup.filters.isActive('email')) {
+      soup.filters.set({ predicates: [], query: QUERY_FILTERS.default });
+    } else {
+      // Special email handling:
+      // Include emails (recipients: []) only if email integration is active AND not searching
+      // Otherwise exclude emails (recipients: EXCLUDE)
+      const shouldIncludeEmails = emailActive() && isSearchDisabled();
+      soup.filters.set({
+        predicates: ['email'],
+        query: {
+          ...QUERY_FILTERS.email,
+          email_filters: {
+            recipients: shouldIncludeEmails ? [] : EXCLUDE,
+          },
+        },
+      });
+    }
+  };
+
+  const togglePeople = () => {
+    if (soup.filters.isActive('people')) {
+      soup.filters.set({ predicates: [], query: QUERY_FILTERS.default });
+    } else {
+      soup.filters.set({ predicates: ['people'], query: QUERY_FILTERS.people });
+    }
+  };
+
+  const toggleTeams = () => {
+    if (soup.filters.isActive('teams')) {
+      soup.filters.set({ predicates: [], query: QUERY_FILTERS.default });
+    } else {
+      soup.filters.set({ predicates: ['teams'], query: QUERY_FILTERS.teams });
+    }
+  };
+
+  const toggleAgent = () => {
+    if (soup.filters.isActive('agent')) {
+      soup.filters.set({ predicates: [], query: QUERY_FILTERS.default });
+    } else {
+      soup.filters.set({ predicates: ['agent'], query: QUERY_FILTERS.agent });
+    }
+  };
+
+  const toggleFile = () => {
+    if (soup.filters.isActive('file')) {
+      soup.filters.set({ predicates: [], query: QUERY_FILTERS.default });
+    } else {
+      soup.filters.set({ predicates: ['file'], query: QUERY_FILTERS.file });
+    }
+  };
+
+  // Map filter IDs to their toggle handlers
+  const entityTypeToggleHandlers: Record<
+    (typeof ENTITY_TYPE_FILTER_CONFIGS)[number]['id'],
+    () => void
+  > = {
+    document: toggleDocument,
+    task: toggleTask,
+    email: toggleEmail,
+    people: togglePeople,
+    teams: toggleTeams,
+    agent: toggleAgent,
+    file: toggleFile,
   };
 
   const togglePreview = () => {
@@ -158,53 +248,53 @@ const SoupFilters = () => {
     {
       hotkey: 'i',
       description: 'Toggle Inbox',
-      handler: toggleSignalFilter,
+      handler: toggleSignal,
     },
     {
       hotkey: 'o',
       description: 'Toggle Other',
-      handler: toggleNoiseFilter,
+      handler: toggleNoise,
     },
     // Entity type filter hotkeys
     {
       hotkey: ENTITY_TYPE_SHORTCUTS.document,
       description: 'Filter by Docs',
-      handler: () => toggleFilter('document'),
+      handler: toggleDocument,
     },
     {
       hotkey: ENTITY_TYPE_SHORTCUTS.task,
       description: 'Filter by Tasks',
-      handler: () => toggleFilter('task'),
+      handler: toggleTask,
     },
     {
       hotkey: ENTITY_TYPE_SHORTCUTS.email,
       description: 'Filter by Mail',
-      handler: () => toggleFilter('email'),
+      handler: toggleEmail,
     },
     {
       hotkey: ENTITY_TYPE_SHORTCUTS.people,
       description: 'Filter by People',
-      handler: () => toggleFilter('people'),
+      handler: togglePeople,
     },
     {
       hotkey: ENTITY_TYPE_SHORTCUTS.teams,
       description: 'Filter by Teams',
-      handler: () => toggleFilter('teams'),
+      handler: toggleTeams,
     },
     {
       hotkey: ENTITY_TYPE_SHORTCUTS.agent,
       description: 'Filter by Agents',
-      handler: () => toggleFilter('agent'),
+      handler: toggleAgent,
     },
     {
       hotkey: ENTITY_TYPE_SHORTCUTS.file,
       description: 'Filter by Files',
-      handler: () => toggleFilter('file'),
+      handler: toggleFile,
     },
     {
       hotkey: 'u',
       description: 'Filter by Unread',
-      handler: () => toggleFilter('unread'),
+      handler: toggleUnread,
     },
     {
       hotkey: 's',
@@ -252,7 +342,7 @@ const SoupFilters = () => {
         label="Inbox"
         shortcut="i"
         isActive={soup.filters.isActive('signal')}
-        onClick={toggleSignalFilter}
+        onClick={toggleSignal}
       />
       {/* Other toggle */}
       <FilterButton
@@ -260,7 +350,7 @@ const SoupFilters = () => {
         label="Other"
         shortcut="o"
         isActive={soup.filters.isActive('noise')}
-        onClick={toggleNoiseFilter}
+        onClick={toggleNoise}
       />
       <FilterDivider />
       {/* Unread filter */}
@@ -274,7 +364,7 @@ const SoupFilters = () => {
               'text-ink-muted hover:text-accent hover:bg-accent/20':
                 !soup.filters.isActive('unread'),
             }}
-            onClick={() => soup.filters.toggle('unread')}
+            onClick={toggleUnread}
           >
             <svg
               class="size-4"
@@ -305,7 +395,7 @@ const SoupFilters = () => {
                 label={filter.label ?? ''}
                 shortcut={shortcut}
                 isActive={() => soup.filters.isActive(filter.id)}
-                onClick={() => toggleFilter(filter.id)}
+                onClick={entityTypeToggleHandlers[filter.id]}
                 paddingClass="px-2.5"
               />
             );
