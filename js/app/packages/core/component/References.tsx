@@ -98,7 +98,7 @@ export function References(props: ReferenceProps) {
         type: blockName,
         id: blockId,
       },
-      force: event?.shiftKey === true ? 'replace' : undefined,
+      force: event?.shiftKey === true ? 'replace' : 'insert',
     });
   };
 
