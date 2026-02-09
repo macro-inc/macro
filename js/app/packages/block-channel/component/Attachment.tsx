@@ -102,7 +102,7 @@ export function Attachment(props: AttachmentProps) {
               text={truncateString(attachmentName(), 30)}
               onClick={(e) => {
                 if (props.attachment.pending) return;
-                const inNewSplit = openInNewSplitForMention(e.altKey, true);
+                const inNewSplit = openInNewSplitForMention(e.shiftKey, true);
                 openWithSplit(
                   {
                     type: fileTypeToBlockName(blockName()),
