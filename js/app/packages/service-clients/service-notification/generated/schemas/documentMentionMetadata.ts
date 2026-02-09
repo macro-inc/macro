@@ -6,4 +6,7 @@
  */
 import type { DocumentMentionMetadataAllOf } from './documentMentionMetadataAllOf';
 
+/**
+ * Someone mentioned a document in a channel
+ */
 export type DocumentMentionMetadata = unknown & DocumentMentionMetadataAllOf;
