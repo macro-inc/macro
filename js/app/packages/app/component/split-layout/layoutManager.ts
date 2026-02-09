@@ -1008,7 +1008,7 @@ export function createSplitLayout(
     }
 
     const shouldReplaceOnEdge =
-      (!options.replaceAtEdge || options.replaceAtEdge === true) &&
+      (options.replaceAtEdge === undefined || options.replaceAtEdge === true) &&
       !canAppendSplit();
 
     const shouldReplace =
