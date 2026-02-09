@@ -1,10 +1,8 @@
-import { toast } from '@core/component/Toast/Toast';
 import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
 import { isOk } from '@core/util/maybeResult';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { commsServiceClient } from '@service-comms/client';
-import { debounce } from '@solid-primitives/scheduled';
-import { createMemo, createSignal, Match, Show, Switch } from 'solid-js';
+import { createMemo, Match, Show, Switch } from 'solid-js';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
 import { ProfilePicture } from './ProfilePicture';
 import { Tooltip } from './Tooltip';
@@ -126,21 +124,6 @@ export function UserIcon(props: UserIconProps) {
     </div>
   ));
 
-  const [copied, setCopied] = createSignal(false);
-
-  const resetCopied = debounce(() => setCopied(false), 800);
-
-  function handleCopyEmail(e: MouseEvent) {
-    e.stopPropagation();
-    const email_ = email();
-    if (!email_) return;
-
-    setCopied(true);
-    navigator.clipboard.writeText(email_);
-    toast.success('Email copied');
-    resetCopied();
-  }
-
   return (
     <Show
       when={
@@ -158,8 +141,6 @@ export function UserIcon(props: UserIconProps) {
             email={email()}
             id={props.id}
             isDeleted={props.isDeleted}
-            copied={copied()}
-            onCopyEmail={handleCopyEmail}
           />
         }
       >
