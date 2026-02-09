@@ -128,7 +128,7 @@ export type OpenWithSplitOptions = {
   activate?: boolean;
   referredFrom?: ReferredFrom;
   allowDuplicate?: boolean;
-  replaceAtEdge?: boolean;
+  replaceWhenFull?: boolean;
   force?: 'replace' | 'insert';
   handle?: SplitHandle;
 };
@@ -1008,11 +1008,9 @@ export function createSplitLayout(
     }
 
     const shouldReplaceOnEdge =
-      (options.replaceAtEdge === undefined || options.replaceAtEdge === true) &&
-      !canAppendSplit();
+      options.replaceWhenFull !== false && !canAppendSplit();
 
-    const shouldReplace =
-      !options.force || options.force === 'replace' || shouldReplaceOnEdge;
+    const shouldReplace = options.force !== 'insert' || shouldReplaceOnEdge;
 
     if (splitHandle && shouldReplace) {
       splitHandle.replace({
@@ -1020,6 +1018,11 @@ export function createSplitLayout(
         referredFrom: options.referredFrom ?? null,
         mergeHistory: options.mergeHistory,
       });
+
+      if (options.activate) {
+        splitHandle.activate();
+      }
+
       return splitHandle;
     } else {
       return createNewSplit({
