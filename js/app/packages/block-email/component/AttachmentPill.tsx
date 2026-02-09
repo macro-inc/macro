@@ -12,7 +12,7 @@ type EmailAttachmentPillProps = {
   attachment: { fileName: string; mimeType?: string };
   removable?: boolean;
   onRemove?: () => void;
-  onClick?: (event: Event, fileType?: FileType) => void;
+  onClick?: (event: MouseEvent, fileType?: FileType) => void;
 };
 
 export function EmailAttachmentPill(props: EmailAttachmentPillProps) {

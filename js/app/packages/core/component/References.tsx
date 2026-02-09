@@ -20,7 +20,6 @@ import { InlineItemPreview } from './ItemPreview';
 import { StaticMarkdown } from './LexicalMarkdown/component/core/StaticMarkdown';
 import { UserIcon } from './UserIcon';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
-import { globalSplitManager } from '@app/signal/splitLayout';
 
 export type ReferenceProps = {
   documentId: string;
