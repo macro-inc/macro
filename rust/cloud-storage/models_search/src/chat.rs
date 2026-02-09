@@ -136,7 +136,7 @@ pub struct SimpleChatSearchResponseBaseItem<T> {
     pub highlight: SearchHighlight,
 }
 
-pub type SimpleChatSearchResponseItem = SimpleChatSearchResponseBaseItem<crate::TimestampSeconds>;
+pub type SimpleChatSearchResponseItem = SimpleChatSearchResponseBaseItem<crate::HumanReadableTimestamp>;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SimpleChatSearchResponse {

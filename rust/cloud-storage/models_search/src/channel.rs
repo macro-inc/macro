@@ -148,7 +148,7 @@ pub struct SimpleChannelSearchReponseBaseItem<T> {
 }
 
 pub type SimpleChannelSearchReponseItem =
-    SimpleChannelSearchReponseBaseItem<crate::TimestampSeconds>;
+    SimpleChannelSearchReponseBaseItem<crate::HumanReadableTimestamp>;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SimpleChannelSearchResponse {

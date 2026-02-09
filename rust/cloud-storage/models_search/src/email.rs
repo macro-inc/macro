@@ -143,7 +143,7 @@ pub struct SimpleEmailSearchResponseBaseItem<T> {
     pub highlight: SearchHighlight,
 }
 
-pub type SimpleEmailSearchResponseItem = SimpleEmailSearchResponseBaseItem<crate::TimestampSeconds>;
+pub type SimpleEmailSearchResponseItem = SimpleEmailSearchResponseBaseItem<crate::HumanReadableTimestamp>;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SimpleEmailSearchResponse {

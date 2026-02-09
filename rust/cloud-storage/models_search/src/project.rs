@@ -117,7 +117,7 @@ pub struct SimpleProjectSearchResponseBaseItem<T> {
 }
 
 pub type SimpleProjectSearchResponseItem =
-    SimpleProjectSearchResponseBaseItem<crate::TimestampSeconds>;
+    SimpleProjectSearchResponseBaseItem<crate::HumanReadableTimestamp>;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SimpleProjectSearchResponse {

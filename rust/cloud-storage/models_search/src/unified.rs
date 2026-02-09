@@ -200,11 +200,11 @@ pub enum SimpleUnifiedSearchResponseBaseItem<T> {
 }
 
 pub type SimpleUnifiedSearchResponseItem =
-    SimpleUnifiedSearchResponseBaseItem<crate::TimestampSeconds>;
+    SimpleUnifiedSearchResponseBaseItem<crate::HumanReadableTimestamp>;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, Default)]
 pub struct SimpleUnifiedSearchBaseResponse<T> {
     pub results: Vec<SimpleUnifiedSearchResponseBaseItem<T>>,
 }
 
-pub type SimpleUnifiedSearchResponse = SimpleUnifiedSearchBaseResponse<crate::TimestampSeconds>;
+pub type SimpleUnifiedSearchResponse = SimpleUnifiedSearchBaseResponse<crate::HumanReadableTimestamp>;
