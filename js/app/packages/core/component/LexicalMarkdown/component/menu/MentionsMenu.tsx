@@ -120,16 +120,16 @@ const getItemTimestamp = (item: CombinedEntity): TimestampedItem => {
   switch (item.kind) {
     case 'item':
       return {
-        updatedAt: item.data.updatedAt,
+        updatedAt: item.data.updatedAt ?? undefined,
       };
     case 'channel':
       return {
-        updatedAt: item.data.updated_at,
+        updatedAt: item.data.updated_at ?? undefined,
       };
     case 'email':
       return {
-        updatedAt: item.data.updatedAt,
-        viewedAt: item.data.viewedAt,
+        updatedAt: item.data.updatedAt ?? undefined,
+        viewedAt: item.data.viewedAt ?? undefined,
       };
     case 'user':
       return {

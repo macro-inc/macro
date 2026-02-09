@@ -386,7 +386,7 @@ describe('notification utils', () => {
 
       it('returns false for viewed notification', () => {
         const notification = {
-          viewedAt: 1234567890,
+          viewedAt: new Date(1234567890),
           done: false,
         } as Notification;
 
@@ -404,7 +404,7 @@ describe('notification utils', () => {
 
       it('returns false for viewed and done notification', () => {
         const notification = {
-          viewedAt: 1234567890,
+          viewedAt: new Date(1234567890),
           done: true,
         } as Notification;
 
@@ -416,9 +416,9 @@ describe('notification utils', () => {
       it('returns true if any notification in stack is unread', () => {
         const stack = {
           notifications: [
-            { viewedAt: 1234567890, done: false } as Notification,
+            { viewedAt: new Date(1234567890), done: false } as Notification,
             { viewedAt: null, done: false } as Notification,
-            { viewedAt: 1234567890, done: false } as Notification,
+            { viewedAt: new Date(1234567890), done: false } as Notification,
           ],
         } as any;
 
@@ -428,8 +428,8 @@ describe('notification utils', () => {
       it('returns false if all notifications are viewed', () => {
         const stack = {
           notifications: [
-            { viewedAt: 1234567890, done: false } as Notification,
-            { viewedAt: 1234567890, done: false } as Notification,
+            { viewedAt: new Date(1234567890), done: false } as Notification,
+            { viewedAt: new Date(1234567890), done: false } as Notification,
           ],
         } as any;
 
