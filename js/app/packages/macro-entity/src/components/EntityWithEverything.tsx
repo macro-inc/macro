@@ -321,8 +321,14 @@ function NotificationRow(props: {
       return 'mentioned you';
     }
 
-    const tag = (props.notification as UnifiedNotification).notificationMetadata.tag;
-    if (tag !== 'channel_mention' && tag !== 'channel_message_send' && tag !== 'channel_message_reply') return '';
+    const tag = (props.notification as UnifiedNotification).notificationMetadata
+      .tag;
+    if (
+      tag !== 'channel_mention' &&
+      tag !== 'channel_message_send' &&
+      tag !== 'channel_message_reply'
+    )
+      return '';
 
     return 'message';
   };
@@ -337,7 +343,11 @@ function NotificationRow(props: {
 
     const n = props.notification as UnifiedNotification;
     const tag = n.notificationMetadata.tag;
-    if (tag !== 'channel_mention' && tag !== 'channel_message_send' && tag !== 'channel_message_reply') {
+    if (
+      tag !== 'channel_mention' &&
+      tag !== 'channel_message_send' &&
+      tag !== 'channel_message_reply'
+    ) {
       return '';
     }
 
@@ -433,7 +443,11 @@ function StackedNotificationRow(props: {
     const notification = mostRecent();
     if (!notification) return '';
     const tag = notification.notificationMetadata.tag;
-    if (tag !== 'channel_mention' && tag !== 'channel_message_send' && tag !== 'channel_message_reply') {
+    if (
+      tag !== 'channel_mention' &&
+      tag !== 'channel_message_send' &&
+      tag !== 'channel_message_reply'
+    ) {
       return '';
     }
     const content = notification.notificationMetadata.content.messageContent;

@@ -95,8 +95,9 @@ function getSupportedHandler(
   const tag = notification.notificationMetadata.tag;
 
   return match(tag)
-    .with(P.union(...CHANNEL_EVENT_TYPES), () => (lm: SplitManager) =>
-      openChannelNotification(notification, lm)
+    .with(
+      P.union(...CHANNEL_EVENT_TYPES),
+      () => (lm: SplitManager) => openChannelNotification(notification, lm)
     )
     .with('new_email', () => {
       if (!isNewEmail(notification)) return null;
