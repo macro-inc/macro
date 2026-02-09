@@ -8,4 +8,4 @@
 /**
  * The file type of the document
  */
-export type DocumentMentionMetadataAllOfFileType = string | null;
+export type DocumentMentionMetadataFileType = string | null;

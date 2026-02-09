@@ -1199,28 +1199,23 @@
         "enum": ["ios", "android"]
       },
       "DocumentMentionMetadata": {
-        "allOf": [
-          {},
-          {
-            "type": "object",
-            "required": ["documentName", "owner"],
-            "properties": {
-              "documentName": {
-                "type": "string",
-                "description": "The name of the document"
-              },
-              "fileType": {
-                "type": ["string", "null"],
-                "description": "The file type of the document"
-              },
-              "owner": {
-                "type": "string",
-                "description": "The owner of the document"
-              }
-            }
+        "type": "object",
+        "description": "Someone mentioned a document in a channel",
+        "required": ["documentName", "owner"],
+        "properties": {
+          "documentName": {
+            "type": "string",
+            "description": "The name of the document"
+          },
+          "fileType": {
+            "type": ["string", "null"],
+            "description": "The file type of the document"
+          },
+          "owner": {
+            "type": "string",
+            "description": "The owner of the document"
           }
-        ],
-        "description": "Someone mentioned a document in a channel"
+        }
       },
       "EmptyResponse": {
         "type": "object",
