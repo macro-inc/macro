@@ -8,9 +8,9 @@ mod service;
 
 pub use config::Config;
 
-use ai::types::ModelWithMetadataAndProvider;
 use crate::core::model::CHAT_MODELS;
 use crate::model::response::models::{AIModel, GetModelsResponse};
+use ai::types::ModelWithMetadataAndProvider;
 
 fn main() {
     let models = CHAT_MODELS
