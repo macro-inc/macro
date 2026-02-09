@@ -1693,10 +1693,8 @@ const trackKeydownDuringTask = () => {
 const startOfDay = (d: Date) =>
   new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 
-const createFormattedDate = (timestamp: number) => {
-  const ts = timestamp < 1e12 ? timestamp * 1000 : timestamp;
-
-  const date = new Date(ts);
+const createFormattedDate = (timestamp: Date) => {
+  const date = timestamp;
   const now = new Date();
 
   const dateDay = startOfDay(date);
