@@ -40,7 +40,7 @@ import {
 } from '@entity';
 import { queryKeys, useQueryClient } from '@macro-entity';
 import { createEffectOnEntityTypeNotification } from '@notifications';
-import { debounce } from '@solid-primitives/scheduled';
+import { debounce, throttle } from '@solid-primitives/scheduled';
 import { cn } from '@ui/utils/classname';
 import {
   type Accessor,
@@ -70,6 +70,7 @@ import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { usePropertyEditorHotkeys } from '@app/component/property-edit-modal/hooks/usePropertyEditorHotkeys';
+import { set } from 'colorjs.io/fn';
 
 const DEFAULT_ENTITY_HEIGHT = 40;
 
@@ -173,32 +174,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
   const [previewPanelRef, setPreviewPanelRef] = createSignal<
     HTMLElement | undefined
   >();
-
-  // Track hovered entity ID for preview mode
-  const [hoveredEntityId, setHoveredEntityId] = createSignal<string | null>(
-    null
-  );
-
-  // Throttle hover updates to frame rate using RAF
-  let pendingHoverId: string | null = null;
-  let rafId: number | null = null;
-
-  const throttledSetHoveredEntityId = (id: string | null) => {
-    pendingHoverId = id;
-
-    if (rafId !== null) return;
-
-    rafId = requestAnimationFrame(() => {
-      setHoveredEntityId(pendingHoverId);
-      rafId = null;
-    });
-  };
-
-  onCleanup(() => {
-    if (rafId !== null) {
-      cancelAnimationFrame(rafId);
-    }
-  });
 
   const focusFirstEntity = () => {
     const next = soup.navigate.toFirst();
@@ -597,20 +572,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                   !!soup.previewEntity() &&
                                   hoveredEntityId() === row.original.id
                                 }
-                                onMouseMove={() => {
-                                  if (soup.previewEntity()) {
-                                    throttledSetHoveredEntityId(
-                                      row.original.id
-                                    );
-                                    return;
-                                  }
+                                onMouseOver={() => {
                                   if (isKeypressActive()) return;
+                                  if (soup.previewEntity()) return;
                                   soup.focus.set(row.original.id);
-                                }}
-                                onMouseLeave={() => {
-                                  if (soup.previewEntity()) {
-                                    throttledSetHoveredEntityId(null);
-                                  }
                                 }}
                                 showUnrollNotifications={
                                   soup.filters.isActive('signal') &&
