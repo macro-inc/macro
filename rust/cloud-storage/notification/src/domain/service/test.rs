@@ -3,14 +3,14 @@
 use crate::domain::models::apple::APNSPushNotification;
 use crate::domain::models::mobile::NotifCollapseKey;
 use crate::domain::models::queue_message::{
-    ConnGatewayNotification, EmailContent, Node, Notif, NotificationChannel, QueueMessage,
-    RawQueueMessage,
+    ConnGatewayInnerNotif, ConnGatewayNotification, EmailContent, Node, NotificationChannel,
+    QueueMessage, RawQueueMessage,
 };
 use crate::domain::models::request::{NotificationStatus, UpdateNotificationsRequest};
 use crate::domain::models::{
     DeviceEndpoint, Notification, NotificationExtEmail, NotificationExtIos,
     NotificationIdAndCollapseKey, RateLimitConfig, RateLimitExceeded, RateLimitKey,
-    RateLimitResult, SendNotificationRequestBuilder, UserNotificationRow,
+    RateLimitResult, SendNotificationRequestBuilder, TaggedContent, UserNotificationRow,
 };
 use crate::domain::ports::{
     EmailSender, NotificationQueue, NotificationRepository, NotificationSender, RateLimitPort,
@@ -936,8 +936,8 @@ fn create_egress_service<R: RateLimitPort>(
     )
 }
 
-fn create_mock_notif(meta: serde_json::Value) -> Notif<serde_json::Value> {
-    Notif {
+fn create_mock_notif<T: Notification>(meta: T) -> ConnGatewayInnerNotif<T> {
+    ConnGatewayInnerNotif {
         notification_id: Uuid::nil(),
         notification_event_type: "testing".to_string(),
         entity: EntityType::Document.with_entity_str("testing"),
@@ -947,7 +947,7 @@ fn create_mock_notif(meta: serde_json::Value) -> Notif<serde_json::Value> {
         viewed_at: None,
         updated_at: None,
         deleted_at: None,
-        notification_metadata: meta,
+        notification_metadata: TaggedContent::new(meta),
         sender_id: None,
     }
 }
@@ -964,10 +964,15 @@ async fn test_egress_rate_limit_exceeded() {
             RateLimitConfig::new(10, Duration::from_secs(3600)),
         )),
         content: Node {
-            notif: NotificationChannel::ConnGateway(ConnGatewayNotification {
-                notif: create_mock_notif(json!({"message": "Hello"})),
-                recipients: vec![recipient],
-            }),
+            notif: NotificationChannel::ConnGateway(
+                ConnGatewayNotification {
+                    notif: create_mock_notif(TestNotification {
+                        message: "Hello".to_string(),
+                    }),
+                    recipients: vec![recipient],
+                }
+                .testing_to_value(),
+            ),
             on_failure: None,
         },
     };
@@ -998,11 +1003,16 @@ async fn test_egress_rate_limit_allowed() {
             RateLimitConfig::new(10, Duration::from_secs(3600)),
         )),
         content: Node {
-            notif: NotificationChannel::ConnGateway(ConnGatewayNotification {
-                notif: create_mock_notif(json!({"message": "Hello"})),
+            notif: NotificationChannel::ConnGateway(
+                ConnGatewayNotification {
+                    notif: create_mock_notif(TestNotification {
+                        message: "Hello".to_string(),
+                    }),
 
-                recipients: vec![recipient],
-            }),
+                    recipients: vec![recipient],
+                }
+                .testing_to_value(),
+            ),
             on_failure: None,
         },
     };
@@ -1023,10 +1033,15 @@ async fn test_egress_no_rate_limit_configured() {
         message_type: "test_notification".to_string(),
         rate_limit: None, // No rate limit configured
         content: Node {
-            notif: NotificationChannel::ConnGateway(ConnGatewayNotification {
-                notif: create_mock_notif(json!({"message": "Hello"})),
-                recipients: vec![recipient],
-            }),
+            notif: NotificationChannel::ConnGateway(
+                ConnGatewayNotification {
+                    notif: create_mock_notif(TestNotification {
+                        message: "Hello".to_string(),
+                    }),
+                    recipients: vec![recipient],
+                }
+                .testing_to_value(),
+            ),
             on_failure: None,
         },
     };

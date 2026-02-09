@@ -79,7 +79,7 @@ use crate::{
                         DocumentMentionMetadata,
 
                         // v2 typed notifications
-                        user_notification::NotifEvent,
+                        model_notifications::NotifEvent,
                         user_notification::ApiUserNotification,
                         user_notification::GetAllUserNotificationsResponse,
                         notification_crate::inbound::http::BulkGetByEventItemIdsRequest,

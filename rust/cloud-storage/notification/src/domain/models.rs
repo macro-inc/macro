@@ -1,7 +1,7 @@
 //! Domain models for the notification service.
 
 use macro_user_id::user_id::MacroUserIdStr;
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 pub(crate) mod android;
 pub mod apple;
@@ -67,10 +67,20 @@ pub struct UserNotificationRow<T> {
 }
 
 /// A notification metadata value tagged with the notification event type.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaggedContent<T> {
     tag: String,
     content: T,
+}
+
+impl<T: Notification> TaggedContent<T> {
+    /// create a new value from a notification T
+    pub fn new(val: T) -> Self {
+        TaggedContent {
+            tag: T::TYPE_NAME.to_string(),
+            content: val,
+        }
+    }
 }
 
 impl<T> UserNotificationRow<T> {
