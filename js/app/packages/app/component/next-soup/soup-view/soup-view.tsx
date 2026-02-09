@@ -85,7 +85,7 @@ import { EmptyState } from '@app/component/next-soup/soup-view/empty-states';
 import { SoupChatInput } from '@app/component/SoupChatInput';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
-import { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
+import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 
 const DEFAULT_ENTITY_HEIGHT = 40;
 
