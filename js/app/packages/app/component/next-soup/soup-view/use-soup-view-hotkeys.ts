@@ -19,7 +19,7 @@ import {
   getScopeElement,
   runCommand,
 } from '@core/hotkey/utils';
-import { isSearchEntity } from '@macro-entity';
+import { isSearchEntity } from '@entity';
 import type { Accessor } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { SoupState } from '../create-soup-state';

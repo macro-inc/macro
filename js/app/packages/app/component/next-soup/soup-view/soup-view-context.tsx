@@ -13,7 +13,7 @@ import { useEmailLinksStatus } from '@core/email-link';
 import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
 import { fuzzyMatch } from '@core/util/fuzzy';
-import type { EntityData, WithNotification, WithSearch } from '@macro-entity';
+import type { EntityData, WithNotification, WithSearch } from '@entity';
 import { useNotificationsForEntity } from '@notifications';
 import {
   type SoupItemsQueryFilters,

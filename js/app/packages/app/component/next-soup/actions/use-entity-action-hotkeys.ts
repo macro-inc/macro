@@ -1,7 +1,7 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { TOKENS } from '@core/hotkey/tokens';
-import type { EntityData } from '@macro-entity';
+import type { EntityData } from '@entity';
 import type { SoupState } from '../create-soup-state';
 import {
   makeCopyAction,

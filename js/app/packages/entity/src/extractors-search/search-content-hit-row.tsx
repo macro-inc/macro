@@ -8,24 +8,17 @@ import { UserIcon } from '@core/component/UserIcon';
 import { SearchLocation as SearchLoc } from './search-location';
 import { getSenderId } from './search-helpers';
 
-// Re-export helper for backward compatibility and testing
-export { getSenderId };
-
 interface SearchContentHitRowProps {
   hit: ContentHitData;
-  onClick?: (location?: SearchLocation) => void;
+  onClick?: (e: PointerEvent | MouseEvent, location?: SearchLocation) => void;
   index?: number;
   count?: number;
 }
 
 export function SearchContentHitRow(props: SearchContentHitRowProps) {
   const senderId = () => getSenderId(props.hit);
-  const handleClick = () => {
-    if (props.hit.location) {
-      props.onClick?.(props.hit.location);
-    } else {
-      props.onClick?.();
-    }
+  const handleClick = (e: PointerEvent | MouseEvent) => {
+    props.onClick?.(e, props.hit.location);
   };
 
   return (
@@ -35,13 +28,6 @@ export function SearchContentHitRow(props: SearchContentHitRowProps) {
       )}
       onClick={handleClick}
       role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          handleClick();
-        }
-      }}
     >
       <div class="flex flex-col gap-3">
         <Show when={props.hit.type === 'channel' || props.hit.type === 'email'}>

@@ -5,7 +5,7 @@ import {
   type WithSearch,
   type EntityData,
   type WithNotification,
-} from '@macro-entity';
+} from '@entity';
 
 export type SystemSortOption =
   | 'updated_at'

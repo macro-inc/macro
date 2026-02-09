@@ -1,8 +1,4 @@
-import {
-  isTaskEntity,
-  type EntityData,
-  type WithNotification,
-} from '@macro-entity';
+import { isTaskEntity, type EntityData, type WithNotification } from '@entity';
 import {
   signalFilter,
   noiseFilter,

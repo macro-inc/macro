@@ -140,7 +140,7 @@ if (LOCAL_ONLY) {
 
   registerComponent(
     'entity-debug',
-    lazy(() => import('@entity/src/debug/DebugEntityView'))
+    lazy(() => import('@entity/debug/DebugEntityView'))
   );
 }
 

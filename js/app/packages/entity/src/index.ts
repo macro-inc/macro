@@ -23,4 +23,6 @@ export {
   filterValidNotifications,
 } from './utils/notification';
 
+export { unreadFilterFn } from './utils/filter';
+
 export { default as DebugEntityView } from './debug/DebugEntityView';

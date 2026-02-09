@@ -38,15 +38,19 @@ interface ListEntityProps {
   ref?: Ref<HTMLDivElement>;
   checked?: boolean;
   highlighted?: boolean;
+  hovered?: boolean;
   onChecked?: (checked: boolean, shiftKey: boolean) => void;
-  onMouseOver?: () => void;
+  onMouseMove?: () => void;
   onMouseLeave?: () => void;
   showUnrollNotifications?: boolean;
   onProjectClick?: (
     entity: ProjectEntity,
     e: PointerEvent | MouseEvent
   ) => void;
-  onContentHitClick?: (location?: SearchLocation) => void;
+  onContentHitClick?: (
+    e: PointerEvent | MouseEvent,
+    location?: SearchLocation
+  ) => void;
 }
 
 interface LayoutProps {
@@ -347,10 +351,13 @@ export function ListEntity(props: ListEntityProps) {
       ref={mergeRefs(props.ref, draggable)}
       class={cn('@container/entity w-full min-h-10 relative group/narrow', {
         'bg-accent/5': props.checked,
+        'hover:bg-hover/30':
+          !props.checked && !props.highlighted && !props.hovered,
+        'bg-hover/20': props.hovered && !props.highlighted && !props.checked,
         'bg-accent/5 outline-1 outline-accent/20 outline-offset-[-1px]':
           props.highlighted,
       })}
-      onMouseOver={props.onMouseOver}
+      onMouseMove={props.onMouseMove}
       onMouseLeave={props.onMouseLeave}
     >
       <div
