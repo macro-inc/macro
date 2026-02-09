@@ -9,7 +9,7 @@ import { ChannelTypeEnum } from '@service-comms/client';
 import { createMemo } from 'solid-js';
 import type { CommandItemCard } from './KonsoleItem';
 
-type ChannelWithViewedAt = Channel & { viewed_at?: number };
+type ChannelWithViewedAt = Channel & { viewed_at?: Date };
 
 const FILTER_PERSISTENT_CHATS = false;
 
@@ -51,7 +51,7 @@ export function useCommandItems() {
           name: description,
           command: command,
         },
-        updatedAt: 0,
+        updatedAt: new Date(0),
       };
     });
 
@@ -78,8 +78,8 @@ export function useCommandItems() {
           fileType: item.type === 'document' ? item.fileType : undefined,
           subType: item.type === 'document' ? item.subType : undefined,
         },
-        updatedAt: item.updatedAt,
-        viewedAt: item.viewedAt,
+        updatedAt: item.updatedAt ?? undefined,
+        viewedAt: item.viewedAt ?? undefined,
       }));
     const bins = channelsIntoCategories(channels());
     const channels_: CommandItemCard[] = [

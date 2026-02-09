@@ -39,7 +39,7 @@ export function ProjectBreadCrumb(props: {
       id: data.id,
       name: data.name,
       ownerId: data.owner,
-      updatedAt: data.updatedAt,
+      updatedAt: data.updatedAt ?? undefined,
     };
 
     props.onClick?.(projectEntity, e);

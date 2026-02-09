@@ -1,4 +1,5 @@
 import { useEntityNotificationsQuery } from '@queries/notification/user-notifications';
+import { compareDateDesc } from '@core/util/date';
 import { createEffect } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import type { EntityData } from '../types/entity';
@@ -33,7 +34,7 @@ export function enhanceWithNotifications<T extends EntityData>(
           ? notificationsQuery.data
               .filter(({ viewedAt }) => !viewedAt)
               .toSorted((a, b) => {
-                return b.createdAt - a.createdAt;
+                return compareDateDesc(a.createdAt, b.createdAt);
               })
           : [];
     },

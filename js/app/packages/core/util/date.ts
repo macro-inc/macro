@@ -15,9 +15,10 @@ export interface FormatDateOptions {
  *     single day offsets, 'Thursday' for a day within the week and '01/23/2025' for dates outside the week.
  */
 export const formatDate = (
-  date: Date | number,
+  date: Date | number | null | undefined,
   options?: FormatDateOptions
 ) => {
+  if (!date) return '';
   const { epochNow, timeZone, showTime } = options ?? {};
   // handle computation in different timezones
   const getDatePartsInTimezone = (date: Date, tz?: string) => {
@@ -139,11 +140,23 @@ const EPOCH_ZERO = new Date(0);
  * @returns Positive if a > b, negative if a < b, zero if equal
  */
 export const compareDateDesc = (
-  a: Date | null | undefined | string,
-  b: Date | null | undefined | string
+  a: Date | null | undefined | string | number,
+  b: Date | null | undefined | string | number
 ): number => {
-  const dateA = a ? (typeof a === 'string' ? new Date(a) : a) : EPOCH_ZERO;
-  const dateB = b ? (typeof b === 'string' ? new Date(b) : b) : EPOCH_ZERO;
+  const dateA = a
+    ? typeof a === 'string'
+      ? new Date(a)
+      : typeof a === 'number'
+        ? new Date(a)
+        : a
+    : EPOCH_ZERO;
+  const dateB = b
+    ? typeof b === 'string'
+      ? new Date(b)
+      : typeof b === 'number'
+        ? new Date(b)
+        : b
+    : EPOCH_ZERO;
   return dateB.getTime() - dateA.getTime();
 };
 
@@ -155,10 +168,22 @@ export const compareDateDesc = (
  * @returns Positive if a > b, negative if a < b, zero if equal
  */
 export const compareDateAsc = (
-  a: Date | null | undefined | string,
-  b: Date | null | undefined | string
+  a: Date | null | undefined | string | number,
+  b: Date | null | undefined | string | number
 ): number => {
-  const dateA = a ? (typeof a === 'string' ? new Date(a) : a) : EPOCH_ZERO;
-  const dateB = b ? (typeof b === 'string' ? new Date(b) : b) : EPOCH_ZERO;
+  const dateA = a
+    ? typeof a === 'string'
+      ? new Date(a)
+      : typeof a === 'number'
+        ? new Date(a)
+        : a
+    : EPOCH_ZERO;
+  const dateB = b
+    ? typeof b === 'string'
+      ? new Date(b)
+      : typeof b === 'number'
+        ? new Date(b)
+        : b
+    : EPOCH_ZERO;
   return dateA.getTime() - dateB.getTime();
 };

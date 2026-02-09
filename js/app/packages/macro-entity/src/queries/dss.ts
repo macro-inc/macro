@@ -297,19 +297,19 @@ const selectData: (
               channelType: item.data.channel.channel_type,
               ownerId: item.data.channel.owner_id,
               frecencyScore: item.frecency_score ?? 0,
-              updatedAt: Date.parse(item.data.channel.updated_at),
-              createdAt: Date.parse(item.data.channel.created_at),
+              updatedAt: new Date(item.data.channel.updated_at),
+              createdAt: new Date(item.data.channel.created_at),
               participantIds: item.data.participants.map((p) => p.user_id),
               viewedAt: item.data.viewed_at
-                ? Date.parse(item.data.viewed_at)
+                ? new Date(item.data.viewed_at)
                 : item.data.interacted_at
-                  ? Date.parse(item.data.interacted_at)
+                  ? new Date(item.data.interacted_at)
                   : undefined,
               latestMessage: item.data.latest_non_thread_message
                 ? {
                     content: item.data.latest_non_thread_message.content,
                     senderId: item.data.latest_non_thread_message.sender_id,
-                    createdAt: Date.parse(
+                    createdAt: new Date(
                       item.data.latest_non_thread_message.created_at
                     ),
                   }
@@ -815,10 +815,10 @@ export function optimisticUpdateDssItemViewedAt(itemId: string) {
               case 'chat':
               case 'project':
               case 'emailThread':
-                item.data.viewedAt = now.getTime();
+                item.data.viewedAt = now;
                 break;
               case 'channel':
-                item.data.viewed_at = now.toISOString();
+                item.data.viewed_at = now;
                 break;
             }
 

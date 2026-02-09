@@ -233,7 +233,9 @@ const useMapSearchResponseItem = () => {
           .map((m) => m.sent_at)
           .filter((m) => m != null);
         const latestMessageSentAt =
-          messagesSentAt.length > 0 ? Math.max(...messagesSentAt) : null;
+          messagesSentAt.length > 0
+            ? new Date(Math.max(...messagesSentAt.map((d) => d.getTime())))
+            : null;
 
         return {
           type: 'email',

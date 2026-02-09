@@ -35,7 +35,7 @@ export type MessageRootProps = {
   isFirstMessage: boolean;
   isLastMessage: boolean;
   isConsecutive?: boolean;
-  timestamp?: string;
+  timestamp?: Date;
   hoverActions?: JSX.Element;
   shouldHover?: boolean;
   threadDepth?: number;
@@ -79,7 +79,7 @@ export function useMessageContext(): MessageContextValue {
 
 export type MessageTopBarSimpleProps = {
   name: string;
-  timestamp?: string;
+  timestamp?: Date;
   tagLabel?: string;
   tagIcon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>> | undefined;
 };
@@ -132,8 +132,7 @@ const TopBar: Component<MessageTopBarProps> = (props) => {
         {/* Date - hidden when hovering since it shows above hover actions */}
         <Show when={local.timestamp && !context.hover()}>
           <div class="text-xs touch:mobile-width:text-sm text-ink-muted">
-            {local.timestamp &&
-              formatDate(new Date(local.timestamp).getTime() / 1000)}
+            {local.timestamp && formatDate(local.timestamp)}
           </div>
         </Show>
       </div>

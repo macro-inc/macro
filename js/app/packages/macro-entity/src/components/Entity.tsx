@@ -11,7 +11,7 @@ import type { EntityClickHandler } from './EntityWithEverything';
 
 interface EntityProps<T extends EntityData> extends ParentProps {
   entity: T;
-  timestamp?: number;
+  timestamp?: Date;
   icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   iconClass?: string;
   onClick?: EntityClickHandler<T>;
@@ -56,7 +56,7 @@ export function Entity<T extends EntityData = EntityData>(
   const formattedDate = createMemo(() => {
     const timestamp = props.timestamp ?? props.entity.updatedAt;
     if (!timestamp) return;
-    const date = new Date(timestamp);
+    const date = timestamp;
     const currentDate = new Date();
 
     if (date.getDate() === currentDate.getDate())

@@ -123,7 +123,7 @@ export const deduplicateEntities = <T extends EntityData>(
  * Gets the timestamp of an entity (updatedAt or createdAt)
  */
 const getEntityTimestamp = (entity: EntityData): number => {
-  return entity.updatedAt ?? entity.createdAt ?? 0;
+  return entity.updatedAt?.getTime() ?? entity.createdAt?.getTime() ?? 0;
 };
 
 /**

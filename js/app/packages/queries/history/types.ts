@@ -6,7 +6,7 @@ type BaseHistoryItem = Pick<
 > & {
   // NOTE: the history endpoint does not return this field so this
   // is a placeholder for now
-  viewedAt?: number;
+  viewedAt?: Date;
   // TODO: item name without safe name transform
   rawName?: string;
 };

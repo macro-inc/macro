@@ -693,9 +693,7 @@ export function CommandItemCard(props: CommandItemProps) {
     const timestamp =
       props.item.type === 'email'
         ? props.item.data.timestamp
-        : props.item.updatedAt
-          ? new Date(props.item.updatedAt).toISOString()
-          : undefined;
+        : props.item.updatedAt;
 
     return (
       <Message

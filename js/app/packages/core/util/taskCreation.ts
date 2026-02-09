@@ -42,7 +42,7 @@ function buildPropertyInputs(
   if (task.dueDate) {
     properties.push({
       propertyId: SYSTEM_PROPERTY_IDS.DUE_DATE,
-      value: { type: 'date', value: task.dueDate },
+      value: { type: 'date', value: new Date(task.dueDate) },
     });
   }
 

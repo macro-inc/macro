@@ -1,8 +1,4 @@
-import type {
-  ContentHitData,
-  ChannelContentHitData,
-  EmailContentHitData,
-} from '../types/search';
+import type { ContentHitData } from '../types/search';
 import { formatRelativeTimestamp } from '../utils/timestamp';
 
 interface SearchTimestampProps {
@@ -12,12 +8,11 @@ interface SearchTimestampProps {
 /**
  * Gets timestamp from content hit if available
  */
-function getTimestamp(hit: ContentHitData): number | undefined {
-  if (hit.type === 'channel') {
-    return (hit as ChannelContentHitData).sentAt;
-  }
-  if (hit.type === 'email') {
-    return (hit as EmailContentHitData).sentAt;
+function getTimestamp(hit: ContentHitData): Date | undefined {
+  switch (hit.type) {
+    case 'email':
+    case 'channel':
+      return hit.sentAt;
   }
   return undefined;
 }
@@ -30,7 +25,7 @@ export function SearchTimestamp(props: SearchTimestampProps) {
 
   const formattedTimestamp = () => {
     const ts = timestamp();
-    return ts ? formatRelativeTimestamp(ts) : '';
+    return ts ? formatRelativeTimestamp(ts.getTime()) : '';
   };
 
   return <>{formattedTimestamp()}</>;

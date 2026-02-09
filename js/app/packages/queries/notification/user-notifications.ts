@@ -313,7 +313,7 @@ const mapNotificationsAsSeen = (
         ...page,
         items: page.items.map((n) =>
           params.notificationIds.includes(n.id)
-            ? { ...n, viewedAt: Date.now() }
+            ? { ...n, viewedAt: new Date() }
             : n
         ),
       })),

@@ -97,7 +97,7 @@ async function fetchDocumentPreviews(ids: string[]): Promise<PreviewItem[]> {
           name: doc.document_name,
           fileType: doc.file_type as FileType,
           owner: doc.owner,
-          updatedAt: doc.updated_at,
+          updatedAt: doc.updated_at ?? undefined,
           subType:
             doc.sub_type === null || doc.sub_type === undefined
               ? undefined
@@ -142,7 +142,7 @@ async function fetchChatPreviews(ids: string[]): Promise<PreviewItem[]> {
           loading: false,
           name: chat.chat_name,
           owner: chat.owner,
-          updatedAt: chat.updated_at,
+          updatedAt: chat.updated_at ?? undefined,
         };
       case 'no_access':
       case 'does_not_exist':
@@ -171,6 +171,10 @@ async function fetchProjectPreviews(
     type: 'project',
     loading: false,
     ...preview,
+    updatedAt:
+      preview.access === 'access'
+        ? (preview.updatedAt ?? undefined)
+        : undefined,
   }));
 }
 
@@ -208,7 +212,7 @@ async function fetchEmailPreviews(threadIds: string[]): Promise<PreviewItem[]> {
         loading: false as const,
         name: subject,
         owner: sender as string | undefined,
-        updatedAt: new Date(data.thread.updated_at).getTime(),
+        updatedAt: data.thread.updated_at,
       };
     })
   );

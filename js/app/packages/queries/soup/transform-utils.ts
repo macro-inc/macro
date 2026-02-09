@@ -239,7 +239,9 @@ export const useSearchResponseItemMapper = () => {
           .map((m) => m.sent_at)
           .filter((m) => m != null);
         const latestMessageSentAt =
-          messagesSentAt.length > 0 ? Math.max(...messagesSentAt) : null;
+          messagesSentAt.length > 0
+            ? new Date(Math.max(...messagesSentAt.map((d) => d.getTime())))
+            : null;
 
         return {
           type: 'email',
@@ -435,19 +437,16 @@ export const mapSoupPageToEntityList: (
             channelType: item.data.channel.channel_type,
             ownerId: item.data.channel.owner_id,
             frecencyScore: item.frecency_score ?? 0,
-            updatedAt: Date.parse(item.data.channel.updated_at),
-            createdAt: Date.parse(item.data.channel.created_at),
+            updatedAt: new Date(item.data.channel.updated_at),
+            createdAt: new Date(item.data.channel.created_at),
             participantIds: item.data.participants.map((p) => p.user_id),
-            viewedAt: item.data.viewed_at
-              ? Date.parse(item.data.viewed_at)
-              : item.data.interacted_at
-                ? Date.parse(item.data.interacted_at)
-                : undefined,
+            viewedAt:
+              item.data.viewed_at ?? item.data.interacted_at ?? undefined,
             latestMessage: item.data.latest_non_thread_message
               ? {
                   content: item.data.latest_non_thread_message.content,
                   senderId: item.data.latest_non_thread_message.sender_id,
-                  createdAt: Date.parse(
+                  createdAt: new Date(
                     item.data.latest_non_thread_message.created_at
                   ),
                 }

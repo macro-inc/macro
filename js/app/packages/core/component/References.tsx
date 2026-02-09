@@ -30,7 +30,7 @@ function isChannelReference(ref: EntityReference): ref is EntityReference & {
   channel_id: string;
   message_id: string;
   sender_id: string;
-  attachment_created_at: string;
+  attachment_created_at: Date;
   message_content?: string;
 } {
   return (
@@ -136,9 +136,10 @@ export function References(props: ReferenceProps) {
 
   const sortedReferences = createMemo(() => {
     const refs = references() ?? [];
+    const EPOCH_ZERO = new Date(0);
     return refs.sort((a, b) => {
-      let timeA = '0';
-      let timeB = '0';
+      let timeA = EPOCH_ZERO;
+      let timeB = EPOCH_ZERO;
 
       if (isChannelReference(a)) {
         timeA = a.attachment_created_at;
@@ -152,13 +153,12 @@ export function References(props: ReferenceProps) {
         timeB = b.created_at;
       }
 
-      return new Date(timeB).getTime() - new Date(timeA).getTime();
+      return timeB.getTime() - timeA.getTime();
     });
   });
 
-  const formatTimestamp = (timestamp: string) => {
-    const date = new Date(timestamp);
-    const datePart = date
+  const formatTimestamp = (timestamp: Date) => {
+    const datePart = timestamp
       .toLocaleDateString('en-US', {
         month: 'numeric',
         day: 'numeric',
@@ -166,7 +166,7 @@ export function References(props: ReferenceProps) {
       })
       .replaceAll('/', '-');
 
-    const timePart = date.toLocaleTimeString('en-US', {
+    const timePart = timestamp.toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: 'numeric',
     });
