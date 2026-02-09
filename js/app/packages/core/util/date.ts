@@ -8,13 +8,16 @@ export interface FormatDateOptions {
 }
 
 /**
- * Formats epoch date (unix timestamp seconds) to a human readable date.
- * @param epochDate - Unix timestamp in seconds. The date to format.
+ * Formats a date to a human readable string.
+ * @param date - Date object or Unix timestamp in seconds
  * @param options - Optional formatting options.
  * @returns Formatted date string. Like '4:53 PM' for same local day or, 'Yesterday at 8:10 AM' for
  *     single day offsets, 'Thursday' for a day within the week and '01/23/2025' for dates outside the week.
  */
-export const formatDate = (epochDate: number, options?: FormatDateOptions) => {
+export const formatDate = (
+  date: Date | number,
+  options?: FormatDateOptions
+) => {
   const { epochNow, timeZone, showTime } = options ?? {};
   // handle computation in different timezones
   const getDatePartsInTimezone = (date: Date, tz?: string) => {
@@ -48,7 +51,7 @@ export const formatDate = (epochDate: number, options?: FormatDateOptions) => {
   };
 
   const now = epochNow ? new Date(epochNow * 1000) : new Date();
-  const inputDate = new Date(epochDate * 1000);
+  const inputDate = date instanceof Date ? date : new Date(date * 1000);
 
   // calculate a midnight aware day boundary
   const nowParts = getDatePartsInTimezone(now, timeZone);
@@ -87,22 +90,22 @@ export const formatDate = (epochDate: number, options?: FormatDateOptions) => {
     return showTime ? `${weekday} at ${time}` : weekday;
   }
 
-  const date = inputDate.toLocaleDateString(undefined, {
+  const displayDate = inputDate.toLocaleDateString(undefined, {
     month: '2-digit',
     day: '2-digit',
     year: '2-digit',
     timeZone,
   });
-  return showTime ? `${date} at ${time}` : date;
+  return showTime ? `${displayDate} at ${time}` : displayDate;
 };
 
 /**
  * Formats a date in the format "Fri, Jul 4, 2025 at 12:20 AM"
- * @param epochDate - Unix timestamp in seconds
+ * @param date - Date object or Unix timestamp in seconds
  * @returns Formatted date string
  */
-export const formatEmailDate = (epochDate: number) => {
-  const inputDate = new Date(epochDate * 1000);
+export const formatEmailDate = (date: Date | number) => {
+  const inputDate = date instanceof Date ? date : new Date(date * 1000);
 
   const weekday = inputDate.toLocaleDateString('en-US', { weekday: 'short' });
   const month = inputDate.toLocaleDateString('en-US', { month: 'short' });
