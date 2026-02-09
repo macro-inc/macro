@@ -6,6 +6,7 @@
  */
 import type { BasicDocumentBranchedFromId } from './basicDocumentBranchedFromId';
 import type { BasicDocumentBranchedFromVersionId } from './basicDocumentBranchedFromVersionId';
+import type { BasicDocumentCreatedAt } from './basicDocumentCreatedAt';
 import type { BasicDocumentDeletedAt } from './basicDocumentDeletedAt';
 import type { BasicDocumentDocumentFamilyId } from './basicDocumentDocumentFamilyId';
 import type { BasicDocumentFileType } from './basicDocumentFileType';
@@ -13,6 +14,7 @@ import type { BasicDocumentProjectId } from './basicDocumentProjectId';
 import type { BasicDocumentSha } from './basicDocumentSha';
 import type { BasicDocumentSubTypeProperty } from './basicDocumentSubTypeProperty';
 import type { BasicDocumentType } from './basicDocumentType';
+import type { BasicDocumentUpdatedAt } from './basicDocumentUpdatedAt';
 
 export interface BasicDocument {
   /** The id of the document this document branched from */
@@ -22,9 +24,9 @@ This could be either DocumentInstance or DocumentBom id depending on
 the file type */
   branchedFromVersionId?: BasicDocumentBranchedFromVersionId;
   /** The time the document was created */
-  createdAt: number;
+  createdAt?: BasicDocumentCreatedAt;
   /** The time the document was deleted */
-  deletedAt: BasicDocumentDeletedAt;
+  deletedAt?: BasicDocumentDeletedAt;
   /** The id of the document family this document belongs to */
   documentFamilyId?: BasicDocumentDocumentFamilyId;
   /** The version of the document
@@ -46,6 +48,6 @@ If the document is a DOCX, this will not be present */
   sha?: BasicDocumentSha;
   subType?: BasicDocumentSubTypeProperty;
   /** The time the document instance / document BOM was updated */
-  updatedAt: number;
+  updatedAt?: BasicDocumentUpdatedAt;
   type: BasicDocumentType;
 }

@@ -32,7 +32,7 @@ export interface SimpleEmailSearchResponseBaseItem {
   /** The thread id */
   thread_id: string;
   /** The time the email was last updated */
-  updated_at: number;
+  updated_at: string;
   /** The user id */
   user_id: string;
 }

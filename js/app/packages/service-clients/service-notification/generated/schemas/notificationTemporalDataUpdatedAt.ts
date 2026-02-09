@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type NotificationTemporalDataUpdatedAt = number | null;
+export type NotificationTemporalDataUpdatedAt = string | null;

@@ -4,13 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
+import type { NotificationTemporalDataCreatedAt } from './notificationTemporalDataCreatedAt';
 import type { NotificationTemporalDataDeletedAt } from './notificationTemporalDataDeletedAt';
 import type { NotificationTemporalDataUpdatedAt } from './notificationTemporalDataUpdatedAt';
 import type { NotificationTemporalDataViewedAt } from './notificationTemporalDataViewedAt';
 
 export interface NotificationTemporalData {
-  createdAt: number;
-  deletedAt: NotificationTemporalDataDeletedAt;
-  updatedAt: NotificationTemporalDataUpdatedAt;
-  viewedAt: NotificationTemporalDataViewedAt;
+  createdAt?: NotificationTemporalDataCreatedAt;
+  deletedAt?: NotificationTemporalDataDeletedAt;
+  updatedAt?: NotificationTemporalDataUpdatedAt;
+  viewedAt?: NotificationTemporalDataViewedAt;
 }

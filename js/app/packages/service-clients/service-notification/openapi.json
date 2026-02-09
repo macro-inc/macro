@@ -994,21 +994,17 @@
               "notificationEventType",
               "sent",
               "done",
-              "createdAt",
-              "viewedAt",
-              "updatedAt",
-              "deletedAt",
               "notificationMetadata"
             ],
             "properties": {
               "createdAt": {
-                "type": "integer",
-                "format": "int64",
+                "type": ["string", "null"],
+                "format": "date-time",
                 "description": "When the notification was created."
               },
               "deletedAt": {
-                "type": ["integer", "null"],
-                "format": "int64",
+                "type": ["string", "null"],
+                "format": "date-time",
                 "description": "When the notification was deleted."
               },
               "done": {
@@ -1041,13 +1037,13 @@
                 "description": "Whether the notification has been sent."
               },
               "updatedAt": {
-                "type": ["integer", "null"],
-                "format": "int64",
+                "type": ["string", "null"],
+                "format": "date-time",
                 "description": "When the notification was last updated."
               },
               "viewedAt": {
-                "type": ["integer", "null"],
-                "format": "int64",
+                "type": ["string", "null"],
+                "format": "date-time",
                 "description": "When the notification was viewed/seen."
               }
             }
@@ -1791,23 +1787,22 @@
       },
       "NotificationTemporalData": {
         "type": "object",
-        "required": ["createdAt", "viewedAt", "updatedAt", "deletedAt"],
         "properties": {
           "createdAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "updatedAt": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "viewedAt": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         }
       },

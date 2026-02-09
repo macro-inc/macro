@@ -1453,8 +1453,9 @@
           "created_at": {
             "oneOf": [
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the channel message was created"
@@ -1490,15 +1491,16 @@
           "updated_at": {
             "oneOf": [
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the channel message was last updated"
           }
         }
       },
-      "SimpleChannelSearchReponseBaseItem_TimestampSeconds": {
+      "SimpleChannelSearchReponseBaseItem_HumanReadableTimestamp": {
         "type": "object",
         "required": [
           "channel_id",
@@ -1522,8 +1524,9 @@
           "created_at": {
             "oneOf": [
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the channel message was created"
@@ -1559,8 +1562,9 @@
           "updated_at": {
             "oneOf": [
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the channel message was last updated"
@@ -1628,8 +1632,9 @@
           "updated_at": {
             "oneOf": [
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the chat was last updated"
@@ -1640,7 +1645,7 @@
           }
         }
       },
-      "SimpleChatSearchResponseBaseItem_TimestampSeconds": {
+      "SimpleChatSearchResponseBaseItem_HumanReadableTimestamp": {
         "type": "object",
         "required": [
           "chat_id",
@@ -1675,8 +1680,9 @@
           "updated_at": {
             "oneOf": [
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the chat was last updated"
@@ -1743,15 +1749,16 @@
           "updated_at": {
             "oneOf": [
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the document was last updated"
           }
         }
       },
-      "SimpleDocumentSearchResponseBaseItem_TimestampSeconds": {
+      "SimpleDocumentSearchResponseBaseItem_HumanReadableTimestamp": {
         "type": "object",
         "required": [
           "document_id",
@@ -1794,8 +1801,9 @@
           "updated_at": {
             "oneOf": [
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the document was last updated"
@@ -1881,8 +1889,9 @@
                 "type": "null"
               },
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the email was sent"
@@ -1898,8 +1907,9 @@
           "updated_at": {
             "oneOf": [
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the email was last updated"
@@ -1910,7 +1920,7 @@
           }
         }
       },
-      "SimpleEmailSearchResponseBaseItem_TimestampSeconds": {
+      "SimpleEmailSearchResponseBaseItem_HumanReadableTimestamp": {
         "type": "object",
         "required": [
           "thread_id",
@@ -1976,8 +1986,9 @@
                 "type": "null"
               },
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the email was sent"
@@ -1993,8 +2004,9 @@
           "updated_at": {
             "oneOf": [
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the email was last updated"
@@ -2032,8 +2044,9 @@
           "created_at": {
             "oneOf": [
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the project was created"
@@ -2053,8 +2066,9 @@
           "updated_at": {
             "oneOf": [
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the project was last updated"
@@ -2065,7 +2079,7 @@
           }
         }
       },
-      "SimpleProjectSearchResponseBaseItem_TimestampSeconds": {
+      "SimpleProjectSearchResponseBaseItem_HumanReadableTimestamp": {
         "type": "object",
         "required": [
           "project_id",
@@ -2079,8 +2093,9 @@
           "created_at": {
             "oneOf": [
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the project was created"
@@ -2100,8 +2115,9 @@
           "updated_at": {
             "oneOf": [
               {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
               }
             ],
             "description": "The time the project was last updated"
@@ -2119,7 +2135,7 @@
           "results": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/SimpleUnifiedSearchResponseBaseItem_TimestampSeconds"
+              "$ref": "#/components/schemas/SimpleUnifiedSearchResponseBaseItem_HumanReadableTimestamp"
             }
           }
         }
@@ -2129,7 +2145,7 @@
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/SimpleDocumentSearchResponseBaseItem_TimestampSeconds"
+                "$ref": "#/components/schemas/SimpleDocumentSearchResponseBaseItem_HumanReadableTimestamp"
               },
               {
                 "type": "object",
@@ -2146,7 +2162,7 @@
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/SimpleChatSearchResponseBaseItem_TimestampSeconds"
+                "$ref": "#/components/schemas/SimpleChatSearchResponseBaseItem_HumanReadableTimestamp"
               },
               {
                 "type": "object",
@@ -2163,7 +2179,7 @@
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/SimpleEmailSearchResponseBaseItem_TimestampSeconds"
+                "$ref": "#/components/schemas/SimpleEmailSearchResponseBaseItem_HumanReadableTimestamp"
               },
               {
                 "type": "object",
@@ -2180,7 +2196,7 @@
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/SimpleChannelSearchReponseBaseItem_TimestampSeconds"
+                "$ref": "#/components/schemas/SimpleChannelSearchReponseBaseItem_HumanReadableTimestamp"
               },
               {
                 "type": "object",
@@ -2197,7 +2213,7 @@
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/SimpleProjectSearchResponseBaseItem_TimestampSeconds"
+                "$ref": "#/components/schemas/SimpleProjectSearchResponseBaseItem_HumanReadableTimestamp"
               },
               {
                 "type": "object",
@@ -2213,12 +2229,12 @@
           }
         ]
       },
-      "SimpleUnifiedSearchResponseBaseItem_TimestampSeconds": {
+      "SimpleUnifiedSearchResponseBaseItem_HumanReadableTimestamp": {
         "oneOf": [
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/SimpleDocumentSearchResponseBaseItem_TimestampSeconds"
+                "$ref": "#/components/schemas/SimpleDocumentSearchResponseBaseItem_HumanReadableTimestamp"
               },
               {
                 "type": "object",
@@ -2235,7 +2251,7 @@
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/SimpleChatSearchResponseBaseItem_TimestampSeconds"
+                "$ref": "#/components/schemas/SimpleChatSearchResponseBaseItem_HumanReadableTimestamp"
               },
               {
                 "type": "object",
@@ -2252,7 +2268,7 @@
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/SimpleEmailSearchResponseBaseItem_TimestampSeconds"
+                "$ref": "#/components/schemas/SimpleEmailSearchResponseBaseItem_HumanReadableTimestamp"
               },
               {
                 "type": "object",
@@ -2269,7 +2285,7 @@
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/SimpleChannelSearchReponseBaseItem_TimestampSeconds"
+                "$ref": "#/components/schemas/SimpleChannelSearchReponseBaseItem_HumanReadableTimestamp"
               },
               {
                 "type": "object",
@@ -2286,7 +2302,7 @@
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/SimpleProjectSearchResponseBaseItem_TimestampSeconds"
+                "$ref": "#/components/schemas/SimpleProjectSearchResponseBaseItem_HumanReadableTimestamp"
               },
               {
                 "type": "object",

@@ -7,6 +7,7 @@
 
 export * from './apiUserNotification';
 export * from './apiUserNotificationAllOf';
+export * from './apiUserNotificationAllOfCreatedAt';
 export * from './apiUserNotificationAllOfDeletedAt';
 export * from './apiUserNotificationAllOfSenderId';
 export * from './apiUserNotificationAllOfUpdatedAt';
@@ -100,6 +101,7 @@ export * from './notificationEventOneOfTwothreeNotificationEventType';
 export * from './notificationEventType';
 export * from './notificationServiceApiVersion';
 export * from './notificationTemporalData';
+export * from './notificationTemporalDataCreatedAt';
 export * from './notificationTemporalDataDeletedAt';
 export * from './notificationTemporalDataUpdatedAt';
 export * from './notificationTemporalDataViewedAt';
