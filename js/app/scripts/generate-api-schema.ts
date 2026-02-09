@@ -13,6 +13,7 @@ import { type Service, services } from './services';
 // Map service names to Rust crate names
 const serviceToCrate: Record<string, string> = {
   'cloud-storage': 'document_storage_service',
+  'comms-service': 'comms_service',
   'document-cognition': 'document_cognition_service',
   'auth-service': 'authentication_service',
   'notification-service': 'notification_service',
