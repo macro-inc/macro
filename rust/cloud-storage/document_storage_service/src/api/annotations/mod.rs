@@ -16,14 +16,11 @@ use axum::{
     routing::{delete, get, patch, post},
 };
 use macro_db_client::annotations::CommentError;
-use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::{annotations::Comment, response::ErrorResponse};
-use model_entity::Entity;
 use model_entity::EntityType;
 use model_notifications::MentionedInDocumentCommentMetadata;
 use notification::domain::models::SendNotificationRequestBuilder;
-use serde::{Deserialize, Serialize};
 use tower::ServiceBuilder;
 
 pub fn router(state: ApiContext) -> Router<ApiContext> {
