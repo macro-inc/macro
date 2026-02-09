@@ -178,9 +178,6 @@ pub struct DocumentMentionMetadata {
     /// The file type of the document
     #[serde(alias = "file_type")]
     pub file_type: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(flatten)]
-    pub metadata: Option<serde_json::Value>,
 }
 
 impl From<DocumentMentionMetadata> for serde_json::Value {

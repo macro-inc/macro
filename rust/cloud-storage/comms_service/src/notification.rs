@@ -130,7 +130,6 @@ impl ChannelMessageEvent<'_> {
                         document_name: mention.item_name.clone(),
                         owner: mention.item_owner.clone(),
                         file_type: mention.file_type.clone(),
-                        metadata: None,
                     }),
                 ));
             }
