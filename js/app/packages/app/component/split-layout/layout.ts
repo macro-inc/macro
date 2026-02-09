@@ -71,6 +71,7 @@ export function useSplitLayout() {
       content,
       activate: true,
       referredFrom,
+      force: 'insert',
     });
   }
 
