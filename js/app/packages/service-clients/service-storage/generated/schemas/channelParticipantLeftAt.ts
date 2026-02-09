@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ChannelParticipantLeftAt = string | null;
+export type ChannelParticipantLeftAt = Date | null;

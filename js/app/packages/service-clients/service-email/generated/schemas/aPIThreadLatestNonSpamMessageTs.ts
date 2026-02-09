@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type APIThreadLatestNonSpamMessageTs = string | null;
+export type APIThreadLatestNonSpamMessageTs = Date | null;

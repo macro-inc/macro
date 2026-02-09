@@ -14,7 +14,7 @@ export interface SimpleChannelSearchReponseBaseItemHumanReadableTimestamp {
   /** The channel type */
   channel_type: string;
   /** The time the channel message was created */
-  created_at: string;
+  created_at: Date;
   /** The highlights on the channel message */
   highlight: SearchHighlight;
   /** The mentions */
@@ -28,5 +28,5 @@ export interface SimpleChannelSearchReponseBaseItemHumanReadableTimestamp {
   /** The thread id */
   thread_id?: SimpleChannelSearchReponseBaseItemHumanReadableTimestampThreadId;
   /** The time the channel message was last updated */
-  updated_at: string;
+  updated_at: Date;
 }

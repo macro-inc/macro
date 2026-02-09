@@ -18,7 +18,7 @@ export interface SimpleChatSearchResponseBaseItem {
   /** The title */
   title: string;
   /** The time the chat was last updated */
-  updated_at: string;
+  updated_at: Date;
   /** The user id */
   user_id: string;
 }

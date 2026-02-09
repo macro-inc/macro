@@ -34,7 +34,7 @@ export interface Message {
   body_macro?: MessageBodyMacro;
   body_text?: MessageBodyText;
   cc: ContactInfo[];
-  created_at: string;
+  created_at: Date;
   db_id: string;
   from?: MessageFrom;
   /** The globally unique Message-ID header value created by the sender to uniquely identify this email
@@ -60,5 +60,5 @@ Used for threading across all providers (In-Reply-To header, References header) 
   subject?: MessageSubject;
   thread_db_id: string;
   to: ContactInfo[];
-  updated_at: string;
+  updated_at: Date;
 }

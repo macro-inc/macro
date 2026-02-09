@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type NotificationTemporalDataDeletedAt = string | null;
+export type NotificationTemporalDataDeletedAt = Date | null;

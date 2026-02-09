@@ -12,7 +12,7 @@ import type { PropertyOwner } from './propertyOwner';
  * Property definition model (service representation).
  */
 export interface PropertyDefinition {
-  created_at: string;
+  created_at: Date;
   data_type: DataType;
   display_name: string;
   id: string;
@@ -24,5 +24,5 @@ Not stored in database - computed at service layer. */
   is_system: boolean;
   owner: PropertyOwner;
   specific_entity_type?: PropertyDefinitionSpecificEntityType;
-  updated_at: string;
+  updated_at: Date;
 }

@@ -8,4 +8,4 @@
 /**
  * When the notification was created.
  */
-export type ApiUserNotificationAllOfCreatedAt = string | null;
+export type ApiUserNotificationAllOfCreatedAt = Date | null;

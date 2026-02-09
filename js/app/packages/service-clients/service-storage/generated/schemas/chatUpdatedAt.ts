@@ -8,4 +8,4 @@
 /**
  * The time the chat was last updated
  */
-export type ChatUpdatedAt = string | null;
+export type ChatUpdatedAt = Date | null;

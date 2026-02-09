@@ -10,7 +10,7 @@ import type { Settings } from './settings';
 import type { UserProvider } from './userProvider';
 
 export interface Link {
-  created_at: string;
+  created_at: Date;
   email_address: string;
   fusionauth_user_id: string;
   id: string;
@@ -19,5 +19,5 @@ export interface Link {
   provider: UserProvider;
   settings: Settings;
   signature?: LinkSignature;
-  updated_at: string;
+  updated_at: Date;
 }

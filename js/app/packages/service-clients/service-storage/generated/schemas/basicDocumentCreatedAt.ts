@@ -8,4 +8,4 @@
 /**
  * The time the document was created
  */
-export type BasicDocumentCreatedAt = string | null;
+export type BasicDocumentCreatedAt = Date | null;

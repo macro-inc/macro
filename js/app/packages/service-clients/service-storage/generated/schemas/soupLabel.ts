@@ -9,7 +9,7 @@ import type { SoupLabelType } from './soupLabelType';
 import type { SoupMessageListVisibility } from './soupMessageListVisibility';
 
 export interface SoupLabel {
-  createdAt: string;
+  createdAt: Date;
   id: string;
   labelListVisibility: SoupLabelListVisibility;
   linkId: string;

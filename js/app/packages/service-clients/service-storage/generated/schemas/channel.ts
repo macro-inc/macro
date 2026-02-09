@@ -11,11 +11,11 @@ import type { ChannelType } from './channelType';
 
 export interface Channel {
   channel_type: ChannelType;
-  created_at: string;
+  created_at: Date;
   id: string;
   name?: ChannelName;
   /** @minimum 0 */
   org_id?: ChannelOrgId;
   owner_id: string;
-  updated_at: string;
+  updated_at: Date;
 }

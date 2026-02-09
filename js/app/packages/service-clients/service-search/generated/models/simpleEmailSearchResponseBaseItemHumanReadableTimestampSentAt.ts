@@ -9,5 +9,4 @@
  * The time the email was sent
  */
 export type SimpleEmailSearchResponseBaseItemHumanReadableTimestampSentAt =
-  | null
-  | string;
+  null | Date;

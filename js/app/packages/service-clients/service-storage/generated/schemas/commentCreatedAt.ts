@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type CommentCreatedAt = string | null;
+export type CommentCreatedAt = Date | null;

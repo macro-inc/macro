@@ -12,7 +12,7 @@ import type { ThreadLatestOutboundMessageTs } from './threadLatestOutboundMessag
 import type { ThreadProviderId } from './threadProviderId';
 
 export interface Thread {
-  created_at: string;
+  created_at: Date;
   db_id: string;
   inbox_visible: boolean;
   is_read: boolean;
@@ -22,5 +22,5 @@ export interface Thread {
   link_id: string;
   messages: Message[];
   provider_id?: ThreadProviderId;
-  updated_at: string;
+  updated_at: Date;
 }

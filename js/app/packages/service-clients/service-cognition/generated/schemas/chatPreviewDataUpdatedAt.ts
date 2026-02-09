@@ -5,4 +5,4 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type ChatPreviewDataUpdatedAt = string | null;
+export type ChatPreviewDataUpdatedAt = Date | null;

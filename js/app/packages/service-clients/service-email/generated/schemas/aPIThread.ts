@@ -16,7 +16,7 @@ import type { MessageWithBodyReplyless } from './messageWithBodyReplyless';
  */
 export interface APIThread {
   access_level: AccessLevel;
-  created_at: string;
+  created_at: Date;
   db_id: string;
   inbox_visible: boolean;
   is_read: boolean;
@@ -26,5 +26,5 @@ export interface APIThread {
   link_id: string;
   messages: MessageWithBodyReplyless[];
   provider_id?: APIThreadProviderId;
-  updated_at: string;
+  updated_at: Date;
 }

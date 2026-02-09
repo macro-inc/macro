@@ -11,5 +11,5 @@ import type { SetPropertyValueOneOfThreeType } from './setPropertyValueOneOfThre
  */
 export type SetPropertyValueOneOfThree = {
   type: SetPropertyValueOneOfThreeType;
-  value: string;
+  value: Date;
 };

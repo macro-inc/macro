@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type APIThreadLatestOutboundMessageTs = string | null;
+export type APIThreadLatestOutboundMessageTs = Date | null;

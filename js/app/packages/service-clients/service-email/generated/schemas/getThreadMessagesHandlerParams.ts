@@ -9,7 +9,7 @@ export type GetThreadMessagesHandlerParams = {
   /**
    * Filter messages after this date
    */
-  since?: string;
+  since?: Date;
   /**
    * Limit number of messages returned
    */

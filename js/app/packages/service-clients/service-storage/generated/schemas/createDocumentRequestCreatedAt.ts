@@ -8,4 +8,4 @@
 /**
  * Optional time to set the document's created_at to. Set when backfilling email attachments.
  */
-export type CreateDocumentRequestCreatedAt = string | null;
+export type CreateDocumentRequestCreatedAt = Date | null;

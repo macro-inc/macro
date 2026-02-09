@@ -8,4 +8,4 @@
 /**
  * The time the document instance / document BOM was updated
  */
-export type DocumentResponseMetadataUpdatedAt = string | null;
+export type DocumentResponseMetadataUpdatedAt = Date | null;
