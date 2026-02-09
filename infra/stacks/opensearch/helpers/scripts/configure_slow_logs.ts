@@ -10,24 +10,18 @@ async function configureSlowLogs() {
       index: '_all',
       body: {
         // Search query slow logs
-        'index.search.slowlog.threshold.query.warn': '1s',
-        'index.search.slowlog.threshold.query.info': '500ms',
-        'index.search.slowlog.threshold.query.debug': '200ms',
-        'index.search.slowlog.threshold.query.trace': '100ms',
+        'index.search.slowlog.threshold.query.warn': '5s',
+        'index.search.slowlog.threshold.query.info': '2s',
 
         // Search fetch slow logs
-        'index.search.slowlog.threshold.fetch.warn': '1s',
-        'index.search.slowlog.threshold.fetch.info': '500ms',
-        'index.search.slowlog.threshold.fetch.debug': '200ms',
-        'index.search.slowlog.threshold.fetch.trace': '100ms',
+        'index.search.slowlog.threshold.fetch.warn': '5s',
+        'index.search.slowlog.threshold.fetch.info': '2s',
 
         // Indexing slow logs
-        'index.indexing.slowlog.threshold.index.warn': '1s',
-        'index.indexing.slowlog.threshold.index.info': '500ms',
-        'index.indexing.slowlog.threshold.index.debug': '200ms',
-        'index.indexing.slowlog.threshold.index.trace': '100ms',
+        'index.indexing.slowlog.threshold.index.warn': '5s',
+        'index.indexing.slowlog.threshold.index.info': '2s',
 
-        // Slow log level (can be: trace, debug, info, warn)
+        // Slow log level - only log INFO and above (no DEBUG/TRACE)
         'index.search.slowlog.level': 'info',
         'index.indexing.slowlog.level': 'info',
       },
@@ -51,10 +45,8 @@ async function configureSlowLogs() {
     }
 
     console.log('\n📝 Slow queries will now be logged to CloudWatch:');
-    console.log('  - Queries > 1s: WARN level');
-    console.log('  - Queries > 500ms: INFO level');
-    console.log('  - Queries > 200ms: DEBUG level');
-    console.log('  - Queries > 100ms: TRACE level');
+    console.log('  - Queries > 5s: WARN level');
+    console.log('  - Queries > 2s: INFO level');
   } catch (error) {
     console.error('❌ Error configuring slow logs:', error);
     throw error;
