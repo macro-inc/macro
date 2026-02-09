@@ -15,8 +15,6 @@ export type PerQueryPersistence = {
   remove: (queryHash: string) => void;
 };
 
-export type PerQueryIDBStore = PerQueryPersistence;
-
 type PerQueryPersistenceOptions = Readonly<{
   dbName: string;
   debounceMs?: number;

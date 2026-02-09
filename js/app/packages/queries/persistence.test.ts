@@ -1,111 +1,16 @@
 import { QueryClient } from '@tanstack/solid-query';
-import type { Persister } from '@tanstack/solid-query-persist-client';
 import { describe, expect, it, vi } from 'vitest';
 import type {
-  PerQueryIDBStore,
+  PerQueryPersistence,
   PersistedQueryEntry,
 } from './persistence/per-query-idb';
 import {
   queryKeyHasPrefix,
   setupQueryPersistence,
-  setupLazyQueryPersistence,
-  shouldPersistForScopeEvent,
-  type LazyPersistScope,
   type PersistScope,
 } from './persistence';
 
-function createScope(prefix: readonly unknown[]): PersistScope {
-  return {
-    persister: {
-      persistClient: vi.fn(async () => {}),
-      restoreClient: vi.fn(async () => undefined),
-      removeClient: vi.fn(async () => {}),
-    } satisfies Persister,
-    maxAgeMs: 1000,
-    shouldDehydrateQuery: (query) => queryKeyHasPrefix(query.queryKey, prefix),
-  };
-}
-
-describe('shouldPersistForScopeEvent', () => {
-  it('returns false for non-cache events or missing query', () => {
-    const scope = createScope(['channel']);
-    expect(shouldPersistForScopeEvent({}, scope)).toBe(false);
-    expect(
-      shouldPersistForScopeEvent({ type: 'observerResultsUpdated' }, scope)
-    ).toBe(false);
-  });
-
-  it('returns false for non-success query state', () => {
-    const scope = createScope(['channel']);
-    const event = {
-      type: 'updated',
-      query: {
-        queryKey: ['channel', 'a'],
-        state: { status: 'pending' },
-      },
-    };
-    expect(shouldPersistForScopeEvent(event, scope)).toBe(false);
-  });
-
-  it('returns true only when query key matches the scope predicate', () => {
-    const scope = createScope(['channel']);
-    const channelEvent = {
-      type: 'updated',
-      query: {
-        queryKey: ['channel', 'a'],
-        state: { status: 'success' },
-      },
-    };
-    const previewEvent = {
-      type: 'updated',
-      query: {
-        queryKey: ['preview', 'a'],
-        state: { status: 'success' },
-      },
-    };
-
-    expect(shouldPersistForScopeEvent(channelEvent, scope)).toBe(true);
-    expect(shouldPersistForScopeEvent(previewEvent, scope)).toBe(false);
-  });
-});
-
-describe('setupQueryPersistence', () => {
-  it('persists only for matching query updates', async () => {
-    const queryClient = new QueryClient();
-    const channelScope = createScope(['channel']);
-    const emailScope = createScope(['email', 'threadMessages']);
-
-    setupQueryPersistence({
-      queryClient,
-      buster: 'test',
-      scopes: [channelScope, emailScope],
-    });
-
-    await Promise.resolve();
-    await Promise.resolve();
-
-    queryClient.setQueryData(['preview', 'item-a'], { value: 'preview' });
-    await Promise.resolve();
-    expect(channelScope.persister.persistClient).toHaveBeenCalledTimes(0);
-    expect(emailScope.persister.persistClient).toHaveBeenCalledTimes(0);
-
-    queryClient.setQueryData(['channel', 'item-a'], { value: 'channel' });
-    await Promise.resolve();
-    expect(channelScope.persister.persistClient).toHaveBeenCalledTimes(1);
-    expect(emailScope.persister.persistClient).toHaveBeenCalledTimes(0);
-
-    queryClient.setQueryData(['email', 'threadMessages', 't-1'], {
-      value: 'email',
-    });
-    await Promise.resolve();
-    expect(channelScope.persister.persistClient).toHaveBeenCalledTimes(1);
-    expect(emailScope.persister.persistClient).toHaveBeenCalledTimes(1);
-  });
-});
-
-// --- Lazy per-query persistence tests ---
-
-function createMockStore(): PerQueryIDBStore & {
+function createMockStore(): PerQueryPersistence & {
   entries: Map<string, PersistedQueryEntry>;
   get: ReturnType<typeof vi.fn>;
   set: ReturnType<typeof vi.fn>;
@@ -124,11 +29,11 @@ function createMockStore(): PerQueryIDBStore & {
   };
 }
 
-function createLazyScope(
+function createScope(
   prefix: readonly unknown[],
-  store: PerQueryIDBStore,
-  overrides?: Partial<LazyPersistScope>
-): LazyPersistScope {
+  store: PerQueryPersistence,
+  overrides?: Partial<PersistScope>
+): PersistScope {
   return {
     store,
     maxAgeMs: 1000 * 60 * 60 * 24 * 7,
@@ -138,13 +43,13 @@ function createLazyScope(
   };
 }
 
-describe('setupLazyQueryPersistence', () => {
+describe('setupQueryPersistence', () => {
   it('writes only the changed query on update', () => {
     const queryClient = new QueryClient();
     const store = createMockStore();
-    const scope = createLazyScope(['channel'], store);
+    const scope = createScope(['channel'], store);
 
-    setupLazyQueryPersistence({ queryClient, scopes: [scope] });
+    setupQueryPersistence({ queryClient, scopes: [scope] });
 
     queryClient.setQueryData(['channel', 'a'], { value: 1 });
     queryClient.setQueryData(['channel', 'b'], { value: 2 });
@@ -163,11 +68,11 @@ describe('setupLazyQueryPersistence', () => {
     const channelStore = createMockStore();
     const emailStore = createMockStore();
 
-    setupLazyQueryPersistence({
+    setupQueryPersistence({
       queryClient,
       scopes: [
-        createLazyScope(['channel'], channelStore),
-        createLazyScope(['email', 'threadMessages'], emailStore),
+        createScope(['channel'], channelStore),
+        createScope(['email', 'threadMessages'], emailStore),
       ],
     });
 
@@ -189,9 +94,9 @@ describe('setupLazyQueryPersistence', () => {
   it('ignores queries that match no scope', () => {
     const queryClient = new QueryClient();
     const store = createMockStore();
-    const scope = createLazyScope(['channel'], store);
+    const scope = createScope(['channel'], store);
 
-    setupLazyQueryPersistence({ queryClient, scopes: [scope] });
+    setupQueryPersistence({ queryClient, scopes: [scope] });
 
     queryClient.setQueryData(['preview', 'x'], { value: 'ignored' });
 
@@ -211,8 +116,8 @@ describe('setupLazyQueryPersistence', () => {
       buster: 'test',
     });
 
-    const scope = createLazyScope(['channel'], store);
-    setupLazyQueryPersistence({ queryClient, scopes: [scope] });
+    const scope = createScope(['channel'], store);
+    setupQueryPersistence({ queryClient, scopes: [scope] });
 
     // Trigger an 'added' event by fetching (prefetchQuery triggers added)
     void queryClient.prefetchQuery({
@@ -241,8 +146,8 @@ describe('setupLazyQueryPersistence', () => {
         })
     );
 
-    const scope = createLazyScope(['channel'], store);
-    setupLazyQueryPersistence({ queryClient, scopes: [scope] });
+    const scope = createScope(['channel'], store);
+    setupQueryPersistence({ queryClient, scopes: [scope] });
 
     // Trigger added event
     void queryClient.prefetchQuery({
@@ -288,8 +193,8 @@ describe('setupLazyQueryPersistence', () => {
       buster: 'test',
     });
 
-    const scope = createLazyScope(['channel'], store, { maxAgeMs });
-    setupLazyQueryPersistence({ queryClient, scopes: [scope] });
+    const scope = createScope(['channel'], store, { maxAgeMs });
+    setupQueryPersistence({ queryClient, scopes: [scope] });
 
     void queryClient.prefetchQuery({
       queryKey: ['channel', 'old'],
@@ -316,8 +221,8 @@ describe('setupLazyQueryPersistence', () => {
       buster: 'old-buster',
     });
 
-    const scope = createLazyScope(['channel'], store, { buster: 'new-buster' });
-    setupLazyQueryPersistence({ queryClient, scopes: [scope] });
+    const scope = createScope(['channel'], store, { buster: 'new-buster' });
+    setupQueryPersistence({ queryClient, scopes: [scope] });
 
     void queryClient.prefetchQuery({
       queryKey: ['channel', 'v'],
@@ -334,9 +239,9 @@ describe('setupLazyQueryPersistence', () => {
   it('stops persistence on unsubscribe', () => {
     const queryClient = new QueryClient();
     const store = createMockStore();
-    const scope = createLazyScope(['channel'], store);
+    const scope = createScope(['channel'], store);
 
-    const unsubscribe = setupLazyQueryPersistence({
+    const unsubscribe = setupQueryPersistence({
       queryClient,
       scopes: [scope],
     });
@@ -353,9 +258,9 @@ describe('setupLazyQueryPersistence', () => {
   it('removes entry from store on query removal', () => {
     const queryClient = new QueryClient();
     const store = createMockStore();
-    const scope = createLazyScope(['channel'], store);
+    const scope = createScope(['channel'], store);
 
-    setupLazyQueryPersistence({ queryClient, scopes: [scope] });
+    setupQueryPersistence({ queryClient, scopes: [scope] });
 
     queryClient.setQueryData(['channel', 'a'], { value: 1 });
     expect(store.set).toHaveBeenCalledTimes(1);

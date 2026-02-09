@@ -1,41 +1,14 @@
-import {
-  type PersistQueryClientOptions,
-  persistQueryClientRestore,
-  persistQueryClientSave,
-} from '@tanstack/solid-query-persist-client';
-import type { Persister } from '@tanstack/solid-query-persist-client';
 import type { QueryKey } from '@tanstack/query-core';
 import type {
-  PerQueryIDBStore,
+  PerQueryPersistence,
   PersistedQueryEntry,
 } from './persistence/per-query-idb';
-
-type Query = NonNullable<
-  PersistQueryClientOptions['dehydrateOptions']
->['shouldDehydrateQuery'] extends ((query: infer Q) => boolean) | undefined
-  ? Q
-  : never;
-
-type PersistQueryClient = PersistQueryClientOptions['queryClient'];
-
-/**
- * Structurally compatible QueryClient type. Accepts any QueryClient instance
- * to work around version mismatches in @tanstack packages.
- */
-type QueryClientLike = {
-  getQueryCache: () => QueryCacheLike;
-};
 
 type QueryCacheLike = {
   subscribe: (listener: (event: unknown) => void) => () => void;
 };
 
-type QueryCacheEvent = {
-  type?: string;
-  query?: Query;
-};
-
-/** Cache event types that trigger persistence (shared across both strategies). */
+/** Cache event types that trigger persistence. */
 const PERSIST_EVENT_TYPES = new Set(['added', 'removed', 'updated']);
 
 /** Checks if a query key starts with the given prefix tuple. */
@@ -62,75 +35,13 @@ export function createPersistenceKey(
 }
 
 export type PersistScope = Readonly<{
-  persister: Persister;
-  maxAgeMs: number;
-  shouldDehydrateQuery: (query: Query) => boolean;
-}>;
-
-/**
- * Determines whether a query cache event should trigger a bulk persist
- * for the given scope. Returns true only for relevant event types
- * on successfully-fetched queries matching the scope's predicate.
- */
-export function shouldPersistForScopeEvent(
-  event: unknown,
-  scope: PersistScope
-): boolean {
-  const queryEvent = event as QueryCacheEvent;
-  const eventType = queryEvent.type;
-  const query = queryEvent.query;
-
-  if (!eventType || !PERSIST_EVENT_TYPES.has(eventType) || !query) return false;
-  if (query.state.status !== 'success') return false;
-  return scope.shouldDehydrateQuery(query);
-}
-
-/**
- * Sets up bulk query persistence: restores cached state on startup,
- * then subscribes to query cache events to persist on each relevant change.
- *
- * Each scope gets its own persister, filter predicate, and max age.
- */
-export function setupQueryPersistence(
-  params: Readonly<{
-    queryClient: QueryClientLike;
-    buster: string;
-    scopes: readonly PersistScope[];
-  }>
-) {
-  for (const scope of params.scopes) {
-    const persistOptions = {
-      queryClient: params.queryClient as PersistQueryClient,
-      persister: scope.persister,
-      maxAge: scope.maxAgeMs,
-      buster: params.buster,
-      dehydrateOptions: {
-        shouldDehydrateQuery: (q: Query) =>
-          q.state.status === 'success' && scope.shouldDehydrateQuery(q),
-      },
-    } satisfies PersistQueryClientOptions;
-
-    persistQueryClientRestore(persistOptions)
-      .then(() => {
-        params.queryClient.getQueryCache().subscribe((event) => {
-          if (!shouldPersistForScopeEvent(event, scope)) return;
-          void persistQueryClientSave(persistOptions);
-        });
-      })
-      .catch(() => {
-        // Keep startup resilient if persistence restore fails.
-      });
-  }
-}
-
-export type LazyPersistScope = Readonly<{
-  store: PerQueryIDBStore;
+  store: PerQueryPersistence;
   maxAgeMs: number;
   buster: string;
   shouldPersist: (queryKey: QueryKey) => boolean;
 }>;
 
-type LazyQueryClientLike = {
+type QueryClientLike = {
   getQueryCache: () => QueryCacheLike;
   getQueryState: (
     queryKey: QueryKey
@@ -142,7 +53,7 @@ type LazyQueryClientLike = {
   ) => void;
 };
 
-type LazyCacheEvent = {
+type CacheEvent = {
   type?: string;
   query?: {
     queryHash: string;
@@ -171,9 +82,9 @@ export function validatePersistedEntry(
  * to the cache. Validates the entry and guards against race conditions where
  * a fresh fetch resolves before the IDB read completes.
  */
-function handleLazyRestore(
-  queryClient: LazyQueryClientLike,
-  scope: LazyPersistScope,
+function handleRestore(
+  queryClient: QueryClientLike,
+  scope: PersistScope,
   queryHash: string,
   queryKey: QueryKey
 ): void {
@@ -207,9 +118,9 @@ function handleLazyRestore(
 /**
  * Persists a query's current data to IDB when the query updates successfully.
  */
-function handleLazyUpdate(
-  scope: LazyPersistScope,
-  query: NonNullable<LazyCacheEvent['query']>
+function handleUpdate(
+  scope: PersistScope,
+  query: NonNullable<CacheEvent['query']>
 ): void {
   if (query.state.status !== 'success') return;
   scope.store.set({
@@ -223,7 +134,7 @@ function handleLazyUpdate(
 }
 
 /**
- * Sets up lazy per-query persistence: individual queries are persisted to
+ * Sets up per-query persistence: individual queries are persisted to
  * and restored from IDB independently, rather than serializing the entire
  * query cache as one blob.
  *
@@ -233,10 +144,10 @@ function handleLazyUpdate(
  *
  * Returns an unsubscribe function to stop listening.
  */
-export function setupLazyQueryPersistence(
+export function setupQueryPersistence(
   params: Readonly<{
-    queryClient: LazyQueryClientLike;
-    scopes: readonly LazyPersistScope[];
+    queryClient: QueryClientLike;
+    scopes: readonly PersistScope[];
   }>
 ): () => void {
   const { queryClient, scopes } = params;
@@ -245,7 +156,7 @@ export function setupLazyQueryPersistence(
     scopes.find((s) => s.shouldPersist(queryKey));
 
   const unsubscribe = queryClient.getQueryCache().subscribe((raw) => {
-    const event = raw as LazyCacheEvent;
+    const event = raw as CacheEvent;
     const { type, query } = event;
     if (!type || !PERSIST_EVENT_TYPES.has(type) || !query) return;
 
@@ -255,9 +166,9 @@ export function setupLazyQueryPersistence(
     const { queryHash, queryKey } = query;
 
     if (type === 'added') {
-      handleLazyRestore(queryClient, scope, queryHash, queryKey);
+      handleRestore(queryClient, scope, queryHash, queryKey);
     } else if (type === 'updated') {
-      handleLazyUpdate(scope, query);
+      handleUpdate(scope, query);
     } else if (type === 'removed') {
       scope.store.remove(queryHash);
     }

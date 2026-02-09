@@ -3,7 +3,7 @@ import { createPerQueryIDBStore } from './persistence/per-query-idb';
 import {
   createPersistenceKey,
   queryKeyHasPrefix,
-  setupLazyQueryPersistence,
+  setupQueryPersistence,
 } from './persistence';
 
 export const queryClient = new QueryClient({
@@ -20,7 +20,7 @@ export const queryClient = new QueryClient({
 const buster = import.meta.env.__APP_VERSION__ ?? 'dev';
 const SEVEN_DAYS_MS = 1000 * 60 * 60 * 24 * 7;
 
-setupLazyQueryPersistence({
+setupQueryPersistence({
   queryClient,
   scopes: [
     {
