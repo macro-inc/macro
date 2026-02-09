@@ -1,4 +1,4 @@
-import type { NotificationEventType } from '@service-notification/types';
+import type { NotificationType } from '@core/types';
 import { describe, expect, it } from 'vitest';
 import {
   getAllNotificationsFromGroup,
@@ -11,7 +11,7 @@ import type { UnifiedNotification } from '../types';
 // Helper to create a base notification
 function createNotification(
   id: string,
-  type: NotificationEventType,
+  type: NotificationType,
   createdAt: number,
   metadata: Record<string, unknown> = {}
 ): UnifiedNotification {

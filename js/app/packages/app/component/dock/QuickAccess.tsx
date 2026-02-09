@@ -16,17 +16,16 @@ import {
 import type { ApiChannelWithLatest as ChannelWithLatest } from '@service-comms/generated/models';
 import { ChannelTypeEnum } from '@service-comms/client';
 import { useUserId } from '@core/context/user';
-import { NotificationEventType } from '@service-notification/types';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 
 // Helper functions for notification processing
 function getNotificationDescription(notification: UnifiedNotification): string {
   switch (notification.notificationEventType) {
-    case NotificationEventType.channel_mention:
+    case 'channel_mention':
       return 'mentioned in';
-    case NotificationEventType.channel_message_reply:
+    case 'channel_message_reply':
       return 'replied in thread';
-    case NotificationEventType.channel_message_send:
+    case 'channel_message_send':
       return 'new messages in';
     default:
       return 'new activity in';
@@ -39,12 +38,9 @@ function isHighPriorityNotification(
   return (
     notification.entity_type === 'channel' &&
     !notificationIsRead(notification) &&
-    (notification.notificationEventType ===
-      NotificationEventType.channel_mention ||
-      notification.notificationEventType ===
-        NotificationEventType.channel_message_reply ||
-      notification.notificationEventType ===
-        NotificationEventType.channel_message_send)
+    (notification.notificationEventType === 'channel_mention' ||
+      notification.notificationEventType === 'channel_message_reply' ||
+      notification.notificationEventType === 'channel_message_send')
   );
 }
 
@@ -221,24 +217,14 @@ export function QuickAccess() {
 
             // For other channels, only include mentions and replies
             return (
-              notification.notificationEventType ===
-                NotificationEventType.channel_mention ||
-              notification.notificationEventType ===
-                NotificationEventType.channel_message_reply
+              notification.notificationEventType === 'channel_mention' ||
+              notification.notificationEventType === 'channel_message_reply'
             );
           })
           .sort((a, b) => {
             const getPriority = (n: UnifiedNotification) => {
-              if (
-                n.notificationEventType ===
-                NotificationEventType.channel_mention
-              )
-                return 3;
-              if (
-                n.notificationEventType ===
-                NotificationEventType.channel_message_reply
-              )
-                return 2;
+              if (n.notificationEventType === 'channel_mention') return 3;
+              if (n.notificationEventType === 'channel_message_reply') return 2;
               return 1; // channel_message_send for DMs
             };
             return getPriority(b) - getPriority(a);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { NotificationEventType } from '@service-notification/types';
+import type { NotificationType } from '@core/types';
 import type { UnifiedNotification } from '../types';
 
 function createEmailNotification(
@@ -17,7 +17,7 @@ function createEmailNotification(
     done: false,
     sent: true,
     senderId,
-    notificationEventType: 'new_email' as NotificationEventType,
+    notificationEventType: 'new_email',
     notificationMetadata: {
       tag: 'new_email',
       content: {
