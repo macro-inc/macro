@@ -6,7 +6,7 @@ pub mod edit_anchor;
 pub mod edit_comment;
 pub mod get;
 
-use std::{collections::HashSet, fmt::Display};
+use std::collections::HashSet;
 
 use super::context::ApiContext;
 use axum::{
@@ -22,15 +22,9 @@ use model::{annotations::Comment, response::ErrorResponse};
 use model_entity::Entity;
 use model_entity::EntityType;
 use model_notifications::MentionedInDocumentCommentMetadata;
-use notification::domain::models::{
-    NotifCollapseKey, Notification, NotificationExtIos, RateLimitConfig, RateLimitKey,
-    SendNotificationRequestBuilder,
-    apple::{APNSPushNotification, AlertDictionary, Aps, PushNotificationData},
-};
+use notification::domain::models::SendNotificationRequestBuilder;
 use serde::{Deserialize, Serialize};
 use tower::ServiceBuilder;
-use utoipa::ToSchema;
-use uuid::Uuid;
 
 pub fn router(state: ApiContext) -> Router<ApiContext> {
     Router::new()
@@ -131,46 +125,7 @@ pub fn comment_error_response(e: anyhow::Error, default_msg: &str) -> Result<Res
     }
 }
 
-#[derive(Debug, Clone, Deserialize, ToSchema)]
-pub enum NotifLocationType {
-    CreateComment,
-    EditComment,
-}
-impl Serialize for NotifLocationType {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.collect_str(self)
-    }
-}
-
-// NB: We ulse this Display impl for `impl Serialize for NotifLocationType`.
-impl Display for NotifLocationType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                NotifLocationType::CreateComment => "create-comment",
-                NotifLocationType::EditComment => "edit-comment",
-            }
-        )
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(in crate::api) struct Location {
-    r#type: NotifLocationType,
-    comment_id: Option<i64>,
-    thread_id: i64,
-    text: String,
-}
-
-#[expect(clippy::too_many_arguments)]
 fn build_mention_notif<'a>(
-    notif_location_type: NotifLocationType,
     text: String,
     comment: &Comment,
     thread_id: i64,
@@ -210,16 +165,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn check_ser_notif_type() -> Result<(), Box<dyn std::error::Error>> {
-        let a = NotifLocationType::CreateComment;
-        let res = serde_json::json!({
-            r#"type"#: a,
-        })
-        .to_string();
-        assert_eq!(res, r#"{"type":"create-comment"}"#);
-        Ok(())
-    }
-    #[test]
     fn check_ser_meta() -> Result<(), Box<dyn std::error::Error>> {
         let m = MentionedInDocumentCommentMetadata {
             document_name: "test".to_string(),
@@ -234,7 +179,6 @@ mod tests {
         assert!(res.contains(r#"mentionId":"xxx""#));
         assert!(res.contains(r#"threadId":42"#));
         assert!(res.contains(r#"commentId":99"#));
-        assert!(res.contains(r#""type":"edit-comment""#));
         Ok(())
     }
 }
