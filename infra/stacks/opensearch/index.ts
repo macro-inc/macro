@@ -81,14 +81,11 @@ const opensearchLogsPolicy = new aws.cloudwatch.LogResourcePolicy(
           Principal: {
             Service: 'es.amazonaws.com',
           },
-          Action: [
-            'logs:CreateLogStream',
-            'logs:PutLogEvents',
-          ],
+          Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
           Resource: [
-            indexSlowLogGroup.arn.apply(arn => `${arn}:*`),
-            searchSlowLogGroup.arn.apply(arn => `${arn}:*`),
-            applicationLogGroup.arn.apply(arn => `${arn}:*`),
+            indexSlowLogGroup.arn.apply((arn) => `${arn}:*`),
+            searchSlowLogGroup.arn.apply((arn) => `${arn}:*`),
+            applicationLogGroup.arn.apply((arn) => `${arn}:*`),
           ],
         },
       ],
