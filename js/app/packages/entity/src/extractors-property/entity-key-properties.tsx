@@ -68,7 +68,6 @@ export function EntityKeyProperties(props: EntityKeyPropertiesProps) {
   const keyProperties = createMemo((): Property[] => {
     const soupProperties = props.entity.properties ?? [];
 
-    // Convert and filter to only key properties
     const converted = soupProperties
       .map(soupPropertyToProperty)
       .filter((prop) =>
@@ -77,7 +76,6 @@ export function EntityKeyProperties(props: EntityKeyPropertiesProps) {
         )
       );
 
-    // Sort by the defined order
     return converted.sort((a, b) => {
       const aIndex = KEY_PROPERTY_ORDER.indexOf(
         a.propertyDefinitionId as (typeof KEY_PROPERTY_ORDER)[number]

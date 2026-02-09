@@ -118,6 +118,9 @@ function NarrowLayout(props: LayoutProps) {
             {(entity) => <Entity.Title entity={entity()} />}
           </Match>
         </Switch>
+        <Show when={isTaskEntity(props.entity) && props.entity}>
+          {(entity) => <Entity.Properties entity={entity()} />}
+        </Show>
       </Entity.Slot>
 
       <Entity.Slot
@@ -293,11 +296,11 @@ function WideLayout(props: LayoutProps) {
             </span>
           )}
         </Show>
-        <Show when={isTaskEntity(props.entity) && props.entity}>
-          {(entity) => <Entity.Properties entity={entity()} />}
-        </Show>
         <Show when={props.isShared}>
           <SharedBadge ownerId={props.entity.ownerId} />
+        </Show>
+        <Show when={isTaskEntity(props.entity) && props.entity}>
+          {(entity) => <Entity.Properties entity={entity()} />}
         </Show>
       </Entity.Slot>
 
