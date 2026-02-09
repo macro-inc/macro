@@ -7,7 +7,6 @@ import {
   getNotificationContent,
   getNotificationTargetName,
   shouldShowNotificationTarget,
-  isNewEmail,
   type UnifiedNotification,
 } from '@notifications';
 import { Show } from 'solid-js';
@@ -36,9 +35,9 @@ export function NotificationRenderer(props: NotificationRendererProps) {
   const entityId = () => props.notification.entity_id;
 
   const emailMeta = () => {
-    if (!isNewEmail(props.notification)) return null;
-    const c = props.notification.notificationMetadata.content;
-    return { subject: c.subject, snippet: c.snippet };
+    const meta = props.notification.notificationMetadata;
+    if (meta.tag !== 'new_email') return null;
+    return { subject: meta.content.subject, snippet: meta.content.snippet };
   };
 
   return (

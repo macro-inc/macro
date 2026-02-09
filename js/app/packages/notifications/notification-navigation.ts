@@ -7,11 +7,6 @@ import type { UnifiedNotification } from '@service-notification/client';
 import { getNotificationById } from '@queries/notification/user-notifications';
 import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
-import {
-  isDocumentMention,
-  isNewEmail,
-  isTaskAssigned,
-} from './notification-metadata';
 import type { NotificationSource } from './notification-source';
 
 const CHANNEL_EVENT_TYPES = [
@@ -100,13 +95,10 @@ function getSupportedHandler(
       () => (lm: SplitManager) => openChannelNotification(notification, lm)
     )
     .with('new_email', () => {
-      if (!isNewEmail(notification)) return null;
+      const meta = notification.notificationMetadata;
+      if (meta.tag !== 'new_email') return null;
       return async (lm: SplitManager) => {
-        openSplitIfNotOpen(
-          lm,
-          'email',
-          notification.notificationMetadata.content.threadId
-        );
+        openSplitIfNotOpen(lm, 'email', meta.content.threadId);
       };
     })
     .with(
@@ -115,26 +107,32 @@ function getSupportedHandler(
         openSplitIfNotOpen(lm, 'channel', notification.entity_id)
     )
     .with('document_mention', () => {
-      if (!isDocumentMention(notification)) return null;
+      const meta = notification.notificationMetadata;
+      if (meta.tag !== 'document_mention') return null;
       return async (lm: SplitManager) =>
         openSplitIfNotOpen(
           lm,
-          safeFileTypeToBlockName(
-            notification.notificationMetadata.content.fileType
-          ),
+          safeFileTypeToBlockName(meta.content.fileType),
           notification.entity_id
         );
     })
     .with('invite_to_team', () => null)
     .with('task_assigned', () => {
-      if (!isTaskAssigned(notification)) return null;
+      const meta = notification.notificationMetadata;
+      if (meta.tag !== 'task_assigned') return null;
       return async (lm: SplitManager) => {
+        openSplitIfNotOpen(lm, 'task', meta.content.taskId);
+      };
+    })
+    .with('mentioned_in_document_comment', () => {
+      const meta = notification.notificationMetadata;
+      if (meta.tag !== 'mentioned_in_document_comment') return null;
+      return async (lm: SplitManager) =>
         openSplitIfNotOpen(
           lm,
-          'task',
-          notification.notificationMetadata.content.taskId
+          safeFileTypeToBlockName(meta.content.fileType),
+          notification.entity_id
         );
-      };
     })
     .exhaustive();
 }

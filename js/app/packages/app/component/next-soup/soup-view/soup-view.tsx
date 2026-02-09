@@ -43,9 +43,6 @@ import {
 import { queryKeys, useQueryClient } from '@macro-entity';
 import {
   createEffectOnEntityTypeNotification,
-  isChannelMention,
-  isChannelMessageReply,
-  isChannelMessageSend,
   type UnifiedNotification,
 } from '@notifications';
 import { debounce } from '@solid-primitives/scheduled';
@@ -326,6 +323,84 @@ export const SoupViewList = (props: SoupViewListProps) => {
       location,
       splitHandle: panel.handle,
     });
+  };
+
+  const onEntityDoubleClick: EntityClickHandler<EntityData> = async (args) => {
+    const { entity, event, location } = args;
+
+    if (!soup.previewEntity()) {
+      return;
+    }
+
+    await openEntityInSplitFromUnifiedList(entity, {
+      openInNewSplit: event.shiftKey,
+      location,
+      splitHandle: panel.handle,
+    });
+  };
+
+  const onEntityPointerDown: EntityPointerDownHandler<EntityData> = async (
+    args
+  ) => {
+    const { type, location, event } = args;
+
+    const entity = (
+      type === 'entity' ? args.entity : args.projectEntity
+    ) as EntityData;
+
+    // middle mouse button pressed
+    if (event.button === 1 && event.pointerType === 'mouse') {
+      // TODO: current page should remain focused after opening new tab
+      openEntityInNewTab({ entity, location });
+    }
+  };
+
+  const onClickEntityAction = (entity: EntityData) => {
+    if (markDoneAction.canExecute(entity)) {
+      markDoneAction.executeWithSoup([entity], soup);
+    }
+  };
+
+  const blockOrchestrator = useGlobalBlockOrchestrator();
+  const gotoChannelNotification = async (notification: UnifiedNotification) => {
+    let message_id: string | undefined;
+    let thread_id: string | undefined;
+
+    const meta = notification.notificationMetadata;
+    if (meta.tag === 'channel_mention') {
+      message_id = meta.content.messageId;
+      thread_id = meta.content.threadId ?? undefined;
+    } else if (meta.tag === 'channel_message_reply') {
+      message_id = meta.content.messageId;
+      thread_id = meta.content.threadId;
+    } else if (meta.tag === 'channel_message_send') {
+      message_id = meta.content.messageId;
+    } else {
+      return;
+    }
+
+    const blockHandle = await blockOrchestrator.getBlockHandle(
+      notification.entity_id,
+      'channel'
+    );
+    if (!blockHandle) return;
+
+    notificationSource.markAsRead(notification);
+
+    return blockHandle?.goToLocationFromParams({
+      [CHANNEL_PARAMS.message]: message_id,
+      [CHANNEL_PARAMS.thread]: thread_id,
+    });
+  };
+
+  const onClickNotification = ({
+    entity,
+  }: {
+    entity: SoupEntity & { notification: Notification };
+  }) => {
+    if (entity.type !== 'channel') return;
+
+    gotoChannelNotification(entity.notification);
   };
 
   let lastClickedEntityId = -1;

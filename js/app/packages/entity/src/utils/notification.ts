@@ -1,10 +1,3 @@
-import {
-  isChannelMention,
-  isChannelMessageReply,
-  isChannelMessageSend,
-  isDocumentMention,
-  isNewEmail,
-} from '@notifications/notification-metadata';
 import type { NotificationStack } from '@notifications/notification-stacking';
 import type { Notification } from '../types/notification';
 import type { UnifiedNotification } from '@notifications';
@@ -54,45 +47,37 @@ export function extractNotificationSenderIds(
  * Gets a human-readable action text for a notification based on its type
  * Returns a short verb phrase like "mentioned", "replied", "shared", etc.
  */
-export function getNotificationActionText(notification: Notification): string {
-  const type = notification.notificationEventType;
+export function getNotificationActionText(n: Notification): string {
+  const tag = n.notificationMetadata.tag;
 
-  return match(type)
+  return match(tag)
     .with('channel_mention', () => 'mentioned')
     .with('channel_message_send', () => 'sent')
     .with('channel_message_reply', () => 'replied')
     .with('document_mention', () => 'mentioned')
+    .with('mentioned_in_document_comment', () => 'mentioned')
     .with('channel_invite', () => 'invited')
     .with('new_email', () => 'emailed')
     .with('invite_to_team', () => 'invited')
     .with('task_assigned', () => 'assigned')
-    .otherwise(() => 'notified');
+    .exhaustive();
 }
 
 export function extractMessageContent(notification: Notification): string {
   const n = notification as UnifiedNotification;
+  const meta = n.notificationMetadata;
 
-  if (isChannelMention(n)) {
-    return n.notificationMetadata.content.messageContent || '';
-  }
-
-  if (isChannelMessageSend(n)) {
-    return n.notificationMetadata.content.messageContent || '';
-  }
-
-  if (isChannelMessageReply(n)) {
-    return n.notificationMetadata.content.messageContent || '';
-  }
-
-  if (isDocumentMention(n)) {
-    return n.notificationMetadata.content.documentName || '';
-  }
-
-  if (isNewEmail(n)) {
-    return n.notificationMetadata.content.subject || '';
-  }
-
-  return '';
+  return match(meta)
+    .with({ tag: 'channel_mention' }, (m) => m.content.messageContent || '')
+    .with({ tag: 'channel_message_send' }, (m) => m.content.messageContent || '')
+    .with({ tag: 'channel_message_reply' }, (m) => m.content.messageContent || '')
+    .with({ tag: 'document_mention' }, (m) => m.content.documentName || '')
+    .with({ tag: 'mentioned_in_document_comment' }, (m) => m.content.text || '')
+    .with({ tag: 'new_email' }, (m) => m.content.subject || '')
+    .with({ tag: 'task_assigned' }, (m) => m.content.taskName ?? '')
+    .with({ tag: 'channel_invite' }, () => '')
+    .with({ tag: 'invite_to_team' }, () => '')
+    .exhaustive();
 }
 
 /**

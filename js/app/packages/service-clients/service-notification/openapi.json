@@ -1199,27 +1199,23 @@
         "enum": ["ios", "android"]
       },
       "DocumentMentionMetadata": {
-        "allOf": [
-          {},
-          {
-            "type": "object",
-            "required": ["documentName", "owner"],
-            "properties": {
-              "documentName": {
-                "type": "string",
-                "description": "The name of the document"
-              },
-              "fileType": {
-                "type": ["string", "null"],
-                "description": "The file type of the document"
-              },
-              "owner": {
-                "type": "string",
-                "description": "The owner of the document"
-              }
-            }
+        "type": "object",
+        "description": "Someone mentioned a document in a channel",
+        "required": ["documentName", "owner"],
+        "properties": {
+          "documentName": {
+            "type": "string",
+            "description": "The name of the document"
+          },
+          "fileType": {
+            "type": ["string", "null"],
+            "description": "The file type of the document"
+          },
+          "owner": {
+            "type": "string",
+            "description": "The owner of the document"
           }
-        ]
+        }
       },
       "EmptyResponse": {
         "type": "object",
@@ -1338,6 +1334,50 @@
           }
         }
       },
+      "MentionedInDocumentCommentMetadata": {
+        "type": "object",
+        "description": "Notification sent when a user is mentioned in a document comment.",
+        "required": [
+          "documentName",
+          "owner",
+          "mentionId",
+          "commentId",
+          "threadId",
+          "text"
+        ],
+        "properties": {
+          "commentId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "the comment id"
+          },
+          "documentName": {
+            "type": "string",
+            "description": "The name of the document."
+          },
+          "fileType": {
+            "type": ["string", "null"],
+            "description": "The file type of the document."
+          },
+          "mentionId": {
+            "type": "string",
+            "description": "The mention ID."
+          },
+          "owner": {
+            "type": "string",
+            "description": "The owner of the document."
+          },
+          "text": {
+            "type": "string",
+            "description": "the text of the comment"
+          },
+          "threadId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "the thread id"
+          }
+        }
+      },
       "NewEmailMetadata": {
         "type": "object",
         "required": ["toEmail", "threadId", "subject", "snippet"],
@@ -1378,16 +1418,31 @@
           },
           {
             "type": "object",
-            "description": "Someone mentioned you in a document.",
+            "description": "Someone mentioned a document in a channel.",
             "required": ["content", "tag"],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/DocumentMentionMetadata",
-                "description": "Someone mentioned you in a document."
+                "description": "Someone mentioned a document in a channel."
               },
               "tag": {
                 "type": "string",
                 "enum": ["document_mention"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "User was mentioned in a comment in a document",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/MentionedInDocumentCommentMetadata",
+                "description": "User was mentioned in a comment in a document"
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["mentioned_in_document_comment"]
               }
             }
           },

@@ -1,6 +1,4 @@
 use chrono::serde::ts_seconds_option;
-use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 use serde::{Deserialize, Serialize};
 use std::hash::{DefaultHasher, Hasher};
 use utoipa::ToSchema;
@@ -172,8 +170,12 @@ define_notif_event!(
         /// Someone mentioned you in a channel.
         ChannelMention(ChannelMentionMetadata),
 
-        /// Someone mentioned you in a document.
+        /// Someone mentioned a document in a channel.
         DocumentMention(DocumentMentionMetadata),
+
+        /// User was mentioned in a comment in a document
+        MentionedInDocumentComment(MentionedInDocumentCommentMetadata),
+
         /// The user was invited to a channel.
         ChannelInvite(ChannelInviteMetadata),
 
@@ -193,33 +195,3 @@ define_notif_event!(
         TaskAssigned(TaskAssignedMetadata),
     }
 );
-
-macro_rules! impl_from_notif_event {
-    ($($Variant:ident => $Ty:ty),* $(,)?) => {
-        $(
-            impl From<$Ty> for NotifEvent {
-                fn from(value: $Ty) -> Self {
-                    NotifEvent::$Variant(value)
-                }
-            }
-        )*
-    };
-}
-
-impl_from_notif_event! {
-    ChannelMention => ChannelMentionMetadata,
-    DocumentMention => DocumentMentionMetadata,
-    ChannelInvite => ChannelInviteMetadata,
-    ChannelMessageSend => ChannelMessageSendMetadata,
-    ChannelMessageReply => ChannelReplyMetadata,
-    NewEmail => NewEmailMetadata,
-    InviteToTeam => InviteToTeamMetadata,
-    TaskAssigned => TaskAssignedMetadata,
-}
-
-pub struct NotificationMsg {
-    pub notification_entity: Entity<'static>,
-    pub notification_event: NotifEvent,
-    pub sender_id: Option<MacroUserIdStr<'static>>,
-    pub recipient_ids: Vec<MacroUserIdStr<'static>>,
-}

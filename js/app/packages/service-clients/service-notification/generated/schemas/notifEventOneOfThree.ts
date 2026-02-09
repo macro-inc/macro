@@ -8,10 +8,10 @@ import type { DocumentMentionMetadata } from './documentMentionMetadata';
 import type { NotifEventOneOfThreeTag } from './notifEventOneOfThreeTag';
 
 /**
- * Someone mentioned you in a document.
+ * Someone mentioned a document in a channel.
  */
 export type NotifEventOneOfThree = {
-  /** Someone mentioned you in a document. */
+  /** Someone mentioned a document in a channel. */
   content: DocumentMentionMetadata;
   tag: NotifEventOneOfThreeTag;
 };

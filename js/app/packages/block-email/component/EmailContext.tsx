@@ -18,10 +18,7 @@ import {
   type WithCustomUserInput,
 } from '@core/user';
 import { whenSettled } from '@core/util/whenSettled';
-import {
-  createEffectOnEntityTypeNotification,
-  isNewEmail,
-} from '@notifications';
+import { createEffectOnEntityTypeNotification } from '@notifications';
 import {
   useArchiveThreadMutation,
   useThreadQuery,
@@ -172,10 +169,9 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     notificationSource,
     'email',
     (notification) => {
-      if (!isNewEmail(notification)) return;
-      const notificationThreadId =
-        notification.notificationMetadata.content.threadId;
-      if (notificationThreadId === threadQuery.data?.db_id) {
+      const meta = notification.notificationMetadata;
+      if (meta.tag !== 'new_email') return;
+      if (meta.content.threadId === threadQuery.data?.db_id) {
         threadQuery.refetch();
       }
     }

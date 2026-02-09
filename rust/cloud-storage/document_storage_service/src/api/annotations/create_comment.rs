@@ -1,10 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    api::{
-        annotations::{NotifLocationType, build_mention_notif},
-        context::ApiContext,
-    },
+    api::{annotations::build_mention_notif, context::ApiContext},
     service::conn_gateway::update_live_comment_state,
 };
 use axum::{
@@ -74,11 +71,12 @@ pub async fn create_comment_handler(
     }
     match create_document_comment(&db, &document_id, &user_id, &req).await {
         Ok(res) => {
-            if let Some(Mentions { users, mention_id }) = &req.mentions {
+            if let Some(Mentions { users, mention_id }) = &req.mentions
+                && let Some(comment) = res.comment_thread.comments.first()
+            {
                 let request = build_mention_notif(
-                    NotifLocationType::CreateComment,
                     req.text,
-                    res.comment_thread.comments.first(),
+                    comment,
                     res.comment_thread.thread.thread_id,
                     users,
                     document_context.document_name.clone(),

@@ -14,7 +14,6 @@ import CheckIcon from '@icon/regular/check.svg';
 import {
   getAllNotificationsFromGroup,
   getMostRecentNotification,
-  isChannelMessageReply,
   type NotificationStack,
   stackNotifications,
   type UnifiedNotification,
@@ -544,8 +543,9 @@ function StackedRepliesRow(props: {
   const threadParentSenderId = () => {
     const notification = props.group.notifications[0];
     if (!notification) return '';
-    if (!isChannelMessageReply(notification)) return '';
-    return notification.notificationMetadata.content.threadParentSenderId ?? '';
+    const meta = notification.notificationMetadata;
+    if (meta.tag !== 'channel_message_reply') return '';
+    return meta.content.threadParentSenderId ?? '';
   };
 
   const { firstName } = useDisplayNameParts(tryMacroId(threadParentSenderId()));

@@ -1,153 +1,67 @@
 import type { UnifiedNotification } from '@service-notification/client';
-import type {
-  NotifEventOneOf,
-  NotifEventOneOfFive,
-  NotifEventOneOfNine,
-  NotifEventOneOfOnefive,
-  NotifEventOneOfOneone,
-  NotifEventOneOfOnethree,
-  NotifEventOneOfSeven,
-  NotifEventOneOfThree,
-} from '@service-notification/generated/schemas';
-
-// Type narrowing helpers for notification metadata discriminated union
-// Each helper narrows the notificationMetadata to its specific variant
-//
-// Mapping:
-// - NotifEventOneOf = channel_mention
-// - NotifEventOneOfThree = document_mention
-// - NotifEventOneOfFive = channel_invite
-// - NotifEventOneOfSeven = channel_message_send
-// - NotifEventOneOfNine = channel_message_reply
-// - NotifEventOneOfOneone = new_email
-// - NotifEventOneOfOnethree = invite_to_team
-// - NotifEventOneOfOnefive = task_assigned
-
-export function isChannelMention(
-  n: UnifiedNotification
-): n is UnifiedNotification & { notificationMetadata: NotifEventOneOf } {
-  return n.notificationMetadata.tag === 'channel_mention';
-}
-
-export function isDocumentMention(
-  n: UnifiedNotification
-): n is UnifiedNotification & { notificationMetadata: NotifEventOneOfThree } {
-  return n.notificationMetadata.tag === 'document_mention';
-}
-
-export function isChannelInvite(
-  n: UnifiedNotification
-): n is UnifiedNotification & { notificationMetadata: NotifEventOneOfFive } {
-  return n.notificationMetadata.tag === 'channel_invite';
-}
-
-export function isChannelMessageSend(
-  n: UnifiedNotification
-): n is UnifiedNotification & { notificationMetadata: NotifEventOneOfSeven } {
-  return n.notificationMetadata.tag === 'channel_message_send';
-}
-
-export function isChannelMessageReply(
-  n: UnifiedNotification
-): n is UnifiedNotification & { notificationMetadata: NotifEventOneOfNine } {
-  return n.notificationMetadata.tag === 'channel_message_reply';
-}
-
-export function isNewEmail(
-  n: UnifiedNotification
-): n is UnifiedNotification & { notificationMetadata: NotifEventOneOfOneone } {
-  return n.notificationMetadata.tag === 'new_email';
-}
-
-export function isInviteToTeam(
-  n: UnifiedNotification
-): n is UnifiedNotification & {
-  notificationMetadata: NotifEventOneOfOnethree;
-} {
-  return n.notificationMetadata.tag === 'invite_to_team';
-}
-
-export function isTaskAssigned(
-  n: UnifiedNotification
-): n is UnifiedNotification & { notificationMetadata: NotifEventOneOfOnefive } {
-  return n.notificationMetadata.tag === 'task_assigned';
-}
+import { match } from 'ts-pattern';
 
 // Helper functions for derived notification data
 
 export function getNotificationAction(n: UnifiedNotification): string {
-  switch (n.notificationMetadata.tag) {
-    case 'channel_mention':
-      return 'mentioned you in';
-    case 'document_mention':
-      return 'mentioned you in';
-    case 'channel_message_send':
-      return 'sent a message in';
-    case 'channel_message_reply':
-      return 'replied in';
-    case 'channel_invite':
-      return 'invited you to';
-    case 'new_email':
-      return 'sent a new email';
-    case 'invite_to_team':
-      return 'invited you to';
-    case 'task_assigned':
-      return 'assigned you a task';
-    default:
-      return 'notified you';
-  }
+  return match(n.notificationMetadata.tag)
+    .with('channel_mention', () => 'mentioned you in')
+    .with('document_mention', () => 'sent a document')
+    .with('mentioned_in_document_comment', () => 'mentioned you in')
+    .with('channel_message_send', () => 'sent a message in')
+    .with('channel_message_reply', () => 'replied in')
+    .with('channel_invite', () => 'invited you to')
+    .with('new_email', () => 'sent a new email')
+    .with('invite_to_team', () => 'invited you to')
+    .with('task_assigned', () => 'assigned you a task')
+    .exhaustive();
 }
 
 export function getNotificationTargetName(
   n: UnifiedNotification
 ): string | undefined {
   const m = n.notificationMetadata;
-  switch (m.tag) {
-    case 'channel_invite':
-      return m.content.channelName;
-    case 'document_mention':
-      return m.content.documentName;
-    case 'invite_to_team':
-      return m.content.teamName;
-    case 'task_assigned':
-      return m.content.taskName ?? undefined;
-    default:
-      return undefined;
-  }
+  return match(m)
+    .with({ tag: 'channel_invite' }, (m) => m.content.channelName)
+    .with({ tag: 'document_mention' }, (m) => m.content.documentName)
+    .with({ tag: 'mentioned_in_document_comment' }, (m) => m.content.documentName)
+    .with({ tag: 'invite_to_team' }, (m) => m.content.teamName)
+    .with({ tag: 'task_assigned' }, (m) => m.content.taskName ?? undefined)
+    .with({ tag: 'channel_mention' }, () => undefined)
+    .with({ tag: 'channel_message_send' }, () => undefined)
+    .with({ tag: 'channel_message_reply' }, () => undefined)
+    .with({ tag: 'new_email' }, () => undefined)
+    .exhaustive();
 }
 
 export function getNotificationContent(
   n: UnifiedNotification
 ): string | undefined {
   const m = n.notificationMetadata;
-  switch (m.tag) {
-    case 'channel_mention':
-    case 'channel_message_send':
-    case 'channel_message_reply':
-      return m.content.messageContent;
-    case 'document_mention':
-      return m.content.documentName;
-    case 'new_email':
-      return m.content.subject;
-    case 'task_assigned':
-      return m.content.taskName ?? undefined;
-    default:
-      return undefined;
-  }
+  return match(m)
+    .with({ tag: 'channel_mention' }, (m) => m.content.messageContent)
+    .with({ tag: 'channel_message_send' }, (m) => m.content.messageContent)
+    .with({ tag: 'channel_message_reply' }, (m) => m.content.messageContent)
+    .with({ tag: 'document_mention' }, (m) => m.content.documentName)
+    .with({ tag: 'mentioned_in_document_comment' }, (m) => m.content.text)
+    .with({ tag: 'new_email' }, (m) => m.content.subject)
+    .with({ tag: 'task_assigned' }, (m) => m.content.taskName ?? undefined)
+    .with({ tag: 'channel_invite' }, () => undefined)
+    .with({ tag: 'invite_to_team' }, () => undefined)
+    .exhaustive();
 }
 
 export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
   const m = n.notificationMetadata;
-  switch (m.tag) {
-    case 'channel_mention':
-    case 'channel_message_send':
-    case 'channel_message_reply':
-      return m.content.channelType !== 'directMessage';
-    case 'new_email':
-      return false;
-    case 'task_assigned':
-      return true;
-    default:
-      return true;
-  }
+  return match(m)
+    .with({ tag: 'channel_mention' }, (m) => m.content.channelType !== 'directMessage')
+    .with({ tag: 'channel_message_send' }, (m) => m.content.channelType !== 'directMessage')
+    .with({ tag: 'channel_message_reply' }, (m) => m.content.channelType !== 'directMessage')
+    .with({ tag: 'new_email' }, () => false)
+    .with({ tag: 'task_assigned' }, () => true)
+    .with({ tag: 'document_mention' }, () => true)
+    .with({ tag: 'mentioned_in_document_comment' }, () => true)
+    .with({ tag: 'channel_invite' }, () => true)
+    .with({ tag: 'invite_to_team' }, () => true)
+    .exhaustive();
 }

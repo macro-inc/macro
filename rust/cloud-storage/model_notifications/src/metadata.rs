@@ -3,6 +3,7 @@ use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
 use mention_utils::parse::{ParsedXmlText, XmlFormatter};
 use model_entity::Entity;
 use model_entity::EntityType;
+use notification::domain::models::Notification;
 use notification::domain::models::RateLimitConfig;
 use notification::domain::models::RateLimitKey;
 use notification::domain::models::{
@@ -164,6 +165,7 @@ pub struct ChannelReplyMetadata {
     pub common: CommonChannelMetadata,
 }
 
+/// Someone mentioned a document in a channel
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentMentionMetadata {
@@ -176,9 +178,6 @@ pub struct DocumentMentionMetadata {
     /// The file type of the document
     #[serde(alias = "file_type")]
     pub file_type: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(flatten)]
-    pub metadata: Option<serde_json::Value>,
 }
 
 impl From<DocumentMentionMetadata> for serde_json::Value {
@@ -552,5 +551,76 @@ impl NotificationExtIos for TaskAssignedMetadata {
             body,
             PushNotificationData { notification_id },
         ))
+    }
+}
+
+/// Notification sent when a user is mentioned in a document comment.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MentionedInDocumentCommentMetadata {
+    /// The name of the document.
+    pub document_name: String,
+    /// The owner of the document.
+    #[schema(value_type = String)]
+    pub owner: MacroUserIdStr<'static>,
+    /// The file type of the document.
+    pub file_type: Option<String>,
+    /// The mention ID.
+    pub mention_id: String,
+    /// the comment id
+    pub comment_id: i64,
+    /// the thread id
+    pub thread_id: i64,
+    /// the text of the comment
+    pub text: String,
+}
+
+impl Notification for MentionedInDocumentCommentMetadata {
+    const TYPE_NAME: &'static str = "mentioned_in_document_comment";
+
+    fn rate_limit_config() -> Option<RateLimitConfig> {
+        None
+    }
+
+    fn rate_limit_key(&self) -> Option<RateLimitKey> {
+        None
+    }
+}
+
+impl NotificationExtIos for MentionedInDocumentCommentMetadata {
+    type NotifData = ::notification::domain::models::apple::PushNotificationData;
+
+    fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
+        let entity_type: &'static str = entity.entity_type.into();
+        NotifCollapseKey::new(entity_type).append(&entity.entity_id)
+    }
+
+    fn into_apns<'a>(
+        self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+        _entity: &Entity<'_>,
+        notification_id: Uuid,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        let sender = sender_id?;
+        let file_type_str = self.file_type.as_ref()?;
+        let title = sender.0.email_part().email_str().to_string();
+        let body = format!(
+            "You were mentioned in {}.{}",
+            self.document_name, file_type_str
+        );
+
+        Some(APNSPushNotification {
+            aps: Aps {
+                alert: Some(notification::domain::models::apple::Alert::Dictionary(
+                    AlertDictionary {
+                        title: Some(title),
+                        body: Some(body),
+                        ..Default::default()
+                    },
+                )),
+                ..Default::default()
+            },
+            push_notification_data: PushNotificationData { notification_id },
+        })
     }
 }

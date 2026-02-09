@@ -1,12 +1,8 @@
-import {
-  isChannelMention,
-  isChannelMessageReply,
-  isChannelMessageSend,
-} from './notification-metadata';
 import type { UnifiedNotification } from './types';
+import type { NotificationType } from '@core/types';
 
 export interface NotificationStack {
-  type: string;
+  type: NotificationType;
   notifications: UnifiedNotification[];
 }
 
@@ -45,11 +41,22 @@ export function getThreadId(group: NotificationStack): string {
 export function stackNotifications(
   notifications: UnifiedNotification[]
 ): NotificationStack[] {
+  const isChannelMention = (n: UnifiedNotification) =>
+    n.notificationMetadata.tag === 'channel_mention';
+  const isChannelMessageSend = (n: UnifiedNotification) =>
+    n.notificationMetadata.tag === 'channel_message_send';
+  const isChannelMessageReply = (n: UnifiedNotification) =>
+    n.notificationMetadata.tag === 'channel_message_reply';
+
   // Collect mention messageIds for shadowing
   const mentionedMsgIds = new Set(
     notifications
       .filter(isChannelMention)
-      .map((n) => n.notificationMetadata.content.messageId)
+      .flatMap((n) =>
+        n.notificationMetadata.tag === 'channel_mention'
+          ? [n.notificationMetadata.content.messageId]
+          : []
+      )
       .filter(Boolean)
   );
 
@@ -115,7 +122,7 @@ const groupBy: <T, K>(items: T[], keyFn: (item: T) => K) => Map<K, T[]> =
   });
 
 function makeStack(
-  type: string,
+  type: NotificationType,
   notifications: UnifiedNotification[]
 ): NotificationStack[] {
   if (notifications.length === 0) return [];
