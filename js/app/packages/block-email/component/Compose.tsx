@@ -69,6 +69,7 @@ import { decodeBase64Utf8 } from '@block-email/util/decodeBase64';
 import { stickyGate } from '@core/util/debounce';
 import { queryClient } from '@queries/client';
 import { soupKeys } from '@queries/soup/keys';
+import { cn } from '@ui/utils/classname';
 
 const DRAFT_DEBOUNCE_MS = 1000;
 
@@ -310,11 +311,14 @@ export function EmailCompose(props: EmailComposeProps) {
 
   const [showCc, setShowCc] = createSignal(false);
   const [showBcc, setShowBcc] = createSignal(false);
+  const [isEditorFocused, setIsEditorFocused] = createSignal(false);
 
+  let mounted = false;
   onMount(() => {
     const container = refs().containerRef;
     if (!container) return;
     attachComposeHotkeys(container);
+    mounted = true;
   });
 
   registerHotkey({
@@ -659,7 +663,7 @@ export function EmailCompose(props: EmailComposeProps) {
       </SplitHeaderLeft>
       <div
         ref={registerRef('containerRef')}
-        class="relative flex flex-col w-full h-full panel min-h-0 overflow-hidden"
+        class="relative flex flex-col w-full h-full min-h-0 overflow-hidden text-sm"
       >
         <Switch>
           <Match when={hasLinkError()}>
@@ -682,7 +686,7 @@ export function EmailCompose(props: EmailComposeProps) {
             <div class="w-full bg-alert-bg border-b border-t border-alert/20 text-alert-ink p-2">
               <div class="flex items-center justify-between gap-2">
                 <Caution class="size-4" />
-                <span class="text-sm">You must upgrade to send email.</span>
+                <span>You must upgrade to send email.</span>
                 <span class="grow" />
                 <DeprecatedTextButton
                   theme="base"
@@ -697,179 +701,187 @@ export function EmailCompose(props: EmailComposeProps) {
         </Switch>
 
         <div
-          class="macro-message-width mx-auto w-full max-h-full my-12 overflow-hidden px-4"
+          class="macro-message-width mx-auto w-full max-h-full my-2 @sm:my-12 px-2 @sm:px-4 overflow-hidden"
           classList={{
             'pointer-events-none opacity-50': hasLinkError(),
           }}
         >
           <ClippedPanel tl={!beveledCorners()}>
             <div
-              class="w-full p-4 bg-input max-h-full overflow-hidden flex flex-col min-h-0"
+              class="w-full p-4 bg-input max-h-full overflow-y-auto flex flex-col min-h-0"
               classList={{
                 'pointer-events-none opacity-50': hasLinkError(),
               }}
             >
-              <div class="macro-message-width mx-auto pb-1 w-full h-max shrink-0">
-                <div class="mb-4 h-6 flex items-center justify-between">
-                  <Suspense
-                    fallback={
-                      <div class="flex gap-1 items-center">
-                        <CircleSpinner class="w-4 h-4 animate-spin" />
-                        <span class="text-ink-extra-muted/50 text-xs">
-                          Processing...
-                        </span>
-                      </div>
-                    }
-                  >
-                    <Show when={link()}>
-                      {(link) => (
-                        <div class="text-xs text-ink-extra-muted/50">
-                          from {link().email_address}
+              <div
+                class={cn(
+                  'macro-message-width mx-auto pb-1 w-full h-max shrink-0 grid grid-rows-[1fr] transition-[grid-template-rows]',
+                  isEditorFocused() && 'grid-rows-[0fr]'
+                )}
+              >
+                <div class="overflow-hidden">
+                  <div class="mb-4 h-6 flex items-center justify-between">
+                    <Suspense
+                      fallback={
+                        <div class="flex gap-1 items-center">
+                          <CircleSpinner class="w-4 h-4 animate-spin" />
+                          <span class="text-ink-extra-muted/50 text-xs">
+                            Processing...
+                          </span>
                         </div>
-                      )}
-                    </Show>
-                  </Suspense>
-                  <div class="flex gap-2 ml-auto">
-                    <Show when={debouncedIsDraftSaving()}>
-                      <div class="flex gap-1 items-center text-sm text-ink-muted">
-                        <Show
-                          when={laggedIsDraftSaving()}
-                          fallback={<span>Draft saved</span>}
+                      }
+                    >
+                      <Show when={link()}>
+                        {(link) => (
+                          <div class="text-xs text-ink-extra-muted/50">
+                            from {link().email_address}
+                          </div>
+                        )}
+                      </Show>
+                    </Suspense>
+                    <div class="flex gap-2 ml-auto">
+                      <Show when={debouncedIsDraftSaving()}>
+                        <div class="flex gap-1 items-center text-ink-muted">
+                          <Show
+                            when={laggedIsDraftSaving()}
+                            fallback={<span>Draft saved</span>}
+                          >
+                            <CircleSpinner class="size-4 animate-spin" />
+                            <span>Saving draft</span>
+                          </Show>
+                        </div>
+                      </Show>
+                      <Show when={!showCc()}>
+                        <button
+                          type="button"
+                          class="text-ink-muted hover:text-ink hover:bg-hover"
+                          onClick={() => setShowCc(true)}
+                          disabled={hasLinkError()}
                         >
-                          <CircleSpinner class="size-4 animate-spin" />
-                          <span>Saving draft</span>
-                        </Show>
-                      </div>
-                    </Show>
-                    <Show when={!showCc()}>
-                      <button
-                        type="button"
-                        class="text-sm text-secondary-text hover:text-primary-text hover:bg-hover"
-                        onClick={() => setShowCc(true)}
-                        disabled={hasLinkError()}
-                      >
-                        + Cc
-                      </button>
-                    </Show>
-                    <Show when={!showBcc()}>
-                      <button
-                        type="button"
-                        class="text-sm text-secondary-text hover:text-primary-text hover:bg-hover"
-                        onClick={() => setShowBcc(true)}
-                        disabled={hasLinkError()}
-                      >
-                        + Bcc
-                      </button>
-                    </Show>
-                  </div>
-                </div>
-
-                <div class="flex flex-col gap-2">
-                  <div class="flex items-center gap-2 border-b border-edge-muted focus-within:border-accent">
-                    <div class="text-base w-4 shrink-0 text-ink-placeholder/70">
-                      To
+                          + Cc
+                        </button>
+                      </Show>
+                      <Show when={!showBcc()}>
+                        <button
+                          type="button"
+                          class="text-ink-muted hover:text-ink hover:bg-hover"
+                          onClick={() => setShowBcc(true)}
+                          disabled={hasLinkError()}
+                        >
+                          + Bcc
+                        </button>
+                      </Show>
                     </div>
-                    <div class="flex-1">
-                      <RecipientSelector
-                        inputRef={registerRef('directRecipientsSelector')}
-                        options={getRecipientOptions}
-                        selectedOptions={form.recipients().to}
-                        setSelectedOptions={(next) =>
-                          form.setRecipients('to', next)
-                        }
-                        placeholder="Macro users or email addresses"
-                        focusOnMount={!hasLinkError()}
-                        hideBorder
-                        noBrackets
-                        disabled={hasLinkError()}
-                      />
-                    </div>
-                    <Show when={withValidationError('no_recipient')}>
-                      {(err) => (
-                        <div class="text-failure-ink text-sm mt-1">
-                          {err().message}
-                        </div>
-                      )}
-                    </Show>
                   </div>
 
-                  <Show when={showCc()}>
+                  <div class="flex flex-col gap-2">
                     <div class="flex items-center gap-2 border-b border-edge-muted focus-within:border-accent">
-                      <div class="text-sm w-4 shrink-0 text-ink-placeholder/70">
-                        Cc
-                      </div>
+                      <div class="w-4 shrink-0 text-ink-placeholder/70">To</div>
                       <div class="flex-1">
                         <RecipientSelector
-                          inputRef={registerRef('ccRecipientsSelector')}
+                          inputRef={registerRef('directRecipientsSelector')}
                           options={getRecipientOptions}
-                          selectedOptions={form.recipients().cc}
+                          selectedOptions={form.recipients().to}
                           setSelectedOptions={(next) =>
-                            form.setRecipients('cc', next)
+                            form.setRecipients('to', next)
                           }
                           placeholder="Macro users or email addresses"
+                          focusOnMount={!hasLinkError() && !mounted}
                           hideBorder
                           noBrackets
                           disabled={hasLinkError()}
                         />
                       </div>
+                      <Show when={withValidationError('no_recipient')}>
+                        {(err) => (
+                          <div class="text-failure-ink text-sm mt-1">
+                            {err().message}
+                          </div>
+                        )}
+                      </Show>
                     </div>
-                  </Show>
 
-                  <Show when={showBcc()}>
-                    <div class="flex items-center gap-2 border-b border-edge-muted focus-within:border-accent">
-                      <div class="text-sm w-4 shrink-0 text-ink-placeholder/70">
-                        Bcc
+                    <Show when={showCc()}>
+                      <div class="flex items-center gap-2 border-b border-edge-muted focus-within:border-accent">
+                        <div class="text-sm w-4 shrink-0 text-ink-placeholder/70">
+                          Cc
+                        </div>
+                        <div class="flex-1">
+                          <RecipientSelector
+                            inputRef={registerRef('ccRecipientsSelector')}
+                            options={getRecipientOptions}
+                            selectedOptions={form.recipients().cc}
+                            setSelectedOptions={(next) =>
+                              form.setRecipients('cc', next)
+                            }
+                            placeholder="Macro users or email addresses"
+                            hideBorder
+                            noBrackets
+                            disabled={hasLinkError()}
+                          />
+                        </div>
                       </div>
+                    </Show>
+
+                    <Show when={showBcc()}>
+                      <div class="flex items-center gap-2 border-b border-edge-muted focus-within:border-accent">
+                        <div class="text-sm w-4 shrink-0 text-ink-placeholder/70">
+                          Bcc
+                        </div>
+                        <div class="flex-1">
+                          <RecipientSelector
+                            inputRef={registerRef('bccRecipientsSelector')}
+                            options={getRecipientOptions}
+                            selectedOptions={form.recipients().bcc}
+                            setSelectedOptions={(next) =>
+                              form.setRecipients('bcc', next)
+                            }
+                            placeholder="Macro users or email addresses"
+                            hideBorder
+                            noBrackets
+                            disabled={hasLinkError()}
+                          />
+                        </div>
+                      </div>
+                    </Show>
+
+                    <div class="w-full flex items-center gap-2 border-b border-edge-muted focus-within:border-accent py-2">
+                      <div class="shrink-0 text-ink-placeholder/70">
+                        Subject
+                      </div>
+
                       <div class="flex-1">
-                        <RecipientSelector
-                          inputRef={registerRef('bccRecipientsSelector')}
-                          options={getRecipientOptions}
-                          selectedOptions={form.recipients().bcc}
-                          setSelectedOptions={(next) =>
-                            form.setRecipients('bcc', next)
-                          }
-                          placeholder="Macro users or email addresses"
-                          hideBorder
-                          noBrackets
+                        <input
+                          ref={registerRef('subjectInput')}
+                          type="text"
+                          value={form.subject()}
+                          placeholder="Subject"
+                          class="w-full resize-none placeholder:text-ink-placeholder p-1 ml-1"
+                          onInput={(e) => {
+                            form.setSubject(e.currentTarget.value);
+                            scheduleDraftSave();
+                          }}
                           disabled={hasLinkError()}
                         />
                       </div>
-                    </div>
-                  </Show>
 
-                  <div class="w-full flex items-center gap-2 border-b border-edge-muted focus-within:border-accent py-2">
-                    <div class="text-base shrink-0 text-ink-placeholder/70">
-                      Subject
+                      <Show when={withValidationError('no_subject')}>
+                        {(err) => (
+                          <div class="text-failure-ink text-sm mt-1">
+                            {err().message}
+                          </div>
+                        )}
+                      </Show>
                     </div>
-
-                    <div class="flex-1">
-                      <input
-                        ref={registerRef('subjectInput')}
-                        type="text"
-                        value={form.subject()}
-                        placeholder="Subject"
-                        class="w-full text-base resize-none placeholder:text-ink-placeholder p-1 ml-1"
-                        onInput={(e) => {
-                          form.setSubject(e.currentTarget.value);
-                          scheduleDraftSave();
-                        }}
-                        disabled={hasLinkError()}
-                      />
-                    </div>
-
-                    <Show when={withValidationError('no_subject')}>
-                      {(err) => (
-                        <div class="text-failure-ink text-sm mt-1">
-                          {err().message}
-                        </div>
-                      )}
-                    </Show>
                   </div>
                 </div>
               </div>
 
               <div
-                class="w-full h-full flex flex-col min-h-0 mt-4"
+                class={cn(
+                  'w-full h-full flex flex-col min-h-0 mt-4',
+                  isEditorFocused() && 'mt-0'
+                )}
                 classList={{
                   'pointer-events-none opacity-50': hasLinkError(),
                 }}
@@ -889,12 +901,12 @@ export function EmailCompose(props: EmailComposeProps) {
                   hasDraft={currentDraftID() != null}
                   onDraftDeletePress={deleteDraftAndReset}
                   disabled={hasLinkError() || sendMutation.isPending}
+                  onFocus={() => setIsEditorFocused(true)}
+                  onBlur={() => setIsEditorFocused(false)}
                 />
                 <Show when={withValidationError('no_message')}>
                   {(err) => (
-                    <div class="text-failure-ink text-sm mt-1">
-                      {err().message}
-                    </div>
+                    <div class="text-failure-ink mt-1">{err().message}</div>
                   )}
                 </Show>
               </div>

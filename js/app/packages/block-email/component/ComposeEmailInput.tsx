@@ -55,6 +55,8 @@ type ComposeEmailInputProps = {
   onContentChange?: (content: string) => void;
   sendTime?: Date | null;
   onSendTimeChange?: (date: Date | null) => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
 };
 
 export function ComposeEmailInput(props: ComposeEmailInputProps) {
@@ -190,6 +192,8 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
     <div
       ref={setComposeContainerRef}
       class="relative flex flex-col flex-1 items-center justify-between min-h-0"
+      onfocusin={() => props.onFocus?.()}
+      onfocusout={() => props.onBlur?.()}
     >
       <div class="w-full h-full flex flex-col min-h-0">
         <Show when={showFormatRibbon()}>
