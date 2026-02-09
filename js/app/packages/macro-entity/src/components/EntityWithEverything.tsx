@@ -13,13 +13,11 @@ import ChatIcon from '@icon/regular/chat.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import {
   getAllNotificationsFromGroup,
-  getMetadata,
   getMostRecentNotification,
   isChannelMessageReply,
   type NotificationStack,
   stackNotifications,
-  type TypedNotification,
-  tryToTypedNotification,
+  type UnifiedNotification,
 } from '@notifications';
 import { formatDocumentName } from '@service-storage/util/filename';
 import { syncServiceClient } from '@service-sync/client';
@@ -323,10 +321,8 @@ function NotificationRow(props: {
       return 'mentioned you';
     }
 
-    const metadata = tryToTypedNotification(
-      props.notification
-    )?.notificationMetadata;
-    if (!metadata || !('messageContent' in metadata)) return '';
+    const tag = (props.notification as UnifiedNotification).notificationMetadata.tag;
+    if (tag !== 'channel_mention' && tag !== 'channel_message_send' && tag !== 'channel_message_reply') return '';
 
     return 'message';
   };
@@ -339,17 +335,13 @@ function NotificationRow(props: {
       return '';
     }
 
-    const typed = tryToTypedNotification(props.notification);
-    if (!typed) return '';
-    const metadata = getMetadata(typed);
-    if (
-      !metadata ||
-      !('messageContent' in metadata) ||
-      metadata.messageContent === undefined
-    )
+    const n = props.notification as UnifiedNotification;
+    const tag = n.notificationMetadata.tag;
+    if (tag !== 'channel_mention' && tag !== 'channel_message_send' && tag !== 'channel_message_reply') {
       return '';
+    }
 
-    const content = metadata.messageContent;
+    const content = n.notificationMetadata.content.messageContent;
     return (
       <Show
         when={content?.trim()}
@@ -412,7 +404,7 @@ function NotificationRow(props: {
  * Shared row component for stacked notifications (new messages and replies)
  */
 function StackedNotificationRow(props: {
-  notifications: TypedNotification[];
+  notifications: UnifiedNotification[];
   title: JSX.Element;
   icon: (props: { class?: string }) => JSX.Element;
   onClick?: (e: EntityClickEvent) => void;
@@ -440,14 +432,12 @@ function StackedNotificationRow(props: {
   const messageContent = createMemo(() => {
     const notification = mostRecent();
     if (!notification) return '';
-    const typed = tryToTypedNotification(notification);
-    if (!typed) return '';
-    const metadata = getMetadata(typed);
-    if (metadata && 'messageContent' in metadata) {
-      const content = metadata.messageContent as string | null | undefined;
-      return content?.trim() ?? '';
+    const tag = notification.notificationMetadata.tag;
+    if (tag !== 'channel_mention' && tag !== 'channel_message_send' && tag !== 'channel_message_reply') {
+      return '';
     }
-    return '';
+    const content = notification.notificationMetadata.content.messageContent;
+    return content?.trim() ?? '';
   });
 
   return (
@@ -540,12 +530,8 @@ function StackedRepliesRow(props: {
   const threadParentSenderId = () => {
     const notification = props.group.notifications[0];
     if (!notification) return '';
-    const typed = tryToTypedNotification(notification);
-    if (!typed || !isChannelMessageReply(typed)) return '';
-    const metadata = getMetadata(
-      typed as TypedNotification<'channel_message_reply'>
-    );
-    return metadata?.threadParentSenderId ?? '';
+    if (!isChannelMessageReply(notification)) return '';
+    return notification.notificationMetadata.content.threadParentSenderId ?? '';
   };
 
   const { firstName } = useDisplayNameParts(tryMacroId(threadParentSenderId()));

@@ -45,11 +45,9 @@ import {
 } from '@macro-entity';
 import {
   createEffectOnEntityTypeNotification,
-  getMetadata,
   isChannelMention,
   isChannelMessageReply,
   isChannelMessageSend,
-  tryToTypedNotification,
   type UnifiedNotification,
 } from '@notifications';
 import { debounce } from '@solid-primitives/scheduled';
@@ -337,15 +335,16 @@ export const SoupViewList = (props: SoupViewListProps) => {
     let thread_id: string | undefined;
 
     if (isChannelMention(notification)) {
-      const metadata = getMetadata(notification);
-      message_id = metadata.messageId;
+      const content = notification.notificationMetadata.content;
+      message_id = content.messageId;
+      thread_id = content.threadId ?? undefined;
     } else if (isChannelMessageReply(notification)) {
-      const metadata = getMetadata(notification);
-      message_id = metadata.messageId;
-      thread_id = metadata.threadId;
+      const content = notification.notificationMetadata.content;
+      message_id = content.messageId;
+      thread_id = content.threadId ?? undefined;
     } else if (isChannelMessageSend(notification)) {
-      const metadata = getMetadata(notification);
-      message_id = metadata.messageId;
+      const content = notification.notificationMetadata.content;
+      message_id = content.messageId;
     } else {
       return;
     }
@@ -369,10 +368,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
   }: {
     entity: SoupEntity & { notification: Notification };
   }) => {
-    const notification = tryToTypedNotification(entity.notification);
-    if (!notification || entity.type !== 'channel') return;
+    if (entity.type !== 'channel') return;
 
-    gotoChannelNotification(notification);
+    gotoChannelNotification(entity.notification);
   };
 
   let lastClickedEntityId = -1;
