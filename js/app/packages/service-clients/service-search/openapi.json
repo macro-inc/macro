@@ -222,20 +222,20 @@
         "required": ["created_at", "updated_at"],
         "properties": {
           "created_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "interacted_at": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "updated_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "viewed_at": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         }
       },
@@ -368,8 +368,8 @@
         "required": ["highlight"],
         "properties": {
           "created_at": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "When the channel message was created\nThis is only prsent if the search result is on the message content"
           },
           "highlight": {
@@ -396,8 +396,8 @@
             "description": "The channel message thread id"
           },
           "updated_at": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "When the channel message was last updated\nThis is only prsent if the search result is on the message content"
           }
         }
@@ -471,23 +471,23 @@
         "required": ["created_at", "updated_at"],
         "properties": {
           "created_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "deleted_at": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "project_id": {
             "type": ["string", "null"]
           },
           "updated_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "viewed_at": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         }
       },
@@ -662,23 +662,23 @@
         "required": ["created_at", "updated_at"],
         "properties": {
           "created_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "deleted_at": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "project_id": {
             "type": ["string", "null"]
           },
           "updated_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "viewed_at": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         }
       },
@@ -1008,19 +1008,19 @@
             "required": ["created_at", "updated_at"],
             "properties": {
               "created_at": {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time"
               },
               "snippet": {
                 "type": ["string", "null"]
               },
               "updated_at": {
-                "type": "integer",
-                "format": "int64"
+                "type": "string",
+                "format": "date-time"
               },
               "viewed_at": {
-                "type": ["integer", "null"],
-                "format": "int64"
+                "type": ["string", "null"],
+                "format": "date-time"
               }
             }
           }
@@ -1091,8 +1091,8 @@
             "description": "The sender.\nIf the match is on the subject, the sender is the latest sender on the thread."
           },
           "sent_at": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "When the email message was sent\nThis is only present if the search result is on the message content"
           }
         }
@@ -1191,23 +1191,23 @@
         "required": ["created_at", "updated_at"],
         "properties": {
           "created_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "deleted_at": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "parent_project_id": {
             "type": ["string", "null"]
           },
           "updated_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "viewed_at": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         }
       },
@@ -1223,8 +1223,8 @@
         ],
         "properties": {
           "created_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "owner_id": {
             "type": "string"
@@ -1237,8 +1237,8 @@
             "type": "string"
           },
           "updated_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -1303,8 +1303,8 @@
         ],
         "properties": {
           "created_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "id": {
             "type": "string",
@@ -1324,8 +1324,8 @@
             }
           },
           "updated_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           }
         }
       },

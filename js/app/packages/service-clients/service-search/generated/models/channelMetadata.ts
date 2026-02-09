@@ -11,8 +11,8 @@ import type { ChannelMetadataViewedAt } from './channelMetadataViewedAt';
  * Metadata for a channel fetched from the database
  */
 export interface ChannelMetadata {
-  created_at: number;
+  created_at: Date;
   interacted_at?: ChannelMetadataInteractedAt;
-  updated_at: number;
+  updated_at: Date;
   viewed_at?: ChannelMetadataViewedAt;
 }

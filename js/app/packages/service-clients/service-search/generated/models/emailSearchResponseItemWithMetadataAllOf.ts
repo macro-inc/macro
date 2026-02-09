@@ -8,8 +8,8 @@ import type { EmailSearchResponseItemWithMetadataAllOfSnippet } from './emailSea
 import type { EmailSearchResponseItemWithMetadataAllOfViewedAt } from './emailSearchResponseItemWithMetadataAllOfViewedAt';
 
 export type EmailSearchResponseItemWithMetadataAllOf = {
-  created_at: number;
+  created_at: Date;
   snippet?: EmailSearchResponseItemWithMetadataAllOfSnippet;
-  updated_at: number;
+  updated_at: Date;
   viewed_at?: EmailSearchResponseItemWithMetadataAllOfViewedAt;
 };

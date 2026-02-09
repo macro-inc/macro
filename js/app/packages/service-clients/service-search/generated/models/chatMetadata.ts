@@ -12,9 +12,9 @@ import type { ChatMetadataViewedAt } from './chatMetadataViewedAt';
  * Metadata for a chat fetched from the database
  */
 export interface ChatMetadata {
-  created_at: number;
+  created_at: Date;
   deleted_at?: ChatMetadataDeletedAt;
   project_id?: ChatMetadataProjectId;
-  updated_at: number;
+  updated_at: Date;
   viewed_at?: ChatMetadataViewedAt;
 }
