@@ -17,6 +17,12 @@ export const queryClient = new QueryClient({
 const buster = import.meta.env.__APP_VERSION__ ?? 'dev';
 const SEVEN_DAYS_MS = 1000 * 60 * 60 * 24 * 7;
 
+// Clean up orphaned v0 databases from the old whole-cache persistence format
+try {
+  indexedDB.deleteDatabase(createPersistenceKey('channels', 0));
+  indexedDB.deleteDatabase(createPersistenceKey('email-threads', 0));
+} catch {}
+
 setupQueryPersistence({
   queryClient,
   scopes: [

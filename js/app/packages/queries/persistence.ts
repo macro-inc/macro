@@ -127,7 +127,18 @@ export function setupQueryPersistence(
   const findScope = (queryKey: QueryKey) =>
     scopes.find((s) => s.shouldPersist(queryKey));
 
-  const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+  const flushAll = () => {
+    for (const scope of scopes) {
+      void scope.store.flush();
+    }
+  };
+
+  const onVisibilityChange = () => {
+    if (document.visibilityState === 'hidden') flushAll();
+  };
+  document.addEventListener('visibilitychange', onVisibilityChange);
+
+  const cacheUnsubscribe = queryClient.getQueryCache().subscribe((event) => {
     const { type } = event;
     if (type !== 'added' && type !== 'updated' && type !== 'removed') return;
 
@@ -136,7 +147,9 @@ export function setupQueryPersistence(
     if (!scope) return;
 
     if (type === 'added') {
-      handleRestore(queryClient, scope, query);
+      handleRestore(queryClient, scope, query).catch((err) => {
+        console.error('[query] IDB restore failed', err);
+      });
     } else if (type === 'updated') {
       handleUpdate(scope, query);
     } else {
@@ -144,5 +157,8 @@ export function setupQueryPersistence(
     }
   });
 
-  return unsubscribe;
+  return () => {
+    cacheUnsubscribe();
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+  };
 }

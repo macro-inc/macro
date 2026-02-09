@@ -12,6 +12,7 @@ function createMockStore(): PerQueryPersistence & {
   get: ReturnType<typeof vi.fn>;
   set: ReturnType<typeof vi.fn>;
   remove: ReturnType<typeof vi.fn>;
+  flush: ReturnType<typeof vi.fn>;
 } {
   const entries = new Map<string, PersistedQueryEntry>();
   return {
@@ -23,6 +24,7 @@ function createMockStore(): PerQueryPersistence & {
     remove: vi.fn((hash: string) => {
       entries.delete(hash);
     }),
+    flush: vi.fn(async () => {}),
   };
 }
 

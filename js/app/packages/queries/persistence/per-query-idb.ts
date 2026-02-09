@@ -13,6 +13,7 @@ export type PerQueryPersistence = {
   get: (queryHash: string) => Promise<PersistedQueryEntry | undefined>;
   set: (entry: PersistedQueryEntry) => void;
   remove: (queryHash: string) => void;
+  flush: () => Promise<void>;
 };
 
 type PerQueryPersistenceOptions = Readonly<{
@@ -38,6 +39,7 @@ function openDB(dbName: string): Promise<IDBDatabase> {
     };
     req.onsuccess = () => {
       const db = req.result;
+      db.onclose = () => dbCache.delete(dbName);
       dbCache.set(dbName, db);
       resolve(db);
     };
@@ -79,22 +81,32 @@ export function createPerQueryIDBStore(
 
     if (puts.size === 0 && deletes.size === 0) return;
 
-    const db = await openDB(dbName);
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
+    try {
+      const db = await openDB(dbName);
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
 
-    for (const [hash, entry] of puts) {
-      store.put(entry, hash);
-    }
-    for (const hash of deletes) {
-      store.delete(hash);
-    }
+      for (const [hash, entry] of puts) {
+        store.put(entry, hash);
+      }
+      for (const hash of deletes) {
+        store.delete(hash);
+      }
 
-    await new Promise<void>((resolve, reject) => {
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-      tx.onabort = () => reject(tx.error);
-    });
+      await new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+      });
+    } catch (err) {
+      for (const [hash, entry] of puts) {
+        if (!pendingPuts.has(hash)) pendingPuts.set(hash, entry);
+      }
+      for (const hash of deletes) {
+        if (!pendingPuts.has(hash)) pendingDeletes.add(hash);
+      }
+      console.error('[query] IDB persistence flush failed', err);
+    }
   };
 
   const scheduleFlush = () => {
@@ -121,6 +133,14 @@ export function createPerQueryIDBStore(
       pendingPuts.delete(queryHash);
       pendingDeletes.add(queryHash);
       scheduleFlush();
+    },
+
+    flush: async () => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      await flush();
     },
   };
 }
