@@ -200,7 +200,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   let initialLoad = true;
 
-  const initialize = (moveInitialFocus = true) => {
+  const registerFocusEffects = (moveInitialFocus = true) => {
     if (moveInitialFocus) {
       createEffect(
         on(rows, () => {
@@ -533,7 +533,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     const cached = stateCache.get(getCacheKey());
 
     if (!cached) {
-      initialize();
+      registerFocusEffects();
       return;
     }
 
@@ -545,7 +545,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     soup.sort.setAll(cached.soup.sort);
 
     handle?.scrollTo(cached.scrollOffset);
-    initialize(false);
+    registerFocusEffects(false);
   };
 
   return (
