@@ -77,11 +77,11 @@ pub fn construct_search_result(
             if let Some(info) = chat_histories.get(&entity_id.to_string()) {
                 let info = info.clone();
                 let metadata = models_search::chat::ChatMetadata {
-                    created_at: info.created_at.timestamp(),
-                    updated_at: info.updated_at.timestamp(),
-                    viewed_at: info.viewed_at.map(|a| a.timestamp()),
+                    created_at: info.created_at,
+                    updated_at: info.updated_at,
+                    viewed_at: info.viewed_at,
                     project_id: info.project_id.clone(),
-                    deleted_at: info.deleted_at.map(|a| a.timestamp()),
+                    deleted_at: info.deleted_at,
                 };
                 Some(ChatSearchResponseItemWithMetadata {
                     metadata: Some(metadata),

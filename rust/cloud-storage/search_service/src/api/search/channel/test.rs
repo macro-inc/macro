@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use models_opensearch::SearchEntityType;
 use opensearch_client::search::model::Highlight;
 
@@ -20,8 +21,8 @@ fn test_construct_search_result_single_channel() {
             opensearch_client::search::model::SearchGotoContent::Channels(
                 opensearch_client::search::model::SearchGotoChannel {
                     channel_message_id: "11111111-1111-1111-1111-111111111111".parse().unwrap(),
-                    created_at: 1234567890,
-                    updated_at: 1234567891,
+                    created_at: DateTime::from_timestamp(1234567890, 0).unwrap(),
+                    updated_at: DateTime::from_timestamp(1234567891, 0).unwrap(),
                     thread_id: Some("22222222-2222-2222-2222-222222222222".parse().unwrap()),
                     sender_id: "user1".to_string(),
                 },

@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use crate::channel::ChannelSearchResponseItemWithMetadata;
@@ -142,19 +143,17 @@ impl UnifiedSearchResponseItem {
         }
     }
     /// Get the updated_at timestamp for each item
-    pub fn updated_at(&self) -> i64 {
+    pub fn updated_at(&self) -> Option<DateTime<Utc>> {
         match self {
             Self::Document(item) => item
                 .metadata
                 .as_ref()
-                .map(|m| m.updated_at)
-                .unwrap_or_default(),
+                .map(|m| m.updated_at),
             Self::Chat(item) => item
                 .metadata
                 .as_ref()
-                .map(|m| m.updated_at)
-                .unwrap_or_default(),
-            Self::Email(item) => item.updated_at,
+                .map(|m| m.updated_at),
+            Self::Email(item) => Some(item.updated_at),
             Self::Channel(item) => {
                 // Get the max updated_at from channel_message_search_results
                 let max_result_updated_at = item
@@ -165,18 +164,16 @@ impl UnifiedSearchResponseItem {
                     .max();
 
                 // Use max from results, or fall back to metadata.updated_at
-                max_result_updated_at.unwrap_or_else(|| {
+                max_result_updated_at.or_else(|| {
                     item.metadata
                         .as_ref()
                         .map(|m| m.updated_at)
-                        .unwrap_or_default()
                 })
             }
             Self::Project(item) => item
                 .metadata
                 .as_ref()
-                .map(|m| m.updated_at)
-                .unwrap_or_default(),
+                .map(|m| m.updated_at),
         }
     }
 }
