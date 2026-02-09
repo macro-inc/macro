@@ -14,7 +14,10 @@ import { emailClient } from '@service-email/client';
 import { useHistoryQuery } from '@queries/history/history';
 import { useQuery } from '@tanstack/solid-query';
 import type { SplitContent } from 'app/component/split-layout/layoutManager';
-import { globalSplitManager, globalPreviewEntities } from 'app/signal/splitLayout';
+import {
+  globalSplitManager,
+  globalPreviewEntities,
+} from 'app/signal/splitLayout';
 import type { Accessor } from 'solid-js';
 import { createMemo } from 'solid-js';
 import type { HistoryItem } from '@queries/history/history';
