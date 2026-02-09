@@ -4,6 +4,7 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ChannelMessageSendMetadata } from './channelMessageSendMetadata';
 import type { NotifEventOneOfSevenTag } from './notifEventOneOfSevenTag';
 
 /**
@@ -11,6 +12,6 @@ import type { NotifEventOneOfSevenTag } from './notifEventOneOfSevenTag';
  */
 export type NotifEventOneOfSeven = {
   /** A user sent a message in a channel. */
-  content: unknown;
+  content: ChannelMessageSendMetadata;
   tag: NotifEventOneOfSevenTag;
 };

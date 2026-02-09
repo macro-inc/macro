@@ -20,5 +20,3 @@ export const NotificationEventType = {
   invite_to_team: 'invite_to_team',
   task_assigned: 'task_assigned',
 } as const;
-
-

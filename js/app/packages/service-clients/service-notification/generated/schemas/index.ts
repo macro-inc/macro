@@ -67,5 +67,7 @@ export * from './notifEventOneOfThreeTag';
 export * from './notificationBulkRequest';
 export * from './notificationServiceApiVersion';
 export * from './pushNotificationData';
+export * from './taskAssignedMetadata';
+export * from './taskAssignedMetadataTaskName';
 export * from './unsubscribeItemPathParams';
 export * from './userUnsubscribe';
