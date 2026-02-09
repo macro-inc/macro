@@ -4,6 +4,7 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
+import type { NewEmailMetadata } from './newEmailMetadata';
 import type { NotifEventOneOfOneoneTag } from './notifEventOneOfOneoneTag';
 
 /**
@@ -11,6 +12,6 @@ import type { NotifEventOneOfOneoneTag } from './notifEventOneOfOneoneTag';
  */
 export type NotifEventOneOfOneone = {
   /** A new email has been sent to the user. */
-  content: unknown;
+  content: NewEmailMetadata;
   tag: NotifEventOneOfOneoneTag;
 };

@@ -1367,6 +1367,7 @@
             "required": ["content", "tag"],
             "properties": {
               "content": {
+                "$ref": "#/components/schemas/ChannelMentionMetadata",
                 "description": "Someone mentioned you in a channel."
               },
               "tag": {
@@ -1381,6 +1382,7 @@
             "required": ["content", "tag"],
             "properties": {
               "content": {
+                "$ref": "#/components/schemas/DocumentMentionMetadata",
                 "description": "Someone mentioned you in a document."
               },
               "tag": {
@@ -1395,6 +1397,7 @@
             "required": ["content", "tag"],
             "properties": {
               "content": {
+                "$ref": "#/components/schemas/ChannelInviteMetadata",
                 "description": "The user was invited to a channel."
               },
               "tag": {
@@ -1409,6 +1412,7 @@
             "required": ["content", "tag"],
             "properties": {
               "content": {
+                "$ref": "#/components/schemas/ChannelMessageSendMetadata",
                 "description": "A user sent a message in a channel."
               },
               "tag": {
@@ -1423,6 +1427,7 @@
             "required": ["content", "tag"],
             "properties": {
               "content": {
+                "$ref": "#/components/schemas/ChannelReplyMetadata",
                 "description": "Someone replied to a thread in a channel that the user is part of."
               },
               "tag": {
@@ -1437,6 +1442,7 @@
             "required": ["content", "tag"],
             "properties": {
               "content": {
+                "$ref": "#/components/schemas/NewEmailMetadata",
                 "description": "A new email has been sent to the user."
               },
               "tag": {
@@ -1451,6 +1457,7 @@
             "required": ["content", "tag"],
             "properties": {
               "content": {
+                "$ref": "#/components/schemas/InviteToTeamMetadata",
                 "description": "A user was invited to a team."
               },
               "tag": {
@@ -1465,6 +1472,7 @@
             "required": ["content", "tag"],
             "properties": {
               "content": {
+                "$ref": "#/components/schemas/TaskAssignedMetadata",
                 "description": "A user was assigned to a task."
               },
               "tag": {
@@ -1503,6 +1511,25 @@
             "type": "string",
             "format": "uuid",
             "description": "The id of the notification record (UserNotification.id)"
+          }
+        }
+      },
+      "TaskAssignedMetadata": {
+        "type": "object",
+        "description": "Metadata for when a user is assigned to a task",
+        "required": ["taskId", "assignedBy"],
+        "properties": {
+          "assignedBy": {
+            "type": "string",
+            "description": "The user who assigned the task"
+          },
+          "taskId": {
+            "type": "string",
+            "description": "The unique identifier of the task"
+          },
+          "taskName": {
+            "type": ["string", "null"],
+            "description": "The name of the task (optional)"
           }
         }
       },

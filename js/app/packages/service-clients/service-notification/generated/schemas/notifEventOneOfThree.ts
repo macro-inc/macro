@@ -4,6 +4,7 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
+import type { DocumentMentionMetadata } from './documentMentionMetadata';
 import type { NotifEventOneOfThreeTag } from './notifEventOneOfThreeTag';
 
 /**
@@ -11,6 +12,6 @@ import type { NotifEventOneOfThreeTag } from './notifEventOneOfThreeTag';
  */
 export type NotifEventOneOfThree = {
   /** Someone mentioned you in a document. */
-  content: unknown;
+  content: DocumentMentionMetadata;
   tag: NotifEventOneOfThreeTag;
 };
