@@ -2,7 +2,7 @@ import type { SplitManager } from '@app/component/split-layout/layoutManager';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { NotificationType } from '@core/types';
+import type { NotificationType } from '@core/types';
 import type { UnifiedNotification } from '@service-notification/client';
 import { getNotificationById } from '@queries/notification/user-notifications';
 import { errAsync, ResultAsync } from 'neverthrow';
