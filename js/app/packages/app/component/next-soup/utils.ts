@@ -295,7 +295,7 @@ export const openEntityInSplitFromUnifiedList = async (
     {
       referredFrom: 'unified-list',
       activate: true,
-      newSplit: openInNewSplit,
+      preferNewSplit: openInNewSplit,
       handle: splitHandle,
     }
   );

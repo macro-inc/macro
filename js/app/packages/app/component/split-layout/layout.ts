@@ -22,11 +22,11 @@ export function useSplitLayout() {
     }
 
     // On mobile, never open in new split
-    const newSplit = isMobile() ? false : options?.newSplit;
+    const preferNewSplit = isMobile() ? false : options?.preferNewSplit;
 
     return splitManager.openWithSplit(content, {
       ...options,
-      newSplit,
+      preferNewSplit,
     });
   }
 
@@ -58,7 +58,7 @@ export function useSplitLayout() {
       mergeHistory,
       referredFrom,
       handle: splitPanelContext?.handle,
-      newSplit: false,
+      preferNewSplit: false,
     });
   }
 
@@ -69,7 +69,7 @@ export function useSplitLayout() {
     return openWithSplit(content, {
       activate: true,
       referredFrom,
-      newSplit: true,
+      preferNewSplit: true,
     });
   }
 

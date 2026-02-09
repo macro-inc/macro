@@ -38,7 +38,7 @@ export function UserTooltip(props: UserTooltipProps) {
         if (channelId) {
           openWithSplit(
             { type: 'channel', id: channelId },
-            { newSplit: e.shiftKey }
+            { preferNewSplit: e.shiftKey }
           );
         } else {
           toast.failure('Failed to open direct message');

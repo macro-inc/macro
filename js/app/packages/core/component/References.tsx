@@ -94,7 +94,7 @@ export function References(props: ReferenceProps) {
   }) => {
     openWithSplit(
       { type: blockName, id: blockId },
-      { newSplit: event?.shiftKey !== true }
+      { preferNewSplit: event?.shiftKey !== true }
     );
   };
 

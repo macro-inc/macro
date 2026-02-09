@@ -52,7 +52,7 @@ const createBlock = async (spec: {
 
     openWithSplit(block, {
       referredFrom: 'launcher',
-      newSplit: spec.shouldInsert,
+      preferNewSplit: spec.shouldInsert,
     });
 
     return;
@@ -61,7 +61,7 @@ const createBlock = async (spec: {
       { type: 'component', id: 'loading' },
       {
         referredFrom: 'launcher',
-        newSplit: spec.shouldInsert,
+        preferNewSplit: spec.shouldInsert,
       }
     );
 
@@ -96,7 +96,7 @@ const createComponent = async (spec: {
     { type: 'component', id: spec.componentId },
     {
       referredFrom: 'launcher',
-      newSplit: spec.shouldInsert,
+      preferNewSplit: spec.shouldInsert,
     }
   );
 };

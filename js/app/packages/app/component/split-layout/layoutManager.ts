@@ -128,8 +128,8 @@ export type OpenWithSplitOptions = {
   referredFrom?: ReferredFrom;
   allowDuplicate?: boolean;
   replaceWhenFull?: boolean;
-  /** If true, opens in a new split. If false/undefined, replaces current split. */
-  newSplit?: boolean;
+  /** If true, prefers opening in a new split. May still replace if layout is at capacity. */
+  preferNewSplit?: boolean;
   handle?: SplitHandle;
 };
 
@@ -1019,7 +1019,7 @@ export function createSplitLayout(
     const shouldReplaceWhenFull =
       options.replaceWhenFull !== false && !canAppendSplit();
 
-    const shouldReplace = !options.newSplit || shouldReplaceWhenFull;
+    const shouldReplace = !options.preferNewSplit || shouldReplaceWhenFull;
 
     if (splitHandle && shouldReplace) {
       splitHandle.replace({

@@ -367,7 +367,7 @@ export function useCommandItemAction(args: {
         { type: blockName, id },
         {
           referredFrom: 'kommand-menu',
-          newSplit: action === 'new-split',
+          preferNewSplit: action === 'new-split',
         }
       );
 

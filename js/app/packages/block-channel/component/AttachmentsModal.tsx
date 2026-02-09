@@ -57,7 +57,7 @@ export function AttachmentsModal() {
   ) => {
     openWithSplit(
       { type: details.blockName, id: details.blockId },
-      { newSplit: !event.shiftKey }
+      { preferNewSplit: !event.shiftKey }
     );
   };
 

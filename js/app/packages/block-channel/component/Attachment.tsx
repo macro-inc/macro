@@ -108,7 +108,7 @@ export function Attachment(props: AttachmentProps) {
                     type: fileTypeToBlockName(blockName()),
                     id: props.attachment.id,
                   },
-                  { newSplit: inNewSplit }
+                  { preferNewSplit: inNewSplit }
                 );
               }}
             />
