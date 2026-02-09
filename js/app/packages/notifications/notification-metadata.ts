@@ -6,27 +6,19 @@ import type {
   ChannelReplyMetadata,
   DocumentMentionMetadata,
   InviteToTeamMetadata,
-  ItemSharedMetadata,
   NewEmailMetadata,
-} from '@service-notification/generated/schemas';
-import type {
-  ItemSharedOrganizationMetadata,
-  NotificationEventType,
   TaskAssignedMetadata,
-} from '@service-notification/types';
+} from '@service-notification/generated/schemas';
+import type { NotificationEventType } from '@service-notification/types';
 
 export interface NotificationMetadataByType {
-  [NotificationEventType.item_shared_user]: ItemSharedMetadata;
-  [NotificationEventType.item_shared_organization]: ItemSharedOrganizationMetadata;
   [NotificationEventType.channel_mention]: ChannelMentionMetadata;
   [NotificationEventType.document_mention]: DocumentMentionMetadata;
   [NotificationEventType.channel_invite]: ChannelInviteMetadata;
   [NotificationEventType.channel_message_send]: ChannelMessageSendMetadata;
   [NotificationEventType.channel_message_reply]: ChannelReplyMetadata;
-  [NotificationEventType.channel_message_document]: DocumentMentionMetadata;
   [NotificationEventType.new_email]: NewEmailMetadata;
   [NotificationEventType.invite_to_team]: InviteToTeamMetadata;
-  [NotificationEventType.reject_team_invite]: null;
   [NotificationEventType.task_assigned]: TaskAssignedMetadata;
 }
 
@@ -75,18 +67,6 @@ function isNotificationType<T extends NotificationEventType>(
   return n.notificationEventType === type;
 }
 
-export function isItemSharedUser(
-  n: UnifiedNotification
-): n is TypedNotification<'item_shared_user'> {
-  return isNotificationType(n, 'item_shared_user');
-}
-
-export function isItemSharedOrganization(
-  n: UnifiedNotification
-): n is TypedNotification<'item_shared_organization'> {
-  return isNotificationType(n, 'item_shared_organization');
-}
-
 export function isChannelMention(
   n: UnifiedNotification
 ): n is TypedNotification<'channel_mention'> {
@@ -117,12 +97,6 @@ export function isChannelMessageReply(
   return isNotificationType(n, 'channel_message_reply');
 }
 
-export function isChannelMessageDocument(
-  n: UnifiedNotification
-): n is TypedNotification<'channel_message_document'> {
-  return isNotificationType(n, 'channel_message_document');
-}
-
 export function isNewEmail(
   n: UnifiedNotification
 ): n is TypedNotification<'new_email'> {
@@ -133,12 +107,6 @@ export function isInviteToTeam(
   n: UnifiedNotification
 ): n is TypedNotification<'invite_to_team'> {
   return isNotificationType(n, 'invite_to_team');
-}
-
-export function isRejectTeamInvite(
-  n: UnifiedNotification
-): n is TypedNotification<'reject_team_invite'> {
-  return isNotificationType(n, 'reject_team_invite');
 }
 
 export function extractMetadata<T extends NotificationEventType>(

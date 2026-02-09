@@ -33,13 +33,9 @@ export const NOTIFICATION_LABEL_BY_TYPE: Record<NotificationType, string> = {
   [NotificationType.channel_message_send]: 'MESSAGE',
   [NotificationType.channel_message_reply]: 'REPLY',
   [NotificationType.document_mention]: 'MENTION',
-  [NotificationType.channel_message_document]: 'DOCUMENT',
-  [NotificationType.item_shared_user]: 'SHARED',
-  [NotificationType.item_shared_organization]: 'SHARED',
   [NotificationType.channel_invite]: 'INVITE',
   [NotificationType.new_email]: 'EMAIL',
   [NotificationType.invite_to_team]: 'INVITE',
-  [NotificationType.reject_team_invite]: 'REJECTED',
   [NotificationType.task_assigned]: 'ASSIGNED',
 } as const;
 
@@ -48,46 +44,6 @@ const extractors: {
     n: TypedNotification<K>
   ) => NotificationData | null;
 } = {
-  item_shared_user: (n) => {
-    const m = getMetadata(n);
-    if (!m) return null;
-    return {
-      type: n.notificationEventType,
-      actor: m.sharedBy ? { id: m.sharedBy! } : undefined,
-      action: 'shared',
-      target: {
-        type: m.itemType?.toLowerCase() as EntityType,
-        id: m.itemId,
-        name: m.itemName,
-      },
-      content: m.itemName ?? undefined,
-      meta: {
-        permissionLevel: m.permissionLevel,
-        itemType: m.itemType,
-        itemId: m.itemId,
-      },
-    };
-  },
-  item_shared_organization: (n) => {
-    const m = getMetadata(n);
-    if (!m) return null;
-    return {
-      type: n.notificationEventType,
-      actor: m.sharedBy ? { id: m.sharedBy! } : undefined,
-      action: 'shared',
-      target: {
-        type: m.itemType?.toLowerCase() as EntityType,
-        id: m.itemId,
-        name: m.itemName,
-      },
-      content: m.itemName ?? undefined,
-      meta: {
-        permissionLevel: m.permissionLevel,
-        itemType: m.itemType,
-        itemId: m.itemId,
-      },
-    };
-  },
   channel_mention: (n) => {
     const m = getMetadata(n);
     if (!m) return null;
@@ -168,20 +124,6 @@ const extractors: {
       },
     };
   },
-  channel_message_document: (n) => {
-    const m = getMetadata(n);
-    if (!m) return null;
-    return {
-      type: n.notificationEventType,
-      actor: m.owner ? { id: m.owner! } : undefined,
-      action: 'shared with you',
-      target: { type: 'document', id: n.entity_id, name: m.documentName },
-      content: m.documentName,
-      meta: {
-        fileType: m.fileType,
-      },
-    };
-  },
   new_email: (n) => {
     const m = getMetadata(n);
     if (!m) return null;
@@ -208,17 +150,6 @@ const extractors: {
       action: 'invited you to',
       target: { type: 'team', id: n.entity_id, name: m.teamName },
       content: m.teamName,
-    };
-  },
-  reject_team_invite: (n) => {
-    const m = getMetadata(n);
-    if (!m) return null;
-    return {
-      type: n.notificationEventType,
-      actor: undefined,
-      action: 'rejected your team invitation',
-      target: { type: 'team', id: n.entity_id },
-      content: undefined,
     };
   },
   task_assigned: (n) => {
