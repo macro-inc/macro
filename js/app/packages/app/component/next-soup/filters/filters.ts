@@ -300,13 +300,6 @@ export const buildDssFiltersRequest = (
     .filter((f) => ENTITY_TYPE_FILTERS.includes(f.id as EntityTypeFilters))
     .map((f) => f.id);
 
-  const isSignal = filters.some((f) => f.id === 'signal');
-  const isNoise = filters.some((f) => f.id === 'noise');
-  // if it's signal, use "inbox" emailView and importance = true
-  // if it's noise, use "inbox" emailView and importance = false
-  // if it's neither, use "all" emailView and importance = undefined
-  const email_importance = isSignal ? true : isNoise ? false : undefined;
-
   const {
     channel_filters,
     document_filters,
@@ -345,7 +338,6 @@ export const buildDssFiltersRequest = (
         (entityTypes.includes('email') || entityTypes.length === 0)
           ? []
           : [NIL_UUID]),
-      importance: email_importance,
     },
     project_filters: {
       ...project_filters,
@@ -353,8 +345,6 @@ export const buildDssFiltersRequest = (
         project_filters?.project_ids ??
         buildDefaultValue(entityTypes, ['file']),
     },
-    emailView: filters.some((f) => f.id === 'signal' || f.id === 'noise')
-      ? 'inbox'
-      : 'all',
+    emailView: 'all',
   };
 };
