@@ -1,23 +1,6 @@
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import { createMemo, createSignal, type Accessor } from 'solid-js';
 
-/**
- * NIL UUID used to exclude an entity type from query results.
- *
- * Backend semantics:
- * - Empty array `[]` = "return all items of this type"
- * - `[NIL_UUID]` = "exclude this type entirely" (matches nothing)
- *
- * @example
- * ```ts
- * filters.set({
- *   query: {
- *     document_filters: { document_ids: [] },      // Include all docs
- *     chat_filters: { chat_ids: EXCLUDE },         // Exclude chats
- *   }
- * });
- * ```
- */
 export const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
 /**
@@ -44,7 +27,6 @@ export type FilterConfig<T> = {
 };
 
 export type FiltersStateOptions<T, TConfig extends FilterConfig<T>> = {
-  /** Available filter configs (e.g., SOUP_FILTERS) */
   configs: readonly TConfig[];
   /** Initial active predicate IDs */
   initialPredicates?: string[];
@@ -61,9 +43,6 @@ export type FiltersState<T, TConfig extends FilterConfig<T>> = {
 
   /** Full filter configs for active predicates (for UI rendering) */
   active: Accessor<TConfig[]>;
-
-  /** Resolved predicate functions for active IDs */
-  predicateFns: Accessor<Array<FilterPredicate<T>>>;
 
   /** All available filter configs */
   available: readonly TConfig[];
@@ -106,8 +85,6 @@ export function createFiltersState<T, TConfig extends FilterConfig<T>>(
       .map((id) => configMap.get(id))
       .filter((c): c is TConfig => c !== undefined)
   );
-
-  const predicateFns = createMemo(() => active().map((c) => c.predicate));
 
   const isActive = (id: string): boolean => activeIds().includes(id);
 
@@ -152,7 +129,6 @@ export function createFiltersState<T, TConfig extends FilterConfig<T>>(
     predicates: activeIds,
     query: queryFilters,
     active,
-    predicateFns,
     available: configs,
     isActive,
     set,

@@ -204,7 +204,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   createEffect(
     on(
-      () => [soup.filters.activeIds(), searchText()] as const,
+      () => [soup.filters.predicates(), searchText()] as const,
       () => {
         focusFirstEntity();
       }

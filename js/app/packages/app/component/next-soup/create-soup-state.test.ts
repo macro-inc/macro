@@ -10,13 +10,10 @@ vi.mock('@app/component/next-soup/filters/filters', () => ({
 vi.mock('@app/component/next-soup/filters', () => ({
   createFiltersState: vi.fn(() => ({
     predicates: () => [],
-    activeIds: () => [],
     query: () => ({}),
     active: () => [],
-    predicateFns: () => [],
     available: [],
     isActive: () => false,
-    getConfig: () => undefined,
     set: vi.fn(),
     toggle: vi.fn(),
     activate: vi.fn(),

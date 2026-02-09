@@ -40,7 +40,6 @@ describe('createFiltersState', () => {
       createRoot((dispose) => {
         const filters = createFiltersState({ configs: mockConfigs });
         expect(filters.predicates()).toEqual([]);
-        expect(filters.predicateFns()).toEqual([]);
         expect(filters.active()).toEqual([]);
         dispose();
       });
@@ -61,7 +60,6 @@ describe('createFiltersState', () => {
           initialPredicates: ['even', 'positive'],
         });
         expect(filters.predicates()).toEqual(['even', 'positive']);
-        expect(filters.predicateFns()).toHaveLength(2);
         expect(filters.active()).toHaveLength(2);
         dispose();
       });
@@ -220,25 +218,6 @@ describe('createFiltersState', () => {
     });
   });
 
-  describe('getConfig', () => {
-    it('should return config for valid ID', () => {
-      createRoot((dispose) => {
-        const filters = createFiltersState({ configs: mockConfigs });
-        const config = filters.getConfig('even');
-        expect(config).toEqual(mockConfigs[0]);
-        dispose();
-      });
-    });
-
-    it('should return undefined for invalid ID', () => {
-      createRoot((dispose) => {
-        const filters = createFiltersState({ configs: mockConfigs });
-        expect(filters.getConfig('nonexistent')).toBeUndefined();
-        dispose();
-      });
-    });
-  });
-
   describe('active', () => {
     it('should return full configs for active predicates', () => {
       createRoot((dispose) => {
@@ -274,53 +253,6 @@ describe('createFiltersState', () => {
           initialPredicates: ['even', 'unknown', 'positive'],
         });
         expect(filters.active()).toHaveLength(2);
-        expect(filters.predicateFns()).toHaveLength(2);
-        dispose();
-      });
-    });
-  });
-
-  describe('predicateFns', () => {
-    it('should return working predicate functions', () => {
-      createRoot((dispose) => {
-        const filters = createFiltersState({
-          configs: mockConfigs,
-          initialPredicates: ['even', 'positive'],
-        });
-        const fns = filters.predicateFns();
-        expect(fns).toHaveLength(2);
-
-        const testEntity: TestEntity = { id: '1', value: 4, type: 'a' };
-        expect(fns[0](testEntity)).toBe(true); // even: 4 % 2 === 0
-        expect(fns[1](testEntity)).toBe(true); // positive: 4 > 0
-
-        const testEntity2: TestEntity = { id: '2', value: 3, type: 'a' };
-        expect(fns[0](testEntity2)).toBe(false); // even: 3 % 2 !== 0
-        expect(fns[1](testEntity2)).toBe(true); // positive: 3 > 0
-        dispose();
-      });
-    });
-
-    it('should work for filtering arrays', () => {
-      createRoot((dispose) => {
-        const filters = createFiltersState({
-          configs: mockConfigs,
-          initialPredicates: ['even', 'small'],
-        });
-
-        const entities: TestEntity[] = [
-          { id: '1', value: 2, type: 'a' }, // even, small
-          { id: '2', value: 4, type: 'a' }, // even, small
-          { id: '3', value: 12, type: 'a' }, // even, NOT small
-          { id: '4', value: 3, type: 'a' }, // NOT even, small
-        ];
-
-        const filtered = entities.filter((e) =>
-          filters.predicateFns().every((fn) => fn(e))
-        );
-
-        expect(filtered).toHaveLength(2);
-        expect(filtered.map((e) => e.id)).toEqual(['1', '2']);
         dispose();
       });
     });
@@ -406,20 +338,6 @@ describe('createFiltersState', () => {
         });
         filters.deactivate('positive');
         expect(filters.predicates()).toEqual(['even']);
-        dispose();
-      });
-    });
-  });
-
-  describe('activeIds (alias)', () => {
-    it('should be an alias for predicates', () => {
-      createRoot((dispose) => {
-        const filters = createFiltersState({
-          configs: mockConfigs,
-          initialPredicates: ['even', 'positive'],
-        });
-        expect(filters.activeIds()).toEqual(filters.predicates());
-        expect(filters.activeIds()).toEqual(['even', 'positive']);
         dispose();
       });
     });
