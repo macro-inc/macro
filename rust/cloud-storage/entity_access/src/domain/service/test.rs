@@ -313,8 +313,7 @@ async fn test_get_entity_permission_document_no_access_returns_unauthorized() {
 
 #[tokio::test]
 async fn test_get_entity_permission_channel_returns_role() {
-    let repo =
-        MockRepo::new().with_channel_role(ChannelRoleResult::Role(ParticipantRole::Admin));
+    let repo = MockRepo::new().with_channel_role(ChannelRoleResult::Role(ParticipantRole::Admin));
     let service = EntityAccessServiceImpl::new(repo);
     let user_id = test_user_id();
 

@@ -145,13 +145,9 @@ where
                     .get_channel_role(&channel_uuid, user_id, user_org_id)
                     .await?
                 {
-                    ChannelRoleResult::Role(role) => {
-                        Ok(EntityPermission::ChannelRole { role })
-                    }
+                    ChannelRoleResult::Role(role) => Ok(EntityPermission::ChannelRole { role }),
                     ChannelRoleResult::NoAccess => Err(AccessError::Unauthorized),
-                    ChannelRoleResult::NotFound => {
-                        Err(AccessError::NotFound("Channel not found"))
-                    }
+                    ChannelRoleResult::NotFound => Err(AccessError::NotFound("Channel not found")),
                 }
             }
             _ => Err(AccessError::BadRequest("Unsupported entity type")),
