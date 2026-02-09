@@ -7,22 +7,29 @@ use axum::{
     Extension,
     extract::{FromRequestParts, Path},
 };
+use model::comms::ParticipantRole;
 use model::user::UserContext;
-use models_permissions::entity_permission::{
-    EntityPermission, EntityPermissionResponse, ParticipantRole,
-};
+use models_permissions::share_permission::access_level::AccessLevel;
+use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-fn convert_role(role: model::comms::ParticipantRole) -> ParticipantRole {
-    match role {
-        model::comms::ParticipantRole::Owner => ParticipantRole::Owner,
-        model::comms::ParticipantRole::Admin => ParticipantRole::Admin,
-        model::comms::ParticipantRole::Member => ParticipantRole::Member,
-    }
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum EntityPermissionResponse {
+    Access { permission: EntityPermission },
+    NoAccess,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum EntityPermission {
+    AccessLevel { access_level: AccessLevel },
+    ChannelRole { role: ParticipantRole },
+}
+
+#[derive(Deserialize)]
 struct Params {
     entity_type: String,
     entity_id: String,
@@ -121,9 +128,7 @@ async fn resolve_channel_permission(
 
     Ok(match role {
         Some(role) => EntityPermissionResponse::Access {
-            permission: EntityPermission::ChannelRole {
-                role: convert_role(role),
-            },
+            permission: EntityPermission::ChannelRole { role },
         },
         None => EntityPermissionResponse::NoAccess,
     })

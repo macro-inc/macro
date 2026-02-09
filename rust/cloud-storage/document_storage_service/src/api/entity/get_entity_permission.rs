@@ -1,7 +1,8 @@
 use axum::{Json, http::StatusCode, response::IntoResponse};
-use macro_middleware::cloud_storage::ensure_access::entity_permission::EntityPermissionExtractor;
+use macro_middleware::cloud_storage::ensure_access::entity_permission::{
+    EntityPermissionExtractor, EntityPermissionResponse,
+};
 use model::response::GenericErrorResponse;
-use models_permissions::entity_permission::EntityPermissionResponse;
 
 /// Get the current user's permission for a given entity.
 #[utoipa::path(
