@@ -19,6 +19,7 @@ pub enum EntityPermissionResponse {
 #[utoipa::path(
     get,
     path = "/entity/{entity_type}/{entity_id}/permissions",
+    operation_id = "get_entity_permission",
     params(
         ("entity_type" = String, Path, description = "Entity type (document, chat, project, thread, email_thread, channel)"),
         ("entity_id" = String, Path, description = "Entity ID"),
@@ -27,6 +28,7 @@ pub enum EntityPermissionResponse {
         (status = 200, body = EntityPermissionResponse),
         (status = 400, description = "Bad request"),
         (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Entity not found"),
     )
 )]
 pub async fn handler(

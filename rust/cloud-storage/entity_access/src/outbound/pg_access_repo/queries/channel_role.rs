@@ -1,6 +1,6 @@
 //! Queries for channel role resolution.
 
-use crate::domain::models::ParticipantRole;
+use crate::domain::models::{ChannelRoleResult, ParticipantRole};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -23,6 +23,12 @@ fn parse_role(s: &str) -> ParticipantRole {
 
 /// Get the user's role in a channel, considering channel type rules.
 ///
+/// Returns a [`ChannelRoleResult`] that distinguishes between:
+/// - `Role(role)`: user has access with this role
+/// - `NoAccess`: channel exists but user has no access
+/// - `NotFound`: channel does not exist
+///
+/// Channel type rules:
 /// - Public channels: non-participants default to Member
 /// - Organization channels: default to Member only if user's org matches
 /// - Private/DM: require explicit participation
@@ -32,7 +38,7 @@ pub async fn get_channel_role(
     channel_id: &Uuid,
     user_id: &str,
     user_org_id: Option<i64>,
-) -> Result<Option<ParticipantRole>, sqlx::Error> {
+) -> Result<ChannelRoleResult, sqlx::Error> {
     let row = sqlx::query_as::<_, ChannelRoleRow>(
         r#"
         SELECT
@@ -51,7 +57,7 @@ pub async fn get_channel_role(
     .await?;
 
     let Some(row) = row else {
-        return Ok(None);
+        return Ok(ChannelRoleResult::NotFound);
     };
 
     let role = match row.channel_type.as_str() {
@@ -78,24 +84,8 @@ pub async fn get_channel_role(
         _ => row.role.as_deref().map(parse_role),
     };
 
-    Ok(role)
-}
-
-/// Check if a channel exists.
-#[tracing::instrument(err, skip(pool))]
-pub async fn channel_exists(pool: &PgPool, channel_id: &Uuid) -> Result<bool, sqlx::Error> {
-    let exists = sqlx::query_scalar::<_, bool>(
-        r#"
-        SELECT EXISTS(
-            SELECT 1
-            FROM comms_channels
-            WHERE id = $1
-        )
-        "#,
-    )
-    .bind(channel_id)
-    .fetch_one(pool)
-    .await?;
-
-    Ok(exists)
+    Ok(match role {
+        Some(role) => ChannelRoleResult::Role(role),
+        None => ChannelRoleResult::NoAccess,
+    })
 }

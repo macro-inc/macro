@@ -39,6 +39,20 @@ pub enum EntityPermission {
     },
 }
 
+/// Result of resolving a user's role in a channel.
+///
+/// Distinguishes between "user has a role", "channel exists but user
+/// has no access", and "channel does not exist" — all from a single query.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChannelRoleResult {
+    /// User has a role in the channel.
+    Role(ParticipantRole),
+    /// Channel exists but user has no access.
+    NoAccess,
+    /// Channel does not exist.
+    NotFound,
+}
+
 /// Errors that can occur during access checking.
 #[derive(Debug, thiserror::Error)]
 pub enum AccessError {
@@ -57,6 +71,10 @@ pub enum AccessError {
     /// Bad request parameters.
     #[error("Bad request: {0}")]
     BadRequest(&'static str),
+
+    /// Requested resource was not found.
+    #[error("Not found: {0}")]
+    NotFound(&'static str),
 
     /// Internal server error.
     #[error("Internal error")]

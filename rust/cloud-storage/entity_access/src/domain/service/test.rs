@@ -14,8 +14,7 @@ struct MockRepo {
     project_access: Arc<Mutex<Option<AccessLevel>>>,
     thread_access: Arc<Mutex<Option<AccessLevel>>>,
     channel_membership: Arc<Mutex<Vec<Uuid>>>,
-    channel_role: Arc<Mutex<Option<ParticipantRole>>>,
-    channel_exists: Arc<Mutex<bool>>,
+    channel_role: Arc<Mutex<ChannelRoleResult>>,
 }
 
 impl MockRepo {
@@ -26,8 +25,7 @@ impl MockRepo {
             project_access: Arc::new(Mutex::new(None)),
             thread_access: Arc::new(Mutex::new(None)),
             channel_membership: Arc::new(Mutex::new(vec![])),
-            channel_role: Arc::new(Mutex::new(None)),
-            channel_exists: Arc::new(Mutex::new(false)),
+            channel_role: Arc::new(Mutex::new(ChannelRoleResult::NotFound)),
         }
     }
 
@@ -56,13 +54,8 @@ impl MockRepo {
         self
     }
 
-    fn with_channel_role(mut self, role: ParticipantRole) -> Self {
-        self.channel_role = Arc::new(Mutex::new(Some(role)));
-        self
-    }
-
-    fn with_channel_exists(mut self, exists: bool) -> Self {
-        self.channel_exists = Arc::new(Mutex::new(exists));
+    fn with_channel_role(mut self, result: ChannelRoleResult) -> Self {
+        self.channel_role = Arc::new(Mutex::new(result));
         self
     }
 }
@@ -113,12 +106,8 @@ impl AccessRepository for MockRepo {
         _channel_id: &Uuid,
         _user_id: &MacroUserId<Lowercase<'_>>,
         _user_org_id: Option<i64>,
-    ) -> Result<Option<ParticipantRole>, AccessError> {
+    ) -> Result<ChannelRoleResult, AccessError> {
         Ok(*self.channel_role.lock().await)
-    }
-
-    async fn channel_exists(&self, _channel_id: &Uuid) -> Result<bool, AccessError> {
-        Ok(*self.channel_exists.lock().await)
     }
 }
 
@@ -324,7 +313,8 @@ async fn test_get_entity_permission_document_no_access_returns_unauthorized() {
 
 #[tokio::test]
 async fn test_get_entity_permission_channel_returns_role() {
-    let repo = MockRepo::new().with_channel_role(ParticipantRole::Admin);
+    let repo =
+        MockRepo::new().with_channel_role(ChannelRoleResult::Role(ParticipantRole::Admin));
     let service = EntityAccessServiceImpl::new(repo);
     let user_id = test_user_id();
 
@@ -347,8 +337,8 @@ async fn test_get_entity_permission_channel_returns_role() {
 }
 
 #[tokio::test]
-async fn test_get_entity_permission_channel_no_role_exists_returns_unauthorized() {
-    let repo = MockRepo::new().with_channel_exists(true);
+async fn test_get_entity_permission_channel_no_access_returns_unauthorized() {
+    let repo = MockRepo::new().with_channel_role(ChannelRoleResult::NoAccess);
     let service = EntityAccessServiceImpl::new(repo);
     let user_id = test_user_id();
 
@@ -365,8 +355,8 @@ async fn test_get_entity_permission_channel_no_role_exists_returns_unauthorized(
 }
 
 #[tokio::test]
-async fn test_get_entity_permission_channel_not_found_returns_bad_request() {
-    let repo = MockRepo::new().with_channel_exists(false);
+async fn test_get_entity_permission_channel_not_found_returns_not_found() {
+    let repo = MockRepo::new().with_channel_role(ChannelRoleResult::NotFound);
     let service = EntityAccessServiceImpl::new(repo);
     let user_id = test_user_id();
 
@@ -379,7 +369,7 @@ async fn test_get_entity_permission_channel_not_found_returns_bad_request() {
         )
         .await;
 
-    assert!(matches!(result, Err(AccessError::BadRequest(_))));
+    assert!(matches!(result, Err(AccessError::NotFound(_))));
 }
 
 #[tokio::test]

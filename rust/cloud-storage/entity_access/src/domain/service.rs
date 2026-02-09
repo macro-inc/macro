@@ -1,7 +1,7 @@
 //! Entity access service implementation.
 
 use crate::domain::{
-    models::{AccessError, AccessLevel, EntityPermission, EntityType},
+    models::{AccessError, AccessLevel, ChannelRoleResult, EntityPermission, EntityType},
     ports::{AccessRepository, EntityAccessService},
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
@@ -140,19 +140,17 @@ where
                 let channel_uuid = Uuid::from_str(entity_id)
                     .map_err(|_| AccessError::BadRequest("Invalid channel ID format"))?;
 
-                let role = self
+                match self
                     .repo
                     .get_channel_role(&channel_uuid, user_id, user_org_id)
-                    .await?;
-
-                match role {
-                    Some(role) => Ok(EntityPermission::ChannelRole { role }),
-                    None => {
-                        if self.repo.channel_exists(&channel_uuid).await? {
-                            Err(AccessError::Unauthorized)
-                        } else {
-                            Err(AccessError::BadRequest("Channel not found"))
-                        }
+                    .await?
+                {
+                    ChannelRoleResult::Role(role) => {
+                        Ok(EntityPermission::ChannelRole { role })
+                    }
+                    ChannelRoleResult::NoAccess => Err(AccessError::Unauthorized),
+                    ChannelRoleResult::NotFound => {
+                        Err(AccessError::NotFound("Channel not found"))
                     }
                 }
             }

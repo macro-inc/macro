@@ -72,6 +72,10 @@ pub enum ExtractorError {
     #[error("Bad request: {0}")]
     BadRequest(&'static str),
 
+    /// Requested resource was not found.
+    #[error("Not found: {0}")]
+    NotFound(&'static str),
+
     /// Internal server error.
     #[error("Internal server error")]
     Internal,
@@ -89,6 +93,7 @@ impl From<AccessError> for ExtractorError {
                 ExtractorError::UnauthorizedWithMessage(msg)
             }
             AccessError::BadRequest(msg) => ExtractorError::BadRequest(msg),
+            AccessError::NotFound(msg) => ExtractorError::NotFound(msg),
             AccessError::DatabaseError(_) => ExtractorError::Database,
             AccessError::Internal => ExtractorError::Internal,
         }
@@ -103,6 +108,7 @@ impl IntoResponse for ExtractorError {
                 (StatusCode::UNAUTHORIZED, self.to_string())
             }
             ExtractorError::BadRequest(_) => (StatusCode::BAD_REQUEST, self.to_string()),
+            ExtractorError::NotFound(_) => (StatusCode::NOT_FOUND, self.to_string()),
             ExtractorError::Internal | ExtractorError::Database => {
                 (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
             }
