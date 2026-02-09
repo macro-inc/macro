@@ -26,12 +26,8 @@ import {
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
-import { useSplitLayout } from '../layout';
-import {
-  createActiveSplitMemo,
-  createIsActiveSplitContentMemo,
-} from '../layoutUtils';
 import { canSpotlight } from '../utils/canSpotlight';
+import { useSettingsState } from '@core/constant/SettingsState';
 
 function SplitBackButton() {
   const context = useContext(SplitPanelContext);
@@ -174,33 +170,21 @@ function _SplitControlButtons() {
 }
 
 function SplitSettingsButton() {
-  const { replaceSplit } = useSplitLayout();
-  const activeSplit = createActiveSplitMemo();
-  const isSettingsSplitOpen = createIsActiveSplitContentMemo(
-    activeSplit,
-    'component',
-    'settings'
-  );
+  const { settingsOpen, toggleSettings } = useSettingsState();
 
   return (
     <Button
       class="p-1"
       classList={{
-        'bg-accent/20 text-accent': isSettingsSplitOpen(),
+        'bg-accent/20 text-accent': settingsOpen(),
       }}
       tooltip={
         <LabelAndHotKey
-          label={isSettingsSplitOpen() ? 'Close Settings' : 'Open Settings'}
+          label={settingsOpen() ? 'Close Settings' : 'Open Settings'}
           hotkeyToken={TOKENS.global.toggleSettings}
         />
       }
-      onClick={() => {
-        if (isSettingsSplitOpen()) {
-          activeSplit()?.goBack();
-          return;
-        }
-        replaceSplit({ content: { type: 'component', id: 'settings' } });
-      }}
+      onClick={toggleSettings}
     >
       <IconGear class="h-4" />
     </Button>
