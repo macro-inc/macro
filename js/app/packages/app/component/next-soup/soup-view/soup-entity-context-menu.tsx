@@ -8,7 +8,7 @@ import { SoupEntityActionsMenu } from './soup-entity-actions-menu';
 
 interface SoupEntityContextMenuProps {
   entity: EntityData;
-  entityTimestamp?: number;
+  entityTimestamp?: Date;
   onOpenChange?: (open: boolean) => void;
 }
 

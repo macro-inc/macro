@@ -719,7 +719,7 @@ interface EntityProps<T extends WithNotification<EntityData>>
   extends ParentProps {
   entity: T;
   focused?: boolean;
-  timestamp?: number;
+  timestamp?: Date;
   onClick?: EntityClickHandler<T>;
   onDblClick?: EntityClickHandler<T>;
   onPointerDown?: EntityClickHandler<T>;
