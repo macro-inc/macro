@@ -5,6 +5,7 @@
 import type { Accessor } from 'solid-js';
 import type { FilterResult } from 'fuzzy';
 import fuzzy from 'fuzzy';
+import { differenceInMilliseconds } from 'date-fns';
 import { fuzzyScoreCommaSpaceSeparated } from './fuzzy';
 
 type BoostFn<T> = (item: T) => number;
@@ -43,9 +44,9 @@ export interface FreshSortConfig<T> {
 type FreshSortConfigWithDefaults = Required<FreshSortConfig<unknown>>;
 
 export interface TimestampedItem {
-  updatedAt?: Date | number | string;
-  viewedAt?: Date | number | string;
-  lastInteraction?: Date | number | string;
+  updatedAt?: Date;
+  viewedAt?: Date;
+  lastInteraction?: Date;
 }
 
 export interface FreshSortResult<T> {
@@ -73,48 +74,23 @@ const DEFAULT_CONFIG = {
 function extractTimestamp(
   item: TimestampedItem,
   useViewedAt: boolean = false
-): number {
-  let timestamp: Date | number | string | undefined;
-
+): Date | undefined {
   if (useViewedAt) {
-    timestamp = item.viewedAt ?? item.updatedAt ?? item.lastInteraction;
-  } else {
-    timestamp = item.updatedAt ?? item.lastInteraction;
+    return item.viewedAt ?? item.updatedAt ?? item.lastInteraction;
   }
 
-  if (timestamp === undefined || timestamp === null) return 0;
-
-  if (timestamp instanceof Date) {
-    return timestamp.getTime();
-  }
-
-  if (typeof timestamp === 'number') {
-    return timestamp;
-  }
-
-  if (typeof timestamp === 'string') {
-    const isoDate = new Date(timestamp);
-    const isoDateTime = isoDate.getTime();
-    if (!isNaN(isoDateTime)) {
-      return isoDateTime;
-    }
-
-    const parsed = parseInt(timestamp, 10);
-    if (!isNaN(parsed)) {
-      return parsed;
-    }
-  }
-
-  return 0;
+  return item.updatedAt ?? item.lastInteraction;
 }
 
 function calculateTimeScore(
-  timestamp: number,
+  timestamp: Date | undefined,
   config: FreshSortConfigWithDefaults
 ): number {
-  const now = Date.now();
-  const itemTime = timestamp;
-  const age = Math.max(0, now - itemTime);
+  if (!timestamp) return 0;
+
+  const now = new Date();
+  const age = Math.max(0, differenceInMilliseconds(now, timestamp));
+
   if (age >= config.maxAgeMs) {
     return 0;
   }
