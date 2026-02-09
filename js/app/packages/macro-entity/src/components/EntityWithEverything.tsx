@@ -401,9 +401,13 @@ function NotificationRow(props: {
         </div>
         <MessageContent />
       </div>
-      <div class="shrink-0 font-mono text-xs touch:mobile-width:text-sm uppercase text-ink-extra-muted ml-2">
-        {createFormattedDate(props.notification.createdAt)}
-      </div>
+      <Show when={props.notification.createdAt}>
+        {(date) => (
+          <div class="shrink-0 font-mono text-xs touch:mobile-width:text-sm uppercase text-ink-extra-muted ml-2">
+            {createFormattedDate(date())}
+          </div>
+        )}
+      </Show>
     </CollapsibleListRow>
   );
 }
@@ -490,9 +494,13 @@ function StackedNotificationRow(props: {
           </div>
         </Show>
       </div>
-      <div class="shrink-0 font-mono text-xs touch:mobile-width:text-sm uppercase text-ink-extra-muted ml-2">
-        {createFormattedDate(mostRecent().createdAt)}
-      </div>
+      <Show when={mostRecent().createdAt}>
+        {(date) => (
+          <div class="shrink-0 font-mono text-xs touch:mobile-width:text-sm uppercase text-ink-extra-muted ml-2">
+            {createFormattedDate(date())}
+          </div>
+        )}
+      </Show>
     </CollapsibleListRow>
   );
 }
@@ -1601,7 +1609,7 @@ function EntityProject(props: {
       id: data.id,
       name: data.name,
       ownerId: data.owner,
-      updatedAt: data.updatedAt,
+      updatedAt: data.updatedAt ?? undefined,
     };
     eventHandler?.({
       type: 'entity-project-path',
