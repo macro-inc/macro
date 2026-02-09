@@ -105,31 +105,6 @@ pub struct ItemSharedMetadata {
     pub permission_level: Option<String>,
 }
 
-/// Metadata for when a item is shared with an organization
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct ItemSharedOrganizationMetadata {
-    /// List of user IDs that the item is shared with
-    #[serde(alias = "org_user_ids")]
-    pub org_user_ids: Vec<String>,
-    /// The type of item being shared
-    #[serde(alias = "item_type")]
-    pub item_type: EntityType,
-    /// The name/title of the shared item (optional)
-    #[serde(alias = "item_id")]
-    pub item_id: String,
-    /// The name/title of the shared item
-    #[serde(alias = "item_name")]
-    pub item_name: Option<String>,
-    /// The user who shared the item
-    #[serde(alias = "shared_by")]
-    #[schema(value_type = String)]
-    pub shared_by: MacroUserIdStr<'static>,
-    /// Permission level granted (read, write, admin, etc.)
-    #[serde(alias = "permission_level")]
-    pub permission_level: Option<String>,
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct InviteToTeamMetadata {
