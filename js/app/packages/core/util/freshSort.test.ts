@@ -1,15 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { createFreshSearch, normalizeFuzzyScore } from './freshSort';
-import type { LastInteractionTimestamp } from '@core/user/types';
 import { applyDurationToDate } from './dateSearch/dateParser';
 
 interface MockItem {
   id: string;
   name: string;
   type: 'item' | 'channel';
-  viewedAt?: number;
-  updatedAt?: number;
-  lastInteraction?: LastInteractionTimestamp;
+  viewedAt?: Date | number;
+  updatedAt?: Date | number;
+  lastInteraction?: Date | number;
 }
 
 interface User extends MockItem {

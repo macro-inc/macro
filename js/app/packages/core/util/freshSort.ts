@@ -6,7 +6,6 @@ import type { Accessor } from 'solid-js';
 import type { FilterResult } from 'fuzzy';
 import fuzzy from 'fuzzy';
 import { fuzzyScoreCommaSpaceSeparated } from './fuzzy';
-import type { LastInteractionTimestamp } from '@core/user';
 
 type BoostFn<T> = (item: T) => number;
 
@@ -44,9 +43,9 @@ export interface FreshSortConfig<T> {
 type FreshSortConfigWithDefaults = Required<FreshSortConfig<unknown>>;
 
 export interface TimestampedItem {
-  updatedAt?: number | string;
-  viewedAt?: number | string;
-  lastInteraction?: LastInteractionTimestamp | string;
+  updatedAt?: Date | number | string;
+  viewedAt?: Date | number | string;
+  lastInteraction?: Date | number | string;
 }
 
 export interface FreshSortResult<T> {
@@ -75,7 +74,7 @@ function extractTimestamp(
   item: TimestampedItem,
   useViewedAt: boolean = false
 ): number {
-  let timestamp: number | string | undefined;
+  let timestamp: Date | number | string | undefined;
 
   if (useViewedAt) {
     timestamp = item.viewedAt ?? item.updatedAt ?? item.lastInteraction;
@@ -84,6 +83,10 @@ function extractTimestamp(
   }
 
   if (timestamp === undefined || timestamp === null) return 0;
+
+  if (timestamp instanceof Date) {
+    return timestamp.getTime();
+  }
 
   if (typeof timestamp === 'number') {
     return timestamp;

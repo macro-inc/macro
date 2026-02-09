@@ -9,15 +9,11 @@ export interface IOrganizationUser {
   is_it_admin: boolean;
 }
 
-/** Timestamp of last interaction with the user (in milliseconds to match server timestamps) */
-export type LastInteractionTimestamp = number;
-
 export type IUser = {
   id: string;
   email: string;
   name: string;
-  /** timestamp of last interaction with the user (in milliseconds to match server timestamps) */
-  lastInteraction?: LastInteractionTimestamp;
+  lastInteraction?: Date;
 };
 
 type BaseUserName = {

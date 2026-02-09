@@ -9,7 +9,6 @@ import { useChannelsActivityQuery } from '@queries/channel/activity';
 import { queryReadyGate } from '@queries/gate';
 import { createAssertedContextProvider } from './createContext';
 import { useUserId } from './user';
-import type { LastInteractionTimestamp } from '@core/user/types';
 
 type ChannelsContextValue = {
   channels: Accessor<ApiChannelWithLatest[]>;
@@ -77,16 +76,16 @@ export function useChannelActivity(channelId: string) {
  * activity with that user. Useful for ranking/sorting users by recency of
  * interaction.
  */
-export function useDmActivityByUserId(): Accessor<Map<string, number>> {
+export function useDmActivityByUserId(): Accessor<Map<string, Date>> {
   const { channels } = useChannelsContext();
   const currentUserId = useUserId();
 
   return createMemo(() => {
     const currentUser = currentUserId();
-    if (!currentUser) return new Map<string, LastInteractionTimestamp>();
+    if (!currentUser) return new Map<string, Date>();
 
     const allChannels = channels();
-    const map = new Map<string, LastInteractionTimestamp>();
+    const map = new Map<string, Date>();
 
     for (const channel of allChannels) {
       if (channel.channel_type !== ChannelTypeEnum.DirectMessage) continue;
