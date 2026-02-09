@@ -187,8 +187,7 @@ function AttachmentItem(props: AttachmentItemProps) {
   );
 }
 
-const formatTimestamp = (timestamp: string) => {
-  const date = new Date(timestamp);
+const formatTimestamp = (date: Date) => {
   const datePart = date
     .toLocaleDateString('en-US', {
       month: 'numeric',
