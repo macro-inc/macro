@@ -7,11 +7,13 @@ import type {
   DocumentMentionMetadata,
   InviteToTeamMetadata,
   ItemSharedMetadata,
-  ItemSharedOrganizationMetadata,
   NewEmailMetadata,
+} from '@service-notification/generated/schemas';
+import type {
+  ItemSharedOrganizationMetadata,
   NotificationEventType,
   TaskAssignedMetadata,
-} from '@service-notification/generated/schemas';
+} from '@service-notification/types';
 
 export interface NotificationMetadataByType {
   [NotificationEventType.item_shared_user]: ItemSharedMetadata;

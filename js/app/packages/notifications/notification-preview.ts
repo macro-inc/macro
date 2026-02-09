@@ -1,6 +1,6 @@
 import type { BlockName } from '@core/block';
 import { type EntityType, NotificationType } from '@core/types';
-import type { NotificationEventType } from '@service-notification/generated/schemas';
+import type { NotificationEventType } from '@service-notification/types';
 import { getMetadata, type TypedNotification } from './notification-metadata';
 
 export type NotificationData = {
