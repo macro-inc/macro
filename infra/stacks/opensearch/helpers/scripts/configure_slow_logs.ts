@@ -39,9 +39,18 @@ async function configureSlowLogs() {
     const firstIndex = Object.keys(settings.body)[0];
     if (firstIndex) {
       const indexSettings = settings.body[firstIndex].settings.index;
-      console.log('Search query warn threshold:', indexSettings?.search?.slowlog?.threshold?.query?.warn);
-      console.log('Search fetch warn threshold:', indexSettings?.search?.slowlog?.threshold?.fetch?.warn);
-      console.log('Indexing warn threshold:', indexSettings?.indexing?.slowlog?.threshold?.index?.warn);
+      console.log(
+        'Search query warn threshold:',
+        indexSettings?.search?.slowlog?.threshold?.query?.warn
+      );
+      console.log(
+        'Search fetch warn threshold:',
+        indexSettings?.search?.slowlog?.threshold?.fetch?.warn
+      );
+      console.log(
+        'Indexing warn threshold:',
+        indexSettings?.indexing?.slowlog?.threshold?.index?.warn
+      );
     }
 
     console.log('\n📝 Slow queries will now be logged to CloudWatch:');
