@@ -528,7 +528,7 @@ export const MOCK_SEARCH_CHANNEL: WithSearch<ChannelEntity> = {
         id: 'msg_1',
         content: 'Has anyone seen the **budget report**?',
         senderId: MOCK_USER_IDS.teamMember1,
-        sentAt: MOCK_TIMESTAMPS.today.getTime(),
+        sentAt: MOCK_TIMESTAMPS.today,
         location: {
           type: 'channel',
           messageId: 'msg_1',
@@ -539,7 +539,7 @@ export const MOCK_SEARCH_CHANNEL: WithSearch<ChannelEntity> = {
         id: 'msg_2',
         content: 'I uploaded it to the **shared drive**',
         senderId: MOCK_USER_IDS.teamMember2,
-        sentAt: MOCK_TIMESTAMPS.today.getTime(),
+        sentAt: MOCK_TIMESTAMPS.today,
         location: {
           type: 'channel',
           messageId: 'msg_2',
@@ -560,7 +560,7 @@ export const MOCK_SEARCH_EMAIL: WithSearch<EmailEntity> = {
         content: 'The **design mockups** look great!',
         sender: 'Diana Miller',
         senderId: 'diana@example.com',
-        sentAt: MOCK_TIMESTAMPS.yesterday.getTime(),
+        sentAt: MOCK_TIMESTAMPS.yesterday,
         location: {
           type: 'email',
           messageId: 'email_msg_1',
@@ -571,7 +571,7 @@ export const MOCK_SEARCH_EMAIL: WithSearch<EmailEntity> = {
         content: 'I agree, but we should adjust the **color scheme**',
         sender: 'Eve Wilson',
         senderId: 'eve@example.com',
-        sentAt: MOCK_TIMESTAMPS.today.getTime(),
+        sentAt: MOCK_TIMESTAMPS.today,
         location: {
           type: 'email',
           messageId: 'email_msg_2',

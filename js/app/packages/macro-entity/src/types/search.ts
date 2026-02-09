@@ -35,7 +35,7 @@ export type ChannelContentHitData = {
   id: string;
   content: string;
   senderId: string;
-  sentAt: number;
+  sentAt: Date;
   location: ChannelMessageHighlightLocation;
 };
 
@@ -62,7 +62,7 @@ export type EmailContentHitData = {
   content: string;
   sender: string;
   senderId: string;
-  sentAt: number;
+  sentAt: Date;
   location: EmailMessageHighlightLocation;
 };
 
