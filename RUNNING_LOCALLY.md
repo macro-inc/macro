@@ -17,7 +17,6 @@ run:
 ```bash
 just run_dbs
 just init_local_dbs
-just infra/stacks/fusionauth-instance/setup
 ```
 
 - Export the **SOPS_KMS_ARN** (you can skip if you use nix-shell)
