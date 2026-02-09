@@ -59,36 +59,35 @@ export function validatePersistedEntry(
  * to the cache. Validates the entry and guards against race conditions where
  * a fresh fetch resolves before the IDB read completes.
  */
-function handleRestore(
+async function handleRestore(
   queryClient: QueryClientLike,
   scope: PersistScope,
   query: Query
-): void {
+): Promise<void> {
   const state = queryClient.getQueryState(query.queryKey);
   if (state && state.status === 'success') return;
 
-  scope.store
-    .get(query.queryHash)
-    .then((entry) => {
-      if (!entry) return;
+  let entry: PersistedQueryEntry | undefined;
+  try {
+    entry = await scope.store.get(query.queryHash);
+  } catch {
+    console.error('[query] IDB persistence read failed');
+    return;
+  }
 
-      if (
-        validatePersistedEntry(entry, scope.buster, scope.maxAgeMs) !== 'valid'
-      ) {
-        scope.store.remove(query.queryHash);
-        return;
-      }
+  if (!entry) return;
 
-      const current = queryClient.getQueryState(query.queryKey);
-      if (current && current.status === 'success') return;
+  if (validatePersistedEntry(entry, scope.buster, scope.maxAgeMs) !== 'valid') {
+    scope.store.remove(query.queryHash);
+    return;
+  }
 
-      queryClient.setQueryData(query.queryKey, entry.data, {
-        updatedAt: entry.dataUpdatedAt,
-      });
-    })
-    .catch(() => {
-      console.error('[query] IDB persistence read failed');
-    });
+  const current = queryClient.getQueryState(query.queryKey);
+  if (current && current.status === 'success') return;
+
+  queryClient.setQueryData(query.queryKey, entry.data, {
+    updatedAt: entry.dataUpdatedAt,
+  });
 }
 
 /**
