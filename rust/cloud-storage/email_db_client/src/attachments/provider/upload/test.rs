@@ -1,5 +1,4 @@
 use super::*;
-use anyhow::__private::not;
 use anyhow::Result;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::{Pool, Postgres};
