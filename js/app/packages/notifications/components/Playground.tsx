@@ -11,17 +11,12 @@ import {
   For,
   Show,
 } from 'solid-js';
-import { tryToTypedNotification } from '../notification-metadata';
 import {
   maybeHandlePlatformNotification,
   type PlatformNotificationData,
   toPlatformNotificationData,
 } from '../notification-platform';
-import {
-  extractNotificationData,
-  NOTIFICATION_LABEL_BY_TYPE,
-  type NotificationData,
-} from '../notification-preview';
+import { NOTIFICATION_LABEL_BY_TYPE } from '../notification-preview';
 import {
   DefaultDocumentNameResolver,
   DefaultUserNameResolver,
@@ -51,14 +46,8 @@ function groupNotificationsByType(
   return groups;
 }
 
-function extractTypedNotificationData(
-  notification: UnifiedNotification
-): NotificationData | null {
-  const typed = tryToTypedNotification(notification);
-  if (!typed) return null;
-  const data = extractNotificationData(typed);
-  if (data === 'no_extractor' || data === 'no_extracted_data') return null;
-  return data;
+function hasNotificationMetadata(notification: UnifiedNotification): boolean {
+  return notification.notificationMetadata != null;
 }
 
 function TypeButton(props: {
@@ -113,7 +102,7 @@ function NotificationItem(props: {
   isSelected: boolean;
   onSelect: () => void;
 }) {
-  const data = () => extractTypedNotificationData(props.notification);
+  const hasData = () => hasNotificationMetadata(props.notification);
   const isUnread = () => !props.notification.viewedAt;
 
   return (
@@ -132,7 +121,7 @@ function NotificationItem(props: {
           }`}
         />
         <div class="flex-1 min-w-0">
-          <Show when={data()}>
+          <Show when={hasData()}>
             <NotificationRenderer
               notification={props.notification}
               mode="preview"
@@ -148,16 +137,13 @@ function NotificationItem(props: {
 }
 
 function BrowserFormat(props: { notification: UnifiedNotification }) {
-  const data = createMemo(() =>
-    extractTypedNotificationData(props.notification)
-  );
+  const hasData = () => hasNotificationMetadata(props.notification);
   const [browserNotif, setBrowserNotif] = createSignal<any>(null);
 
   createEffect(() => {
-    const notifData = data();
-    if (notifData) {
+    if (hasData()) {
       toPlatformNotificationData(
-        notifData,
+        props.notification,
         DefaultUserNameResolver,
         DefaultDocumentNameResolver
       ).then(setBrowserNotif);
@@ -168,7 +154,7 @@ function BrowserFormat(props: { notification: UnifiedNotification }) {
 
   return (
     <Show
-      when={data()}
+      when={hasData()}
       fallback={
         <div class="text-ink-muted text-sm italic">No extractable data</div>
       }

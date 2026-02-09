@@ -41,7 +41,13 @@ import {
   type ProjectEntity,
 } from '@entity';
 import { queryKeys, useQueryClient } from '@macro-entity';
-import { createEffectOnEntityTypeNotification } from '@notifications';
+import {
+  createEffectOnEntityTypeNotification,
+  isChannelMention,
+  isChannelMessageReply,
+  isChannelMessageSend,
+  type UnifiedNotification,
+} from '@notifications';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui/utils/classname';
 import {

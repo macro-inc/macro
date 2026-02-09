@@ -20,7 +20,6 @@ import {
 import { whenSettled } from '@core/util/whenSettled';
 import {
   createEffectOnEntityTypeNotification,
-  getMetadata,
   isNewEmail,
 } from '@notifications';
 import {
@@ -174,8 +173,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     'email',
     (notification) => {
       if (!isNewEmail(notification)) return;
-      const metadata = getMetadata(notification);
-      const notificationThreadId = metadata.threadId;
+      const notificationThreadId = notification.notificationMetadata.content.threadId;
       if (notificationThreadId === threadQuery.data?.db_id) {
         threadQuery.refetch();
       }

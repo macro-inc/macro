@@ -4,12 +4,10 @@ import {
   isChannelMessageSend,
   isDocumentMention,
   isNewEmail,
-  getMetadata,
-  type UnifiedNotificationWithMetadata,
-  type TypedNotification,
 } from '@notifications/notification-metadata';
 import type { NotificationStack } from '@notifications/notification-stacking';
 import type { Notification } from '../types/notification';
+import type { UnifiedNotification } from '@notifications';
 import { match } from 'ts-pattern';
 
 /**
@@ -33,7 +31,7 @@ export function filterNotDoneNotifications(
 }
 
 export function extractNotificationSenderIds(
-  notifications: TypedNotification[],
+  notifications: UnifiedNotification[],
   maxCount: number = 3,
   reverse = false
 ): string[] {
@@ -42,14 +40,8 @@ export function extractNotificationSenderIds(
   for (const notification of notifications) {
     if (senderIds.size >= maxCount) break;
 
-    const metadata = notification.notificationMetadata;
-    if (
-      metadata &&
-      'senderId' in metadata &&
-      typeof metadata.senderId === 'string' &&
-      metadata.senderId
-    ) {
-      senderIds.add(metadata.senderId);
+    if (notification.senderId) {
+      senderIds.add(notification.senderId);
     }
   }
 
@@ -78,31 +70,26 @@ export function getNotificationActionText(notification: Notification): string {
 }
 
 export function extractMessageContent(notification: Notification): string {
-  const typed = notification as UnifiedNotificationWithMetadata;
+  const n = notification as UnifiedNotification;
 
-  if (isChannelMention(typed)) {
-    const metadata = getMetadata(typed);
-    return metadata.messageContent || '';
+  if (isChannelMention(n)) {
+    return n.notificationMetadata.content.messageContent || '';
   }
 
-  if (isChannelMessageSend(typed)) {
-    const metadata = getMetadata(typed);
-    return metadata.messageContent || '';
+  if (isChannelMessageSend(n)) {
+    return n.notificationMetadata.content.messageContent || '';
   }
 
-  if (isChannelMessageReply(typed)) {
-    const metadata = getMetadata(typed);
-    return metadata.messageContent || '';
+  if (isChannelMessageReply(n)) {
+    return n.notificationMetadata.content.messageContent || '';
   }
 
-  if (isDocumentMention(typed)) {
-    const metadata = getMetadata(typed);
-    return metadata.documentName || '';
+  if (isDocumentMention(n)) {
+    return n.notificationMetadata.content.documentName || '';
   }
 
-  if (isNewEmail(typed)) {
-    const metadata = getMetadata(typed);
-    return metadata.subject || '';
+  if (isNewEmail(n)) {
+    return n.notificationMetadata.content.subject || '';
   }
 
   return '';
