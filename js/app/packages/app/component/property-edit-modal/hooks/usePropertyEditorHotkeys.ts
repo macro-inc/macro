@@ -1,5 +1,4 @@
 import { registerHotkey } from 'core/hotkey/hotkeys';
-import type { Accessor } from 'solid-js';
 import { openPropertyEditor } from '../state/propertyEditor';
 import type {
   Property,
