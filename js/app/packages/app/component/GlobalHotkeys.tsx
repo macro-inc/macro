@@ -28,8 +28,7 @@ import { useSplitLayout } from './split-layout/layout';
 export default function GlobalShortcuts() {
   const [_, setBigChatOpen] = useBigChat();
 
-  const canFit = () =>
-    globalSplitManager()?.resizeContext()?.canFit({ minSize: 400 }) ?? true;
+  const canFit = () => globalSplitManager()?.canAppendSplit() ?? true;
   const { toggleSettings } = useSettingsState();
 
   const handleCommandMenu = () => {
@@ -106,7 +105,7 @@ export default function GlobalShortcuts() {
     runWithInputFocused: true,
   });
 
-  const { insertSplit } = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
   registerHotkey({
     hotkeyToken: TOKENS.global.createNewSplit,
     hotkey: 'cmd+\\',
@@ -114,7 +113,13 @@ export default function GlobalShortcuts() {
     description: 'Create new split',
     condition: canFit,
     keyDownHandler: () => {
-      insertSplit({ type: 'component', id: 'unified-list' }, 'hotkey');
+      openWithSplit(
+        { type: 'component', id: 'unified-list' },
+        {
+          referredFrom: 'hotkey',
+          allowDuplicate: true,
+        }
+      );
       return true;
     },
     runWithInputFocused: true,
@@ -126,7 +131,13 @@ export default function GlobalShortcuts() {
     description: 'Create new split',
     condition: canFit,
     keyDownHandler: () => {
-      insertSplit({ type: 'component', id: 'unified-list' }, 'hotkey');
+      openWithSplit(
+        { type: 'component', id: 'unified-list' },
+        {
+          referredFrom: 'hotkey',
+          allowDuplicate: true,
+        }
+      );
       return true;
     },
   });
