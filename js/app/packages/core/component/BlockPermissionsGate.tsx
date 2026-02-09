@@ -1,20 +1,29 @@
 import { useEntityPermissions } from '@queries/entity/permissions';
 import { hasEntityAccess } from '@queries/entity/permissionUtils';
 import { MaybeResultError } from '@core/util/maybeResult';
-import { type FlowProps, Match, Switch } from 'solid-js';
-import { LoadingPanel } from './LoadingSpinner';
+import { type FlowProps, Show, Suspense } from 'solid-js';
+import { ErrorBoundary } from 'solid-js/web';
+import { LoadingBlock } from './LoadingBlock';
 import Gone from './AccessErrorViews/Gone';
 import NotFound from './AccessErrorViews/NotFound';
 import Unauthorized from './AccessErrorViews/Unauthorized';
 
-function getErrorCode(error: Error | null): string | null {
-  if (error instanceof MaybeResultError) {
-    return error.errors[0]?.code ?? null;
+function PermissionErrorFallback(props: { error: Error }) {
+  if (props.error instanceof MaybeResultError) {
+    const code = props.error.errors[0]?.code;
+    if (code === 'UNAUTHORIZED') return <Unauthorized />;
+    if (code === 'NOT_FOUND') return <NotFound />;
+    if (code === 'GONE') return <Gone />;
   }
-  return null;
+
+  return (
+    <div class="flex flex-col items-center justify-center h-full text-lg">
+      Sorry, an unexpected error has occurred.
+    </div>
+  );
 }
 
-export function BlockPermissionsGate(
+function PermissionGateInner(
   props: FlowProps<{ entityType: string; entityId: string }>
 ) {
   const query = useEntityPermissions(
@@ -22,34 +31,21 @@ export function BlockPermissionsGate(
     () => props.entityId
   );
 
-  const errorCode = () => getErrorCode(query.error);
-
   return (
-    <Switch
-      fallback={
-        <div class="flex flex-col items-center justify-center h-full text-lg">
-          Sorry, an unexpected error has occurred.
-        </div>
-      }
-    >
-      <Match when={query.isLoading}>
-        <LoadingPanel blockId={props.entityId} />
-      </Match>
-      <Match when={errorCode() === 'UNAUTHORIZED'}>
-        <Unauthorized />
-      </Match>
-      <Match when={errorCode() === 'NOT_FOUND'}>
-        <NotFound />
-      </Match>
-      <Match when={errorCode() === 'GONE'}>
-        <Gone />
-      </Match>
-      <Match when={query.data && !hasEntityAccess(query.data)}>
-        <Unauthorized />
-      </Match>
-      <Match when={query.data && hasEntityAccess(query.data)}>
-        {props.children}
-      </Match>
-    </Switch>
+    <Show when={query.data && hasEntityAccess(query.data)} fallback={<Unauthorized />}>
+      {props.children}
+    </Show>
+  );
+}
+
+export function BlockPermissionsGate(
+  props: FlowProps<{ entityType: string; entityId: string }>
+) {
+  return (
+    <ErrorBoundary fallback={(error) => <PermissionErrorFallback error={error} />}>
+      <Suspense fallback={<LoadingBlock />}>
+        <PermissionGateInner {...props} />
+      </Suspense>
+    </ErrorBoundary>
   );
 }
