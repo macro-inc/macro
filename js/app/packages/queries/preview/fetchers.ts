@@ -97,7 +97,7 @@ async function fetchDocumentPreviews(ids: string[]): Promise<PreviewItem[]> {
           name: doc.document_name,
           fileType: doc.file_type as FileType,
           owner: doc.owner,
-          updatedAt: doc.updated_at ?? undefined,
+          updatedAt: doc.updated_at,
           subType:
             doc.sub_type === null || doc.sub_type === undefined
               ? undefined
@@ -142,7 +142,7 @@ async function fetchChatPreviews(ids: string[]): Promise<PreviewItem[]> {
           loading: false,
           name: chat.chat_name,
           owner: chat.owner,
-          updatedAt: chat.updated_at ?? undefined,
+          updatedAt: chat.updated_at,
         };
       case 'no_access':
       case 'does_not_exist':
