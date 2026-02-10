@@ -4,6 +4,8 @@ pub mod user;
 
 use clap::Subcommand;
 
+use crate::config::SeedCliContext;
+
 /// Top-level entity subcommands for the seed CLI.
 #[derive(Debug, Subcommand)]
 pub enum EntityCommand {
@@ -13,9 +15,9 @@ pub enum EntityCommand {
 
 impl EntityCommand {
     /// Execute the entity command.
-    pub async fn execute(self) -> anyhow::Result<()> {
+    pub async fn execute(self, ctx: SeedCliContext) -> anyhow::Result<()> {
         match self {
-            EntityCommand::User(args) => args.execute().await,
+            EntityCommand::User(args) => args.execute(ctx).await,
         }
     }
 }

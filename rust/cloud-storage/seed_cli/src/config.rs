@@ -1,5 +1,6 @@
 use macro_env_var::env_var;
-use sqlx::PgPool;
+
+use crate::service::{auth::Auth, db::Db};
 
 env_var! {
     pub struct EnvVars {
@@ -15,12 +16,15 @@ env_var! {
         pub FusionauthClientId,
         /// fusionauth client secret key
         pub FusionauthClientSecretKey,
+        /// Fusionauth oauth redirect uri
+        pub FusionauthOauthRedirectUri,
     }
 }
 
 /// The context containing everything we need to use in the CLI
-#[derive(Clone)]
 pub struct SeedCliContext {
     /// Database connection to macrodb
-    pub db: PgPool,
+    pub db: Db,
+    /// Fusionauth client
+    pub fusionauth_client: Auth,
 }

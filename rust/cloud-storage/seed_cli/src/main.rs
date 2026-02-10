@@ -3,12 +3,15 @@
 
 mod config;
 mod entity;
+mod service;
 
 use anyhow::Context;
 use clap::Parser;
 use entity::EntityCommand;
+use fusionauth::FusionAuthClient;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
+use service::{auth::Auth, db::Db};
 use sqlx::postgres::PgPoolOptions;
 
 use crate::config::{EnvVars, SeedCliContext};
@@ -36,9 +39,25 @@ pub async fn main() -> anyhow::Result<()> {
         .connect(&env_vars.database_url)
         .await
         .context("could not connect to db")?;
+    tracing::trace!("initialized db");
 
-    let _context = SeedCliContext { db };
+    let fusionauth_client = FusionAuthClient::new(
+        env_vars.fusionauth_tenant_id.to_string(),
+        env_vars.fusionauth_api_key_secret_key.to_string(),
+        env_vars.fusionauth_client_id.to_string(),
+        env_vars.fusionauth_client_secret_key.to_string(),
+        env_vars.fusionauth_base_url.to_string(),
+        env_vars.fusionauth_oauth_redirect_uri.to_string(),
+        "".to_string(), // NOTE: Not needed. Google Client id
+        "".to_string(), // NOTE: Not needed. Google client secret
+    );
+    tracing::trace!("initialized fusionauth client");
+
+    let context = SeedCliContext {
+        db: Db::new(db),
+        fusionauth_client: Auth::new(fusionauth_client),
+    };
 
     let cli = Cli::parse();
-    cli.command.execute().await
+    cli.command.execute(context).await
 }

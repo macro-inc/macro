@@ -7941,10 +7941,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "fusionauth",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
  "macro_user_id",
+ "mockall",
  "reqwest",
  "serde",
  "serde_json",

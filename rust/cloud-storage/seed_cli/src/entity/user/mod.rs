@@ -3,7 +3,11 @@
 #[cfg(test)]
 mod test;
 
+use std::borrow::Cow;
+
 use clap::{Args, Subcommand};
+
+use crate::config::SeedCliContext;
 
 /// Arguments for the `user` entity subcommand.
 #[derive(Debug, Args)]
@@ -55,41 +59,53 @@ pub struct DeleteArgs {
 pub struct ReadArgs {
     /// The ID of the user to read.
     #[arg(long)]
-    pub id: String,
+    pub id: Option<String>,
 }
 
 impl UserArgs {
     /// Execute the user command.
-    pub async fn execute(self) -> anyhow::Result<()> {
+    pub async fn execute(self, ctx: SeedCliContext) -> anyhow::Result<()> {
         match self.command {
-            UserCommand::Create(args) => create(args).await,
-            UserCommand::BulkCreate(args) => bulk_create(args).await,
-            UserCommand::Delete(args) => delete(args).await,
-            UserCommand::Read(args) => read(args).await,
+            UserCommand::Create(args) => create(args, ctx).await,
+            UserCommand::BulkCreate(args) => bulk_create(args, ctx).await,
+            UserCommand::Delete(args) => delete(args, ctx).await,
+            UserCommand::Read(args) => read(args, ctx).await,
         }
     }
 }
 
-#[tracing::instrument(err)]
-async fn create(args: CreateArgs) -> anyhow::Result<()> {
+#[tracing::instrument(skip(ctx), err)]
+async fn create(args: CreateArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
     tracing::info!("creating user");
-    todo!()
+    let user_id = ctx
+        .fusionauth_client
+        .create_user(fusionauth::user::create::User {
+            email: Cow::Borrowed(&args.email),
+            username: Some(Cow::Borrowed(&args.email)),
+            // TODO: do we want to bother with random generated passwords?
+            password: "hardcodeLocalPassword123!".into(),
+        })
+        .await?;
+
+    println!("Created FusionAuth user with id {user_id}");
+
+    Ok(())
 }
 
-#[tracing::instrument(err)]
-async fn bulk_create(args: BulkCreateArgs) -> anyhow::Result<()> {
+#[tracing::instrument(skip(ctx), err)]
+async fn bulk_create(args: BulkCreateArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
     tracing::info!("bulk creating users");
     todo!()
 }
 
-#[tracing::instrument(err)]
-async fn delete(args: DeleteArgs) -> anyhow::Result<()> {
+#[tracing::instrument(skip(ctx), err)]
+async fn delete(args: DeleteArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
     tracing::info!("deleting user");
     todo!()
 }
 
-#[tracing::instrument(err)]
-async fn read(args: ReadArgs) -> anyhow::Result<()> {
+#[tracing::instrument(skip(ctx), err)]
+async fn read(args: ReadArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
     tracing::info!("reading user");
     todo!()
 }

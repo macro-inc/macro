@@ -17,3 +17,5 @@ macro_env_var = { path = "../macro_env_var" }
 macro_env = { path = "../macro_env" }
 sqlx = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
+fusionauth = { path = "../fusionauth" }
+mockall = { workspace = true }
