@@ -580,16 +580,19 @@ export const FilterButton: Component<FilterButtonProps> = (props) => {
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
-          {ENABLE_ANIMATED_ICONS && props.animatedIcon ? (
-            <div class="size-3.5 overflow-visible">
-              <Dynamic
-                component={props.animatedIcon}
-                triggerAnimation={isHovered() || isActive()}
-              />
-            </div>
-          ) : (
-            <Dynamic component={props.icon} class="size-3.5" />
-          )}
+          <Show
+            when={ENABLE_ANIMATED_ICONS && props.animatedIcon}
+            fallback={<Dynamic component={props.icon} class="size-3.5" />}
+          >
+            {(Icon) => (
+              <div class="size-3.5 overflow-visible">
+                <Dynamic
+                  component={Icon()}
+                  triggerAnimation={isHovered() || isActive()}
+                />
+              </div>
+            )}
+          </Show>
           <span class="leading-none">
             <ShortcutLabel label={props.label} shortcut={props.shortcut} />
           </span>

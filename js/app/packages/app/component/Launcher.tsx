@@ -410,11 +410,14 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
           'scale-110': props.focused,
         }}
       >
-        {ENABLE_ANIMATED_ICONS && AnimatedIcon ? (
-          <AnimatedIcon triggerAnimation={props.focused} />
-        ) : (
-          <Dynamic component={StaticIcon} />
-        )}
+        <Show
+          when={ENABLE_ANIMATED_ICONS && AnimatedIcon}
+          fallback={<Dynamic component={StaticIcon} />}
+        >
+          {(Icon) => (
+            <Dynamic component={Icon()} triggerAnimation={props.focused} />
+          )}
+        </Show>
       </div>
     </button>
   );
