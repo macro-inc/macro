@@ -167,8 +167,8 @@ export function TaskPreviewRow(props: TaskPreviewRowProps) {
         isMultiSelect: definition.is_multi_select,
         owner: definition.owner,
         specificEntityType: definition.specific_entity_type ?? null,
-        updatedAt: new Date(),
-        createdAt: new Date(),
+        updatedAt: new Date(0),
+        createdAt: new Date(0),
         valueType: definition.data_type,
         value: extractPropertyValue(
           definition,
