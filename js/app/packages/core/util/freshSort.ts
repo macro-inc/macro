@@ -7,6 +7,10 @@ import type { FilterResult } from 'fuzzy';
 import fuzzy from 'fuzzy';
 import { differenceInMilliseconds } from 'date-fns';
 import { fuzzyScoreCommaSpaceSeparated } from './fuzzy';
+import {
+  type ParsedDuration,
+  parsedDurationToMilliseconds,
+} from './dateSearch/dateParser';
 
 type BoostFn<T> = (item: T) => number;
 
@@ -27,8 +31,8 @@ export interface FreshSortConfig<T> {
   brevityWeight?: number;
   /** Time decay factor. Higher values make older items decay faster. Default: 0.5 */
   timeDecayFactor?: number;
-  /** Maximum age in milliseconds to consider for scoring. Items older than this get minimum time score. Default: 30 days */
-  maxAgeMs?: number;
+  /** Maximum age to consider for scoring. Items older than this get minimum time score. Default: 30 days */
+  maxAge?: ParsedDuration;
   /** Minimum fuzzy score threshold (0-1). Items below this are heavily penalized. Default: 0.1 */
   minFuzzyThreshold?: number;
   /** Use viewedAt instead of updatedAt for time scoring. Default: false */
@@ -63,7 +67,7 @@ const DEFAULT_CONFIG = {
   timeWeight: 0.3,
   brevityWeight: 0.0,
   timeDecayFactor: 0.5,
-  maxAgeMs: 30 * 24 * 60 * 60 * 1000, // 30 days
+  maxAge: { value: 30, unit: 'd' } as ParsedDuration,
   minFuzzyThreshold: 0.1,
   useViewedAt: false,
   channelBoost: 1.0,
@@ -89,14 +93,15 @@ function calculateTimeScore(
   if (!timestamp) return 0;
 
   const now = new Date();
-  const age = Math.max(0, differenceInMilliseconds(now, timestamp));
+  const ageMs = Math.max(0, differenceInMilliseconds(now, timestamp));
+  const maxAgeMs = parsedDurationToMilliseconds(config.maxAge);
 
-  if (age >= config.maxAgeMs) {
+  if (ageMs >= maxAgeMs) {
     return 0;
   }
 
   // exponential decay: e^(-decay * normalizedAge)
-  const normalizedAge = age / config.maxAgeMs;
+  const normalizedAge = ageMs / maxAgeMs;
   return Math.exp(-config.timeDecayFactor * normalizedAge);
 }
 

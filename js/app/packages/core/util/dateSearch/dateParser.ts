@@ -41,6 +41,24 @@ export function parseDurationString(input: string): ParsedDuration | null {
 }
 
 /**
+ * Converts a parsed duration to milliseconds
+ */
+export function parsedDurationToMilliseconds(duration: ParsedDuration): number {
+  const value = duration.value;
+  const unit = duration.unit;
+
+  return match(unit)
+    .with('s', () => value * 1000)
+    .with('min', () => value * 60 * 1000)
+    .with('h', () => value * 60 * 60 * 1000)
+    .with('d', () => value * 24 * 60 * 60 * 1000)
+    .with('w', () => value * 7 * 24 * 60 * 60 * 1000)
+    .with('m', () => value * 30 * 24 * 60 * 60 * 1000) // Approximate: 30 days
+    .with('y', () => value * 365 * 24 * 60 * 60 * 1000) // Approximate: 365 days
+    .otherwise(() => 0);
+}
+
+/**
  * Converts a parsed duration to a Date object relative to a base date
  */
 export function applyDurationToDate(

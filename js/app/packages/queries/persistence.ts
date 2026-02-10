@@ -4,6 +4,10 @@ import {
 } from '@tanstack/solid-query-persist-client';
 import type { Persister } from '@tanstack/solid-query-persist-client';
 import type { QueryKey } from '@tanstack/query-core';
+import {
+  type ParsedDuration,
+  parsedDurationToMilliseconds,
+} from '@core/util/dateSearch/dateParser';
 
 type Query = NonNullable<
   PersistQueryClientOptions['dehydrateOptions']
@@ -24,7 +28,7 @@ type QueryClientLike = {
 
 export type PersistScope = Readonly<{
   persister: Persister;
-  maxAgeMs: number;
+  maxAge: ParsedDuration;
   shouldDehydrateQuery: (query: Query) => boolean;
 }>;
 
@@ -61,7 +65,7 @@ export function setupQueryPersistence(
       persistQueryClient({
         queryClient: params.queryClient as PersistQueryClient,
         persister: scope.persister,
-        maxAge: scope.maxAgeMs,
+        maxAge: parsedDurationToMilliseconds(scope.maxAge),
         buster: params.buster,
         dehydrateOptions: {
           shouldDehydrateQuery: (q) =>
