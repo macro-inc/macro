@@ -54,6 +54,21 @@ describe('Checkbox Parsing', () => {
       expect(extractDateMention('No date here')).toBeNull();
     });
 
+    it('should return null when date is not a string', () => {
+      const text =
+        '<m-date-mention>{"date":2024-03-15T00:00:00Z,"displayFormat":"March 15, 2024"}</m-date-mention>';
+      const result = extractDateMention(text);
+      expect(result).toBeNull();
+    });
+
+    it('should return null when date is not a valid date', () => {
+      const text =
+        '<m-date-mention>{"date":"2024-16-15T00:00:00Z","displayFormat":"March 15, 2024"}</m-date-mention>';
+      const result = extractDateMention(text);
+      console.log('result 4', result);
+      expect(result).toBeNull();
+    });
+
     it('should return first date when multiple present', () => {
       const text =
         '<m-date-mention>{"date":"2024-01-01","displayFormat":"Jan 1"}</m-date-mention> to <m-date-mention>{"date":"2024-12-31","displayFormat":"Dec 31"}</m-date-mention>';

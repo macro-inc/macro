@@ -167,8 +167,8 @@ describe('notification mutations', () => {
       await mutatePromise;
 
       const notifications = getNotificationsFromCache();
-      expect(notifications[0].viewedAt).toBeGreaterThan(0);
-      expect(notifications[1].viewedAt).toBe(0);
+      expect(notifications[0].viewedAt).toBeInstanceOf(Date);
+      expect(notifications[1].viewedAt).toBe(null);
 
       cleanup();
     });
@@ -198,7 +198,7 @@ describe('notification mutations', () => {
       await new Promise((r) => setTimeout(r, 10));
 
       const notifications = getNotificationsFromCache();
-      expect(notifications[0].viewedAt).toBe(0);
+      expect(notifications[0].viewedAt).toBe(null);
 
       cleanup();
     });
@@ -226,8 +226,8 @@ describe('notification mutations', () => {
       await mutatePromise;
 
       const notifications = getNotificationsFromCache();
-      expect(notifications[0].viewedAt).toBe(0); // n1 unchanged
-      expect(notifications[1].viewedAt).toBeGreaterThan(0); // n2 updated
+      expect(notifications[0].viewedAt).toBe(null); // n1 unchanged
+      expect(notifications[1].viewedAt).toBeInstanceOf(Date); // n2 updated
 
       cleanup();
     });

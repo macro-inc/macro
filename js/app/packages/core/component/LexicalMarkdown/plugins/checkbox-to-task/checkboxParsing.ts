@@ -6,7 +6,7 @@ import {
 } from '@lexical-core/utils/parsers';
 import { $elementNodeToMarkdown } from '../../utils';
 import type { ParsedCheckbox } from './types';
-import { isDate } from 'date-fns';
+import { isValid } from 'date-fns';
 
 // Patterns for extracting data from mentions (not for replacement)
 const USER_MENTION_PATTERN = /<m-user-mention>(.*?)<\/m-user-mention>/;
@@ -43,11 +43,11 @@ export function extractDateMention(markdownText: string): Date | null {
 
   try {
     const data = JSON.parse(match[1]);
-    const maybeIsoString = data.date ?? null;
-    if (isDate(maybeIsoString)) {
-      return maybeIsoString;
-    }
-    return null;
+    const maybeIsoString = data.date;
+    if (!maybeIsoString) return null;
+    const date = new Date(maybeIsoString);
+    if (!isValid(date)) return null;
+    return date;
   } catch {
     return null;
   }
