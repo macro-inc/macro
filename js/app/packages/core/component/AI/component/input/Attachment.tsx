@@ -1,4 +1,3 @@
-import { useSplitLayout } from '@app/component/split-layout/layout';
 import type { Attachment, AttachmentPreview } from '@core/component/AI/types';
 import {
   isDssImage,
@@ -6,25 +5,13 @@ import {
 } from '@core/component/AI/util/attachment';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { ImagePreview } from '@core/component/ImagePreview';
-import { useItemPreviewData } from '@core/component/ItemPreview';
+import { ItemPreview } from '@core/component/ItemPreview';
 import { toast } from '@core/component/Toast/Toast';
-import { itemToBlockName } from '@core/constant/allBlocks';
-import { openInNewSplitForMention } from '@core/util/openInNewSplit';
-import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import XIcon from '@icon/regular/x.svg';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
-import Envelope from '@phosphor-icons/core/regular/envelope.svg';
 import Close from '@phosphor-icons/core/regular/x.svg?component-solid';
 import type { Accessor } from 'solid-js';
-import {
-  createMemo,
-  createSignal,
-  For,
-  Match,
-  Show,
-  Suspense,
-  Switch,
-} from 'solid-js';
+import { createSignal, For, Match, Show, Suspense, Switch } from 'solid-js';
 
 type AttachmentListProps = {
   removeAttachment: (id: string) => void;
@@ -108,51 +95,6 @@ function ChatAttachment(props: {
   attachment: Attachment;
   onRemove: () => void;
 }) {
-  const { insertSplit, replaceOrInsertSplit } = useSplitLayout();
-
-  const name = createMemo(() => {
-    const attachment = props.attachment;
-    if (!attachment.metadata) return '';
-
-    if (attachment.metadata.type === 'email') {
-      return attachment.metadata.email_subject;
-    } else if (attachment.metadata.type === 'image') {
-      return attachment.metadata.image_name;
-    }
-
-    const entity = {
-      id: attachment.attachmentId,
-      type: attachment.metadata.type,
-    };
-    const { name } = useItemPreviewData(() => entity);
-    return name();
-  });
-
-  const block = createMemo(() => {
-    const attachment = props.attachment;
-    if (!attachment.metadata) return;
-    const type = attachment.metadata.type;
-    if (type === 'image') return;
-    return itemToBlockName({
-      type,
-      fileType:
-        type === 'document' ? attachment.metadata.document_type : undefined,
-    });
-  });
-
-  const onClick = (e: MouseEvent) => {
-    const attachment = props.attachment;
-    if (isImageAttachment(attachment)) return;
-    const block_ = block();
-    if (!block_) return;
-    const inNewSplit = openInNewSplitForMention(e.shiftKey, true);
-    const open = inNewSplit ? insertSplit : replaceOrInsertSplit;
-    open({
-      id: attachment.attachmentId,
-      type: block_,
-    })?.activate?.();
-  };
-  const navHandlers = useSplitNavigationHandler<HTMLDivElement>(onClick);
   return (
     <Switch>
       <Match when={isImageAttachment(props.attachment)}>
@@ -161,69 +103,33 @@ function ChatAttachment(props: {
           onRemove={props.onRemove}
         />
       </Match>
-      <Match when={true}>
-        <div
-          class={`
-      flex items-center p-1 space-x-2
-      hover:bg-hover hover-transition-bg cursor-default
-      text-sm
-      `}
-          {...navHandlers}
-        >
-          <Switch>
-            <Match
-              when={
-                props.attachment.metadata?.type === 'channel' &&
-                props.attachment.metadata
-              }
-            >
-              {(a) => (
-                <div class="flex gap-1 items-center">
-                  <EntityIcon targetType={a().channel_type || 'channel'} />
-                  <div> {name()}</div>
-                </div>
-              )}
-            </Match>
-            <Match
-              when={
-                props.attachment.metadata?.type === 'document' &&
-                props.attachment.metadata
-              }
-            >
-              {(a) => (
-                <div class="flex gap-1 items-center">
-                  <EntityIcon targetType={a().document_type} />
-                  <div>{name()}</div>
-                </div>
-              )}
-            </Match>
-            <Match when={props.attachment.attachmentType === 'email'}>
-              <div class="flex gap-1 items-center">
-                <Envelope class="w-4" />
-                <div> {name()}</div>
-              </div>
-            </Match>
-            <Match when={props.attachment.attachmentType === 'project'}>
-              <div class="flex gap-1 items-center">
-                <EntityIcon targetType="project" />
-                <div> {name()}</div>
-              </div>
-            </Match>
-          </Switch>
-          <div
-            class="hover:bg-hover hover-transition-bg rounded-md p-1 items-center flex"
-            onClick={(e) => {
-              e.stopPropagation();
-              props.onRemove?.();
-            }}
-          >
-            <Close
-              width={12}
-              height={12}
-              class="text-ink-muted group-hover:text-failure"
+      <Match
+        when={
+          props.attachment.metadata?.type !== 'image' &&
+          props.attachment.metadata
+        }
+      >
+        {(metadata) => (
+          <div class="flex items-center p-1 space-x-2 hover:bg-hover hover-transition-bg cursor-default text-sm">
+            <ItemPreview
+              id={props.attachment.attachmentId}
+              type={metadata().type}
             />
+            <div
+              class="hover:bg-hover hover-transition-bg rounded-md p-1 items-center flex"
+              onClick={(e) => {
+                e.stopPropagation();
+                props.onRemove?.();
+              }}
+            >
+              <Close
+                width={12}
+                height={12}
+                class="text-ink-muted group-hover:text-failure"
+              />
+            </div>
           </div>
-        </div>
+        )}
       </Match>
     </Switch>
   );
