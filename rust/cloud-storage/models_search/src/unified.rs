@@ -1,5 +1,5 @@
-use std::collections::HashSet;
 use chrono::{DateTime, Utc};
+use std::collections::HashSet;
 use uuid::Uuid;
 
 use crate::channel::ChannelSearchResponseItemWithMetadata;
@@ -145,14 +145,8 @@ impl UnifiedSearchResponseItem {
     /// Get the updated_at timestamp for each item
     pub fn updated_at(&self) -> Option<DateTime<Utc>> {
         match self {
-            Self::Document(item) => item
-                .metadata
-                .as_ref()
-                .map(|m| m.updated_at),
-            Self::Chat(item) => item
-                .metadata
-                .as_ref()
-                .map(|m| m.updated_at),
+            Self::Document(item) => item.metadata.as_ref().map(|m| m.updated_at),
+            Self::Chat(item) => item.metadata.as_ref().map(|m| m.updated_at),
             Self::Email(item) => Some(item.updated_at),
             Self::Channel(item) => {
                 // Get the max updated_at from channel_message_search_results
@@ -164,16 +158,9 @@ impl UnifiedSearchResponseItem {
                     .max();
 
                 // Use max from results, or fall back to metadata.updated_at
-                max_result_updated_at.or_else(|| {
-                    item.metadata
-                        .as_ref()
-                        .map(|m| m.updated_at)
-                })
+                max_result_updated_at.or_else(|| item.metadata.as_ref().map(|m| m.updated_at))
             }
-            Self::Project(item) => item
-                .metadata
-                .as_ref()
-                .map(|m| m.updated_at),
+            Self::Project(item) => item.metadata.as_ref().map(|m| m.updated_at),
         }
     }
 }
@@ -204,4 +191,5 @@ pub struct SimpleUnifiedSearchBaseResponse<T> {
     pub results: Vec<SimpleUnifiedSearchResponseBaseItem<T>>,
 }
 
-pub type SimpleUnifiedSearchResponse = SimpleUnifiedSearchBaseResponse<crate::HumanReadableTimestamp>;
+pub type SimpleUnifiedSearchResponse =
+    SimpleUnifiedSearchBaseResponse<crate::HumanReadableTimestamp>;
