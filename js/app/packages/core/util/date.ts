@@ -1,4 +1,10 @@
-import { differenceInWeeks, isToday, isYesterday } from 'date-fns';
+import {
+  compareAsc,
+  compareDesc,
+  differenceInWeeks,
+  isToday,
+  isYesterday,
+} from 'date-fns';
 import { tz } from '@date-fns/tz';
 
 const EPOCH_ZERO = new Date(0);
@@ -97,7 +103,7 @@ export const compareDateDesc = (
 ): number => {
   const dateA = a ?? EPOCH_ZERO;
   const dateB = b ?? EPOCH_ZERO;
-  return dateB.getTime() - dateA.getTime();
+  return compareDesc(dateA, dateB);
 };
 
 /**
@@ -111,5 +117,5 @@ export const compareDateAsc = (
 ): number => {
   const dateA = a ?? EPOCH_ZERO;
   const dateB = b ?? EPOCH_ZERO;
-  return dateA.getTime() - dateB.getTime();
+  return compareAsc(dateA, dateB);
 };
