@@ -227,6 +227,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
   useSoupNavigationHotkeys({
     scopeId: scopeId(),
     soup,
+    splitHandle: panel.handle,
     virtualizerHandle,
     previewPanelRef,
   });
