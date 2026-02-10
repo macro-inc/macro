@@ -142,19 +142,19 @@ export function signalFilter(entity: EntityData): boolean {
     case 'channel':
       return true;
     case 'chat':
-      return hasRecentlyViewed(entity);
+      return true;
     case 'document': {
       if (isTaskEntity(entity)) {
         const currentUserId = getCurrentUserId();
         return isSignalTask(entity as TaskEntityWithProperties, currentUserId);
       }
 
-      return hasRecentlyViewed(entity);
+      return true;
     }
     case 'email':
       return isSignalEmail(entity) || entity.isDraft;
     case 'project':
-      return hasRecentlyViewed(entity);
+      return true;
   }
 }
 
