@@ -120,8 +120,8 @@ const stateCache = new Map<
       filters: string[];
       sort: SystemSortOption[];
     };
-    virtualCache: CacheSnapshot;
-    scrollOffset: number;
+    virtualCache?: CacheSnapshot;
+    scrollOffset?: number;
   }
 >();
 
@@ -446,16 +446,14 @@ export const SoupViewList = (props: SoupViewListProps) => {
   onCleanup(() => {
     const virtualHandle = virtualizerHandle();
 
-    if (!virtualHandle) return;
-
     stateCache.set(getCacheKey(), {
       soup: {
         focus: soup.focus.id(),
         filters: soup.filters.activeIds(),
         sort: soup.sort.active().map((s) => s.id),
       },
-      virtualCache: virtualHandle.cache,
-      scrollOffset: virtualHandle.scrollOffset,
+      virtualCache: virtualHandle?.cache,
+      scrollOffset: virtualHandle?.scrollOffset,
     });
   });
 
@@ -473,12 +471,12 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
     soup.focus.set(cached.soup.focus);
     for (const id of cached.soup.filters) {
-      soup.filters.toggle(id);
+      soup.filters.activate(id);
     }
 
     soup.sort.setAll(cached.soup.sort);
 
-    handle?.scrollTo(cached.scrollOffset);
+    handle?.scrollTo(cached.scrollOffset ?? 0);
     registerFocusEffects(false);
   };
 
