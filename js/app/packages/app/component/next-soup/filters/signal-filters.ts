@@ -121,10 +121,10 @@ const getCurrentUserId = () => {
  *
  * Classification:
  * - Channels: Always signal (explicit membership)
- * - Chats: Signal if recently viewed
- * - Documents: Tasks always signal, others if recently viewed
+ * - Chats: Always signal
+ * - Documents: Docs always signal, tasks depending on conditions
  * - Emails: Based on priority/depriority labels and metadata
- * - Projects: Signal if recently viewed
+ * - Projects: Always signal
  */
 export function signalFilter(entity: EntityData): boolean {
   switch (entity.type) {
