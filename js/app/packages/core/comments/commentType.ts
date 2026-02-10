@@ -17,7 +17,7 @@ type CommentBase = {
   owner: string;
   author: string;
   text: string;
-  createdAt: Date | undefined;
+  createdAt: Date | null | undefined;
   // TODO: deprecated, adding for type compatibility
   resolved?: boolean;
 };
