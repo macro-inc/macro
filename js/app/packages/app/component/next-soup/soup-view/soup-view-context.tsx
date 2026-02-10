@@ -41,6 +41,7 @@ const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
 
 type Row<T> = {
   original: T;
+  id: string;
   depth: number;
   isSelected: () => boolean;
   isExpanded: () => boolean;
@@ -286,6 +287,7 @@ export const SoupViewContextProvider: FlowComponent<
   ): SoupRow => {
     return {
       original: entity,
+      id: entity.id,
       depth,
       isFocused() {
         return soup.focus.id() === entity.id;
@@ -377,9 +379,17 @@ export const SoupViewContextProvider: FlowComponent<
     return transformed;
   };
 
-  const rows = () => {
-    return entities().map((e) => attachMethods(e));
-  };
+  const rows = createMemo(
+    (prev) => {
+      const next = entities().map((e) => attachMethods(e));
+
+      return reconcile(next)(prev);
+    },
+    [],
+    {
+      equals: false,
+    }
+  );
 
   const context = {
     soup,

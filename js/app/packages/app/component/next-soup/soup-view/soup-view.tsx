@@ -161,10 +161,8 @@ interface SoupViewListProps {
 
 export const SoupViewList = (props: SoupViewListProps) => {
   const panel = useSplitPanelOrThrow();
-  const { soup, source, rows: _rows, searchText } = useSoupView();
+  const { soup, source, rows, searchText } = useSoupView();
   const { getSplitCount } = useSplitLayout();
-
-  const rows = createMemo(() => _rows());
 
   const { isKeypressActive } = useIsKeyPressActive();
 
