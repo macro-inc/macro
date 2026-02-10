@@ -6,6 +6,10 @@ use crate::{
     service::s3::S3,
 };
 use anyhow::Context;
+use channels::{
+    domain::service::ChannelMessagesServiceImpl, inbound::axum_router::ChannelsRouterState,
+    outbound::pg_channels_repo::PgChannelMessagesRepo,
+};
 use comms::{
     domain::service::ChannelServiceImpl,
     inbound::CommsRouterState,
@@ -279,6 +283,9 @@ async fn main() -> anyhow::Result<()> {
                 entity_access::outbound::PgAccessRepository::new(db.clone()),
             ),
         ),
+        channels_state: ChannelsRouterState::new(ChannelMessagesServiceImpl::new(
+            PgChannelMessagesRepo::new(db.clone()),
+        )),
     };
 
     api::setup_and_serve(api_context).await?;

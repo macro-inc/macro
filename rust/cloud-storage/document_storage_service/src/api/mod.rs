@@ -167,6 +167,10 @@ fn api_router(state: ApiContext) -> Router {
                 .with_state(CommsHandlerState::from_ref(&state)),
         )
         .nest("/entity", entity::router())
+        .nest(
+            "/channels",
+            channels::inbound::axum_router::channels_router(state.channels_state.clone()),
+        )
         .layer(
             ServiceBuilder::new()
                 .layer(axum::middleware::from_fn(

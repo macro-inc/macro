@@ -8,6 +8,7 @@ members = [
   "ai_toolset",
   "anthropic",
   "authentication_service",
+  "channels",
   "authentication_service_client",
   "comms_db_client",
   "comms_service",
