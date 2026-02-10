@@ -608,6 +608,8 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
       return; // no backoff defined, no retry
     }
 
+    this.cancelScheduledConnectionRetry();
+
     // handler dispatches the retry event to all listeners of the retry event-type
     const handleRetryEvent = (detail: RetryEventDetail) => {
       const event: CustomEvent<RetryEventDetail> = new CustomEvent(
