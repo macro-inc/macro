@@ -228,8 +228,7 @@ export const SoupViewContextProvider: FlowComponent<
     () => ({
       params: {
         limit: 100,
-        sort_method:
-          (soup.sort.active()[0]?.id as 'updated_at') ?? 'updated_at',
+        sort_method: soup.sort.active()[0]?.id ?? 'updated_at',
       },
       body: queryFilters(),
     }),
