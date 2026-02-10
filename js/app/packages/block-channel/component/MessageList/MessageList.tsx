@@ -2,12 +2,10 @@ import {
   COLLAPSED_THREAD_INDEX_CUTOFF,
   TARGET_MESSAGE_ACTIVE_TIME,
 } from '@block-channel/constants';
-import type { MessageWithThreadId } from '@block-channel/signal/threads';
 import type {
   ThreadView,
   ThreadViewData,
 } from '@block-channel/type/threadView';
-import type { GetChannelResponseReactions } from '@service-comms/generated/models';
 import { loadDraftMessage } from '@block-channel/utils/draftMessages';
 import {
   createMessageListContextLookup,
@@ -21,10 +19,9 @@ import type { InputAttachment } from '@core/store/cacheChannelInput';
 import SunIcon from '@icon/duotone/sun-horizon-duotone.svg';
 import ArrowDownIcon from '@icon/regular/arrow-down.svg';
 import XIcon from '@icon/regular/x.svg';
+import type { ApiChannelMessage } from '@service-comms/client';
 import type { Activity as ChannelActivity } from '@service-comms/generated/models/activity';
-import type { Attachment } from '@service-comms/generated/models/attachment';
 import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
-import type { Message } from '@service-comms/generated/models/message';
 import { useUserId } from '@core/context/user';
 import { debounce } from '@solid-primitives/scheduled';
 import {
@@ -58,18 +55,19 @@ false && observedSize;
 
 type ThreadRow = {
   id: string;
-  message: Message;
-  children: Accessor<Message[]>;
+  message: ApiChannelMessage;
+  children: Accessor<ApiChannelMessage[]>;
 };
 
 type MessageListItemProps = {
-  message: Message;
+  message: ApiChannelMessage;
   index: Accessor<number>;
   listContext: MessageListContext;
   isFocused: boolean;
   isTarget: boolean;
-  threadChildren?: Message[];
-  threadSiblings?: Message[];
+  threadChildren?: ApiChannelMessage[];
+  threadSiblings?: ApiChannelMessage[];
+  parentThreadId?: string;
 };
 
 // The size of a message with a profile picture and a one line message
@@ -104,7 +102,7 @@ type MessageListContentContextValues = {
   getThreadsWithActiveReplies: () => string[];
   registerThreadAppendMountTarget: (threadID: string, el: HTMLElement) => void;
   getThreadState: (threadID: string) => ThreadView | undefined;
-  orderedMessages: Accessor<Message[]>;
+  orderedMessages: Accessor<ApiChannelMessage[]>;
 };
 
 const MessageListContentContext =
@@ -131,14 +129,11 @@ export type MessageListNavigation = {
   navigateToMessage: (messageId: string) => boolean;
 };
 
-export type ThreadStoreData = Record<string, MessageWithThreadId[]>;
+export type ThreadStoreData = Record<string, ApiChannelMessage[]>;
 
 export type MessageListProps = {
   channelId: string;
-  messages: Message[];
-  threads: ThreadStoreData;
-  reactions: GetChannelResponseReactions;
-  attachments: Attachment[];
+  messages: ApiChannelMessage[];
   participants: ChannelParticipant[];
   latestActivity?: ChannelActivity;
   openedChannel?: Date;
@@ -148,8 +143,11 @@ export type MessageListProps = {
   setFocusedMessageId: Setter<string | undefined>;
   /** Callback to expose navigation methods to parent */
   onNavigationReady?: (nav: MessageListNavigation) => void;
-  orderedMessages: Accessor<Message[]>;
-  setOrderedMessages: Setter<Message[]>;
+  orderedMessages: Accessor<ApiChannelMessage[]>;
+  setOrderedMessages: Setter<ApiChannelMessage[]>;
+  fetchNextPage: () => void;
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
 };
 
 function EmptyMessageList() {
@@ -175,8 +173,7 @@ export function MessageList(props: MessageListProps) {
   const topLevelMessages = createMemo(() =>
     props.messages.filter(
       (message) =>
-        !message.thread_id &&
-        (!message.deleted_at || (props.threads[message.id]?.length ?? 0) > 0)
+        !message.deleted_at || message.thread.reply_count > 0
     )
   );
 
@@ -186,9 +183,8 @@ export function MessageList(props: MessageListProps) {
     for (let i = 0; i < list.length; i++) {
       const parent = list[i];
       map.set(parent.id, i);
-      const children = props.threads[parent.id] ?? [];
-      for (const child of children) {
-        map.set(child.id, i);
+      for (const reply of parent.thread.preview) {
+        map.set(reply.id, i);
       }
     }
     return map;
@@ -367,7 +363,7 @@ function MessageListImpl(props: MessageListProps) {
     createStore<MessageListContextLookup>({});
 
   const userId = useUserId();
-  const [viewThreads, setViewThreads] = createStore<ThreadStoreData>({});
+  const [viewThreads, setViewThreads] = createStore<Record<string, ApiChannelMessage[]>>({});
 
   const [threadInputAttachmentsStore, setThreadInputAttachmentsStore] =
     createStore<Record<string, InputAttachment[]>>({});
@@ -439,7 +435,7 @@ function MessageListImpl(props: MessageListProps) {
     return props?.latestActivity?.viewed_at;
   });
 
-  const checkIfNewMessage = (message: Message) => {
+  const checkIfNewMessage = (message: ApiChannelMessage) => {
     const lastViewed_ = lastViewed();
     const openedChannel_ = props.openedChannel;
     return (
@@ -546,10 +542,19 @@ function MessageListImpl(props: MessageListProps) {
   /**
    * Track context for messages as they are rendered in the list
    */
-  function computeListContext(messages: Message[]) {
+  function computeListContext(messages: ApiChannelMessage[]) {
+    // Build child-to-parent thread lookup from viewThreads store
+    const childToParent = new Map<string, string>();
+    for (const [parentId, children] of Object.entries(viewThreads)) {
+      for (const child of children) {
+        childToParent.set(child.id, parentId);
+      }
+    }
+
     const context = createMessageListContextLookup({
       messages,
       isNewMessageFn: checkIfNewMessage,
+      getThreadId: (m) => childToParent.get(m.id),
     });
 
     setMessageListContext(reconcile(context));
@@ -559,8 +564,8 @@ function MessageListImpl(props: MessageListProps) {
 
   // Keep the message if:
   // 1. It's not deleted, OR
-  // 2. It's deleted but is a parent message
-  const messageFilterFn = (message: Message) =>
+  // 2. It's deleted but has thread children
+  const messageFilterFn = (message: ApiChannelMessage) =>
     !message.deleted_at || viewThreads[message.id]?.length > 0;
 
   const filteredTopLevelMessages = createMemo(() =>
@@ -581,7 +586,7 @@ function MessageListImpl(props: MessageListProps) {
 
   const flattenedThreaded = createMemo(() => {
     const segs = segments();
-    const out: Message[] = [];
+    const out: ApiChannelMessage[] = [];
     for (let i = 0; i < segs.length; i++) out.push(...segs[i]());
     return out;
   });
@@ -616,6 +621,22 @@ function MessageListImpl(props: MessageListProps) {
 
   let dirtyTypingThreadId: string | undefined;
 
+  // Convert thread preview replies to ApiChannelMessage shape for thread children
+  const threadPreviewAsMessages = (message: ApiChannelMessage): ApiChannelMessage[] =>
+    message.thread.preview.map((reply) => ({
+      id: reply.id,
+      channel_id: message.channel_id,
+      sender_id: reply.sender_id,
+      content: reply.content,
+      created_at: reply.created_at,
+      updated_at: reply.updated_at,
+      edited_at: reply.edited_at,
+      deleted_at: null,
+      thread: { reply_count: 0, latest_reply_at: null, preview: [] },
+      reactions: reply.reactions,
+      attachments: reply.attachments,
+    }));
+
   // Maintain a local snapshot of threads that freezes changes for threads in which a user is actively typing.
   createEffect(() => {
     const baseMessages = props.messages;
@@ -623,7 +644,7 @@ function MessageListImpl(props: MessageListProps) {
 
     for (const message of baseMessages) {
       const id = message.id;
-      const threadArr = props.threads[id] ?? [];
+      const threadArr = threadPreviewAsMessages(message);
       const currentView = viewThreads[id];
       const isTypingThisThread = id === activeThreadId;
 
@@ -634,7 +655,7 @@ function MessageListImpl(props: MessageListProps) {
         continue;
       }
 
-      if (currentView !== threadArr) {
+      if (!currentView || currentView.length !== threadArr.length || currentView.some((v, i) => v.id !== threadArr[i]?.id)) {
         setViewThreads(id, reconcile(threadArr));
       }
 
@@ -653,7 +674,8 @@ function MessageListImpl(props: MessageListProps) {
       prevTypingId !== currentTypingId &&
       dirtyTypingThreadId === prevTypingId
     ) {
-      const threadArr = untrack(() => props.threads[prevTypingId] ?? []);
+      const msg = untrack(() => props.messages.find((m) => m.id === prevTypingId));
+      const threadArr = msg ? threadPreviewAsMessages(msg) : [];
       setViewThreads(prevTypingId, reconcile(threadArr));
       dirtyTypingThreadId = undefined;
     }
@@ -746,8 +768,8 @@ function MessageListImpl(props: MessageListProps) {
 
   const lastMessageReaction = createMemo(() => {
     const list = props.orderedMessages();
-    const lastMessageId = list[list.length - 1]?.id;
-    return props.reactions[lastMessageId];
+    const lastMsg = list[list.length - 1];
+    return lastMsg?.reactions;
   });
 
   const lastMessageThread = createMemo(() => {
@@ -772,7 +794,7 @@ function MessageListImpl(props: MessageListProps) {
     )
   );
 
-  const [unviewedMessages, setUnviewedMessages] = createSignal<Message[]>();
+  const [unviewedMessages, setUnviewedMessages] = createSignal<ApiChannelMessage[]>();
   const [dismissUnviewedMessages, setDismissUnviewedMessages] =
     createSignal(false);
   const [dismissJumpToLatest, setDismissJumpToLatest] = createSignal(false);
@@ -867,6 +889,15 @@ function MessageListImpl(props: MessageListProps) {
         setUnviewedMessages(undefined);
       }
     }
+
+    // Trigger pagination when scrolling near the top (oldest messages)
+    const handle = virtualHandle();
+    if (handle) {
+      const distanceFromTop = handle.scrollSize - handle.scrollOffset - handle.viewportSize;
+      if (distanceFromTop < 500 && props.hasNextPage && !props.isFetchingNextPage) {
+        props.fetchNextPage();
+      }
+    }
   };
 
   // Jump to the first unviewed message
@@ -906,6 +937,7 @@ function MessageListImpl(props: MessageListProps) {
       orderedMessages={props.orderedMessages}
       threadChildren={params.threadChildren}
       threadSiblings={params.threadSiblings}
+      parentThreadId={params.parentThreadId}
       newIndicatorShown={newIndicatorShown}
       setNewIndicatorShown={setNewIndicatorShown}
       virtualHandle={virtualHandle()!}
@@ -913,8 +945,6 @@ function MessageListImpl(props: MessageListProps) {
       listContext={params.listContext}
       isTarget={params.isTarget}
       channelId={() => props.channelId}
-      attachments={props.attachments}
-      reactions={props.reactions}
     />
   );
 
@@ -930,7 +960,7 @@ function MessageListImpl(props: MessageListProps) {
     const parentContext = () =>
       messageListContext[row().id] ?? parentDefaultContext();
 
-    const renderThreadChild = (child: Message) => {
+    const renderThreadChild = (child: ApiChannelMessage) => {
       const childId = () => child.id;
       const childContext = () => messageListContext[childId()];
       const childIndexAccessor = () => childContext()?.index ?? 0;
@@ -954,6 +984,7 @@ function MessageListImpl(props: MessageListProps) {
             isFocused={isFocused(childId())}
             index={childIndexAccessor}
             threadSiblings={threadChildren()}
+            parentThreadId={row().message.id}
             listContext={resolvedChildContext()}
             isTarget={isActiveTargetMessage(child.id)}
           />

@@ -1,6 +1,8 @@
 use super::*;
 use crate::domain::{
-    models::{CountedReaction, MessageAttachment, ThreadReplyRow, TopLevelMessageRow},
+    models::{
+        CountedReaction, MessageAttachment, ThreadReplyRow, ThreadStats, TopLevelMessageRow,
+    },
     ports::MockChannelMessagesRepo,
 };
 use chrono::Utc;
@@ -17,8 +19,6 @@ fn make_row(id: Uuid, minutes_ago: i64) -> TopLevelMessageRow {
         updated_at: now - chrono::Duration::minutes(minutes_ago),
         edited_at: None,
         deleted_at: None,
-        thread_reply_count: 0,
-        latest_reply_at: None,
     }
 }
 
@@ -26,6 +26,8 @@ fn empty_repo() -> MockChannelMessagesRepo {
     let mut repo = MockChannelMessagesRepo::new();
     repo.expect_get_top_level_messages()
         .returning(|_, _, _| Box::pin(async { Ok(vec![]) }));
+    repo.expect_get_thread_stats()
+        .returning(|_| Box::pin(async { Ok(HashMap::new()) }));
     repo.expect_get_thread_previews()
         .returning(|_, _| Box::pin(async { Ok(HashMap::new()) }));
     repo.expect_get_reactions_batch()
@@ -51,11 +53,8 @@ async fn returns_empty_page_for_no_messages() {
 async fn returns_messages_with_thread_info() {
     let parent_id = Uuid::new_v4();
     let reply_id = Uuid::new_v4();
-    let row = TopLevelMessageRow {
-        thread_reply_count: 5,
-        latest_reply_at: Some(Utc::now()),
-        ..make_row(parent_id, 10)
-    };
+    let row = make_row(parent_id, 10);
+    let latest_reply = Utc::now();
 
     let reply_row = ThreadReplyRow {
         id: reply_id,
@@ -75,6 +74,18 @@ async fn returns_messages_with_thread_info() {
             let r = row_clone.clone();
             Box::pin(async move { Ok(vec![r]) })
         });
+
+    repo.expect_get_thread_stats().returning(move |_| {
+        let mut map = HashMap::new();
+        map.insert(
+            parent_id,
+            ThreadStats {
+                reply_count: 5,
+                latest_reply_at: Some(latest_reply),
+            },
+        );
+        Box::pin(async move { Ok(map) })
+    });
 
     let reply_clone = reply_row.clone();
     repo.expect_get_thread_previews().returning(move |_, _| {
@@ -128,6 +139,8 @@ async fn clamps_limit() {
     repo.expect_get_top_level_messages()
         .withf(|_, _, limit| *limit == 100)
         .returning(|_, _, _| Box::pin(async { Ok(vec![]) }));
+    repo.expect_get_thread_stats()
+        .returning(|_| Box::pin(async { Ok(HashMap::new()) }));
     repo.expect_get_thread_previews()
         .returning(|_, _| Box::pin(async { Ok(HashMap::new()) }));
     repo.expect_get_reactions_batch()

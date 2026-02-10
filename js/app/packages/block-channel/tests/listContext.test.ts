@@ -4,8 +4,10 @@ import {
   type MinimalMessage,
 } from '../utils/listContext';
 
+type TestMessage = MinimalMessage & { thread_id?: string };
+
 describe('createMessageListContextLookup', () => {
-  const mockMessages: MinimalMessage[] = [
+  const mockMessages: TestMessage[] = [
     {
       id: 'msg0',
       created_at: '2024-01-01T10:00:00Z',
@@ -35,6 +37,8 @@ describe('createMessageListContextLookup', () => {
     },
   ];
 
+  const getThreadId = (m: TestMessage) => m.thread_id;
+
   const neverNewMessage = () => false;
   const alwaysNewMessage = () => true;
 
@@ -42,6 +46,7 @@ describe('createMessageListContextLookup', () => {
     const context = createMessageListContextLookup({
       messages: mockMessages,
       isNewMessageFn: neverNewMessage,
+      getThreadId,
     });
 
     expect(Object.keys(context)).toHaveLength(5);
@@ -56,6 +61,7 @@ describe('createMessageListContextLookup', () => {
     const context = createMessageListContextLookup({
       messages: mockMessages,
       isNewMessageFn: neverNewMessage,
+      getThreadId,
     });
 
     expect(context.msg0.index).toBe(0);
@@ -69,6 +75,7 @@ describe('createMessageListContextLookup', () => {
     const context = createMessageListContextLookup({
       messages: mockMessages,
       isNewMessageFn: neverNewMessage,
+      getThreadId,
     });
 
     expect(context.msg0.threadIndex).toBe(-1);
@@ -82,6 +89,7 @@ describe('createMessageListContextLookup', () => {
     const context = createMessageListContextLookup({
       messages: mockMessages,
       isNewMessageFn: alwaysNewMessage,
+      getThreadId,
     });
 
     // All non threaded messages are new (if new function is always true)
@@ -96,6 +104,7 @@ describe('createMessageListContextLookup', () => {
     const context = createMessageListContextLookup({
       messages: mockMessages,
       isNewMessageFn: neverNewMessage,
+      getThreadId,
     });
 
     expect(context.msg1.previousNonThreadedMessage?.id).toBe('msg0');
@@ -105,13 +114,14 @@ describe('createMessageListContextLookup', () => {
   });
 
   it('should identify parent new messages', () => {
-    const isMsg1New = (msg: MinimalMessage) => {
-      return msg.thread_id ? msg.thread_id === 'msg1' : msg.id === 'msg1';
+    const isMsg1New = (msg: TestMessage) => {
+      return getThreadId(msg) ? getThreadId(msg) === 'msg1' : msg.id === 'msg1';
     };
 
     const context = createMessageListContextLookup({
       messages: mockMessages,
       isNewMessageFn: isMsg1New,
+      getThreadId,
     });
 
     expect(context.msg1.isNewMessage).toBe(true);
@@ -122,7 +132,7 @@ describe('createMessageListContextLookup', () => {
   });
 
   it('should identify messages in the last thread when messages are threaded to last top-level', () => {
-    const messagesWithLastThread: MinimalMessage[] = [
+    const messagesWithLastThread: TestMessage[] = [
       {
         id: 'msg0',
         created_at: '2024-01-01T10:00:00Z',
@@ -150,6 +160,7 @@ describe('createMessageListContextLookup', () => {
     const context = createMessageListContextLookup({
       messages: messagesWithLastThread,
       isNewMessageFn: neverNewMessage,
+      getThreadId,
     });
 
     // msg1 is the last top-level message

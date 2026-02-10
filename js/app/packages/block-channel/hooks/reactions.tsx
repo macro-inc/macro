@@ -6,19 +6,14 @@ import {
   useRemoveReactionMutation,
 } from '@queries/channel/reaction';
 import type { Accessor } from 'solid-js';
-import type { GetChannelResponseReactions } from '@service-comms/generated/models';
-
-type CountedReaction = {
-  emoji: string;
-  users: string[];
-};
+import type { CountedReaction } from '@service-comms/generated/models';
 
 /**
  * Hook to react to a message. Uses the reaction mutations with optimistic updates.
  */
 export function useReactToMessage(
   channelId: Accessor<string>,
-  reactions: Accessor<GetChannelResponseReactions>
+  reactions: Accessor<CountedReaction[]>
 ) {
   const { track } = withAnalytics();
   const userId_ = useUserId();
@@ -31,9 +26,8 @@ export function useReactToMessage(
     const channelIdValue = channelId();
     if (!channelIdValue || !userId) return;
 
-    const messageReactions = reactions()?.[messageId] ?? [];
-    const hasReacted = messageReactions.some(
-      (reaction: CountedReaction) =>
+    const hasReacted = reactions().some(
+      (reaction) =>
         reaction.emoji === emoji && reaction.users.includes(userId)
     );
 

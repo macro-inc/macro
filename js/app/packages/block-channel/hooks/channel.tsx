@@ -1,16 +1,15 @@
 import { createAssertedContextProvider } from '@core/context/createContext';
 import type { useChannelQuery } from '@queries/channel/channel';
 import {
-  getThreadMessages,
-  getTopLevelMessages,
-} from '@queries/channel/derived';
+  flattenMessages,
+  type useChannelMessagesQuery,
+} from '@queries/channel/channel-messages';
 import type {
-  Attachment,
-  ChannelType,
-  GetChannelResponse,
-  GetChannelResponseReactions,
-} from '@service-comms/generated/models';
-import type { Message } from '@service-comms/generated/models/message';
+  ApiChannelMessage,
+  ChannelMessagesPage,
+} from '@service-comms/client';
+import type { ChannelType, GetChannelResponse } from '@service-comms/generated/models';
+import type { InfiniteData } from '@tanstack/solid-query';
 import { createMemo, type Accessor } from 'solid-js';
 
 export type MessageSenderLookup = Map<string, string>;
@@ -18,44 +17,62 @@ export type MessageSenderLookup = Map<string, string>;
 type ChannelContextValue = {
   channel: Accessor<GetChannelResponse>;
   channelName: Accessor<string>;
-  messages: Accessor<Message[]>;
-  threads: Accessor<ReturnType<typeof getThreadMessages>>;
-  reactions: Accessor<GetChannelResponseReactions>;
-  attachments: Accessor<Attachment[]>;
-  messageSenderMap: Accessor<MessageSenderLookup>;
   channelType: Accessor<ChannelType>;
+  messages: Accessor<ApiChannelMessage[]>;
+  messageSenderMap: Accessor<MessageSenderLookup>;
+  fetchNextPage: () => void;
+  hasNextPage: Accessor<boolean>;
+  isFetchingNextPage: Accessor<boolean>;
 };
 
 type ChannelContextProps = {
-  query: ReturnType<typeof useChannelQuery>;
+  metadataQuery: ReturnType<typeof useChannelQuery>;
+  messagesQuery: ReturnType<typeof useChannelMessagesQuery>;
 };
 
 export const [ChannelContextProvider, useChannelContext] =
   createAssertedContextProvider<ChannelContextValue>(
     'ChannelContext',
     (props: ChannelContextProps): ChannelContextValue => {
-      const channel = createMemo(() => props.query.data);
+      const channel = createMemo(() => props.metadataQuery.data);
       const channelType = createMemo(() => channel().channel.channel_type);
       const channelName = createMemo(() => channel().channel.name ?? '');
-      const messages = createMemo(() => getTopLevelMessages(channel()));
-      const threads = createMemo(() => getThreadMessages(channel()));
-      const reactions = createMemo(() => channel().reactions ?? {});
-      const attachments = createMemo(() => channel().attachments ?? []);
+
+      const messages = createMemo(() =>
+        flattenMessages(
+          props.messagesQuery.data as
+            | InfiniteData<ChannelMessagesPage, string | null>
+            | undefined
+        )
+      );
 
       const messageSenderMap = createMemo(() => {
-        const all = [...messages(), ...Object.values(threads()).flat()];
-        return new Map(all.map((m) => [m.id, m.sender_id]));
+        const msgs = messages();
+        const map = new Map<string, string>();
+        for (const m of msgs) {
+          map.set(m.id, m.sender_id);
+          for (const reply of m.thread.preview) {
+            map.set(reply.id, reply.sender_id);
+          }
+        }
+        return map;
       });
+
+      const fetchNextPage = () => props.messagesQuery.fetchNextPage();
+      const hasNextPage = createMemo(() => props.messagesQuery.hasNextPage);
+      const isFetchingNextPage = createMemo(
+        () => props.messagesQuery.isFetchingNextPage
+      );
 
       return {
         channel,
         channelName,
         channelType,
         messages,
-        threads,
-        reactions,
-        attachments,
         messageSenderMap,
+        fetchNextPage,
+        hasNextPage,
+        isFetchingNextPage,
       };
     }
   );

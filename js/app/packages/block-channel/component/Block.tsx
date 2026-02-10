@@ -7,6 +7,7 @@ import { Channel } from './Channel';
 import { URL_PARAMS } from '@block-channel/constants';
 import type { TargetMessageInfo } from '@block-channel/component/MessageList/MessageList';
 import { useChannelQuery } from '@queries/channel/channel';
+import { useChannelMessagesQuery } from '@queries/channel/channel-messages';
 import { ChannelContextProvider } from '@block-channel/hooks/channel';
 
 export function WithTopBar(props: { children: JSXElement }) {
@@ -29,6 +30,7 @@ export default function BlockChannel(props: BlockChannelProps) {
   const channelId = useBlockId();
   const channelName = useChannelName(channelId);
   const channelQuery = useChannelQuery(() => channelId);
+  const messagesQuery = useChannelMessagesQuery(() => channelId);
 
   const targetMessage = () => {
     const messageID = props[URL_PARAMS.message];
@@ -45,7 +47,10 @@ export default function BlockChannel(props: BlockChannelProps) {
     <EntityPermissionsGate entityType="channel" entityId={channelId}>
       <Suspense fallback={<ChannelBlockSuspenseFallback />}>
         <DocumentBlockContainer title={channelName() ?? 'Channel'}>
-          <ChannelContextProvider query={channelQuery}>
+          <ChannelContextProvider
+            metadataQuery={channelQuery}
+            messagesQuery={messagesQuery}
+          >
             <Channel channelId={channelId} target={targetMessage()} />
           </ChannelContextProvider>
         </DocumentBlockContainer>

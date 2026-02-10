@@ -2,12 +2,8 @@
  * @vitest-environment jsdom
  */
 
-import type {
-  Attachment,
-  CountedReaction,
-  GetChannelResponse,
-  Message,
-} from '@service-comms/generated/models';
+import type { ApiChannelMessage } from '@service-comms/client';
+import type { ChannelMessagesData } from '../channel-messages';
 import { QueryClient } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -58,8 +54,11 @@ import {
   rollbackAddReaction,
   rollbackRemoveReaction,
 } from '../reaction';
+import type { GetChannelResponse } from '@service-comms/generated/models';
 
-function createMockMessage(overrides: Partial<Message> = {}): Message {
+function createMockApiMessage(
+  overrides: Partial<ApiChannelMessage> = {}
+): ApiChannelMessage {
   return {
     id: `msg-${Math.random().toString(36).slice(2)}`,
     channel_id: 'channel-1',
@@ -67,28 +66,47 @@ function createMockMessage(overrides: Partial<Message> = {}): Message {
     content: 'Test message',
     created_at: '2024-01-01T00:00:00.000Z',
     updated_at: '2024-01-01T00:00:00.000Z',
-    deleted_at: undefined,
-    edited_at: undefined,
-    thread_id: undefined,
+    edited_at: null,
+    deleted_at: null,
+    thread: { reply_count: 0, latest_reply_at: null, preview: [] },
+    reactions: [],
+    attachments: [],
     ...overrides,
   };
 }
 
-function createMockAttachment(overrides: Partial<Attachment> = {}): Attachment {
+function createMockMessagesData(
+  messages: ApiChannelMessage[],
+  nextCursor: string | null = null
+): ChannelMessagesData {
   return {
-    id: `attachment-${Math.random().toString(36).slice(2)}`,
-    channel_id: 'channel-1',
-    message_id: 'msg-1',
-    created_at: '2024-01-01T00:00:00.000Z',
-    updated_at: '2024-01-01T00:00:00.000Z',
-    s3_key: 'test-key',
-    file_name: 'test.txt',
-    file_size: 100,
-    mime_type: 'text/plain',
-    ...overrides,
-  } as Attachment;
+    pages: [{ items: messages, next_cursor: nextCursor }],
+    pageParams: [null],
+  };
 }
 
+function seedMessagesCache(
+  channelId: string,
+  data: ChannelMessagesData
+): readonly unknown[] {
+  const queryKey = channelKeys.messages(channelId).queryKey;
+  testQueryClient.setQueryData(queryKey, data);
+  return queryKey;
+}
+
+function getMessagesFromCache(
+  channelId: string
+): ChannelMessagesData | undefined {
+  const queryKey = channelKeys.messages(channelId).queryKey;
+  return testQueryClient.getQueryData<ChannelMessagesData>(queryKey);
+}
+
+function flatItems(data: ChannelMessagesData | undefined): ApiChannelMessage[] {
+  if (!data) return [];
+  return data.pages.flatMap((p) => p.items);
+}
+
+// Channel metadata helpers (for channel name tests)
 function createMockChannelResponse(
   overrides: Partial<GetChannelResponse> = {}
 ): GetChannelResponse {
@@ -110,7 +128,7 @@ function createMockChannelResponse(
   } as GetChannelResponse;
 }
 
-function seedQueryCache(
+function seedChannelCache(
   channelId: string,
   data: GetChannelResponse
 ): readonly unknown[] {
@@ -141,12 +159,9 @@ describe('optimisticInsertChannelMessage', () => {
     testQueryClient.clear();
   });
 
-  it('should insert a new message at the end of the messages array', () => {
-    const existingMessage = createMockMessage({ id: 'existing-msg' });
-    seedQueryCache(
-      'channel-1',
-      createMockChannelResponse({ messages: [existingMessage] })
-    );
+  it('should insert a new message at the start of the first page', () => {
+    const existingMessage = createMockApiMessage({ id: 'existing-msg' });
+    seedMessagesCache('channel-1', createMockMessagesData([existingMessage]));
 
     const context = optimisticInsertChannelMessage({
       channelId: 'channel-1',
@@ -157,18 +172,19 @@ describe('optimisticInsertChannelMessage', () => {
       mentions: [],
     });
 
-    const cached = getChannelFromCache('channel-1');
-    expect(cached?.messages).toHaveLength(2);
-    expect(cached?.messages[0].id).toBe('existing-msg');
-    expect(cached?.messages[1].id).toBe('optimistic-msg-1');
-    expect(cached?.messages[1].content).toBe('New message content');
-    expect(cached?.messages[1].sender_id).toBe('user-2');
-    // Context should contain only the optimistic ID for rollback
+    const items = flatItems(getMessagesFromCache('channel-1'));
+    expect(items).toHaveLength(2);
+    // New message prepended to first page (newest first)
+    expect(items[0].id).toBe('optimistic-msg-1');
+    expect(items[0].content).toBe('New message content');
+    expect(items[0].sender_id).toBe('user-2');
+    expect(items[1].id).toBe('existing-msg');
     expect(context?.optimisticId).toBe('optimistic-msg-1');
   });
 
-  it('should handle thread_id correctly', () => {
-    seedQueryCache('channel-1', createMockChannelResponse());
+  it('should handle thread_id by adding to parent preview', () => {
+    const parent = createMockApiMessage({ id: 'parent-msg-id' });
+    seedMessagesCache('channel-1', createMockMessagesData([parent]));
 
     optimisticInsertChannelMessage({
       channelId: 'channel-1',
@@ -180,8 +196,14 @@ describe('optimisticInsertChannelMessage', () => {
       thread_id: 'parent-msg-id',
     });
 
-    const cached = getChannelFromCache('channel-1');
-    expect(cached?.messages[0].thread_id).toBe('parent-msg-id');
+    const items = flatItems(getMessagesFromCache('channel-1'));
+    // Top-level count unchanged
+    expect(items).toHaveLength(1);
+    // Thread preview updated
+    expect(items[0].thread.reply_count).toBe(1);
+    expect(items[0].thread.preview).toHaveLength(1);
+    expect(items[0].thread.preview[0].id).toBe('optimistic-msg-1');
+    expect(items[0].thread.preview[0].content).toBe('Thread reply');
   });
 
   it('should return undefined when cache is empty', () => {
@@ -198,11 +220,8 @@ describe('optimisticInsertChannelMessage', () => {
   });
 
   it('should rollback correctly using returned context', () => {
-    const existingMessage = createMockMessage({ id: 'existing-msg' });
-    seedQueryCache(
-      'channel-1',
-      createMockChannelResponse({ messages: [existingMessage] })
-    );
+    const existingMessage = createMockApiMessage({ id: 'existing-msg' });
+    seedMessagesCache('channel-1', createMockMessagesData([existingMessage]));
 
     const context = optimisticInsertChannelMessage({
       channelId: 'channel-1',
@@ -214,7 +233,7 @@ describe('optimisticInsertChannelMessage', () => {
     });
 
     // Verify insert happened
-    expect(getChannelFromCache('channel-1')?.messages).toHaveLength(2);
+    expect(flatItems(getMessagesFromCache('channel-1'))).toHaveLength(2);
 
     // Rollback
     if (context) {
@@ -222,9 +241,9 @@ describe('optimisticInsertChannelMessage', () => {
     }
 
     // Verify rollback restored original state
-    const cached = getChannelFromCache('channel-1');
-    expect(cached?.messages).toHaveLength(1);
-    expect(cached?.messages[0].id).toBe('existing-msg');
+    const items = flatItems(getMessagesFromCache('channel-1'));
+    expect(items).toHaveLength(1);
+    expect(items[0].id).toBe('existing-msg');
   });
 });
 
@@ -244,10 +263,13 @@ describe('replaceOptimisticMessage', () => {
   });
 
   it('should replace optimistic ID with real ID', () => {
-    const optimisticMessage = createMockMessage({ id: 'optimistic-msg-1' });
-    seedQueryCache(
+    const optimisticMessage = createMockApiMessage({
+      id: 'optimistic-msg-1',
+      content: 'Test content',
+    });
+    seedMessagesCache(
       'channel-1',
-      createMockChannelResponse({ messages: [optimisticMessage] })
+      createMockMessagesData([optimisticMessage])
     );
 
     replaceOptimisticMessage({
@@ -256,17 +278,14 @@ describe('replaceOptimisticMessage', () => {
       realId: 'real-msg-id-from-server',
     });
 
-    const cached = getChannelFromCache('channel-1');
-    expect(cached?.messages[0].id).toBe('real-msg-id-from-server');
-    expect(cached?.messages[0].content).toBe(optimisticMessage.content);
+    const items = flatItems(getMessagesFromCache('channel-1'));
+    expect(items[0].id).toBe('real-msg-id-from-server');
+    expect(items[0].content).toBe('Test content');
   });
 
   it('should do nothing if optimistic message not found', () => {
-    const message = createMockMessage({ id: 'msg-1' });
-    seedQueryCache(
-      'channel-1',
-      createMockChannelResponse({ messages: [message] })
-    );
+    const message = createMockApiMessage({ id: 'msg-1' });
+    seedMessagesCache('channel-1', createMockMessagesData([message]));
 
     replaceOptimisticMessage({
       channelId: 'channel-1',
@@ -274,8 +293,8 @@ describe('replaceOptimisticMessage', () => {
       realId: 'real-id',
     });
 
-    const cached = getChannelFromCache('channel-1');
-    expect(cached?.messages[0].id).toBe('msg-1');
+    const items = flatItems(getMessagesFromCache('channel-1'));
+    expect(items[0].id).toBe('msg-1');
   });
 });
 
@@ -294,111 +313,63 @@ describe('optimisticDeleteChannelMessage', () => {
     testQueryClient.clear();
   });
 
-  it('should remove message from the messages array', () => {
-    const msg1 = createMockMessage({ id: 'msg-1' });
-    const msg2 = createMockMessage({ id: 'msg-2' });
-    seedQueryCache(
-      'channel-1',
-      createMockChannelResponse({ messages: [msg1, msg2] })
-    );
+  it('should remove message from the page items', () => {
+    const msg1 = createMockApiMessage({ id: 'msg-1' });
+    const msg2 = createMockApiMessage({ id: 'msg-2' });
+    seedMessagesCache('channel-1', createMockMessagesData([msg1, msg2]));
 
     const context = optimisticDeleteChannelMessage({
       channelId: 'channel-1',
-      message_id: 'msg-1',
+      messageId: 'msg-1',
     });
 
-    const cached = getChannelFromCache('channel-1');
-    expect(cached?.messages).toHaveLength(1);
-    expect(cached?.messages[0].id).toBe('msg-2');
-    // Context should contain the deleted message for rollback
-    expect(context?.deletedMessage.id).toBe('msg-1');
+    const items = flatItems(getMessagesFromCache('channel-1'));
+    expect(items).toHaveLength(1);
+    expect(items[0].id).toBe('msg-2');
+    expect(context?.deletedMessage?.id).toBe('msg-1');
   });
 
-  it('should remove associated reactions', () => {
-    const msg1 = createMockMessage({ id: 'msg-1' });
-    const reactions: Record<string, CountedReaction[]> = {
-      'msg-1': [{ emoji: '👍', users: ['user-1'] }],
-      'msg-2': [{ emoji: '❤️', users: ['user-2'] }],
-    };
-    seedQueryCache(
-      'channel-1',
-      createMockChannelResponse({ messages: [msg1], reactions })
-    );
+  it('should remove reactions embedded in the deleted message', () => {
+    const msg1 = createMockApiMessage({
+      id: 'msg-1',
+      reactions: [{ emoji: '👍', users: ['user-1'] }],
+    });
+    seedMessagesCache('channel-1', createMockMessagesData([msg1]));
 
     optimisticDeleteChannelMessage({
       channelId: 'channel-1',
-      message_id: 'msg-1',
+      messageId: 'msg-1',
     });
 
-    const cached = getChannelFromCache('channel-1');
-    expect(cached?.reactions['msg-1']).toBeUndefined();
-    expect(cached?.reactions['msg-2']).toBeDefined();
-  });
-
-  it('should remove associated attachments', () => {
-    const msg1 = createMockMessage({ id: 'msg-1' });
-    const attachment1 = createMockAttachment({ message_id: 'msg-1' });
-    const attachment2 = createMockAttachment({ message_id: 'msg-2' });
-    seedQueryCache(
-      'channel-1',
-      createMockChannelResponse({
-        messages: [msg1],
-        attachments: [attachment1, attachment2],
-      })
-    );
-
-    optimisticDeleteChannelMessage({
-      channelId: 'channel-1',
-      message_id: 'msg-1',
-    });
-
-    const cached = getChannelFromCache('channel-1');
-    expect(cached?.attachments).toHaveLength(1);
-    expect(cached?.attachments[0].message_id).toBe('msg-2');
+    const items = flatItems(getMessagesFromCache('channel-1'));
+    expect(items).toHaveLength(0);
   });
 
   it('should gracefully handle missing message', () => {
-    const msg1 = createMockMessage({ id: 'msg-1' });
-    seedQueryCache(
-      'channel-1',
-      createMockChannelResponse({ messages: [msg1] })
-    );
+    const msg1 = createMockApiMessage({ id: 'msg-1' });
+    seedMessagesCache('channel-1', createMockMessagesData([msg1]));
 
     optimisticDeleteChannelMessage({
       channelId: 'channel-1',
-      message_id: 'nonexistent-msg',
+      messageId: 'nonexistent-msg',
     });
 
-    const cached = getChannelFromCache('channel-1');
-    expect(cached?.messages).toHaveLength(1);
-    expect(cached?.messages[0].id).toBe('msg-1');
+    const items = flatItems(getMessagesFromCache('channel-1'));
+    expect(items).toHaveLength(1);
+    expect(items[0].id).toBe('msg-1');
   });
 
   it('should rollback correctly using returned context', () => {
-    const msg1 = createMockMessage({ id: 'msg-1', content: 'Message 1' });
-    const reactions: Record<string, CountedReaction[]> = {
-      'msg-1': [{ emoji: '👍', users: ['user-1'] }],
-    };
-    const attachment1 = createMockAttachment({
-      id: 'att-1',
-      message_id: 'msg-1',
-    });
-    seedQueryCache(
-      'channel-1',
-      createMockChannelResponse({
-        messages: [msg1],
-        reactions,
-        attachments: [attachment1],
-      })
-    );
+    const msg1 = createMockApiMessage({ id: 'msg-1', content: 'Message 1' });
+    seedMessagesCache('channel-1', createMockMessagesData([msg1]));
 
     const context = optimisticDeleteChannelMessage({
       channelId: 'channel-1',
-      message_id: 'msg-1',
+      messageId: 'msg-1',
     });
 
     // Verify delete happened
-    expect(getChannelFromCache('channel-1')?.messages).toHaveLength(0);
+    expect(flatItems(getMessagesFromCache('channel-1'))).toHaveLength(0);
 
     // Rollback
     if (context) {
@@ -406,11 +377,9 @@ describe('optimisticDeleteChannelMessage', () => {
     }
 
     // Verify rollback restored original state
-    const cached = getChannelFromCache('channel-1');
-    expect(cached?.messages).toHaveLength(1);
-    expect(cached?.messages[0].id).toBe('msg-1');
-    expect(cached?.reactions['msg-1']).toHaveLength(1);
-    expect(cached?.attachments).toHaveLength(1);
+    const items = flatItems(getMessagesFromCache('channel-1'));
+    expect(items).toHaveLength(1);
+    expect(items[0].id).toBe('msg-1');
   });
 });
 
@@ -430,49 +399,42 @@ describe('optimisticUpdateChannelMessage', () => {
   });
 
   it('should update message content and timestamps', () => {
-    const msg1 = createMockMessage({ id: 'msg-1', content: 'Original' });
-    const msg2 = createMockMessage({ id: 'msg-2', content: 'Unchanged' });
-    seedQueryCache(
-      'channel-1',
-      createMockChannelResponse({ messages: [msg1, msg2] })
-    );
+    const msg1 = createMockApiMessage({ id: 'msg-1', content: 'Original' });
+    const msg2 = createMockApiMessage({ id: 'msg-2', content: 'Unchanged' });
+    seedMessagesCache('channel-1', createMockMessagesData([msg1, msg2]));
 
     const context = optimisticUpdateChannelMessage({
       channelId: 'channel-1',
-      message_id: 'msg-1',
+      messageId: 'msg-1',
       content: 'Updated content',
     });
 
-    const cached = getChannelFromCache('channel-1');
-    expect(cached?.messages[0].content).toBe('Updated content');
-    expect(cached?.messages[0].edited_at).not.toBeUndefined();
-    expect(cached?.messages[1].content).toBe('Unchanged');
-    // Context should contain previous values for rollback
+    const items = flatItems(getMessagesFromCache('channel-1'));
+    expect(items[0].content).toBe('Updated content');
+    expect(items[0].edited_at).not.toBeNull();
+    expect(items[1].content).toBe('Unchanged');
     expect(context?.messageId).toBe('msg-1');
     expect(context?.previousContent).toBe('Original');
   });
 
   it('should rollback correctly using returned context', () => {
     const originalUpdatedAt = '2024-01-01T00:00:00.000Z';
-    const msg1 = createMockMessage({
+    const msg1 = createMockApiMessage({
       id: 'msg-1',
       content: 'Original',
       updated_at: originalUpdatedAt,
-      edited_at: undefined,
+      edited_at: null,
     });
-    seedQueryCache(
-      'channel-1',
-      createMockChannelResponse({ messages: [msg1] })
-    );
+    seedMessagesCache('channel-1', createMockMessagesData([msg1]));
 
     const context = optimisticUpdateChannelMessage({
       channelId: 'channel-1',
-      message_id: 'msg-1',
+      messageId: 'msg-1',
       content: 'Updated content',
     });
 
     // Verify update happened
-    expect(getChannelFromCache('channel-1')?.messages[0].content).toBe(
+    expect(flatItems(getMessagesFromCache('channel-1'))[0].content).toBe(
       'Updated content'
     );
 
@@ -482,10 +444,10 @@ describe('optimisticUpdateChannelMessage', () => {
     }
 
     // Verify rollback restored original state
-    const cached = getChannelFromCache('channel-1');
-    expect(cached?.messages[0].content).toBe('Original');
-    expect(cached?.messages[0].updated_at).toBe(originalUpdatedAt);
-    expect(cached?.messages[0].edited_at).toBeUndefined();
+    const items = flatItems(getMessagesFromCache('channel-1'));
+    expect(items[0].content).toBe('Original');
+    expect(items[0].updated_at).toBe(originalUpdatedAt);
+    expect(items[0].edited_at).toBeNull();
   });
 });
 
@@ -505,7 +467,8 @@ describe('optimisticAddReaction', () => {
   });
 
   it('should add a new reaction to a message', () => {
-    seedQueryCache('channel-1', createMockChannelResponse());
+    const msg = createMockApiMessage({ id: 'msg-1', reactions: [] });
+    seedMessagesCache('channel-1', createMockMessagesData([msg]));
 
     const context = optimisticAddReaction({
       channelId: 'channel-1',
@@ -514,20 +477,20 @@ describe('optimisticAddReaction', () => {
       message_id: 'msg-1',
     });
 
-    const cached = getChannelFromCache('channel-1');
-    expect(cached?.reactions['msg-1']).toHaveLength(1);
-    expect(cached?.reactions['msg-1'][0].emoji).toBe('👍');
-    expect(cached?.reactions['msg-1'][0].users).toContain('user-1');
-    // Context should indicate this was a new reaction
+    const items = flatItems(getMessagesFromCache('channel-1'));
+    expect(items[0].reactions).toHaveLength(1);
+    expect(items[0].reactions[0].emoji).toBe('👍');
+    expect(items[0].reactions[0].users).toContain('user-1');
     expect(context?.wasNewReaction).toBe(true);
     expect(context?.emoji).toBe('👍');
   });
 
   it('should add user to existing reaction', () => {
-    const reactions: Record<string, CountedReaction[]> = {
-      'msg-1': [{ emoji: '👍', users: ['user-1'] }],
-    };
-    seedQueryCache('channel-1', createMockChannelResponse({ reactions }));
+    const msg = createMockApiMessage({
+      id: 'msg-1',
+      reactions: [{ emoji: '👍', users: ['user-1'] }],
+    });
+    seedMessagesCache('channel-1', createMockMessagesData([msg]));
 
     const context = optimisticAddReaction({
       channelId: 'channel-1',
@@ -536,19 +499,19 @@ describe('optimisticAddReaction', () => {
       message_id: 'msg-1',
     });
 
-    const cached = getChannelFromCache('channel-1');
-    expect(cached?.reactions['msg-1'][0].users).toHaveLength(2);
-    expect(cached?.reactions['msg-1'][0].users).toContain('user-1');
-    expect(cached?.reactions['msg-1'][0].users).toContain('user-2');
-    // Context should indicate this was not a new reaction
+    const items = flatItems(getMessagesFromCache('channel-1'));
+    expect(items[0].reactions[0].users).toHaveLength(2);
+    expect(items[0].reactions[0].users).toContain('user-1');
+    expect(items[0].reactions[0].users).toContain('user-2');
     expect(context?.wasNewReaction).toBe(false);
   });
 
   it('should not add duplicate user to reaction', () => {
-    const reactions: Record<string, CountedReaction[]> = {
-      'msg-1': [{ emoji: '👍', users: ['user-1'] }],
-    };
-    seedQueryCache('channel-1', createMockChannelResponse({ reactions }));
+    const msg = createMockApiMessage({
+      id: 'msg-1',
+      reactions: [{ emoji: '👍', users: ['user-1'] }],
+    });
+    seedMessagesCache('channel-1', createMockMessagesData([msg]));
 
     optimisticAddReaction({
       channelId: 'channel-1',
@@ -557,15 +520,16 @@ describe('optimisticAddReaction', () => {
       message_id: 'msg-1',
     });
 
-    const cached = getChannelFromCache('channel-1');
-    expect(cached?.reactions['msg-1'][0].users).toHaveLength(1);
+    const items = flatItems(getMessagesFromCache('channel-1'));
+    expect(items[0].reactions[0].users).toHaveLength(1);
   });
 
   it('should add different emoji as separate reaction', () => {
-    const reactions: Record<string, CountedReaction[]> = {
-      'msg-1': [{ emoji: '👍', users: ['user-1'] }],
-    };
-    seedQueryCache('channel-1', createMockChannelResponse({ reactions }));
+    const msg = createMockApiMessage({
+      id: 'msg-1',
+      reactions: [{ emoji: '👍', users: ['user-1'] }],
+    });
+    seedMessagesCache('channel-1', createMockMessagesData([msg]));
 
     optimisticAddReaction({
       channelId: 'channel-1',
@@ -574,18 +538,15 @@ describe('optimisticAddReaction', () => {
       message_id: 'msg-1',
     });
 
-    const cached = getChannelFromCache('channel-1');
-    expect(cached?.reactions['msg-1']).toHaveLength(2);
-    expect(
-      cached?.reactions['msg-1'].find((r) => r.emoji === '👍')
-    ).toBeDefined();
-    expect(
-      cached?.reactions['msg-1'].find((r) => r.emoji === '❤️')
-    ).toBeDefined();
+    const items = flatItems(getMessagesFromCache('channel-1'));
+    expect(items[0].reactions).toHaveLength(2);
+    expect(items[0].reactions.find((r) => r.emoji === '👍')).toBeDefined();
+    expect(items[0].reactions.find((r) => r.emoji === '❤️')).toBeDefined();
   });
 
   it('should rollback correctly using returned context', () => {
-    seedQueryCache('channel-1', createMockChannelResponse());
+    const msg = createMockApiMessage({ id: 'msg-1', reactions: [] });
+    seedMessagesCache('channel-1', createMockMessagesData([msg]));
 
     const context = optimisticAddReaction({
       channelId: 'channel-1',
@@ -595,9 +556,9 @@ describe('optimisticAddReaction', () => {
     });
 
     // Verify add happened
-    expect(getChannelFromCache('channel-1')?.reactions['msg-1']).toHaveLength(
-      1
-    );
+    expect(
+      flatItems(getMessagesFromCache('channel-1'))[0].reactions
+    ).toHaveLength(1);
 
     // Rollback
     if (context) {
@@ -605,8 +566,8 @@ describe('optimisticAddReaction', () => {
     }
 
     // Verify rollback restored original state
-    const cached = getChannelFromCache('channel-1');
-    expect(cached?.reactions['msg-1']).toBeUndefined();
+    const items = flatItems(getMessagesFromCache('channel-1'));
+    expect(items[0].reactions).toHaveLength(0);
   });
 });
 
@@ -626,10 +587,11 @@ describe('optimisticRemoveReaction', () => {
   });
 
   it('should remove user from reaction', () => {
-    const reactions: Record<string, CountedReaction[]> = {
-      'msg-1': [{ emoji: '👍', users: ['user-1', 'user-2'] }],
-    };
-    seedQueryCache('channel-1', createMockChannelResponse({ reactions }));
+    const msg = createMockApiMessage({
+      id: 'msg-1',
+      reactions: [{ emoji: '👍', users: ['user-1', 'user-2'] }],
+    });
+    seedMessagesCache('channel-1', createMockMessagesData([msg]));
 
     const context = optimisticRemoveReaction({
       channelId: 'channel-1',
@@ -638,22 +600,22 @@ describe('optimisticRemoveReaction', () => {
       message_id: 'msg-1',
     });
 
-    const cached = getChannelFromCache('channel-1');
-    expect(cached?.reactions['msg-1'][0].users).toHaveLength(1);
-    expect(cached?.reactions['msg-1'][0].users).not.toContain('user-1');
-    expect(cached?.reactions['msg-1'][0].users).toContain('user-2');
-    // Context should indicate this was not the last user
+    const items = flatItems(getMessagesFromCache('channel-1'));
+    expect(items[0].reactions[0].users).toHaveLength(1);
+    expect(items[0].reactions[0].users).not.toContain('user-1');
+    expect(items[0].reactions[0].users).toContain('user-2');
     expect(context?.wasLastUser).toBe(false);
   });
 
   it('should remove reaction entirely when last user removes it', () => {
-    const reactions: Record<string, CountedReaction[]> = {
-      'msg-1': [
+    const msg = createMockApiMessage({
+      id: 'msg-1',
+      reactions: [
         { emoji: '👍', users: ['user-1'] },
         { emoji: '❤️', users: ['user-2'] },
       ],
-    };
-    seedQueryCache('channel-1', createMockChannelResponse({ reactions }));
+    });
+    seedMessagesCache('channel-1', createMockMessagesData([msg]));
 
     const context = optimisticRemoveReaction({
       channelId: 'channel-1',
@@ -662,19 +624,18 @@ describe('optimisticRemoveReaction', () => {
       message_id: 'msg-1',
     });
 
-    const cached = getChannelFromCache('channel-1');
-    expect(cached?.reactions['msg-1']).toHaveLength(1);
-    expect(cached?.reactions['msg-1'][0].emoji).toBe('❤️');
-    // Context should indicate this was the last user
+    const items = flatItems(getMessagesFromCache('channel-1'));
+    expect(items[0].reactions).toHaveLength(1);
+    expect(items[0].reactions[0].emoji).toBe('❤️');
     expect(context?.wasLastUser).toBe(true);
   });
 
-  it('should remove message key from reactions map when no reactions left', () => {
-    const reactions: Record<string, CountedReaction[]> = {
-      'msg-1': [{ emoji: '👍', users: ['user-1'] }],
-      'msg-2': [{ emoji: '❤️', users: ['user-2'] }],
-    };
-    seedQueryCache('channel-1', createMockChannelResponse({ reactions }));
+  it('should remove all reactions from message when last reaction removed', () => {
+    const msg = createMockApiMessage({
+      id: 'msg-1',
+      reactions: [{ emoji: '👍', users: ['user-1'] }],
+    });
+    seedMessagesCache('channel-1', createMockMessagesData([msg]));
 
     optimisticRemoveReaction({
       channelId: 'channel-1',
@@ -683,13 +644,13 @@ describe('optimisticRemoveReaction', () => {
       message_id: 'msg-1',
     });
 
-    const cached = getChannelFromCache('channel-1');
-    expect(cached?.reactions['msg-1']).toBeUndefined();
-    expect(cached?.reactions['msg-2']).toBeDefined();
+    const items = flatItems(getMessagesFromCache('channel-1'));
+    expect(items[0].reactions).toHaveLength(0);
   });
 
   it('should do nothing for non-existent reactions', () => {
-    seedQueryCache('channel-1', createMockChannelResponse());
+    const msg = createMockApiMessage({ id: 'msg-1', reactions: [] });
+    seedMessagesCache('channel-1', createMockMessagesData([msg]));
 
     optimisticRemoveReaction({
       channelId: 'channel-1',
@@ -698,15 +659,16 @@ describe('optimisticRemoveReaction', () => {
       message_id: 'msg-1',
     });
 
-    const cached = getChannelFromCache('channel-1');
-    expect(cached?.reactions).toEqual({});
+    const items = flatItems(getMessagesFromCache('channel-1'));
+    expect(items[0].reactions).toHaveLength(0);
   });
 
   it('should rollback correctly using returned context', () => {
-    const reactions: Record<string, CountedReaction[]> = {
-      'msg-1': [{ emoji: '👍', users: ['user-1'] }],
-    };
-    seedQueryCache('channel-1', createMockChannelResponse({ reactions }));
+    const msg = createMockApiMessage({
+      id: 'msg-1',
+      reactions: [{ emoji: '👍', users: ['user-1'] }],
+    });
+    seedMessagesCache('channel-1', createMockMessagesData([msg]));
 
     const context = optimisticRemoveReaction({
       channelId: 'channel-1',
@@ -717,8 +679,8 @@ describe('optimisticRemoveReaction', () => {
 
     // Verify remove happened
     expect(
-      getChannelFromCache('channel-1')?.reactions['msg-1']
-    ).toBeUndefined();
+      flatItems(getMessagesFromCache('channel-1'))[0].reactions
+    ).toHaveLength(0);
 
     // Rollback
     if (context) {
@@ -726,9 +688,9 @@ describe('optimisticRemoveReaction', () => {
     }
 
     // Verify rollback restored original state
-    const cached = getChannelFromCache('channel-1');
-    expect(cached?.reactions['msg-1']).toHaveLength(1);
-    expect(cached?.reactions['msg-1'][0].users).toContain('user-1');
+    const items = flatItems(getMessagesFromCache('channel-1'));
+    expect(items[0].reactions).toHaveLength(1);
+    expect(items[0].reactions[0].users).toContain('user-1');
   });
 });
 
@@ -749,7 +711,7 @@ describe('optimisticUpdateChannelName', () => {
 
   it('should update channel name and timestamp', () => {
     const originalUpdatedAt = '2024-01-01T00:00:00.000Z';
-    seedQueryCache('channel-1', createMockChannelResponse());
+    seedChannelCache('channel-1', createMockChannelResponse());
 
     const context = optimisticUpdateChannelName({
       channelId: 'channel-1',
@@ -759,13 +721,12 @@ describe('optimisticUpdateChannelName', () => {
     const cached = getChannelFromCache('channel-1');
     expect(cached?.channel.name).toBe('New Channel Name');
     expect(cached?.channel.updated_at).not.toBe(originalUpdatedAt);
-    // Context should contain previous name for rollback
     expect(context?.previousName).toBe('Test Channel');
   });
 
   it('should rollback correctly using returned context', () => {
     const originalUpdatedAt = '2024-01-01T00:00:00.000Z';
-    seedQueryCache('channel-1', createMockChannelResponse());
+    seedChannelCache('channel-1', createMockChannelResponse());
 
     const context = optimisticUpdateChannelName({
       channelId: 'channel-1',

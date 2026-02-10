@@ -5,7 +5,7 @@ import clickOutside from '@core/directive/clickOutside';
 import { touchHandler } from '@core/directive/touchHandler';
 import { idToDisplayName } from '@core/user';
 import Tooltip from '@corvu/tooltip';
-import type { GetChannelResponseReactions } from '@service-comms/generated/models';
+import type { CountedReaction } from '@service-comms/generated/models';
 
 import { useUserId } from '@core/context/user';
 import { createMemo, createSignal, For, Show, type Accessor } from 'solid-js';
@@ -17,15 +17,13 @@ false && touchHandler;
 type MessageReactionsProps = {
   messageId: string;
   channelId: Accessor<string>;
-  reactions: Accessor<GetChannelResponseReactions>;
+  reactions: Accessor<CountedReaction[]>;
 };
 
 export function MessageReactions(props: MessageReactionsProps) {
   const userId = useUserId();
 
-  const reactionsForMessage = createMemo(() => {
-    return props.reactions()?.[props.messageId] ?? [];
-  });
+  const reactionsForMessage = createMemo(() => props.reactions() ?? []);
 
   const reactToMessage = useReactToMessage(props.channelId, props.reactions);
 

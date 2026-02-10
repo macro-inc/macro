@@ -1,5 +1,5 @@
 use crate::domain::{
-    models::{CountedReaction, MessageAttachment, ThreadReplyRow, TopLevelMessageRow},
+    models::{CountedReaction, MessageAttachment, ThreadReplyRow, ThreadStats, TopLevelMessageRow},
     ports::ChannelMessagesRepo,
 };
 use models_pagination::{CreatedAt, Query};
@@ -30,7 +30,13 @@ struct TopLevelRow {
     updated_at: chrono::DateTime<chrono::Utc>,
     edited_at: Option<chrono::DateTime<chrono::Utc>>,
     deleted_at: Option<chrono::DateTime<chrono::Utc>>,
-    thread_reply_count: i64,
+}
+
+/// Intermediate row for thread stats batch query.
+#[derive(Debug, sqlx::FromRow)]
+struct ThreadStatsRow {
+    thread_id: Uuid,
+    reply_count: i64,
     latest_reply_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
@@ -88,16 +94,9 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                 m.content,
                 m.created_at,
                 m.updated_at,
-                m.edited_at,
-                m.deleted_at,
-                COALESCE(t.reply_count, 0) AS thread_reply_count,
-                t.latest_reply_at
+                m.edited_at::timestamptz AS edited_at,
+                m.deleted_at::timestamptz AS deleted_at
             FROM comms_messages m
-            LEFT JOIN LATERAL (
-                SELECT COUNT(*) AS reply_count, MAX(r.created_at) AS latest_reply_at
-                FROM comms_messages r
-                WHERE r.thread_id = m.id AND r.deleted_at IS NULL
-            ) t ON true
             WHERE m.channel_id = $1
               AND m.thread_id IS NULL
               AND m.deleted_at IS NULL
@@ -124,8 +123,44 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                 updated_at: r.updated_at,
                 edited_at: r.edited_at,
                 deleted_at: r.deleted_at,
-                thread_reply_count: r.thread_reply_count,
-                latest_reply_at: r.latest_reply_at,
+            })
+            .collect())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_thread_stats(
+        &self,
+        parent_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, ThreadStats>, Self::Err> {
+        if parent_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let rows = sqlx::query_as::<_, ThreadStatsRow>(
+            r#"
+            SELECT
+                thread_id,
+                COUNT(*) AS reply_count,
+                MAX(created_at)::timestamptz AS latest_reply_at
+            FROM comms_messages
+            WHERE thread_id = ANY($1) AND deleted_at IS NULL
+            GROUP BY thread_id
+            "#,
+        )
+        .bind(parent_ids)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| {
+                (
+                    r.thread_id,
+                    ThreadStats {
+                        reply_count: r.reply_count,
+                        latest_reply_at: r.latest_reply_at,
+                    },
+                )
             })
             .collect())
     }
@@ -142,7 +177,7 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
 
         let rows = sqlx::query_as::<_, PreviewRow>(
             r#"
-            SELECT id, thread_id, sender_id, content, created_at, updated_at, edited_at
+            SELECT id, thread_id, sender_id, content, created_at, updated_at, edited_at::timestamptz AS edited_at
             FROM (
                 SELECT
                     r.id,

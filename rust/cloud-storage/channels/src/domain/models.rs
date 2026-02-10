@@ -128,8 +128,13 @@ pub struct TopLevelMessageRow {
     pub edited_at: Option<DateTime<Utc>>,
     /// Deleted timestamp.
     pub deleted_at: Option<DateTime<Utc>>,
+}
+
+/// Thread statistics for a parent message.
+#[derive(Debug, Clone)]
+pub struct ThreadStats {
     /// Number of replies in this thread.
-    pub thread_reply_count: i64,
+    pub reply_count: i64,
     /// Timestamp of the latest reply.
     pub latest_reply_at: Option<DateTime<Utc>>,
 }

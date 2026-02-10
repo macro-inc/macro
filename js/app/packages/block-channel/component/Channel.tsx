@@ -25,7 +25,7 @@ import {
   useEntityHasUnreadNotifications,
 } from '@notifications';
 import { useUpdateChannelsActivityMutation } from '@queries/channel/activity';
-import type { Message } from '@service-comms/generated/models';
+import type { ApiChannelMessage } from '@service-comms/client';
 import { connectionGatewayClient } from '@service-connection/client';
 import { useBeforeLeave, useSearchParams } from '@solidjs/router';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
@@ -108,7 +108,7 @@ export function Channel(props: {
   const [channelInputAttachmentsStore, setChannelInputAttachmentsStore] =
     createStore<Record<string, InputAttachment[]>>({});
   // All messages, including threads, in order of how they should be displayed, i.e. thread children are placed after their parent message
-  const [orderedMessages, setOrderedMessages] = createSignal<Message[]>([]);
+  const [orderedMessages, setOrderedMessages] = createSignal<ApiChannelMessage[]>([]);
   const scopeId = blockHotkeyScopeSignal.get;
   const blockRef = blockElementSignal.get;
   const [isDraggingOverChannel, setIsDraggingOverChannel] = createSignal(false);
@@ -419,9 +419,6 @@ export function Channel(props: {
           <MessageList
             channelId={props.channelId}
             messages={channelContext.messages()}
-            threads={channelContext.threads()}
-            reactions={channelContext.reactions()}
-            attachments={channelContext.attachments()}
             participants={channelContext.channel()?.participants ?? []}
             focusedMessageId={selectedMessageId}
             setFocusedMessageId={setSelectedMessageId}
@@ -431,6 +428,9 @@ export function Channel(props: {
             orderedMessages={orderedMessages}
             setOrderedMessages={setOrderedMessages}
             onNavigationReady={setMessageListNav}
+            fetchNextPage={() => channelContext.fetchNextPage()}
+            hasNextPage={channelContext.hasNextPage()}
+            isFetchingNextPage={channelContext.isFetchingNextPage()}
           />
           <div class="shrink-0 w-full px-4 pb-2">
             {/* seamus: note this element is below the scroll so we translate it back to account for the scroll above */}

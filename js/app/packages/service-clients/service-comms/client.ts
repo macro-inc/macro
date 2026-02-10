@@ -38,7 +38,51 @@ import type { PostMessageRequest } from './generated/models/postMessageRequest';
 import type { PostReactionRequest } from './generated/models/postReactionRequest';
 import type { PostTypingRequest } from './generated/models/postTypingRequest';
 import type { RemoveParticipantsRequest } from './generated/models/removeParticipantsRequest';
+import type { CountedReaction } from './generated/models/countedReaction';
 import { ChannelType } from './generated/models/channelType';
+
+export type ApiThreadReply = {
+  id: string;
+  sender_id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  edited_at: string | null;
+  reactions: CountedReaction[];
+  attachments: ApiMessageAttachment[];
+};
+
+export type ApiThreadInfo = {
+  reply_count: number;
+  latest_reply_at: string | null;
+  preview: ApiThreadReply[];
+};
+
+export type ApiMessageAttachment = {
+  id: string;
+  entity_type: string;
+  entity_id: string;
+  created_at: string;
+};
+
+export type ApiChannelMessage = {
+  id: string;
+  channel_id: string;
+  sender_id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  edited_at: string | null;
+  deleted_at: string | null;
+  thread: ApiThreadInfo;
+  reactions: CountedReaction[];
+  attachments: ApiMessageAttachment[];
+};
+
+export type ChannelMessagesPage = {
+  items: ApiChannelMessage[];
+  next_cursor: string | null;
+};
 
 const commsHost: string = SERVER_HOSTS['document-storage-service'];
 
@@ -346,6 +390,18 @@ export const commsServiceClient = {
           headers: token ? { 'x-permissions-token': `${token}` } : undefined,
         }
       ),
+      (result) => result
+    );
+  },
+  async getChannelMessages(args: WithChannelId & { limit?: number; cursor?: string | null }) {
+    const { channel_id, limit, cursor } = args;
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.append('limit', limit.toString());
+    if (cursor) params.append('cursor', cursor);
+    const qs = params.toString();
+    const url = `/channels/${channel_id}/messages${qs ? `?${qs}` : ''}`;
+    return mapOk(
+      await commsFetch<ChannelMessagesPage>(url, { method: 'GET' }),
       (result) => result
     );
   },

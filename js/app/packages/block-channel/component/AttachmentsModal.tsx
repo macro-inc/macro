@@ -37,7 +37,13 @@ export function AttachmentsModal() {
           makeAttachmentFromMention(m, currentBlockId)
         );
 
-    const channelAttachments = channelContext.attachments() ?? [];
+    const channelAttachments: Attachment[] = channelContext.messages().flatMap((msg) =>
+      msg.attachments.map((a) => ({
+        ...a,
+        channel_id: currentBlockId,
+        message_id: msg.id,
+      }))
+    );
     const safeAttachments = filterSafeAttachments(channelAttachments);
     const all = [...safeAttachments, ...mentions];
     return all

@@ -41,7 +41,7 @@ where
     ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
         let limit = limit.clamp(1, 100);
 
-        // 1. Fetch top-level messages with thread stats.
+        // 1. Fetch top-level messages (lightweight — no LATERAL join).
         let rows = self
             .repo
             .get_top_level_messages(channel_id, &query, limit)
@@ -50,40 +50,35 @@ where
 
         let parent_ids: Vec<Uuid> = rows.iter().map(|r| r.id).collect();
 
-        // 2 + 3. Fetch thread previews, reactions, and attachments in parallel.
-        let (thread_previews, reactions, attachments) = {
-            let previews_fut = self
-                .repo
-                .get_thread_previews(&parent_ids, THREAD_PREVIEW_COUNT);
+        // 2. Fetch thread stats + previews in parallel (both keyed on parent_ids).
+        let (thread_stats, thread_previews) = tokio::join!(
+            self.repo.get_thread_stats(&parent_ids),
+            self.repo.get_thread_previews(&parent_ids, THREAD_PREVIEW_COUNT),
+        );
+        let thread_stats = thread_stats.map_err(anyhow::Error::from)?;
+        let thread_previews = thread_previews.map_err(anyhow::Error::from)?;
 
-            // Collect ALL message ids (top-level + preview replies) for reactions/attachments
-            // We need previews first to know reply ids, so fetch previews first,
-            // then reactions+attachments in parallel.
-            let previews = previews_fut.await.map_err(anyhow::Error::from)?;
-
-            let mut all_ids: Vec<Uuid> = parent_ids.clone();
-            for replies in previews.values() {
-                for reply in replies {
-                    all_ids.push(reply.id);
-                }
+        // 3. Collect all message IDs (parents + preview replies) for reactions/attachments.
+        let mut all_ids: Vec<Uuid> = parent_ids.clone();
+        for replies in thread_previews.values() {
+            for reply in replies {
+                all_ids.push(reply.id);
             }
+        }
 
-            let (reactions, attachments) = tokio::join!(
-                self.repo.get_reactions_batch(&all_ids),
-                self.repo.get_attachments_batch(&all_ids),
-            );
+        // 4. Fetch reactions + attachments in parallel over all IDs.
+        let (reactions, attachments) = tokio::join!(
+            self.repo.get_reactions_batch(&all_ids),
+            self.repo.get_attachments_batch(&all_ids),
+        );
+        let reactions = reactions.map_err(anyhow::Error::from)?;
+        let attachments = attachments.map_err(anyhow::Error::from)?;
 
-            (
-                previews,
-                reactions.map_err(anyhow::Error::from)?,
-                attachments.map_err(anyhow::Error::from)?,
-            )
-        };
-
-        // 4. Assemble ChannelMessages.
+        // 5. Assemble ChannelMessages.
         let messages: Vec<ChannelMessage> = rows
             .into_iter()
             .map(|row| {
+                let stats = thread_stats.get(&row.id);
                 let preview_replies = thread_previews
                     .get(&row.id)
                     .map(|replies| {
@@ -113,8 +108,8 @@ where
                     edited_at: row.edited_at,
                     deleted_at: row.deleted_at,
                     thread: ThreadInfo {
-                        reply_count: row.thread_reply_count,
-                        latest_reply_at: row.latest_reply_at,
+                        reply_count: stats.map_or(0, |s| s.reply_count),
+                        latest_reply_at: stats.and_then(|s| s.latest_reply_at),
                         preview: preview_replies,
                     },
                     reactions: reactions.get(&row.id).cloned().unwrap_or_default(),
@@ -123,7 +118,7 @@ where
             })
             .collect();
 
-        // 5. Paginate.
+        // 6. Paginate.
         let page = messages
             .into_iter()
             .paginate_on(limit.into(), CreatedAt)

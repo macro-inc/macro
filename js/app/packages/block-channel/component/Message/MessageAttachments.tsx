@@ -1,14 +1,14 @@
 import { ItemPreview } from '@core/component/ItemPreview';
 import { VideoPreview } from '@core/component/VideoPreview';
-import type { Attachment } from '@service-comms/generated/models/attachment';
+import type { ApiMessageAttachment } from '@service-comms/client';
 import { stringToItemType } from '@service-storage/client';
 import { type Accessor, For, Show } from 'solid-js';
 import { DynamicImageList } from './DynamicImageList';
 
 type MessageAttachmentsProps = {
-  videoAttachments: Accessor<Attachment[]>;
-  imageAttachments: Accessor<Attachment[]>;
-  documentAttachments: Accessor<Attachment[]>;
+  videoAttachments: Accessor<ApiMessageAttachment[]>;
+  imageAttachments: Accessor<ApiMessageAttachment[]>;
+  documentAttachments: Accessor<ApiMessageAttachment[]>;
   isDeleted: Accessor<boolean>;
   isCurrentUser: Accessor<boolean>;
   channelId: string;
@@ -26,8 +26,6 @@ export function MessageAttachments(props: MessageAttachmentsProps) {
             <VideoPreview
               id={item.entity_id}
               variant="dynamic"
-              width={item.width}
-              height={item.height}
             />
           )}
         </For>
@@ -38,8 +36,8 @@ export function MessageAttachments(props: MessageAttachmentsProps) {
           <DynamicImageList
             images={props.imageAttachments()?.map((a) => ({
               id: a.entity_id,
-              width: a.width ?? undefined,
-              height: a.height ?? undefined,
+              width: undefined,
+              height: undefined,
             }))}
             attachmentIds={props.imageAttachments()?.map((a) => a.id)}
             isCurrentUser={props.isCurrentUser()}

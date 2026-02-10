@@ -1,5 +1,5 @@
 use crate::domain::models::{
-    CountedReaction, MessageAttachment, ThreadReplyRow, TopLevelMessageRow,
+    CountedReaction, MessageAttachment, ThreadReplyRow, ThreadStats, TopLevelMessageRow,
 };
 use models_pagination::{CreatedAt, Query};
 use std::collections::HashMap;
@@ -11,14 +11,19 @@ pub trait ChannelMessagesRepo: Send + Sync + 'static {
     /// Error type for repo operations.
     type Err: Send;
 
-    /// Fetch top-level messages (thread_id IS NULL) with thread reply count
-    /// and latest_reply_at. Cursor-paginated on created_at DESC.
+    /// Fetch top-level messages (thread_id IS NULL). Cursor-paginated on created_at DESC.
     fn get_top_level_messages(
         &self,
         channel_id: Uuid,
         query: &Query<Uuid, CreatedAt, ()>,
         limit: u16,
     ) -> impl Future<Output = Result<Vec<TopLevelMessageRow>, Self::Err>> + Send;
+
+    /// Batch-fetch thread statistics (reply count + latest reply timestamp) for parent messages.
+    fn get_thread_stats(
+        &self,
+        parent_ids: &[Uuid],
+    ) -> impl Future<Output = Result<HashMap<Uuid, ThreadStats>, Self::Err>> + Send;
 
     /// Fetch the last N replies per parent message (for thread previews).
     fn get_thread_previews(

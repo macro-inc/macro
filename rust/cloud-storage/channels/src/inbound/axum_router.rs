@@ -55,7 +55,7 @@ where
 {
     Router::new()
         .route(
-            "/{channel_id}/messages",
+            "/:channel_id/messages",
             get(get_channel_messages_handler::<S>),
         )
         .with_state(state)
