@@ -6,17 +6,18 @@ import {
   addWeeks,
   addYears,
   addSeconds,
+  addMilliseconds,
 } from 'date-fns';
 import { match } from 'ts-pattern';
 
-export type TimeUnit = 'h' | 'd' | 'w' | 'm' | 'y' | 'min' | 's';
+export type TimeUnit = 'h' | 'd' | 'w' | 'm' | 'y' | 'min' | 's' | 'ms';
 
 export interface ParsedDuration {
   value: number;
   unit: TimeUnit;
 }
 
-const UNITS = new Set<TimeUnit>(['h', 'd', 'w', 'm', 'y', 'min', 's']);
+const UNITS = new Set<TimeUnit>(['h', 'd', 'w', 'm', 'y', 'min', 's', 'ms']);
 
 /**
  * Parses a duration string like "3d", "1w", "36h", "2m", "1y", "30min"
@@ -48,6 +49,7 @@ export function parsedDurationToMilliseconds(duration: ParsedDuration): number {
   const unit = duration.unit;
 
   return match(unit)
+    .with('ms', () => value)
     .with('s', () => value * 1000)
     .with('min', () => value * 60 * 1000)
     .with('h', () => value * 60 * 60 * 1000)
@@ -69,6 +71,7 @@ export function applyDurationToDate(
   const unit = duration.unit;
 
   return match(unit)
+    .with('ms', () => addMilliseconds(baseDate, value))
     .with('s', () => addSeconds(baseDate, value))
     .with('min', () => addMinutes(baseDate, value))
     .with('h', () => addHours(baseDate, value))
@@ -121,6 +124,7 @@ export function formatDuration(duration: ParsedDuration): string {
   const { value, unit } = duration;
 
   const unitLabels: Record<TimeUnit, string> = {
+    ms: value === 1 ? 'millisecond' : 'milliseconds',
     s: value === 1 ? 'second' : 'seconds',
     min: value === 1 ? 'minute' : 'minutes',
     h: value === 1 ? 'hour' : 'hours',
