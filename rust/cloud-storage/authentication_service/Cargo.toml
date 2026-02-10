@@ -92,7 +92,6 @@ rsa = "0.9.10"
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
-serde_urlencoded = "0.7.1"
 serde_utils = { path = "../serde_utils", features = ["urlencode"] }
 ses_client = { path = "../ses_client" }
 sha1 = "0.10.6"
