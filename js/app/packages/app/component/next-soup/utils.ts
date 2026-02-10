@@ -23,6 +23,7 @@ import {
 } from '@core/component/Properties/constants';
 import { soupKeys } from '@queries/soup/keys';
 import { match } from 'ts-pattern';
+import { isAfter } from 'date-fns';
 
 const mergeSearchEntities = <T extends EntityData>(
   first: WithSearch<T>,
@@ -122,8 +123,8 @@ export const deduplicateEntities = <T extends EntityData>(
 /**
  * Gets the timestamp of an entity (updatedAt or createdAt)
  */
-const getEntityTimestamp = (entity: EntityData): number => {
-  return entity.updatedAt?.getTime() ?? entity.createdAt?.getTime() ?? 0;
+const getEntityTimestamp = (entity: EntityData): Date => {
+  return entity.updatedAt ?? entity.createdAt ?? new Date(0);
 };
 
 /**
@@ -133,7 +134,7 @@ export const isNewerEntity = (
   newEntity: EntityData,
   existing: EntityData
 ): boolean => {
-  return getEntityTimestamp(newEntity) >= getEntityTimestamp(existing);
+  return isAfter(getEntityTimestamp(newEntity), getEntityTimestamp(existing));
 };
 
 export const openEntityInNewTab = ({
