@@ -587,7 +587,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                 highlighted={
                                   panel.isPanelActive() && row.isFocused()
                                 }
-                                onMouseOver={() => {
+                                onMouseMove={() => {
                                   if (isKeypressActive()) return;
                                   if (soup.previewEntity()) return;
                                   soup.focus.set(row.original.id);
