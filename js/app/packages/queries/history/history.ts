@@ -115,7 +115,7 @@ export function refetchHistory() {
 // @ts-ignore
 // biome-ignore lint/correctness/noUnusedVariables: we may use this eventually
 function optimisticUpdateViewedAt(itemId: string) {
-  const now = Date.now();
+  const now = new Date();
 
   setHistoryData((old) => {
     return updateViewedAtAndMoveItemToFront(old, itemId, now);

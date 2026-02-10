@@ -316,7 +316,7 @@ export function useSendMessageMutation(
   }));
 }
 
-type ScheduleMessageParams = { draftID: string; sendTime: string };
+type ScheduleMessageParams = { draftID: string; sendTime: Date };
 
 /**
  * Mutation to send an email message.

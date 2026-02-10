@@ -15,8 +15,8 @@ function createItem(overrides: Partial<Item> = {}): Item {
     name: 'Test Item',
     type: 'document',
     userId: 'user-1',
-    createdAt: Date.now() / 1000,
-    updatedAt: Date.now() / 1000,
+    createdAt: new Date(),
+    updatedAt: new Date(),
     ...overrides,
   } as Item;
 }
@@ -56,7 +56,7 @@ describe('history transforms', () => {
         createItem({ id: 'item-2' }),
         createItem({ id: 'item-3' }),
       ];
-      const timestamp = Date.now();
+      const timestamp = new Date();
 
       const result = updateViewedAtAndMoveItemToFront(
         items,
@@ -79,7 +79,7 @@ describe('history transforms', () => {
       const result = updateViewedAtAndMoveItemToFront(
         items,
         'nonexistent',
-        Date.now()
+        new Date()
       );
 
       expect(result).toBe(items);
@@ -91,7 +91,7 @@ describe('history transforms', () => {
         createItem({ id: 'item-1' }),
         createItem({ id: 'item-2' }),
       ];
-      const timestamp = Date.now();
+      const timestamp = new Date();
 
       const result = updateViewedAtAndMoveItemToFront(
         items,
@@ -111,7 +111,7 @@ describe('history transforms', () => {
       ];
       const originalLength = items.length;
 
-      updateViewedAtAndMoveItemToFront(items, 'item-2', Date.now());
+      updateViewedAtAndMoveItemToFront(items, 'item-2', new Date());
 
       expect(items.length).toBe(originalLength);
       expect(items[0].id).toBe('item-1');

@@ -8,29 +8,29 @@ describe('createMessageListContextLookup', () => {
   const mockMessages: MinimalMessage[] = [
     {
       id: 'msg0',
-      created_at: '2024-01-01T10:00:00Z',
+      created_at: new Date('2024-01-01T10:00:00Z'),
       sender_id: 'user1',
     },
     {
       id: 'msg1',
-      created_at: '2024-01-01T10:00:00Z',
+      created_at: new Date('2024-01-01T10:00:00Z'),
       sender_id: 'user1',
     },
     {
       id: 'msg2',
-      created_at: '2024-01-01T10:01:00Z',
+      created_at: new Date('2024-01-01T10:01:00Z'),
       sender_id: 'user2',
       thread_id: 'msg1',
     },
     {
       id: 'msg3',
-      created_at: '2024-01-01T10:02:00Z',
+      created_at: new Date('2024-01-01T10:02:00Z'),
       sender_id: 'user1',
       thread_id: 'msg1',
     },
     {
       id: 'msg4',
-      created_at: '2024-01-01T10:03:00Z',
+      created_at: new Date('2024-01-01T10:03:00Z'),
       sender_id: 'user3',
     },
   ];
@@ -125,23 +125,23 @@ describe('createMessageListContextLookup', () => {
     const messagesWithLastThread: MinimalMessage[] = [
       {
         id: 'msg0',
-        created_at: '2024-01-01T10:00:00Z',
+        created_at: new Date('2024-01-01T10:00:00Z'),
         sender_id: 'user1',
       },
       {
         id: 'msg1',
-        created_at: '2024-01-01T10:01:00Z',
+        created_at: new Date('2024-01-01T10:01:00Z'),
         sender_id: 'user2',
       },
       {
         id: 'msg2',
-        created_at: '2024-01-01T10:02:00Z',
+        created_at: new Date('2024-01-01T10:02:00Z'),
         sender_id: 'user3',
         thread_id: 'msg1',
       },
       {
         id: 'msg3',
-        created_at: '2024-01-01T10:03:00Z',
+        created_at: new Date('2024-01-01T10:03:00Z'),
         sender_id: 'user1',
         thread_id: 'msg1',
       },

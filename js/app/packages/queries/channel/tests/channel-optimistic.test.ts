@@ -65,8 +65,8 @@ function createMockMessage(overrides: Partial<Message> = {}): Message {
     channel_id: 'channel-1',
     sender_id: 'user-1',
     content: 'Test message',
-    created_at: '2024-01-01T00:00:00.000Z',
-    updated_at: '2024-01-01T00:00:00.000Z',
+    created_at: new Date('2024-01-01T00:00:00.000Z'),
+    updated_at: new Date('2024-01-01T00:00:00.000Z'),
     deleted_at: undefined,
     edited_at: undefined,
     thread_id: undefined,
@@ -453,7 +453,7 @@ describe('optimisticUpdateChannelMessage', () => {
   });
 
   it('should rollback correctly using returned context', () => {
-    const originalUpdatedAt = '2024-01-01T00:00:00.000Z';
+    const originalUpdatedAt = new Date('2024-01-01T00:00:00.000Z');
     const msg1 = createMockMessage({
       id: 'msg-1',
       content: 'Original',

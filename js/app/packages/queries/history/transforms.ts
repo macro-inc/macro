@@ -49,7 +49,7 @@ export function transformHistoryResponse(
 export function updateViewedAtAndMoveItemToFront(
   items: HistoryItem[],
   itemId: string,
-  timestamp: number
+  timestamp: Date
 ): HistoryItem[] {
   const itemIndex = items.findIndex((item) => item.id === itemId);
 

@@ -53,10 +53,10 @@ function createMockNotification(
     id: `notification-${Math.random().toString(36).slice(2)}`,
     entity_id: 'entity-1',
     entity_type: 'document',
-    createdAt: Date.now(),
-    updatedAt: 0,
-    viewedAt: 0,
-    deletedAt: 0,
+    createdAt: new Date(),
+    updatedAt: null,
+    viewedAt: null,
+    deletedAt: null,
     done: false,
     sent: true,
     ownerId: 'owner-1',
@@ -148,8 +148,8 @@ describe('notification mutations', () => {
 
   describe('useMarkNotificationsAsSeenMutation', () => {
     it('should optimistically update viewedAt when marking as seen', async () => {
-      const n1 = createMockNotification({ id: 'n1', viewedAt: 0 });
-      const n2 = createMockNotification({ id: 'n2', viewedAt: 0 });
+      const n1 = createMockNotification({ id: 'n1', viewedAt: null });
+      const n2 = createMockNotification({ id: 'n2', viewedAt: null });
       seedQueryCache([createMockNotificationPage([n1, n2])]);
 
       mockBulkMarkNotificationAsSeen.mockResolvedValue(ok({ success: true }));
@@ -174,7 +174,7 @@ describe('notification mutations', () => {
     });
 
     it('should rollback optimistic update on error', async () => {
-      const n1 = createMockNotification({ id: 'n1', viewedAt: 0 });
+      const n1 = createMockNotification({ id: 'n1', viewedAt: null });
       seedQueryCache([createMockNotificationPage([n1])]);
 
       mockBulkMarkNotificationAsSeen.mockResolvedValue(
@@ -204,8 +204,8 @@ describe('notification mutations', () => {
     });
 
     it('should handle marking notifications across multiple pages', async () => {
-      const n1 = createMockNotification({ id: 'n1', viewedAt: 0 });
-      const n2 = createMockNotification({ id: 'n2', viewedAt: 0 });
+      const n1 = createMockNotification({ id: 'n1', viewedAt: null });
+      const n2 = createMockNotification({ id: 'n2', viewedAt: null });
       seedQueryCache([
         createMockNotificationPage([n1]),
         createMockNotificationPage([n2]),

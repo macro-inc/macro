@@ -101,7 +101,7 @@ function NewMessageIndicator(props: NewIndicatorProps) {
 
 type MessageProps = {
   message: MessageType;
-  lastViewed: Accessor<string | null | undefined>;
+  lastViewed: Accessor<Date | null | undefined>;
   isFocused: boolean;
   index: Accessor<number>;
   orderedMessages: Accessor<MessageType[]>;
@@ -274,9 +274,9 @@ export function MessageContainer(props: MessageProps) {
   });
   const lastReplyTimestamp = createMemo(() => {
     if (collapsedThreadMessages()) {
-      return collapsedThreadMessages()?.at(-1)?.created_at ?? '';
+      return collapsedThreadMessages()?.at(-1)?.created_at;
     }
-    return '';
+    return;
   });
   const threadReplyUsers = createMemo(() => {
     if (collapsedThreadMessages()) {

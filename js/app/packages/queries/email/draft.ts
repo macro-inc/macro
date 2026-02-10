@@ -13,7 +13,7 @@ import { soupKeys } from '@queries/soup/keys';
 
 type CreateDraftParams = {
   draft: MessageToSend;
-  sendTime?: string | null;
+  sendTime?: Date | null;
 };
 
 /**

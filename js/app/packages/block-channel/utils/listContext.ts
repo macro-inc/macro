@@ -2,7 +2,7 @@ import type { Message } from '@service-comms/generated/models/message';
 
 export type MinimalMessage = {
   id: string;
-  created_at: string;
+  created_at: Date;
   sender_id: string;
   thread_id?: string | null;
 };

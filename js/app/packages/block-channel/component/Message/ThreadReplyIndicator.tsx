@@ -8,7 +8,7 @@ import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 
 export function ThreadReplyIndicator(props: {
   countCollapsedMessages: number;
-  timestamp: string;
+  timestamp?: Date;
   users: string[];
   onClick: () => void;
   justifyRight?: boolean;
@@ -83,10 +83,12 @@ export function ThreadReplyIndicator(props: {
                 {props.isThreadOpen ? 'Close thread' : 'Expand thread'}
               </p>
             </Match>
-            <Match when={!hover()}>
-              <p class="text-ink-muted">
-                Last reply {formatRelativeDate(props.timestamp)}
-              </p>
+            <Match when={!hover() && props.timestamp}>
+              {(timestamp) => (
+                <p class="text-ink-muted">
+                  Last reply {formatRelativeDate(timestamp())}
+                </p>
+              )}
             </Match>
           </Switch>
         </div>

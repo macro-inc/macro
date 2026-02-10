@@ -8,8 +8,7 @@
  * @param isoString - ISO date string to format
  * @returns Formatted date string
  */
-export function formatRelativeDate(isoString: string): string {
-  const date = new Date(isoString);
+export function formatRelativeDate(date: Date): string {
   const now = new Date();
 
   // Same day
