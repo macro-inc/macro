@@ -100,6 +100,7 @@ members = [
   "search_service_client",
   "search_upload_handler",
   "secretsmanager_client",
+  "seed_cli",
   "ses_client",
   "sha_cleanup_worker",
   "sns_client",
