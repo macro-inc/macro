@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { formatDate } from '../util/date';
+import { compareDateAsc, compareDateDesc, formatDate } from '../util/date';
 
 // Use June 14, 2025 at 10:15 AM New York time (EDT/UTC-4) as a reference time.
 const mockNow: Date = new Date('2025-06-14T14:15:00.000Z');
@@ -233,6 +233,108 @@ describe('Date Utilities (core/utils/date.ts)', () => {
           })
         ).toBe('06/07/25');
       });
+    });
+  });
+
+  describe('compareDateDesc', () => {
+    it('should sort more recent dates first (descending)', () => {
+      const older = new Date('2025-01-01T00:00:00.000Z');
+      const newer = new Date('2025-12-31T23:59:59.000Z');
+
+      expect(compareDateDesc(newer, older)).toBeLessThan(0);
+      expect(compareDateDesc(older, newer)).toBeGreaterThan(0);
+    });
+
+    it('should return 0 for equal dates', () => {
+      const date1 = new Date('2025-06-15T12:00:00.000Z');
+      const date2 = new Date('2025-06-15T12:00:00.000Z');
+
+      expect(compareDateDesc(date1, date2)).toBe(0);
+    });
+
+    it('should treat null as epoch zero and sort after real dates', () => {
+      const realDate = new Date('2025-06-15T12:00:00.000Z');
+
+      expect(compareDateDesc(realDate, null)).toBeLessThan(0);
+      expect(compareDateDesc(null, realDate)).toBeGreaterThan(0);
+    });
+
+    it('should treat undefined as epoch zero and sort after real dates', () => {
+      const realDate = new Date('2025-06-15T12:00:00.000Z');
+
+      expect(compareDateDesc(realDate, undefined)).toBeLessThan(0);
+      expect(compareDateDesc(undefined, realDate)).toBeGreaterThan(0);
+    });
+
+    it('should return 0 when both dates are null', () => {
+      expect(compareDateDesc(null, null)).toBe(0);
+    });
+
+    it('should return 0 when both dates are undefined', () => {
+      expect(compareDateDesc(undefined, undefined)).toBe(0);
+    });
+
+    it('should return 0 when one is null and other is undefined', () => {
+      expect(compareDateDesc(null, undefined)).toBe(0);
+      expect(compareDateDesc(undefined, null)).toBe(0);
+    });
+
+    it('should work correctly in array sort (descending)', () => {
+      const dates = [
+        new Date('2025-03-15T00:00:00.000Z'),
+        new Date('2025-01-01T00:00:00.000Z'),
+        new Date('2025-12-31T00:00:00.000Z'),
+      ];
+
+      const sorted = [...dates].sort(compareDateDesc);
+
+      expect(sorted[0]).toEqual(new Date('2025-12-31T00:00:00.000Z'));
+      expect(sorted[1]).toEqual(new Date('2025-03-15T00:00:00.000Z'));
+      expect(sorted[2]).toEqual(new Date('2025-01-01T00:00:00.000Z'));
+    });
+  });
+
+  describe('compareDateAsc', () => {
+    it('should sort older dates first (ascending)', () => {
+      const older = new Date('2025-01-01T00:00:00.000Z');
+      const newer = new Date('2025-12-31T23:59:59.000Z');
+
+      expect(compareDateAsc(older, newer)).toBeLessThan(0);
+      expect(compareDateAsc(newer, older)).toBeGreaterThan(0);
+    });
+
+    it('should return 0 for equal dates', () => {
+      const date1 = new Date('2025-06-15T12:00:00.000Z');
+      const date2 = new Date('2025-06-15T12:00:00.000Z');
+
+      expect(compareDateAsc(date1, date2)).toBe(0);
+    });
+
+    it('should treat null as epoch zero and sort before real dates', () => {
+      const realDate = new Date('2025-06-15T12:00:00.000Z');
+
+      expect(compareDateAsc(null, realDate)).toBeLessThan(0);
+      expect(compareDateAsc(realDate, null)).toBeGreaterThan(0);
+    });
+
+    it('should treat undefined as epoch zero and sort before real dates', () => {
+      const realDate = new Date('2025-06-15T12:00:00.000Z');
+
+      expect(compareDateAsc(undefined, realDate)).toBeLessThan(0);
+      expect(compareDateAsc(realDate, undefined)).toBeGreaterThan(0);
+    });
+
+    it('should return 0 when both dates are null', () => {
+      expect(compareDateAsc(null, null)).toBe(0);
+    });
+
+    it('should return 0 when both dates are undefined', () => {
+      expect(compareDateAsc(undefined, undefined)).toBe(0);
+    });
+
+    it('should return 0 when one is null and other is undefined', () => {
+      expect(compareDateAsc(null, undefined)).toBe(0);
+      expect(compareDateAsc(undefined, null)).toBe(0);
     });
   });
 });
