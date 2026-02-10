@@ -1,8 +1,8 @@
 const EPOCH_ZERO = new Date(0);
 
 export interface FormatDateOptions {
-  /** Unix timestamp in seconds. An optional reference date. */
-  epochNow?: number;
+  /** An optional reference date. */
+  now?: Date;
   /** IANA timezone string (e.g., 'America/New_York', 'UTC'). Defaults to system timezone. */
   timeZone?: string;
   /** If true, always include time in the output (e.g., 'Thursday at 4:53 PM' instead of 'Thursday'). */
@@ -21,7 +21,7 @@ export const formatDate = (
   options?: FormatDateOptions
 ) => {
   if (!date) return '';
-  const { epochNow, timeZone, showTime } = options ?? {};
+  const { now: userNow, timeZone, showTime } = options ?? {};
   // handle computation in different timezones
   const getDatePartsInTimezone = (date: Date, tz?: string) => {
     if (tz) {
@@ -53,7 +53,7 @@ export const formatDate = (
     }
   };
 
-  const now = epochNow ? new Date(epochNow * 1000) : new Date();
+  const now = userNow ?? new Date();
   const inputDate = date instanceof Date ? date : new Date(date * 1000);
 
   // calculate a midnight aware day boundary
