@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type EntityPropertyResponseCreatedAt = string | null;
+export type EntityPropertyResponseCreatedAt = Date | null;

@@ -14,6 +14,7 @@ import { type Service, services } from './services';
 const serviceToCrate: Record<string, string> = {
   'cloud-storage': 'document_storage_service',
   'comms-service': 'comms_service',
+  'properties-service': 'properties_service',
   'document-cognition': 'document_cognition_service',
   'auth-service': 'authentication_service',
   'notification-service': 'notification_service',

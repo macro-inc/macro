@@ -10,10 +10,10 @@ import type { EntityType } from './entityType';
  * Assignment of a property definition to a specific entity (service representation).
  */
 export interface EntityProperty {
-  created_at: string;
+  created_at: Date;
   entity_id: string;
   entity_type: EntityType;
   id: string;
   property_definition_id: string;
-  updated_at: string;
+  updated_at: Date;
 }

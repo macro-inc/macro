@@ -25,6 +25,14 @@ export const services: Service[] = [
     orvalKey: "commsService",
   },
   {
+    name: "properties-service",
+    dev: "https://cloud-storage-dev.macro.com/properties/api-doc/openapi.json",
+    prod: "https://cloud-storage.macro.com/properties/api-doc/openapi.json",
+    local: "http://localhost:8086/properties/api-doc/openapi.json",
+    output: "../packages/service-clients/service-properties/",
+    orvalKey: "propertiesService",
+  },
+  {
     name: "document-cognition",
     dev: "https://document-cognition-dev.macro.com/api-doc/openapi.json",
     prod: "https://document-cognition-dev.macro.com/api-doc/openapi.json",

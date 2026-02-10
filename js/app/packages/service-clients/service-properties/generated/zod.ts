@@ -36,7 +36,7 @@ export const listPropertiesResponseItem = zod
   .union([
     zod
       .object({
-        created_at: zod.string().datetime({}),
+        created_at: zod.date(),
         data_type: zod
           .enum([
             'BOOLEAN',
@@ -113,14 +113,14 @@ export const listPropertiesResponseItem = zod
               ),
           ])
           .optional(),
-        updated_at: zod.string().datetime({}),
+        updated_at: zod.date(),
       })
       .describe('Property definition model (service representation).'),
     zod
       .object({
         definition: zod
           .object({
-            created_at: zod.string().datetime({}),
+            created_at: zod.date(),
             data_type: zod
               .enum([
                 'BOOLEAN',
@@ -197,17 +197,17 @@ export const listPropertiesResponseItem = zod
                   ),
               ])
               .optional(),
-            updated_at: zod.string().datetime({}),
+            updated_at: zod.date(),
           })
           .describe('Property definition model (service representation).'),
         property_options: zod.array(
           zod
             .object({
-              created_at: zod.string().datetime({}),
+              created_at: zod.date(),
               display_order: zod.number(),
               id: zod.string().uuid(),
               property_definition_id: zod.string().uuid(),
-              updated_at: zod.string().datetime({}),
+              updated_at: zod.date(),
               value: zod
                 .union([
                   zod
@@ -384,11 +384,11 @@ export const getPropertyOptionsParams = zod.object({
 
 export const getPropertyOptionsResponseItem = zod
   .object({
-    created_at: zod.string().datetime({}),
+    created_at: zod.date(),
     display_order: zod.number(),
     id: zod.string().uuid(),
     property_definition_id: zod.string().uuid(),
-    updated_at: zod.string().datetime({}),
+    updated_at: zod.date(),
     value: zod
       .union([
         zod
@@ -521,7 +521,7 @@ export const getBulkEntityPropertiesResponse = zod.record(
           .object({
             definition: zod
               .object({
-                created_at: zod.string().datetime({}),
+                created_at: zod.date(),
                 data_type: zod
                   .enum([
                     'BOOLEAN',
@@ -598,18 +598,18 @@ export const getBulkEntityPropertiesResponse = zod.record(
                       ),
                   ])
                   .optional(),
-                updated_at: zod.string().datetime({}),
+                updated_at: zod.date(),
               })
               .describe('Property definition model (service representation).'),
             options: zod
               .array(
                 zod
                   .object({
-                    created_at: zod.string().datetime({}),
+                    created_at: zod.date(),
                     display_order: zod.number(),
                     id: zod.string().uuid(),
                     property_definition_id: zod.string().uuid(),
-                    updated_at: zod.string().datetime({}),
+                    updated_at: zod.date(),
                     value: zod
                       .union([
                         zod
@@ -644,7 +644,7 @@ export const getBulkEntityPropertiesResponse = zod.record(
               .nullish(),
             property: zod
               .object({
-                created_at: zod.string().datetime({}),
+                created_at: zod.date(),
                 entity_id: zod.string(),
                 entity_type: zod
                   .enum([
@@ -662,7 +662,7 @@ export const getBulkEntityPropertiesResponse = zod.record(
                   ),
                 id: zod.string().uuid(),
                 property_definition_id: zod.string().uuid(),
-                updated_at: zod.string().datetime({}),
+                updated_at: zod.date(),
               })
               .describe(
                 'Assignment of a property definition to a specific entity (service representation).'
@@ -712,8 +712,7 @@ export const getBulkEntityPropertiesResponse = zod.record(
                       .object({
                         type: zod.enum(['Date']),
                         value: zod
-                          .string()
-                          .datetime({})
+                          .date()
                           .describe(
                             'Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
                           ),
@@ -835,7 +834,7 @@ export const getEntityPropertiesResponse = zod
         .object({
           definition: zod
             .object({
-              created_at: zod.string().datetime({}),
+              created_at: zod.date(),
               data_type: zod
                 .enum([
                   'BOOLEAN',
@@ -912,18 +911,18 @@ export const getEntityPropertiesResponse = zod
                     ),
                 ])
                 .optional(),
-              updated_at: zod.string().datetime({}),
+              updated_at: zod.date(),
             })
             .describe('Property definition model (service representation).'),
           options: zod
             .array(
               zod
                 .object({
-                  created_at: zod.string().datetime({}),
+                  created_at: zod.date(),
                   display_order: zod.number(),
                   id: zod.string().uuid(),
                   property_definition_id: zod.string().uuid(),
-                  updated_at: zod.string().datetime({}),
+                  updated_at: zod.date(),
                   value: zod
                     .union([
                       zod
@@ -958,7 +957,7 @@ export const getEntityPropertiesResponse = zod
             .nullish(),
           property: zod
             .object({
-              created_at: zod.string().datetime({}),
+              created_at: zod.date(),
               entity_id: zod.string(),
               entity_type: zod
                 .enum([
@@ -976,7 +975,7 @@ export const getEntityPropertiesResponse = zod
                 ),
               id: zod.string().uuid(),
               property_definition_id: zod.string().uuid(),
-              updated_at: zod.string().datetime({}),
+              updated_at: zod.date(),
             })
             .describe(
               'Assignment of a property definition to a specific entity (service representation).'
@@ -1026,8 +1025,7 @@ export const getEntityPropertiesResponse = zod
                     .object({
                       type: zod.enum(['Date']),
                       value: zod
-                        .string()
-                        .datetime({})
+                        .date()
                         .describe(
                           'Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
                         ),
@@ -1150,7 +1148,7 @@ export const setEntityPropertyBody = zod
             zod
               .object({
                 type: zod.enum(['date']),
-                value: zod.string().datetime({}),
+                value: zod.date(),
               })
               .describe('Date and time value'),
             zod

@@ -14,5 +14,5 @@ export type PropertyValueOneOfSeven = {
   type: PropertyValueOneOfSevenType;
   /** Date/timestamp value
 Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"} */
-  value: string;
+  value: Date;
 };
