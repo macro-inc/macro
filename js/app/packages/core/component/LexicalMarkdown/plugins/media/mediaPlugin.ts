@@ -539,7 +539,7 @@ function registerMediaPlugin(editor: LexicalEditor) {
       (mediaType) => {
         const input = document.createElement('input');
         input.type = 'file';
-        input.accept = mediaType === 'video' ? 'video/*' : 'image/*'
+        input.accept = mediaType === 'video' ? 'video/*' : 'image/*';
         input.multiple = true;
         input.style.display = 'none';
 
@@ -562,7 +562,9 @@ function registerMediaPlugin(editor: LexicalEditor) {
           input.remove();
         });
 
-        input.addEventListener('cancel', () => { input.remove() });
+        input.addEventListener('cancel', () => {
+          input.remove();
+        });
         document.body.appendChild(input);
         input.click();
         return true;
