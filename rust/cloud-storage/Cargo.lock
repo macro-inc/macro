@@ -7857,6 +7857,7 @@ dependencies = [
  "anyhow",
  "clap",
  "macro_entrypoint",
+ "macro_env_var",
  "reqwest",
  "serde",
  "serde_json",
