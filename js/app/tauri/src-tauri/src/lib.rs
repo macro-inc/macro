@@ -176,7 +176,7 @@ pub fn run() {
             .plugin(tauri_plugin_safe_area_insets::init())
             .plugin(tauri_plugin_notifications::init())
             .plugin(tauri_plugin_virtual_keyboard::init());
-
+        builder = builder.plugin(tauri_plugin_auth::init());
     }
 
     builder

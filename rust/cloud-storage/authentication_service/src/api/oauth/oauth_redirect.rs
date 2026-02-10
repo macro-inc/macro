@@ -166,7 +166,7 @@ async fn update_url_with_session_code(
     };
 
     url.query_pairs_mut()
-        .append_pair("session_code", &session_code.0);
+        .append_pair("token", &session_code.0);
 
     write_db(session_code).await?;
 
