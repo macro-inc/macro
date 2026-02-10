@@ -13,7 +13,6 @@ pub type Result<T, E = error::FusionAuthClientError> = std::result::Result<T, E>
 
 use anyhow::Context;
 
-use macro_env::Environment;
 use reqwest::Url;
 
 #[derive(Clone, Debug)]
@@ -39,7 +38,7 @@ impl AuthedClient {
                 "inserting {} header into fusionauth authed client",
                 FUSIONAUTH_TENANT_ID_HEADER
             );
-            auth_headers.insert(FUSIONAUTH_TENANT_ID_HEADER, tenant_id);
+            auth_headers.insert(FUSIONAUTH_TENANT_ID_HEADER, tenant_id.parse().unwrap());
         }
 
         let client = reqwest::Client::builder()
