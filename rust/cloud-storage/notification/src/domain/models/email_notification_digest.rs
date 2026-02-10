@@ -22,6 +22,9 @@ use std::{collections::HashSet, time::Duration};
 /// Port traits for external dependencies (user existence, push notification checks).
 pub mod ports;
 
+#[cfg(test)]
+mod test;
+
 /// Send as part of a batched digest email (collected over 5-30 minutes).
 pub struct BatchSend<T>(T);
 
