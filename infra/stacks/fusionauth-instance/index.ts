@@ -184,6 +184,8 @@ const defaultTenant = new FusionAuthTenant(
   { provider: fusionAuthProvider }
 );
 
+export const defaultTenantId = defaultTenant.tenantId;
+
 // Lambda
 const populateLambdaBody = pulumi
   .output(AUTHENTICATION_SERVICE_INTERNAL_SECRET)
@@ -218,6 +220,8 @@ const signingKey = new FusionAuthKey(
   },
   { provider: fusionAuthProvider }
 );
+
+export const signingKeyId = signingKey.keyId;
 
 const macroApplication = new FusionAuthApplication(
   'macro-application',

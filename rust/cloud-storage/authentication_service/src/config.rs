@@ -21,6 +21,8 @@ pub struct Config {
     /// The Redis URI for the Redis this application should use.
     pub redis_uri: String,
 
+    /// FusionAuth Tenant Id
+    pub fusionauth_tenant_id: String,
     /// FusionAuth API key secret name
     pub fusionauth_api_key_secret_key: String,
     /// FusionAuth client id
@@ -74,6 +76,8 @@ impl Config {
 
         let redis_uri = std::env::var("REDIS_URI").context("REDIS_URI must be provided")?;
 
+        let fusionauth_tenant_id = std::env::var("FUSIONAUTH_TENANT_ID")
+            .context("FUSIONAUTH_TENANT_ID must be provided")?;
         let fusionauth_api_key_secret_key = std::env::var("FUSIONAUTH_API_KEY_SECRET_KEY")
             .context("FUSIONAUTH_API_KEY_SECRET_KEY must be provided")?;
         let fusionauth_client_id = std::env::var("FUSIONAUTH_CLIENT_ID")
@@ -123,6 +127,7 @@ impl Config {
             base_url,
             database_url,
             redis_uri,
+            fusionauth_tenant_id,
             fusionauth_api_key_secret_key,
             fusionauth_client_id,
             fusionauth_client_secret_key,

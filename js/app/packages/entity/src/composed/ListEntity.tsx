@@ -41,8 +41,7 @@ interface ListEntityProps {
   highlighted?: boolean;
   hovered?: boolean;
   onChecked?: (checked: boolean, shiftKey: boolean) => void;
-  onMouseOver?: () => void;
-  onMouseLeave?: () => void;
+  onMouseMove?: () => void;
   showUnrollNotifications?: boolean;
   onProjectClick?: (
     entity: ProjectEntity,
@@ -364,8 +363,7 @@ export function ListEntity(props: ListEntityProps) {
         'bg-accent/5 outline-1 outline-accent/20 outline-offset-[-1px]':
           props.highlighted,
       })}
-      onMouseOver={props.onMouseOver}
-      onMouseLeave={props.onMouseLeave}
+      onMouseMove={props.onMouseMove}
     >
       <div
         class={cn('absolute h-full w-[3px] left-0 top-0 bg-accent opacity-0', {

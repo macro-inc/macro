@@ -227,6 +227,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
   useSoupNavigationHotkeys({
     scopeId: scopeId(),
     soup,
+    splitHandle: panel.handle,
     virtualizerHandle,
     previewPanelRef,
   });
@@ -587,7 +588,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                 highlighted={
                                   panel.isPanelActive() && row.isFocused()
                                 }
-                                onMouseOver={() => {
+                                onMouseMove={() => {
                                   if (isKeypressActive()) return;
                                   if (soup.previewEntity()) return;
                                   soup.focus.set(row.original.id);
@@ -667,7 +668,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
           onClear={soup.selection.clear}
         />
       </Show>
-      <Show when={soup.previewEntity()}>
+      <Show when={soup.previewEntity() || panel.previewState[0]()}>
         <PreviewPanel
           ref={setPreviewPanelRef}
           selectedEntity={soup.focus.item()}
