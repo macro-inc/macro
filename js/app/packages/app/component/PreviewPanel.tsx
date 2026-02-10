@@ -17,6 +17,7 @@ import {
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import { Suspense } from 'solid-js';
 import { createContextProvider } from '@solid-primitives/context';
+import { throttledDependent } from '@core/util/debounce';
 
 export const [PreviewPanelContext, useMaybePreviewPanel] =
   createContextProvider(
@@ -53,6 +54,11 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
     const [previewState, setPreviewState] = createSignal(true);
     scopedSplitPanelContextType.previewState = [previewState, setPreviewState];
   }
+
+  const throttledSelectedEntity = throttledDependent(
+    () => props.selectedEntity,
+    150
+  );
 
   const blockInstance = () => {
     const aliasContext = isTaskEntity(props.selectedEntity)
@@ -151,7 +157,7 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
           }}
         >
           <PreviewPanelContext
-            previewEntity={props.selectedEntity}
+            previewEntity={throttledSelectedEntity()}
             onFocusOut={props.onFocusOut}
           >
             <Suspense>
