@@ -35,7 +35,7 @@ import { mergeRefs } from '@solid-primitives/refs';
 interface ListEntityProps {
   entity: WithNotification<EntityData>;
   onClick?: (event: MouseEvent) => void;
-  timestamp?: number;
+  timestamp?: Date;
   ref?: Ref<HTMLDivElement>;
   checked?: boolean;
   highlighted?: boolean;
