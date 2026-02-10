@@ -1,10 +1,19 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { formatDate } from '../util/date';
+// NOTE: vitest's own setSystemTime does not work with bun environment
+import { setSystemTime } from 'bun:test';
 
-// Use June 14, 2025 at 10:15 AM as a reference time.
+// Use June 14, 2025 at 10:15 AM New York time (EDT/UTC-4) as a reference time.
 const mockNow: Date = new Date('2025-06-14T14:15:00.000Z');
+const NEW_YORK_TZ = 'America/New_York';
 
 describe('Date Utilities (core/utils/date.ts)', () => {
+  beforeEach(() => {
+    // default system time to UTC
+    process.env.TZ = 'UTC';
+    setSystemTime(mockNow);
+  });
+
   describe('formatDate', () => {
     it('should should show only time at Date.now()', () => {
       const now = new Date();
@@ -12,79 +21,65 @@ describe('Date Utilities (core/utils/date.ts)', () => {
       expect(result).toMatch(/\d{1,2}:\d{2}\s?(AM|PM)/i);
     });
 
-    it('should show correct date with no params', () => {
+    it('should show correct time for now with default UTC system time', () => {
       const result = formatDate(mockNow);
-      expect(result).toMatch('06/14/25');
+      expect(result).toMatch('2:15 PM');
+    });
+
+    it('should show correct time for now with no params and new york system time', () => {
+      process.env.TZ = NEW_YORK_TZ;
+      const result = formatDate(mockNow);
+      expect(result).toMatch('10:15 AM');
+    });
+
+    it('should show correct time for new york timezone param', () => {
+      const result = formatDate(mockNow, { timeZone: NEW_YORK_TZ });
+      expect(result).toMatch('10:15 AM');
     });
 
     it('should format time for today', () => {
       // Today at 8:15 AM UTC
       const todayMorning: Date = new Date('2025-06-14T08:15:00.000Z');
-      expect(
-        formatDate(todayMorning, {
-          now: mockNow,
-          timeZone: 'UTC',
-        })
-      ).toBe('8:15 AM');
+      expect(formatDate(todayMorning)).toBe('8:15 AM');
     });
 
     it('should format "Yesterday at {time}" for yesterday (UTC day boundary)', () => {
       // Yesterday at 11:00 PM UTC (June 13)
       const yesterdayEvening: Date = new Date('2025-06-13T23:00:00.000Z');
-      expect(
-        formatDate(yesterdayEvening, {
-          now: mockNow,
-          timeZone: 'UTC',
-        })
-      ).toBe('Yesterday at 11:00 PM');
+      expect(formatDate(yesterdayEvening)).toBe('Yesterday at 11:00 PM');
     });
 
     it('should handle edge case at UTC midnight boundary', () => {
       // Reference time: June 14, 2:15 PM UTC
       // Yesterday at 11:59 PM UTC (June 13) - just before midnight
       const justBeforeMidnight: Date = new Date('2025-06-13T23:59:59.000Z');
-      expect(
-        formatDate(justBeforeMidnight, {
-          now: mockNow,
-          timeZone: 'UTC',
-        })
-      ).toBe('Yesterday at 11:59 PM');
+      expect(formatDate(justBeforeMidnight)).toBe('Yesterday at 11:59 PM');
     });
 
     it('should handle same day even with less than 24 hour difference', () => {
       // Reference time: June 14, 2:15 PM UTC
       // Same day at 1:00 AM UTC (13.25 hours earlier, but same UTC day)
       const earlyToday: Date = new Date('2025-06-14T01:00:00.000Z');
-      expect(
-        formatDate(earlyToday, {
-          now: mockNow,
-          timeZone: 'UTC',
-        })
-      ).toBe('1:00 AM');
+      expect(formatDate(earlyToday)).toBe('1:00 AM');
     });
 
     it('should handle yesterday even with more than 24 hour difference', () => {
       // Reference time: June 14, 2:15 PM UTC
       // Yesterday at 1:00 AM UTC (37.25 hours earlier, but still "yesterday")
       const yesterdayEarly: Date = new Date('2025-06-13T01:00:00.000Z');
-      expect(
-        formatDate(yesterdayEarly, {
-          now: mockNow,
-          timeZone: 'UTC',
-        })
-      ).toBe('Yesterday at 1:00 AM');
+      expect(formatDate(yesterdayEarly)).toBe('Yesterday at 1:00 AM');
     });
 
     it('should format weekday for recent days (2-6 days ago)', () => {
       // June 12 (2 days ago) - should show weekday
       const twoDaysAgo: Date = new Date('2025-06-12T15:00:00.000Z');
-      expect(formatDate(twoDaysAgo, { now: mockNow })).toBe('Thursday');
+      expect(formatDate(twoDaysAgo)).toBe('Thursday');
     });
 
     it('should format date for older dates (more than 7 days)', () => {
       // June 1, 2025 (13 days ago)
       const oldDate: Date = new Date('2025-06-01T12:00:00.000Z');
-      expect(formatDate(oldDate, { now: mockNow })).toBe('06/01/25');
+      expect(formatDate(oldDate)).toBe('06/01/25');
     });
 
     it('should handle timezone-aware day boundaries', () => {
@@ -95,8 +90,7 @@ describe('Date Utilities (core/utils/date.ts)', () => {
       const lateEastern: Date = new Date('2025-06-15T03:30:00.000Z');
       expect(
         formatDate(lateEastern, {
-          now: mockNow,
-          timeZone: 'America/New_York',
+          timeZone: NEW_YORK_TZ,
         })
       ).toBe('11:30 PM');
 
@@ -105,8 +99,7 @@ describe('Date Utilities (core/utils/date.ts)', () => {
       const easternToday: Date = new Date('2025-06-14T23:30:00.000Z');
       expect(
         formatDate(easternToday, {
-          now: mockNow,
-          timeZone: 'America/New_York',
+          timeZone: NEW_YORK_TZ,
         })
       ).toBe('7:30 PM');
     });
@@ -116,8 +109,7 @@ describe('Date Utilities (core/utils/date.ts)', () => {
       // We can't easily mock formatToParts to fail, but we can test with extreme dates
       const extremeDate: Date = new Date('1900-01-01T00:00:00.000Z');
       const result = formatDate(extremeDate, {
-        now: mockNow,
-        timeZone: 'America/New_York',
+        timeZone: NEW_YORK_TZ,
       });
 
       // Should not throw and should return a reasonable date format (not crash due to invalid Date)
@@ -132,8 +124,6 @@ describe('Date Utilities (core/utils/date.ts)', () => {
         const twoDaysAgo: Date = new Date('2025-06-12T15:30:00.000Z');
         expect(
           formatDate(twoDaysAgo, {
-            now: mockNow,
-            timeZone: 'UTC',
             showTime: true,
           })
         ).toBe('Thursday at 3:30 PM');
@@ -144,8 +134,6 @@ describe('Date Utilities (core/utils/date.ts)', () => {
         const twoDaysAgo: Date = new Date('2025-06-12T15:30:00.000Z');
         expect(
           formatDate(twoDaysAgo, {
-            now: mockNow,
-            timeZone: 'UTC',
             showTime: false,
           })
         ).toBe('Thursday');
@@ -156,8 +144,6 @@ describe('Date Utilities (core/utils/date.ts)', () => {
         const twoDaysAgo: Date = new Date('2025-06-12T15:30:00.000Z');
         expect(
           formatDate(twoDaysAgo, {
-            now: mockNow,
-            timeZone: 'UTC',
             showTime: undefined,
           })
         ).toBe('Thursday');
@@ -168,8 +154,6 @@ describe('Date Utilities (core/utils/date.ts)', () => {
         const oldDate: Date = new Date('2025-06-01T16:45:00.000Z');
         expect(
           formatDate(oldDate, {
-            now: mockNow,
-            timeZone: 'UTC',
             showTime: true,
           })
         ).toBe('06/01/25 at 4:45 PM');
@@ -180,8 +164,6 @@ describe('Date Utilities (core/utils/date.ts)', () => {
         const oldDate: Date = new Date('2025-06-01T16:45:00.000Z');
         expect(
           formatDate(oldDate, {
-            now: mockNow,
-            timeZone: 'UTC',
             showTime: false,
           })
         ).toBe('06/01/25');
@@ -192,8 +174,6 @@ describe('Date Utilities (core/utils/date.ts)', () => {
         const oldDate: Date = new Date('2025-06-01T16:45:00.000Z');
         expect(
           formatDate(oldDate, {
-            now: mockNow,
-            timeZone: 'UTC',
             showTime: undefined,
           })
         ).toBe('06/01/25');
@@ -204,15 +184,11 @@ describe('Date Utilities (core/utils/date.ts)', () => {
         const todayMorning: Date = new Date('2025-06-14T08:15:00.000Z');
         expect(
           formatDate(todayMorning, {
-            now: mockNow,
-            timeZone: 'UTC',
             showTime: true,
           })
         ).toBe('8:15 AM');
         expect(
           formatDate(todayMorning, {
-            now: mockNow,
-            timeZone: 'UTC',
             showTime: false,
           })
         ).toBe('8:15 AM');
@@ -223,15 +199,11 @@ describe('Date Utilities (core/utils/date.ts)', () => {
         const yesterdayEvening: Date = new Date('2025-06-13T23:00:00.000Z');
         expect(
           formatDate(yesterdayEvening, {
-            now: mockNow,
-            timeZone: 'UTC',
             showTime: true,
           })
         ).toBe('Yesterday at 11:00 PM');
         expect(
           formatDate(yesterdayEvening, {
-            now: mockNow,
-            timeZone: 'UTC',
             showTime: false,
           })
         ).toBe('Yesterday at 11:00 PM');
@@ -242,8 +214,7 @@ describe('Date Utilities (core/utils/date.ts)', () => {
         const testDate: Date = new Date('2025-06-13T03:30:00.000Z');
         expect(
           formatDate(testDate, {
-            now: mockNow,
-            timeZone: 'America/New_York',
+            timeZone: NEW_YORK_TZ,
             showTime: true,
           })
         ).toBe('Thursday at 11:30 PM');
@@ -254,15 +225,11 @@ describe('Date Utilities (core/utils/date.ts)', () => {
         const sevenDaysAgo: Date = new Date('2025-06-07T14:15:00.000Z');
         expect(
           formatDate(sevenDaysAgo, {
-            now: mockNow,
-            timeZone: 'UTC',
             showTime: true,
           })
         ).toBe('06/07/25 at 2:15 PM');
         expect(
           formatDate(sevenDaysAgo, {
-            now: mockNow,
-            timeZone: 'UTC',
             showTime: false,
           })
         ).toBe('06/07/25');

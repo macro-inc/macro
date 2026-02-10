@@ -1,8 +1,9 @@
+import { differenceInWeeks, isToday, isYesterday } from 'date-fns';
+import { tz } from '@date-fns/tz';
+
 const EPOCH_ZERO = new Date(0);
 
 export interface FormatDateOptions {
-  /** An optional reference date. */
-  now?: Date;
   /** IANA timezone string (e.g., 'America/New_York', 'UTC'). Defaults to system timezone. */
   timeZone?: string;
   /** If true, always include time in the output (e.g., 'Thursday at 4:53 PM' instead of 'Thursday'). */
@@ -21,79 +22,34 @@ export const formatDate = (
   options?: FormatDateOptions
 ) => {
   if (!date) return '';
-  const { now: userNow, timeZone, showTime } = options ?? {};
-  // handle computation in different timezones
-  const getDatePartsInTimezone = (date: Date, tz?: string) => {
-    if (tz) {
-      const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: tz,
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric',
-      });
-      const parts = formatter.formatToParts(date);
-      const year = parseInt(
-        parts.find((p) => p.type === 'year')?.value || '1970'
-      );
-      const month = Math.max(
-        0,
-        parseInt(parts.find((p) => p.type === 'month')?.value || '1') - 1
-      );
-      const day = Math.max(
-        1,
-        parseInt(parts.find((p) => p.type === 'day')?.value || '1')
-      );
-      return { year, month, day };
-    } else {
-      return {
-        year: date.getFullYear(),
-        month: date.getMonth(),
-        day: date.getDate(),
-      };
-    }
-  };
+  const { timeZone, showTime } = options ?? {};
+  const timeZoneOpts = timeZone ? { in: tz(timeZone) } : {};
+  const now = new Date();
 
-  const now = userNow ?? new Date();
-  const inputDate = date instanceof Date ? date : new Date(date * 1000);
-
-  // calculate a midnight aware day boundary
-  const nowParts = getDatePartsInTimezone(now, timeZone);
-  const inputParts = getDatePartsInTimezone(inputDate, timeZone);
-
-  const today = new Date(nowParts.year, nowParts.month, nowParts.day);
-  const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
-  const inputDateStart = new Date(
-    inputParts.year,
-    inputParts.month,
-    inputParts.day
-  );
-
-  const time = inputDate.toLocaleTimeString('en-US', {
+  const time = date.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
     timeZone,
   });
 
-  if (inputDateStart.getTime() === today.getTime()) {
+  if (isToday(date, timeZoneOpts)) {
     return time;
   }
 
-  if (inputDateStart.getTime() === yesterday.getTime()) {
+  if (isYesterday(date, timeZoneOpts)) {
     return `Yesterday at ${time}`;
   }
 
-  const diffMs = now.getTime() - inputDate.getTime();
-  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  if (days < 7) {
-    const weekday = inputDate.toLocaleDateString(undefined, {
+  if (differenceInWeeks(now, date) < 1) {
+    const weekday = date.toLocaleDateString(undefined, {
       weekday: 'long',
       timeZone,
     });
     return showTime ? `${weekday} at ${time}` : weekday;
   }
 
-  const displayDate = inputDate.toLocaleDateString(undefined, {
+  const displayDate = date.toLocaleDateString(undefined, {
     month: '2-digit',
     day: '2-digit',
     year: '2-digit',
