@@ -15,7 +15,7 @@ export interface FormatDateOptions {
  *     single day offsets, 'Thursday' for a day within the week and '01/23/2025' for dates outside the week.
  */
 export const formatDate = (
-  date: Date | number | null | undefined,
+  date: Date | null | undefined,
   options?: FormatDateOptions
 ) => {
   if (!date) return '';
@@ -135,55 +135,27 @@ const EPOCH_ZERO = new Date(0);
 /**
  * Compares two dates in descending order (most recent first).
  * Handles undefined/null dates by treating them as epoch zero.
- * @param a - First date (undefined/null treated as epoch zero)
- * @param b - Second date (undefined/null treated as epoch zero)
  * @returns Positive if a > b, negative if a < b, zero if equal
  */
 export const compareDateDesc = (
-  a: Date | null | undefined | string | number,
-  b: Date | null | undefined | string | number
+  a: Date | null | undefined,
+  b: Date | null | undefined
 ): number => {
-  const dateA = a
-    ? typeof a === 'string'
-      ? new Date(a)
-      : typeof a === 'number'
-        ? new Date(a)
-        : a
-    : EPOCH_ZERO;
-  const dateB = b
-    ? typeof b === 'string'
-      ? new Date(b)
-      : typeof b === 'number'
-        ? new Date(b)
-        : b
-    : EPOCH_ZERO;
+  const dateA = a ?? EPOCH_ZERO;
+  const dateB = b ?? EPOCH_ZERO;
   return dateB.getTime() - dateA.getTime();
 };
 
 /**
  * Compares two dates in ascending order (oldest first).
  * Handles undefined/null dates by treating them as epoch zero.
- * @param a - First date (undefined/null treated as epoch zero)
- * @param b - Second date (undefined/null treated as epoch zero)
  * @returns Positive if a > b, negative if a < b, zero if equal
  */
 export const compareDateAsc = (
-  a: Date | null | undefined | string | number,
-  b: Date | null | undefined | string | number
+  a: Date | null | undefined,
+  b: Date | null | undefined
 ): number => {
-  const dateA = a
-    ? typeof a === 'string'
-      ? new Date(a)
-      : typeof a === 'number'
-        ? new Date(a)
-        : a
-    : EPOCH_ZERO;
-  const dateB = b
-    ? typeof b === 'string'
-      ? new Date(b)
-      : typeof b === 'number'
-        ? new Date(b)
-        : b
-    : EPOCH_ZERO;
+  const dateA = a ?? EPOCH_ZERO;
+  const dateB = b ?? EPOCH_ZERO;
   return dateA.getTime() - dateB.getTime();
 };
