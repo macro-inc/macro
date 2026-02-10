@@ -201,7 +201,7 @@ function WideLayout(props: LayoutProps) {
         </div>
         <div
           class={cn(
-            'absolute inset-0 grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity',
+            'absolute inset-0 grid place-items-center opacity-0 group-hover:opacity-100',
             {
               'opacity-100': props.checked,
             }
