@@ -67,7 +67,7 @@ const DEFAULT_CONFIG = {
   timeWeight: 0.3,
   brevityWeight: 0.0,
   timeDecayFactor: 0.5,
-  maxAge: { value: 30, unit: 'd' } as ParsedDuration,
+  maxAge: { value: 30, unit: 'd' },
   minFuzzyThreshold: 0.1,
   useViewedAt: false,
   channelBoost: 1.0,
