@@ -2,42 +2,21 @@ import type { SplitManager } from '@app/component/split-layout/layoutManager';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { NotificationType } from '@core/types';
+import type { NotificationType } from '@core/types';
+import type { UnifiedNotification } from '@service-notification/client';
 import { getNotificationById } from '@queries/notification/user-notifications';
 import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
-import {
-  getMetadata,
-  tryToTypedNotification,
-  type TypedNotification,
-} from './notification-metadata';
 import type { NotificationSource } from './notification-source';
 
-/**
- * Notification event types that are all handled by opening a channel
- * with a specific message and optionally a thread id
- */
-const ChannelNotificationType = {
-  channel_mention: NotificationType.channel_mention,
-  channel_message_send: NotificationType.channel_message_send,
-  channel_message_reply: NotificationType.channel_message_reply,
-} as const satisfies Partial<Record<string, NotificationType>>;
-
-type ChannelNotificationType =
-  (typeof ChannelNotificationType)[keyof typeof ChannelNotificationType];
-
-const CHANNEL_EVENT_TYPES = Object.values(ChannelNotificationType) as [
-  ChannelNotificationType,
-  ...ChannelNotificationType[],
-];
+const CHANNEL_EVENT_TYPES = [
+  'channel_mention',
+  'channel_message_send',
+  'channel_message_reply',
+] as const;
 
 /**
  * Opens a split if it is not already open.
- *
- * @param layoutManager The layout manager to use.
- * @param type The type of the block to open.
- * @param id The id of the block to open.
- * @returns A result async that resolves to void if the split was opened successfully, or an error if the split could not be opened.
  */
 function openSplitIfNotOpen(
   layoutManager: SplitManager,
@@ -58,23 +37,29 @@ function openSplitIfNotOpen(
 
 /**
  * Opens a channel notification.
- *
- * @param notification The notification to open.
- * @param layoutManager The layout manager to use.
- * @returns A result async that resolves to void if the notification was opened successfully, or an error if the notification could not be opened.
  */
 async function openChannelNotification(
-  notification: TypedNotification<ChannelNotificationType>,
+  notification: UnifiedNotification,
   layoutManager: SplitManager
 ) {
   const channelId = notification.entity_id;
-  const metadata = getMetadata(notification);
-  const messageId = metadata.messageId;
-  const threadId = 'threadId' in metadata ? metadata.threadId : undefined;
+  let messageId: string | undefined;
+  let threadId: string | undefined;
+
+  const tag = notification.notificationMetadata.tag;
+  if (tag === 'channel_mention') {
+    messageId = notification.notificationMetadata.content.messageId;
+    threadId = notification.notificationMetadata.content.threadId ?? undefined;
+  } else if (tag === 'channel_message_send') {
+    messageId = notification.notificationMetadata.content.messageId;
+  } else if (tag === 'channel_message_reply') {
+    messageId = notification.notificationMetadata.content.messageId;
+    threadId = notification.notificationMetadata.content.threadId;
+  }
+
   openSplitIfNotOpen(layoutManager, 'channel', channelId);
 
   const orchestrator = layoutManager.getOrchestrator();
-
   const handle = await orchestrator.getBlockHandle(channelId, 'channel');
 
   handle?.goToLocationFromParams({
@@ -97,95 +82,74 @@ type NotFoundError = {
   notificationId: string;
 };
 
-type NotTypedError = {
-  tag: 'NotTypedError';
-  notificationId: string;
-};
-
-export type OpenNotificationFromIdError =
-  | NotSupportedError
-  | NotFoundError
-  | NotTypedError;
+export type OpenNotificationFromIdError = NotSupportedError | NotFoundError;
 
 function getSupportedHandler(
-  notification: TypedNotification<NotificationType>
+  notification: UnifiedNotification
 ): ((layoutManager: SplitManager) => Promise<void>) | null {
-  return match(notification)
+  const tag = notification.notificationMetadata.tag;
+
+  return match(tag)
     .with(
-      { notificationEventType: P.union(...CHANNEL_EVENT_TYPES) },
-      (n) => (lm: SplitManager) => openChannelNotification(n, lm)
+      P.union(...CHANNEL_EVENT_TYPES),
+      () => (lm: SplitManager) => openChannelNotification(notification, lm)
     )
+    .with('new_email', () => {
+      const meta = notification.notificationMetadata;
+      if (meta.tag !== 'new_email') return null;
+      return async (lm: SplitManager) => {
+        openSplitIfNotOpen(lm, 'email', meta.content.threadId);
+      };
+    })
     .with(
-      { notificationEventType: 'new_email' },
-      (n) => async (lm: SplitManager) => {
-        openSplitIfNotOpen(lm, 'email', getMetadata(n).threadId);
-      }
+      'channel_invite',
+      () => async (lm: SplitManager) =>
+        openSplitIfNotOpen(lm, 'channel', notification.entity_id)
     )
-    .with(
-      { notificationEventType: 'channel_invite' },
-      (n) => async (lm: SplitManager) =>
-        openSplitIfNotOpen(lm, 'channel', n.entity_id)
-    )
-    .with(
-      {
-        notificationEventType: P.union(
-          'item_shared_user',
-          'item_shared_organization'
-        ),
-      },
-      (n) => async (lm: SplitManager) =>
+    .with('document_mention', () => {
+      const meta = notification.notificationMetadata;
+      if (meta.tag !== 'document_mention') return null;
+      return async (lm: SplitManager) =>
         openSplitIfNotOpen(
           lm,
-          safeFileTypeToBlockName(getMetadata(n).itemType),
-          n.entity_id
-        )
-    )
-    .with(
-      {
-        notificationEventType: P.union(
-          'document_mention',
-          'channel_message_document'
-        ),
-      },
-      (n) => async (lm: SplitManager) =>
+          safeFileTypeToBlockName(meta.content.fileType),
+          notification.entity_id
+        );
+    })
+    .with('invite_to_team', () => null)
+    .with('task_assigned', () => {
+      const meta = notification.notificationMetadata;
+      if (meta.tag !== 'task_assigned') return null;
+      return async (lm: SplitManager) => {
+        openSplitIfNotOpen(lm, 'task', meta.content.taskId);
+      };
+    })
+    .with('mentioned_in_document_comment', () => {
+      const meta = notification.notificationMetadata;
+      if (meta.tag !== 'mentioned_in_document_comment') return null;
+      return async (lm: SplitManager) =>
         openSplitIfNotOpen(
           lm,
-          safeFileTypeToBlockName(getMetadata(n).fileType),
-          n.entity_id
-        )
-    )
-    .with(
-      {
-        notificationEventType: P.union('invite_to_team', 'reject_team_invite'),
-      },
-      () => null
-    )
-    .with(
-      { notificationEventType: 'task_assigned' },
-      (n) => async (lm: SplitManager) => {
-        openSplitIfNotOpen(lm, 'task', getMetadata(n).taskId);
-      }
-    )
+          safeFileTypeToBlockName(meta.content.fileType),
+          notification.entity_id
+        );
+    })
     .exhaustive();
 }
 
 /**
  * Opens the notification given the layout manager.
  * Some notifications are not supported and will return an error.
- *
- * @param notification The notification to open.
- * @param layoutManager The layout manager to use.
- * @returns A result async that resolves to void if the notification was opened successfully, or an error if the notification is not supported.
  */
 export function openNotification(
-  notification: TypedNotification<NotificationType>,
+  notification: UnifiedNotification,
   layoutManager: SplitManager
 ): ResultAsync<void, NotSupportedError> {
   const handler = getSupportedHandler(notification);
   if (!handler) {
     return errAsync({
       tag: 'NotSupportedError',
-      notificationType: notification.notificationEventType,
+      notificationType: notification.notificationMetadata.tag,
     });
   }
   return ResultAsync.fromSafePromise(handler(layoutManager));
@@ -201,12 +165,7 @@ export function openNotificationFromId(
     .notifications()
     .find((n) => n.id === notificationId);
   if (cached) {
-    const typed = tryToTypedNotification(cached);
-    if (!typed) {
-      const err: NotTypedError = { tag: 'NotTypedError', notificationId };
-      return errAsync(err);
-    }
-    return openNotification(typed, layoutManager);
+    return openNotification(cached, layoutManager);
   }
 
   // Fetch if not in notification source
@@ -217,13 +176,6 @@ export function openNotificationFromId(
       const err: NotFoundError = { tag: 'NotFoundError', notificationId };
       return errAsync(err);
     }
-
-    const typed = tryToTypedNotification(unified);
-    if (!typed) {
-      const err: NotTypedError = { tag: 'NotTypedError', notificationId };
-      return errAsync(err);
-    }
-
-    return openNotification(typed, layoutManager);
+    return openNotification(unified, layoutManager);
   });
 }

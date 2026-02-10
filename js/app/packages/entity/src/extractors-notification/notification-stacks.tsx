@@ -5,7 +5,6 @@ import {
   type NotificationStack,
   getMostRecentNotification,
   openNotification,
-  tryToTypedNotification,
 } from '@notifications';
 import type { WithNotification } from '../types/notification';
 import type { EntityData } from '../types/entity';
@@ -49,12 +48,11 @@ function NotificationStackRow(props: {
 
   const handleClick = async (e: PointerEvent | MouseEvent) => {
     const mostRecent = getMostRecentNotification(props.stack);
-    const typed = tryToTypedNotification(mostRecent);
     const splitManager = globalSplitManager();
-    if (!typed || !splitManager) return;
+    if (!splitManager) return;
 
     e.stopPropagation();
-    await openNotification(typed, splitManager);
+    await openNotification(mostRecent, splitManager);
     await notificationSource.markAsRead(mostRecent);
     props.onClick?.(e);
   };

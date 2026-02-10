@@ -13,7 +13,7 @@ import { useEmailLinksStatus } from '@core/email-link';
 import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
 import { fuzzyMatch } from '@core/util/fuzzy';
-import type { EntityData, WithNotification, WithSearch } from '@macro-entity';
+import type { EntityData, WithNotification, WithSearch } from '@entity';
 import { useNotificationsForEntity } from '@notifications';
 import {
   type SoupItemsQueryFilters,
@@ -228,8 +228,7 @@ export const SoupViewContextProvider: FlowComponent<
     () => ({
       params: {
         limit: 100,
-        sort_method:
-          (soup.sort.active()[0]?.id as 'updated_at') ?? 'updated_at',
+        sort_method: soup.sort.active()[0]?.id ?? 'updated_at',
       },
       body: queryFilters(),
     }),

@@ -1,8 +1,4 @@
-import {
-  isTaskEntity,
-  type EntityData,
-  type WithNotification,
-} from '@macro-entity';
+import { isTaskEntity, type EntityData, type WithNotification } from '@entity';
 import {
   signalFilter,
   noiseFilter,
@@ -278,7 +274,7 @@ export const getFolderFileTypes = (type: 'soup' | 'search') => {
   });
 };
 
-const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+export const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
 const buildDefaultValue = (entityTypes: string[], required: string[]) => {
   const hasNoEntityTypes = entityTypes.length === 0;

@@ -11,7 +11,7 @@ import {
 import { createSelectionState } from '@app/component/next-soup/selection-state';
 import { SORT_CONFIGS } from '@app/component/next-soup/soup-view/sort-options';
 import { isModality } from '@core/mobile/inputModality';
-import type { EntityData, WithSearch } from '@macro-entity';
+import type { EntityData, WithSearch } from '@entity';
 import { createMemo, createSignal } from 'solid-js';
 
 type SoupEntity = EntityData | WithSearch<EntityData>;

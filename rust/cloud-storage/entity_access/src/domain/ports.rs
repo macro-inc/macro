@@ -3,7 +3,7 @@
 //! These traits define the contracts that adapters must implement.
 
 use super::models::EntityType;
-use crate::domain::models::{AccessError, AccessLevel};
+use crate::domain::models::{AccessError, AccessLevel, ChannelRoleResult, EntityPermission};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use std::future::Future;
 use uuid::Uuid;
@@ -61,6 +61,19 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         user_id: &MacroUserId<Lowercase<'_>>,
         channel_ids: &[Uuid],
     ) -> impl Future<Output = Result<Vec<Uuid>, AccessError>> + Send;
+
+    /// Get the user's role in a channel.
+    ///
+    /// Returns a [`ChannelRoleResult`] that distinguishes between:
+    /// - User has a role (considering channel type rules)
+    /// - Channel exists but user has no access
+    /// - Channel does not exist
+    fn get_channel_role(
+        &self,
+        channel_id: &Uuid,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        user_org_id: Option<i64>,
+    ) -> impl Future<Output = Result<ChannelRoleResult, AccessError>> + Send;
 }
 
 /// Service for checking entity access levels.
@@ -88,4 +101,18 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
         entity_type: EntityType,
         required_level: AccessLevel,
     ) -> impl Future<Output = Result<AccessLevel, AccessError>> + Send;
+
+    /// Get the user's permission for an entity.
+    ///
+    /// Returns `EntityPermission::AccessLevel` for items (documents, chats, projects, threads)
+    /// and `EntityPermission::ChannelRole` for channels.
+    ///
+    /// Returns `AccessError::Unauthorized` if the user has no access.
+    fn get_entity_permission(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        entity_id: &str,
+        entity_type: EntityType,
+        user_org_id: Option<i64>,
+    ) -> impl Future<Output = Result<EntityPermission, AccessError>> + Send;
 }

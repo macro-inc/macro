@@ -3,7 +3,7 @@
 mod queries;
 
 use crate::domain::{
-    models::{AccessError, AccessLevel},
+    models::{AccessError, AccessLevel, ChannelRoleResult},
     ports::AccessRepository,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
@@ -72,6 +72,22 @@ impl AccessRepository for PgAccessRepository {
             &self.pool,
             user_id,
             channel_ids,
+        )
+        .await?)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_channel_role(
+        &self,
+        channel_id: &Uuid,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        user_org_id: Option<i64>,
+    ) -> Result<ChannelRoleResult, AccessError> {
+        Ok(queries::channel_role::get_channel_role(
+            &self.pool,
+            channel_id,
+            user_id.as_ref(),
+            user_org_id,
         )
         .await?)
     }

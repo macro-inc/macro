@@ -10,11 +10,11 @@ import { waitForFrames } from '@core/util/sleep';
 import {
   type EntityData,
   isSearchEntity,
-  queryKeys,
   type SearchLocation,
   type TaskEntityWithProperties,
   type WithSearch,
-} from '@macro-entity';
+} from '@entity';
+import { queryKeys } from '@macro-entity';
 import { queryClient } from '@queries/client';
 import { emailClient } from '@service-email/client';
 import {

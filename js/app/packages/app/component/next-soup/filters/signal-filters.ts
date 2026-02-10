@@ -2,7 +2,7 @@ import {
   isTaskEntity,
   type TaskEntityWithProperties,
   type EntityData,
-} from '@macro-entity';
+} from '@entity';
 import { useUserId } from '@core/context/user';
 import { createMemo } from 'solid-js';
 import {

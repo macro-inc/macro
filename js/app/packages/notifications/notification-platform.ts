@@ -4,12 +4,13 @@ import { markdownToPlainText } from '@lexical-core';
 import type { UnifiedNotification } from '@service-notification/client';
 import { themeReactive } from '../block-theme/signals/themeReactive';
 import type { PlatformNotificationState } from './components/PlatformNotificationProvider';
-import { tryToTypedNotification } from './notification-metadata';
-import { openNotification } from './notification-navigation';
 import {
-  extractNotificationData,
-  type NotificationData,
-} from './notification-preview';
+  getNotificationAction,
+  getNotificationContent,
+  getNotificationTargetName,
+  shouldShowNotificationTarget,
+} from './notification-metadata';
+import { openNotification } from './notification-navigation';
 import {
   DefaultDocumentNameResolver,
   DefaultUserNameResolver,
@@ -37,24 +38,26 @@ function getAccentColorForIcon(): string {
 }
 
 export async function toPlatformNotificationData(
-  data: NotificationData,
+  notification: UnifiedNotification,
   resolveUserName: UserNameResolver,
   resolveDocumentName: DocumentNameResolver
 ): Promise<PlatformNotificationData | null> {
-  if (!data) return null;
-
+  const actorId = notification.senderId;
   const actor =
-    (data.actor ? await resolveUserName(data.actor.id) : undefined) ??
+    (actorId ? await resolveUserName(actorId) : undefined) ??
     USER_NAME_FALLBACK;
 
-  const showTarget = data.target?.show ?? false;
-
+  const showTarget = shouldShowNotificationTarget(notification);
   const targetName =
-    data.target?.name ??
-    (data.target?.id
-      ? await resolveDocumentName(data.target.id, data.target.type)
-      : undefined) ??
+    getNotificationTargetName(notification) ??
+    (await resolveDocumentName(
+      notification.entity_id,
+      notification.entity_type
+    )) ??
     DOCUMENT_NAME_FALLBACK;
+
+  const content = getNotificationContent(notification);
+  const action = getNotificationAction(notification);
 
   const accentColor = getAccentColorForIcon();
   const icon = getFaviconUrl(accentColor);
@@ -62,7 +65,7 @@ export async function toPlatformNotificationData(
   return {
     title: `${actor}${showTarget ? ` <${targetName}>` : ''}`,
     options: {
-      body: data.content ? markdownToPlainText(data.content) : `${data.action}`,
+      body: content ? markdownToPlainText(content) : action,
       icon,
     },
   };
@@ -71,22 +74,14 @@ export async function toPlatformNotificationData(
 /**
  * Maybe handles a new notification as a platform notification.
  * If the notification is supported and formattable emit it and handle click events.
- * @param notification
- * @param notificationInterface
- * @param splitLayoutManager
  */
 export async function maybeHandlePlatformNotification(
   notification: UnifiedNotification,
   notificationInterface: PlatformNotificationState,
   splitLayoutManager: SplitManager
 ) {
-  const nm = tryToTypedNotification(notification);
-  if (!nm) return;
-  const data = extractNotificationData(nm);
-  if (data === 'no_extractor' || data === 'no_extracted_data') return;
-
   const platformNotificationData = await toPlatformNotificationData(
-    data,
+    notification,
     DefaultUserNameResolver,
     DefaultDocumentNameResolver
   );
@@ -101,7 +96,7 @@ export async function maybeHandlePlatformNotification(
     ) {
       notificationHandle.onClick(() => {
         window.focus();
-        openNotification(nm, splitLayoutManager);
+        openNotification(notification, splitLayoutManager);
         notificationHandle.close();
       });
     }

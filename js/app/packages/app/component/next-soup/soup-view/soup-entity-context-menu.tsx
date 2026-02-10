@@ -1,7 +1,7 @@
 import { ContextMenuContent, MenuSeparator } from '@core/component/Menu';
 import { isMobile } from '@core/mobile/isMobile';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import { Entity, type EntityData } from '@macro-entity';
+import { InlineEntity, type EntityData } from '@entity';
 import { type FlowComponent, Show } from 'solid-js';
 import { useSoupView } from './soup-view-context';
 import { SoupEntityActionsMenu } from './soup-entity-actions-menu';
@@ -27,10 +27,7 @@ export const SoupEntityContextMenu: FlowComponent<
           {(selectedEntity) => (
             <ContextMenuContent mobileFullScreen>
               <Show when={isMobile()}>
-                <Entity
-                  entity={selectedEntity()}
-                  timestamp={props.entityTimestamp}
-                />
+                <InlineEntity entity={selectedEntity()} />
                 <MenuSeparator />
               </Show>
               <SoupEntityActionsMenu

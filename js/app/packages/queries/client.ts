@@ -1,10 +1,7 @@
 import { QueryClient } from '@tanstack/solid-query';
-import { createIDBPersister } from './storage/idb';
-import {
-  createPersistenceKey,
-  queryKeyHasPrefix,
-  setupQueryPersistence,
-} from './persistence';
+import { createPerQueryIDBStore } from './persistence/per-query-idb';
+import { partialMatchKey } from '@tanstack/query-core';
+import { createPersistenceKey, setupQueryPersistence } from './persistence';
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -17,24 +14,32 @@ export const queryClient = new QueryClient({
   },
 });
 
+const buster = import.meta.env.__APP_VERSION__ ?? 'dev';
+
+// Clean up orphaned v0 databases from the old whole-cache persistence format
+try {
+  indexedDB.deleteDatabase(createPersistenceKey('channels', 0));
+  indexedDB.deleteDatabase(createPersistenceKey('email-threads', 0));
+} catch {}
+
 setupQueryPersistence({
   queryClient,
-  buster: import.meta.env.__APP_VERSION__ ?? 'dev',
   scopes: [
     {
-      persister: createIDBPersister({
-        key: createPersistenceKey('channels', 0),
+      store: createPerQueryIDBStore({
+        dbName: createPersistenceKey('channels', 1),
       }),
       maxAge: { value: 7, unit: 'd' },
-      shouldDehydrateQuery: (q) => queryKeyHasPrefix(q.queryKey, ['channel']),
+      buster,
+      shouldPersist: (key) => partialMatchKey(key, ['channel']),
     },
     {
-      persister: createIDBPersister({
-        key: createPersistenceKey('email-threads', 0),
+      store: createPerQueryIDBStore({
+        dbName: createPersistenceKey('email-threads', 1),
       }),
       maxAge: { value: 7, unit: 'd' },
-      shouldDehydrateQuery: (q) =>
-        queryKeyHasPrefix(q.queryKey, ['email', 'threadMessages']),
+      buster,
+      shouldPersist: (key) => partialMatchKey(key, ['email', 'threadMessages']),
     },
   ],
 });

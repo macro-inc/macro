@@ -90,6 +90,10 @@ pub enum Model {
     #[serde(rename = "claude-opus-4-5")]
     #[strum(serialize = "claude-opus-4-5")]
     Claude45Opus,
+
+    #[serde(rename = "claude-opus-4-6")]
+    #[strum(serialize = "claude-opus-4-6")]
+    Claude46Opus,
 }
 
 pub mod constants {
@@ -113,6 +117,7 @@ pub mod constants {
         pub const CLAUDE_45_SONNET: &str = "claude-4.5-sonnet";
         pub const CLAUDE_45_HAIKU: &str = "claude-4.5-haiku";
         pub const CLAUDE_45_OPUS: &str = "claude-4.5-opus";
+        pub const CLAUDE_46_OPUS: &str = "claude-4.6-opus";
     }
 
     /// String versions of providers
@@ -145,6 +150,7 @@ impl Model {
             Model::Claude45Sonnet => (ANTHROPIC, CLAUDE_45_SONNET),
             Model::Claude45Haiku => (ANTHROPIC, CLAUDE_45_HAIKU),
             Model::Claude45Opus => (ANTHROPIC, CLAUDE_45_OPUS),
+            Model::Claude46Opus => (ANTHROPIC, CLAUDE_46_OPUS),
         }
     }
     pub fn from_model_str(model: &str) -> Option<Self> {
@@ -164,6 +170,7 @@ impl Model {
             CLAUDE_37_SONNET => Model::Claude37Sonnet,
             CLAUDE_45_SONNET => Model::Claude45Sonnet,
             CLAUDE_45_HAIKU => Model::Claude45Haiku,
+            CLAUDE_46_OPUS => Model::Claude46Opus,
             _unknown => return None,
         })
     }

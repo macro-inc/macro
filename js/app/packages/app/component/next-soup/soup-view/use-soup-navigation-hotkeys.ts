@@ -4,6 +4,9 @@ import type { Accessor } from 'solid-js';
 import type { SoupState } from '../create-soup-state';
 import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 import { registerHotkey } from '@core/hotkey/hotkeys';
+import type { SplitHandle } from '@app/component/split-layout/layoutManager';
+import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
+import type { EntityData } from '@entity';
 
 const DEFAULT_ENTITY_SIZE = 40;
 const CONTEXT_ENTITIES_COUNT = 3;
@@ -13,6 +16,7 @@ const CONTEXT_OFFSET = DEFAULT_ENTITY_SIZE * CONTEXT_ENTITIES_COUNT;
 type UseSoupNavigationHotkeysOptions = {
   scopeId: string;
   soup: SoupState;
+  splitHandle: SplitHandle;
   virtualizerHandle: Accessor<VirtualizerHandle | undefined>;
   previewPanelRef: Accessor<HTMLElement | undefined>;
 };
@@ -20,7 +24,7 @@ type UseSoupNavigationHotkeysOptions = {
 export const useSoupNavigationHotkeys = (
   options: UseSoupNavigationHotkeysOptions
 ) => {
-  const { scopeId, soup, virtualizerHandle } = options;
+  const { scopeId, soup, splitHandle, virtualizerHandle } = options;
 
   const scrollTo = (index: number) => {
     const handle = virtualizerHandle();
@@ -42,6 +46,16 @@ export const useSoupNavigationHotkeys = (
 
     virtualizerHandle()?.scrollToIndex(index + contextOffset, {
       align: 'nearest',
+    });
+  };
+
+  const openEntity = (entity: EntityData) => {
+    const handleContent = splitHandle.content().type;
+
+    if (handleContent === 'component' || handleContent === 'project') return;
+
+    openEntityInSplitFromUnifiedList(entity, {
+      splitHandle,
     });
   };
 
@@ -105,6 +119,7 @@ export const useSoupNavigationHotkeys = (
       if (!next) return true;
 
       scrollTo(next.index);
+      openEntity(next.item);
 
       return true;
     },
@@ -123,6 +138,7 @@ export const useSoupNavigationHotkeys = (
       if (!next) return true;
 
       scrollTo(next.index);
+      openEntity(next.item);
 
       return true;
     },

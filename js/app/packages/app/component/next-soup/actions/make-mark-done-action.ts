@@ -3,7 +3,7 @@ import {
   type EntityData,
   isTaskEntity,
   type TaskEntityWithProperties,
-} from '@macro-entity';
+} from '@entity';
 import {
   markNotificationsForEntityAsDone,
   type NotificationSource,

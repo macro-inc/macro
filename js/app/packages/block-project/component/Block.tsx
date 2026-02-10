@@ -1,8 +1,4 @@
-import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
-import {
-  PreviewPanel,
-  useMaybePreviewPanel,
-} from '@app/component/PreviewPanel';
+import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 import { SplitPanelContext } from '@app/component/split-layout/context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { getIsSpecialProject } from '@block-project/isSpecial';
@@ -21,27 +17,24 @@ import {
 } from '@core/util/upload';
 import { useQueryClient } from '@queries/client';
 import { soupKeys } from '@queries/soup/keys';
-import { throttledDependent } from '@core/util/debounce';
 import { refetchResources } from '@service-storage/util/refetchResources';
 import { toast } from 'core/component/Toast/Toast';
 import { type Component, createSignal, Show } from 'solid-js';
 import { TopBar } from './TopBar';
-import {
-  SoupContextProvider,
-  useSoup,
-} from '@app/component/next-soup/soup-context';
+import { SoupContextProvider } from '@app/component/next-soup/soup-context';
 import {
   createSoupState,
   type SoupState,
 } from '@app/component/next-soup/create-soup-state';
 import { SoupViewContextProvider } from '@app/component/next-soup/soup-view/soup-view-context';
 import { SoupViewList } from '@app/component/next-soup/soup-view/soup-view';
+import { NIL_UUID } from '@app/component/next-soup/filters/filters';
 
 // HACK: prevent lint error on custom directive
 false && fileFolderDrop;
 false && fileSelector;
 
-const PROJECT_ENTITY_TYPES = ['document', 'agent', 'file', 'task'];
+const PROJECT_ENTITY_TYPES = ['document', 'task', 'chat', 'project'];
 
 const Block: Component = () => {
   const [isDragging, setIsDragging] = createSignal(false);
@@ -92,17 +85,11 @@ const Block: Component = () => {
     }
   };
 
-  const orchestrator = useGlobalBlockOrchestrator();
-
-  const soup = useSoup();
-
   const previewPanel = useMaybePreviewPanel();
 
   const splitPanelContext = useSplitPanelOrThrow();
 
   const [preview, setPreview] = splitPanelContext.previewState;
-  const selectedEntity = () => soup.focus.item();
-  const throttledSelectedEntity = throttledDependent(selectedEntity, 150);
 
   if (!previewPanel) {
     registerHotkey({
@@ -163,13 +150,6 @@ const Block: Component = () => {
             >
               <ProjectEntityList projectId={projectId} soup={projectSoup} />
             </SplitPanelContext.Provider>
-            <Show when={preview()}>
-              <PreviewPanel
-                selectedEntity={throttledSelectedEntity()}
-                orchestrator={orchestrator}
-                splitPanelContext={splitPanelContext}
-              />
-            </Show>
           </div>
         </Show>
       </div>
@@ -183,6 +163,9 @@ const ProjectEntityList = (props: { projectId: string; soup: SoupState }) => {
       <SoupViewContextProvider
         soup={props.soup}
         queryFilters={{
+          channel_filters: {
+            channel_ids: [NIL_UUID],
+          },
           chat_filters: {
             project_ids: [props.projectId],
           },
@@ -191,6 +174,9 @@ const ProjectEntityList = (props: { projectId: string; soup: SoupState }) => {
           },
           document_filters: {
             project_ids: [props.projectId],
+          },
+          email_filters: {
+            recipients: [NIL_UUID],
           },
         }}
       >

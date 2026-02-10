@@ -127,6 +127,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let auth_client = service::fusionauth_client::FusionAuthClient::new(
+        config.fusionauth_tenant_id,
         fusionauth_api_key,
         config.fusionauth_client_id.clone(),
         fusionauth_client_secret,

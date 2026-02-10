@@ -23,6 +23,9 @@ import {
   NotificationCount,
 } from './extractors-notification';
 
+// Property components
+import { EntityKeyProperties } from './extractors-property';
+
 /**
  * Entity composable component namespace.
  */
@@ -47,4 +50,5 @@ export const Entity = {
     Description: NotificationDescription,
     Count: NotificationCount,
   },
+  Properties: EntityKeyProperties,
 };

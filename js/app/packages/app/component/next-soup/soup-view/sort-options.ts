@@ -5,7 +5,7 @@ import {
   type WithSearch,
   type EntityData,
   type WithNotification,
-} from '@macro-entity';
+} from '@entity';
 import { compareDateDesc } from '@core/util/date';
 
 export type SystemSortOption =

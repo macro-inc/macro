@@ -6,10 +6,8 @@ import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler'
 import {
   NOTIFICATION_LABEL_BY_TYPE,
   type NotificationSource,
-  tryToTypedNotification,
   type UnifiedNotification,
 } from '@notifications';
-import type { NotificationEventType } from '@service-notification/generated/schemas';
 import { openNotification } from '@notifications/notification-navigation';
 import { createMemo, For, Show } from 'solid-js';
 
@@ -31,10 +29,9 @@ export function Notifications(props: NotificationsProps) {
 
   const handleNotificationClick = async (notification: UnifiedNotification) => {
     const splitManager = globalSplitManager();
-    const typed = tryToTypedNotification(notification);
-    if (!typed || !splitManager) return;
+    if (!splitManager) return;
 
-    openNotification(typed, splitManager);
+    openNotification(notification, splitManager);
     await props.notificationSource.markAsRead(notification);
   };
 
@@ -71,7 +68,7 @@ export function Notifications(props: NotificationsProps) {
                   <div>
                     {
                       NOTIFICATION_LABEL_BY_TYPE[
-                        notification.notificationEventType as NotificationEventType
+                        notification.notificationMetadata.tag
                       ]
                     }
                   </div>

@@ -6,7 +6,7 @@ pub mod edit_anchor;
 pub mod edit_comment;
 pub mod get;
 
-use std::{collections::HashSet, fmt::Display};
+use std::collections::HashSet;
 
 use super::context::ApiContext;
 use axum::{
@@ -16,20 +16,12 @@ use axum::{
     routing::{delete, get, patch, post},
 };
 use macro_db_client::annotations::CommentError;
-use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::{annotations::Comment, response::ErrorResponse};
-use model_entity::Entity;
 use model_entity::EntityType;
-use notification::domain::models::{
-    NotifCollapseKey, Notification, NotificationExtIos, RateLimitConfig, RateLimitKey,
-    SendNotificationRequestBuilder,
-    apple::{APNSPushNotification, AlertDictionary, Aps, PushNotificationData},
-};
-use serde::{Deserialize, Serialize};
+use model_notifications::MentionedInDocumentCommentMetadata;
+use notification::domain::models::SendNotificationRequestBuilder;
 use tower::ServiceBuilder;
-use utoipa::ToSchema;
-use uuid::Uuid;
 
 pub fn router(state: ApiContext) -> Router<ApiContext> {
     Router::new()
@@ -130,114 +122,10 @@ pub fn comment_error_response(e: anyhow::Error, default_msg: &str) -> Result<Res
     }
 }
 
-#[derive(Debug, Clone, Deserialize, ToSchema)]
-pub enum NotifLocationType {
-    CreateComment,
-    EditComment,
-}
-impl Serialize for NotifLocationType {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.collect_str(self)
-    }
-}
-
-// NB: We ulse this Display impl for `impl Serialize for NotifLocationType`.
-impl Display for NotifLocationType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                NotifLocationType::CreateComment => "create-comment",
-                NotifLocationType::EditComment => "edit-comment",
-            }
-        )
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(in crate::api) struct Location {
-    r#type: NotifLocationType,
-    comment_id: Option<i64>,
-    thread_id: i64,
-    text: String,
-}
-
-/// Notification sent when a user is mentioned in a document comment.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DocumentMentionNotification {
-    /// The name of the document.
-    pub document_name: String,
-    /// The owner of the document.
-    pub owner: MacroUserIdStr<'static>,
-    /// The file type of the document.
-    pub file_type: Option<String>,
-    /// The mention ID.
-    pub mention_id: String,
-    /// The location metadata for the mention.
-    pub location: Location,
-}
-
-impl Notification for DocumentMentionNotification {
-    const TYPE_NAME: &'static str = "document_mention";
-
-    fn rate_limit_config() -> Option<RateLimitConfig> {
-        None
-    }
-
-    fn rate_limit_key(&self) -> Option<RateLimitKey> {
-        None
-    }
-}
-
-impl NotificationExtIos for DocumentMentionNotification {
-    type NotifData = ::notification::domain::models::apple::PushNotificationData;
-
-    fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
-        let entity_type: &'static str = entity.entity_type.into();
-        NotifCollapseKey::new(entity_type).append(&entity.entity_id)
-    }
-
-    fn into_apns<'a>(
-        self,
-        sender_id: Option<MacroUserIdStr<'a>>,
-        _entity: &Entity<'_>,
-        notification_id: Uuid,
-    ) -> Option<APNSPushNotification<Self::NotifData>> {
-        let sender = sender_id?;
-        let file_type_str = self.file_type.as_ref()?;
-        let title = sender.0.email_part().email_str().to_string();
-        let body = format!(
-            "You were mentioned in {}.{}",
-            self.document_name, file_type_str
-        );
-
-        Some(APNSPushNotification {
-            aps: Aps {
-                alert: Some(notification::domain::models::apple::Alert::Dictionary(
-                    AlertDictionary {
-                        title: Some(title),
-                        body: Some(body),
-                        ..Default::default()
-                    },
-                )),
-                ..Default::default()
-            },
-            push_notification_data: PushNotificationData { notification_id },
-        })
-    }
-}
-
 #[expect(clippy::too_many_arguments)]
 fn build_mention_notif<'a>(
-    notif_location_type: NotifLocationType,
     text: String,
-    comment: Option<&Comment>,
+    comment: &Comment,
     thread_id: i64,
     mentions: &'a [String],
     document_name: String,
@@ -246,18 +134,15 @@ fn build_mention_notif<'a>(
     sender_id: Option<MacroUserIdStr<'static>>,
     document_id: String,
     mention_id: &str,
-) -> SendNotificationRequestBuilder<'a, DocumentMentionNotification> {
-    let notification = DocumentMentionNotification {
+) -> SendNotificationRequestBuilder<'a, MentionedInDocumentCommentMetadata> {
+    let notification = MentionedInDocumentCommentMetadata {
         document_name,
         owner,
         file_type,
         mention_id: mention_id.to_string(),
-        location: Location {
-            r#type: notif_location_type,
-            comment_id: comment.map(|c| c.comment_id),
-            thread_id,
-            text,
-        },
+        comment_id: comment.comment_id,
+        thread_id,
+        text,
     };
 
     let recipient_ids: HashSet<MacroUserIdStr<'a>> = mentions
@@ -278,34 +163,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn check_ser_notif_type() -> Result<(), Box<dyn std::error::Error>> {
-        let a = NotifLocationType::CreateComment;
-        let res = serde_json::json!({
-            r#"type"#: a,
-        })
-        .to_string();
-        assert_eq!(res, r#"{"type":"create-comment"}"#);
-        Ok(())
-    }
-    #[test]
     fn check_ser_meta() -> Result<(), Box<dyn std::error::Error>> {
-        let m = DocumentMentionNotification {
+        let m = MentionedInDocumentCommentMetadata {
             document_name: "test".to_string(),
             owner: MacroUserIdStr::parse_from_str("macro|user@test.com").unwrap(),
             file_type: None,
             mention_id: "xxx".to_string(),
-            location: Location {
-                r#type: NotifLocationType::EditComment,
-                thread_id: 42,
-                comment_id: Some(99),
-                text: "yy".to_string(),
-            },
+            thread_id: 42,
+            comment_id: 99,
+            text: "yy".to_string(),
         };
         let res = serde_json::to_string(&m).unwrap();
         assert!(res.contains(r#"mentionId":"xxx""#));
         assert!(res.contains(r#"threadId":42"#));
         assert!(res.contains(r#"commentId":99"#));
-        assert!(res.contains(r#""type":"edit-comment""#));
         Ok(())
     }
 }

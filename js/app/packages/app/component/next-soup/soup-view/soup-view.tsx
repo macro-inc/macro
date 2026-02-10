@@ -1,5 +1,4 @@
 import CheckIcon from '@icon/bold/check-bold.svg';
-import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
@@ -12,7 +11,6 @@ import {
 import { useSoup } from '@app/component/next-soup/soup-context';
 import { SoupEntityContextMenu } from '@app/component/next-soup/soup-view/soup-entity-context-menu';
 import {
-  type SoupEntity,
   type SoupRow,
   SoupViewContextProvider,
   useSoupView,
@@ -35,25 +33,15 @@ import { SplitPanelContext } from '@app/component/split-layout/context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { useTaskProperties } from '@core/component/Properties/hooks';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import {
   type EntityData,
-  isTaskEntity,
-  type Notification,
-  queryKeys,
-  unreadFilterFn,
-  useQueryClient,
-} from '@macro-entity';
-import {
-  createEffectOnEntityTypeNotification,
-  getMetadata,
-  isChannelMention,
-  isChannelMessageReply,
-  isChannelMessageSend,
-  tryToTypedNotification,
-  type UnifiedNotification,
-} from '@notifications';
+  ListEntity,
+  type SearchLocation,
+  type ProjectEntity,
+} from '@entity';
+import { queryKeys, useQueryClient } from '@macro-entity';
+import { createEffectOnEntityTypeNotification } from '@notifications';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui/utils/classname';
 import {
@@ -72,11 +60,6 @@ import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { SoupToolbar } from './soup-toolbar';
 import { useUserId } from '@core/context/user';
-import {
-  type EntityClickHandler,
-  type EntityPointerDownHandler,
-  EntityWithEverything,
-} from '../../../../macro-entity/src/components/EntityWithEverything';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { SoupViewFileDropzone } from '@app/component/next-soup/soup-view/soup-view-file-dropzone';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -88,6 +71,7 @@ import { SoupChatInput } from '@app/component/SoupChatInput';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
+import { usePropertyEditorHotkeys } from '@app/component/property-edit-modal/hooks/usePropertyEditorHotkeys';
 
 const DEFAULT_ENTITY_HEIGHT = 40;
 
@@ -243,12 +227,19 @@ export const SoupViewList = (props: SoupViewListProps) => {
   useSoupNavigationHotkeys({
     scopeId: scopeId(),
     soup,
+    splitHandle: panel.handle,
     virtualizerHandle,
     previewPanelRef,
   });
 
   // Register entity action hotkeys
   useEntityActionHotkeys({
+    scopeId: scopeId(),
+    soup,
+  });
+
+  // Property editor
+  usePropertyEditorHotkeys({
     scopeId: scopeId(),
     soup,
   });
@@ -300,9 +291,15 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   const orchestrator = useGlobalBlockOrchestrator();
 
-  const taskPropertiesStore = useTaskProperties(soup.data);
+  type EntityClickArgs = {
+    type: 'entity' | 'project';
+    entity: EntityData;
+    projectEntity?: ProjectEntity;
+    event: MouseEvent | PointerEvent;
+    location?: SearchLocation;
+  };
 
-  const onEntityClick: EntityClickHandler<EntityData> = async (args) => {
+  const onEntityClick = async (args: EntityClickArgs) => {
     const { type, event, location } = args;
 
     const entity = (
@@ -324,86 +321,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
       location,
       splitHandle: panel.handle,
     });
-  };
-
-  const onEntityDoubleClick: EntityClickHandler<EntityData> = async (args) => {
-    const { entity, event, location } = args;
-
-    if (!soup.previewEntity()) {
-      return;
-    }
-
-    await openEntityInSplitFromUnifiedList(entity, {
-      openInNewSplit: event.shiftKey,
-      location,
-      splitHandle: panel.handle,
-    });
-  };
-
-  const onEntityPointerDown: EntityPointerDownHandler<EntityData> = async (
-    args
-  ) => {
-    const { type, location, event } = args;
-
-    const entity = (
-      type === 'entity' ? args.entity : args.projectEntity
-    ) as EntityData;
-
-    // middle mouse button pressed
-    if (event.button === 1 && event.pointerType === 'mouse') {
-      // TODO: current page should remain focused after opening new tab
-      openEntityInNewTab({ entity, location });
-    }
-  };
-
-  const onClickEntityAction = (entity: EntityData) => {
-    if (markDoneAction.canExecute(entity)) {
-      markDoneAction.executeWithSoup([entity], soup);
-    }
-  };
-
-  const blockOrchestrator = useGlobalBlockOrchestrator();
-  const gotoChannelNotification = async (notification: UnifiedNotification) => {
-    let message_id: string | undefined;
-    let thread_id: string | undefined;
-
-    if (isChannelMention(notification)) {
-      const metadata = getMetadata(notification);
-      message_id = metadata.messageId;
-    } else if (isChannelMessageReply(notification)) {
-      const metadata = getMetadata(notification);
-      message_id = metadata.messageId;
-      thread_id = metadata.threadId;
-    } else if (isChannelMessageSend(notification)) {
-      const metadata = getMetadata(notification);
-      message_id = metadata.messageId;
-    } else {
-      return;
-    }
-
-    const blockHandle = await blockOrchestrator.getBlockHandle(
-      notification.entity_id,
-      'channel'
-    );
-    if (!blockHandle) return;
-
-    notificationSource.markAsRead(notification);
-
-    return blockHandle?.goToLocationFromParams({
-      [CHANNEL_PARAMS.message]: message_id,
-      [CHANNEL_PARAMS.thread]: thread_id,
-    });
-  };
-
-  const onClickNotification = ({
-    entity,
-  }: {
-    entity: SoupEntity & { notification: Notification };
-  }) => {
-    const notification = tryToTypedNotification(entity.notification);
-    if (!notification || entity.type !== 'channel') return;
-
-    gotoChannelNotification(notification);
   };
 
   let lastClickedEntityId = -1;
@@ -493,10 +410,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
   );
 
   onCleanup(() => debouncedFetchMore.clear());
-
-  const [entityContextMenuOpen, setEntityContextMenuOpen] = createSignal<
-    string | undefined
-  >(undefined);
 
   const [localEntityListRef, setLocalEntityListRef] = createSignal<
     HTMLDivElement | undefined
@@ -637,21 +550,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
                       }
                     };
 
-                    const properties = () => {
-                      if (isTaskEntity(row.original)) {
-                        return taskPropertiesStore()[row.original.id] ?? [];
-                      }
-                      return undefined;
-                    };
-
-                    const shouldDisplayDoneButton = () => {
-                      if (row.original.type === 'email') {
-                        return !row.original.done;
-                      }
-
-                      return (row.original.notifications?.().length ?? 0) > 0;
-                    };
-
                     return (
                       <EntityRow
                         entityId={row.original.id}
@@ -663,11 +561,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
                         <SoupEntityContextMenu
                           entity={row.original}
                           entityTimestamp={timestamp()}
-                          onOpenChange={(open) => {
-                            setEntityContextMenuOpen(
-                              open ? row.original.id : undefined
-                            );
-                          }}
                         >
                           <div
                             class="flex flex-col w-full min-w-0"
@@ -689,33 +582,14 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                 </div>
                               }
                             >
-                              <EntityWithEverything
-                                splitId={panel.handle.id}
+                              <ListEntity
                                 entity={row.original}
                                 timestamp={timestamp()}
-                                properties={properties()}
-                                searchActive={!!searchText()}
-                                selected={{
-                                  active:
-                                    row.isFocused() ||
-                                    entityContextMenuOpen() === row.original.id,
-                                  // TODO: Update this to take into account when this is used within a nested
-                                  // view like the preview panel
-                                  muted:
-                                    row.isFocused() && !panel.isPanelActive(),
-                                }}
                                 highlighted={
                                   panel.isPanelActive() && row.isFocused()
                                 }
-                                onMouseOver={() => {
-                                  if (
-                                    soup.previewEntity() ||
-                                    isKeypressActive()
-                                  )
-                                    return;
-                                  soup.focus.set(row.original.id);
-                                }}
-                                onFocusIn={() => {
+                                onMouseMove={() => {
+                                  if (isKeypressActive()) return;
                                   if (soup.previewEntity()) return;
                                   soup.focus.set(row.original.id);
                                 }}
@@ -723,12 +597,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                   soup.filters.isActive('signal') &&
                                   !soup.filters.isActive('noise')
                                 }
-                                unreadIndicatorActive={unreadFilterFn(
-                                  row.original
-                                )}
-                                showDoneButton={shouldDisplayDoneButton()}
                                 checked={row.isSelected()}
-                                onChecked={(next, shiftKey) =>
+                                onChecked={(next: boolean, shiftKey: boolean) =>
                                   handleMultiSelectChecked({
                                     entity: row.original,
                                     entityIndex: i(),
@@ -736,11 +606,34 @@ export const SoupViewList = (props: SoupViewListProps) => {
                                     shiftKey: shiftKey ?? false,
                                   })
                                 }
-                                onClick={onEntityClick}
-                                onDblClick={onEntityDoubleClick}
-                                onPointerDown={onEntityPointerDown}
-                                onClickRowAction={onClickEntityAction}
-                                onClickNotification={onClickNotification}
+                                onClick={(event: MouseEvent) => {
+                                  onEntityClick({
+                                    type: 'entity',
+                                    entity: row.original,
+                                    event,
+                                    location: undefined,
+                                  });
+                                }}
+                                onProjectClick={(projectEntity, event) => {
+                                  onEntityClick({
+                                    type: 'project',
+                                    projectEntity,
+                                    entity: row.original,
+                                    event,
+                                    location: undefined,
+                                  });
+                                }}
+                                onContentHitClick={(
+                                  e: PointerEvent | MouseEvent,
+                                  location?: SearchLocation
+                                ) => {
+                                  onEntityClick({
+                                    type: 'entity',
+                                    entity: row.original,
+                                    event: e,
+                                    location,
+                                  });
+                                }}
                               />
                             </Show>
                           </div>
@@ -775,7 +668,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
           onClear={soup.selection.clear}
         />
       </Show>
-      <Show when={soup.previewEntity()}>
+      <Show when={soup.previewEntity() || panel.previewState[0]()}>
         <PreviewPanel
           ref={setPreviewPanelRef}
           selectedEntity={soup.focus.item()}

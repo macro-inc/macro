@@ -1,5 +1,6 @@
 import { match } from 'ts-pattern';
 import type { Notification } from '../types/notification';
+import type { NotificationType } from '@core/types';
 
 /**
  * Gets unique sender IDs from a notification stack
@@ -19,35 +20,36 @@ export function getUniqueSenderIds(notifications: Notification[]): string[] {
  * Gets the action verb for a notification type
  * @internal
  */
-export function getActionVerb(
-  type: Notification['notificationEventType']
-): string {
+export function getActionVerb(type: NotificationType): string {
   return match(type)
     .with('channel_mention', () => 'mentioned you')
     .with('document_mention', () => 'mentioned you')
+    .with('mentioned_in_document_comment', () => 'mentioned you')
     .with('channel_message_reply', () => 'replied')
     .with('channel_message_send', () => 'sent a message')
-    .with('item_shared_user', () => 'shared')
-    .with('item_shared_organization', () => 'shared')
     .with('new_email', () => 'sent an email')
-    .otherwise(() => 'notified you');
+    .with('channel_invite', () => 'invited you')
+    .with('invite_to_team', () => 'invited you')
+    .with('task_assigned', () => 'assigned you')
+    .exhaustive();
 }
 
 /**
  * Gets a noun for the notification type (for multi-notification descriptions)
  * @internal
  */
-export function getTypeNoun(
-  type: Notification['notificationEventType'],
-  count: number
-): string {
+export function getTypeNoun(type: NotificationType, count: number): string {
   return match(type)
     .with('channel_message_reply', () => (count === 1 ? 'reply' : 'replies'))
     .with('channel_message_send', () => (count === 1 ? 'message' : 'messages'))
     .with('channel_mention', () => (count === 1 ? 'mention' : 'mentions'))
     .with('document_mention', () => (count === 1 ? 'mention' : 'mentions'))
-    .with('item_shared_user', () => (count === 1 ? 'share' : 'shares'))
-    .with('item_shared_organization', () => (count === 1 ? 'share' : 'shares'))
+    .with('mentioned_in_document_comment', () =>
+      count === 1 ? 'mention' : 'mentions'
+    )
     .with('new_email', () => (count === 1 ? 'email' : 'emails'))
-    .otherwise(() => (count === 1 ? 'notification' : 'notifications'));
+    .with('channel_invite', () => (count === 1 ? 'invite' : 'invites'))
+    .with('invite_to_team', () => (count === 1 ? 'invite' : 'invites'))
+    .with('task_assigned', () => (count === 1 ? 'task' : 'tasks'))
+    .exhaustive();
 }

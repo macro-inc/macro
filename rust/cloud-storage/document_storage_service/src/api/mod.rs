@@ -40,6 +40,7 @@ mod recents;
 mod user;
 mod user_document_view_location;
 
+mod entity;
 mod items;
 mod permissions;
 pub(crate) mod swagger;
@@ -165,6 +166,7 @@ fn api_router(state: ApiContext) -> Router {
             comms_service::comms_router(&CommsHandlerState::from_ref(&state))
                 .with_state(CommsHandlerState::from_ref(&state)),
         )
+        .nest("/entity", entity::router())
         .layer(
             ServiceBuilder::new()
                 .layer(axum::middleware::from_fn(

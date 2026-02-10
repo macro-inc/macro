@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    api::annotations::{NotifLocationType, build_mention_notif},
-    service::conn_gateway::update_live_comment_state,
+    api::annotations::build_mention_notif, service::conn_gateway::update_live_comment_state,
 };
 use axum::{
     Json,
@@ -61,9 +60,8 @@ pub async fn edit_comment_handler(
         Ok(res) => {
             if let Some(Mentions { users, mention_id }) = req.mentions {
                 let request = build_mention_notif(
-                    NotifLocationType::EditComment,
                     req.text.clone().unwrap_or_else(|| "".to_string()),
-                    Some(&res.comment),
+                    &res.comment,
                     req.thread_id,
                     &users,
                     res.document_name.clone(),

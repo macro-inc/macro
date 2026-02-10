@@ -1,22 +1,10 @@
-import {
-  isChannelMention,
-  isChannelMessageReply,
-  isChannelMessageSend,
-  isDocumentMention,
-  isItemSharedOrganization,
-  isItemSharedUser,
-  isNewEmail,
-  getMetadata,
-  type UnifiedNotificationWithMetadata,
-  type TypedNotification,
-} from '@notifications/notification-metadata';
 import type { NotificationStack } from '@notifications/notification-stacking';
 import type { Notification } from '../types/notification';
+import type { UnifiedNotification } from '@notifications';
 import { match } from 'ts-pattern';
 
 /**
  * Filters out invalid notification types that shouldn't be displayed
- * Currently filters out 'channel_message_document' notifications.
  */
 export function filterValidNotifications(
   notifications: Notification[] | undefined
@@ -24,10 +12,7 @@ export function filterValidNotifications(
   if (!notifications) return [];
 
   return notifications.filter((n) => {
-    return (
-      n.notificationEventType !== 'channel_message_document' &&
-      n.notificationEventType !== undefined
-    );
+    return n.notificationEventType !== undefined;
   });
 }
 
@@ -39,7 +24,7 @@ export function filterNotDoneNotifications(
 }
 
 export function extractNotificationSenderIds(
-  notifications: TypedNotification[],
+  notifications: UnifiedNotification[],
   maxCount: number = 3,
   reverse = false
 ): string[] {
@@ -48,14 +33,8 @@ export function extractNotificationSenderIds(
   for (const notification of notifications) {
     if (senderIds.size >= maxCount) break;
 
-    const metadata = notification.notificationMetadata;
-    if (
-      metadata &&
-      'senderId' in metadata &&
-      typeof metadata.senderId === 'string' &&
-      metadata.senderId
-    ) {
-      senderIds.add(metadata.senderId);
+    if (notification.senderId) {
+      senderIds.add(notification.senderId);
     }
   }
 
@@ -68,64 +47,43 @@ export function extractNotificationSenderIds(
  * Gets a human-readable action text for a notification based on its type
  * Returns a short verb phrase like "mentioned", "replied", "shared", etc.
  */
-export function getNotificationActionText(notification: Notification): string {
-  const type = notification.notificationEventType;
+export function getNotificationActionText(n: Notification): string {
+  const tag = n.notificationMetadata.tag;
 
-  return match(type)
+  return match(tag)
     .with('channel_mention', () => 'mentioned')
     .with('channel_message_send', () => 'sent')
     .with('channel_message_reply', () => 'replied')
     .with('document_mention', () => 'mentioned')
-    .with('item_shared_user', () => 'shared')
-    .with('item_shared_organization', () => 'shared')
+    .with('mentioned_in_document_comment', () => 'mentioned')
     .with('channel_invite', () => 'invited')
     .with('new_email', () => 'emailed')
     .with('invite_to_team', () => 'invited')
-    .with('reject_team_invite', () => 'declined')
     .with('task_assigned', () => 'assigned')
-    .with('channel_message_document', () => 'notified')
-    .otherwise(() => 'notified');
+    .exhaustive();
 }
 
 export function extractMessageContent(notification: Notification): string {
-  const typed = notification as UnifiedNotificationWithMetadata;
+  const n = notification as UnifiedNotification;
+  const meta = n.notificationMetadata;
 
-  if (isChannelMention(typed)) {
-    const metadata = getMetadata(typed);
-    return metadata.messageContent || '';
-  }
-
-  if (isChannelMessageSend(typed)) {
-    const metadata = getMetadata(typed);
-    return metadata.messageContent || '';
-  }
-
-  if (isChannelMessageReply(typed)) {
-    const metadata = getMetadata(typed);
-    return metadata.messageContent || '';
-  }
-
-  if (isDocumentMention(typed)) {
-    const metadata = getMetadata(typed);
-    return metadata.documentName || '';
-  }
-
-  if (isItemSharedUser(typed)) {
-    const metadata = getMetadata(typed);
-    return metadata.itemName || '';
-  }
-
-  if (isItemSharedOrganization(typed)) {
-    const metadata = getMetadata(typed);
-    return metadata.itemName || '';
-  }
-
-  if (isNewEmail(typed)) {
-    const metadata = getMetadata(typed);
-    return metadata.subject || '';
-  }
-
-  return '';
+  return match(meta)
+    .with({ tag: 'channel_mention' }, (m) => m.content.messageContent || '')
+    .with(
+      { tag: 'channel_message_send' },
+      (m) => m.content.messageContent || ''
+    )
+    .with(
+      { tag: 'channel_message_reply' },
+      (m) => m.content.messageContent || ''
+    )
+    .with({ tag: 'document_mention' }, (m) => m.content.documentName || '')
+    .with({ tag: 'mentioned_in_document_comment' }, (m) => m.content.text || '')
+    .with({ tag: 'new_email' }, (m) => m.content.subject || '')
+    .with({ tag: 'task_assigned' }, (m) => m.content.taskName ?? '')
+    .with({ tag: 'channel_invite' }, () => '')
+    .with({ tag: 'invite_to_team' }, () => '')
+    .exhaustive();
 }
 
 /**

@@ -111,7 +111,6 @@ const SuggestedPill: Component<SuggestedPillProps> = (props) => {
              text-xs text-ink
              bg-transparent hover:bg-hover
              border border-edge
-             cursor-pointer
              transition-colors"
     >
       <PropertyDataTypeIcon property={props.property} />
