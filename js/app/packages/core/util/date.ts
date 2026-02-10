@@ -107,14 +107,12 @@ export const formatDate = (
  * @param date - Date object or Unix timestamp in seconds
  * @returns Formatted date string
  */
-export const formatEmailDate = (date: Date | number) => {
-  const inputDate = date instanceof Date ? date : new Date(date * 1000);
-
-  const weekday = inputDate.toLocaleDateString('en-US', { weekday: 'short' });
-  const month = inputDate.toLocaleDateString('en-US', { month: 'short' });
-  const day = inputDate.getDate();
-  const year = inputDate.getFullYear();
-  const time = inputDate.toLocaleTimeString('en-US', {
+export const formatEmailDate = (date: Date) => {
+  const weekday = date.toLocaleDateString('en-US', { weekday: 'short' });
+  const month = date.toLocaleDateString('en-US', { month: 'short' });
+  const day = date.getDate();
+  const year = date.getFullYear();
+  const time = date.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
