@@ -6,23 +6,18 @@ import {
 } from '@core/component/AI/util/attachment';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { ImagePreview } from '@core/component/ImagePreview';
+import { useItemPreviewData } from '@core/component/ItemPreview';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
-import BuildingIcon from '@icon/duotone/building-office-duotone.svg';
-import GlobeIcon from '@icon/duotone/globe-duotone.svg';
-import ChannelIcon from '@icon/duotone/hash-duotone.svg';
-import User from '@icon/duotone/user-duotone.svg';
-import ThreeUsersIcon from '@icon/duotone/users-three-duotone.svg';
+import type { ItemEntity } from '@queries/preview';
 import XIcon from '@icon/regular/x.svg';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import Envelope from '@phosphor-icons/core/regular/envelope.svg';
 import Close from '@phosphor-icons/core/regular/x.svg?component-solid';
-import type { ChannelType } from '@service-cognition/generated/schemas';
 import type { Accessor } from 'solid-js';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
 
 type AttachmentListProps = {
   removeAttachment: (id: string) => void;
@@ -105,18 +100,51 @@ function ChatAttachment(props: {
   onRemove: () => void;
 }) {
   const { insertSplit, replaceOrInsertSplit } = useSplitLayout();
+
+  const itemEntity = createMemo((): ItemEntity | null => {
+    const attachment = props.attachment;
+    if (!attachment.metadata) return null;
+
+    if (
+      attachment.metadata.type === 'email' ||
+      attachment.metadata.type === 'image'
+    ) {
+      return null;
+    }
+
+    if (attachment.metadata.type === 'channel') {
+      return {
+        id: attachment.attachmentId,
+        type: 'channel',
+      };
+    }
+
+    return {
+      id: attachment.attachmentId,
+      type: attachment.metadata.type,
+    };
+  });
+
+  const previewData = createMemo(() => {
+    const entity = itemEntity();
+    if (!entity) return null;
+    return useItemPreviewData(() => entity);
+  });
+
   const name = createMemo(() => {
     const attachment = props.attachment;
     if (!attachment.metadata) return '';
-    return attachment.metadata.type === 'document'
-      ? attachment.metadata.document_name
+
+    const preview = previewData();
+    if (preview) {
+      return preview.name();
+    }
+
+    return attachment.metadata.type === 'email'
+      ? attachment.metadata.email_subject
       : attachment.metadata.type === 'image'
         ? attachment.metadata.image_name
-        : attachment.metadata.type === 'channel'
-          ? attachment.metadata.channel_name
-          : attachment.metadata.type === 'project'
-            ? attachment.metadata.project_name
-            : attachment.metadata.email_subject;
+        : '';
   });
 
   const block = createMemo(() => {
@@ -134,7 +162,7 @@ function ChatAttachment(props: {
     if (isImageAttachment(attachment)) return;
     const block_ = block();
     if (!block_) return;
-    const inNewSplit = openInNewSplitForMention(e.altKey, true);
+    const inNewSplit = openInNewSplitForMention(e.shiftKey, true);
     const open = inNewSplit ? insertSplit : replaceOrInsertSplit;
     open({
       id: attachment.attachmentId,
@@ -168,11 +196,7 @@ function ChatAttachment(props: {
             >
               {(a) => (
                 <div class="flex gap-1 items-center">
-                  <Dynamic
-                    component={channelTypeIcon(a().channel_type)}
-                    width={14}
-                    height={14}
-                  />
+                  <EntityIcon targetType={a().channel_type || 'channel'} />
                   <div> {name()}</div>
                 </div>
               )}
@@ -220,19 +244,4 @@ function ChatAttachment(props: {
       </Match>
     </Switch>
   );
-}
-
-function channelTypeIcon(channelType: ChannelType) {
-  switch (channelType) {
-    case 'direct_message':
-      return User;
-    case 'private':
-      return ThreeUsersIcon;
-    case 'organization':
-      return BuildingIcon;
-    case 'public':
-      return GlobeIcon;
-    default:
-      return ChannelIcon;
-  }
 }

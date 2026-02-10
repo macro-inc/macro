@@ -1,4 +1,5 @@
 import { useBlockAliasedName, useBlockId } from '@core/block';
+import { isMobile } from '@core/mobile/isMobile';
 import {
   $getPinnedProperties,
   ADD_PINNED_PROPERTY_COMMAND,
@@ -66,9 +67,10 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
   );
 
   // Track expanded/collapsed state from persisted preference
+  // Default to collapsed on mobile, expanded on desktop
   const isExpanded = createMemo(() => {
     const preference = frontMatterPreference[blockId];
-    return preference === undefined ? true : preference;
+    return preference === undefined ? !isMobile() : preference;
   });
 
   const toggleExpanded = () => {
@@ -186,7 +188,7 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
             <div class="flex items-center gap-2 pt-2">
               <div class="w-6 border-t border-edge-muted" />
               <button
-                class="flex items-center gap-1 px-2 cursor-pointer hover:opacity-70 transition-opacity"
+                class="flex items-center gap-1 px-2 hover:opacity-70 transition-opacity"
                 onClick={toggleExpanded}
               >
                 {isExpanded() ? (
@@ -223,7 +225,7 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
 
                 <div class="pt-4 pb-2">
                   <button
-                    class="flex items-center gap-1 cursor-pointer opacity-75 hover:opacity-50 transition-opacity"
+                    class="flex items-center gap-1 opacity-75 hover:opacity-50 transition-opacity"
                     onClick={toggleExpanded}
                   >
                     <EyeSlash class="w-3 h-3 mr-2" />

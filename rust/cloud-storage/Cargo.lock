@@ -165,21 +165,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "alloc-no-stdlib"
-version = "2.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc7bb162ec39d46ab1ca8c77bf72e890535becd1751bb45f64c597edb4c8c6b3"
-
-[[package]]
-name = "alloc-stdlib"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94fb8275041c72129eb51b7d0322c29b8387a0386127718b096429201a5d6ece"
-dependencies = [
- "alloc-no-stdlib",
-]
-
-[[package]]
 name = "allocator-api2"
 version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -343,7 +328,6 @@ version = "0.4.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df895a515f70646414f4b45c0b79082783b80552b373a68283012928df56f522"
 dependencies = [
- "brotli",
  "flate2",
  "futures-core",
  "memchr",
@@ -538,7 +522,6 @@ dependencies = [
  "macro_env",
  "macro_env_var",
  "macro_middleware",
- "macro_notify",
  "macro_user_id",
  "macro_uuid",
  "maud",
@@ -550,6 +533,7 @@ dependencies = [
  "models_team",
  "native_app_service",
  "non_empty",
+ "notification",
  "notification_service_client",
  "openssl",
  "rand 0.9.0",
@@ -1528,27 +1512,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "brotli"
-version = "7.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc97b8f16f944bba54f0433f07e30be199b6dc2bd25937444bbad560bcea29bd"
-dependencies = [
- "alloc-no-stdlib",
- "alloc-stdlib",
- "brotli-decompressor",
-]
-
-[[package]]
-name = "brotli-decompressor"
-version = "4.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a334ef7c9e23abf0ce748e8cd309037da93e606ad52eb372e4ce327a0dcfbdfd"
-dependencies = [
- "alloc-no-stdlib",
- "alloc-stdlib",
-]
-
-[[package]]
 name = "bstr"
 version = "1.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1591,9 +1554,9 @@ checksum = "8f1fe948ff07f4bd06c30984e69f5b4899c516a3ef74f34df92a2df2ab535495"
 
 [[package]]
 name = "bytes"
-version = "1.10.1"
+version = "1.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d71b6127be86fdcfddb610f7182ac57211d4b18a3e9c82eb2d17662f2227ad6a"
+checksum = "1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33"
 dependencies = [
  "serde",
 ]
@@ -1923,7 +1886,6 @@ dependencies = [
  "macro_env",
  "macro_env_var",
  "macro_middleware",
- "macro_notify",
  "macro_user_id",
  "macro_uuid",
  "model",
@@ -1932,6 +1894,7 @@ dependencies = [
  "models_comms",
  "models_opensearch",
  "models_permissions",
+ "notification",
  "reqwest",
  "secretsmanager_client",
  "serde",
@@ -2546,12 +2509,12 @@ dependencies = [
 
 [[package]]
 name = "deranged"
-version = "0.3.11"
+version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b42b6fa04a440b495c8b04d0e71b707c585f83cb9cb28cf8cd0d976c315e31b4"
+checksum = "ececcb659e7ba858fb4f10388c250a7252eb0a27373f1a72b8748afdd248e587"
 dependencies = [
  "powerfmt",
- "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -2669,7 +2632,6 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_middleware",
- "macro_notify",
  "macro_project_utils",
  "macro_share_permissions",
  "macro_user_id",
@@ -2745,6 +2707,7 @@ dependencies = [
  "document_sub_type",
  "dynamodb_client",
  "email",
+ "entity_access",
  "frecency",
  "futures",
  "hex",
@@ -2760,7 +2723,6 @@ dependencies = [
  "macro_env",
  "macro_env_var",
  "macro_middleware",
- "macro_notify",
  "macro_project_utils",
  "macro_sha_count_client",
  "macro_share_permissions",
@@ -2777,6 +2739,7 @@ dependencies = [
  "models_permissions",
  "models_properties",
  "models_soup",
+ "notification",
  "opensearch_client",
  "ordered-float",
  "properties",
@@ -3194,7 +3157,6 @@ dependencies = [
  "macro_env",
  "macro_env_var",
  "macro_middleware",
- "macro_notify",
  "macro_user_id",
  "macro_uuid",
  "mailparse",
@@ -3208,6 +3170,7 @@ dependencies = [
  "models_pagination",
  "models_permissions",
  "models_properties",
+ "notification",
  "once_cell",
  "redis",
  "regex",
@@ -3342,6 +3305,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tracing",
+ "utoipa",
  "uuid",
 ]
 
@@ -4239,6 +4203,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyper-timeout"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b90d566bffbce6a75bd8b09a05aa8c2cb1fabb6cb348f8840c9e4c90a0d83b0"
+dependencies = [
+ "hyper 1.6.0",
+ "hyper-util",
+ "pin-project-lite",
+ "tokio",
+ "tower-service",
+]
+
+[[package]]
 name = "hyper-tls"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4965,6 +4942,7 @@ dependencies = [
  "macro_env_var",
  "thiserror 2.0.17",
  "tracing",
+ "url",
 ]
 
 [[package]]
@@ -5047,7 +5025,12 @@ version = "0.1.0"
 dependencies = [
  "dotenvy",
  "macro_env",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
+ "serde_json",
  "tracing",
+ "tracing-opentelemetry",
  "tracing-panic",
  "tracing-subscriber",
  "tracing-tree",
@@ -5107,28 +5090,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "macro_notify"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aws-sdk-sqs",
- "macro_aws_config",
- "macro_uuid",
- "model",
- "model_notifications",
- "serde",
- "serde_json",
- "tracing",
- "uuid",
-]
-
-[[package]]
 name = "macro_project_utils"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "macro_db_client",
- "macro_notify",
  "model",
  "sqlx",
  "tokio",
@@ -5530,9 +5496,12 @@ dependencies = [
  "chrono",
  "doppleganger",
  "macro_user_id",
+ "mention_utils",
  "model-entity",
  "models_comms",
  "models_pagination",
+ "notification",
+ "paste",
  "serde",
  "serde_json",
  "sqlx",
@@ -5890,20 +5859,28 @@ dependencies = [
  "aws-sdk-sesv2",
  "aws-sdk-sns",
  "aws-sdk-sqs",
+ "axum",
+ "chrono",
+ "either",
  "hex",
  "itertools 0.14.0",
  "macro_db_migrator",
  "macro_user_id",
  "model-entity",
+ "model-error-response",
+ "model_user",
+ "models_pagination",
  "redis",
  "reqwest",
  "rootcause",
  "serde",
  "serde_json",
+ "sha2",
  "sqlx",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
+ "utoipa",
  "uuid",
 ]
 
@@ -5921,6 +5898,7 @@ dependencies = [
  "model_notifications",
  "models_pagination",
  "serde",
+ "serde_json",
  "sqlx",
  "tracing",
  "uuid",
@@ -5931,37 +5909,37 @@ name = "notification_service"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "authentication_service_client",
  "aws-sdk-secretsmanager",
  "aws-sdk-sesv2",
  "aws-sdk-sns",
  "aws-sdk-sqs",
  "axum",
  "chrono",
- "connection_gateway",
- "document_cognition_service_client",
- "document_storage_service_client",
  "email_validator",
  "futures",
  "http-body-util",
  "macro_auth",
  "macro_aws_config",
- "macro_cache_client",
  "macro_cors",
  "macro_entrypoint",
  "macro_env",
+ "macro_env_var",
  "macro_middleware",
- "macro_notify",
  "macro_user_id",
  "macro_uuid",
  "mention_utils",
  "model",
  "model-entity",
+ "model-error-response",
  "model_file_type",
  "model_notifications",
+ "model_user",
  "models_comms",
  "models_pagination",
+ "notification",
  "notification_db_client",
+ "paste",
+ "redis",
  "regex",
  "secretsmanager_client",
  "serde",
@@ -6030,9 +6008,9 @@ dependencies = [
 
 [[package]]
 name = "num-conv"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51d515d32fb182ee37cda2ccdcb92950d6a3c2893aa280e540671c2cd0f3b1d9"
+checksum = "cf97ec579c3c42f953ef76dbf8d55ac91fb219dde70e49aa4a6b7d74e9919050"
 
 [[package]]
 name = "num-derive"
@@ -6195,6 +6173,82 @@ dependencies = [
  "openssl-src",
  "pkg-config",
  "vcpkg",
+]
+
+[[package]]
+name = "opentelemetry"
+version = "0.31.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b84bcd6ae87133e903af7ef497404dda70c60d0ea14895fc8a5e6722754fc2a0"
+dependencies = [
+ "futures-core",
+ "futures-sink",
+ "js-sys",
+ "pin-project-lite",
+ "thiserror 2.0.17",
+ "tracing",
+]
+
+[[package]]
+name = "opentelemetry-http"
+version = "0.31.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7a6d09a73194e6b66df7c8f1b680f156d916a1a942abf2de06823dd02b7855d"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "http 1.3.1",
+ "opentelemetry",
+ "reqwest",
+]
+
+[[package]]
+name = "opentelemetry-otlp"
+version = "0.31.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a2366db2dca4d2ad033cad11e6ee42844fd727007af5ad04a1730f4cb8163bf"
+dependencies = [
+ "http 1.3.1",
+ "opentelemetry",
+ "opentelemetry-http",
+ "opentelemetry-proto",
+ "opentelemetry_sdk",
+ "prost",
+ "reqwest",
+ "thiserror 2.0.17",
+ "tokio",
+ "tonic",
+ "tracing",
+]
+
+[[package]]
+name = "opentelemetry-proto"
+version = "0.31.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7175df06de5eaee9909d4805a3d07e28bb752c34cab57fa9cff549da596b30f"
+dependencies = [
+ "opentelemetry",
+ "opentelemetry_sdk",
+ "prost",
+ "tonic",
+ "tonic-prost",
+]
+
+[[package]]
+name = "opentelemetry_sdk"
+version = "0.31.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e14ae4f5991976fd48df6d843de219ca6d31b01daaab2dad5af2badeded372bd"
+dependencies = [
+ "futures-channel",
+ "futures-executor",
+ "futures-util",
+ "opentelemetry",
+ "percent-encoding",
+ "rand 0.9.0",
+ "thiserror 2.0.17",
+ "tokio",
+ "tokio-stream",
 ]
 
 [[package]]
@@ -6654,7 +6708,6 @@ dependencies = [
  "macro_db_client",
  "macro_db_migrator",
  "macro_middleware",
- "macro_notify",
  "macro_user_id",
  "macro_uuid",
  "mockall",
@@ -6662,6 +6715,8 @@ dependencies = [
  "model_notifications",
  "models_permissions",
  "models_properties",
+ "notification",
+ "serde",
  "serde_json",
  "sqlx",
  "system_properties",
@@ -6698,6 +6753,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "aws-sdk-secretsmanager",
+ "aws-sdk-sqs",
  "axum",
  "chrono",
  "email_db_client",
@@ -6708,11 +6764,11 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_middleware",
- "macro_notify",
  "macro_uuid",
  "model",
  "models_permissions",
  "models_properties",
+ "notification",
  "properties",
  "properties_db_client",
  "secretsmanager_client",
@@ -6730,6 +6786,29 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
+]
+
+[[package]]
+name = "prost"
+version = "0.14.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2ea70524a2f82d518bce41317d0fae74151505651af45faf1ffbd6fd33f0568"
+dependencies = [
+ "bytes",
+ "prost-derive",
+]
+
+[[package]]
+name = "prost-derive"
+version = "0.14.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "27c6023962132f4b30eb4c172c91ce92d933da334c59c23cddee82358ddafb0b"
+dependencies = [
+ "anyhow",
+ "itertools 0.14.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.98",
 ]
 
 [[package]]
@@ -7112,6 +7191,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "encoding_rs",
+ "futures-channel",
  "futures-core",
  "futures-util",
  "h2 0.4.13",
@@ -8897,30 +8977,30 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.3.37"
+version = "0.3.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35e7868883861bd0e56d9ac6efcaaca0d6d5d82a2a7ec8209ff492c07cf37b21"
+checksum = "743bd48c283afc0388f9b8827b976905fb217ad9e647fae3a379a9283c4def2c"
 dependencies = [
  "deranged",
  "itoa",
  "num-conv",
  "powerfmt",
- "serde",
+ "serde_core",
  "time-core",
  "time-macros",
 ]
 
 [[package]]
 name = "time-core"
-version = "0.1.2"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef927ca75afb808a4d64dd374f00a2adf8d0fcff8e7b184af886c3c87ec4a3f3"
+checksum = "7694e1cfe791f8d31026952abf09c69ca6f6fa4e1a1229e18988f06a04a12dca"
 
 [[package]]
 name = "time-macros"
-version = "0.2.19"
+version = "0.2.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2834e6017e3e5e4b9834939793b282bc03b37a3336245fa820e35e233e2a85de"
+checksum = "2e70e4c5a0e0a8a4823ad65dfe1a6930e4f4d756dcd9dd7939022b5e8c501215"
 dependencies = [
  "num-conv",
  "time-core",
@@ -9046,6 +9126,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "tonic"
+version = "0.14.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a286e33f82f8a1ee2df63f4fa35c0becf4a85a0cb03091a15fd7bf0b402dc94a"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "bytes",
+ "http 1.3.1",
+ "http-body 1.0.1",
+ "http-body-util",
+ "hyper 1.6.0",
+ "hyper-timeout",
+ "hyper-util",
+ "percent-encoding",
+ "pin-project",
+ "sync_wrapper",
+ "tokio",
+ "tokio-stream",
+ "tower 0.5.2",
+ "tower-layer",
+ "tower-service",
+ "tracing",
+]
+
+[[package]]
+name = "tonic-prost"
+version = "0.14.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6c55a2d6a14174563de34409c9f92ff981d006f56da9c6ecd40d9d4a31500b0"
+dependencies = [
+ "bytes",
+ "prost",
+ "tonic",
+]
+
+[[package]]
 name = "tower"
 version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9068,9 +9185,12 @@ checksum = "d039ad9159c98b70ecfd540b2573b97f7f52c3e8d9f8ad57a24b916a536975f9"
 dependencies = [
  "futures-core",
  "futures-util",
+ "indexmap 2.12.1",
  "pin-project-lite",
+ "slab",
  "sync_wrapper",
  "tokio",
+ "tokio-util",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -9171,6 +9291,22 @@ dependencies = [
  "log",
  "once_cell",
  "tracing-core",
+]
+
+[[package]]
+name = "tracing-opentelemetry"
+version = "0.32.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ac28f2d093c6c477eaa76b23525478f38de514fa9aeb1285738d4b97a9552fc"
+dependencies = [
+ "js-sys",
+ "opentelemetry",
+ "smallvec",
+ "tracing",
+ "tracing-core",
+ "tracing-log",
+ "tracing-subscriber",
+ "web-time",
 ]
 
 [[package]]

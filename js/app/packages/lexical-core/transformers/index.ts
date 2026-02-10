@@ -21,6 +21,7 @@ import {
   I_DOCUMENT_CARD,
   I_DOCUMENT_MENTION,
   I_GROUP_MENTION,
+  I_THEME_MENTION,
   I_USER_MENTION,
 } from './mentions';
 import { E_TABLE_NODE, I_TABLE_NODE } from './tables';
@@ -28,12 +29,16 @@ import {
   BR_TAG_TO_LINE_BREAK,
   HR,
   HTML_ENTITY_TRANSFORMERS,
+  isConversionOnlyTransformer,
   LINK_XML,
   MARK_XML,
   PRESERVE_LINES,
   SEARCH_MATCH,
 } from './transformers';
+import { UNKNOWN_MENTION } from './unknownMention';
 import { E_WATERMARK, I_WATERMARK } from './watermark';
+
+export { isConversionOnlyTransformer };
 
 /**
  * Internal transformers for converting markdown between Lexical state and markdown.
@@ -57,9 +62,11 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_TABLE_NODE,
   I_MACRO_QUOTE,
   I_EQUATION_NODE,
+  I_THEME_MENTION,
   I_WATERMARK,
   I_SNAPSHOT_NODE,
   ...CUSTOM_TRANSFORMERS,
+  UNKNOWN_MENTION, // Must be last to act as fallback for unrecognized XML tags
 ];
 
 /**
@@ -87,6 +94,7 @@ export const EXTERNAL_TRANSFORMERS: Transformer[] = [
   E_SNAPSHOT_NODE,
   ...HTML_ENTITY_TRANSFORMERS,
   ...CUSTOM_TRANSFORMERS,
+  UNKNOWN_MENTION, // Must be last to act as fallback for unrecognized XML tags
 ];
 
 /**
@@ -117,6 +125,7 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   E_DATE_MENTION,
   I_MACRO_QUOTE,
   I_EQUATION_NODE,
+  I_THEME_MENTION,
   I_WATERMARK,
   E_WATERMARK,
   I_SNAPSHOT_NODE,
@@ -127,4 +136,5 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   E_INLINE_EQUATION_NODE,
   ...HTML_ENTITY_TRANSFORMERS,
   ...CUSTOM_TRANSFORMERS,
+  UNKNOWN_MENTION, // Must be last to act as fallback for unrecognized XML tags
 ];

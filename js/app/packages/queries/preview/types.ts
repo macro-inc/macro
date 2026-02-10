@@ -20,16 +20,17 @@ type BasePreviewItem<T extends ItemType = ItemType> = {
   updatedAt?: number;
 };
 
-export type PreviewItemAccess = {
+/** this is a catch-all type for access items that do not have a more specific type */
+type PreviewItemAccess = {
   access: Extract<AccessType, 'access'>;
   loading: false;
   name: string;
   fileType?: FileType;
   subType?: SubType;
   channelType?: never;
-} & BasePreviewItem<Exclude<ItemType, 'project'>>;
+} & BasePreviewItem<Exclude<ItemType, 'project' | 'document' | 'channel'>>;
 
-export type PreviewProjectAccess = {
+type PreviewProjectAccess = {
   access: Extract<AccessType, 'access'>;
   loading: false;
   name: string;
@@ -38,11 +39,11 @@ export type PreviewProjectAccess = {
   channelType?: never;
 } & BasePreviewItem<'project'>;
 
-export type PreviewDocumentAccess = {
+type PreviewDocumentAccess = {
   access: Extract<AccessType, 'access'>;
   loading: false;
   name: string;
-  fileType: FileType;
+  fileType?: FileType;
   subType?: SubType;
   channelType?: never;
 } & BasePreviewItem<'document'>;
@@ -57,15 +58,18 @@ export type PreviewChannelAccess = {
   subType?: never;
   channelType?: ChannelType;
   messageContext?: MessageContext | undefined;
-} & BasePreviewItem<Exclude<ItemType, 'project'>>;
+} & BasePreviewItem<'channel'>;
 
-export type PreviewItem =
-  | PreviewItemLoading
-  | PreviewItemNoAccess
+export type AccessiblePreviewItem =
   | PreviewItemAccess
   | PreviewProjectAccess
   | PreviewDocumentAccess
   | PreviewChannelAccess;
+
+export type PreviewItem =
+  | PreviewItemLoading
+  | PreviewItemNoAccess
+  | AccessiblePreviewItem;
 
 type BaseItemEntity = {
   id: string;
@@ -80,7 +84,9 @@ type ChannelItemEntity = {
 
 export type ItemEntity = BaseItemEntity | ChannelItemEntity;
 
-export const isAccessiblePreviewItem = (item: PreviewItem) => {
+export const isAccessiblePreviewItem = (
+  item: PreviewItem
+): item is AccessiblePreviewItem => {
   return !item.loading && item.access === 'access';
 };
 

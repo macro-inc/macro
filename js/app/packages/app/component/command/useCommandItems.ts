@@ -5,6 +5,7 @@ import { mapFromListsByKey } from '@core/util/compareUtils';
 import { useHistoryQuery } from '@queries/history/history';
 import type { Channel } from '@service-comms/generated/models/channel';
 import type { ChannelType } from '@service-comms/generated/models/channelType';
+import { ChannelTypeEnum } from '@service-comms/client';
 import { createMemo } from 'solid-js';
 import type { CommandItemCard } from './KonsoleItem';
 
@@ -93,7 +94,7 @@ export function useCommandItems() {
         name: channel.name!,
         channel_type: channel.channel_type,
         participants:
-          channel.channel_type === 'direct_message'
+          channel.channel_type === ChannelTypeEnum.DirectMessage
             ? (channel as any).participants
             : undefined,
       },

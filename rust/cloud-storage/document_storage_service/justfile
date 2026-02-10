@@ -8,7 +8,7 @@ mod ensure '../ensure.just'
 mod ci '../ci.just'
 
 deploy-dev:
-    just ci::deploy-dev document-storage
+    just ci::deploy-dev document-storage-service
 
 run: ensure::ensure_dynamodb
     cargo run -F local

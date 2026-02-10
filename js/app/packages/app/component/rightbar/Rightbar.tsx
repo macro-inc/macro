@@ -54,7 +54,6 @@ import {
   cognitionApiServiceClient,
   cognitionWebsocketServiceClient,
 } from '@service-cognition/client';
-import { createCognitionWebsocketEffect } from '@service-cognition/websocket';
 import { refetchHistory, useHistoryQuery } from '@queries/history/history';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
 import type { LexicalEditor } from 'lexical';
@@ -74,8 +73,8 @@ import {
 import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
 import { Button } from '@ui/components/Button';
 import { Hotkey } from '@core/component/Hotkey';
-import { setPreviewData } from '@queries/preview';
 import { AccessLevel } from '@service-cognition/generated/schemas/accessLevel';
+import { useWaitChatRename } from '../../../macro-entity/src/queries/rename';
 
 type ChatData = {
   messages: ChatMessageWithAttachments[];
@@ -542,42 +541,6 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
     saveChatState();
   });
 
-  // TODO: move this into a shared util: see dcs websocket extraction and connection websocket bulk upload
-  const CHAT_RENAME_TIMEOUT_MS = 60000;
-  const chatRenameMap = new Map<
-    string,
-    {
-      callback: (name: string | undefined) => void;
-      clearTimeout: () => void;
-    }
-  >();
-  const waitChatRename = async (chatId: string) => {
-    const dispose = createCognitionWebsocketEffect('chat_renamed', (data) => {
-      if (data.chat_id !== chatId) return;
-      const chatInfo = chatRenameMap.get(chatId);
-      if (!chatInfo) return;
-      chatInfo.callback(data.name);
-      dispose();
-    });
-
-    return new Promise<string | undefined>((accept) => {
-      // always run this after timeout
-      setTimeout(() => {
-        dispose();
-        chatRenameMap.delete(chatId);
-      }, CHAT_RENAME_TIMEOUT_MS);
-
-      const errorTimeout = setTimeout(() => {
-        accept(undefined);
-      }, CHAT_RENAME_TIMEOUT_MS);
-
-      chatRenameMap.set(chatId, {
-        callback: accept,
-        clearTimeout: () => clearTimeout(errorTimeout),
-      });
-    });
-  };
-
   const { showPaywall } = usePaywallState();
 
   const onSend = async (request: Send | CreateAndSend) => {
@@ -596,19 +559,8 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
       setChatId(newChatId);
       setUserAccessLevel(AccessLevel.owner);
 
-      // TODO: move this into a separate resource so we don't have to refetch history
-      // refetch history immediately to have the new chat id
-      // then rename again when the server provides a default name
       refetchHistory();
-      waitChatRename(newChatId).then((name) => {
-        refetchHistory();
-        if (name) {
-          setPreviewData(newChatId, (prev) => ({
-            ...prev,
-            name,
-          }));
-        }
-      });
+      useWaitChatRename(newChatId);
       return await onSend(response);
     } else if (request.type === 'send') {
       setMessages((p) => {

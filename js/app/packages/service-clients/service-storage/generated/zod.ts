@@ -984,6 +984,12 @@ export const createDocumentHandlerBody = zod.object({
     ),
   projectId: zod.string().nullish(),
   sha: zod.string().describe('The sha of the document.'),
+  skipHistory: zod
+    .boolean()
+    .optional()
+    .describe(
+      'Whether to add a viewed_at record for this document upon creation.'
+    ),
 });
 
 export const createDocumentHandlerResponse = zod.object({
@@ -2139,6 +2145,53 @@ export const getDocumentVersionResponse = zod.object({
 });
 
 /**
+ * @summary Get the current user's permission for a given entity.
+ */
+export const getEntityPermissionParams = zod.object({
+  entity_type: zod
+    .string()
+    .describe(
+      'Entity type (document, chat, project, thread, email_thread, channel)'
+    ),
+  entity_id: zod.string().describe('Entity ID'),
+});
+
+export const getEntityPermissionResponse = zod
+  .union([
+    zod.object({
+      permission: zod
+        .union([
+          zod
+            .object({
+              access_level: zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+              type: zod.enum(['access_level']),
+            })
+            .describe(
+              'Permission for item-based entities (document, chat, project, thread).'
+            ),
+          zod
+            .object({
+              role: zod
+                .enum(['owner', 'admin', 'member'])
+                .describe('The role a user has within a channel.'),
+              type: zod.enum(['channel_role']),
+            })
+            .describe('Permission for channel-based entities.'),
+        ])
+        .describe(
+          "A user's permission for an entity, discriminated by entity kind.\n\nItems (documents, chats, projects, threads) use access levels.\nChannels use participant roles."
+        ),
+      status: zod.enum(['access']),
+    }),
+    zod.object({
+      status: zod.enum(['no_access']),
+    }),
+  ])
+  .describe('API response envelope for entity permissions.');
+
+/**
  * @summary Gets the users history
  */
 export const getHistoryHandlerResponse = zod.object({
@@ -3183,20 +3236,6 @@ export const getItemsSoupResponse = zod.object({
                     type: zod.enum(['system', 'user']),
                   })
                 ),
-                metadata: zod.object({
-                  calendarInvite: zod
-                    .boolean()
-                    .describe('if any email contains a calendar invite'),
-                  genericSender: zod
-                    .boolean()
-                    .describe('if any sender is a generic email'),
-                  knownSender: zod
-                    .boolean()
-                    .describe('if user has previously emailed any sender'),
-                  tabular: zod
-                    .boolean()
-                    .describe('if any email contains a <table> html tag'),
-                }),
                 participants: zod.array(
                   zod.object({
                     emailAddress: zod.string().nullish(),
@@ -3454,7 +3493,9 @@ export const getItemsSoupResponse = zod.object({
                   channel_id: zod.string().uuid(),
                   joined_at: zod.string().datetime({}),
                   left_at: zod.string().datetime({}).nullish(),
-                  role: zod.enum(['owner', 'admin', 'member']),
+                  role: zod
+                    .enum(['owner', 'admin', 'member'])
+                    .describe('The role a user has within a channel.'),
                   user_id: zod.string(),
                 })
               ),
@@ -3538,6 +3579,12 @@ export const postItemsSoupBody = zod
           .describe(
             "Channel IDs to search within. Examples: ['general']. Empty to search all accessible channels."
           ),
+        importance: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Filter by channel importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
+          ),
         mentions: zod
           .array(zod.string())
           .optional()
@@ -3574,6 +3621,12 @@ export const postItemsSoupBody = zod
           .optional()
           .describe(
             "Chat ids to search over. Examples: ['chat1'], ['chat1', 'chat2']. When provided, chat search will only match results on these chats. Empty to search all accessible chats."
+          ),
+        importance: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Filter by chat importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
           ),
         owners: zod
           .array(zod.string())
@@ -3612,6 +3665,12 @@ export const postItemsSoupBody = zod
           .describe(
             "Document file types to search. Examples: ['pdf'], ['md', 'txt']. Empty to search all file types."
           ),
+        importance: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Filter by document importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
+          ),
         owners: zod
           .array(zod.string())
           .optional()
@@ -3643,6 +3702,12 @@ export const postItemsSoupBody = zod
           .describe(
             "Email CC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by CC."
           ),
+        importance: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Filter by email importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
+          ),
         recipients: zod
           .array(zod.string())
           .optional()
@@ -3662,6 +3727,12 @@ export const postItemsSoupBody = zod
       ),
     project_filters: zod
       .object({
+        importance: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Filter by project importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.'
+          ),
         owners: zod
           .array(zod.string())
           .optional()
@@ -4572,20 +4643,6 @@ export const postItemsSoupResponse = zod.object({
                     type: zod.enum(['system', 'user']),
                   })
                 ),
-                metadata: zod.object({
-                  calendarInvite: zod
-                    .boolean()
-                    .describe('if any email contains a calendar invite'),
-                  genericSender: zod
-                    .boolean()
-                    .describe('if any sender is a generic email'),
-                  knownSender: zod
-                    .boolean()
-                    .describe('if user has previously emailed any sender'),
-                  tabular: zod
-                    .boolean()
-                    .describe('if any email contains a <table> html tag'),
-                }),
                 participants: zod.array(
                   zod.object({
                     emailAddress: zod.string().nullish(),
@@ -4843,7 +4900,9 @@ export const postItemsSoupResponse = zod.object({
                   channel_id: zod.string().uuid(),
                   joined_at: zod.string().datetime({}),
                   left_at: zod.string().datetime({}).nullish(),
-                  role: zod.enum(['owner', 'admin', 'member']),
+                  role: zod
+                    .enum(['owner', 'admin', 'member'])
+                    .describe('The role a user has within a channel.'),
                   user_id: zod.string(),
                 })
               ),

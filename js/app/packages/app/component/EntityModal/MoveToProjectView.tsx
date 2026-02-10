@@ -2,7 +2,7 @@ import { BozzyBracket } from '@core/component/BozzyBracket';
 import {
   CustomEntityIcon,
   EntityIcon,
-  getIconConfig,
+  getEntityIconConfig,
 } from '@core/component/EntityIcon';
 import { ExplorerSpacer } from '@core/component/FileList/ExplorerSpacer';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -366,27 +366,7 @@ export const MoveToProjectView = (props: {
     props.onFinish();
   };
 
-  const getIcon = createMemo(() => {
-    switch (props.entity.type) {
-      case 'channel':
-        switch (props.entity.channelType) {
-          case 'direct_message':
-            return getIconConfig('directMessage');
-          case 'organization':
-            return getIconConfig('company');
-          default:
-            return getIconConfig('channel');
-        }
-      case 'document':
-        return getIconConfig(props.entity.fileType || 'default');
-      case 'chat':
-        return getIconConfig('chat');
-      case 'project':
-        return getIconConfig('project');
-      case 'email':
-        return getIconConfig(props.entity.isRead ? 'emailRead' : 'email');
-    }
-  });
+  const getIcon = createMemo(() => getEntityIconConfig(props.entity));
 
   return (
     <div class="" ref={rootScopeId} tabindex={-1}>

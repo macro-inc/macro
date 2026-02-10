@@ -48,6 +48,7 @@ comms = { path = "../comms", features = ["outbound"] }
 connection_gateway = { path = "../connection_gateway" }
 document_sub_type = { path = "../document_sub_type" }
 dynamodb_client = { path = "../dynamodb_client" }
+entity_access = { path = "../entity_access", features = ["schema"] }
 email = { path = "../email", features = ["outbound", "ports"] }
 frecency = { path = "../frecency", features = ["postgres"] }
 futures = { workspace = true }
@@ -68,7 +69,7 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
   "cloud_storage",
   "user_permissions",
 ] }
-macro_notify = { path = "../macro_notify" }
+notification = { path = "../notification" }
 macro_project_utils = { path = "../macro_project_utils" }
 macro_sha_count_client = { path = "../macro_sha_count_client" }
 macro_share_permissions = { path = "../macro_share_permissions" }
@@ -115,7 +116,6 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true, features = [
-  "compression-br",
   "compression-gzip",
 ] }
 tracing = { workspace = true }

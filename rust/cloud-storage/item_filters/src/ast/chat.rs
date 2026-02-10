@@ -19,6 +19,8 @@ pub enum ChatLiteral {
     ChatId(Uuid),
     /// the chat is owned by [MacroUserIdStr]
     Owner(MacroUserIdStr<'static>),
+    /// this node value filters by chat importance. false short-circuits to match nothing.
+    Importance(bool),
 }
 
 /// the possible roles for a chat
@@ -55,6 +57,7 @@ impl ExpandFrame<ChatLiteral> for ChatFilters {
             chat_ids,
             project_ids,
             owners,
+            importance,
         } = filter_request;
 
         let project_ids = project_ids
@@ -77,7 +80,9 @@ impl ExpandFrame<ChatLiteral> for ChatFilters {
             .map(|s| MacroUserIdStr::parse_from_str(s).map(CowLike::into_owned))
             .try_expand(|r| r.map(ChatLiteral::Owner), Expr::or)?;
 
-        Ok([project_ids, chat_ids, role, owners]
+        let importance_node = importance.map(|imp| Expr::Literal(ChatLiteral::Importance(imp)));
+
+        Ok([project_ids, chat_ids, role, owners, importance_node]
             .into_iter()
             .fold_with(Expr::and))
     }

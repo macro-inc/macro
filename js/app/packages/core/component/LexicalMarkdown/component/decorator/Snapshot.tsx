@@ -6,7 +6,6 @@ import {
   type EntityIconSelector,
 } from '@core/component/EntityIcon';
 import { verifyBlockName } from '@core/constant/allBlocks';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
@@ -88,7 +87,7 @@ function SnapshotInner(props: SnapshotDecoratorProps) {
       props.blockName,
       props.documentId,
       {},
-      openInNewSplitForMention(e?.altKey, e != null)
+      openInNewSplitForMention(e?.shiftKey, e != null)
     );
   });
 
@@ -178,21 +177,6 @@ function SnapshotInner(props: SnapshotDecoratorProps) {
             style={{
               'user-select': 'inherit',
             }}
-            ontouchstart={(e) => {
-              if (isTouchDevice()) {
-                e.preventDefault();
-              }
-            }}
-            ontouchend={(e) => {
-              if (isTouchDevice()) {
-                e.preventDefault();
-                if (
-                  matches(item(), (i) => !i.loading && i.access === 'access')
-                ) {
-                  open(null);
-                }
-              }
-            }}
             {...navHandlers}
           >
             {renderContent()}
@@ -202,12 +186,12 @@ function SnapshotInner(props: SnapshotDecoratorProps) {
       }
       content={
         <PopupPreview
-          item={item}
           mouseEnter={() => {}}
           mouseLeave={() => {}}
           delete={editor?.isEditable() ? deleteSnapshot : undefined}
           documentInfo={{
             id: props.documentId,
+            name: props.documentName,
             type: verifyBlockName(props.blockName),
             params: {},
             isOpenable: currentBlockId !== props.documentId,

@@ -37,7 +37,7 @@ export function openDocument(
   inNewSplit?: boolean
 ) {
   const currentBlockId = useMaybeBlockId();
-  const { replaceOrInsertSplit, insertSplit } = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
 
   const targetBlock = fileTypeToBlockName(blockOrFileType);
   if (!targetBlock) return;
@@ -53,19 +53,7 @@ export function openDocument(
     return;
   }
 
-  if (inNewSplit) {
-    const handle = insertSplit({
-      type: targetBlock,
-      id,
-    });
-    handle?.activate();
-  } else {
-    const handle = replaceOrInsertSplit({
-      type: targetBlock,
-      id,
-    });
-    handle?.activate();
-  }
+  openWithSplit({ type: targetBlock, id }, { preferNewSplit: inNewSplit });
 
   if (isBlockNameWithLocation(targetBlock)) {
     openLocation(targetBlock, id, params);
@@ -80,7 +68,7 @@ export function BlockLink(
   }>
 ) {
   const open = createCallback((e: MouseEvent) => {
-    let newSplit = e.altKey;
+    let newSplit = e.shiftKey;
     openDocument(props.blockOrFileName, props.id, props.params, newSplit);
   });
   const navHandlers = useSplitNavigationHandler<HTMLSpanElement>(open);

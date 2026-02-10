@@ -38,6 +38,7 @@ import {
   getScopeId,
   normalizeEventKeyPress,
   registerScope,
+  removeCommandsFromTokenMap,
   removeScope,
   runCommand,
 } from './utils';
@@ -247,18 +248,9 @@ export function registerHotkey(
     dispose: () => {
       // Remove from hotkey token map if it exists
       if (hotkeyToken) {
-        setHotkeyTokenMap((prev) => {
-          const newMap = new Map(prev);
-          const existingCommands = newMap.get(hotkeyToken) || [];
-          // Filter out this specific command instance
-          const newCommands = existingCommands.filter((c) => c !== command);
-          if (newCommands.length > 0) {
-            newMap.set(hotkeyToken, newCommands);
-          } else {
-            newMap.delete(hotkeyToken);
-          }
-          return newMap;
-        });
+        setHotkeyTokenMap((prev) =>
+          removeCommandsFromTokenMap(prev, [command])
+        );
       }
 
       // Remove this specific command from scope's hotkey handlers
@@ -383,7 +375,6 @@ export function useHotkeyDOMScope(
     }
     if (DOMScope?.type === 'dom') {
       DOMScope.parentScopeId = parentScopeId;
-      DOMScope.element = el;
     }
 
     el.addEventListener('focusin', handleFocusIn);

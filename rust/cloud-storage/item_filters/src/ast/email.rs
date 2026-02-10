@@ -24,6 +24,8 @@ pub enum EmailLiteral {
     Bcc(Email),
     /// The recipient field of the email
     Recipient(Email),
+    /// This node value filters by email importance. false short-circuits to match nothing.
+    Importance(bool),
 }
 
 impl ExpandFrame<EmailLiteral> for EmailFilters {
@@ -34,6 +36,7 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             cc,
             bcc,
             recipients,
+            importance,
         } = input;
 
         fn map_email(s: String) -> Email {
@@ -60,8 +63,16 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             .map(map_email)
             .expand(EmailLiteral::Recipient, Expr::or);
 
-        Ok([sender_nodes, cc_nodes, bcc_nodes, recipient_nodes]
-            .into_iter()
-            .fold_with(Expr::and))
+        let importance_node = importance.map(|imp| Expr::Literal(EmailLiteral::Importance(imp)));
+
+        Ok([
+            sender_nodes,
+            cc_nodes,
+            bcc_nodes,
+            recipient_nodes,
+            importance_node,
+        ]
+        .into_iter()
+        .fold_with(Expr::and))
     }
 }

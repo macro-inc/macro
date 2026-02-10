@@ -8,8 +8,8 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    Attachment, Contact, EmailThreadPreview, EmailThreadPreviewMetadata,
-    EnrichedEmailThreadPreview, Label, LabelListVisibility, LabelType, MessageListVisibility,
+    Attachment, Contact, EmailThreadPreview, EnrichedEmailThreadPreview, Label,
+    LabelListVisibility, LabelType, MessageListVisibility,
 };
 
 /// common types of sorts based on timestamps
@@ -48,7 +48,6 @@ struct ApiThreadPreviewCursor {
     #[dg(rename = "participants")]
     contacts: Vec<ApiContact>,
     labels: Vec<ApiLabel>,
-    metadata: APIEmailThreadPreviewMetadata,
     #[dg(map = map_frecency)]
     frecency_score: Option<f64>,
 }
@@ -166,20 +165,6 @@ pub enum ApiLabelListVisibility {
 pub enum ApiLabelType {
     System,
     User,
-}
-
-#[derive(Debug, ToSchema, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Doppleganger)]
-#[cfg_attr(feature = "ai_schema", derive(schemars::JsonSchema))]
-#[dg(backward = EmailThreadPreviewMetadata)]
-pub struct APIEmailThreadPreviewMetadata {
-    /// if user has previously emailed any sender in the thread
-    pub known_sender: bool,
-    /// if any email contains a <table> html tag
-    pub tabular: bool,
-    /// if any email contains a calendar invite
-    pub calendar_invite: bool,
-    /// if any sender in the thread is a generic email
-    pub generic_sender: bool,
 }
 
 #[derive(Debug, ToSchema, Serialize, Deserialize)]

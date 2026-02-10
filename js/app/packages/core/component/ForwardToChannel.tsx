@@ -294,7 +294,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
           <div class="flex w-full items-center p-3 gap-3 flex-wrap">
             <Show when={canSendAsGroup()}>
               <label
-                class={`flex items-start gap-2 ${!canSendAsGroup() ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                class={`flex items-start gap-2 ${!canSendAsGroup() ? 'cursor-not-allowed' : 'cursor-default'}`}
               >
                 <div class="relative mt-0.5">
                   <input

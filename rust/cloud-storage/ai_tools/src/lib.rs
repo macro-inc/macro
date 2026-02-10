@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 use ai_toolset::AsyncToolSet;
 use ai_toolset::schema::{ToolSchemaGenerator, ToolSchemas};
 pub mod code_execution;

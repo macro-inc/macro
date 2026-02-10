@@ -624,200 +624,101 @@ async fn test_dynamic_query_pagination(pool: Pool<Postgres>) -> anyhow::Result<(
     Ok(())
 }
 
+// Test filtering emails by importance
+// The fixture has:
+//   Thread 1 (msg 1): INBOX + CATEGORY_PERSONAL → important (has priority label)
+//   Thread 2 (msg 2): SENT → important (has priority label)
+//   Thread 3 (msg 3): DRAFT → important (no depriority label)
+//   Thread 4 (msg 4): STARRED + INBOX → important (no depriority label)
+//   Thread 5 (msg 5): IMPORTANT + INBOX → important (no depriority label)
+//   Thread 6 (msg 6): Work + CATEGORY_UPDATES → NOT important (depriority, no priority)
+//   Thread 7 (msg 7): INBOX + CATEGORY_PROMOTIONS → NOT important (depriority, no priority)
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("email_thread_metadata"))
+    fixtures(path = "../../../fixtures", scripts("email_dynamic_query"))
 )]
-async fn test_thread_metadata_has_table(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
-    let thread_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+async fn test_dynamic_query_with_importance_filter(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let limit = 50;
 
-    let metadata = repo.thread_metadata_by_thread_ids(&[thread_id]).await?;
+    // importance=true: threads with priority labels OR without depriority labels
+    {
+        let filter = Arc::new(Expr::Literal(EmailLiteral::Importance(true)));
+        let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
 
-    assert_eq!(metadata.len(), 1);
-    let item = &metadata[0];
+        let results =
+            dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
 
-    assert_eq!(item.thread_id, thread_id);
-    assert!(item.has_table, "Should detect HTML table");
-    assert!(
-        !item.has_calendar_invite,
-        "Should not detect calendar invite"
-    );
-    assert_eq!(item.sender_emails.len(), 1);
-    assert_eq!(item.sender_emails[0], "sender1@example.com");
+        // Threads 1 (CATEGORY_PERSONAL), 2 (SENT), 3 (no depriority), 4 (no depriority), 5 (no depriority)
+        assert_eq!(
+            results.len(),
+            5,
+            "importance=true should return 5 important threads"
+        );
 
-    Ok(())
-}
+        let result_ids: std::collections::HashSet<String> =
+            results.iter().map(|r| r.id.to_string()).collect();
 
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("email_thread_metadata"))
-)]
-async fn test_thread_metadata_has_calendar_invite(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
-    let thread_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222")?;
+        assert!(
+            result_ids.contains("20000001-0000-0000-0000-000000000001"),
+            "Should include thread 1 (CATEGORY_PERSONAL)"
+        );
+        assert!(
+            result_ids.contains("20000002-0000-0000-0000-000000000002"),
+            "Should include thread 2 (SENT)"
+        );
+        assert!(
+            result_ids.contains("20000003-0000-0000-0000-000000000003"),
+            "Should include thread 3 (no depriority)"
+        );
+        assert!(
+            result_ids.contains("20000004-0000-0000-0000-000000000004"),
+            "Should include thread 4 (no depriority)"
+        );
+        assert!(
+            result_ids.contains("20000005-0000-0000-0000-000000000005"),
+            "Should include thread 5 (no depriority)"
+        );
 
-    let metadata = repo.thread_metadata_by_thread_ids(&[thread_id]).await?;
+        // Threads 6 and 7 should be excluded (depriority labels, no priority)
+        assert!(
+            !result_ids.contains("20000006-0000-0000-0000-000000000006"),
+            "Should exclude thread 6 (CATEGORY_UPDATES)"
+        );
+        assert!(
+            !result_ids.contains("20000007-0000-0000-0000-000000000007"),
+            "Should exclude thread 7 (CATEGORY_PROMOTIONS)"
+        );
+    }
 
-    assert_eq!(metadata.len(), 1);
-    let item = &metadata[0];
+    // importance=false: threads with depriority labels AND without priority labels
+    {
+        let filter = Arc::new(Expr::Literal(EmailLiteral::Importance(false)));
+        let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
 
-    assert_eq!(item.thread_id, thread_id);
-    assert!(!item.has_table, "Should not detect HTML table");
-    assert!(item.has_calendar_invite, "Should detect calendar invite");
+        let results =
+            dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
 
-    // Verify multiple senders are collected
-    assert_eq!(item.sender_emails.len(), 2);
-    assert!(
-        item.sender_emails
-            .contains(&"sender1@example.com".to_string())
-    );
-    assert!(
-        item.sender_emails
-            .contains(&"sender2@example.com".to_string())
-    );
+        // Threads 6 (CATEGORY_UPDATES) and 7 (CATEGORY_PROMOTIONS)
+        assert_eq!(
+            results.len(),
+            2,
+            "importance=false should return 2 unimportant threads"
+        );
 
-    Ok(())
-}
+        let result_ids: std::collections::HashSet<String> =
+            results.iter().map(|r| r.id.to_string()).collect();
 
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("email_thread_metadata"))
-)]
-async fn test_thread_metadata_sender_deduplication(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
-    // Thread 3 has 2 messages from the same sender
-    let thread_id = Uuid::parse_str("33333333-3333-3333-3333-333333333333")?;
-
-    let metadata = repo.thread_metadata_by_thread_ids(&[thread_id]).await?;
-
-    assert_eq!(metadata.len(), 1);
-    let item = &metadata[0];
-
-    assert_eq!(
-        item.sender_emails.len(),
-        1,
-        "Should deduplicate identical senders"
-    );
-    assert_eq!(item.sender_emails[0], "sender1@example.com");
-
-    Ok(())
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("email_thread_metadata"))
-)]
-async fn test_thread_metadata_batch_retrieval(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
-    let t1 = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
-    let t2 = Uuid::parse_str("22222222-2222-2222-2222-222222222222")?;
-
-    let metadata = repo.thread_metadata_by_thread_ids(&[t1, t2]).await?;
-
-    assert_eq!(metadata.len(), 2);
-
-    let meta1 = metadata.iter().find(|m| m.thread_id == t1).unwrap();
-    assert!(meta1.has_table);
-
-    let meta2 = metadata.iter().find(|m| m.thread_id == t2).unwrap();
-    assert!(meta2.has_calendar_invite);
-
-    Ok(())
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("threads_with_known_senders"))
-)]
-async fn test_known_senders_single_match(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
-    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
-
-    // Thread 1 is from Known Contact A
-    let thread_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
-
-    let result = repo
-        .threads_with_known_senders(&link_id, &[thread_id])
-        .await?;
-
-    assert_eq!(result.len(), 1);
-    assert_eq!(
-        result[0], thread_id,
-        "Should identify thread from known sender"
-    );
-
-    Ok(())
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("threads_with_known_senders"))
-)]
-async fn test_known_senders_no_match(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
-    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
-
-    // Thread 2 is from Unknown Contact B
-    let thread_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222")?;
-
-    let result = repo
-        .threads_with_known_senders(&link_id, &[thread_id])
-        .await?;
-
-    assert!(
-        result.is_empty(),
-        "Should NOT return thread from unknown sender"
-    );
-
-    Ok(())
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("threads_with_known_senders"))
-)]
-async fn test_known_senders_mixed_input(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
-    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
-
-    let t1_known = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
-    let t2_unknown = Uuid::parse_str("22222222-2222-2222-2222-222222222222")?;
-    let t3_known = Uuid::parse_str("33333333-3333-3333-3333-333333333333")?;
-
-    let result = repo
-        .threads_with_known_senders(&link_id, &[t1_known, t2_unknown, t3_known])
-        .await?;
-
-    assert_eq!(result.len(), 2);
-    assert!(result.contains(&t1_known));
-    assert!(result.contains(&t3_known));
-    assert!(!result.contains(&t2_unknown));
-
-    Ok(())
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("threads_with_known_senders"))
-)]
-async fn test_known_senders_mixed_thread_participants(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
-    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
-
-    // Thread 4 has messages from both Unknown B and Known A
-    let thread_id = Uuid::parse_str("44444444-4444-4444-4444-444444444444")?;
-
-    let result = repo
-        .threads_with_known_senders(&link_id, &[thread_id])
-        .await?;
-
-    assert_eq!(
-        result.len(),
-        1,
-        "Should match because at least one participant is known"
-    );
-    assert_eq!(result[0], thread_id);
+        assert!(
+            result_ids.contains("20000006-0000-0000-0000-000000000006"),
+            "Should include thread 6 (CATEGORY_UPDATES)"
+        );
+        assert!(
+            result_ids.contains("20000007-0000-0000-0000-000000000007"),
+            "Should include thread 7 (CATEGORY_PROMOTIONS)"
+        );
+    }
 
     Ok(())
 }

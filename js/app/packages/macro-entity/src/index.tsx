@@ -3,15 +3,7 @@ export { EntityWrapper } from './components/EntityWrapper';
 export { createFilter } from './components/Filter';
 export { Provider } from './components/Provider';
 export * from './components/Sort';
-export { createUnifiedInfiniteList } from './components/UnifiedInfiniteList';
-export {
-  createUnifiedList,
-  UnifiedList,
-  type UnifiedListComponent,
-} from './components/UnifiedList';
 export { UnreadIndicator } from './components/Unread';
-export * from './contexts/soup';
-export { createChannelsQuery } from './queries/channel';
 export { useQueryClient } from './queries/client';
 export {
   createChatsInfiniteQuery,
@@ -19,6 +11,9 @@ export {
   createDssInfiniteQuery,
   createMoveToProjectDssEntityMutation,
   createCopyDssEntityMutation,
+  optimisticUpdateDssItemViewedAt,
+  hasSoupItem,
+  invalidateSoup,
 } from './queries/dss';
 export { createEmailsInfiniteQuery } from './queries/email';
 export type { EntityInfiniteQuery, EntityQuery } from './queries/entity';

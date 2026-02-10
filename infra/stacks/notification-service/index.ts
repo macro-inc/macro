@@ -256,6 +256,15 @@ const notificationService = new NotificationService('notification-service', {
       name: 'AUTHENTICATION_SERVICE_SECRET_KEY',
       value: pulumi.interpolate`${AUTHENTICATION_SERVICE_INTERNAL_API_KEY}`,
     },
+    // OpenTelemetry / Datadog tracing configuration
+    {
+      name: 'DD_SERVICE',
+      value: 'notification-service',
+    },
+    {
+      name: 'DD_ENV',
+      value: stack,
+    },
   ],
 });
 

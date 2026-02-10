@@ -421,7 +421,6 @@ export class StaticFileService extends pulumi.ComponentResource {
         })
       ),
     });
-    const STORAGE_LOCATION = `https://${SERVICE_DOMAIN_NAME}.macro.com`;
     // service
     const service = new awsx.ecs.FargateService(
       `${SERVICE_NAME}`,
@@ -452,10 +451,6 @@ export class StaticFileService extends pulumi.ComponentResource {
                 {
                   name: `STATIC_FILE_SERVICE_DYNAMODB_TABLE_NAME`,
                   value: args.dynamoDbTableName,
-                },
-                {
-                  name: `STATIC_FILE_SERVICE_S3_BUCKET_URL`,
-                  value: STORAGE_LOCATION,
                 },
                 {
                   name: 'STATIC_FILE_SERVICE_S3_EVENT_QUEUE_URL',

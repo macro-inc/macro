@@ -5,7 +5,6 @@ import Bell from '@icon/regular/bell.svg';
 import {
   type NotificationSource,
   openNotification,
-  tryToTypedNotification,
   useUnreadNotifications,
 } from '@notifications';
 import { Show } from 'solid-js';
@@ -36,11 +35,10 @@ export function GlobalNotificationBell(props: GlobalNotificationBellProps) {
 
     if (!notification) return;
 
-    const nm = tryToTypedNotification(notification);
     const layoutManager = globalSplitManager();
-    if (!nm || !layoutManager) return;
+    if (!layoutManager) return;
 
-    openNotification(nm, layoutManager);
+    openNotification(notification, layoutManager);
 
     notificationSource.markAsRead(notification);
 

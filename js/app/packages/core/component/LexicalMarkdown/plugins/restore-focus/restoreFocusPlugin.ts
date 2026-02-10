@@ -14,11 +14,17 @@ export function restoreFocusPlugin() {
   let clickFlag = false;
   return (editor: LexicalEditor) => {
     return mergeRegister(
-      registerRootEventListener(editor, 'pointerdown', () => {
+      registerRootEventListener(editor, 'pointerdown', (e: PointerEvent) => {
         clickFlag = true;
-        setTimeout(() => {
-          clickFlag = false;
-        });
+
+        setTimeout(
+          () => {
+            clickFlag = false;
+            // On click, focusin happens synchonously after pointerdown, with the setTimeout flipping the flag back after. This is deterministic and good.
+            // On iOS touch these do not happen synchronously, so we're blindly flipping the flag back after 500ms.
+          },
+          e.pointerType === 'touch' ? 500 : 0
+        );
       }),
       registerRootEventListener(editor, 'focusin', (e) => {
         if (clickFlag) return;

@@ -1,11 +1,12 @@
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
 import { catchToResult, isErr, ok, throwOnErr } from '@core/util/maybeResult';
-import { queryKeys } from '@macro-entity';
+import { soupKeys } from '../soup/keys';
 import { emailClient } from '@service-email/client';
 import type {
   MessageToSend,
   SendMessageResponse,
   APIThread as Thread,
+  UpsertScheduledResponse,
 } from '@service-email/generated/schemas';
 import type { SoupPage } from '@service-storage/generated/schemas';
 import {
@@ -157,7 +158,7 @@ type MarkThreadAsSeenParams = { threadId: string };
  */
 function threadSeenOnMutate(params: MarkThreadAsSeenParams): void {
   queryClient.setQueriesData<InfiniteData<SoupPage, unknown>>(
-    { queryKey: queryKeys.all.dss },
+    { queryKey: soupKeys.items._def },
     (old) => {
       if (!old) return old;
       return {
@@ -298,13 +299,77 @@ export function useSendMessageMutation(
       ),
     ...withCallbacks<SendMessageResponse, Error, SendMessageParams>(
       {
-        onSuccess: (_data, params) => {
-          if (params.message.thread_db_id) {
+        onSuccess: (data) => {
+          const threadID = data.message.thread_db_id;
+          if (threadID) {
             queryClient.invalidateQueries({
-              queryKey: emailKeys.threadMessages(params.message.thread_db_id)
-                .queryKey,
+              queryKey: emailKeys.threadMessages(threadID).queryKey,
             });
           }
+          queryClient.invalidateQueries({
+            queryKey: emailKeys.previews._def,
+          });
+        },
+      },
+      callbacks
+    ),
+  }));
+}
+
+type ScheduleMessageParams = { draftID: string; sendTime: string };
+
+/**
+ * Mutation to send an email message.
+ */
+export function useScheduleMessageMutation(
+  callbacks?: MutationCallbacks<
+    UpsertScheduledResponse,
+    Error,
+    ScheduleMessageParams
+  >
+) {
+  return useMutation(() => ({
+    mutationFn: async (vars: ScheduleMessageParams) =>
+      await throwOnErr(
+        async () =>
+          await emailClient.scheduleMessage({
+            draftID: vars.draftID,
+            send_time: vars.sendTime,
+          })
+      ),
+    ...withCallbacks<UpsertScheduledResponse, Error, ScheduleMessageParams>(
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({
+            queryKey: emailKeys.previews._def,
+          });
+        },
+      },
+      callbacks
+    ),
+  }));
+}
+
+type UnscheduleMessageParams = { draftID: string };
+
+/**
+ * Mutation to send an email message.
+ */
+export function useUnscheduleMessageMutation(
+  callbacks?: MutationCallbacks<void, Error, UnscheduleMessageParams>
+) {
+  return useMutation(() => ({
+    mutationFn: async (vars: UnscheduleMessageParams) => {
+      await throwOnErr(
+        async () =>
+          await emailClient.unscheduleMessage({
+            draftID: vars.draftID,
+          })
+      );
+    },
+    ...withCallbacks<void, Error, UnscheduleMessageParams>(
+      {
+        onSuccess: () => {
           queryClient.invalidateQueries({
             queryKey: emailKeys.previews._def,
           });

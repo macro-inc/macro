@@ -1,41 +1,45 @@
 import type { BlockAliasContext } from '@core/block';
 import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
-import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import type { NonNullableFields } from '@core/util/withRequired';
 import { type EntityData, isTaskEntity } from '@macro-entity';
 import {
   type Component,
-  createMemo,
   createRenderEffect,
   createSignal,
-  onMount,
   Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
-  createNavigationEntityListShortcut,
-  createSoupContext,
-} from './SoupContext';
-import {
   SplitPanelContext,
   type SplitPanelContextType,
 } from './split-layout/context';
-import { useSplitLayout } from './split-layout/layout';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
+import { Suspense } from 'solid-js';
+import { createContextProvider } from '@solid-primitives/context';
+import { throttledDependent } from '@core/util/debounce';
+
+export const [PreviewPanelContext, useMaybePreviewPanel] =
+  createContextProvider(
+    (props: { previewEntity: EntityData; onFocusOut?: VoidFunction }) => {
+      return {
+        previewEntity: () => props.previewEntity,
+        onFocusOut: () => props.onFocusOut?.(),
+      };
+    }
+  );
 
 type PreviewPanel = {
   selectedEntity: EntityData | undefined;
   orchestrator: BlockOrchestrator;
   splitPanelContext: SplitPanelContextType;
+  onFocusOut?: VoidFunction;
+  ref?: (el: HTMLElement) => void;
 };
 
 const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
   props
 ) => {
-  const [containerRef, setContainerRef] = createSignal<HTMLDivElement | null>(
-    null
-  );
   let scopedSplitPanelContextType: SplitPanelContextType = {} as any;
   const splitPanelContext = useSplitPanelOrThrow();
   const scopedLayoutRefs: SplitPanelContextType['layoutRefs'] = {
@@ -47,40 +51,14 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
   scopedLayoutRefs.headerRight = undefined;
 
   if (props.selectedEntity.type === 'project') {
-    const { getSplitCount } = useSplitLayout();
-    const soupContext = createSoupContext({
-      isRenderedFromPreview: true,
-      parentContext: splitPanelContext.soupContext,
-      domRef: containerRef,
-    });
-
-    const [attachHotKeys, splitHotkeyScope] = useHotkeyDOMScope(
-      `split=${splitPanelContext.splitHotkeyScope}`
-    );
-
-    const [previewState, setPreviewState] = createSignal(false);
-    const splitName = createMemo(() => {
-      const { type, id } = splitPanelContext.handle.content();
-      if (type === 'component') return id;
-
-      return type;
-    });
-
-    createNavigationEntityListShortcut({
-      splitName,
-      splitHandle: splitPanelContext.handle,
-      splitHotkeyScope,
-      soupContext,
-      previewState: [previewState, setPreviewState],
-      getSplitCount: getSplitCount,
-    });
-    scopedSplitPanelContextType.soupContext = soupContext;
+    const [previewState, setPreviewState] = createSignal(true);
     scopedSplitPanelContextType.previewState = [previewState, setPreviewState];
-
-    onMount(() => {
-      attachHotKeys(containerRef()!);
-    });
   }
+
+  const throttledSelectedEntity = throttledDependent(
+    () => props.selectedEntity,
+    150
+  );
 
   const blockInstance = () => {
     const aliasContext = isTaskEntity(props.selectedEntity)
@@ -116,6 +94,7 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
 
   return (
     <div
+      ref={props.ref}
       class="flex flex-col size-full"
       onFocusIn={(event) => {
         if (interactedWith()) return;
@@ -138,7 +117,6 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
         setInteractedWith(true);
       }}
       tabIndex={-1}
-      ref={setContainerRef}
     >
       {/* Preview-specific toolbar slots so blocks can render the "share" bar (via SplitToolbarLeft/Right) */}
       <div
@@ -178,7 +156,14 @@ const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
             halfSplitState: undefined,
           }}
         >
-          <Dynamic component={blockInstance().element} />
+          <PreviewPanelContext
+            previewEntity={throttledSelectedEntity()}
+            onFocusOut={props.onFocusOut}
+          >
+            <Suspense>
+              <Dynamic component={blockInstance().element} />
+            </Suspense>
+          </PreviewPanelContext>
         </SplitPanelContext.Provider>
       </div>
     </div>
@@ -191,9 +176,11 @@ export const PreviewPanel: Component<PreviewPanel> = (props) => {
       <Show when={props.selectedEntity}>
         {(selectedEntity) => (
           <PreviewPanelContent
+            ref={props.ref}
             selectedEntity={selectedEntity()}
             orchestrator={props.orchestrator}
             splitPanelContext={props.splitPanelContext}
+            onFocusOut={props.onFocusOut}
           />
         )}
       </Show>

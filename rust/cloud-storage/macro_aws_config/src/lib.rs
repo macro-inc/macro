@@ -29,3 +29,40 @@ pub async fn get_macro_aws_config() -> aws_config::SdkConfig {
             .await
     }
 }
+
+/// Returns if the aws config is local or not
+pub fn is_local_aws() -> bool {
+    LocalAwsUrl::new().is_some()
+}
+
+/// internal method to transform the local aws url
+fn transform_local_url(url: &str) -> String {
+    // NOTE: it is ok to use expect as this is only run locally
+    let parsed = url::Url::parse(url).expect("valid url");
+    let host = parsed.host_str().unwrap();
+
+    // hostname should be in the form {asset}.localstack or {asset}.localhost
+    let asset = host
+        .strip_suffix(".localstack")
+        .or_else(|| host.strip_suffix(".localhost"))
+        .unwrap();
+
+    let port = parsed.port().unwrap_or(4566);
+    let path = parsed.path();
+    let query = parsed.query().map(|q| format!("?{q}")).unwrap_or_default();
+
+    format!("http://localhost:{port}/{asset}{path}{query}")
+}
+
+/// Transforms a localstack url into one that will work within the app
+/// For example, presigned urls for localstack come out as `http://{BUCKET_NAME}.localstack:{PORT}`
+/// but we need them to be formulated as `http://localhost:{PORT}/bucket-name`.
+pub fn transform_aws_url(url: &str) -> String {
+    if is_local_aws() {
+        return transform_local_url(url);
+    }
+    url.to_string()
+}
+
+#[cfg(test)]
+mod test;

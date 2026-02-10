@@ -20,6 +20,8 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use macro_sha_count_client::Redis;
+use notification::domain::service::NotificationIngressService;
+use notification::outbound::{queue::SqsNotificationQueue, repository::DbNotificationRepository};
 use opensearch_client::OpensearchClient;
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
@@ -76,9 +78,9 @@ async fn main() -> anyhow::Result<()> {
     tracing::trace!("initialized config");
 
     let (min_connections, max_connections): (u32, u32) = match config.environment {
-        Environment::Production => (10, 50),
-        Environment::Develop => (3, 20),
-        Environment::Local => (3, 10),
+        Environment::Production => (50, 150),
+        Environment::Develop => (15, 50),
+        Environment::Local => (15, 50),
     };
 
     let db = PgPoolOptions::new()
@@ -130,13 +132,6 @@ async fn main() -> anyhow::Result<()> {
     let internal_api_secret = secretsmanager_client
         .get_maybe_secret_value(config.environment, InternalApiSecretKey::new()?)
         .await?;
-
-    let macro_notify_client = macro_notify::MacroNotify::new(
-        config.vars.notification_queue.as_ref().to_string(),
-        "document_storage_service".to_string(),
-    )
-    .await;
-    tracing::trace!("initialized macro_notify client");
 
     let dss_auth_key = DocumentStorageServiceAuthKey::new()?;
 
@@ -205,8 +200,19 @@ async fn main() -> anyhow::Result<()> {
         EmailServiceImpl::new(EmailPgRepo::new(db.clone()), frecency_service.clone());
     let system_properties_service =
         SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(db.clone()));
+    let make_notification_ingress = || {
+        let notification_repository = DbNotificationRepository::new(db.clone());
+        let notification_queue = SqsNotificationQueue::new(
+            aws_sdk_sqs::Client::new(&aws_config),
+            config.vars.notification_queue.as_ref().to_string(),
+        );
+        NotificationIngressService::new(notification_repository, notification_queue)
+    };
+    let notification_ingress_service = Arc::new(make_notification_ingress());
+    tracing::trace!("initialized notification ingress service");
+
     let permission_checker = PermissionServiceImpl::new(db.clone());
-    let notification_service = NotificationServiceImpl::new(Arc::new(macro_notify_client.clone()));
+    let notification_service = NotificationServiceImpl::new(make_notification_ingress());
     let properties_service = PropertiesServiceImpl::new(
         PropertiesPgRepo::new(db.clone()),
         Some(permission_checker),
@@ -255,7 +261,7 @@ async fn main() -> anyhow::Result<()> {
         dynamodb_client: Arc::new(dynamodb_client),
         dynamo_db,
         sqs_client: Arc::new(sqs_client),
-        macro_notify_client: Arc::new(macro_notify_client),
+        notification_ingress_service,
         conn_gateway_client: Arc::new(conn_gateway_client),
         sync_service_client: Arc::new(sync_service_client),
         system_properties_service: Arc::new(system_properties_service),
@@ -268,6 +274,11 @@ async fn main() -> anyhow::Result<()> {
         frecency_storage,
         comms_state,
         permissions_token_secret: comms_permissions_token_secret,
+        entity_access_service: Arc::new(
+            entity_access::domain::service::EntityAccessServiceImpl::new(
+                entity_access::outbound::PgAccessRepository::new(db.clone()),
+            ),
+        ),
     };
 
     api::setup_and_serve(api_context).await?;

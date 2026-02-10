@@ -23,7 +23,7 @@ import {
 import DeviceMobileIcon from '@icon/regular/device-mobile-speaker.svg';
 import LaptopIcon from '@icon/regular/laptop.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
-import type { Item } from '@service-storage/generated/schemas/item';
+import type { HistoryItem } from '@queries/history/history';
 import {
   createEffect,
   createMemo,
@@ -183,7 +183,7 @@ export function ChatAttachMenu(props: ChatAttachMenuProps) {
     }
   };
 
-  const selectItem = (item: Item) => {
+  const selectItem = (item: HistoryItem) => {
     // TODO: add other supported attachment types, e.g. channel
     if (item.type !== 'document') {
       console.error('ChatAttachMenu only supports document items');

@@ -57,8 +57,8 @@ export function MessageAttachments(props: MessageAttachmentsProps) {
           <For each={props.documentAttachments()}>
             {(attachment) => (
               <ItemPreview
-                itemType={stringToItemType(attachment.entity_type)}
-                itemId={attachment.entity_id}
+                type={stringToItemType(attachment.entity_type)}
+                id={attachment.entity_id}
               />
             )}
           </For>

@@ -288,7 +288,8 @@ export class DocumentMentionNode extends DecoratorNode<
   }
 
   decorate(_: LexicalEditor, config: EditorConfig) {
-    const decorator = getDecorator<DocumentMentionNode>(DocumentMentionNode);
+    const decorator =
+      getDecorator<DocumentMentionDecoratorProps>(DocumentMentionNode);
     if (decorator) {
       return () =>
         decorator({

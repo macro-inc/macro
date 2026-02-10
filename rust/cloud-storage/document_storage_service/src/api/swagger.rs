@@ -18,7 +18,7 @@ use crate::{
                 validate_permissions_token::DocumentPermissionsTokenRequest,
             },
         },
-        health, history, instructions, pins,
+        entity, health, history, instructions, pins,
         projects::{
             self,
             delete_project::{ProjectDeleteResponse, ProjectDeleteResponseData},
@@ -103,9 +103,8 @@ use models_permissions::share_permission::channel_share_permission::UpdateOperat
 use models_soup::chat::SoupChat;
 use models_soup::document::SoupDocument;
 use models_soup::email_thread::{
-    SoupAttachment, SoupContact, SoupEmailThreadPreview, SoupEmailThreadPreviewMetadata,
-    SoupEnrichedEmailThreadPreview, SoupLabel, SoupLabelListVisibility, SoupLabelType,
-    SoupMessageListVisibility,
+    SoupAttachment, SoupContact, SoupEmailThreadPreview, SoupEnrichedEmailThreadPreview, SoupLabel,
+    SoupLabelListVisibility, SoupLabelType, SoupMessageListVisibility,
 };
 use models_soup::item::SoupItem;
 use models_soup::project::SoupProject;
@@ -204,6 +203,8 @@ use utoipa::OpenApi;
         // threads
         threads::edit_thread::edit_thread_handler,
 
+        entity::get_entity_permission::handler,
+
         // /recents
         recents::recently_deleted::handler,
         saved_views::create_view_handler,
@@ -291,7 +292,6 @@ use utoipa::OpenApi;
             SoupEmailThreadPreview,
             SoupAttachment,
             SoupContact,
-            SoupEmailThreadPreviewMetadata,
             SoupLabel,
             SoupLabelListVisibility,
             SoupMessageListVisibility,
@@ -307,6 +307,9 @@ use utoipa::OpenApi;
             models_permissions::share_permission::UpdateSharePermissionRequestV2, // Share permission
             models_permissions::share_permission::channel_share_permission::ChannelSharePermission,
             models_permissions::share_permission::channel_share_permission::UpdateChannelSharePermission, // Channel share permissions
+            entity::get_entity_permission::EntityPermissionResponse,
+            entity_access::domain::models::EntityPermission,
+            entity_access::domain::models::ParticipantRole,
 
             // Chat
             Chat,

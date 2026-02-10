@@ -1,14 +1,22 @@
 import { useBlockId } from '@core/block';
 import { useChannelName } from '@core/context/channels';
+import { EntityPermissionsGate } from '@core/component/EntityPermissionsGate';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
-import { type JSXElement, Suspense } from 'solid-js';
+import { type JSXElement, onMount, Suspense } from 'solid-js';
 import { Channel } from './Channel';
 import { URL_PARAMS } from '@block-channel/constants';
 import type { TargetMessageInfo } from '@block-channel/component/MessageList/MessageList';
+import { useChannelQuery } from '@queries/channel/channel';
 import { ChannelContextProvider } from '@block-channel/hooks/channel';
 
 export function WithTopBar(props: { children: JSXElement }) {
   return <div>{props.children}</div>;
+}
+function ChannelBlockSuspenseFallback() {
+  onMount(() => {
+    console.warn('[block-channel] Top-level BlockChannel suspense triggered');
+  });
+  return null;
 }
 
 export type JoinState = 'REQUIRED' | 'NOT_REQUIRED';
@@ -20,6 +28,7 @@ export type BlockChannelProps = IncomingParams & {};
 export default function BlockChannel(props: BlockChannelProps) {
   const channelId = useBlockId();
   const channelName = useChannelName(channelId);
+  const channelQuery = useChannelQuery(() => channelId);
 
   const targetMessage = () => {
     const messageID = props[URL_PARAMS.message];
@@ -33,12 +42,14 @@ export default function BlockChannel(props: BlockChannelProps) {
   };
 
   return (
-    <Suspense>
-      <DocumentBlockContainer title={channelName() ?? 'Channel'}>
-        <ChannelContextProvider channelId={() => channelId}>
-          <Channel channelId={channelId} target={targetMessage()} />
-        </ChannelContextProvider>
-      </DocumentBlockContainer>
-    </Suspense>
+    <EntityPermissionsGate entityType="channel" entityId={channelId}>
+      <Suspense fallback={<ChannelBlockSuspenseFallback />}>
+        <DocumentBlockContainer title={channelName() ?? 'Channel'}>
+          <ChannelContextProvider query={channelQuery}>
+            <Channel channelId={channelId} target={targetMessage()} />
+          </ChannelContextProvider>
+        </DocumentBlockContainer>
+      </Suspense>
+    </EntityPermissionsGate>
   );
 }

@@ -58,6 +58,7 @@ default = [
   "sfs_delete",
 ]
 gmail_webhook_auth = []
+local_auth = ["macro_middleware/local_auth"]
 local_queue = []
 sfs_map = []
 sfs_delete = []
@@ -99,7 +100,7 @@ macro_env_var = { path = "../macro_env_var" }
 macro_middleware = { path = "../macro_middleware", default-features = false, features = [
   "auth",
 ] }
-macro_notify = { path = "../macro_notify" }
+notification = { path = "../notification" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 mime_guess = "2.0.5"
@@ -144,7 +145,6 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["signal"] }
 tower = { workspace = true }
 tower-http = { workspace = true, features = [
-  "compression-br",
   "compression-gzip",
 ] }
 tracing = { workspace = true }

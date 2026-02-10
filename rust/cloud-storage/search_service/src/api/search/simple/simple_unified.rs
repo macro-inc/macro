@@ -413,143 +413,169 @@ pub(in crate::api::search) async fn perform_unified_search(
     let project_name_count = project_hits.len();
     let content_count = content_hits.len();
 
-    // Wrap results with source tags
-    let mut combined: Vec<TaggedSearchHit> = Vec::new();
-    combined.extend(doc_hits.into_iter().map(|hit| TaggedSearchHit {
-        hit,
-        source: SearchSource::DocumentName,
-    }));
-    combined.extend(chat_hits.into_iter().map(|hit| TaggedSearchHit {
-        hit,
-        source: SearchSource::ChatName,
-    }));
-    combined.extend(email_hits.into_iter().map(|hit| TaggedSearchHit {
-        hit,
-        source: SearchSource::EmailSubject,
-    }));
-    combined.extend(email_contact_hits.into_iter().map(|hit| TaggedSearchHit {
-        hit,
-        source: SearchSource::EmailContact,
-    }));
-    combined.extend(project_hits.into_iter().map(|hit| TaggedSearchHit {
-        hit,
-        source: SearchSource::ProjectName,
-    }));
-    combined.extend(content_hits.into_iter().map(|hit| TaggedSearchHit {
-        hit,
-        source: SearchSource::Content,
-    }));
+    let final_tagged = {
+        let _span = tracing::info_span!(
+            "combine_and_sort_results",
+            doc_name_count,
+            chat_name_count,
+            email_subject_count,
+            email_contact_count,
+            project_name_count,
+            content_count
+        )
+        .entered();
 
-    // Sort: updated_at DESC (None to bottom), entity_id DESC as tiebreaker
-    combined.sort_by(|a, b| match (&b.hit.updated_at, &a.hit.updated_at) {
-        (Some(b_ts), Some(a_ts)) => b_ts
-            .cmp(a_ts)
-            .then_with(|| b.hit.entity_id.cmp(&a.hit.entity_id)),
-        (Some(_), None) => std::cmp::Ordering::Less,
-        (None, Some(_)) => std::cmp::Ordering::Greater,
-        (None, None) => b.hit.entity_id.cmp(&a.hit.entity_id),
-    });
+        // Wrap results with source tags
+        let mut combined: Vec<TaggedSearchHit> = Vec::new();
+        combined.extend(doc_hits.into_iter().map(|hit| TaggedSearchHit {
+            hit,
+            source: SearchSource::DocumentName,
+        }));
+        combined.extend(chat_hits.into_iter().map(|hit| TaggedSearchHit {
+            hit,
+            source: SearchSource::ChatName,
+        }));
+        combined.extend(email_hits.into_iter().map(|hit| TaggedSearchHit {
+            hit,
+            source: SearchSource::EmailSubject,
+        }));
+        combined.extend(email_contact_hits.into_iter().map(|hit| TaggedSearchHit {
+            hit,
+            source: SearchSource::EmailContact,
+        }));
+        combined.extend(project_hits.into_iter().map(|hit| TaggedSearchHit {
+            hit,
+            source: SearchSource::ProjectName,
+        }));
+        combined.extend(content_hits.into_iter().map(|hit| TaggedSearchHit {
+            hit,
+            source: SearchSource::Content,
+        }));
 
-    // Take only page_size results
-    let page_size_usize = page_size as usize;
-    let final_tagged: Vec<TaggedSearchHit> = combined.into_iter().take(page_size_usize).collect();
+        tracing::debug!(total_combined = combined.len(), "combined all results");
 
-    // Count included results by source
-    let included_doc_names = final_tagged
-        .iter()
-        .filter(|h| h.source == SearchSource::DocumentName)
-        .count();
-    let included_chat_names = final_tagged
-        .iter()
-        .filter(|h| h.source == SearchSource::ChatName)
-        .count();
-    let included_email_subjects = final_tagged
-        .iter()
-        .filter(|h| h.source == SearchSource::EmailSubject)
-        .count();
-    let included_email_contacts = final_tagged
-        .iter()
-        .filter(|h| h.source == SearchSource::EmailContact)
-        .count();
-    let included_project_names = final_tagged
-        .iter()
-        .filter(|h| h.source == SearchSource::ProjectName)
-        .count();
-    let included_content = final_tagged
-        .iter()
-        .filter(|h| h.source == SearchSource::Content)
-        .count();
-    // Content cursor deferred - always None for now
+        // Sort: updated_at DESC (None to bottom), entity_id DESC as tiebreaker
+        combined.sort_by(|a, b| match (&b.hit.updated_at, &a.hit.updated_at) {
+            (Some(b_ts), Some(a_ts)) => b_ts
+                .cmp(a_ts)
+                .then_with(|| b.hit.entity_id.cmp(&a.hit.entity_id)),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => b.hit.entity_id.cmp(&a.hit.entity_id),
+        });
 
-    // Generate new cursors using helper function
-    let new_doc_cursor = compute_next_cursor(
-        &doc_next_cursor,
-        included_doc_names,
-        doc_name_count,
-        find_last_of_source(&final_tagged, SearchSource::DocumentName),
-        &document_cursor,
-    );
+        // Take only page_size results
+        let page_size_usize = page_size as usize;
+        let final_tagged: Vec<TaggedSearchHit> =
+            combined.into_iter().take(page_size_usize).collect();
 
-    let new_chat_cursor = compute_next_cursor(
-        &chat_next_cursor,
-        included_chat_names,
-        chat_name_count,
-        find_last_of_source(&final_tagged, SearchSource::ChatName),
-        &chat_cursor,
-    );
+        tracing::debug!(
+            final_count = final_tagged.len(),
+            "final results after pagination"
+        );
 
-    let new_email_cursor = compute_next_cursor(
-        &email_next_cursor,
-        included_email_subjects,
-        email_subject_count,
-        find_last_of_source(&final_tagged, SearchSource::EmailSubject),
-        &email_cursor,
-    );
+        final_tagged
+    };
 
-    let new_email_contact_cursor = compute_next_cursor(
-        &email_contact_next_cursor,
-        included_email_contacts,
-        email_contact_count,
-        find_last_of_source(&final_tagged, SearchSource::EmailContact),
-        &email_contact_cursor,
-    );
+    let next_cursor = {
+        let _span = tracing::info_span!("compute_pagination_cursors").entered();
 
-    let new_project_cursor = compute_next_cursor(
-        &project_next_cursor,
-        included_project_names,
-        project_name_count,
-        find_last_of_source(&final_tagged, SearchSource::ProjectName),
-        &project_cursor,
-    );
+        // Count included results by source
+        let included_doc_names = final_tagged
+            .iter()
+            .filter(|h| h.source == SearchSource::DocumentName)
+            .count();
+        let included_chat_names = final_tagged
+            .iter()
+            .filter(|h| h.source == SearchSource::ChatName)
+            .count();
+        let included_email_subjects = final_tagged
+            .iter()
+            .filter(|h| h.source == SearchSource::EmailSubject)
+            .count();
+        let included_email_contacts = final_tagged
+            .iter()
+            .filter(|h| h.source == SearchSource::EmailContact)
+            .count();
+        let included_project_names = final_tagged
+            .iter()
+            .filter(|h| h.source == SearchSource::ProjectName)
+            .count();
+        let included_content = final_tagged
+            .iter()
+            .filter(|h| h.source == SearchSource::Content)
+            .count();
 
-    let new_content_cursor = compute_next_cursor(
-        &content_next_cursor,
-        included_content,
-        content_count,
-        find_last_of_source(&final_tagged, SearchSource::Content),
-        &content_cursor,
-    );
+        // Generate new cursors using helper function
+        let new_doc_cursor = compute_next_cursor(
+            &doc_next_cursor,
+            included_doc_names,
+            doc_name_count,
+            find_last_of_source(&final_tagged, SearchSource::DocumentName),
+            &document_cursor,
+        );
 
-    // Build next cursor if any source has more results
-    let has_more = new_doc_cursor.has_more()
-        || new_chat_cursor.has_more()
-        || new_email_cursor.has_more()
-        || new_email_contact_cursor.has_more()
-        || new_project_cursor.has_more()
-        || new_content_cursor.has_more();
+        let new_chat_cursor = compute_next_cursor(
+            &chat_next_cursor,
+            included_chat_names,
+            chat_name_count,
+            find_last_of_source(&final_tagged, SearchSource::ChatName),
+            &chat_cursor,
+        );
 
-    let next_cursor = if has_more {
-        let cursor = SearchCursor {
-            document_name_cursor: new_doc_cursor,
-            chat_name_cursor: new_chat_cursor,
-            content_cursor: new_content_cursor,
-            email_subject_cursor: new_email_cursor,
-            email_contact_cursor: new_email_contact_cursor,
-            project_name_cursor: new_project_cursor,
-        };
-        cursor.encode()
-    } else {
-        None
+        let new_email_cursor = compute_next_cursor(
+            &email_next_cursor,
+            included_email_subjects,
+            email_subject_count,
+            find_last_of_source(&final_tagged, SearchSource::EmailSubject),
+            &email_cursor,
+        );
+
+        let new_email_contact_cursor = compute_next_cursor(
+            &email_contact_next_cursor,
+            included_email_contacts,
+            email_contact_count,
+            find_last_of_source(&final_tagged, SearchSource::EmailContact),
+            &email_contact_cursor,
+        );
+
+        let new_project_cursor = compute_next_cursor(
+            &project_next_cursor,
+            included_project_names,
+            project_name_count,
+            find_last_of_source(&final_tagged, SearchSource::ProjectName),
+            &project_cursor,
+        );
+
+        let new_content_cursor = compute_next_cursor(
+            &content_next_cursor,
+            included_content,
+            content_count,
+            find_last_of_source(&final_tagged, SearchSource::Content),
+            &content_cursor,
+        );
+
+        // Build next cursor if any source has more results
+        let has_more = new_doc_cursor.has_more()
+            || new_chat_cursor.has_more()
+            || new_email_cursor.has_more()
+            || new_email_contact_cursor.has_more()
+            || new_project_cursor.has_more()
+            || new_content_cursor.has_more();
+
+        if has_more {
+            let cursor = SearchCursor {
+                document_name_cursor: new_doc_cursor,
+                chat_name_cursor: new_chat_cursor,
+                content_cursor: new_content_cursor,
+                email_subject_cursor: new_email_cursor,
+                email_contact_cursor: new_email_contact_cursor,
+                project_name_cursor: new_project_cursor,
+            };
+            cursor.encode()
+        } else {
+            None
+        }
     };
 
     // Extract final SearchHits from tagged results

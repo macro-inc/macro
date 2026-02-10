@@ -35,7 +35,6 @@ async-stripe = { workspace = true, default-features = false, features = [
 ] }
 async-stripe-webhook = { version = "1.0.0-alpha.4", default-features = false }
 aws-sdk-secretsmanager = { workspace = true }
-macro_aws_config = { path = "../macro_aws_config" }
 aws-sdk-sesv2 = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, features = ["macros"] }
@@ -50,6 +49,7 @@ futures = { workspace = true }
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }
 macro_auth = { path = "../macro_auth" }
+macro_aws_config = { path = "../macro_aws_config" }
 macro_cache_client = { path = "../macro_cache_client", default-features = false, features = [
   "auth",
   "auth_rate_limit",
@@ -69,7 +69,6 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
   "tracking",
   "user_permissions",
 ] }
-macro_notify = { path = "../macro_notify" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 maud = { version = "0.27.0" }
@@ -81,6 +80,7 @@ model_user = { path = "../model_user", features = ["axum"] }
 models_team = { path = "../models_team" }
 native_app_service = { path = "../native_app_service" }
 non_empty = { path = "../non_empty" }
+notification = { path = "../notification" }
 notification_service_client = { path = "../notification_service_client" }
 openssl = { workspace = true }
 rand = { workspace = true }

@@ -40,6 +40,7 @@ mod recents;
 mod user;
 mod user_document_view_location;
 
+mod entity;
 mod items;
 mod permissions;
 pub(crate) mod swagger;
@@ -68,7 +69,7 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
                     validate_api_version,
                 ))
                 .layer(macro_cors::cors_layer())
-                .layer(CompressionLayer::new().gzip(true).br(true)),
+                .layer(CompressionLayer::new().gzip(true)),
         )
         // The health router is attached here so we don't attach the logging middleware to it
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()));
@@ -165,6 +166,7 @@ fn api_router(state: ApiContext) -> Router {
             comms_service::comms_router(&CommsHandlerState::from_ref(&state))
                 .with_state(CommsHandlerState::from_ref(&state)),
         )
+        .nest("/entity", entity::router())
         .layer(
             ServiceBuilder::new()
                 .layer(axum::middleware::from_fn(

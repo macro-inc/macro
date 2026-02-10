@@ -301,13 +301,7 @@ const cloudStorageService = new CloudStorageService(
       },
       {
         name: 'RUST_LOG',
-        value: `warn,document_storage_service=${
-          stack === 'prod' ? 'debug' : 'trace'
-        },comms_service=${
-          stack === 'prod' ? 'debug' : 'trace'
-        },tower_http=info,macro_share_permissions=${
-          stack === 'prod' ? 'error' : 'trace'
-        },macro_project_utils=info,macro_notify=info`,
+        value: 'info',
       },
       {
         name: 'DOCUMENT_STORAGE_BUCKET',
@@ -421,6 +415,15 @@ const cloudStorageService = new CloudStorageService(
       {
         name: 'CONTACTS_QUEUE',
         value: pulumi.interpolate`${contactsQueueName}`,
+      },
+      // OpenTelemetry / Datadog tracing configuration
+      {
+        name: 'DD_SERVICE',
+        value: 'cloud-storage-service',
+      },
+      {
+        name: 'DD_ENV',
+        value: stack,
       },
     ],
     isPrivate: false,

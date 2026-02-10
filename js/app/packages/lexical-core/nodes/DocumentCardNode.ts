@@ -325,7 +325,8 @@ export class DocumentCardNode extends DecoratorBlockNode<
       ? documentCardNodeKeyToPreviewComponent.get(key)?.component
       : undefined;
 
-    const decorator = getDecorator<DocumentCardNode>(DocumentCardNode);
+    const decorator =
+      getDecorator<DocumentCardDecoratorProps>(DocumentCardNode);
     if (decorator) {
       return () =>
         decorator({

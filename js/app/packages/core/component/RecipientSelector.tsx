@@ -1,4 +1,4 @@
-import { CustomEntityIcon } from '@core/component/EntityIcon';
+import { EntityIcon } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
 import {
@@ -12,9 +12,6 @@ import {
 import { matches } from '@core/util/match';
 import { clamp } from '@core/util/math';
 import { truncateString } from '@core/util/string';
-import BuildingIcon from '@icon/duotone/building-office-duotone.svg';
-import GlobeIcon from '@icon/duotone/globe-duotone.svg';
-import ThreeUsersIcon from '@icon/duotone/users-three-duotone.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import HashIcon from '@icon/regular/hash.svg';
 import XIcon from '@icon/regular/x.svg';
@@ -24,9 +21,7 @@ import {
   type ComboboxTriggerMode,
   useComboboxContext,
 } from '@kobalte/core/combobox';
-import type { Channel } from '@service-comms/generated/models/channel';
 import { useEmail, useUserId } from '@core/context/user';
-import { useDmActivityByUserId } from '@core/context/channels';
 import { debounce } from '@solid-primitives/scheduled';
 import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
 import * as EmailValidator from 'email-validator';
@@ -42,6 +37,7 @@ import {
   Switch,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
+import { useAugmentUserWithDmActivity } from '@core/user/dmActivity';
 
 function getRecipientOptionEmail(
   option: CombinedRecipientItem
@@ -116,21 +112,6 @@ function getRecipientOptionTextValue(option: CombinedRecipientItem) {
 type RecipientComboboxItemProps = CollectionNode<CombinedRecipientItem>;
 
 function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
-  function channelTypeIcon(channel: Channel) {
-    switch (channel.channel_type) {
-      case 'direct_message':
-        return UserIcon;
-      case 'private':
-        return ThreeUsersIcon;
-      case 'organization':
-        return BuildingIcon;
-      case 'public':
-        return GlobeIcon;
-      default:
-        return HashIcon;
-    }
-  }
-
   const handleMouseEnter = () => {
     const items = document.querySelectorAll('[data-highlighted]');
     items.forEach((item) => {
@@ -189,9 +170,8 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
             return (
               <Combobox.ItemLabel class="flex flex-row w-full gap-1.5 text-ink-muted select-none text-sm">
                 <div class="flex flex-col items-center justify-center p-1">
-                  <CustomEntityIcon
-                    icon={channelTypeIcon(item().data)}
-                    size="xs"
+                  <EntityIcon
+                    targetType={item().data.channel_type || 'channel'}
                   />
                 </div>
                 <p class={'truncate my-auto'}>{item().data.name}</p>
@@ -331,21 +311,24 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     return email ? email.split('@')[1] : undefined;
   });
 
-  const dmActivityByUserId = useDmActivityByUserId();
-
   // Create search function for recipients - only used for initial sorting with no query
-  const recipientSearch = createFreshSearch<CombinedRecipientItem<K>>(
-    FreshSearchPresets.baseUserSearch(currentUserDomain, (item) =>
-      item.kind === 'user' ? item.data.email : undefined
+  const recipientSearch = createFreshSearch<CombinedRecipientItem>(
+    FreshSearchPresets.baseUserSearch<CombinedRecipientItem>(
+      currentUserDomain,
+      getRecipientOptionEmail
     ),
-    getRecipientOptionTextValue as (item: CombinedRecipientItem<K>) => string
+    getRecipientOptionTextValue,
+    (item) => item.kind === 'channel',
+    (item) => ({
+      lastInteraction:
+        item.kind === 'user' ? item.data.lastInteraction : undefined,
+    })
   );
 
+  const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
   const recipients = createMemo(() => {
-    const options: CombinedRecipientItem<K>[] = [];
+    const options: CombinedRecipientItem[] = [];
     const emails = new Set<string>();
-
-    const dmActivity = dmActivityByUserId();
 
     for (const option of props.options()) {
       const item = option as CombinedRecipientItem;
@@ -364,19 +347,11 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         emails.add(email.toLowerCase());
       }
 
-      // Augment user items with DM activity timestamp
       if (item.kind === 'user') {
-        const dmTimestamp = dmActivity.get(item.id);
-        if (dmTimestamp) {
-          options.push({
-            ...option,
-            lastInteraction: dmTimestamp,
-          } as CombinedRecipientItem<K>);
-          continue;
-        }
+        item.data = augmentUserWithDmActivity(item.data);
       }
 
-      options.push(option);
+      options.push(item);
     }
 
     const sorted = recipientSearch(options, '').map((item) => {
@@ -505,7 +480,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                                 {truncateString(displayText ?? '', 20)}
                               </p>
                               <XIcon
-                                class="w-5 h-5 cursor-pointer hover:bg-hover hover-transition-bg p-1 "
+                                class="w-5 h-5 hover:bg-hover hover-transition-bg p-1 "
                                 onClick={() => state.remove(option)}
                               />
                             </div>
@@ -527,7 +502,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                                 )}
                               </p>
                               <XIcon
-                                class="w-5 h-5 cursor-pointer hover:bg-hover hover-transition-bg p-1 "
+                                class="w-5 h-5 hover:bg-hover hover-transition-bg p-1 "
                                 onClick={() => state.remove(option)}
                               />
                             </div>
@@ -548,7 +523,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                                 {truncateString(email, 20)}
                               </p>
                               <XIcon
-                                class="w-5 h-5 cursor-pointer hover:bg-hover hover-transition-bg p-1 "
+                                class="w-5 h-5 hover:bg-hover hover-transition-bg p-1 "
                                 onClick={() => state.remove(option)}
                               />
                             </div>

@@ -1,4 +1,4 @@
-import type { NotificationEventType } from '@service-notification/generated/schemas';
+import type { NotifEvent } from '@service-notification/generated/schemas';
 import { describe, expect, it } from 'vitest';
 import {
   getAllNotificationsFromGroup,
@@ -8,27 +8,26 @@ import {
 } from '../notification-stacking';
 import type { UnifiedNotification } from '../types';
 
-// Helper to create a base notification
-function createNotification(
+// Helper to create a base notification with proper typing
+function createBaseNotification(
   id: string,
-  type: NotificationEventType,
   createdAt: number,
-  metadata: Record<string, unknown> = {}
+  notificationMetadata: NotifEvent
 ): UnifiedNotification {
   return {
     id,
     entity_id: 'channel-1',
     entity_type: 'channel',
     createdAt,
-    updatedAt: null,
-    viewedAt: null,
-    deletedAt: null,
+    updatedAt: 0,
+    viewedAt: 0,
+    deletedAt: 0,
     done: false,
     sent: true,
     senderId: 'user-1',
-    notificationEventType: type,
-    notificationMetadata: metadata,
-  } as UnifiedNotification;
+    notificationEventType: notificationMetadata.tag,
+    notificationMetadata,
+  };
 }
 
 function createNewMessageNotification(
@@ -36,11 +35,14 @@ function createNewMessageNotification(
   messageId: string,
   createdAt: number
 ): UnifiedNotification {
-  return createNotification(id, 'channel_message_send', createdAt, {
-    messageId,
-    messageContent: `Message ${id}`,
-    sender: 'user-1',
-    channelType: 'team',
+  return createBaseNotification(id, createdAt, {
+    tag: 'channel_message_send',
+    content: {
+      messageId,
+      messageContent: `Message ${id}`,
+      sender: 'user-1',
+      channelType: 'organization',
+    },
   });
 }
 
@@ -50,12 +52,15 @@ function createReplyNotification(
   threadId: string,
   createdAt: number
 ): UnifiedNotification {
-  return createNotification(id, 'channel_message_reply', createdAt, {
-    messageId,
-    threadId,
-    messageContent: `Reply ${id}`,
-    userId: 'user-1',
-    channelType: 'team',
+  return createBaseNotification(id, createdAt, {
+    tag: 'channel_message_reply',
+    content: {
+      messageId,
+      threadId,
+      messageContent: `Reply ${id}`,
+      userId: 'user-1',
+      channelType: 'organization',
+    },
   });
 }
 
@@ -65,11 +70,14 @@ function createMentionNotification(
   createdAt: number,
   threadId?: string
 ): UnifiedNotification {
-  return createNotification(id, 'channel_mention', createdAt, {
-    messageId,
-    messageContent: `Mention ${id}`,
-    threadId: threadId ?? null,
-    channelType: 'team',
+  return createBaseNotification(id, createdAt, {
+    tag: 'channel_mention',
+    content: {
+      messageId,
+      messageContent: `Mention ${id}`,
+      threadId: threadId ?? null,
+      channelType: 'organization',
+    },
   });
 }
 

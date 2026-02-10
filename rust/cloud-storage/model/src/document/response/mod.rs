@@ -230,4 +230,7 @@ pub struct CreateDocumentRequest {
     /// md.
     #[serde(default)]
     pub is_task: bool,
+    /// Whether to add a viewed_at record for this document upon creation.
+    #[serde(default)]
+    pub skip_history: bool,
 }

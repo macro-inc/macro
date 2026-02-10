@@ -16,7 +16,6 @@ import {
   type FetchWithTokenErrorCode,
   fetchWithToken,
 } from '@core/util/fetchWithToken';
-import { contentHash } from '@core/util/hash';
 import {
   err,
   isErr,
@@ -28,10 +27,15 @@ import {
 } from '@core/util/maybeResult';
 import { registerClient } from '@core/util/mockClient';
 import type { SafeFetchInit } from '@core/util/safeFetch';
-import { utf8Encode } from '@core/util/string';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import { platformFetch } from 'core/util/platformFetch';
-import type { AccessLevel, View, ViewsResponse } from './generated/schemas';
+import type {
+  AccessLevel,
+  PostSoupRequest,
+  SoupPage,
+  View,
+  ViewsResponse,
+} from './generated/schemas';
 import type { AddPinRequest } from './generated/schemas/addPinRequest';
 import type { AnchorResponse } from './generated/schemas/anchorResponse';
 import {
@@ -50,7 +54,6 @@ import type { DeleteCommentResponse } from './generated/schemas/deleteCommentRes
 import type { DeleteUnthreadedAnchorResponse } from './generated/schemas/deleteUnthreadedAnchorResponse';
 import type { DocumentMetadata } from './generated/schemas/documentMetadata';
 import type { DocumentPreview } from './generated/schemas/documentPreview';
-import { DocumentStorageServiceApiVersion } from './generated/schemas/documentStorageServiceApiVersion';
 import type { EditAnchorResponse } from './generated/schemas/editAnchorResponse';
 import type { EditCommentResponse } from './generated/schemas/editCommentResponse';
 import type { ExportDocumentResponse } from './generated/schemas/exportDocumentResponse';
@@ -88,24 +91,11 @@ import {
   type GetDocxFileResponse,
   getDocxExpandedParts,
 } from './util/getDocxFile';
-import { uploadToPresignedUrl } from './util/uploadToPresignedUrl';
 
 // the server is set to expire at 15 minutes, so expire just before that
 const MINUTES_BEFORE_PRESIGNED_EXPIRES = 14;
 
 const dssHost = SERVER_HOSTS['document-storage-service'];
-
-const apiVersions = Object.values(
-  DocumentStorageServiceApiVersion
-) satisfies string[];
-const latestApiVersion = apiVersions[apiVersions.length - 1];
-
-// NOTE: change this to the version you want to use, defaults to latest
-// TODO: @whutchinson98 will update this back to undefined once we've made it so v2 is the default version
-const overrideApiVersion: string | undefined = 'v2';
-
-const apiVersion = overrideApiVersion ?? latestApiVersion;
-console.log('DSS API version:', apiVersion);
 
 export function dssFetch(
   url: string,
@@ -121,7 +111,7 @@ export function dssFetch<T extends Record<string, any> = never>(
 ):
   | Promise<MaybeResult<FetchWithTokenErrorCode, T>>
   | Promise<MaybeError<FetchWithTokenErrorCode>> {
-  return fetchWithToken<T>(`${dssHost}/${apiVersion}${url}`, init);
+  return fetchWithToken<T>(`${dssHost}${url}`, init);
 }
 
 export type Success = {
@@ -252,6 +242,21 @@ export const storageServiceClient = {
     );
   },
 
+  async getSoupItems(args: {
+    params: { cursor?: string | null };
+    body: PostSoupRequest;
+  }) {
+    // Could use URLSearchParams?
+    const searchParams = args.params.cursor
+      ? `?cursor=${args.params.cursor}`
+      : '';
+
+    return await dssFetch<SoupPage>(`/items/soup${searchParams}`, {
+      method: 'POST',
+      body: JSON.stringify(args.body),
+    });
+  },
+
   permissionsTokens: {
     async createPermissionToken(args) {
       return await dssFetch<GetDocumentPermissionsTokenResponse>(
@@ -345,27 +350,6 @@ export const storageServiceClient = {
     return mapOk(
       await dssFetch<SuccessResponse>(`/documents/${params.documentId}`, {
         method: 'DELETE',
-      }),
-      (result) => result.data
-    );
-  },
-
-  async trackOpenedDocument(params: { documentId: string }) {
-    return mapOk(
-      await dssFetch<SuccessResponse>(
-        `/history/document/${params.documentId}`,
-        {
-          method: 'POST',
-        }
-      ),
-      (result) => result.data
-    );
-  },
-
-  async trackOpenedChat(params: { chatId: string }) {
-    return mapOk(
-      await dssFetch<SuccessResponse>(`/history/chat/${params.chatId}`, {
-        method: 'POST',
       }),
       (result) => result.data
     );
@@ -494,51 +478,6 @@ export const storageServiceClient = {
 
     const [, response] = result;
     return ok({ documentId: response.documentId });
-  },
-
-  async createTextDocument({ text, ...docArgs }) {
-    const buffer = utf8Encode(text);
-    const sha = await contentHash(buffer);
-    // INFO: Typescript trips up on resolving storageServiceClient.createDocument, not sure why
-    const maybeDoc = await dssFetch<CreateDocumentResponse>(`/documents`, {
-      method: 'POST',
-      body: JSON.stringify({ sha, ...docArgs }),
-    });
-    if (isErr(maybeDoc)) {
-      const err = maybeDoc[0];
-
-      if (err[0].message.includes('403')) {
-        showPaywall(PaywallKey.FILE_LIMIT);
-      }
-      return maybeDoc;
-    }
-
-    const [
-      ,
-      {
-        data: { documentMetadata, presignedUrl },
-      },
-    ] = maybeDoc;
-
-    if (!presignedUrl) {
-      console.error('no presigned url found for upload');
-      return err('SERVER_ERROR', 'Failed to upload file');
-    }
-
-    const maybeUpload = await uploadToPresignedUrl({
-      presignedUrl,
-      buffer,
-      sha,
-      type: 'text/plain',
-    });
-
-    if (isErr(maybeUpload)) {
-      return err('SERVER_ERROR', 'Failed to upload file');
-    }
-
-    return ok({
-      metadata: documentMetadata,
-    });
   },
 
   async copyDocument(params: {

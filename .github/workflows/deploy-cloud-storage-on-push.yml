@@ -35,25 +35,40 @@ jobs:
         run: |
           # Make the script executable
           chmod +x .github/scripts/detect-affected-services.sh
-          
+
           # Run the detection script and capture output
           OUTPUT=$(.github/scripts/detect-affected-services.sh)
-          
+
           # Parse the output
           SERVICES=$(echo "$OUTPUT" | grep "^services=" | cut -d'=' -f2-)
           HAS_CHANGES=$(echo "$OUTPUT" | grep "^has_changes=" | cut -d'=' -f2-)
-          
+
           # Set outputs
           echo "services=$SERVICES" >> $GITHUB_OUTPUT
           echo "has_changes=$HAS_CHANGES" >> $GITHUB_OUTPUT
-          
+
           # Log for debugging
           echo "Detected services: $SERVICES"
           echo "Has changes: $HAS_CHANGES"
 
+  migrate-db:
+    name: Run Database Migrations
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.has_changes == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run migrations for dev
+        uses: ./.github/actions/migrate-cloud-storage-db
+        with:
+          environment: dev
+          aws-access-key: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
   deploy-services:
     name: Deploy ${{ matrix.service }}
-    needs: detect-changes
+    needs: [detect-changes, migrate-db]
     if: ${{ needs.detect-changes.outputs.has_changes == 'true' }}
     runs-on:
       [
@@ -92,13 +107,16 @@ jobs:
   deployment-summary:
     name: Deployment Summary
     runs-on: ubuntu-latest
-    needs: [ detect-changes, deploy-services ]
+    needs: [detect-changes, migrate-db, deploy-services]
     if: always()
     steps:
       - name: Check deployment results
         run: |
           if [[ "${{ needs.detect-changes.outputs.has_changes }}" == "false" ]]; then
             echo "ℹ️ No cloud-storage services were affected by the changes"
+          elif [[ "${{ needs.migrate-db.result }}" == "failure" ]]; then
+            echo "❌ Database migrations failed"
+            exit 1
           elif [[ "${{ needs.deploy-services.result }}" == "failure" ]]; then
             echo "❌ One or more service deployments failed"
             exit 1

@@ -191,7 +191,7 @@ pub async fn unexpanded_generic_cursor_soup(
         FROM Combined
         WHERE ($4::timestamptz IS NULL)
             OR ("sort_ts!", "id!") < ($4, $5)
-        ORDER BY "sort_ts!" DESC, "updated_at!" DESC
+        ORDER BY "sort_ts!" DESC, "id!" DESC
         LIMIT $3
         "#,
         user_id.as_ref(),    // $1

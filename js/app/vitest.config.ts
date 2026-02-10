@@ -52,6 +52,13 @@ export default defineConfig({
         },
       },
       {
+        extends: './packages/lexical-core/vitest.config.ts',
+        test: {
+          include: ['packages/block-theme/**/*.{test,spec}.{ts,tsx}'],
+          name: 'block-theme',
+        },
+      },
+      {
         extends: './packages/core/vitest.config.ts',
         test: {
           include: ['packages/block-channel/**/*.{test,spec}.{ts,tsx}'],

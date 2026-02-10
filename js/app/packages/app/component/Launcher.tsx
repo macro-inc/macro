@@ -58,7 +58,7 @@ const createBlock = async (spec: {
   loading?: boolean;
   shouldInsert?: boolean;
 }) => {
-  const { replaceSplit, insertSplit } = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
   const { blockName, createFn, loading } = spec;
 
   setCreateMenuOpen(false, false);
@@ -69,16 +69,20 @@ const createBlock = async (spec: {
 
     const block = { type: blockName, id };
 
-    spec.shouldInsert
-      ? insertSplit(block, 'launcher')
-      : replaceSplit({ content: block, referredFrom: 'launcher' });
+    openWithSplit(block, {
+      referredFrom: 'launcher',
+      preferNewSplit: spec.shouldInsert,
+    });
+
+    return;
   } else {
-    const split = spec.shouldInsert
-      ? insertSplit({ type: 'component', id: 'loading' }, 'launcher')
-      : replaceSplit({
-          content: { type: 'component', id: 'loading' },
-          referredFrom: 'launcher',
-        });
+    const split = openWithSplit(
+      { type: 'component', id: 'loading' },
+      {
+        referredFrom: 'launcher',
+        preferNewSplit: spec.shouldInsert,
+      }
+    );
 
     const id = await createFn();
     if (!id) {
@@ -101,19 +105,19 @@ const createComponent = async (spec: {
   asPopover?: boolean;
 }) => {
   setCreateMenuOpen(false, false);
-  const { replaceSplit, insertSplit, popoverSplit } = useSplitLayout();
+  const { openWithSplit, popoverSplit } = useSplitLayout();
   if (spec.asPopover) {
     popoverSplit({ type: 'component', id: spec.componentId });
     return;
   }
-  if (spec.shouldInsert) {
-    insertSplit({ type: 'component', id: spec.componentId }, 'launcher');
-  } else {
-    replaceSplit({
-      content: { type: 'component', id: spec.componentId },
+
+  openWithSplit(
+    { type: 'component', id: spec.componentId },
+    {
       referredFrom: 'launcher',
-    });
-  }
+      preferNewSplit: spec.shouldInsert,
+    }
+  );
 };
 
 type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {
@@ -143,7 +147,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
             content: '',
             projectId: undefined,
           }),
-        shouldInsert: !pressedKeys().has('opt'),
+        shouldInsert: pressedKeys().has('shift'),
       });
       return true;
     },
@@ -181,7 +185,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     keyDownHandler: () => {
       createComponent({
         componentId: 'email-compose',
-        shouldInsert: !pressedKeys().has('opt'),
+        shouldInsert: pressedKeys().has('shift'),
       });
       return true;
     },
@@ -198,7 +202,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     keyDownHandler: () => {
       createComponent({
         componentId: 'channel-compose',
-        shouldInsert: !pressedKeys().has('opt'),
+        shouldInsert: pressedKeys().has('shift'),
       });
       return true;
     },
@@ -222,7 +226,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
           }
           return result.chatId;
         },
-        shouldInsert: !pressedKeys().has('opt'),
+        shouldInsert: pressedKeys().has('shift'),
       });
       return true;
     },
@@ -249,7 +253,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
           const [_, id] = ok(result.documentId);
           return id;
         },
-        shouldInsert: !pressedKeys().has('opt'),
+        shouldInsert: pressedKeys().has('shift'),
       });
       return true;
     },
@@ -267,7 +271,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
       createBlock({
         blockName: 'project',
         createFn: () => createProject({ name: 'New Folder' }),
-        shouldInsert: !pressedKeys().has('opt'),
+        shouldInsert: pressedKeys().has('shift'),
       });
       return true;
     },
@@ -295,7 +299,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
           const [, id] = ok(result[1]?.documentId);
           return id;
         },
-        shouldInsert: !pressedKeys().has('opt'),
+        shouldInsert: pressedKeys().has('shift'),
       });
       return true;
     },
@@ -324,7 +328,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
 
   const textFg = () =>
     USE_ENTITY_COLORS
-      ? getIconConfig(props.creatableBlock.blockName ?? 'pdf').foreground
+      ? getIconConfig(props.creatableBlock.blockName).foreground
       : 'text-accent';
 
   const StaticIcon = props.creatableBlock.icon;
@@ -371,8 +375,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
       <div
         class="absolute size-full inset-0 transition-transform origin-top opacity-20 ease duration-200 mix-blend-color"
         classList={{
-          [getIconConfig(props.creatableBlock.blockName ?? 'pdf').background]:
-            true,
+          [getIconConfig(props.creatableBlock.blockName).background]: true,
           'scale-y-0': !props.focused,
           'scale-y-100': props.focused,
         }}
@@ -479,7 +482,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
     if (item.altHotkeyToken) {
       registerHotkey({
         hotkeyToken: item.altHotkeyToken,
-        hotkey: `opt+${item.hotkey}` as ValidHotkey,
+        hotkey: `shift+${item.hotkey}` as ValidHotkey,
         scopeId: launcherScope,
         description: `${item.description} in current split`,
         keyDownHandler: () => {
@@ -539,7 +542,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
   });
 
   registerHotkey({
-    hotkey: 'opt+enter' as ValidHotkey,
+    hotkey: 'enter' as ValidHotkey,
     scopeId: launcherScope,
     description: 'Open in current split',
     keyDownHandler: () => {
@@ -598,7 +601,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
         </For>
       </div>
       <div class="col-span-full text-sm text-ink-muted text-center pt-4">
-        Hold option to open in current split
+        Hold shift to open in current split
       </div>
     </div>
   );

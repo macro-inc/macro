@@ -29,6 +29,9 @@ pub enum DocumentLiteral {
     /// this node value filters by document owner
     #[serde(rename = "o")]
     Owner(MacroUserIdStr<'static>),
+    /// this node value filters by document importance. false short-circuits to match nothing.
+    #[serde(rename = "imp")]
+    Importance(bool),
 }
 
 fn prefix(s: &str) -> IResult<&str, &str> {
@@ -120,6 +123,7 @@ impl ExpandFrame<DocumentLiteral> for DocumentFilters {
             document_ids,
             project_ids,
             owners,
+            importance,
         } = filter_request;
 
         let file_types_node = file_types
@@ -142,8 +146,16 @@ impl ExpandFrame<DocumentLiteral> for DocumentFilters {
             .map(|s| MacroUserIdStr::parse_from_str(s).map(CowLike::into_owned))
             .try_expand(|r| r.map(DocumentLiteral::Owner), Expr::or)?;
 
-        Ok([file_types_node, document_id_nodes, project_ids, owners]
-            .into_iter()
-            .fold_with(Expr::and))
+        let importance_node = importance.map(|imp| Expr::Literal(DocumentLiteral::Importance(imp)));
+
+        Ok([
+            file_types_node,
+            document_id_nodes,
+            project_ids,
+            owners,
+            importance_node,
+        ]
+        .into_iter()
+        .fold_with(Expr::and))
     }
 }

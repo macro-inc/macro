@@ -1,13 +1,12 @@
 FROM rust:latest AS chef
 ENV SQLX_OFFLINE=true
-RUN cargo install cargo-strip
 WORKDIR /app
 
 FROM chef AS builder
 COPY . .
 
 # Build ALL standard service binaries at once
-RUN cargo build --release \
+RUN cargo build \
     --bin authentication_service \
     --bin connection_gateway_service \
     --bin contacts_service \
@@ -16,8 +15,7 @@ RUN cargo build --release \
     --bin email_service \
     --bin notification_service \
     --bin static_file_service \
-    --bin unfurl_service \
-    && cargo strip
+    --bin unfurl_service
 
 # Base runtime image
 FROM debian:trixie-slim AS base
@@ -30,46 +28,46 @@ EXPOSE 8080
 
 # Individual service targets
 FROM base AS authentication_service
-COPY --from=builder /app/target/release/authentication_service /app/svc
+COPY --from=builder /app/target/debug/authentication_service /app/svc
 RUN chmod +x /app/svc
 ENTRYPOINT ["dumb-init", "./svc"]
 
 FROM base AS connection_gateway_service
-COPY --from=builder /app/target/release/connection_gateway_service /app/svc
+COPY --from=builder /app/target/debug/connection_gateway_service /app/svc
 RUN chmod +x /app/svc
 ENTRYPOINT ["dumb-init", "./svc"]
 
 FROM base AS contacts_service
-COPY --from=builder /app/target/release/contacts_service /app/svc
+COPY --from=builder /app/target/debug/contacts_service /app/svc
 RUN chmod +x /app/svc
 ENTRYPOINT ["dumb-init", "./svc"]
 
 FROM base AS document_cognition_service
-COPY --from=builder /app/target/release/document_cognition_service /app/svc
+COPY --from=builder /app/target/debug/document_cognition_service /app/svc
 RUN chmod +x /app/svc
 ENTRYPOINT ["dumb-init", "./svc"]
 
 FROM base AS document_storage_service
-COPY --from=builder /app/target/release/document_storage_service /app/svc
+COPY --from=builder /app/target/debug/document_storage_service /app/svc
 RUN chmod +x /app/svc
 ENTRYPOINT ["dumb-init", "./svc"]
 
 FROM base AS email_service
-COPY --from=builder /app/target/release/email_service /app/svc
+COPY --from=builder /app/target/debug/email_service /app/svc
 RUN chmod +x /app/svc
 ENTRYPOINT ["dumb-init", "./svc"]
 
 FROM base AS notification_service
-COPY --from=builder /app/target/release/notification_service /app/svc
+COPY --from=builder /app/target/debug/notification_service /app/svc
 RUN chmod +x /app/svc
 ENTRYPOINT ["dumb-init", "./svc"]
 
 FROM base AS static_file_service
-COPY --from=builder /app/target/release/static_file_service /app/svc
+COPY --from=builder /app/target/debug/static_file_service /app/svc
 RUN chmod +x /app/svc
 ENTRYPOINT ["dumb-init", "./svc"]
 
 FROM base AS unfurl_service
-COPY --from=builder /app/target/release/unfurl_service /app/svc
+COPY --from=builder /app/target/debug/unfurl_service /app/svc
 RUN chmod +x /app/svc
 ENTRYPOINT ["dumb-init", "./svc"]

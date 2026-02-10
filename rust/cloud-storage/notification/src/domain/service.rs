@@ -12,14 +12,12 @@ mod test;
 use thiserror::Error;
 
 pub use egress::NotificationEgressService;
+pub use ingress::NotificationIngress;
 pub use ingress::NotificationIngressService;
 
 /// Error returned when sending a notification fails.
 #[derive(Debug, Error)]
 pub enum SendNotificationError {
-    /// Rate limit was exceeded.
-    #[error("Rate limit exceeded")]
-    RateLimitExceeded,
     /// Invalid rate limit config, either a key was provided but a key was not, or vice versa.
     #[error("Rate limit config error")]
     RateLimitConfigErr,

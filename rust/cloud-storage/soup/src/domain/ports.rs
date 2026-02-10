@@ -2,7 +2,7 @@ use crate::domain::models::{
     AdvancedSortParams, FrecencySoupItem, SimpleSortRequest, SoupErr, SoupRequest,
 };
 use either::Either;
-use item_filters::ast::EntityFilterAst;
+use item_filters::EntityFilters;
 use models_pagination::{Frecency, PaginatedCursor, SimpleSortMethod};
 use models_soup::item::SoupItem;
 
@@ -43,13 +43,13 @@ pub trait SoupRepo: Send + Sync + 'static {
 /// 1. The sort method is [Either] [SimpleSortMethod] or [Frecency]
 /// 1. The filter type is an [Option] [EntityFilterAst]
 pub type SoupOutput = Either<
-    PaginatedCursor<FrecencySoupItem, String, SimpleSortMethod, Option<EntityFilterAst>>,
-    PaginatedCursor<FrecencySoupItem, String, Frecency, Option<EntityFilterAst>>,
+    PaginatedCursor<FrecencySoupItem, String, SimpleSortMethod, EntityFilters>,
+    PaginatedCursor<FrecencySoupItem, String, Frecency, EntityFilters>,
 >;
 
 pub trait SoupService: Send + Sync + 'static {
     fn get_user_soup(
         &self,
-        req: SoupRequest,
+        req: SoupRequest<EntityFilters>,
     ) -> impl Future<Output = Result<SoupOutput, SoupErr>> + Send;
 }

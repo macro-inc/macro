@@ -29,7 +29,7 @@ import type { SoupProperty } from '../../service-clients/service-storage/generat
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { propertiesKeys } from './keys';
-import { queryKeys } from '../../macro-entity/src/queries/key';
+import { soupKeys } from '../soup/keys';
 import type { BulkEntityPropertiesData } from './bulk';
 
 export function useEntityPropertiesQuery(
@@ -96,8 +96,105 @@ export type SaveEntityPropertyParams = {
   apiValues: PropertyApiValues;
 };
 
+type SaveEntityPropertyContext = {
+  previousDss: [QueryKey, InfiniteData<SoupPage, unknown> | undefined][];
+};
+
+/**
+ * Converts PropertyApiValues to the SoupProperty value format for optimistic updates.
+ */
+function apiValuesToSoupPropertyValue(
+  apiValues: PropertyApiValues
+): { type: string; value: unknown } | null {
+  switch (apiValues.valueType) {
+    case 'STRING':
+      return apiValues.value != null
+        ? { type: 'String', value: apiValues.value }
+        : null;
+    case 'NUMBER':
+      return apiValues.value != null
+        ? { type: 'Number', value: apiValues.value }
+        : null;
+    case 'BOOLEAN':
+      return apiValues.value != null
+        ? { type: 'Boolean', value: apiValues.value }
+        : null;
+    case 'DATE':
+      return apiValues.value != null
+        ? { type: 'Date', value: apiValues.value }
+        : null;
+    case 'SELECT_STRING':
+    case 'SELECT_NUMBER':
+      return apiValues.values != null && apiValues.values.length > 0
+        ? { type: 'SelectOption', value: apiValues.values }
+        : null;
+    case 'ENTITY':
+      return apiValues.refs != null && apiValues.refs.length > 0
+        ? { type: 'EntityReference', value: apiValues.refs }
+        : null;
+    case 'LINK':
+      return apiValues.values != null && apiValues.values.length > 0
+        ? { type: 'Link', value: apiValues.values }
+        : null;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Updates a specific property in DSS data for optimistic updates.
+ */
+function updateDssProperty(
+  data: InfiniteData<SoupPage, unknown> | undefined,
+  entityId: string,
+  propertyDefinitionId: string,
+  newValue: { type: string; value: unknown } | null
+): InfiniteData<SoupPage, unknown> | undefined {
+  if (!data) return data;
+
+  return {
+    ...data,
+    pages: data.pages.map((page) => ({
+      ...page,
+      items: page.items.map((item) => {
+        if ('data' in item && item.data && 'id' in item.data) {
+          const itemData = item.data as {
+            id: string;
+            properties?: SoupProperty[];
+          };
+          if (itemData.id === entityId && itemData.properties) {
+            const updatedProperties = itemData.properties.map((prop) => {
+              if (prop.definition.id === propertyDefinitionId) {
+                return {
+                  ...prop,
+                  value: newValue,
+                };
+              }
+              return prop;
+            });
+            return {
+              ...item,
+              data: {
+                ...item.data,
+                properties: updatedProperties,
+              },
+            } as typeof item;
+          }
+        }
+        return item;
+      }),
+    })),
+    pageParams: data.pageParams,
+  };
+}
+
 export function useSaveEntityPropertyMutation(
-  callbacks?: MutationCallbacks<void, Error, SaveEntityPropertyParams>
+  callbacks?: MutationCallbacks<
+    void,
+    Error,
+    SaveEntityPropertyParams,
+    SaveEntityPropertyContext
+  >
 ) {
   return useMutation(() => ({
     mutationFn: async (vars: SaveEntityPropertyParams) => {
@@ -118,30 +215,65 @@ export function useSaveEntityPropertyMutation(
           })
       );
     },
-    ...withCallbacks<void, Error, SaveEntityPropertyParams>(
-      {
-        onError(error) {
-          console.error('Failed to save property', error);
-          toast.failure('Failed to save property');
-        },
-        onSettled: (_data, _error, variables) => {
-          invalidatePropertiesForEntity(
-            variables.entityType,
-            variables.entityId
-          );
+    onMutate: async (
+      vars: SaveEntityPropertyParams
+    ): Promise<SaveEntityPropertyContext> => {
+      // Cancel any in-flight DSS queries that might overwrite our optimistic update
+      await queryClient.cancelQueries({ queryKey: soupKeys.items._def });
 
-          // If the status property was changed, also invalidate DSS
-          // so that tasks can reappear in Signal when marked un-done
-          if (
-            variables.property.propertyDefinitionId ===
-            SYSTEM_PROPERTY_IDS.STATUS
-          ) {
-            queryClient.invalidateQueries({ queryKey: queryKeys.all.dss });
-          }
-        },
-      },
-      callbacks
-    ),
+      // Snapshot previous DSS data for rollback
+      const previousDss = queryClient.getQueriesData<
+        InfiniteData<SoupPage, unknown>
+      >({
+        queryKey: soupKeys.items._def,
+      });
+
+      // Convert API values to soup property value format
+      const soupValue = apiValuesToSoupPropertyValue(vars.apiValues);
+
+      // Optimistically update DSS queries
+      queryClient.setQueriesData<InfiniteData<SoupPage, unknown>>(
+        { queryKey: soupKeys.items._def },
+        (old) =>
+          updateDssProperty(
+            old,
+            vars.entityId,
+            vars.property.propertyDefinitionId,
+            soupValue
+          )
+      );
+
+      return { previousDss };
+    },
+    onError: (
+      error: Error,
+      _vars: SaveEntityPropertyParams,
+      context: SaveEntityPropertyContext | undefined
+    ) => {
+      console.error('Failed to save property', error);
+      toast.failure('Failed to save property');
+
+      // Rollback optimistic updates
+      if (context) {
+        for (const [key, data] of context.previousDss) {
+          queryClient.setQueryData(key, data);
+        }
+      }
+    },
+    onSettled: (_data, _error, variables) => {
+      invalidatePropertiesForEntity(variables.entityType, variables.entityId);
+
+      // Invalidate DSS to ensure consistency with server state
+      queryClient.invalidateQueries({ queryKey: soupKeys.items._def });
+    },
+    ...(callbacks
+      ? withCallbacks<
+          void,
+          Error,
+          SaveEntityPropertyParams,
+          SaveEntityPropertyContext
+        >({}, callbacks)
+      : {}),
   }));
 }
 
@@ -343,7 +475,7 @@ export function useSetPropertyStatusCompleteMutation(
           predicate: ({ queryKey }) =>
             bulkIncludesEntityPredicate(queryKey, vars.entityId),
         }),
-        queryClient.cancelQueries({ queryKey: queryKeys.all.dss }),
+        queryClient.cancelQueries({ queryKey: soupKeys.items._def }),
       ]);
 
       // Snapshot previous data for rollback
@@ -363,7 +495,7 @@ export function useSetPropertyStatusCompleteMutation(
       const previousDss = queryClient.getQueriesData<
         InfiniteData<SoupPage, unknown>
       >({
-        queryKey: queryKeys.all.dss,
+        queryKey: soupKeys.items._def,
       });
 
       // Optimistically update entity properties query
@@ -394,9 +526,9 @@ export function useSetPropertyStatusCompleteMutation(
         }
       );
 
-      // Optimistically update DSS queries (embedded properties on entities)
+      // Optimistically update soup queries (embedded properties on entities)
       queryClient.setQueriesData<InfiniteData<SoupPage, unknown>>(
-        { queryKey: queryKeys.all.dss },
+        { queryKey: soupKeys.items._def },
         (old) => updateDssStatusToCompleted(old, vars.entityId)
       );
 
@@ -428,8 +560,8 @@ export function useSetPropertyStatusCompleteMutation(
     },
     onSettled: (_data, _error, variables) => {
       invalidatePropertiesForEntity(variables.entityType, variables.entityId);
-      // Also invalidate DSS to ensure consistency
-      queryClient.invalidateQueries({ queryKey: queryKeys.all.dss });
+      // Also invalidate soup items to ensure consistency
+      queryClient.invalidateQueries({ queryKey: soupKeys.items._def });
     },
     ...(callbacks
       ? withCallbacks<
@@ -505,6 +637,9 @@ export function useBulkSaveEntityPropertiesMutation(
               invalidatePropertiesForEntity(entityType, entityId);
             });
           });
+
+          // Invalidate soup/DSS queries to ensure UI updates reactively
+          queryClient.invalidateQueries({ queryKey: soupKeys.items._def });
         },
       },
       callbacks

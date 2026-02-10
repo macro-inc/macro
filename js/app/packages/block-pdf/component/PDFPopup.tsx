@@ -9,8 +9,7 @@ import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { AskAi } from '@core/component/GeneralizedPopup/AskAI';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
 import { blockElementSignal } from '@core/signal/blockElement';
-import { blockMetadataSignal } from '@core/signal/load';
-import { createFromMarkdownText } from '@core/util/md';
+import { createMarkdownFile } from '@core/util/create';
 import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
 import NotesIcon from '@phosphor-icons/core/bold/file-md-bold.svg?component-solid';
@@ -36,6 +35,7 @@ import {
   PDFPopupCompletionSignal,
   PDFPopupSelectedTextSignal,
 } from './PageOverlay';
+import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 
 const { track, TrackingEvents } = withAnalytics();
 
@@ -197,6 +197,7 @@ export function PDFPopup(props: PDFPopupProps) {
     return undefined;
   }
 
+  const name = useBlockDocumentName();
   const handleEditInMarkdown = createCallback(async () => {
     setIsLoading(true);
     const content = completion()?.content;
@@ -205,20 +206,13 @@ export function PDFPopup(props: PDFPopupProps) {
     }
 
     const title: string | undefined = await generateTitleForMarkdown(content);
-    const maybeDoc = await createFromMarkdownText({
-      markdown: content,
-      title: title ?? `${blockMetadataSignal()?.documentName} - AI Explanation`,
-      preserveNewLines: false,
+    const documentId = await createMarkdownFile({
+      content,
+      title: title ?? `${name()} - AI Explanation`,
     });
 
-    if ('error' in maybeDoc) {
-      console.error('Error opening AI message in Notes', maybeDoc.error);
-      setIsLoading(false);
-      return;
-    }
-
-    const documentId = maybeDoc.documentId;
     if (!documentId) {
+      console.error('Error opening AI message in Notes');
       setIsLoading(false);
       return;
     }
