@@ -48,7 +48,7 @@ type QueryClientLike = {
  * Returns 'valid' if the entry can be restored, or a reason string
  * explaining why it should be discarded.
  */
-export function validatePersistedEntry(
+function validatePersistedEntry(
   entry: PersistedQueryEntry,
   buster: string,
   maxAgeMs: number

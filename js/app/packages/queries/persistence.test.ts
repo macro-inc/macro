@@ -35,7 +35,7 @@ function createScope(
 ): PersistScope {
   return {
     store,
-    maxAgeMs: 1000 * 60 * 60 * 24 * 7,
+    maxAge: { value: 7, unit: 'd' },
     buster: 'test',
     shouldPersist: (key) => partialMatchKey(key, prefix),
     ...overrides,
@@ -192,7 +192,9 @@ describe('setupQueryPersistence', () => {
       buster: 'test',
     });
 
-    const scope = createScope(['channel'], store, { maxAgeMs });
+    const scope = createScope(['channel'], store, {
+      maxAge: { value: maxAgeMs, unit: 'ms' },
+    });
     setupQueryPersistence({ queryClient, scopes: [scope] });
 
     void queryClient.prefetchQuery({
