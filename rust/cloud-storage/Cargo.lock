@@ -3255,6 +3255,10 @@ dependencies = [
 [[package]]
 name = "email_utils"
 version = "0.1.0"
+dependencies = [
+ "lazy_static",
+ "regex",
+]
 
 [[package]]
 name = "email_validator"
