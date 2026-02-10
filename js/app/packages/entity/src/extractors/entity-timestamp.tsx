@@ -3,12 +3,12 @@ import { formatTimestamp } from '../utils/timestamp';
 
 export function EntityTimestamp(props: {
   entity: EntityData;
-  overrideTimeStamp?: number;
+  overrideTimeStamp?: Date;
 }) {
   const timestamp = () => {
-    if (props.overrideTimeStamp !== undefined) return props.overrideTimeStamp;
-    if (props.entity.updatedAt) return props.entity.updatedAt.getTime();
-    return Date.now();
+    if (props.overrideTimeStamp) return props.overrideTimeStamp;
+    if (props.entity.updatedAt) return props.entity.updatedAt;
+    return new Date();
   };
   return <>{formatTimestamp(timestamp())}</>;
 }

@@ -25,7 +25,7 @@ export function SearchTimestamp(props: SearchTimestampProps) {
 
   const formattedTimestamp = () => {
     const ts = timestamp();
-    return ts ? formatRelativeTimestamp(ts.getTime()) : '';
+    return ts ? formatRelativeTimestamp(ts) : '';
   };
 
   return <>{formattedTimestamp()}</>;
