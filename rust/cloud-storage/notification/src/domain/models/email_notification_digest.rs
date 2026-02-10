@@ -1,4 +1,11 @@
-use std::{collections::HashSet, time::Duration};
+//! Email notification digest decision logic.
+//!
+//! This module implements a state machine for determining whether to send
+//! email notifications, following the decision flow:
+//! 1. Check if notification type is blocked (e.g., new_email notifications)
+//! 2. Check if user has a Macro account
+//! 3. If no account: decide between single send (for invites) or batch send
+//! 4. If account exists: check push notification settings
 
 use crate::domain::models::{
     Notification, TaggedContent, UserNotificationRow,
@@ -10,6 +17,7 @@ use either::Either;
 use macro_user_id::cowlike::CowLike;
 use rootcause::Report;
 use serde::{Deserialize, Serialize};
+use std::{collections::HashSet, time::Duration};
 
 /// Port traits for external dependencies (user existence, push notification checks).
 pub mod ports;
@@ -56,10 +64,51 @@ impl NotificationSet {
     }
 }
 
+#[cfg_attr(feature = "docs", aquamarine::aquamarine)]
 /// A set of notification types that should never trigger email notifications.
 ///
 /// For example, `new_email` notifications are blocked since users already
 /// received the email in their inbox.
+///
+/// # Decision Flow
+///
+/// ```mermaid
+/// flowchart TD
+///     Start["Send email for notification?"]
+///     IsNewEmail{"Is new_email notification?"}
+///     HasAccount{"Has Macro account?"}
+///     HasPush{"Push notifications on?"}
+///     IsOnline{"Online recently?"}
+///     GotPush{"Got push notification?"}
+///     IsInvite{"Explicit invite?"}
+///
+///     DontSend(["DON'T SEND"]):::red
+///     Send(["SEND"]):::green
+///     BatchSend(["BATCH SEND"]):::blue
+///
+///     Start --> IsNewEmail
+///     IsNewEmail -->|NO| HasAccount
+///     IsNewEmail -->|YES| DontSend
+///
+///     HasAccount -->|YES| HasPush
+///     HasAccount -->|NO| IsInvite
+///
+///     HasPush -->|NO| IsOnline
+///     HasPush -->|YES| GotPush
+///
+///     IsOnline -->|YES| DontSend
+///     IsOnline -->|NO| BatchSend
+///
+///     GotPush -->|YES| DontSend
+///     GotPush -->|NO| BatchSend
+///
+///     IsInvite -->|YES| Send
+///     IsInvite -->|NO| BatchSend
+///
+///     classDef red fill:#8B0000,stroke:#FF6B6B,color:#fff
+///     classDef green fill:#006400,stroke:#90EE90,color:#fff
+///     classDef blue fill:#00008B,stroke:#6495ED,color:#fff
+/// ```
 pub struct EmailBlockList(NotificationSet);
 
 impl NotificationSetBuilder for EmailBlockList {

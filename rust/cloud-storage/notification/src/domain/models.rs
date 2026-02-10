@@ -5,14 +5,7 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 pub(crate) mod android;
 pub mod apple;
-/// Email notification digest decision logic.
-///
-/// This module implements a state machine for determining whether to send
-/// email notifications, following the decision flow:
-/// 1. Check if notification type is blocked (e.g., new_email notifications)
-/// 2. Check if user has a Macro account
-/// 3. If no account: decide between single send (for invites) or batch send
-/// 4. If account exists: check push notification settings
+
 pub mod email_notification_digest;
 pub mod mobile;
 pub(crate) mod queue_message;
