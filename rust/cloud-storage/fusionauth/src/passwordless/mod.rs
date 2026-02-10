@@ -227,7 +227,7 @@ async fn complete(
 
 impl FusionAuthClient {
     /// Starts a passwordless login flow for the given email.
-    #[tracing::instrument(skip(self), fields(application_id=%self.application_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
+    #[tracing::instrument(skip(self), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn start_passwordless_login(
         &self,
         email: &str,
@@ -238,7 +238,7 @@ impl FusionAuthClient {
             &self.fusion_auth_base_url,
             PasswordlessLoginStartRequest {
                 login_id: Cow::Borrowed(email),
-                application_id: Cow::Borrowed(&self.application_id),
+                application_id: Cow::Borrowed(&self.client_id),
                 state: PasswordlessLoginStateRequest {
                     client_id: Cow::Borrowed(&self.client_id),
                     response_type: Cow::Borrowed("code"),
@@ -251,7 +251,7 @@ impl FusionAuthClient {
     }
 
     /// Sends the passwordless login code to the user.
-    #[tracing::instrument(skip(self), fields(application_id=%self.application_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
+    #[tracing::instrument(skip(self), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn send_passwordless_login(&self, code: &str) -> Result<()> {
         send(
             &self.auth_client,
@@ -273,7 +273,7 @@ impl FusionAuthClient {
             &self.auth_client,
             &self.fusion_auth_base_url,
             PasswordlessLoginCompleteRequest {
-                application_id: Cow::Borrowed(&self.application_id),
+                application_id: Cow::Borrowed(&self.client_id),
                 code: Cow::Borrowed(code),
             },
         )

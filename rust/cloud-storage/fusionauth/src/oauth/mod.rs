@@ -97,7 +97,7 @@ async fn complete(
 
 impl FusionAuthClient {
     /// Completes the OAuth2 authorization code grant flow.
-    #[tracing::instrument(skip(self), fields(application_id=%self.application_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
+    #[tracing::instrument(skip(self), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn complete_authorization_code_grant(&self, code: &str) -> Result<(String, String)> {
         complete(
             &self.unauth_client,

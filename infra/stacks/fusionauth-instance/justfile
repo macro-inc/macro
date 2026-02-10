@@ -76,7 +76,6 @@ insert_local_fusionauth_variables:
   echo "#AUTO-ADDED DO NOT MODIFY" >> "$ENV_FILE"
   echo "FUSIONAUTH_TENANT_ID=\"${TENANT_ID}\"" >> "$ENV_FILE"
   echo "AUDIENCE=\"${APPLICATION_ID}\"" >> "$ENV_FILE"
-  echo "FUSIONAUTH_APPLICATION_ID=\"${APPLICATION_ID}\"" >> "$ENV_FILE"
   echo "FUSIONAUTH_CLIENT_ID=\"${APPLICATION_ID}\"" >> "$ENV_FILE"
   echo "FUSIONAUTH_CLIENT_SECRET_KEY=\"${CLIENT_SECRET}\"" >> "$ENV_FILE"
 

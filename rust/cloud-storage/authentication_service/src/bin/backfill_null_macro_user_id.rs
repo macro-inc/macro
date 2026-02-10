@@ -35,8 +35,6 @@ pub async fn main() -> anyhow::Result<()> {
         std::env::var("FUSIONAUTH_CLIENT_ID").context("FUSIONAUTH_CLIENT_ID env var not set")?,
         std::env::var("FUSIONAUTH_CLIENT_SECRET")
             .context("FUSIONAUTH_CLIENT_SECRET env var not set")?,
-        std::env::var("FUSIONAUTH_APPLICATION_ID")
-            .context("FUSIONAUTH_APPLICATION_ID env var not set")?,
         std::env::var("FUSIONAUTH_BASE_URL").context("FUSIONAUTH_BASE_URL env var not set")?,
         "FUSIONAUTH_OAUTH_REDIRECT_URI".to_string(), // not used in script so can be ignored
         "GOOGLE_CLIENT_ID".to_string(),              // not used in script so can be ignored

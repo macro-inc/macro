@@ -96,8 +96,6 @@ pub struct FusionAuthClient {
     client_id: String,
     /// The fusionauth client secret
     client_secret: String,
-    /// The fusionauth application id
-    application_id: String,
     /// The base url for the fusion auth api
     fusion_auth_base_url: String,
     /// The oauth redirect uri
@@ -120,7 +118,6 @@ impl FusionAuthClient {
         api_key: String,
         client_id: String,
         client_secret: String,
-        application_id: String,
         fusion_auth_base_url: String,
         oauth_redirect_uri: String,
         google_client_id: String,
@@ -132,7 +129,6 @@ impl FusionAuthClient {
         Self {
             client_id,
             client_secret,
-            application_id,
             fusion_auth_base_url,
             oauth_redirect_uri,
             auth_client,
@@ -145,7 +141,7 @@ impl FusionAuthClient {
     /// Constructs the oauth2 authorize url for the given idp
     /// If login_hint is provided, it will be used as the login_hint parameter. This is used to
     /// ensure users are correctly redirected for domain specific SSO
-    #[tracing::instrument(skip(self, state), fields(application_id=%self.application_id, fusion_auth_base_url=%self.fusion_auth_base_url), level = tracing::Level::TRACE)]
+    #[tracing::instrument(skip(self, state), level = tracing::Level::TRACE)]
     pub fn construct_oauth2_authorize_url<T>(
         &self,
         idp_id: &str,

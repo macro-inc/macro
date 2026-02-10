@@ -129,7 +129,6 @@ async fn main() -> anyhow::Result<()> {
         fusionauth_api_key,
         config.fusionauth_client_id.clone(),
         fusionauth_client_secret,
-        config.fusionauth_application_id.clone(),
         config.fusionauth_base_url.clone(),
         config.fusionauth_oauth_redirect_uri.clone(),
         config.google_client_id.clone(),
