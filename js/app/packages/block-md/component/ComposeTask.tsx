@@ -343,7 +343,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     );
   };
 
-  const properties = () => {
+  const properties = (): Property[] => {
     return filterMap(COMPOSER_PROPERTIES, (id) => {
       const definition = definitions().get(id);
       if (!definition) return;
@@ -354,8 +354,8 @@ export function ComposeTask(props: ComposeTaskProps) {
         isMultiSelect: definition.is_multi_select,
         owner: definition.owner,
         specificEntityType: definition.specific_entity_type ?? null,
-        updatedAt: '',
-        createdAt: '',
+        updatedAt: new Date(),
+        createdAt: new Date(),
         valueType: definition.data_type,
         value: extractPropertyValue(definition, propertyValues, options()),
         options: options().get(definition.id),

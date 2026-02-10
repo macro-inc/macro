@@ -52,8 +52,8 @@ export type Property = {
   options?: PropertyOption[];
   owner: PropertyOwner;
   specificEntityType?: EntityType | null;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Date;
+  updatedAt: Date;
 } & ( // Single-value types
   | { valueType: 'STRING'; value: string | null }
   | { valueType: 'NUMBER'; value: number | null }
@@ -115,8 +115,8 @@ export type PropertyDefinitionDomain = {
   owner: PropertyOwner;
   specificEntityType?: EntityType | null;
   options?: PropertyOption[];
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
 export type PropertiesPanelProps = {
