@@ -13,6 +13,7 @@ pub type Result<T, E = error::FusionAuthClientError> = std::result::Result<T, E>
 
 use anyhow::Context;
 
+use macro_env::Environment;
 use reqwest::Url;
 
 #[derive(Clone, Debug)]
@@ -24,11 +25,22 @@ pub struct AuthedClient {
 const FUSIONAUTH_TENANT_ID_HEADER: &str = "X-FusionAuth-TenantId";
 
 impl AuthedClient {
-    pub fn new(api_key: String, tenant_id: String) -> Self {
+    pub fn new(url: &str, api_key: String, tenant_id: String) -> Self {
         // Create authenticated client with default Authorization header
         let mut auth_headers = reqwest::header::HeaderMap::new();
         auth_headers.insert(reqwest::header::AUTHORIZATION, api_key.parse().unwrap());
-        auth_headers.insert(FUSIONAUTH_TENANT_ID_HEADER, tenant_id.parse().unwrap());
+
+        // NOTE: we only want to insert this header automatically if we are
+        // using a local fusionauth instance
+        // This is due to the local fusionauth instance containing 2 tenants
+        if is_local_fusionauth(url) {
+            // We need to insert the
+            tracing::trace!(
+                "inserting {} header into fusionauth authed client",
+                FUSIONAUTH_TENANT_ID_HEADER
+            );
+            auth_headers.insert(FUSIONAUTH_TENANT_ID_HEADER, tenant_id);
+        }
 
         let client = reqwest::Client::builder()
             .default_headers(auth_headers)
@@ -93,7 +105,7 @@ impl FusionAuthClient {
         google_client_id: String,
         google_client_secret: String,
     ) -> Self {
-        let auth_client = AuthedClient::new(api_key, tenant_id);
+        let auth_client = AuthedClient::new(&fusion_auth_base_url, api_key, tenant_id);
         let unauth_client = UnauthedClient::new();
 
         Self {
@@ -151,10 +163,16 @@ impl FusionAuthClient {
     }
 }
 
+/// Determines if fusionauth is local based on the url
+#[tracing::instrument(level = tracing::Level::TRACE)]
+fn is_local_fusionauth(url: &str) -> bool {
+    url.starts_with("http://fusionauth:9011") || url.starts_with("http://localhost:9011")
+}
+
 /// Transforms the url replacing the domain with localhost
 #[tracing::instrument(level = tracing::Level::TRACE)]
 fn transform_local_fusionauth_url(url: &str) -> String {
-    if url.starts_with("http://fusionauth:9011") {
+    if is_local_fusionauth(url) {
         url.replace("fusionauth", "localhost")
     } else {
         url.to_string()
