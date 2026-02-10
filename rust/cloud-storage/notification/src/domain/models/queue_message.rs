@@ -65,8 +65,6 @@ pub struct ConnGatewayInnerNotif<T> {
     pub(crate) sender_id: Option<MacroUserIdStr<'static>>,
 }
 
-impl<T> ConnGatewayInnerNotif<T> where T: Notification + Clone {}
-
 /// Connection gateway (WebSocket) notification payload.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ConnGatewayNotification<'a, T> {

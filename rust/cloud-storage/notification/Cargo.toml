@@ -22,6 +22,7 @@ aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
 either = { workspace = true }
+email_notification_digest = { path = "../email_notification_digest" }
 hex = { workspace = true }
 itertools = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
