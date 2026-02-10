@@ -54,17 +54,6 @@ const getLabelTokens = (
   return tokens.map((token) => token.toUpperCase());
 };
 
-/** Check if entity was recently viewed (within last 24 hours) */
-const hasRecentlyViewed = (entity: EntityData): boolean => {
-  if (!entity.viewedAt) return false;
-
-  const now = Date.now();
-  const viewedAt = new Date(entity.viewedAt).getTime();
-  const oneDayMs = 24 * 60 * 60 * 1000;
-
-  return now - viewedAt < oneDayMs;
-};
-
 type EmailEntity = Extract<EntityData, { type: 'email' }>;
 
 /** Analyze email for priority/depriority indicators */
