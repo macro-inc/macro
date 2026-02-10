@@ -26,6 +26,7 @@ import type { EntityData } from '../types/entity';
 import type { ContentHitData, SearchData, WithSearch } from '../types/search';
 import type { EntityInfiniteQuery } from './entity';
 import { queryKeys } from './key';
+import { max } from 'date-fns';
 
 const SEARCH_MATCH_LENGTH = 60;
 
@@ -233,9 +234,7 @@ const useMapSearchResponseItem = () => {
           .map((m) => m.sent_at)
           .filter((m) => m != null);
         const latestMessageSentAt =
-          messagesSentAt.length > 0
-            ? new Date(Math.max(...messagesSentAt.map((d) => d.getTime())))
-            : null;
+          messagesSentAt.length > 0 ? max(messagesSentAt) : null;
 
         return {
           type: 'email',
