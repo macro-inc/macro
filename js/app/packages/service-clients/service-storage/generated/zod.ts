@@ -2179,6 +2179,53 @@ export const getDocumentVersionResponse = zod.object({
 });
 
 /**
+ * @summary Get the current user's permission for a given entity.
+ */
+export const getEntityPermissionParams = zod.object({
+  entity_type: zod
+    .string()
+    .describe(
+      'Entity type (document, chat, project, thread, email_thread, channel)'
+    ),
+  entity_id: zod.string().describe('Entity ID'),
+});
+
+export const getEntityPermissionResponse = zod
+  .union([
+    zod.object({
+      permission: zod
+        .union([
+          zod
+            .object({
+              access_level: zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+              type: zod.enum(['access_level']),
+            })
+            .describe(
+              'Permission for item-based entities (document, chat, project, thread).'
+            ),
+          zod
+            .object({
+              role: zod
+                .enum(['owner', 'admin', 'member'])
+                .describe('The role a user has within a channel.'),
+              type: zod.enum(['channel_role']),
+            })
+            .describe('Permission for channel-based entities.'),
+        ])
+        .describe(
+          "A user's permission for an entity, discriminated by entity kind.\n\nItems (documents, chats, projects, threads) use access levels.\nChannels use participant roles."
+        ),
+      status: zod.enum(['access']),
+    }),
+    zod.object({
+      status: zod.enum(['no_access']),
+    }),
+  ])
+  .describe('API response envelope for entity permissions.');
+
+/**
  * @summary Gets the users history
  */
 export const getHistoryHandlerResponse = zod.object({
@@ -3484,7 +3531,9 @@ export const getItemsSoupResponse = zod.object({
                   channel_id: zod.string().uuid(),
                   joined_at: zod.date(),
                   left_at: zod.date().nullish(),
-                  role: zod.enum(['owner', 'admin', 'member']),
+                  role: zod
+                    .enum(['owner', 'admin', 'member'])
+                    .describe('The role a user has within a channel.'),
                   user_id: zod.string(),
                 })
               ),
@@ -4879,7 +4928,9 @@ export const postItemsSoupResponse = zod.object({
                   channel_id: zod.string().uuid(),
                   joined_at: zod.date(),
                   left_at: zod.date().nullish(),
-                  role: zod.enum(['owner', 'admin', 'member']),
+                  role: zod
+                    .enum(['owner', 'admin', 'member'])
+                    .describe('The role a user has within a channel.'),
                   user_id: zod.string(),
                 })
               ),
