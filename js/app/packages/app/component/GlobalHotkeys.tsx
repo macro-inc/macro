@@ -106,22 +106,26 @@ export default function GlobalShortcuts() {
   });
 
   const { openWithSplit } = useSplitLayout();
+
+  const createNewSplit = () => {
+    openWithSplit(
+      { type: 'component', id: 'unified-list' },
+      {
+        referredFrom: 'hotkey',
+        allowDuplicate: true,
+        preferNewSplit: true,
+      }
+    );
+    return true;
+  };
+
   registerHotkey({
     hotkeyToken: TOKENS.global.createNewSplit,
     hotkey: 'cmd+\\',
     scopeId: 'global',
     description: 'Create new split',
     condition: canFit,
-    keyDownHandler: () => {
-      openWithSplit(
-        { type: 'component', id: 'unified-list' },
-        {
-          referredFrom: 'hotkey',
-          allowDuplicate: true,
-        }
-      );
-      return true;
-    },
+    keyDownHandler: createNewSplit,
     runWithInputFocused: true,
   });
 
@@ -130,16 +134,7 @@ export default function GlobalShortcuts() {
     scopeId: 'global',
     description: 'Create new split',
     condition: canFit,
-    keyDownHandler: () => {
-      openWithSplit(
-        { type: 'component', id: 'unified-list' },
-        {
-          referredFrom: 'hotkey',
-          allowDuplicate: true,
-        }
-      );
-      return true;
-    },
+    keyDownHandler: createNewSplit,
   });
 
   registerHotkey({
