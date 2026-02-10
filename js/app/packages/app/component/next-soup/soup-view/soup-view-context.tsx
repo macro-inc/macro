@@ -33,6 +33,7 @@ import {
   Suspense,
   useContext,
 } from 'solid-js';
+import { reconcile } from 'solid-js/store';
 import { match } from 'ts-pattern';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 300;
@@ -304,43 +305,67 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
+  const items = createMemo(
+    (prev) => {
+      const itemsData = itemsQuery.data;
+      const searchData = searchQuery.data;
+
+      if (!itemsData && !searchData) return [];
+
+      const isSearching = searchText().length > 0;
+
+      const items = itemsData ?? [];
+      const searchItems = isSearching ? (searchData ?? []) : [];
+
+      let transformed: SoupEntity[] = [...searchItems];
+
+      if (isSearching) {
+        transformed.push(...nameFuzzySearchFilter(items));
+      } else {
+        transformed.push(...items);
+      }
+
+      const next = reconcile(transformed)(prev);
+
+      for (let i = 0; i < next.length; i++) {
+        const entity = next[i];
+        if (entity.notifications) continue;
+        next[i] = attachNotifications(entity);
+      }
+
+      return next;
+    },
+    [],
+    {
+      equals: false,
+    }
+  );
+
   const entities = () => {
-    const itemsData = itemsQuery.data;
-    const searchData = searchQuery.data;
-
-    if (!itemsData && !searchData) return [];
-
     const filters = soup.filters.active();
+    let transformed = items();
+
+    const next = [];
+
+    for (const entity of transformed) {
+      if (!filters.every((f) => f.predicate(entity))) {
+        continue;
+      }
+
+      next.push(entity);
+    }
+
+    transformed = deduplicateEntities(next);
 
     const isSearching = searchText().length > 0;
-
-    const items = itemsData ?? [];
-    const searchItems = isSearching ? (searchData ?? []) : [];
-
-    let transformed: SoupEntity[] = [...searchItems];
-
     if (isSearching) {
-      transformed.push(...nameFuzzySearchFilter(items));
-    } else {
-      transformed.push(...items);
-    }
-
-    transformed = transformed.map(attachNotifications);
-
-    for (const filter of filters) {
-      transformed = transformed.filter(filter.predicate);
-    }
-
-    transformed = deduplicateEntities(transformed);
-
-    if (isSearching) {
-      transformed = transformed.toSorted(sortEntitiesForSearch);
+      transformed.sort(sortEntitiesForSearch);
     }
 
     const sorts = soup.sort.active();
 
     if (sorts.length > 0) {
-      transformed = transformed.toSorted((a, b) => {
+      transformed.sort((a, b) => {
         for (const sort of sorts) {
           const result = sort.fn(a, b);
           if (result !== 0) return result;
