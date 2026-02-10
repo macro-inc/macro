@@ -1,7 +1,5 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { formatDate } from '../util/date';
-// NOTE: vitest's own setSystemTime does not work with bun environment
-import { setSystemTime } from 'bun:test';
 
 // Use June 14, 2025 at 10:15 AM New York time (EDT/UTC-4) as a reference time.
 const mockNow: Date = new Date('2025-06-14T14:15:00.000Z');
@@ -11,7 +9,8 @@ describe('Date Utilities (core/utils/date.ts)', () => {
   beforeEach(() => {
     // default system time to UTC
     process.env.TZ = 'UTC';
-    setSystemTime(mockNow);
+
+    vi.setSystemTime(mockNow);
   });
 
   describe('formatDate', () => {
