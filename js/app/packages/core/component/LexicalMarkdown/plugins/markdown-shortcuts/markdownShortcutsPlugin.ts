@@ -64,6 +64,8 @@ function registerMarkdownShortcutsPlugins(
           if (regExp.test(textContent)) {
             const parent = node.getParent();
             if (parent && $isParagraphNode(parent)) {
+              if (parent.getFirstChild() !== node) continue;
+
               const match = textContent.match(regExp); // get the real match, since we care for the coercion here
               if (match) {
                 if (transformer.type === 'multiline-element') {
