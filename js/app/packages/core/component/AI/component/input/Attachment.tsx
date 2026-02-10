@@ -8,7 +8,7 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { ImagePreview } from '@core/component/ImagePreview';
 import { useItemPreviewData } from '@core/component/ItemPreview';
 import { toast } from '@core/component/Toast/Toast';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { itemToBlockName } from '@core/constant/allBlocks';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import type { ItemEntity } from '@queries/preview';
@@ -150,11 +150,13 @@ function ChatAttachment(props: {
   const block = createMemo(() => {
     const attachment = props.attachment;
     if (!attachment.metadata) return;
-    return attachment.metadata.type === 'document'
-      ? fileTypeToBlockName(attachment.metadata.document_type)
-      : attachment.metadata.type === 'image'
-        ? 'image'
-        : 'channel';
+    const type = attachment.metadata.type;
+    if (type === 'image') return;
+    return itemToBlockName({
+      type,
+      fileType:
+        type === 'document' ? attachment.metadata.document_type : undefined,
+    });
   });
 
   const onClick = (e: MouseEvent) => {
