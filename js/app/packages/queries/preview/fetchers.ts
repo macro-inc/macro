@@ -171,10 +171,6 @@ async function fetchProjectPreviews(
     type: 'project',
     loading: false,
     ...preview,
-    updatedAt:
-      preview.access === 'access'
-        ? (preview.updatedAt ?? undefined)
-        : undefined,
   }));
 }
 

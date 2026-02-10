@@ -17,7 +17,7 @@ type BasePreviewItem<T extends ItemType = ItemType> = {
   id: string;
   type: T;
   owner?: string;
-  updatedAt?: Date;
+  updatedAt?: Date | null;
 };
 
 /** this is a catch-all type for access items that do not have a more specific type */
