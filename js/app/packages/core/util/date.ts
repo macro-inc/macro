@@ -1,3 +1,5 @@
+const EPOCH_ZERO = new Date(0);
+
 export interface FormatDateOptions {
   /** Unix timestamp in seconds. An optional reference date. */
   epochNow?: number;
@@ -129,8 +131,6 @@ export const formatEmailDate = (date: Date | number) => {
 export const isoToUnixTimestamp = (isoString: string): number => {
   return Math.floor(new Date(isoString).getTime() / 1000);
 };
-
-const EPOCH_ZERO = new Date(0);
 
 /**
  * Compares two dates in descending order (most recent first).

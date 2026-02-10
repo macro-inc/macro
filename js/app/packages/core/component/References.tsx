@@ -20,6 +20,7 @@ import { InlineItemPreview } from './ItemPreview';
 import { StaticMarkdown } from './LexicalMarkdown/component/core/StaticMarkdown';
 import { UserIcon } from './UserIcon';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
+import { compareDateDesc } from '@core/util/date';
 
 export type ReferenceProps = {
   documentId: string;
@@ -52,6 +53,14 @@ function isGenericReference(
     'created_at' in ref
   );
 }
+
+const getReferenceCreatedAt = (ref: EntityReference) => {
+  if (isChannelReference(ref)) {
+    return ref.attachment_created_at;
+  } else if (isGenericReference(ref)) {
+    return ref.created_at;
+  }
+};
 
 export function References(props: ReferenceProps) {
   const [references] = createResource(async () => {
@@ -136,25 +145,9 @@ export function References(props: ReferenceProps) {
 
   const sortedReferences = createMemo(() => {
     const refs = references() ?? [];
-    const EPOCH_ZERO = new Date(0);
-    return refs.sort((a, b) => {
-      let timeA = EPOCH_ZERO;
-      let timeB = EPOCH_ZERO;
-
-      if (isChannelReference(a)) {
-        timeA = a.attachment_created_at;
-      } else if (isGenericReference(a)) {
-        timeA = a.created_at;
-      }
-
-      if (isChannelReference(b)) {
-        timeB = b.attachment_created_at;
-      } else if (isGenericReference(b)) {
-        timeB = b.created_at;
-      }
-
-      return timeB.getTime() - timeA.getTime();
-    });
+    return refs.sort((a, b) =>
+      compareDateDesc(getReferenceCreatedAt(a), getReferenceCreatedAt(b))
+    );
   });
 
   const formatTimestamp = (timestamp: Date) => {
