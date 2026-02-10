@@ -445,9 +445,7 @@ export const mapSoupPageToEntityList: (
               ? {
                   content: item.data.latest_non_thread_message.content,
                   senderId: item.data.latest_non_thread_message.sender_id,
-                  createdAt: new Date(
-                    item.data.latest_non_thread_message.created_at
-                  ),
+                  createdAt: item.data.latest_non_thread_message.created_at,
                 }
               : undefined,
           };
