@@ -7944,6 +7944,7 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
+ "macro_user_id",
  "reqwest",
  "serde",
  "serde_json",

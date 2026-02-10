@@ -53,9 +53,9 @@ pub struct DeleteArgs {
 /// Arguments for reading user information.
 #[derive(Debug, Args)]
 pub struct ReadArgs {
-    /// The ID of the user to read. If omitted, lists all users.
+    /// The ID of the user to read.
     #[arg(long)]
-    pub id: Option<String>,
+    pub id: String,
 }
 
 impl UserArgs {
