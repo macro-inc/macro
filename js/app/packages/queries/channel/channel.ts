@@ -141,7 +141,7 @@ export function optimisticUpdateChannelName(
     };
   }
 
-  const now = new Date().toISOString();
+  const now = new Date();
   updateChannelNameInQueries(vars.channelId, vars.name, now);
 
   return context;
