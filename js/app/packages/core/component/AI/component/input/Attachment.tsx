@@ -17,7 +17,15 @@ import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-so
 import Envelope from '@phosphor-icons/core/regular/envelope.svg';
 import Close from '@phosphor-icons/core/regular/x.svg?component-solid';
 import type { Accessor } from 'solid-js';
-import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  For,
+  Match,
+  Show,
+  Suspense,
+  Switch,
+} from 'solid-js';
 
 type AttachmentListProps = {
   removeAttachment: (id: string) => void;
@@ -30,10 +38,12 @@ export function AttachmentList(props: AttachmentListProps) {
     <div class="flex flex-row w-full space-x-2 items-end flex-wrap overflow-x-hidden pb-1">
       <For each={props.attached()}>
         {(attachment) => (
-          <ChatAttachment
-            attachment={attachment}
-            onRemove={() => props.removeAttachment(attachment.attachmentId)}
-          />
+          <Suspense>
+            <ChatAttachment
+              attachment={attachment}
+              onRemove={() => props.removeAttachment(attachment.attachmentId)}
+            />
+          </Suspense>
         )}
       </For>
       <For each={props.uploading()}>
