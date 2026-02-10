@@ -28,12 +28,13 @@ import {
 } from '@app/component/next-soup/create-soup-state';
 import { SoupViewContextProvider } from '@app/component/next-soup/soup-view/soup-view-context';
 import { SoupViewList } from '@app/component/next-soup/soup-view/soup-view';
+import { NIL_UUID } from '@app/component/next-soup/filters/filters';
 
 // HACK: prevent lint error on custom directive
 false && fileFolderDrop;
 false && fileSelector;
 
-const PROJECT_ENTITY_TYPES = ['document', 'agent', 'file', 'task'];
+const PROJECT_ENTITY_TYPES = ['document', 'task', 'chat', 'project'];
 
 const Block: Component = () => {
   const [isDragging, setIsDragging] = createSignal(false);
@@ -162,6 +163,9 @@ const ProjectEntityList = (props: { projectId: string; soup: SoupState }) => {
       <SoupViewContextProvider
         soup={props.soup}
         queryFilters={{
+          channel_filters: {
+            channel_ids: [NIL_UUID],
+          },
           chat_filters: {
             project_ids: [props.projectId],
           },
@@ -170,6 +174,9 @@ const ProjectEntityList = (props: { projectId: string; soup: SoupState }) => {
           },
           document_filters: {
             project_ids: [props.projectId],
+          },
+          email_filters: {
+            recipients: [NIL_UUID],
           },
         }}
       >
