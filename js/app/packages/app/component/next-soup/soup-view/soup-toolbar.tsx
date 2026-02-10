@@ -117,11 +117,11 @@ const SoupFilters = () => {
     // we should replace it with the explicit-noise filter
     if (soup.filters.isActive('signal')) {
       toggleFilter('explicit-noise');
+      soup.filters.deactivate('not-done');
     } else {
       toggleFilter('signal');
+      soup.filters.activate('not-done');
     }
-
-    toggleFilter('not-done');
   };
 
   const toggleNoiseFilter = () => {
@@ -129,11 +129,11 @@ const SoupFilters = () => {
     // we should replace it with the explicit-noise filter
     if (soup.filters.isActive('noise')) {
       toggleFilter('explicit-noise');
+      soup.filters.deactivate('not-done');
     } else {
       toggleFilter('noise');
+      soup.filters.activate('not-done');
     }
-
-    toggleFilter('not-done');
   };
 
   const togglePreview = () => {
