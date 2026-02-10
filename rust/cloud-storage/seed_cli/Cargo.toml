@@ -13,3 +13,4 @@ reqwest = { workspace = true }
 macro_entrypoint = { path = "../macro_entrypoint" }
 tracing = { workspace = true }
 tokio = { workspace = true }
+macro_env_var = { path = "../macro_env_var" }
