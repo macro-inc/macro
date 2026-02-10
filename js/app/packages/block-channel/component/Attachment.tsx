@@ -1,24 +1,13 @@
-import { useSplitLayout } from '@app/component/split-layout/layout';
-import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
-import { EntityIcon } from '@core/component/EntityIcon';
-import { ImagePreview } from '@core/component/ImagePreview';
-import { VideoPreview } from '@core/component/VideoPreview';
-import {
-  blockNameToDefaultFile,
-  fileTypeToBlockName,
-} from '@core/constant/allBlocks';
+import { ItemPreview } from '@core/component/ItemPreview';
 import {
   type InputAttachment,
   isStaticAttachmentType,
-  STATIC_IMAGE,
-  STATIC_VIDEO,
 } from '@core/store/cacheChannelInput';
 import { matches } from '@core/util/match';
-import { openInNewSplitForMention } from '@core/util/openInNewSplit';
-import { truncateString } from '@core/util/string';
-import XIcon from '@icon/regular/x.svg';
+import Close from '@phosphor-icons/core/regular/x.svg?component-solid';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
-import { createSignal, Match, Show, Switch } from 'solid-js';
+import { blockNameToItemType } from '@service-storage/client';
+import { Match, Show, Switch } from 'solid-js';
 
 type AttachmentProps = {
   attachment: InputAttachment;
@@ -27,94 +16,47 @@ type AttachmentProps = {
 };
 
 export function Attachment(props: AttachmentProps) {
-  const { openWithSplit } = useSplitLayout();
-  const [hover, setHover] = createSignal(false);
-
-  const attachmentName = () => {
-    const baseName =
-      props.attachment.name ??
-      blockNameToDefaultFile(props.attachment.blockName as any);
-
-    return baseName;
-  };
-
   return (
-    <div
-      class="relative flex flex-row items-center"
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-    >
-      <Show when={hover() && props.remove}>
-        <XIcon
-          class="w-6 h-6 text-ink absolute -top-2 -right-2 rounded-full bg-menu  p-1 border border-edge-muted z-[10]"
-          onClick={() => props.remove?.(props.attachment)}
-        />
-      </Show>
-      <Switch>
-        <Match
-          when={
-            props.attachment.pending &&
-            props.attachment.blockName === STATIC_VIDEO
-          }
-        >
-          <div class="flex flex-col items-center justify-center gap-2 w-[60px] h-[60px] border border-edge-muted rounded-md bg-menu">
-            <Spinner class="w-4 h-4 animate-spin" />
+    <Switch>
+      <Match
+        when={matches(
+          props.attachment.blockName,
+          (bn) => !isStaticAttachmentType(bn)
+        )}
+      >
+        {(blockName) => (
+          <div class="flex items-center px-1 space-x-1 hover:bg-hover hover-transition-bg cursor-default text-sm border border-edge-muted rounded-xs">
+            <Show when={props.attachment.pending}>
+              <Spinner class="w-4 h-4 animate-spin" />
+            </Show>
+            <Show when={!props.attachment.pending}>
+              <ItemPreview
+                id={props.attachment.id}
+                type={blockNameToItemType(blockName())}
+                class="flex items-center gap-1 text-sm ring-0"
+                textClass="truncate"
+                iconSize="xs"
+                disableHoverCard
+              />
+            </Show>
+            <Show when={props.remove}>
+              <div
+                class="hover:bg-hover hover-transition-bg rounded-md p-1 items-center flex"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  props.remove?.(props.attachment);
+                }}
+              >
+                <Close
+                  width={12}
+                  height={12}
+                  class="text-ink-muted group-hover:text-failure"
+                />
+              </div>
+            </Show>
           </div>
-        </Match>
-        <Match
-          when={
-            props.attachment.pending &&
-            props.attachment.blockName === STATIC_IMAGE
-          }
-        >
-          <div class="flex flex-col items-center justify-center gap-2 w-[60px] h-[60px] border border-edge-muted rounded-md bg-menu">
-            <Spinner class="w-4 h-4 animate-spin" />
-          </div>
-        </Match>
-        <Match when={props.attachment.blockName === STATIC_IMAGE}>
-          <ImagePreview
-            image={{
-              id: props.attachment.id,
-            }}
-            variant="small"
-          />
-        </Match>
-        <Match when={props.attachment.blockName === STATIC_VIDEO}>
-          <VideoPreview id={props.attachment.id} variant="small" />
-        </Match>
-        <Match
-          when={matches(
-            props.attachment.blockName,
-            (bn) => !isStaticAttachmentType(bn)
-          )}
-        >
-          {(blockName) => (
-            <DeprecatedTextButton
-              theme="base"
-              disabled={props.attachment.pending}
-              icon={() =>
-                props.attachment.pending ? (
-                  <Spinner class="w-4 h-4 animate-spin" />
-                ) : (
-                  <EntityIcon targetType={blockName()} size="xs" />
-                )
-              }
-              text={truncateString(attachmentName(), 30)}
-              onClick={(e) => {
-                if (props.attachment.pending) return;
-                const inNewSplit = openInNewSplitForMention(e.shiftKey, true);
-                openWithSplit(
-                  {
-                    type: fileTypeToBlockName(blockName()),
-                    id: props.attachment.id,
-                  },
-                  { preferNewSplit: inNewSplit }
-                );
-              }}
-            />
-          )}
-        </Match>
-      </Switch>
-    </div>
+        )}
+      </Match>
+    </Switch>
   );
 }

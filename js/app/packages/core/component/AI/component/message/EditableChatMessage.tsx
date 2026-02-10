@@ -1,22 +1,24 @@
-import { useChatInput } from '@core/component/AI/component/input/useChatInput';
+import {
+  ChatContextProvider,
+  useChatContext,
+} from '@core/component/AI/context';
+import { ChatInput } from '@core/component/AI/component/input/useChatInput';
+import { useChatMarkdownArea } from '@core/component/AI/component/input/useChatMarkdownArea';
 import type { Attachment, Model, Send } from '@core/component/AI/types';
 import { asEditRequest } from '@core/component/AI/types/util';
 import { onMount } from 'solid-js';
 
-export function EditableChatMessage(props: {
-  chatId: string;
+function EditableChatMessageInner(props: {
   initialText: string;
   attachments: Attachment[];
   onAccept: (r: Send) => void;
   onCancel: () => void;
   model: Model;
 }) {
-  const { ChatInput, chatMarkdownArea } = useChatInput({
-    initialAttachments: props.attachments,
-    chatId: props.chatId,
+  const ctx = useChatContext();
+  const chatMarkdownArea = useChatMarkdownArea({
     initialValue: props.initialText,
-    model: props.model,
-    isGenerating: false,
+    addAttachment: (a) => ctx.attachments.addAttachment(a),
   });
 
   onMount(() => {
@@ -32,10 +34,37 @@ export function EditableChatMessage(props: {
   return (
     <div onKeyDown={handleKey} class="w-full">
       <ChatInput
+        markdown={chatMarkdownArea}
         onSend={(request) => {
           if (request.type === 'send') props.onAccept(asEditRequest(request));
         }}
       />
     </div>
+  );
+}
+
+export function EditableChatMessage(props: {
+  chatId: string;
+  initialText: string;
+  attachments: Attachment[];
+  onAccept: (r: Send) => void;
+  onCancel: () => void;
+  model: Model;
+}) {
+  return (
+    <ChatContextProvider
+      chatId={props.chatId}
+      model={props.model}
+      isGenerating={false}
+      initialAttachments={props.attachments}
+    >
+      <EditableChatMessageInner
+        initialText={props.initialText}
+        attachments={props.attachments}
+        onAccept={props.onAccept}
+        onCancel={props.onCancel}
+        model={props.model}
+      />
+    </ChatContextProvider>
   );
 }

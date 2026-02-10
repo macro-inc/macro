@@ -12,6 +12,7 @@ use std::collections::HashMap;
 
 /// upsert methods used when inserting individual threads/messages into the database.
 /// wrapper around insert_email_address to format the data into a usable shape
+#[tracing::instrument(skip(pool, addresses_data), err)]
 pub async fn parse_and_upsert_message_contacts(
     pool: &PgPool,
     link_id: Uuid,
@@ -117,6 +118,22 @@ async fn upsert_message_contacts(
         .map(|r| (r.email_address, r.id))
         .collect();
 
+    // Update names for existing contacts that don't have one yet
+    let name_updates: Vec<_> = contacts
+        .iter()
+        .filter_map(|c| {
+            c.name.as_ref().and_then(|name| {
+                result_map
+                    .get(&c.email_address)
+                    .map(|id| (*id, name.clone()))
+            })
+        })
+        .collect();
+
+    if !name_updates.is_empty() {
+        update_missing_contact_names(pool, &name_updates).await?;
+    }
+
     // Step 2: Filter to contacts we don't have yet
     let new_contacts: Vec<_> = contacts
         .into_iter()
@@ -157,6 +174,7 @@ async fn upsert_message_contacts(
     Ok(result_map)
 }
 
+#[tracing::instrument(skip(pool, emails), err)]
 async fn fetch_contacts_by_emails(
     pool: &PgPool,
     link_id: Uuid,
@@ -178,6 +196,32 @@ async fn fetch_contacts_by_emails(
     Ok(results)
 }
 
+#[tracing::instrument(skip(pool, updates), err)]
+async fn update_missing_contact_names(
+    pool: &PgPool,
+    updates: &[(Uuid, String)],
+) -> anyhow::Result<()> {
+    let ids: Vec<Uuid> = updates.iter().map(|(id, _)| *id).collect();
+    let names: Vec<String> = updates.iter().map(|(_, name)| name.clone()).collect();
+
+    sqlx::query!(
+        r#"
+        UPDATE email_contacts
+        SET name = data.name, updated_at = now()
+        FROM (SELECT unnest($1::uuid[]) as id, unnest($2::text[]) as name) as data
+        WHERE email_contacts.id = data.id
+          AND email_contacts.name IS NULL
+        "#,
+        &ids,
+        &names
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+#[tracing::instrument(skip(pool, contacts), err)]
 async fn insert_new_contacts(
     pool: &PgPool,
     contacts: &[ContactPhotoless],

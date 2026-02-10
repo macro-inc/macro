@@ -1,10 +1,11 @@
 import { withAnalytics } from '@coparse/analytics';
 import { SUPPORTED_ATTACHMENT_EXTENSIONS } from '@core/component/AI/constant';
+import { useChatContext } from '@core/component/AI/context';
 import {
   useChatAttachableHistory,
   useGetChatAttachmentInfo,
 } from '@core/component/AI/signal/attachment';
-import type { Attachment, UploadQueue } from '@core/component/AI/types';
+import type { Attachment } from '@core/component/AI/types';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { OldMenu, OldMenuItem } from '@core/component/OldMenu';
 import clickOutside from '@core/directive/clickOutside';
@@ -45,7 +46,6 @@ type ChatAttachMenuProps = {
   anchorRef: HTMLDivElement;
   containerRef: HTMLElement;
   onAttach: (attachment: Attachment) => void;
-  uploadQueue: UploadQueue;
 };
 
 function truncate(str: string, maxLength: number = 30) {
@@ -56,6 +56,9 @@ function truncate(str: string, maxLength: number = 30) {
 // TODO: create a shared component for chat attach menu and block channel AttachMenu
 // TODO: add other supported attachment types, e.g. chat/channel
 export function ChatAttachMenu(props: ChatAttachMenuProps) {
+  const ctx = useChatContext();
+  const uploadQueue = ctx.uploadQueue;
+
   const [position, setPosition] = createSignal({ x: 0, y: 0 });
   const [popupRef, setPopupRef] = createSignal<HTMLDivElement>();
   const history = useChatAttachableHistory();
@@ -340,7 +343,7 @@ export function ChatAttachMenu(props: ChatAttachMenuProps) {
                 acceptedFileExtensions: SUPPORTED_ATTACHMENT_EXTENSIONS,
                 multiple: true,
                 onSelect: (files) => {
-                  props.uploadQueue.upload(files);
+                  uploadQueue.upload(files);
                   props.close();
                 },
               }}

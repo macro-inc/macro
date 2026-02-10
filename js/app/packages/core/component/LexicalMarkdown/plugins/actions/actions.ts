@@ -1,6 +1,8 @@
 import CodeBlock from '@icon/regular/code-block.svg';
+import VideoIcon from '@icon/regular/file-video.svg';
 import MathIcon from '@icon/regular/function.svg';
 import TableIcon from '@icon/regular/grid-four.svg';
+import ImageIcon from '@icon/regular/image.svg';
 import LinkIcon from '@icon/regular/link.svg';
 import ListBullets from '@icon/regular/list-bullets.svg';
 import ListChecks from '@icon/regular/list-checks.svg';
@@ -17,6 +19,7 @@ import type { Component } from 'solid-js';
 import { INSERT_HORIZONTAL_RULE_COMMAND } from '..';
 import { TRY_INSERT_EQUATION_COMMAND } from '../katex';
 import { TRY_INSERT_LINK_COMMAND } from '../links';
+import { TRY_INSERT_MEDIA_UPLOAD_COMMAND } from '../media';
 import { NODE_TRANSFORM } from '../node-transform';
 
 export type ActionIcon = string;
@@ -139,16 +142,30 @@ export const ACTIONS: Action[] = [
       editor.dispatchCommand(NODE_TRANSFORM, 'list-check');
     },
   },
-  // {
-  //   id: 'image',
-  //   name: 'Image',
-  //   keywords: ['picture', 'photo', 'img'],
-  //   category: ActionCategory.MEDIA,
-  //   icon: Image,
-  //   action: (editor: LexicalEditor) => {
-  //     console.log('Insert image');
-  //   },
-  // },
+  {
+    id: 'image',
+    name: 'Image',
+    keywords: ['picture', 'photo', 'img', 'upload'],
+    category: ActionCategory.MEDIA,
+    icon: ImageIcon,
+    action: (editor: LexicalEditor) => {
+      queueMicrotask(() => {
+        editor.dispatchCommand(TRY_INSERT_MEDIA_UPLOAD_COMMAND, 'image');
+      });
+    },
+  },
+  {
+    id: 'video',
+    name: 'Video',
+    keywords: ['video', 'movie', 'film', 'upload'],
+    category: ActionCategory.MEDIA,
+    icon: VideoIcon,
+    action: (editor: LexicalEditor) => {
+      queueMicrotask(() => {
+        editor.dispatchCommand(TRY_INSERT_MEDIA_UPLOAD_COMMAND, 'video');
+      });
+    },
+  },
   {
     id: 'link',
     name: 'Link',

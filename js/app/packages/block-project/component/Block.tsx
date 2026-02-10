@@ -8,7 +8,7 @@ import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { ENABLE_PROJECT_VIEW_PREVIEW } from '@core/constant/featureFlags';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { fileSelector } from '@core/directive/fileSelector';
-import { registerHotkey } from '@core/hotkey/hotkeys';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import {
   handleFileFolderDrop,
@@ -117,9 +117,12 @@ const Block: Component = () => {
     filterGroups: [],
   });
 
+  const [attachHotkeys, projectViewScope] = useHotkeyDOMScope('project-view');
+
   return (
     <DocumentBlockContainer>
       <div
+        ref={attachHotkeys}
         class="w-full h-full bg-panel flex flex-col relative"
         use:fileFolderDrop={{
           onDragStart: () => setIsDragging(true),
@@ -137,7 +140,11 @@ const Block: Component = () => {
         <Show
           when={ENABLE_PROJECT_VIEW_PREVIEW}
           fallback={
-            <ProjectEntityList projectId={projectId} soup={projectSoup} />
+            <ProjectEntityList
+              projectId={projectId}
+              soup={projectSoup}
+              scopeId={projectViewScope}
+            />
           }
         >
           <div class="flex size-full">
@@ -148,7 +155,11 @@ const Block: Component = () => {
                   preview() ? { side: 'left', percentage: 30 } : undefined,
               }}
             >
-              <ProjectEntityList projectId={projectId} soup={projectSoup} />
+              <ProjectEntityList
+                projectId={projectId}
+                soup={projectSoup}
+                scopeId={projectViewScope}
+              />
             </SplitPanelContext.Provider>
           </div>
         </Show>
@@ -157,7 +168,11 @@ const Block: Component = () => {
   );
 };
 
-const ProjectEntityList = (props: { projectId: string; soup: SoupState }) => {
+const ProjectEntityList = (props: {
+  scopeId: string;
+  projectId: string;
+  soup: SoupState;
+}) => {
   return (
     <SoupContextProvider soup={props.soup}>
       <SoupViewContextProvider
@@ -180,7 +195,7 @@ const ProjectEntityList = (props: { projectId: string; soup: SoupState }) => {
           },
         }}
       >
-        <SoupViewList customScrollbarHidden={true} />
+        <SoupViewList customScrollbarHidden={true} scopeId={props.scopeId} />
       </SoupViewContextProvider>
     </SoupContextProvider>
   );

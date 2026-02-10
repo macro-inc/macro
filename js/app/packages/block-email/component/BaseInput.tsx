@@ -310,7 +310,6 @@ export function BaseInput(props: {
   onMarkDone?: () => void;
   setShowReply?: Setter<boolean>;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
-  onHasContentChange?: (hasContent: boolean) => void;
 }) {
   const ctx = useEmailContext();
   const form = createMemo(() => {
@@ -372,14 +371,6 @@ export function BaseInput(props: {
   let pendingMentions: { documentId: string }[] = [];
   const [shouldMarkDoneOnSuccess, setShouldMarkDoneOnSuccess] =
     createSignal(false);
-
-  const hasContent = createMemo(
-    () => bodyMacro().trim() !== '' || form().attachments.list().length > 0
-  );
-
-  createEffect(() => {
-    props.onHasContentChange?.(hasContent());
-  });
 
   const sendMutation = useSendMessageMutation({
     onSuccess: async ({ message }) => {

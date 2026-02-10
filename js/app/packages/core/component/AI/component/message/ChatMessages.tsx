@@ -1,3 +1,4 @@
+import { useChatContext } from '@core/component/AI/context';
 import type {
   ChatMessageWithAttachments,
   MessageStream,
@@ -39,63 +40,7 @@ function OnMount(props: {
   return <div ref={ref}>{props.children}</div>;
 }
 
-type ChatMessages = {
-  ChatMessages: () => JSXElement;
-  addMessage: (message: ChatMessageWithAttachments) => void;
-  setStream: (stream: MessageStream) => void;
-  reset: () => void;
-  messages: Accessor<ChatMessageWithAttachments[]>;
-};
-
-export function useChatMessages(args: {
-  messages: ChatMessageWithAttachments[];
-  actions?: MessageActions;
-  chatId?: string;
-  editDisabled?: Accessor<boolean>;
-  pendingLocationParams?: Accessor<Record<string, string> | undefined>;
-}): ChatMessages {
-  const [messages, setMessages] = createSignal(args.messages);
-  const [stream, setStream] = createSignal<MessageStream>();
-  const addMessage = (message: ChatMessageWithAttachments) => {
-    setMessages((p) => [...p, message]);
-  };
-  const editDisabled = createMemo(() => args.editDisabled?.());
-
-  const CurriedChatMessages = createMemo(() => (
-    <ChatMessages
-      chatId={args.chatId}
-      messages={[messages, setMessages]}
-      messageActions={args.actions}
-      stream={[stream, setStream]}
-      editDisabled={editDisabled()}
-      pendingLocationParams={args.pendingLocationParams}
-    />
-  ));
-
-  const reset = () => {
-    setMessages([]);
-    setStream();
-  };
-
-  return {
-    ChatMessages: CurriedChatMessages,
-    addMessage,
-    setStream,
-    reset,
-    messages,
-  };
-}
-
 export type ChatMessagesProps = {
-  messages: [
-    Accessor<ChatMessageWithAttachments[]>,
-    Setter<ChatMessageWithAttachments[]>,
-  ];
-  stream?: [
-    Accessor<MessageStream | undefined>,
-    Setter<MessageStream | undefined>,
-  ];
-  chatId?: string;
   messageActions?: MessageActions;
   editDisabled?: boolean;
   pendingLocationParams?: Accessor<Record<string, string> | undefined>;
@@ -110,10 +55,16 @@ function messageContentIsEmpty(message: ChatMessageWithAttachments) {
 }
 
 export function ChatMessages(props: ChatMessagesProps) {
-  const [messages, setMessages] = props.messages;
+  const ctx = useChatContext();
+  const [messages, setMessages] = [ctx.messages!, ctx.setMessages!];
+  const streamTuple:
+    | [Accessor<MessageStream | undefined>, Setter<MessageStream | undefined>]
+    | undefined =
+    ctx.stream && ctx.setStream ? [ctx.stream, ctx.setStream] : undefined;
+  const chatId = () => ctx.chatId?.();
 
   const extendedStream = createMemo(() => {
-    const s = props.stream?.[0]?.();
+    const s = streamTuple?.[0]?.();
     if (!s) return;
     return timeStream(idStream(s));
   });
@@ -134,7 +85,7 @@ export function ChatMessages(props: ChatMessagesProps) {
   let messagesRef: HTMLDivElement | undefined;
 
   const generatingMessage = () => {
-    const streamAccessor = props.stream?.[0];
+    const streamAccessor = streamTuple?.[0];
     if (!streamAccessor) return;
     const stream = streamAccessor();
     if (!stream) return;
@@ -147,7 +98,7 @@ export function ChatMessages(props: ChatMessagesProps) {
   };
 
   const generatingAfterToolCall = () => {
-    const streamAccessor = props.stream?.[0];
+    const streamAccessor = streamTuple?.[0];
     if (!streamAccessor) return;
     const stream = streamAccessor();
     if (!stream || stream.isDone()) return;
@@ -160,7 +111,7 @@ export function ChatMessages(props: ChatMessagesProps) {
   };
 
   const isStream = () => {
-    const streamSignal = props.stream?.[0];
+    const streamSignal = streamTuple?.[0];
     if (!streamSignal) return false;
     const stream = streamSignal();
     if (!stream) return false;
@@ -168,7 +119,7 @@ export function ChatMessages(props: ChatMessagesProps) {
   };
 
   const streamRequestAttachments = () => {
-    const streamable = props.stream?.[0];
+    const streamable = streamTuple?.[0];
     if (!streamable) return [];
     const stream = streamable();
     if (!stream || !('attachments' in stream.request)) return [];
@@ -177,8 +128,8 @@ export function ChatMessages(props: ChatMessagesProps) {
 
   // when messages finish streaming, append and scroll
   createEffect(() => {
-    if (!props.stream?.[0]) return;
-    const s = props.stream?.[0]();
+    if (!streamTuple?.[0]) return;
+    const s = streamTuple?.[0]();
     if (!s) return;
     if (s.isDone()) {
       const message = asChatMessage(s.data());
@@ -350,9 +301,9 @@ export function ChatMessages(props: ChatMessagesProps) {
                               props.editDisabled
                                 ? undefined
                                 : {
-                                    chatId: props.chatId!,
+                                    chatId: chatId()!,
                                     makeEdit: (send) => {
-                                      const setStream = props?.stream?.[1];
+                                      const setStream = streamTuple?.[1];
                                       if (setStream) {
                                         setMessages((p) => {
                                           const last = p.at(-1);
