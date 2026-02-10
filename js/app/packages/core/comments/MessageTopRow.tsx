@@ -36,7 +36,7 @@ export enum Color {
 export function MessageRow(
   props: ParentProps<{
     authorId: string | null;
-    date: Date;
+    date?: Date | null;
     hideBottomMargin?: boolean;
     nameSlot?: any;
     isActive: boolean;
@@ -57,7 +57,7 @@ export function MessageRow(
 export function MessageRowUI(
   props: ParentProps<{
     authorId: string;
-    date: Date;
+    date?: Date | null;
     hideBottomMargin?: boolean;
     nameSlot?: any;
     hideBubble?: boolean;
@@ -92,7 +92,9 @@ export function MessageRowUI(
           </div>
         )}
         <div class="text-xs text-ink truncate grow-1">{displayName()}</div>
-        <div class="text-xs text-ink-muted">{formatDate(props.date)}</div>
+        <Show when={props.date}>
+          <div class="text-xs text-ink-muted">{formatDate(props.date)}</div>
+        </Show>
       </div>
       <Show when={props.children}>
         <div
@@ -107,7 +109,7 @@ export function MessageRowUI(
 
 export function MessageTopRow(props: {
   authorId: string | null;
-  date: Date;
+  date?: Date | null;
   deleteMessage?: () => void;
   enableEditing?: () => void;
   hideBottomMargin?: boolean;

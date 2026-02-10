@@ -56,8 +56,7 @@ export function Comment(
   const { commentOperations, setActiveThread } = useContext(CommentsContext);
 
   const isResolved = createMemo(() => props.comment.resolved ?? false);
-  // TODO: handle nullish dates correctly
-  const date = createMemo(() => props.comment.createdAt ?? new Date());
+  const date = () => props.comment.createdAt;
 
   const [textValue, setTextValue] = createSignal<string>(props.comment.text);
   const [isEditing, setIsEditing] = createSignal<boolean>(false);
@@ -162,7 +161,7 @@ export function CommentReply(
   createEffect(() => setTextValue(reply()?.text ?? ''));
 
   const authorId = createMemo(() => reply()?.author ?? thisAuthor() ?? '');
-  const date = createMemo(() => new Date(reply()?.createdAt ?? ''));
+  const date = () => reply()?.createdAt;
   const isNew = createMemo(() => reply()?.isNew ?? true);
 
   return (
