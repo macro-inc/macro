@@ -48,9 +48,9 @@ export interface FreshSortConfig<T> {
 type FreshSortConfigWithDefaults = Required<FreshSortConfig<unknown>>;
 
 export interface TimestampedItem {
-  updatedAt?: Date;
-  viewedAt?: Date;
-  lastInteraction?: Date;
+  updatedAt?: Date | null;
+  viewedAt?: Date | null;
+  lastInteraction?: Date | null;
 }
 
 export interface FreshSortResult<T> {
@@ -78,16 +78,16 @@ const DEFAULT_CONFIG = {
 function extractTimestamp(
   item: TimestampedItem,
   useViewedAt: boolean = false
-): Date | undefined {
+): Date | null {
   if (useViewedAt) {
-    return item.viewedAt ?? item.updatedAt ?? item.lastInteraction;
+    return item.viewedAt ?? item.updatedAt ?? item.lastInteraction ?? null;
   }
 
-  return item.updatedAt ?? item.lastInteraction;
+  return item.updatedAt ?? item.lastInteraction ?? null;
 }
 
 function calculateTimeScore(
-  timestamp: Date | undefined,
+  timestamp: Date | null,
   config: FreshSortConfigWithDefaults
 ): number {
   if (!timestamp) return 0;
