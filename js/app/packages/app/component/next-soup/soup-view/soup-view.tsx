@@ -156,6 +156,7 @@ export const SoupView = () => {
 
 interface SoupViewListProps {
   customScrollbarHidden?: boolean;
+  scopeId?: string;
 }
 
 export const SoupViewList = (props: SoupViewListProps) => {
@@ -220,7 +221,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
   const [attachHotkeys, soupViewScope] = useHotkeyDOMScope('soup-view');
 
   const scopeId = createMemo(() => {
-    return previewPanel ? soupViewScope : panel.splitHotkeyScope;
+    return previewPanel
+      ? soupViewScope
+      : (props.scopeId ?? panel.splitHotkeyScope);
   });
 
   // Register navigation hotkeys
