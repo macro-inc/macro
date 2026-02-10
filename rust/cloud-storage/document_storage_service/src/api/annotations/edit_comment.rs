@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    api::annotations::build_mention_notif,
-    service::conn_gateway::update_live_comment_state,
+    api::annotations::build_mention_notif, service::conn_gateway::update_live_comment_state,
 };
 use axum::{
     Json,

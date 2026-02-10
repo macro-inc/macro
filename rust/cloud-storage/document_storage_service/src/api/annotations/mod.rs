@@ -122,6 +122,7 @@ pub fn comment_error_response(e: anyhow::Error, default_msg: &str) -> Result<Res
     }
 }
 
+#[expect(clippy::too_many_arguments)]
 fn build_mention_notif<'a>(
     text: String,
     comment: &Comment,

@@ -24,7 +24,10 @@ export function getNotificationTargetName(
   return match(m)
     .with({ tag: 'channel_invite' }, (m) => m.content.channelName)
     .with({ tag: 'document_mention' }, (m) => m.content.documentName)
-    .with({ tag: 'mentioned_in_document_comment' }, (m) => m.content.documentName)
+    .with(
+      { tag: 'mentioned_in_document_comment' },
+      (m) => m.content.documentName
+    )
     .with({ tag: 'invite_to_team' }, (m) => m.content.teamName)
     .with({ tag: 'task_assigned' }, (m) => m.content.taskName ?? undefined)
     .with({ tag: 'channel_mention' }, () => undefined)
@@ -54,9 +57,18 @@ export function getNotificationContent(
 export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
   const m = n.notificationMetadata;
   return match(m)
-    .with({ tag: 'channel_mention' }, (m) => m.content.channelType !== 'directMessage')
-    .with({ tag: 'channel_message_send' }, (m) => m.content.channelType !== 'directMessage')
-    .with({ tag: 'channel_message_reply' }, (m) => m.content.channelType !== 'directMessage')
+    .with(
+      { tag: 'channel_mention' },
+      (m) => m.content.channelType !== 'directMessage'
+    )
+    .with(
+      { tag: 'channel_message_send' },
+      (m) => m.content.channelType !== 'directMessage'
+    )
+    .with(
+      { tag: 'channel_message_reply' },
+      (m) => m.content.channelType !== 'directMessage'
+    )
     .with({ tag: 'new_email' }, () => false)
     .with({ tag: 'task_assigned' }, () => true)
     .with({ tag: 'document_mention' }, () => true)

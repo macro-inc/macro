@@ -69,8 +69,14 @@ export function extractMessageContent(notification: Notification): string {
 
   return match(meta)
     .with({ tag: 'channel_mention' }, (m) => m.content.messageContent || '')
-    .with({ tag: 'channel_message_send' }, (m) => m.content.messageContent || '')
-    .with({ tag: 'channel_message_reply' }, (m) => m.content.messageContent || '')
+    .with(
+      { tag: 'channel_message_send' },
+      (m) => m.content.messageContent || ''
+    )
+    .with(
+      { tag: 'channel_message_reply' },
+      (m) => m.content.messageContent || ''
+    )
     .with({ tag: 'document_mention' }, (m) => m.content.documentName || '')
     .with({ tag: 'mentioned_in_document_comment' }, (m) => m.content.text || '')
     .with({ tag: 'new_email' }, (m) => m.content.subject || '')
