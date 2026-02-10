@@ -222,7 +222,7 @@ export abstract class MediaNode<
   }
 
   exportJSON(): SerializedMediaNode<{}> {
-    const json = {
+    return {
       ...super.exportJSON(),
       srcType: this.__srcType,
       id: this.__id,
@@ -233,7 +233,6 @@ export abstract class MediaNode<
       constrainedWidth: this.__constrainedWidth,
       constrainedHeight: this.__constrainedHeight,
     } as SerializedMediaNode<{}>;
-    return json;
   }
 }
 

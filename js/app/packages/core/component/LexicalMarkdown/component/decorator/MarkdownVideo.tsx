@@ -298,7 +298,7 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
         <video
           crossorigin="anonymous"
           class="h-full object-contain"
-          draggable={false}
+          draggable={true}
           classList={{
             invisible: state() === 'loading' || state() === 'error',
           }}
