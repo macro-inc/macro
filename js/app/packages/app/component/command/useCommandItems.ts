@@ -78,8 +78,8 @@ export function useCommandItems() {
           fileType: item.type === 'document' ? item.fileType : undefined,
           subType: item.type === 'document' ? item.subType : undefined,
         },
-        updatedAt: item.updatedAt ?? undefined,
-        viewedAt: item.viewedAt ?? undefined,
+        updatedAt: item.updatedAt,
+        viewedAt: item.viewedAt,
       }));
     const bins = channelsIntoCategories(channels());
     const channels_: CommandItemCard[] = [

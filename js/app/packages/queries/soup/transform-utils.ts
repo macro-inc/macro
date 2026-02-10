@@ -250,7 +250,7 @@ export const useSearchResponseItemMapper = () => {
           ownerId: result.owner_id,
           createdAt: latestMessageSentAt ?? result.created_at,
           updatedAt: latestMessageSentAt ?? result.updated_at,
-          viewedAt: result.viewed_at ?? undefined,
+          viewedAt: result.viewed_at,
           isRead: singleMessage
             ? !messageHits[0].labels.includes('UNREAD')
             : false,
@@ -310,7 +310,7 @@ export const useSearchResponseItemMapper = () => {
           createdAt: result.metadata?.created_at,
           updatedAt: result.metadata?.updated_at,
           channelType: result.channel_type as ChannelType,
-          interactedAt: result.metadata?.interacted_at ?? undefined,
+          interactedAt: result.metadata?.interacted_at,
           participantIds: channelWithLatest?.participants?.map(
             (p) => p.user_id
           ),
@@ -390,7 +390,7 @@ export const mapSoupPageToEntityList: (
             type: item.tag,
             name: item.data.name || 'New Chat',
             frecencyScore: item.frecency_score,
-            viewedAt: item.data.viewedAt ?? undefined,
+            viewedAt: item.data.viewedAt,
             projectId: item.data.projectId ?? undefined,
           };
         }
@@ -402,7 +402,7 @@ export const mapSoupPageToEntityList: (
             id: item.data.id,
             ownerId: item.data.ownerId,
             frecencyScore: item.frecency_score,
-            viewedAt: item.data.viewedAt ?? undefined,
+            viewedAt: item.data.viewedAt,
             projectId: item.data.parentId ?? undefined,
             type: item.tag,
             name: item.data.name || 'New Project',
@@ -424,7 +424,7 @@ export const mapSoupPageToEntityList: (
             type: 'email',
             name: item.data.name || 'Email Thread',
             frecencyScore: item.frecency_score,
-            viewedAt: item.data.viewedAt ?? undefined,
+            viewedAt: item.data.viewedAt,
             participants,
           };
         }
@@ -437,11 +437,10 @@ export const mapSoupPageToEntityList: (
             channelType: item.data.channel.channel_type,
             ownerId: item.data.channel.owner_id,
             frecencyScore: item.frecency_score ?? 0,
-            updatedAt: new Date(item.data.channel.updated_at),
-            createdAt: new Date(item.data.channel.created_at),
+            updatedAt: item.data.channel.updated_at,
+            createdAt: item.data.channel.created_at,
             participantIds: item.data.participants.map((p) => p.user_id),
-            viewedAt:
-              item.data.viewed_at ?? item.data.interacted_at ?? undefined,
+            viewedAt: item.data.viewed_at ?? item.data.interacted_at,
             latestMessage: item.data.latest_non_thread_message
               ? {
                   content: item.data.latest_non_thread_message.content,
@@ -459,7 +458,7 @@ export const mapSoupPageToEntityList: (
           ...item.data,
           type: item.tag,
           frecencyScore: item.frecency_score,
-          viewedAt: item.data.viewedAt ?? undefined,
+          viewedAt: item.data.viewedAt,
           fileType: item.data.fileType ?? undefined,
           projectId: item.data.projectId ?? undefined,
           subType:

@@ -79,7 +79,7 @@ export function useMessageContext(): MessageContextValue {
 
 export type MessageTopBarSimpleProps = {
   name: string;
-  timestamp?: Date;
+  timestamp?: Date | null;
   tagLabel?: string;
   tagIcon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>> | undefined;
 };

@@ -97,15 +97,15 @@ export function getEntityTimestampedItem<T extends CombinedEntity>(
   switch (item.kind) {
     case 'item':
       return {
-        updatedAt: item.data.updatedAt ?? undefined,
+        updatedAt: item.data.updatedAt,
       };
     case 'channel':
       return {
-        updatedAt: item.data.updated_at ?? undefined,
+        updatedAt: item.data.updated_at,
       };
     case 'user':
       return {
-        lastInteraction: item.data.lastInteraction ?? undefined,
+        lastInteraction: item.data.lastInteraction,
       };
     default:
       return {};

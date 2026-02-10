@@ -11,15 +11,15 @@ export type EntityBase = {
   name: string;
   ownerId: string;
   frecencyScore?: number;
-  createdAt?: Date;
-  updatedAt?: Date;
-  viewedAt?: Date;
+  createdAt?: Date | null;
+  updatedAt?: Date | null;
+  viewedAt?: Date | null;
 };
 
 export type ChannelEntity = EntityBase & {
   type: 'channel';
   channelType: 'direct_message' | 'private' | 'organization' | 'public';
-  interactedAt?: Date;
+  interactedAt?: Date | null;
   participantIds?: string[];
   latestMessage?: {
     content: string;

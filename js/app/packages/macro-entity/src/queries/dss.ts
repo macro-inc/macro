@@ -250,7 +250,7 @@ const selectData: (
               type: item.tag,
               name: item.data.name || 'New Chat',
               frecencyScore: item.frecency_score,
-              viewedAt: item.data.viewedAt ?? undefined,
+              viewedAt: item.data.viewedAt,
               projectId: item.data.projectId ?? undefined,
             };
           }
@@ -262,7 +262,7 @@ const selectData: (
               id: item.data.id,
               ownerId: item.data.ownerId,
               frecencyScore: item.frecency_score,
-              viewedAt: item.data.viewedAt ?? undefined,
+              viewedAt: item.data.viewedAt,
               projectId: item.data.parentId ?? undefined,
               type: item.tag,
               name: item.data.name || 'New Project',
@@ -284,7 +284,7 @@ const selectData: (
               type: 'email',
               name: item.data.name || 'Email Thread',
               frecencyScore: item.frecency_score,
-              viewedAt: item.data.viewedAt ?? undefined,
+              viewedAt: item.data.viewedAt,
               participants,
             };
           }
@@ -297,21 +297,15 @@ const selectData: (
               channelType: item.data.channel.channel_type,
               ownerId: item.data.channel.owner_id,
               frecencyScore: item.frecency_score ?? 0,
-              updatedAt: new Date(item.data.channel.updated_at),
-              createdAt: new Date(item.data.channel.created_at),
+              updatedAt: item.data.channel.updated_at,
+              createdAt: item.data.channel.created_at,
               participantIds: item.data.participants.map((p) => p.user_id),
-              viewedAt: item.data.viewed_at
-                ? new Date(item.data.viewed_at)
-                : item.data.interacted_at
-                  ? new Date(item.data.interacted_at)
-                  : undefined,
+              viewedAt: item.data.viewed_at ?? item.data.interacted_at,
               latestMessage: item.data.latest_non_thread_message
                 ? {
                     content: item.data.latest_non_thread_message.content,
                     senderId: item.data.latest_non_thread_message.sender_id,
-                    createdAt: new Date(
-                      item.data.latest_non_thread_message.created_at
-                    ),
+                    createdAt: item.data.latest_non_thread_message.created_at,
                   }
                 : undefined,
             };
@@ -322,7 +316,7 @@ const selectData: (
             ...item.data,
             type: item.tag,
             frecencyScore: item.frecency_score,
-            viewedAt: item.data.viewedAt ?? undefined,
+            viewedAt: item.data.viewedAt,
             fileType: item.data.fileType ?? undefined,
             projectId: item.data.projectId ?? undefined,
             subType:
@@ -377,7 +371,7 @@ export function createChatsInfiniteQuery(
               ...item.data,
               type: item.tag,
               frecencyScore: item.frecency_score,
-              viewedAt: item.data.viewedAt ?? undefined,
+              viewedAt: item.data.viewedAt,
               projectId: item.data.projectId ?? undefined,
             })
           )

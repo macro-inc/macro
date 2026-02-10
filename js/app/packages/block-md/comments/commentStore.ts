@@ -184,7 +184,7 @@ const getHighlightThread = (
     replies.push({
       ...commentBase,
       id: comment.commentId,
-      createdAt: comment.createdAt ?? undefined,
+      createdAt: comment.createdAt,
       owner: comment.owner,
       author: comment.sender || comment.owner,
       text: comment.text,
@@ -194,7 +194,7 @@ const getHighlightThread = (
   const root: Root = {
     ...commentBase,
     id: rootComment.commentId,
-    createdAt: rootComment.createdAt ?? undefined,
+    createdAt: rootComment.createdAt,
     owner: rootComment.owner,
     author: rootComment.sender || rootComment.owner,
     text: rootComment.text,

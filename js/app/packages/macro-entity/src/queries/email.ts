@@ -93,7 +93,7 @@ export function createEmailsInfiniteQuery(
               type: 'email',
               name: email.name || 'No Subject',
               frecencyScore: email.frecencyScore ?? undefined,
-              viewedAt: email.viewedAt ?? undefined,
+              viewedAt: email.viewedAt,
               snippet: email.snippet ?? undefined,
               isImportant: email.isImportant ?? false,
               done: !email.inboxVisible,

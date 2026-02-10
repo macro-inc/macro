@@ -11,7 +11,7 @@ import type { EntityClickHandler } from './EntityWithEverything';
 
 interface EntityProps<T extends EntityData> extends ParentProps {
   entity: T;
-  timestamp?: Date;
+  timestamp?: Date | null;
   icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   iconClass?: string;
   onClick?: EntityClickHandler<T>;

@@ -207,8 +207,8 @@ export type SearchSnippet = {
 type CommandItemBase = {
   snippet?: SearchSnippet;
   height?: number;
-  updatedAt?: Date;
-  viewedAt?: Date;
+  updatedAt?: Date | null;
+  viewedAt?: Date | null;
 };
 
 type SimpleText = {

@@ -727,7 +727,7 @@ interface EntityProps<T extends WithNotification<EntityData>>
   extends ParentProps {
   entity: T;
   focused?: boolean;
-  timestamp?: Date;
+  timestamp?: Date | null;
   onClick?: EntityClickHandler<T>;
   onDblClick?: EntityClickHandler<T>;
   onPointerDown?: EntityClickHandler<T>;
@@ -1609,7 +1609,7 @@ function EntityProject(props: {
       id: data.id,
       name: data.name,
       ownerId: data.owner,
-      updatedAt: data.updatedAt ?? undefined,
+      updatedAt: data.updatedAt,
     };
     eventHandler?.({
       type: 'entity-project-path',
