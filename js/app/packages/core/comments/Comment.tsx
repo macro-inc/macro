@@ -56,7 +56,8 @@ export function Comment(
   const { commentOperations, setActiveThread } = useContext(CommentsContext);
 
   const isResolved = createMemo(() => props.comment.resolved ?? false);
-  const date = createMemo(() => new Date(props.comment.createdAt));
+  // TODO: handle nullish dates correctly
+  const date = createMemo(() => props.comment.createdAt ?? new Date());
 
   const [textValue, setTextValue] = createSignal<string>(props.comment.text);
   const [isEditing, setIsEditing] = createSignal<boolean>(false);

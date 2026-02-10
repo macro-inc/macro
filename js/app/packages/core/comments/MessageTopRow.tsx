@@ -92,9 +92,7 @@ export function MessageRowUI(
           </div>
         )}
         <div class="text-xs text-ink truncate grow-1">{displayName()}</div>
-        <div class="text-xs text-ink-muted">
-          {formatDate(props.date.valueOf())}
-        </div>
+        <div class="text-xs text-ink-muted">{formatDate(props.date)}</div>
       </div>
       <Show when={props.children}>
         <div
