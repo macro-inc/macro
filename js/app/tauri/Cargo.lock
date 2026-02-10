@@ -90,6 +90,7 @@ dependencies = [
  "serde_qs",
  "tauri",
  "tauri-build",
+ "tauri-plugin-auth",
  "tauri-plugin-deep-link",
  "tauri-plugin-haptics",
  "tauri-plugin-http",
@@ -4524,6 +4525,17 @@ dependencies = [
  "tauri-utils",
  "toml 0.9.8",
  "walkdir",
+]
+
+[[package]]
+name = "tauri-plugin-auth"
+version = "0.1.0"
+source = "git+https://github.com/seanaye/tauri-plugins?branch=main#5863bef82f3327e3358d0c1a13f5994c25c5ce3e"
+dependencies = [
+ "serde",
+ "tauri",
+ "tauri-plugin",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
