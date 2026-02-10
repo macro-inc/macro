@@ -29,7 +29,7 @@ import { useSplitLayout } from '../../app/component/split-layout/layout';
 import { DeprecatedTextButton } from './DeprecatedTextButton';
 import {
   EntityIcon,
-  EntityIconProps,
+  type EntityIconProps,
   getPreviewItemIconType,
 } from './EntityIcon';
 
