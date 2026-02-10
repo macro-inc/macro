@@ -259,8 +259,7 @@ fn starts_with_automated_prefix(local_part: &str) -> bool {
         if local_part == *prefix {
             return true;
         }
-        if local_part.starts_with(prefix) {
-            let remainder = &local_part[prefix.len()..];
+        if let Some(remainder) = local_part.strip_prefix(prefix) {
             if let Some(first_char) = remainder.chars().next() {
                 // Must be followed by a delimiter, not a letter (to avoid matching "support" in "supportive")
                 if matches!(first_char, '@' | '-' | '.' | '+' | '=' | '_' | '0'..='9') {
