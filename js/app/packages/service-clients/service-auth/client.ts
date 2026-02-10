@@ -322,6 +322,16 @@ export const authServiceClient = {
     );
   },
 
+  async patchAiConsent(args: { aiDataConsent: boolean }) {
+    return mapOk(
+      await fetchWithAuth<EmptyResponse>(`${authHost}/user/ai_consent`, {
+        method: 'PATCH',
+        body: JSON.stringify(args),
+      }),
+      (result) => result
+    );
+  },
+
   // HTTP methods (migrated from RPC)
   async getLegacyUserPermissions() {
     const result = await fetchWithAuth<GetLegacyUserPermissionsResponse>(
@@ -341,6 +351,7 @@ export const authServiceClient = {
       authenticated: !!data.userId,
       userId: data.userId,
       hasTrialed: data.hasTrialed,
+      aiDataConsent: data.aiDataConsent,
     }));
   },
 
