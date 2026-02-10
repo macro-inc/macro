@@ -41,7 +41,10 @@ export function processEmailColors(root: Node, theme: ThemeColorParams) {
     if (!textNodeColor.fg) return;
     // if the text is inside an anchor tag with a chromatic color, use the accent color;
     // grey/monochrome links fall through to normal text processing
-    if (textNodeColor.insideAnchor && textNodeColor.fg.c > CHROMATIC_THRESHOLD) {
+    if (
+      textNodeColor.insideAnchor &&
+      textNodeColor.fg.c > CHROMATIC_THRESHOLD
+    ) {
       const accentColor = `oklch(${accentL} ${accentC} ${accentH})`;
       setAnchorStyle(textNodeColor.node, 'color', accentColor);
       setAnchorStyle(textNodeColor.node, 'text-decoration-color', accentColor);
