@@ -1,10 +1,11 @@
 use std::borrow::Cow;
 
-use crate::service::fusionauth_client::{
+use crate::{
     AuthedClient, Result,
     error::{FusionAuthClientError, GenericErrorResponse},
 };
 
+/// A user to create in FusionAuth.
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct User<'a> {
@@ -20,7 +21,7 @@ pub struct User<'a> {
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub(in crate::service::fusionauth_client) struct CreateUserRequest<'a> {
+pub(crate) struct CreateUserRequest<'a> {
     /// The fusionauth application id
     pub application_id: Cow<'a, str>,
     /// Whether to skip verification of a user
@@ -32,7 +33,7 @@ pub(in crate::service::fusionauth_client) struct CreateUserRequest<'a> {
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub(in crate::service::fusionauth_client) struct UserResponse<'a> {
+pub(crate) struct UserResponse<'a> {
     /// The id of the user
     pub id: Cow<'a, str>,
     /// The email address of the user
@@ -43,7 +44,7 @@ pub(in crate::service::fusionauth_client) struct UserResponse<'a> {
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub(in crate::service::fusionauth_client) struct CreateUserResponse<'a> {
+pub(crate) struct CreateUserResponse<'a> {
     /// The user
     pub user: UserResponse<'a>,
 }
@@ -51,7 +52,7 @@ pub(in crate::service::fusionauth_client) struct CreateUserResponse<'a> {
 /// Creates a user in fusionauth
 /// https://fusionauth.io/docs/apis/users#create-a-user
 /// Valid respones: 200, 400, 401, 500, 503, 504
-pub(in crate::service::fusionauth_client) async fn create_user(
+pub(crate) async fn create_user(
     client: &AuthedClient,
     base_url: &str,
     request: CreateUserRequest<'_>,

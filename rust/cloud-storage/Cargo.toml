@@ -40,6 +40,7 @@ members = [
   "email_validator",
   "entity_access",
   "frecency",
+  "fusionauth",
   "gmail_client",
   "integration_tests/*",
   "lambda_client",

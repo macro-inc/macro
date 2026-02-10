@@ -3,7 +3,7 @@ mod generate_password;
 pub mod service;
 
 /// expose auth client to be used in bin
-pub use service::fusionauth_client::FusionAuthClient;
-pub use service::fusionauth_client::user::create::User;
+pub use fusionauth::FusionAuthClient;
+pub use fusionauth::user::create::User;
 
 pub use generate_password::generate_random_password;

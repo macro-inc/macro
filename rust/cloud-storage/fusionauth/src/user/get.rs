@@ -1,38 +1,40 @@
 use std::borrow::Cow;
 
-use crate::service::fusionauth_client::{
+use crate::{
     AuthedClient, Result,
     error::{FusionAuthClientError, GenericErrorResponse},
 };
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub(in crate::service::fusionauth_client) struct Registration<'a> {
-    /// The application id
-    pub application_id: Cow<'a, str>,
+pub(crate) struct UserResponse<'a> {
+    /// The id of the user
+    pub id: Cow<'a, str>,
+    /// The email address of the user
+    pub email: Cow<'a, str>,
+    /// The additional data associated with the user
+    pub data: Option<serde_json::Value>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub(in crate::service::fusionauth_client) struct RegisterUserRequest<'a> {
-    /// The registration object
-    pub registration: Registration<'a>,
+pub(crate) struct GetUserResponse<'a> {
+    /// The user
+    pub user: UserResponse<'a>,
 }
 
-/// Registers a user to a given application in fusionauth
-/// https://fusionauth.io/docs/apis/registrations#create-a-user-registration-for-an-existing-user
-/// Valid respones: 200, 400, 401, 404, 500, 503
-pub(in crate::service::fusionauth_client) async fn register_user<'a>(
+/// Retreives a user by email in fusionauth
+/// https://fusionauth.io/docs/apis/users#retrieve-a-user
+/// Valid respones: 200, 400, 401, 500, 503
+pub(crate) async fn get_user_id_by_email(
     client: &AuthedClient,
     base_url: &str,
-    user_id: &str,
-    register_user_request: RegisterUserRequest<'a>,
-) -> Result<()> {
-    let url_user_id = urlencoding::encode(user_id);
+    email: &str,
+) -> Result<String> {
+    let url_email = urlencoding::encode(email);
     let res = client
         .client()
-        .post(format!("{base_url}/api/user/registration/{url_user_id}"))
-        .json(&register_user_request)
+        .get(format!("{base_url}/api/user?email={url_email}"))
         .send()
         .await
         .map_err(|e| {
@@ -44,8 +46,14 @@ pub(in crate::service::fusionauth_client) async fn register_user<'a>(
     let status_code = res.status();
     match status_code {
         reqwest::StatusCode::OK => {
-            tracing::trace!("user registered");
-            Ok(())
+            tracing::trace!("user found");
+            let body = res.json::<GetUserResponse>().await.map_err(|e| {
+                FusionAuthClientError::Generic(GenericErrorResponse {
+                    message: e.to_string(),
+                })
+            })?;
+
+            Ok(body.user.id.into())
         }
         _ => {
             let body = res.text().await.map_err(|e| {
@@ -53,12 +61,6 @@ pub(in crate::service::fusionauth_client) async fn register_user<'a>(
                     message: e.to_string(),
                 })
             })?;
-
-            if status_code == reqwest::StatusCode::BAD_REQUEST
-                && body.contains("[duplicate]registration")
-            {
-                return Err(FusionAuthClientError::UserAlreadyRegistered);
-            }
 
             if status_code == reqwest::StatusCode::NOT_FOUND {
                 return Err(FusionAuthClientError::UserDoesNotExist);

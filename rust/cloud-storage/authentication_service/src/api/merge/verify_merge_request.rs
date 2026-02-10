@@ -8,9 +8,7 @@ use axum::{
 };
 
 use crate::api::context::ApiContext;
-use authentication_service::service::fusionauth_client::identity_provider::{
-    IdentityProviderLink, LinkUserRequest,
-};
+use fusionauth::identity_provider::{IdentityProviderLink, LinkUserRequest};
 
 use model::{
     response::{EmptyResponse, ErrorResponse},

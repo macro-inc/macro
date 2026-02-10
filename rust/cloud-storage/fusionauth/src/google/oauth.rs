@@ -1,6 +1,6 @@
 use std::{collections::HashMap, time::Duration};
 
-use crate::service::fusionauth_client::{
+use crate::{
     Result, UnauthedClient,
     error::{FusionAuthClientError, GenericErrorResponse},
 };
@@ -10,6 +10,7 @@ use base64::{
 };
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
+/// Request to refresh a Google OAuth2 access token.
 pub struct GoogleTokenRequest {
     client_id: String,
     client_secret: String,
@@ -18,17 +19,23 @@ pub struct GoogleTokenRequest {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
+/// Response from refreshing a Google OAuth2 access token.
 pub struct GoogleTokenResponse {
+    /// The access token.
     pub access_token: String,
+    /// The number of seconds until the token expires.
     pub expires_in: u64,
+    /// The scope of the token.
     pub scope: String,
+    /// The type of token.
     pub token_type: String,
+    /// The ID token.
     pub id_token: String,
 }
 
 /// Refreshes a Google OAuth2 access token using a refresh token.
 /// See https://developers.google.com/identity/protocols/oauth2/web-server#offline
-pub(in crate::service::fusionauth_client) async fn refresh_google_token(
+pub(crate) async fn refresh_google_token(
     client: &UnauthedClient,
     client_id: &str,
     client_secret: &str,
@@ -99,8 +106,11 @@ pub(in crate::service::fusionauth_client) async fn refresh_google_token(
 }
 
 #[derive(Debug, serde::Deserialize)]
+/// Response from exchanging a Google authorization code for tokens.
 pub struct GoogleExchangeTokenResponse {
+    /// The refresh token.
     pub refresh_token: String,
+    /// The ID token.
     pub id_token: String,
 }
 
@@ -113,7 +123,8 @@ struct TokenExchangeRequest {
     redirect_uri: String,
 }
 
-pub(in crate::service::fusionauth_client) async fn exchange_code_for_tokens(
+/// Exchanges a Google authorization code for tokens.
+pub(crate) async fn exchange_code_for_tokens(
     client: &UnauthedClient,
     client_id: &str,
     client_secret: &str,
@@ -172,16 +183,19 @@ pub(in crate::service::fusionauth_client) async fn exchange_code_for_tokens(
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
+/// User info extracted from a Google ID token.
 pub struct GoogleUserInfo {
-    pub sub: String, // Google user ID
+    /// The Google user ID.
+    pub sub: String,
+    /// The user's email address.
     pub email: String,
+    /// Additional claims from the ID token.
     #[serde(flatten)]
     pub other: HashMap<String, serde_json::Value>,
 }
 
-pub(in crate::service::fusionauth_client) fn decode_google_id_token(
-    id_token: &str,
-) -> anyhow::Result<GoogleUserInfo> {
+/// Decodes a Google ID token without signature verification.
+pub(crate) fn decode_google_id_token(id_token: &str) -> anyhow::Result<GoogleUserInfo> {
     // Split the JWT into its three parts
     let parts: Vec<&str> = id_token.split('.').collect();
     if parts.len() != 3 {

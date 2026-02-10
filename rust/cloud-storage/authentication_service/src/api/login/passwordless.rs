@@ -8,7 +8,7 @@ use axum::{
 use std::borrow::Cow;
 
 use crate::{api::context::ApiContext, generate_password::generate_random_password};
-use authentication_service::service::fusionauth_client::error::FusionAuthClientError;
+use fusionauth::error::FusionAuthClientError;
 use model::{
     authentication::login::{request::PasswordlessRequest, response::SsoRequiredResponse},
     response::EmptyResponse,
@@ -96,7 +96,7 @@ pub async fn handler(
                     tracing::trace!(email=%lowercase_email, "user does not exist, we need to create user");
                     let fusionauth_user_id = ctx
                     .auth_client
-                    .create_user(authentication_service::service::fusionauth_client::user::create::User {
+                    .create_user(fusionauth::user::create::User {
                         email: (&lowercase_email).into(),
                         password: generate_random_password().into(),
                         username: None,

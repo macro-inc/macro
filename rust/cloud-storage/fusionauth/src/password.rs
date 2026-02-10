@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::service::fusionauth_client::{
+use crate::{
     AuthedClient, FusionAuthClient, Result,
     error::{FusionAuthClientError, GenericErrorResponse},
 };
@@ -91,6 +91,7 @@ async fn login(
 }
 
 impl FusionAuthClient {
+    /// Performs a password-based login with the given email and password.
     #[tracing::instrument(skip(self, password), fields(application_id=%self.application_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn password_login(&self, email: &str, password: &str) -> Result<(String, String)> {
         login(

@@ -1,7 +1,8 @@
 use std::borrow::Cow;
 
-use crate::service::fusionauth_client::{FusionAuthClient, Result};
+use crate::{FusionAuthClient, Result};
 
+/// User creation operations.
 pub mod create;
 mod delete;
 mod get;
@@ -9,6 +10,7 @@ mod register;
 mod verify;
 
 impl FusionAuthClient {
+    /// Gets a user's FusionAuth ID by their email address.
     #[tracing::instrument(skip(self), fields(application_id=%self.application_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn get_user_id_by_email(&self, email: &str) -> Result<String> {
         get::get_user_id_by_email(&self.auth_client, &self.fusion_auth_base_url, email).await
@@ -41,6 +43,7 @@ impl FusionAuthClient {
         delete::delete_user(&self.auth_client, &self.fusion_auth_base_url, user_id).await
     }
 
+    /// Registers a user to the application by looking up their email first.
     #[tracing::instrument(skip(self), fields(application_id=%self.application_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn register_user_from_email(&self, email: &str) -> Result<()> {
         // Get the fusionauth user id for the email
@@ -61,6 +64,7 @@ impl FusionAuthClient {
         .await
     }
 
+    /// Registers a user to the application by their user ID.
     #[tracing::instrument(skip(self), fields(application_id=%self.application_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn register_user(&self, user_id: &str) -> Result<()> {
         register::register_user(
@@ -76,6 +80,7 @@ impl FusionAuthClient {
         .await
     }
 
+    /// Verifies a user's email with the given verification ID.
     #[tracing::instrument(skip(self), fields(application_id=%self.application_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn verify_email(&self, verification_id: &str) -> Result<()> {
         verify::verify_email(
@@ -88,6 +93,7 @@ impl FusionAuthClient {
         .await
     }
 
+    /// Resends the email verification for the given email.
     #[tracing::instrument(skip(self), fields(application_id=%self.application_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn resend_verify_email(&self, email: &str) -> Result<()> {
         verify::resend_verify_email(

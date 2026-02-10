@@ -1,8 +1,9 @@
-use crate::service::fusionauth_client::{FusionAuthClient, Result};
+use crate::{FusionAuthClient, Result};
 
 mod refresh;
 
 impl FusionAuthClient {
+    /// Refreshes a JWT token using the provided access and refresh tokens.
     #[tracing::instrument(skip(self), fields(application_id=%self.application_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn refresh_token(
         &self,

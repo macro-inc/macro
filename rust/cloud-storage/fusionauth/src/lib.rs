@@ -1,20 +1,35 @@
+#![deny(missing_docs)]
+//! FusionAuth API client library.
+
+/// Apple identity provider login.
 pub mod apple;
+/// FusionAuth error types.
 pub mod error;
+/// Google identity provider and OAuth.
 pub mod google;
+/// Identity provider management (links, login, lookup, search, unlink).
 pub mod identity_provider;
+/// JWT refresh operations.
 pub mod jwt;
+/// Logout operations.
 pub mod logout;
+/// OAuth authorization code grant.
 pub mod oauth;
+/// Password-based login.
 pub mod password;
+/// Passwordless login flow.
 pub mod passwordless;
+/// User management (create, delete, get, register, verify).
 pub mod user;
 
+/// Result type alias using [`error::FusionAuthClientError`] as the default error.
 pub type Result<T, E = error::FusionAuthClientError> = std::result::Result<T, E>;
 
 use anyhow::Context;
 
 use reqwest::Url;
 
+/// An HTTP client with default Authorization and optional tenant headers.
 #[derive(Clone, Debug)]
 pub struct AuthedClient {
     inner: reqwest::Client,
@@ -24,6 +39,7 @@ pub struct AuthedClient {
 const FUSIONAUTH_TENANT_ID_HEADER: &str = "X-FusionAuth-TenantId";
 
 impl AuthedClient {
+    /// Creates a new authenticated client with the given API key and tenant ID.
     pub fn new(url: &str, api_key: String, tenant_id: String) -> Self {
         // Create authenticated client with default Authorization header
         let mut auth_headers = reqwest::header::HeaderMap::new();
@@ -49,26 +65,31 @@ impl AuthedClient {
         Self { inner: client }
     }
 
+    /// Returns a reference to the inner reqwest client.
     pub fn client(&self) -> &reqwest::Client {
         &self.inner
     }
 }
 
+/// An HTTP client without authentication headers.
 #[derive(Clone, Debug, Default)]
 pub struct UnauthedClient {
     inner: reqwest::Client,
 }
 
 impl UnauthedClient {
+    /// Creates a new unauthenticated client.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Returns a reference to the inner reqwest client.
     pub fn client(&self) -> &reqwest::Client {
         &self.inner
     }
 }
 
+/// The main FusionAuth API client.
 #[derive(Clone, Debug)]
 pub struct FusionAuthClient {
     /// The fusionauth client id
@@ -92,6 +113,7 @@ pub struct FusionAuthClient {
 }
 
 impl FusionAuthClient {
+    /// Creates a new FusionAuth client with the given configuration.
     #[expect(clippy::too_many_arguments, reason = "too annoying to fix")]
     pub fn new(
         tenant_id: String,

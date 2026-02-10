@@ -33,8 +33,6 @@ mod config;
 mod generate_password;
 mod rate_limit_config;
 
-use authentication_service::service;
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     MacroEntrypoint::default().init();
@@ -126,7 +124,7 @@ async fn main() -> anyhow::Result<()> {
             .to_string(),
     };
 
-    let auth_client = service::fusionauth_client::FusionAuthClient::new(
+    let auth_client = fusionauth::FusionAuthClient::new(
         config.fusionauth_tenant_id,
         fusionauth_api_key,
         config.fusionauth_client_id.clone(),

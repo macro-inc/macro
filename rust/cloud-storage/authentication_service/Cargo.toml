@@ -45,6 +45,7 @@ cookie = { workspace = true }
 document_storage_service_client = { path = "../document_storage_service_client" }
 doppleganger = { workspace = true }
 email_validator = { path = "../email_validator" }
+fusionauth = { path = "../fusionauth" }
 futures = { workspace = true }
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }

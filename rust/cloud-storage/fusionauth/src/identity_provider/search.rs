@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::service::fusionauth_client::{
+use crate::{
     AuthedClient, Result,
     error::{FusionAuthClientError, GenericErrorResponse},
 };
@@ -24,7 +24,7 @@ struct IdentityProviderSearchResponse<'a> {
 /// name of the provider
 /// https://fusionauth.io/docs/apis/identity-providers/#request-1
 /// Valid respones: 200, 400, 401, 500
-pub(in crate::service::fusionauth_client) async fn get_idp_id_by_name(
+pub(crate) async fn get_idp_id_by_name(
     client: &AuthedClient,
     base_url: &str,
     name: &str,

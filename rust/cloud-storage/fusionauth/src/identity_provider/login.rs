@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::service::fusionauth_client::{
+use crate::{
     Result, UnauthedClient,
     error::{FusionAuthClientError, GenericErrorResponse},
 };
@@ -41,7 +41,7 @@ pub struct IdentityProviderLoginResponse {
 /// This API allows you to complete a OpenID Connect login after authenticating a user using the OpenID Connect API. If you are using the FusionAuth login UI with the OpenID Connect button you will not utilize this API directly.
 /// https://fusionauth.io/docs/apis/identity-providers/openid-connect#complete-an-openid-connect-login
 /// Valid respones: 200, 202, 203, 204, 212, 213, 242, 400, 401, 409, 410, 500, 503, 504
-pub(in crate::service::fusionauth_client) async fn complete_identity_provider_login(
+pub(crate) async fn complete_identity_provider_login(
     client: &UnauthedClient,
     base_url: &str,
     request: IdentityProviderLoginRequest<'_>,

@@ -1,13 +1,13 @@
 use std::borrow::Cow;
 
-use crate::service::fusionauth_client::{
+use crate::{
     AuthedClient, Result,
     error::{FusionAuthClientError, GenericErrorResponse},
 };
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub(in crate::service::fusionauth_client) struct VerifyEmailRequest<'a> {
+pub(crate) struct VerifyEmailRequest<'a> {
     /// The verification id to validate the user's email
     pub verification_id: Cow<'a, str>,
 }
@@ -15,7 +15,7 @@ pub(in crate::service::fusionauth_client) struct VerifyEmailRequest<'a> {
 /// Verifies a user's email in fusionauth
 /// https://fusionauth.io/docs/apis/users#verify-a-users-email
 /// Valid respones: 200, 400, 401, 404, 500, 503
-pub(in crate::service::fusionauth_client) async fn verify_email<'a>(
+pub(crate) async fn verify_email<'a>(
     client: &AuthedClient,
     base_url: &str,
     verify_email_request: VerifyEmailRequest<'a>,

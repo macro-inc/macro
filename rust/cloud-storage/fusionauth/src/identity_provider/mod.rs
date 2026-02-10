@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::service::fusionauth_client::{FusionAuthClient, Result};
+use crate::{FusionAuthClient, Result};
 
 mod link;
 mod login;
@@ -11,6 +11,7 @@ mod unlink;
 pub use link::*;
 
 impl FusionAuthClient {
+    /// Searches for an identity provider by name and returns its ID.
     #[tracing::instrument(skip(self), fields(application_id=%self.application_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn get_identity_provider_id_by_name(&self, name: &str) -> Result<String> {
         search::get_idp_id_by_name(&self.auth_client, &self.fusion_auth_base_url, name).await
@@ -38,6 +39,7 @@ impl FusionAuthClient {
         link::link_user(&self.auth_client, &self.fusion_auth_base_url, request).await
     }
 
+    /// Unlinks a user from an identity provider.
     #[tracing::instrument(skip(self), fields(application_id=%self.application_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn unlink_user(&self, user_id: &str, idp_id: &str, idp_user_id: &str) -> Result<()> {
         unlink::unlink(
@@ -50,6 +52,7 @@ impl FusionAuthClient {
         .await
     }
 
+    /// Looks up an identity provider by domain.
     #[tracing::instrument(skip(self), fields(application_id=%self.application_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn lookup_identity_provider(&self, domain: &str) -> Result<Option<String>> {
         lookup::get_idp_id_by_domain(&self.auth_client, &self.fusion_auth_base_url, domain).await

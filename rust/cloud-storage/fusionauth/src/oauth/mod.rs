@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::service::fusionauth_client::{
+use crate::{
     FusionAuthClient, Result, UnauthedClient,
     error::{FusionAuthClientError, GenericErrorResponse},
 };
@@ -96,6 +96,7 @@ async fn complete(
 }
 
 impl FusionAuthClient {
+    /// Completes the OAuth2 authorization code grant flow.
     #[tracing::instrument(skip(self), fields(application_id=%self.application_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn complete_authorization_code_grant(&self, code: &str) -> Result<(String, String)> {
         complete(

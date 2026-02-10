@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::service::fusionauth_client::{
+use crate::{
     AuthedClient, FusionAuthClient, Result,
     error::{FusionAuthClientError, GenericErrorResponse},
 };
@@ -43,17 +43,23 @@ struct PasswordlessLoginCompleteRequest<'a> {
     pub code: Cow<'a, str>,
 }
 
+/// The state returned in the passwordless login response.
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct PasswordlessLoginStateResponse {
+    /// The redirect URI.
     pub redirect_uri: String,
 }
 
+/// A user returned from the passwordless login response.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct User {
+    /// The user's FusionAuth ID.
     pub id: String,
+    /// The user's email address.
     pub email: String,
 }
 
+/// The complete response from a passwordless login.
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct PasswordlessLoginCompleteResponse {
@@ -220,6 +226,7 @@ async fn complete(
 }
 
 impl FusionAuthClient {
+    /// Starts a passwordless login flow for the given email.
     #[tracing::instrument(skip(self), fields(application_id=%self.application_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn start_passwordless_login(
         &self,
@@ -243,6 +250,7 @@ impl FusionAuthClient {
         .await
     }
 
+    /// Sends the passwordless login code to the user.
     #[tracing::instrument(skip(self), fields(application_id=%self.application_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn send_passwordless_login(&self, code: &str) -> Result<()> {
         send(
@@ -255,6 +263,7 @@ impl FusionAuthClient {
         .await
     }
 
+    /// Completes the passwordless login flow with the given code.
     #[tracing::instrument(skip_all, level = tracing::Level::TRACE)]
     pub async fn complete_passwordless_login(
         &self,

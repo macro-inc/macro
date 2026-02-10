@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::service::fusionauth_client::{
+use crate::{
     AuthedClient, Result,
     error::{FusionAuthClientError, GenericErrorResponse},
 };
@@ -36,7 +36,7 @@ struct IdentityProviderLookupResponse<'a> {
 /// If a match is found, it will return the identify provider's id to be used in the sso idp_hint
 /// https://fusionauth.io/docs/apis/identity-providers/#lookup-an-identity-provider
 /// Valid respones: 200, 400, 404, 500
-pub(in crate::service::fusionauth_client) async fn get_idp_id_by_domain(
+pub(crate) async fn get_idp_id_by_domain(
     client: &AuthedClient,
     base_url: &str,
     email: &str,

@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::service::fusionauth_client::{
+use crate::{
     Result, UnauthedClient,
     error::{FusionAuthClientError, GenericErrorResponse},
 };

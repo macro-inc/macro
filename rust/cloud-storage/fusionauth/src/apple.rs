@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::service::fusionauth_client::{
+use crate::{
     FusionAuthClient, Result, UnauthedClient,
     error::{FusionAuthClientError, GenericErrorResponse},
 };
@@ -82,6 +82,7 @@ async fn login(
 }
 
 impl FusionAuthClient {
+    /// Performs an Apple login using the provided identity provider ID, id token, and code.
     #[tracing::instrument(skip(self), fields(application_id=%self.application_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn apple_login(
         &self,

@@ -1,4 +1,4 @@
-use crate::service::fusionauth_client::{
+use crate::{
     FusionAuthClient, Result, UnauthedClient,
     error::{FusionAuthClientError, GenericErrorResponse},
 };
@@ -53,6 +53,7 @@ async fn logout(client: &UnauthedClient, base_url: &str, request: LogoutRequest<
 }
 
 impl FusionAuthClient {
+    /// Logs out the user for the given tenant.
     #[tracing::instrument(skip(self), fields(application_id=%self.application_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
     pub async fn logout(&self, tenant_id: &str) -> Result<()> {
         logout(

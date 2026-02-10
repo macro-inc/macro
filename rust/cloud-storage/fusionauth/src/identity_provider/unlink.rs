@@ -1,4 +1,4 @@
-use crate::service::fusionauth_client::{
+use crate::{
     AuthedClient, Result,
     error::{FusionAuthClientError, GenericErrorResponse},
 };
@@ -6,7 +6,7 @@ use crate::service::fusionauth_client::{
 /// Unlinks a user from an identity provider
 /// https://fusionauth.io/docs/apis/identity-providers/links#unlink-a-user
 /// Valid respones: 200, 400, 401, 404, 500
-pub(in crate::service::fusionauth_client) async fn unlink(
+pub(crate) async fn unlink(
     client: &AuthedClient,
     base_url: &str,
     user_id: &str,

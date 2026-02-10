@@ -1,11 +1,13 @@
-use crate::service::fusionauth_client::{
+use crate::{
     FusionAuthClient, Result,
     error::{FusionAuthClientError, GenericErrorResponse},
 };
 
+/// Google OAuth token operations.
 pub mod oauth;
 
 impl FusionAuthClient {
+    /// Refreshes a Google OAuth2 access token using a refresh token.
     #[tracing::instrument(skip(self, refresh_token), fields(client_id=%self.client_id))]
     pub async fn refresh_google_token(
         &self,
@@ -20,6 +22,7 @@ impl FusionAuthClient {
         .await
     }
 
+    /// Exchanges a Google authorization code for tokens.
     #[tracing::instrument(skip(self, code, redirect_uri))]
     pub async fn exchange_google_code_for_tokens(
         &self,
@@ -36,6 +39,7 @@ impl FusionAuthClient {
         .await
     }
 
+    /// Parses and decodes a Google ID token to extract user info.
     #[tracing::instrument(skip(self, id_token))]
     pub fn parse_google_id_token(&self, id_token: &str) -> Result<oauth::GoogleUserInfo> {
         let result = oauth::decode_google_id_token(id_token).map_err(|e| {
