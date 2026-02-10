@@ -84,15 +84,6 @@ export const formatEmailDate = (date: Date) => {
 };
 
 /**
- * Converts an ISO 8601 date string to Unix timestamp in seconds
- * @param isoString - ISO 8601 date string (e.g., "2025-08-18T18:07:54.000Z")
- * @returns Unix timestamp in seconds
- */
-export const isoToUnixTimestamp = (isoString: string): number => {
-  return Math.floor(new Date(isoString).getTime() / 1000);
-};
-
-/**
  * Compares two dates in descending order (most recent first).
  * Handles undefined/null dates by treating them as epoch zero.
  * @returns Positive if a > b, negative if a < b, zero if equal
