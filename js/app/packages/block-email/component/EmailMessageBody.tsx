@@ -106,9 +106,8 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
   // TODO it might be nice to do some additional checks here, e.g. check if this message was sent from a user that the user has sent a message to before.
   const isPersonal = createMemo(() => {
     return (
-      (props.message.from?.email === userEmail() ||
-        props.message.labels.some((l) => l.name === 'CATEGORY_PERSONAL')) &&
-      !parsedBodyHtml()?.hasTable
+      props.message.from?.email === userEmail() ||
+      props.message.labels.some((l) => l.name === 'CATEGORY_PERSONAL')
     );
   });
 
