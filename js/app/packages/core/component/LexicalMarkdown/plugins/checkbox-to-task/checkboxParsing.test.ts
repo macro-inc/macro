@@ -45,7 +45,9 @@ describe('Checkbox Parsing', () => {
     it('should extract date from mention', () => {
       const text =
         'Due <m-date-mention>{"date":"2024-03-15T00:00:00Z","displayFormat":"March 15, 2024"}</m-date-mention>';
-      expect(extractDateMention(text)).toBe('2024-03-15T00:00:00Z');
+      const result = extractDateMention(text);
+      expect(result).toBeInstanceOf(Date);
+      expect(result?.toISOString()).toBe('2024-03-15T00:00:00.000Z');
     });
 
     it('should return null when no date mention', () => {
@@ -55,11 +57,25 @@ describe('Checkbox Parsing', () => {
     it('should return first date when multiple present', () => {
       const text =
         '<m-date-mention>{"date":"2024-01-01","displayFormat":"Jan 1"}</m-date-mention> to <m-date-mention>{"date":"2024-12-31","displayFormat":"Dec 31"}</m-date-mention>';
-      expect(extractDateMention(text)).toBe('2024-01-01');
+      const result = extractDateMention(text);
+      expect(result).toBeInstanceOf(Date);
+      expect(result?.toISOString()).toBe('2024-01-01T00:00:00.000Z');
     });
 
     it('should handle malformed JSON gracefully', () => {
       const text = '<m-date-mention>{invalid}</m-date-mention>';
+      expect(extractDateMention(text)).toBeNull();
+    });
+
+    it('should handle null date field', () => {
+      const text =
+        '<m-date-mention>{"date":null,"displayFormat":"N/A"}</m-date-mention>';
+      expect(extractDateMention(text)).toBeNull();
+    });
+
+    it('should handle missing date field', () => {
+      const text =
+        '<m-date-mention>{"displayFormat":"March 15"}</m-date-mention>';
       expect(extractDateMention(text)).toBeNull();
     });
   });

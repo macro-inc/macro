@@ -187,7 +187,7 @@ export function TaskPreviewRow(props: TaskPreviewRowProps) {
     saveDate: async (property: Property, date: Date) => {
       props.onUpdatePropertyValue(property.propertyDefinitionId, {
         valueType: 'DATE',
-        value: date.toISOString(),
+        value: date,
       });
     },
   };

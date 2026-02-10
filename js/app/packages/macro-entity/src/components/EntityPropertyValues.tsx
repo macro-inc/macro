@@ -75,7 +75,7 @@ export const EntityPropertyValues = (props: EntityPropertyValuesProps) => {
         property,
         apiValues: {
           valueType: 'DATE',
-          value: date.toISOString(),
+          value: date,
         },
       }),
   };
@@ -141,7 +141,7 @@ export const KeyPropertiesGrid = (props: EntityPropertyValuesProps) => {
         property,
         apiValues: {
           valueType: 'DATE',
-          value: date.toISOString(),
+          value: date,
         },
       }),
   };

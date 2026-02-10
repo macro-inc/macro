@@ -323,10 +323,9 @@ export function propertyApiValuesToNormalized(
     }
 
     case 'DATE': {
-      if (apiValues.value !== null && typeof apiValues.value === 'string') {
-        const date = new Date(apiValues.value);
-        if (!isNaN(date.getTime())) {
-          return { type: 'DATE', value: date };
+      if (apiValues.value !== null && apiValues.value instanceof Date) {
+        if (!isNaN(apiValues.value.getTime())) {
+          return { type: 'DATE', value: apiValues.value };
         }
       }
       return { type: 'EMPTY', value: null };

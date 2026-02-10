@@ -111,7 +111,7 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
         const date = selectedDate();
         apiValues = {
           valueType: 'DATE',
-          value: date ? date.toISOString() : null,
+          value: date,
         };
         break;
       }

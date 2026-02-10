@@ -6,7 +6,7 @@ import type { MessageToSend } from '@service-email/generated/schemas/messageToSe
 
 export async function saveEmailDraft(
   draft: MessageToSend,
-  sendTime?: string | null
+  sendTime?: Date | null
 ): Promise<MessageToSendDbId | false> {
   const createRes = await emailClient.createDraft({
     draft,

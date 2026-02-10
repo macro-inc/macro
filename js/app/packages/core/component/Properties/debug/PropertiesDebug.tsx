@@ -193,7 +193,7 @@ const PropertiesDebug: Component = () => {
 
       setPropertyValues(property.propertyDefinitionId, {
         valueType: 'DATE',
-        value: date.toISOString(),
+        value: date,
       });
     },
   };

@@ -370,7 +370,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     saveDate: async (property: Property, date: Date) => {
       setPropertyValues(property.propertyDefinitionId, {
         valueType: 'DATE',
-        value: date.toISOString(),
+        value: date,
       });
     },
   };

@@ -168,7 +168,7 @@ export type { SetPropertyValue } from '@service-properties/generated/schemas/set
 export type PropertyApiValues =
   | { valueType: 'STRING'; value: string | null }
   | { valueType: 'NUMBER'; value: number | null }
-  | { valueType: 'DATE'; value: string | null }
+  | { valueType: 'DATE'; value: Date | null }
   | { valueType: 'BOOLEAN'; value: boolean | null }
   | { valueType: 'SELECT_STRING'; values: string[] | null }
   | { valueType: 'SELECT_NUMBER'; values: string[] | null }

@@ -34,15 +34,16 @@ export function extractUserMentions(markdownText: string): string[] {
 
 /**
  * Extract the first date mention from markdown text.
- * Returns ISO date string or null.
+ * Returns parsed ISO date string Date object or null.
  */
-export function extractDateMention(markdownText: string): string | null {
+export function extractDateMention(markdownText: string): Date | null {
   const match = DATE_MENTION_PATTERN.exec(markdownText);
   if (!match) return null;
 
   try {
     const data = JSON.parse(match[1]);
-    return data.date ?? null;
+    const maybeIsoString = data.date ?? null;
+    return maybeIsoString ? new Date(maybeIsoString) : null;
   } catch {
     return null;
   }
