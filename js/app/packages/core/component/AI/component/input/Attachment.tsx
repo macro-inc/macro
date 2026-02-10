@@ -114,6 +114,11 @@ function ChatAttachment(props: {
             <ItemPreview
               id={props.attachment.attachmentId}
               type={metadata().type}
+              class="flex items-center gap-1 text-sm"
+              iconClass=""
+              textClass="truncate"
+              iconSize="xs"
+              disableHoverCard
             />
             <div
               class="hover:bg-hover hover-transition-bg rounded-md p-1 items-center flex"

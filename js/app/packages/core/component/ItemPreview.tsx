@@ -27,7 +27,11 @@ import { PopupPreview } from './DocumentPreview';
 import { HoverCard } from './HoverCard';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
 import { DeprecatedTextButton } from './DeprecatedTextButton';
-import { EntityIcon, getPreviewItemIconType } from './EntityIcon';
+import {
+  EntityIcon,
+  EntityIconProps,
+  getPreviewItemIconType,
+} from './EntityIcon';
 
 export function useItemPreviewData(entity: Accessor<ItemEntity>) {
   const [item] = useItemPreview(entity);
@@ -170,7 +174,22 @@ function InlineLoading() {
   );
 }
 
-export function ItemPreview(props: ItemEntity) {
+export type ItemPreviewProps = ItemEntity & {
+  /** Custom class for the button wrapper */
+  class?: string;
+  /** Custom class for the icon container */
+  iconClass?: string;
+  /** Custom class for the text/name */
+  textClass?: string;
+  /** Disable hover card popup */
+  disableHoverCard?: boolean;
+  /** Max length for text truncation */
+  maxLength?: number;
+  /** Icon size (defaults to 'fill') */
+  iconSize?: EntityIconProps['size'];
+};
+
+export function ItemPreview(props: ItemPreviewProps) {
   return (
     <Suspense>
       <ItemPreviewInner {...props} />
@@ -178,9 +197,19 @@ export function ItemPreview(props: ItemEntity) {
   );
 }
 
-function ItemPreviewInner(props: ItemEntity) {
+function ItemPreviewInner(props: ItemPreviewProps) {
   const { item, name, onPreviewClick, targetType, ItemEntityIcon } =
     useItemPreviewData(() => props);
+
+  const maxLength = () => props.maxLength ?? 80;
+  const iconSize = () => props.iconSize ?? 'fill';
+  const buttonClass = () =>
+    props.class ??
+    'text-ink-base text-sm ring-1 ring-edge-muted rounded-xs hover:bg-panel-hover flex flex-row h-6 px-2 justify-center items-center';
+  const iconClass = () =>
+    props.iconClass ?? 'flex justify-start items-center h-3.5 mr-2';
+  const textClass = () =>
+    props.textClass ?? 'flex-1 text-left leading-5 min-w-0 truncate';
 
   return (
     <Switch>
@@ -197,6 +226,7 @@ function ItemPreviewInner(props: ItemEntity) {
                   const itemType = accessibleItem().type;
                   return fileTypeToBlockName(type ?? itemType);
                 };
+
                 const navHandlers =
                   useSplitNavigationHandler<HTMLButtonElement>((e) => {
                     const item = accessibleItem();
@@ -208,19 +238,19 @@ function ItemPreviewInner(props: ItemEntity) {
                       e.shiftKey
                     );
                   });
+
                 return (
                   <HoverCard
-                    disabled={isTouchDevice() || !blockName()}
+                    disabled={
+                      props.disableHoverCard || isTouchDevice() || !blockName()
+                    }
                     trigger={
-                      <button
-                        class="text-ink-base text-sm ring-1 ring-edge-muted rounded-xs hover:bg-panel-hover flex flex-row h-6 px-2 justify-center items-center"
-                        {...navHandlers}
-                      >
-                        <div class="flex justify-start items-center h-3.5 mr-2">
-                          <ItemEntityIcon size="fill" />
+                      <button class={buttonClass()} {...navHandlers}>
+                        <div class={iconClass()}>
+                          <ItemEntityIcon size={iconSize()} />
                         </div>
-                        <div class="flex-1 text-left leading-5 min-w-0 truncate">
-                          {truncateString(name(), 80)}
+                        <div class={textClass()}>
+                          {truncateString(name(), maxLength())}
                         </div>
                       </button>
                     }
