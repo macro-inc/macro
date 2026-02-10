@@ -14,10 +14,6 @@ name = "generate_keys"
 path = "src/bin/generate_keys.rs"
 
 [[bin]]
-name = "backfill_null_macro_user_id"
-path = "src/bin/backfill_null_macro_user_id.rs"
-
-[[bin]]
 name = "authentication_service_openapi"
 path = "src/openapi.rs"
 
