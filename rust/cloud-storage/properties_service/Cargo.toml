@@ -10,7 +10,7 @@ path = "src/lib.rs"
 
 [[bin]]
 name = "properties_service_openapi"
-path = "src/bin/properties_service_openapi.rs"
+path = "src/openapi.rs"
 
 [dependencies]
 anyhow = { workspace = true }
