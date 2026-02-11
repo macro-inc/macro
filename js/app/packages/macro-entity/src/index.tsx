@@ -6,9 +6,7 @@ export * from './components/Sort';
 export { UnreadIndicator } from './components/Unread';
 export { useQueryClient } from './queries/client';
 export {
-  createChatsInfiniteQuery,
   createDeleteDssItemMutation,
-  createDssInfiniteQuery,
   createMoveToProjectDssEntityMutation,
   createCopyDssEntityMutation,
   optimisticUpdateDssItemViewedAt,
