@@ -1,3 +1,4 @@
+import { convertDates } from './date';
 import {
   err,
   type MaybeResult,
@@ -213,7 +214,8 @@ export async function safeFetch<
         }
 
         const data = await response.json();
-        return ok(data as T);
+        const convertedData = convertDates(data);
+        return ok(convertedData as T);
       }
     } catch (error) {
       if (error instanceof TypeError && error.message === 'Failed to fetch') {
