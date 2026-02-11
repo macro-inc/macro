@@ -206,7 +206,7 @@ const Root: Component<MessageRootProps> = (props) => {
     isFirstMessage: () => props.isFirstMessage,
     isLastMessage: () => props.isLastMessage,
     isConsecutive: () => props.isConsecutive,
-    hoverActions: props.hoverActions,
+    hoverActions: () => props.hoverActions?.(),
     threadDepth: () => props.threadDepth,
     isFirstInThread: () => props.isFirstInThread,
     isLastInThread: () => props.isLastInThread,
@@ -352,7 +352,7 @@ const Root: Component<MessageRootProps> = (props) => {
             </Show>
             <Show when={hover()}>
               <div class="border border-edge bg-panel">
-                {props.hoverActions()}
+                {props.hoverActions?.()}
               </div>
             </Show>
           </div>
