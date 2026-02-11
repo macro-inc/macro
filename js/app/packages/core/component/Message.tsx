@@ -265,8 +265,7 @@ const Root: Component<MessageRootProps> = (props) => {
               classList={{
                 'border-l': !props.hideConnectors,
                 'border-accent': props.isNewMessage,
-                'border-edge-muted':
-                  !props.isNewMessage,
+                'border-edge-muted': !props.isNewMessage,
                 'pt-1.5': !(
                   props.isConsecutive ||
                   props.isFirstMessage ||

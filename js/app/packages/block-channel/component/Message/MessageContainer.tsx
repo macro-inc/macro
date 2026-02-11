@@ -87,8 +87,16 @@ export function MessageFlag(props: MessageFlagProps) {
   );
 }
 
-function NewMessageIndicator() {
-  return <MessageFlag text="New" highlight />;
+function NewMessageIndicator(props: { onClick?: () => void }) {
+  return (
+    <button
+      type="button"
+      class="w-full text-left"
+      onClick={props.onClick}
+    >
+      <MessageFlag text="New" highlight />
+    </button>
+  );
 }
 
 type MessageProps = {
@@ -107,6 +115,7 @@ type MessageProps = {
   channelId: Accessor<string>;
   attachments: Attachment[];
   reactions: GetChannelResponseReactions;
+  onDismissNewMessages?: () => void;
 };
 
 export function MessageContainer(props: MessageProps) {
@@ -506,7 +515,7 @@ export function MessageContainer(props: MessageProps) {
         </Show>
         {/* New message indicator */}
         <Show when={props.listContext.isFirstNewMessage}>
-          <NewMessageIndicator />
+          <NewMessageIndicator onClick={props.onDismissNewMessages} />
         </Show>
         {/* Message item */}
 
