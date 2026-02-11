@@ -117,6 +117,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     const shadow = hostContainer.attachShadow({ mode: 'open' });
     // Style that uses a CSS variable to control image visibility
     const styleEl = document.createElement('style');
+    // Normalize font in email
     const fontOverride = isPersonal()
       ? `*:not(code):not(pre):not(code *):not(pre *){font-family: system-ui, sans-serif !important; font-size: inherit !important; line-height: 1.5 !important;}`
       : '';
