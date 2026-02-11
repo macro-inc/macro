@@ -327,15 +327,15 @@ fn test_chat_history_timestamps() {
     assert_eq!(result.len(), 1);
     assert_eq!(
         result[0].metadata.as_ref().unwrap().created_at,
-        now.timestamp()
+        now
     );
     assert_eq!(
         result[0].metadata.as_ref().unwrap().updated_at,
-        now.timestamp()
+        now
     );
     assert_eq!(
         result[0].metadata.as_ref().unwrap().viewed_at,
-        Some(now.timestamp())
+        Some(now)
     );
 }
 
@@ -402,7 +402,7 @@ fn test_chat_history_deleted() {
     assert_eq!(result.len(), 1);
     assert!(result[0].metadata.is_some());
     let metadata = result[0].metadata.as_ref().unwrap();
-    assert_eq!(metadata.deleted_at, Some(now.timestamp()));
+    assert_eq!(metadata.deleted_at, Some(now));
     assert_eq!(metadata.project_id, Some("project_1".to_string()));
 
     // Test 2: Chat that doesn't exist in DB (OpenSearch has stale data)
@@ -452,11 +452,11 @@ fn test_chat_history_null_viewed_at() {
     assert_eq!(result.len(), 1);
     assert_eq!(
         result[0].metadata.as_ref().unwrap().created_at,
-        now.timestamp()
+        now
     );
     assert_eq!(
         result[0].metadata.as_ref().unwrap().updated_at,
-        now.timestamp()
+        now
     );
     assert!(result[0].metadata.as_ref().unwrap().viewed_at.is_none());
 }

@@ -1,5 +1,5 @@
 use super::*;
-use chrono::{DateTime, Utc};
+use chrono::DateTime;
 use models_search::{
     SearchHighlight,
     channel::{
@@ -145,8 +145,8 @@ fn test_channel_updated_at_uses_max_from_message_results() {
     // Channel with metadata.updated_at = 1000, but message results have higher values
     let channel = UnifiedSearchResponseItem::Channel(ChannelSearchResponseItemWithMetadata {
         metadata: Some(ChannelMetadata {
-            created_at: 900,
-            updated_at: 1000,
+            created_at: DateTime::from_timestamp(900, 0).unwrap(),
+            updated_at: DateTime::from_timestamp(1000, 0).unwrap(),
             viewed_at: None,
             interacted_at: None,
         }),
@@ -160,8 +160,8 @@ fn test_channel_updated_at_uses_max_from_message_results() {
                     message_id: Some(Uuid::new_v4()),
                     thread_id: None,
                     sender_id: Some("sender1".to_string()),
-                    created_at: Some(1800),
-                    updated_at: Some(2000), // Second highest
+                    created_at: Some(DateTime::from_timestamp(1800, 0).unwrap()),
+                    updated_at: Some(DateTime::from_timestamp(2000, 0).unwrap()), // Second highest
                     highlight: SearchHighlight::default(),
                     score: None,
                 },
@@ -169,8 +169,8 @@ fn test_channel_updated_at_uses_max_from_message_results() {
                     message_id: Some(Uuid::new_v4()),
                     thread_id: None,
                     sender_id: Some("sender2".to_string()),
-                    created_at: Some(2900),
-                    updated_at: Some(3000), // Highest - should be used
+                    created_at: Some(DateTime::from_timestamp(2900, 0).unwrap()),
+                    updated_at: Some(DateTime::from_timestamp(3000, 0).unwrap()), // Highest - should be used
                     highlight: SearchHighlight::default(),
                     score: None,
                 },
@@ -178,8 +178,8 @@ fn test_channel_updated_at_uses_max_from_message_results() {
                     message_id: Some(Uuid::new_v4()),
                     thread_id: None,
                     sender_id: Some("sender3".to_string()),
-                    created_at: Some(1400),
-                    updated_at: Some(1500), // Lowest of results
+                    created_at: Some(DateTime::from_timestamp(1400, 0).unwrap()),
+                    updated_at: Some(DateTime::from_timestamp(1500, 0).unwrap()), // Lowest of results
                     highlight: SearchHighlight::default(),
                     score: None,
                 },
@@ -188,7 +188,7 @@ fn test_channel_updated_at_uses_max_from_message_results() {
     });
 
     // Should return 3000 (max from message results), not 1000 (metadata)
-    assert_eq!(channel.updated_at(), 3000);
+    assert_eq!(channel.updated_at(), Some(DateTime::from_timestamp(3000, 0).unwrap()));
 }
 
 #[test]
@@ -198,8 +198,8 @@ fn test_channel_updated_at_falls_back_to_metadata_when_no_results() {
     // Channel with metadata.updated_at = 1000, but no message results
     let channel = UnifiedSearchResponseItem::Channel(ChannelSearchResponseItemWithMetadata {
         metadata: Some(ChannelMetadata {
-            created_at: 900,
-            updated_at: 1000,
+            created_at: DateTime::from_timestamp(900, 0).unwrap(),
+            updated_at: DateTime::from_timestamp(1000, 0).unwrap(),
             viewed_at: None,
             interacted_at: None,
         }),
@@ -213,7 +213,7 @@ fn test_channel_updated_at_falls_back_to_metadata_when_no_results() {
     });
 
     // Should return 1000 (metadata) since no message results
-    assert_eq!(channel.updated_at(), 1000);
+    assert_eq!(channel.updated_at(), Some(DateTime::from_timestamp(1000, 0).unwrap()));
 }
 
 #[test]
@@ -223,8 +223,8 @@ fn test_channel_updated_at_falls_back_to_metadata_when_results_have_no_updated_a
     // Channel with metadata.updated_at = 1000, message results have None for updated_at
     let channel = UnifiedSearchResponseItem::Channel(ChannelSearchResponseItemWithMetadata {
         metadata: Some(ChannelMetadata {
-            created_at: 900,
-            updated_at: 1000,
+            created_at: DateTime::from_timestamp(900, 0).unwrap(),
+            updated_at: DateTime::from_timestamp(1000, 0).unwrap(),
             viewed_at: None,
             interacted_at: None,
         }),
@@ -238,7 +238,7 @@ fn test_channel_updated_at_falls_back_to_metadata_when_results_have_no_updated_a
                     message_id: Some(Uuid::new_v4()),
                     thread_id: None,
                     sender_id: Some("sender1".to_string()),
-                    created_at: Some(1800),
+                    created_at: Some(DateTime::from_timestamp(1800, 0).unwrap()),
                     updated_at: None, // No updated_at
                     highlight: SearchHighlight::default(),
                     score: None,
@@ -247,7 +247,7 @@ fn test_channel_updated_at_falls_back_to_metadata_when_results_have_no_updated_a
                     message_id: Some(Uuid::new_v4()),
                     thread_id: None,
                     sender_id: Some("sender2".to_string()),
-                    created_at: Some(2900),
+                    created_at: Some(DateTime::from_timestamp(2900, 0).unwrap()),
                     updated_at: None, // No updated_at
                     highlight: SearchHighlight::default(),
                     score: None,
@@ -257,7 +257,7 @@ fn test_channel_updated_at_falls_back_to_metadata_when_results_have_no_updated_a
     });
 
     // Should return 1000 (metadata) since all message results have None for updated_at
-    assert_eq!(channel.updated_at(), 1000);
+    assert_eq!(channel.updated_at(), Some(DateTime::from_timestamp(1000, 0).unwrap()));
 }
 
 #[test]
@@ -270,8 +270,8 @@ fn test_sort_unified_search_results_with_channel() {
         // Document with updated_at = 2000
         UnifiedSearchResponseItem::Document(DocumentSearchResponseItemWithMetadata {
             metadata: Some(DocumentMetadata {
-                created_at: 1900,
-                updated_at: 2000,
+                created_at: DateTime::from_timestamp(1900, 0).unwrap(),
+                updated_at: DateTime::from_timestamp(2000, 0).unwrap(),
                 viewed_at: None,
                 project_id: None,
                 deleted_at: None,
@@ -290,8 +290,8 @@ fn test_sort_unified_search_results_with_channel() {
         // Channel with metadata.updated_at = 1000, but message result has updated_at = 3000
         UnifiedSearchResponseItem::Channel(ChannelSearchResponseItemWithMetadata {
             metadata: Some(ChannelMetadata {
-                created_at: 900,
-                updated_at: 1000, // Would be sorted after document if this was used
+                created_at: DateTime::from_timestamp(900, 0).unwrap(),
+                updated_at: DateTime::from_timestamp(1000, 0).unwrap(), // Would be sorted after document if this was used
                 viewed_at: None,
                 interacted_at: None,
             }),
@@ -304,8 +304,8 @@ fn test_sort_unified_search_results_with_channel() {
                     message_id: Some(Uuid::new_v4()),
                     thread_id: None,
                     sender_id: Some("sender1".to_string()),
-                    created_at: Some(2900),
-                    updated_at: Some(3000), // Should make channel sort first
+                    created_at: Some(DateTime::from_timestamp(2900, 0).unwrap()),
+                    updated_at: Some(DateTime::from_timestamp(3000, 0).unwrap()), // Should make channel sort first
                     highlight: SearchHighlight::default(),
                     score: None,
                 }],
