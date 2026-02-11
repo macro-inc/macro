@@ -85,15 +85,16 @@ export const emailClient = {
   },
   async getPreviews(args: {
     view: string;
-    limit: number;
-    sort_method: string;
+    limit?: number;
+    sort_method?: string;
     cursor?: string;
   }) {
     const { view, ...params } = args;
     const p = Object.entries(params)
+      .filter(([, v]) => v != null)
       .map(([k, v]) => `${k}=${v}`)
       .join('&');
-    const qp = p.length > 0 ? '?' + p : p;
+    const qp = p.length > 0 ? '?' + p : '';
 
     return mapOk(
       await emailFetch<ApiPaginatedThreadCursor>(
