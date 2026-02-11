@@ -118,7 +118,11 @@ function stripContentBackgrounds(root: Node) {
         if (rgba && rgba.a > 0) {
           const oklch = rgbaToOklch(rgba);
           if (oklch && oklch.l > LIGHT_BG_THRESHOLD) {
-            el.style.setProperty('background-color', 'transparent', 'important');
+            el.style.setProperty(
+              'background-color',
+              'transparent',
+              'important'
+            );
             el.removeAttribute('bgcolor');
           }
         }
