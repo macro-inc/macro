@@ -1,5 +1,5 @@
+import { authServiceClient } from '@service-auth/client';
 import type { MacroApiTokenResponse } from '@service-auth/generated/schemas/macroApiTokenResponse';
-import type { ProfilePictures } from '@service-auth/generated/schemas/profilePictures';
 import {
   queryOptions,
   type SolidQueryOptions,
@@ -8,7 +8,7 @@ import {
 import { SERVER_HOSTS } from 'core/constant/servers';
 import { fetchWithToken } from 'core/util/fetchWithToken';
 import { isOk } from 'core/util/maybeResult';
-import { platformFetch } from 'core/util/platformFetch';
+import type { SafeFetchInit } from '@core/util/safeFetch';
 import { createMemo } from 'solid-js';
 import { queryKeys } from './key';
 
@@ -26,19 +26,6 @@ export class FetchDocumentsError extends Error {
 
   isJwtExpired(): boolean {
     return this.response.status === 401 && this.data?.message === 'jwt expired';
-  }
-}
-
-export async function handleFetchResponse(
-  response: Response,
-  errorMessage: string
-): Promise<void> {
-  if (!response.ok) {
-    const errorData =
-      response.status === 401
-        ? await response.json().catch(() => undefined)
-        : undefined;
-    throw new FetchDocumentsError(errorMessage, response, errorData);
   }
 }
 
@@ -117,32 +104,27 @@ export function useUserId() {
   });
 }
 
-const fetchProfilePictures = async (
-  user_id_list: Array<string>,
-  apiToken?: string
-) => {
-  const credentials: RequestInit = apiToken
-    ? {
-        headers: {
-          Authorization: `Bearer ${apiToken}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    : {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-      };
-  const response = await platformFetch(`${authHost}/user/profile_pictures`, {
-    method: 'POST',
-    body: JSON.stringify({ user_id_list }),
-    ...credentials,
-  });
+const fetchProfilePictures = async ({
+  user_id_list,
+  apiToken,
+}: {
+  user_id_list: Array<string>;
+  apiToken: string;
+}) => {
+  const init: SafeFetchInit = {
+    headers: { Authorization: `Bearer ${apiToken}` },
+  };
 
-  await handleFetchResponse(response, 'Failed to fetch profile picture');
+  const result = await authServiceClient.postProfilePictures(
+    { user_id_list },
+    init
+  );
 
-  const { pictures }: ProfilePictures = await response.json();
+  if (!isOk(result)) {
+    throw new Error('Failed to fetch profile picture');
+  }
+
+  const { pictures } = result[1];
   if (pictures.length === 0)
     throw new Error(`No profile picture found for ${user_id_list}`);
 
@@ -155,7 +137,7 @@ export function createProfilePictureQuery(id: string) {
     queryKey: queryKeys.auth.profilePicture({ id }),
     queryFn: () =>
       withApiTokenRetry(authQuery, (apiToken) =>
-        fetchProfilePictures([id], apiToken)
+        fetchProfilePictures({ user_id_list: [id], apiToken })
       ),
     select: (pictures) => pictures.at(0),
     enabled: authQuery.isSuccess,
