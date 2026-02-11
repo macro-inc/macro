@@ -159,10 +159,10 @@ function NarrowLayout(props: LayoutProps) {
                 <Show when={entity().latestMessage}>
                   {(msg) => (
                     <div class="flex items-center gap-2 w-full truncate">
-                      <span class="font-semibold truncate">
+                      <span class="font-semibold truncate min-w-min">
                         <DisplayName id={msg().senderId} format="firstName" />
                       </span>
-                      <span class="text-ink/50 font-medium truncate inline-flex items-center">
+                      <span class="text-ink/50 font-medium truncate inline-flex items-center shrink">
                         <StaticMarkdown
                           theme={unifiedListMarkdownTheme}
                           markdown={msg().content}
