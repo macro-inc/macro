@@ -1,11 +1,13 @@
+import { tz } from '@date-fns/tz';
 import {
   compareAsc,
   compareDesc,
   differenceInWeeks,
   isToday,
+  isValid,
   isYesterday,
+  parseISO,
 } from 'date-fns';
-import { tz } from '@date-fns/tz';
 
 const EPOCH_ZERO = new Date(0);
 
@@ -110,3 +112,57 @@ export const compareDateAsc = (
   const dateB = b ?? EPOCH_ZERO;
   return compareAsc(dateA, dateB);
 };
+
+const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z?$/;
+
+/**
+ * Recursively converts ISO date strings to Date objects in an object, array, or primitive value.
+ * - If a string matches ISO date format and is valid, it's converted to a Date object
+ * - If a string matches ISO date format but is invalid, returns undefined
+ * - null values remain null
+ * - Recursively processes arrays and objects
+ *
+ * @template T - The type of the value being converted
+ * @param obj - The value to convert (can be object, array, string, or any primitive)
+ * @returns The value with date strings converted to Date objects
+ *
+ * @example
+ * const data = { createdAt: '2025-02-11T10:30:00Z', items: [{ date: '2025-02-10T08:00:00Z' }] };
+ * const converted = convertDates(data);
+ * // converted.createdAt is now a Date object
+ * // converted.items[0].date is now a Date object
+ */
+export function convertDates<T>(obj: T): T {
+  if (obj === null) {
+    return null as T;
+  }
+
+  if (obj === undefined) {
+    return undefined as T;
+  }
+
+  if (typeof obj === 'string') {
+    if (ISO_DATE_REGEX.test(obj)) {
+      const date = parseISO(obj);
+      if (isValid(date)) {
+        return date as unknown as T;
+      }
+      return undefined as T;
+    }
+    return obj;
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map((item) => convertDates(item)) as unknown as T;
+  }
+
+  if (typeof obj === 'object') {
+    const converted: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      converted[key] = convertDates(value);
+    }
+    return converted as T;
+  }
+
+  return obj;
+}
