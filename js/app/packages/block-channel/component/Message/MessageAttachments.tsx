@@ -22,12 +22,7 @@ export function MessageAttachments(props: MessageAttachmentsProps) {
       {/* Video attachments */}
       <Show when={props.videoAttachments()?.length > 0 && !props.isDeleted()}>
         <For each={props.videoAttachments()}>
-          {(item) => (
-            <VideoPreview
-              id={item.entity_id}
-              variant="dynamic"
-            />
-          )}
+          {(item) => <VideoPreview id={item.entity_id} variant="dynamic" />}
         </For>
       </Show>
       {/* Image attachments */}

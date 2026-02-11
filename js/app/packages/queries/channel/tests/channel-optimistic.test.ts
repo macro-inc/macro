@@ -267,10 +267,7 @@ describe('replaceOptimisticMessage', () => {
       id: 'optimistic-msg-1',
       content: 'Test content',
     });
-    seedMessagesCache(
-      'channel-1',
-      createMockMessagesData([optimisticMessage])
-    );
+    seedMessagesCache('channel-1', createMockMessagesData([optimisticMessage]));
 
     replaceOptimisticMessage({
       channelId: 'channel-1',

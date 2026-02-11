@@ -1,7 +1,6 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
 import { ok } from '@core/util/maybeResult';
 import ChannelBlock from './component/Block';
-import { fetchAndCacheChannel } from '@queries/channel/channel';
 import { channelMessagesQueryOptions } from '@queries/channel/channel-messages';
 import { queryClient } from '@queries/client';
 
@@ -13,7 +12,6 @@ export const definition = defineBlock({
   async load(source, _intent) {
     if (source.type === 'dss') {
       await Promise.all([
-        fetchAndCacheChannel(source.id),
         queryClient.ensureInfiniteQueryData(
           channelMessagesQueryOptions(source.id)
         ),

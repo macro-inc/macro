@@ -1,3 +1,4 @@
+import { useChannelName } from '@core/context/channels';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import type { useChannelQuery } from '@queries/channel/channel';
 import {
@@ -8,14 +9,17 @@ import type {
   ApiChannelMessage,
   ChannelMessagesPage,
 } from '@service-comms/client';
-import type { ChannelType, GetChannelResponse } from '@service-comms/generated/models';
+import type {
+  ChannelType,
+  GetChannelResponse,
+} from '@service-comms/generated/models';
 import type { InfiniteData } from '@tanstack/solid-query';
 import { createMemo, type Accessor } from 'solid-js';
 
 export type MessageSenderLookup = Map<string, string>;
 
 type ChannelContextValue = {
-  channel: Accessor<GetChannelResponse>;
+  // channel: Accessor<GetChannelResponse>;
   channelName: Accessor<string>;
   channelType: Accessor<ChannelType>;
   messages: Accessor<ApiChannelMessage[]>;
@@ -26,18 +30,15 @@ type ChannelContextValue = {
 };
 
 type ChannelContextProps = {
-  metadataQuery: ReturnType<typeof useChannelQuery>;
   messagesQuery: ReturnType<typeof useChannelMessagesQuery>;
+  channelName: Accessor<string>;
+  channelType: Accessor<ChannelType>;
 };
 
 export const [ChannelContextProvider, useChannelContext] =
   createAssertedContextProvider<ChannelContextValue>(
     'ChannelContext',
     (props: ChannelContextProps): ChannelContextValue => {
-      const channel = createMemo(() => props.metadataQuery.data);
-      const channelType = createMemo(() => channel().channel.channel_type);
-      const channelName = createMemo(() => channel().channel.name ?? '');
-
       const messages = createMemo(() =>
         flattenMessages(
           props.messagesQuery.data as
@@ -65,9 +66,8 @@ export const [ChannelContextProvider, useChannelContext] =
       );
 
       return {
-        channel,
-        channelName,
-        channelType,
+        channelName: props.channelName,
+        channelType: props.channelType,
         messages,
         messageSenderMap,
         fetchNextPage,

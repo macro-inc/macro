@@ -84,6 +84,31 @@ export type ChannelMessagesPage = {
   next_cursor: string | null;
 };
 
+export type ApiChannelAttachment = {
+  id: string;
+  channel_id: string;
+  message_id: string;
+  entity_type: string;
+  entity_id: string;
+  width: number | null;
+  height: number | null;
+  created_at: string;
+};
+
+export type ChannelAttachmentsPage = {
+  items: ApiChannelAttachment[];
+  next_cursor: string | null;
+};
+
+export type ApiParticipantRole = 'owner' | 'admin' | 'member';
+
+export type ApiChannelParticipant = {
+  channel_id: string;
+  user_id: string;
+  role: ApiParticipantRole;
+  joined_at: string;
+};
+
 const commsHost: string = SERVER_HOSTS['document-storage-service'];
 
 export function commsFetch(
@@ -393,7 +418,9 @@ export const commsServiceClient = {
       (result) => result
     );
   },
-  async getChannelMessages(args: WithChannelId & { limit?: number; cursor?: string | null }) {
+  async getChannelMessages(
+    args: WithChannelId & { limit?: number; cursor?: string | null }
+  ) {
     const { channel_id, limit, cursor } = args;
     const params = new URLSearchParams();
     if (limit !== undefined) params.append('limit', limit.toString());
@@ -402,6 +429,30 @@ export const commsServiceClient = {
     const url = `/channels/${channel_id}/messages${qs ? `?${qs}` : ''}`;
     return mapOk(
       await commsFetch<ChannelMessagesPage>(url, { method: 'GET' }),
+      (result) => result
+    );
+  },
+  async getChannelAttachments(
+    args: WithChannelId & { limit?: number; cursor?: string | null }
+  ) {
+    const { channel_id, limit, cursor } = args;
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.append('limit', limit.toString());
+    if (cursor) params.append('cursor', cursor);
+    const qs = params.toString();
+    const url = `/channels/${channel_id}/attachments${qs ? `?${qs}` : ''}`;
+    return mapOk(
+      await commsFetch<ChannelAttachmentsPage>(url, { method: 'GET' }),
+      (result) => result
+    );
+  },
+  async getChannelParticipants(args: WithChannelId) {
+    const { channel_id } = args;
+    return mapOk(
+      await commsFetch<ApiChannelParticipant[]>(
+        `/channels/${channel_id}/participants`,
+        { method: 'GET' }
+      ),
       (result) => result
     );
   },

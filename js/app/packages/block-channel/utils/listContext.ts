@@ -15,13 +15,14 @@ export type MessageListContext<T extends MinimalMessage = MinimalMessage> = {
   isInLastThread: boolean;
 };
 
-export type MessageListContextLookup<T extends MinimalMessage = MinimalMessage> =
-  Record<string, MessageListContext<T>>;
+export type MessageListContextLookup<
+  T extends MinimalMessage = MinimalMessage,
+> = Record<string, MessageListContext<T>>;
 
 function findLastNonThreadedMessageIndex<T extends MinimalMessage>(
   messages: T[],
   fromIndex: number,
-  getThreadId: (message: T) => string | undefined,
+  getThreadId: (message: T) => string | undefined
 ) {
   for (let i = fromIndex; i >= 0; i--) {
     const message = messages[i];
@@ -91,7 +92,7 @@ export function createMessageListContextLookup<
       const previousNonThreadedMessageIndex = findLastNonThreadedMessageIndex(
         messages,
         backTrackIndex - 1,
-        getThreadId,
+        getThreadId
       );
 
       if (previousNonThreadedMessageIndex >= 0) {

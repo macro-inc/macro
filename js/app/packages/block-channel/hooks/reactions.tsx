@@ -27,8 +27,7 @@ export function useReactToMessage(
     if (!channelIdValue || !userId) return;
 
     const hasReacted = reactions().some(
-      (reaction) =>
-        reaction.emoji === emoji && reaction.users.includes(userId)
+      (reaction) => reaction.emoji === emoji && reaction.users.includes(userId)
     );
 
     if (hasReacted) {

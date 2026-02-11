@@ -52,10 +52,8 @@ import { Top } from './Top';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { useChannelContext } from '@block-channel/hooks/channel';
 import { FloatingInputLoader } from '@core/component/FloatingInputLoader';
-import {
-  invalidateChannelWithID,
-  useChannelQuery,
-} from '@queries/channel/channel';
+import { invalidateChannelWithID } from '@queries/channel/channel';
+import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 
 false && fileFolderDrop;
 
@@ -81,7 +79,7 @@ export function Channel(props: {
   target?: TargetMessageInfo;
 }) {
   const channelContext = useChannelContext();
-  const channelQuery = useChannelQuery(() => props.channelId);
+  const participantsQuery = useChannelParticipantsQuery(() => props.channelId);
   const latestActivity = useChannelActivity(props.channelId);
 
   const [openedChannel, setOpenedChannel] = createSignal<Date>();
@@ -108,7 +106,9 @@ export function Channel(props: {
   const [channelInputAttachmentsStore, setChannelInputAttachmentsStore] =
     createStore<Record<string, InputAttachment[]>>({});
   // All messages, including threads, in order of how they should be displayed, i.e. thread children are placed after their parent message
-  const [orderedMessages, setOrderedMessages] = createSignal<ApiChannelMessage[]>([]);
+  const [orderedMessages, setOrderedMessages] = createSignal<
+    ApiChannelMessage[]
+  >([]);
   const scopeId = blockHotkeyScopeSignal.get;
   const blockRef = blockElementSignal.get;
   const [isDraggingOverChannel, setIsDraggingOverChannel] = createSignal(false);
@@ -163,7 +163,7 @@ export function Channel(props: {
     track(TrackingEvents.BLOCKCHANNEL.CHANNEL.OPEN);
 
     const STALE_THRESHOLD_MS = 1_000;
-    const age = Date.now() - channelQuery.dataUpdatedAt;
+    const age = Date.now() - 0;
     if (age > STALE_THRESHOLD_MS) {
       invalidateChannelWithID(props.channelId);
     }
@@ -364,6 +364,8 @@ export function Channel(props: {
     })
   );
 
+  const participants = () => participantsQuery.data;
+
   return (
     <div
       class={`relative flex flex-col w-full h-full bg-panel bracket-never`}
@@ -379,7 +381,7 @@ export function Channel(props: {
           <Top
             channelId={props.channelId}
             channelType={channelContext.channelType()}
-            participants={channelContext.channel()?.participants ?? []}
+            participants={[]}
             channelName={channelContext.channelName()}
           />
         </Suspense>
@@ -412,14 +414,14 @@ export function Channel(props: {
           <FloatingInputLoader
             minShowTime={200}
             successDuration={100}
-            isLoading={() => channelQuery.isFetching}
+            isLoading={channelContext.isFetchingNextPage}
             loadingText="Refreshing messages"
             class="top-0 bottom-auto mt-2 mb-0 z-10"
           />
           <MessageList
             channelId={props.channelId}
             messages={channelContext.messages()}
-            participants={channelContext.channel()?.participants ?? []}
+            participants={participants() ?? []}
             focusedMessageId={selectedMessageId}
             setFocusedMessageId={setSelectedMessageId}
             targetMessage={targetMessage}
@@ -439,7 +441,7 @@ export function Channel(props: {
                 <ChannelInput
                   channelId={props.channelId}
                   channelName={channelContext.channelName()}
-                  participants={channelContext.channel()?.participants ?? []}
+                  participants={participants() ?? []}
                   inputAttachmentsStore={channelInputAttachmentsStore}
                   setInputAttachmentsStore={setChannelInputAttachmentsStore}
                   inputAttachmentsKey={props.channelId}

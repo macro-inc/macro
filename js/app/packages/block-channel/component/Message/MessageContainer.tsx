@@ -1,7 +1,10 @@
 import { useMessageListContext } from '@block-channel/component/MessageList/MessageList';
 import { COLLAPSED_THREAD_INDEX_CUTOFF } from '@block-channel/constants';
 import { useReactToMessage } from '@block-channel/hooks/reactions';
-import type { ApiChannelMessage, ApiMessageAttachment } from '@service-comms/client';
+import type {
+  ApiChannelMessage,
+  ApiMessageAttachment,
+} from '@service-comms/client';
 import type { MessageListContext } from '@block-channel/utils/listContext';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
@@ -245,16 +248,13 @@ export function MessageContainer(props: MessageProps) {
     return (
       !!props.parentThreadId &&
       previousMessage()?.id !== props.parentThreadId &&
-      !props.threadSiblings?.some(
-        (s) => s.id === previousMessage()?.id
-      )
+      !props.threadSiblings?.some((s) => s.id === previousMessage()?.id)
     );
   });
 
   const isLastInThread = createMemo(() => {
     return (
-      !!props.parentThreadId &&
-      props.threadSiblings?.at(-1)?.id === message.id
+      !!props.parentThreadId && props.threadSiblings?.at(-1)?.id === message.id
     );
   });
 
@@ -422,9 +422,7 @@ export function MessageContainer(props: MessageProps) {
   });
 
   const setThreadExpansion = (shouldExpand: boolean) => {
-    const threadId = hasThreadChildren()
-      ? message.id
-      : props.parentThreadId;
+    const threadId = hasThreadChildren() ? message.id : props.parentThreadId;
     if (!threadId) return;
 
     listContext.toggleThread(threadId, shouldExpand);
@@ -761,9 +759,7 @@ export function MessageContainer(props: MessageProps) {
           </MessageComponent>
         </Show>
         <Show when={isLastMessage()}>
-          <TypingIndicator
-            previousMessage={message}
-          />
+          <TypingIndicator previousMessage={message} />
         </Show>
       </div>
     </div>

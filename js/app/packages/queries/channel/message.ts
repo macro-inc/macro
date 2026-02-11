@@ -1,7 +1,10 @@
 import { TrackingEvents, withAnalytics } from '@coparse/analytics';
 import { toast } from '@core/component/Toast/Toast';
 import { throwOnErr } from '@core/util/maybeResult';
-import { softInvalidateChannelMessages, type ChannelMessagesData } from '@queries/channel/channel-messages';
+import {
+  softInvalidateChannelMessages,
+  type ChannelMessagesData,
+} from '@queries/channel/channel-messages';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import {
   commsServiceClient,
@@ -36,15 +39,13 @@ function registerMessageNonces(
 function updateMessageInPages(
   data: ChannelMessagesData,
   messageId: string,
-  updater: (message: ApiChannelMessage) => ApiChannelMessage,
+  updater: (message: ApiChannelMessage) => ApiChannelMessage
 ): ChannelMessagesData {
   return {
     ...data,
     pages: data.pages.map((page) => ({
       ...page,
-      items: page.items.map((m) =>
-        m.id === messageId ? updater(m) : m
-      ),
+      items: page.items.map((m) => (m.id === messageId ? updater(m) : m)),
     })),
   };
 }
@@ -103,16 +104,19 @@ export function optimisticInsertChannelMessage(
           ...parent.thread,
           reply_count: parent.thread.reply_count + 1,
           latest_reply_at: now,
-          preview: [...parent.thread.preview, {
-            id: vars.optimisticId,
-            sender_id: vars.senderId,
-            content: vars.content,
-            created_at: now,
-            updated_at: now,
-            edited_at: null,
-            reactions: [],
-            attachments: optimisticAttachments,
-          }],
+          preview: [
+            ...parent.thread.preview,
+            {
+              id: vars.optimisticId,
+              sender_id: vars.senderId,
+              content: vars.content,
+              created_at: now,
+              updated_at: now,
+              edited_at: null,
+              reactions: [],
+              attachments: optimisticAttachments,
+            },
+          ],
         },
       }));
     }
@@ -255,9 +259,7 @@ export function optimisticDeleteChannelMessage(
     // Check thread replies
     for (const page of prev.pages) {
       for (const msg of page.items) {
-        const reply = msg.thread.preview.find(
-          (r) => r.id === vars.messageId
-        );
+        const reply = msg.thread.preview.find((r) => r.id === vars.messageId);
         if (reply) {
           context = { threadParentId: msg.id, deletedReply: reply };
           return updateMessageInPages(prev, msg.id, (m) => ({
@@ -265,9 +267,7 @@ export function optimisticDeleteChannelMessage(
             thread: {
               ...m.thread,
               reply_count: m.thread.reply_count - 1,
-              preview: m.thread.preview.filter(
-                (r) => r.id !== vars.messageId
-              ),
+              preview: m.thread.preview.filter((r) => r.id !== vars.messageId),
             },
           }));
         }
@@ -361,9 +361,7 @@ export function optimisticUpdateChannelMessage(
     // Check thread replies
     for (const page of prev.pages) {
       for (const msg of page.items) {
-        const reply = msg.thread.preview.find(
-          (r) => r.id === vars.messageId
-        );
+        const reply = msg.thread.preview.find((r) => r.id === vars.messageId);
         if (reply) {
           context = {
             messageId: vars.messageId,
@@ -383,7 +381,12 @@ export function optimisticUpdateChannelMessage(
                     ...m.thread,
                     preview: m.thread.preview.map((r) =>
                       r.id === vars.messageId
-                        ? { ...r, content: vars.content, edited_at: now, updated_at: now }
+                        ? {
+                            ...r,
+                            content: vars.content,
+                            edited_at: now,
+                            updated_at: now,
+                          }
                         : r
                     ),
                   },
@@ -431,7 +434,8 @@ export function rollbackUpdateChannelMessage(
       pages: prev.pages.map((page) => ({
         ...page,
         items: page.items.map((m) => {
-          if (!m.thread.preview.some((r) => r.id === context.messageId)) return m;
+          if (!m.thread.preview.some((r) => r.id === context.messageId))
+            return m;
           return {
             ...m,
             thread: {

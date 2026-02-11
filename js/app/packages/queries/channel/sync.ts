@@ -5,7 +5,10 @@ import type {
 } from '@service-comms/generated/models';
 import type { ApiChannelMessage } from '@service-comms/client';
 import { queryClient } from '../client';
-import { softInvalidateChannelMessages, type ChannelMessagesData } from './channel-messages';
+import {
+  softInvalidateChannelMessages,
+  type ChannelMessagesData,
+} from './channel-messages';
 import { channelKeys, ChannelNonceKeys } from './keys';
 import { consumeNonce } from '../nonce';
 
@@ -34,15 +37,13 @@ type CommsAttachmentPayload = {
 function updateMessageInPages(
   data: ChannelMessagesData,
   messageId: string,
-  updater: (message: ApiChannelMessage) => ApiChannelMessage,
+  updater: (message: ApiChannelMessage) => ApiChannelMessage
 ): ChannelMessagesData {
   return {
     ...data,
     pages: data.pages.map((page) => ({
       ...page,
-      items: page.items.map((m) =>
-        m.id === messageId ? updater(m) : m
-      ),
+      items: page.items.map((m) => (m.id === messageId ? updater(m) : m)),
     })),
   };
 }
@@ -76,16 +77,19 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
               ...parent.thread,
               reply_count: parent.thread.reply_count + 1,
               latest_reply_at: payload.created_at,
-              preview: [...parent.thread.preview, {
-                id: payload.id,
-                sender_id: payload.sender_id,
-                content: payload.content,
-                created_at: payload.created_at,
-                updated_at: payload.updated_at,
-                edited_at: payload.edited_at ?? null,
-                reactions: [],
-                attachments: [],
-              }],
+              preview: [
+                ...parent.thread.preview,
+                {
+                  id: payload.id,
+                  sender_id: payload.sender_id,
+                  content: payload.content,
+                  created_at: payload.created_at,
+                  updated_at: payload.updated_at,
+                  edited_at: payload.edited_at ?? null,
+                  reactions: [],
+                  attachments: [],
+                },
+              ],
             },
           }));
         }

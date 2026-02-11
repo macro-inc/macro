@@ -170,15 +170,8 @@ export function MessageList(props: MessageListProps) {
 
   const [threadViewStore, setThreadViewStore] = createStore<ThreadViewData>({});
 
-  const topLevelMessages = createMemo(() =>
-    props.messages.filter(
-      (message) =>
-        !message.deleted_at || message.thread.reply_count > 0
-    )
-  );
-
   const topLevelIndexByMessageId = createMemo(() => {
-    const list = topLevelMessages();
+    const list = props.messages;
     const map = new Map<string, number>();
     for (let i = 0; i < list.length; i++) {
       const parent = list[i];
@@ -191,7 +184,7 @@ export function MessageList(props: MessageListProps) {
   });
 
   const getVirtualIndexForMessageId = (messageId: string) => {
-    const list = topLevelMessages();
+    const list = props.messages;
     const topLevelIndex = topLevelIndexByMessageId().get(messageId);
     if (topLevelIndex === undefined) return undefined;
     return list.length - 1 - topLevelIndex;
@@ -363,7 +356,9 @@ function MessageListImpl(props: MessageListProps) {
     createStore<MessageListContextLookup>({});
 
   const userId = useUserId();
-  const [viewThreads, setViewThreads] = createStore<Record<string, ApiChannelMessage[]>>({});
+  const [viewThreads, setViewThreads] = createStore<
+    Record<string, ApiChannelMessage[]>
+  >({});
 
   const [threadInputAttachmentsStore, setThreadInputAttachmentsStore] =
     createStore<Record<string, InputAttachment[]>>({});
@@ -622,7 +617,9 @@ function MessageListImpl(props: MessageListProps) {
   let dirtyTypingThreadId: string | undefined;
 
   // Convert thread preview replies to ApiChannelMessage shape for thread children
-  const threadPreviewAsMessages = (message: ApiChannelMessage): ApiChannelMessage[] =>
+  const threadPreviewAsMessages = (
+    message: ApiChannelMessage
+  ): ApiChannelMessage[] =>
     message.thread.preview.map((reply) => ({
       id: reply.id,
       channel_id: message.channel_id,
@@ -655,7 +652,11 @@ function MessageListImpl(props: MessageListProps) {
         continue;
       }
 
-      if (!currentView || currentView.length !== threadArr.length || currentView.some((v, i) => v.id !== threadArr[i]?.id)) {
+      if (
+        !currentView ||
+        currentView.length !== threadArr.length ||
+        currentView.some((v, i) => v.id !== threadArr[i]?.id)
+      ) {
         setViewThreads(id, reconcile(threadArr));
       }
 
@@ -674,7 +675,9 @@ function MessageListImpl(props: MessageListProps) {
       prevTypingId !== currentTypingId &&
       dirtyTypingThreadId === prevTypingId
     ) {
-      const msg = untrack(() => props.messages.find((m) => m.id === prevTypingId));
+      const msg = untrack(() =>
+        props.messages.find((m) => m.id === prevTypingId)
+      );
       const threadArr = msg ? threadPreviewAsMessages(msg) : [];
       setViewThreads(prevTypingId, reconcile(threadArr));
       dirtyTypingThreadId = undefined;
@@ -794,7 +797,8 @@ function MessageListImpl(props: MessageListProps) {
     )
   );
 
-  const [unviewedMessages, setUnviewedMessages] = createSignal<ApiChannelMessage[]>();
+  const [unviewedMessages, setUnviewedMessages] =
+    createSignal<ApiChannelMessage[]>();
   const [dismissUnviewedMessages, setDismissUnviewedMessages] =
     createSignal(false);
   const [dismissJumpToLatest, setDismissJumpToLatest] = createSignal(false);
@@ -893,8 +897,13 @@ function MessageListImpl(props: MessageListProps) {
     // Trigger pagination when scrolling near the top (oldest messages)
     const handle = virtualHandle();
     if (handle) {
-      const distanceFromTop = handle.scrollSize - handle.scrollOffset - handle.viewportSize;
-      if (distanceFromTop < 500 && props.hasNextPage && !props.isFetchingNextPage) {
+      const distanceFromTop =
+        handle.scrollSize - handle.scrollOffset - handle.viewportSize;
+      if (
+        distanceFromTop < 500 &&
+        props.hasNextPage &&
+        !props.isFetchingNextPage
+      ) {
         props.fetchNextPage();
       }
     }

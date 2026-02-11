@@ -22,7 +22,7 @@ export function channelMessagesQueryOptions(channelId: string) {
         async () =>
           await commsServiceClient.getChannelMessages({
             channel_id: channelId,
-            limit: 50,
+            limit: 200,
             cursor: pageParam,
           })
       );

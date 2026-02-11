@@ -9,7 +9,10 @@ import {
 import type { PostReactionRequest } from '@service-comms/generated/models';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
-import { softInvalidateChannelMessages, type ChannelMessagesData } from './channel-messages';
+import {
+  softInvalidateChannelMessages,
+  type ChannelMessagesData,
+} from './channel-messages';
 import { channelKeys, ChannelNonceKeys } from './keys';
 import { createMutationNonce } from '../nonce';
 
@@ -36,15 +39,13 @@ export type RemoveReactionContext = {
 function updateMessageInPages(
   data: ChannelMessagesData,
   messageId: string,
-  updater: (message: ApiChannelMessage) => ApiChannelMessage,
+  updater: (message: ApiChannelMessage) => ApiChannelMessage
 ): ChannelMessagesData {
   return {
     ...data,
     pages: data.pages.map((page) => ({
       ...page,
-      items: page.items.map((m) =>
-        m.id === messageId ? updater(m) : m
-      ),
+      items: page.items.map((m) => (m.id === messageId ? updater(m) : m)),
     })),
   };
 }
@@ -56,7 +57,9 @@ function updateMessageInPages(
 function updateReactionsForMessage(
   data: ChannelMessagesData,
   messageId: string,
-  updater: (reactions: { emoji: string; users: string[] }[]) => { emoji: string; users: string[] }[],
+  updater: (
+    reactions: { emoji: string; users: string[] }[]
+  ) => { emoji: string; users: string[] }[]
 ): { data: ChannelMessagesData; found: boolean } {
   // Check top-level messages
   for (const page of data.pages) {
@@ -119,25 +122,29 @@ export function optimisticAddReaction(
   queryClient.setQueryData<ChannelMessagesData>(queryKey, (prev) => {
     if (!prev?.pages?.length) return prev;
 
-    const result = updateReactionsForMessage(prev, vars.message_id, (reactions) => {
-      const existing = reactions.find((r) => r.emoji === vars.emoji);
-      if (existing?.users.includes(vars.userId)) return reactions;
+    const result = updateReactionsForMessage(
+      prev,
+      vars.message_id,
+      (reactions) => {
+        const existing = reactions.find((r) => r.emoji === vars.emoji);
+        if (existing?.users.includes(vars.userId)) return reactions;
 
-      context = {
-        messageId: vars.message_id,
-        emoji: vars.emoji,
-        userId: vars.userId,
-        wasNewReaction: !existing,
-      };
+        context = {
+          messageId: vars.message_id,
+          emoji: vars.emoji,
+          userId: vars.userId,
+          wasNewReaction: !existing,
+        };
 
-      return existing
-        ? reactions.map((r) =>
-            r.emoji === vars.emoji
-              ? { ...r, users: [...r.users, vars.userId] }
-              : r
-          )
-        : [...reactions, { emoji: vars.emoji, users: [vars.userId] }];
-    });
+        return existing
+          ? reactions.map((r) =>
+              r.emoji === vars.emoji
+                ? { ...r, users: [...r.users, vars.userId] }
+                : r
+            )
+          : [...reactions, { emoji: vars.emoji, users: [vars.userId] }];
+      }
+    );
 
     return result.data;
   });
@@ -157,16 +164,20 @@ export function rollbackAddReaction(
   queryClient.setQueryData<ChannelMessagesData>(queryKey, (prev) => {
     if (!prev?.pages?.length) return prev;
 
-    const result = updateReactionsForMessage(prev, context.messageId, (reactions) => {
-      if (context.wasNewReaction) {
-        return reactions.filter((r) => r.emoji !== context.emoji);
+    const result = updateReactionsForMessage(
+      prev,
+      context.messageId,
+      (reactions) => {
+        if (context.wasNewReaction) {
+          return reactions.filter((r) => r.emoji !== context.emoji);
+        }
+        return reactions.map((r) =>
+          r.emoji === context.emoji
+            ? { ...r, users: r.users.filter((id) => id !== context.userId) }
+            : r
+        );
       }
-      return reactions.map((r) =>
-        r.emoji === context.emoji
-          ? { ...r, users: r.users.filter((id) => id !== context.userId) }
-          : r
-      );
-    });
+    );
 
     return result.data;
   });
@@ -188,25 +199,29 @@ export function optimisticRemoveReaction(
   queryClient.setQueryData<ChannelMessagesData>(queryKey, (prev) => {
     if (!prev?.pages?.length) return prev;
 
-    const result = updateReactionsForMessage(prev, vars.message_id, (reactions) => {
-      const existing = reactions.find((r) => r.emoji === vars.emoji);
-      if (!existing?.users.includes(vars.userId)) return reactions;
+    const result = updateReactionsForMessage(
+      prev,
+      vars.message_id,
+      (reactions) => {
+        const existing = reactions.find((r) => r.emoji === vars.emoji);
+        if (!existing?.users.includes(vars.userId)) return reactions;
 
-      context = {
-        messageId: vars.message_id,
-        emoji: vars.emoji,
-        userId: vars.userId,
-        wasLastUser: existing.users.length === 1,
-      };
+        context = {
+          messageId: vars.message_id,
+          emoji: vars.emoji,
+          userId: vars.userId,
+          wasLastUser: existing.users.length === 1,
+        };
 
-      return reactions
-        .map((r) =>
-          r.emoji === vars.emoji
-            ? { ...r, users: r.users.filter((id) => id !== vars.userId) }
-            : r
-        )
-        .filter((r) => r.users.length > 0);
-    });
+        return reactions
+          .map((r) =>
+            r.emoji === vars.emoji
+              ? { ...r, users: r.users.filter((id) => id !== vars.userId) }
+              : r
+          )
+          .filter((r) => r.users.length > 0);
+      }
+    );
 
     return result.data;
   });
@@ -226,17 +241,24 @@ export function rollbackRemoveReaction(
   queryClient.setQueryData<ChannelMessagesData>(queryKey, (prev) => {
     if (!prev?.pages?.length) return prev;
 
-    const result = updateReactionsForMessage(prev, context.messageId, (reactions) => {
-      const existing = reactions.find((r) => r.emoji === context.emoji);
-      if (existing) {
-        return reactions.map((r) =>
-          r.emoji === context.emoji
-            ? { ...r, users: [...r.users, context.userId] }
-            : r
-        );
+    const result = updateReactionsForMessage(
+      prev,
+      context.messageId,
+      (reactions) => {
+        const existing = reactions.find((r) => r.emoji === context.emoji);
+        if (existing) {
+          return reactions.map((r) =>
+            r.emoji === context.emoji
+              ? { ...r, users: [...r.users, context.userId] }
+              : r
+          );
+        }
+        return [
+          ...reactions,
+          { emoji: context.emoji, users: [context.userId] },
+        ];
       }
-      return [...reactions, { emoji: context.emoji, users: [context.userId] }];
-    });
+    );
 
     return result.data;
   });

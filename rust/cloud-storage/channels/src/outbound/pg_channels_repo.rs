@@ -125,7 +125,10 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
             FROM comms_messages m
             WHERE m.channel_id = $1
               AND m.thread_id IS NULL
-              AND m.deleted_at IS NULL
+              AND (m.deleted_at IS NULL OR EXISTS (
+                  SELECT 1 FROM comms_messages r
+                  WHERE r.thread_id = m.id AND r.deleted_at IS NULL
+              ))
               AND ($2::timestamptz IS NULL OR (m.created_at, m.id) < ($2, $3))
             ORDER BY m.created_at DESC, m.id DESC
             LIMIT $4

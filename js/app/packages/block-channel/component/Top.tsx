@@ -61,11 +61,12 @@ export function Top(props: TopProps) {
   const participantCount = () => props.participants.length;
   const blockId = useBlockId();
   const notificationSource = useGlobalNotificationSource();
-  const channelContext = useChannelContext();
+  // const channelContext = useChannelContext();
 
   const isAdminOrOwner = createMemo(() => {
-    const channelData = channelContext.channel();
-    return isChannelAdminOrOwner(channelData);
+    // const channelData = channelContext.channel();
+    // return isChannelAdminOrOwner(channelData);
+    return false;
   });
 
   function handleCopyLink() {
