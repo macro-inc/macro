@@ -5,6 +5,7 @@ import {
   ok,
   type MaybeResult,
 } from '@core/util/maybeResult';
+import { platformFetch } from '@core/util/platformFetch';
 import type {
   GetBatchProjectPreviewResponse,
   ProjectPreviewData,
@@ -27,7 +28,7 @@ async function fetchProjectPreview(
   const apiVersion = 'v2';
   const url = `${dssHost}/${apiVersion}/projects/preview`;
 
-  const response = await fetch(url, {
+  const response = await platformFetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

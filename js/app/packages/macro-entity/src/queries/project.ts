@@ -1,5 +1,6 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import type { WithRequired } from '@core/util/withRequired';
+import { platformFetch } from '@core/util/platformFetch';
 import type {
   GetBatchProjectPreviewResponse,
   ProjectPreviewData,
@@ -39,7 +40,7 @@ const fetchProjectData = async (
   const dssHost = SERVER_HOSTS['document-storage-service'];
   const url = `${dssHost}/projects/preview`;
 
-  const response = await fetch(url, {
+  const response = await platformFetch(url, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${apiToken}`,
