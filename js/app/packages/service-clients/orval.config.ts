@@ -8,10 +8,6 @@ export default defineConfig({
       schemas: './service-auth/generated/schemas',
       override: {
         useDates: true,
-        mutator: {
-          path: './dateConverter.ts',
-          name: 'customFetch',
-        },
       },
     },
     input: {
@@ -25,10 +21,6 @@ export default defineConfig({
       schemas: './service-cognition/generated/schemas',
       override: {
         useDates: true,
-        mutator: {
-          path: './dateConverter.ts',
-          name: 'customFetch',
-        },
       },
     },
     input: {
@@ -42,10 +34,6 @@ export default defineConfig({
       schemas: './service-comms/generated/models',
       override: {
         useDates: true,
-        mutator: {
-          path: './dateConverter.ts',
-          name: 'customFetch',
-        },
       },
     },
     input: {
@@ -59,10 +47,6 @@ export default defineConfig({
       schemas: './service-connection/generated/schemas',
       override: {
         useDates: true,
-        mutator: {
-          path: './dateConverter.ts',
-          name: 'customFetch',
-        },
       },
     },
     input: {
@@ -76,10 +60,6 @@ export default defineConfig({
       schemas: './service-contacts/generated/schemas',
       override: {
         useDates: true,
-        mutator: {
-          path: './dateConverter.ts',
-          name: 'customFetch',
-        },
       },
     },
     input: {
@@ -93,10 +73,6 @@ export default defineConfig({
       schemas: './service-email/generated/schemas',
       override: {
         useDates: true,
-        mutator: {
-          path: './dateConverter.ts',
-          name: 'customFetch',
-        },
       },
     },
     input: {
@@ -111,10 +87,6 @@ export default defineConfig({
       schemas: './service-notification/generated/schemas',
       override: {
         useDates: true,
-        mutator: {
-          path: './dateConverter.ts',
-          name: 'customFetch',
-        },
       },
     },
     input: {
@@ -130,10 +102,6 @@ export default defineConfig({
       biome: true,
       override: {
         useDates: true,
-        mutator: {
-          path: './dateConverterZod.ts',
-          name: 'customZodFetch',
-        },
       },
     },
     input: {
@@ -150,10 +118,6 @@ export default defineConfig({
       biome: true,
       override: {
         useDates: true,
-        mutator: {
-          path: './dateConverterZod.ts',
-          name: 'customZodFetch',
-        },
       },
     },
     input: {
@@ -167,10 +131,6 @@ export default defineConfig({
       schemas: './service-search/generated/models',
       override: {
         useDates: true,
-        mutator: {
-          path: './dateConverter.ts',
-          name: 'customFetch',
-        },
       },
     },
     input: {
@@ -184,10 +144,6 @@ export default defineConfig({
       schemas: './service-static-files/generated/schemas',
       override: {
         useDates: true,
-        mutator: {
-          path: './dateConverter.ts',
-          name: 'customFetch',
-        },
       },
     },
     input: {
@@ -203,10 +159,6 @@ export default defineConfig({
       biome: true,
       override: {
         useDates: true,
-        mutator: {
-          path: './dateConverterZod.ts',
-          name: 'customZodFetch',
-        },
       },
     },
     input: {
@@ -220,10 +172,6 @@ export default defineConfig({
       schemas: './service-unfurl/generated/schemas',
       override: {
         useDates: true,
-        mutator: {
-          path: './dateConverter.ts',
-          name: 'customFetch',
-        },
       },
     },
     input: {

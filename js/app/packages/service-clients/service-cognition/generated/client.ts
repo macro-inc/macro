@@ -4,8 +4,6 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-
-import { customFetch } from '../../dateConverter';
 import type {
   ChatHistory,
   ChatHistoryBatchMessagesRequest,
@@ -32,6 +30,7 @@ import type {
   VerifyAttachmentsRequest,
   VerifyAttachmentsResponse,
 } from './schemas';
+
 export type getModelsForAttachmentsHandlerResponse200 = {
   data: GetModelsForAttachmentsResponse;
   status: 200;
@@ -76,15 +75,23 @@ export const getModelsForAttachmentsHandler = async (
   getModelsForAttachmentsRequest: GetModelsForAttachmentsRequest,
   options?: RequestInit
 ): Promise<getModelsForAttachmentsHandlerResponse> => {
-  return customFetch<getModelsForAttachmentsHandlerResponse>(
-    getGetModelsForAttachmentsHandlerUrl(),
-    {
-      ...options,
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...options?.headers },
-      body: JSON.stringify(getModelsForAttachmentsRequest),
-    }
-  );
+  const res = await fetch(getGetModelsForAttachmentsHandlerUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(getModelsForAttachmentsRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getModelsForAttachmentsHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getModelsForAttachmentsHandlerResponse;
 };
 
 export type verifyAttachmentsHandlerResponse200 = {
@@ -131,15 +138,23 @@ export const verifyAttachmentsHandler = async (
   verifyAttachmentsRequest: VerifyAttachmentsRequest,
   options?: RequestInit
 ): Promise<verifyAttachmentsHandlerResponse> => {
-  return customFetch<verifyAttachmentsHandlerResponse>(
-    getVerifyAttachmentsHandlerUrl(),
-    {
-      ...options,
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...options?.headers },
-      body: JSON.stringify(verifyAttachmentsRequest),
-    }
-  );
+  const res = await fetch(getVerifyAttachmentsHandlerUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(verifyAttachmentsRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: verifyAttachmentsHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as verifyAttachmentsHandlerResponse;
 };
 
 export type getChatsForAttachmentHandlerResponse200 = {
@@ -186,13 +201,21 @@ export const getChatsForAttachmentHandler = async (
   attachmentId: string,
   options?: RequestInit
 ): Promise<getChatsForAttachmentHandlerResponse> => {
-  return customFetch<getChatsForAttachmentHandlerResponse>(
-    getGetChatsForAttachmentHandlerUrl(attachmentId),
-    {
-      ...options,
-      method: 'GET',
-    }
-  );
+  const res = await fetch(getGetChatsForAttachmentHandlerUrl(attachmentId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getChatsForAttachmentHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getChatsForAttachmentHandlerResponse;
 };
 
 /**
@@ -240,10 +263,19 @@ export const getGetChatsHandlerUrl = () => {
 export const getChatsHandler = async (
   options?: RequestInit
 ): Promise<getChatsHandlerResponse> => {
-  return customFetch<getChatsHandlerResponse>(getGetChatsHandlerUrl(), {
+  const res = await fetch(getGetChatsHandlerUrl(), {
     ...options,
     method: 'GET',
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getChatsHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getChatsHandlerResponse;
 };
 
 export type createChatHandlerResponse201 = {
@@ -288,10 +320,19 @@ export const getCreateChatHandlerUrl = () => {
 export const createChatHandler = async (
   options?: RequestInit
 ): Promise<createChatHandlerResponse> => {
-  return customFetch<createChatHandlerResponse>(getCreateChatHandlerUrl(), {
+  const res = await fetch(getCreateChatHandlerUrl(), {
     ...options,
     method: 'POST',
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createChatHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createChatHandlerResponse;
 };
 
 /**
@@ -335,13 +376,21 @@ export const getChatHistoryHandler = async (
   chatId: string,
   options?: RequestInit
 ): Promise<getChatHistoryHandlerResponse> => {
-  return customFetch<getChatHistoryHandlerResponse>(
-    getGetChatHistoryHandlerUrl(chatId),
-    {
-      ...options,
-      method: 'GET',
-    }
-  );
+  const res = await fetch(getGetChatHistoryHandlerUrl(chatId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getChatHistoryHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getChatHistoryHandlerResponse;
 };
 
 /**
@@ -391,15 +440,23 @@ export const getChatHistoryBatchMessagesHandler = async (
   chatHistoryBatchMessagesRequest: ChatHistoryBatchMessagesRequest,
   options?: RequestInit
 ): Promise<getChatHistoryBatchMessagesHandlerResponse> => {
-  return customFetch<getChatHistoryBatchMessagesHandlerResponse>(
-    getGetChatHistoryBatchMessagesHandlerUrl(),
-    {
-      ...options,
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...options?.headers },
-      body: JSON.stringify(chatHistoryBatchMessagesRequest),
-    }
-  );
+  const res = await fetch(getGetChatHistoryBatchMessagesHandlerUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(chatHistoryBatchMessagesRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getChatHistoryBatchMessagesHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getChatHistoryBatchMessagesHandlerResponse;
 };
 
 /**
@@ -448,10 +505,19 @@ export const getChatHandler = async (
   chatId: string,
   options?: RequestInit
 ): Promise<getChatHandlerResponse> => {
-  return customFetch<getChatHandlerResponse>(getGetChatHandlerUrl(chatId), {
+  const res = await fetch(getGetChatHandlerUrl(chatId), {
     ...options,
     method: 'GET',
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getChatHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getChatHandlerResponse;
 };
 
 /**
@@ -501,13 +567,19 @@ export const deleteChatHandler = async (
   chatId: string,
   options?: RequestInit
 ): Promise<deleteChatHandlerResponse> => {
-  return customFetch<deleteChatHandlerResponse>(
-    getDeleteChatHandlerUrl(chatId),
-    {
-      ...options,
-      method: 'DELETE',
-    }
-  );
+  const res = await fetch(getDeleteChatHandlerUrl(chatId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteChatHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteChatHandlerResponse;
 };
 
 export type copyChatHandlerResponse201 = {
@@ -554,12 +626,21 @@ export const copyChatHandler = async (
   copyChatRequest: CopyChatRequest,
   options?: RequestInit
 ): Promise<copyChatHandlerResponse> => {
-  return customFetch<copyChatHandlerResponse>(getCopyChatHandlerUrl(chatId), {
+  const res = await fetch(getCopyChatHandlerUrl(chatId), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(copyChatRequest),
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: copyChatHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as copyChatHandlerResponse;
 };
 
 /**
@@ -609,13 +690,21 @@ export const permanentlyDeleteChat = async (
   chatId: string,
   options?: RequestInit
 ): Promise<permanentlyDeleteChatResponse> => {
-  return customFetch<permanentlyDeleteChatResponse>(
-    getPermanentlyDeleteChatUrl(chatId),
-    {
-      ...options,
-      method: 'DELETE',
-    }
-  );
+  const res = await fetch(getPermanentlyDeleteChatUrl(chatId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: permanentlyDeleteChatResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as permanentlyDeleteChatResponse;
 };
 
 /**
@@ -664,10 +753,19 @@ export const revertDeleteChat = async (
   chatId: string,
   options?: RequestInit
 ): Promise<revertDeleteChatResponse> => {
-  return customFetch<revertDeleteChatResponse>(getRevertDeleteChatUrl(chatId), {
+  const res = await fetch(getRevertDeleteChatUrl(chatId), {
     ...options,
     method: 'PUT',
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: revertDeleteChatResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as revertDeleteChatResponse;
 };
 
 export type getCitationHandlerResponse200 = {
@@ -708,10 +806,19 @@ export const getCitationHandler = async (
   id: string,
   options?: RequestInit
 ): Promise<getCitationHandlerResponse> => {
-  return customFetch<getCitationHandlerResponse>(getGetCitationHandlerUrl(id), {
+  const res = await fetch(getGetCitationHandlerUrl(id), {
     ...options,
     method: 'GET',
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getCitationHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getCitationHandlerResponse;
 };
 
 export type getCompletionHandlerResponse200 = {
@@ -764,15 +871,23 @@ export const getCompletionHandler = async (
   getCompletionRequest: GetCompletionRequest,
   options?: RequestInit
 ): Promise<getCompletionHandlerResponse> => {
-  return customFetch<getCompletionHandlerResponse>(
-    getGetCompletionHandlerUrl(),
-    {
-      ...options,
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...options?.headers },
-      body: JSON.stringify(getCompletionRequest),
-    }
-  );
+  const res = await fetch(getGetCompletionHandlerUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(getCompletionRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getCompletionHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getCompletionHandlerResponse;
 };
 
 export type handlerResponse200 = {
@@ -816,12 +931,17 @@ export const handler = async (
   structedOutputCompletionRequest: StructedOutputCompletionRequest,
   options?: RequestInit
 ): Promise<handlerResponse> => {
-  return customFetch<handlerResponse>(getHandlerUrl(), {
+  const res = await fetch(getHandlerUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(structedOutputCompletionRequest),
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: handlerResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as handlerResponse;
 };
 
 export type upsertTextHandlerResponse201 = {
@@ -867,12 +987,21 @@ export const upsertTextHandler = async (
   createTextRequestBody: CreateTextRequestBody,
   options?: RequestInit
 ): Promise<upsertTextHandlerResponse> => {
-  return customFetch<upsertTextHandlerResponse>(getUpsertTextHandlerUrl(), {
+  const res = await fetch(getUpsertTextHandlerUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(createTextRequestBody),
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: upsertTextHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as upsertTextHandlerResponse;
 };
 
 /**
@@ -896,10 +1025,19 @@ export const getHealthHandlerUrl = () => {
 export const healthHandler = async (
   options?: RequestInit
 ): Promise<healthHandlerResponse> => {
-  return customFetch<healthHandlerResponse>(getHealthHandlerUrl(), {
+  const res = await fetch(getHealthHandlerUrl(), {
     ...options,
     method: 'GET',
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: healthHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as healthHandlerResponse;
 };
 
 /**
@@ -923,10 +1061,19 @@ export const getGetModelsHandlerUrl = () => {
 export const getModelsHandler = async (
   options?: RequestInit
 ): Promise<getModelsHandlerResponse> => {
-  return customFetch<getModelsHandlerResponse>(getGetModelsHandlerUrl(), {
+  const res = await fetch(getGetModelsHandlerUrl(), {
     ...options,
     method: 'GET',
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getModelsHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getModelsHandlerResponse;
 };
 
 export type getBatchPreviewResponse200 = {
@@ -966,12 +1113,21 @@ export const getBatchPreview = async (
   getBatchPreviewRequest: GetBatchPreviewRequest,
   options?: RequestInit
 ): Promise<getBatchPreviewResponse> => {
-  return customFetch<getBatchPreviewResponse>(getGetBatchPreviewUrl(), {
+  const res = await fetch(getGetBatchPreviewUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(getBatchPreviewRequest),
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getBatchPreviewResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getBatchPreviewResponse;
 };
 
 export type wsHandlerResponse200 = {
@@ -1002,10 +1158,19 @@ export const getWsHandlerUrl = () => {
 export const wsHandler = async (
   options?: RequestInit
 ): Promise<wsHandlerResponse> => {
-  return customFetch<wsHandlerResponse>(getWsHandlerUrl(), {
+  const res = await fetch(getWsHandlerUrl(), {
     ...options,
     method: 'GET',
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: wsHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as wsHandlerResponse;
 };
 
 /**
@@ -1049,11 +1214,19 @@ export const getChatPermissionsHandlerV2 = async (
   chatId: string,
   options?: RequestInit
 ): Promise<getChatPermissionsHandlerV2Response> => {
-  return customFetch<getChatPermissionsHandlerV2Response>(
-    getGetChatPermissionsHandlerV2Url(chatId),
-    {
-      ...options,
-      method: 'GET',
-    }
-  );
+  const res = await fetch(getGetChatPermissionsHandlerV2Url(chatId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getChatPermissionsHandlerV2Response['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getChatPermissionsHandlerV2Response;
 };

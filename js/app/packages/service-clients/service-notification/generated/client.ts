@@ -4,8 +4,6 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-
-import { customFetch } from '../../dateConverter';
 import type {
   ApiUserNotification,
   BulkGetByEventItemIdsRequest,
@@ -19,6 +17,7 @@ import type {
   NotificationBulkRequest,
   UserUnsubscribe,
 } from './schemas';
+
 /**
  * @summary Register a user device for push notifications.
  */
@@ -65,12 +64,21 @@ export const registerDevice = async (
   deviceRequest: DeviceRequest,
   options?: RequestInit
 ): Promise<registerDeviceResponse> => {
-  return customFetch<registerDeviceResponse>(getRegisterDeviceUrl(), {
+  const res = await fetch(getRegisterDeviceUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(deviceRequest),
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: registerDeviceResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as registerDeviceResponse;
 };
 
 /**
@@ -119,12 +127,21 @@ export const unregisterDevice = async (
   deviceRequest: DeviceRequest,
   options?: RequestInit
 ): Promise<unregisterDeviceResponse> => {
-  return customFetch<unregisterDeviceResponse>(getUnregisterDeviceUrl(), {
+  const res = await fetch(getUnregisterDeviceUrl(), {
     ...options,
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(deviceRequest),
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: unregisterDeviceResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as unregisterDeviceResponse;
 };
 
 /**
@@ -148,10 +165,19 @@ export const getHealthHandlerUrl = () => {
 export const healthHandler = async (
   options?: RequestInit
 ): Promise<healthHandlerResponse> => {
-  return customFetch<healthHandlerResponse>(getHealthHandlerUrl(), {
+  const res = await fetch(getHealthHandlerUrl(), {
     ...options,
     method: 'GET',
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: healthHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as healthHandlerResponse;
 };
 
 /**
@@ -193,10 +219,19 @@ export const getGetUnsubscribesUrl = () => {
 export const getUnsubscribes = async (
   options?: RequestInit
 ): Promise<getUnsubscribesResponse> => {
-  return customFetch<getUnsubscribesResponse>(getGetUnsubscribesUrl(), {
+  const res = await fetch(getGetUnsubscribesUrl(), {
     ...options,
     method: 'GET',
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getUnsubscribesResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getUnsubscribesResponse;
 };
 
 /**
@@ -238,10 +273,19 @@ export const getUnsubscribeEmailUrl = () => {
 export const unsubscribeEmail = async (
   options?: RequestInit
 ): Promise<unsubscribeEmailResponse> => {
-  return customFetch<unsubscribeEmailResponse>(getUnsubscribeEmailUrl(), {
+  const res = await fetch(getUnsubscribeEmailUrl(), {
     ...options,
     method: 'POST',
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: unsubscribeEmailResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as unsubscribeEmailResponse;
 };
 
 /**
@@ -283,10 +327,19 @@ export const getUnsubscribeItemUrl = () => {
 export const unsubscribeItem = async (
   options?: RequestInit
 ): Promise<unsubscribeItemResponse> => {
-  return customFetch<unsubscribeItemResponse>(getUnsubscribeItemUrl(), {
+  const res = await fetch(getUnsubscribeItemUrl(), {
     ...options,
     method: 'POST',
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: unsubscribeItemResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as unsubscribeItemResponse;
 };
 
 /**
@@ -329,13 +382,21 @@ export const getRemoveUnsubscribeItemUrl = () => {
 export const removeUnsubscribeItem = async (
   options?: RequestInit
 ): Promise<removeUnsubscribeItemResponse> => {
-  return customFetch<removeUnsubscribeItemResponse>(
-    getRemoveUnsubscribeItemUrl(),
-    {
-      ...options,
-      method: 'DELETE',
-    }
-  );
+  const res = await fetch(getRemoveUnsubscribeItemUrl(), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: removeUnsubscribeItemResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as removeUnsubscribeItemResponse;
 };
 
 /**
@@ -377,10 +438,19 @@ export const getUnsubscribeAllUrl = () => {
 export const unsubscribeAll = async (
   options?: RequestInit
 ): Promise<unsubscribeAllResponse> => {
-  return customFetch<unsubscribeAllResponse>(getUnsubscribeAllUrl(), {
+  const res = await fetch(getUnsubscribeAllUrl(), {
     ...options,
     method: 'POST',
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: unsubscribeAllResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as unsubscribeAllResponse;
 };
 
 /**
@@ -424,13 +494,21 @@ export const getRemoveUnsubscribeAllUrl = () => {
 export const removeUnsubscribeAll = async (
   options?: RequestInit
 ): Promise<removeUnsubscribeAllResponse> => {
-  return customFetch<removeUnsubscribeAllResponse>(
-    getRemoveUnsubscribeAllUrl(),
-    {
-      ...options,
-      method: 'DELETE',
-    }
-  );
+  const res = await fetch(getRemoveUnsubscribeAllUrl(), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: removeUnsubscribeAllResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as removeUnsubscribeAllResponse;
 };
 
 /**
@@ -496,13 +574,21 @@ export const listTypedNotifications = async (
   params?: ListTypedNotificationsParams,
   options?: RequestInit
 ): Promise<listTypedNotificationsResponse> => {
-  return customFetch<listTypedNotificationsResponse>(
-    getListTypedNotificationsUrl(params),
-    {
-      ...options,
-      method: 'GET',
-    }
-  );
+  const res = await fetch(getListTypedNotificationsUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listTypedNotificationsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listTypedNotificationsResponse;
 };
 
 /**
@@ -569,7 +655,7 @@ export const bulkGetTypedNotificationsByEventItemIds = async (
   params?: BulkGetTypedNotificationsByEventItemIdsParams,
   options?: RequestInit
 ): Promise<bulkGetTypedNotificationsByEventItemIdsResponse> => {
-  return customFetch<bulkGetTypedNotificationsByEventItemIdsResponse>(
+  const res = await fetch(
     getBulkGetTypedNotificationsByEventItemIdsUrl(params),
     {
       ...options,
@@ -578,6 +664,17 @@ export const bulkGetTypedNotificationsByEventItemIds = async (
       body: JSON.stringify(bulkGetByEventItemIdsRequest),
     }
   );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: bulkGetTypedNotificationsByEventItemIdsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as bulkGetTypedNotificationsByEventItemIdsResponse;
 };
 
 /**
@@ -643,13 +740,24 @@ export const getTypedNotificationsByEventItemId = async (
   params?: GetTypedNotificationsByEventItemIdParams,
   options?: RequestInit
 ): Promise<getTypedNotificationsByEventItemIdResponse> => {
-  return customFetch<getTypedNotificationsByEventItemIdResponse>(
+  const res = await fetch(
     getGetTypedNotificationsByEventItemIdUrl(eventItemId, params),
     {
       ...options,
       method: 'GET',
     }
   );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getTypedNotificationsByEventItemIdResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getTypedNotificationsByEventItemIdResponse;
 };
 
 /**
@@ -705,13 +813,21 @@ export const getTypedNotificationById = async (
   notificationId: string,
   options?: RequestInit
 ): Promise<getTypedNotificationByIdResponse> => {
-  return customFetch<getTypedNotificationByIdResponse>(
-    getGetTypedNotificationByIdUrl(notificationId),
-    {
-      ...options,
-      method: 'GET',
-    }
-  );
+  const res = await fetch(getGetTypedNotificationByIdUrl(notificationId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getTypedNotificationByIdResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getTypedNotificationByIdResponse;
 };
 
 /**
@@ -761,15 +877,23 @@ export const bulkDeleteUserNotificationsV2 = async (
   notificationBulkRequest: NotificationBulkRequest,
   options?: RequestInit
 ): Promise<bulkDeleteUserNotificationsV2Response> => {
-  return customFetch<bulkDeleteUserNotificationsV2Response>(
-    getBulkDeleteUserNotificationsV2Url(),
-    {
-      ...options,
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json', ...options?.headers },
-      body: JSON.stringify(notificationBulkRequest),
-    }
-  );
+  const res = await fetch(getBulkDeleteUserNotificationsV2Url(), {
+    ...options,
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(notificationBulkRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: bulkDeleteUserNotificationsV2Response['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as bulkDeleteUserNotificationsV2Response;
 };
 
 /**
@@ -819,15 +943,23 @@ export const bulkMarkNotificationsDone = async (
   notificationBulkRequest: NotificationBulkRequest,
   options?: RequestInit
 ): Promise<bulkMarkNotificationsDoneResponse> => {
-  return customFetch<bulkMarkNotificationsDoneResponse>(
-    getBulkMarkNotificationsDoneUrl(),
-    {
-      ...options,
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', ...options?.headers },
-      body: JSON.stringify(notificationBulkRequest),
-    }
-  );
+  const res = await fetch(getBulkMarkNotificationsDoneUrl(), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(notificationBulkRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: bulkMarkNotificationsDoneResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as bulkMarkNotificationsDoneResponse;
 };
 
 /**
@@ -877,15 +1009,23 @@ export const bulkMarkNotificationsSeen = async (
   notificationBulkRequest: NotificationBulkRequest,
   options?: RequestInit
 ): Promise<bulkMarkNotificationsSeenResponse> => {
-  return customFetch<bulkMarkNotificationsSeenResponse>(
-    getBulkMarkNotificationsSeenUrl(),
-    {
-      ...options,
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', ...options?.headers },
-      body: JSON.stringify(notificationBulkRequest),
-    }
-  );
+  const res = await fetch(getBulkMarkNotificationsSeenUrl(), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(notificationBulkRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: bulkMarkNotificationsSeenResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as bulkMarkNotificationsSeenResponse;
 };
 
 /**
@@ -935,15 +1075,23 @@ export const bulkMarkNotificationsUndone = async (
   notificationBulkRequest: NotificationBulkRequest,
   options?: RequestInit
 ): Promise<bulkMarkNotificationsUndoneResponse> => {
-  return customFetch<bulkMarkNotificationsUndoneResponse>(
-    getBulkMarkNotificationsUndoneUrl(),
-    {
-      ...options,
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', ...options?.headers },
-      body: JSON.stringify(notificationBulkRequest),
-    }
-  );
+  const res = await fetch(getBulkMarkNotificationsUndoneUrl(), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(notificationBulkRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: bulkMarkNotificationsUndoneResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as bulkMarkNotificationsUndoneResponse;
 };
 
 /**
@@ -993,11 +1141,19 @@ export const deleteUserNotificationV2 = async (
   notificationId: string,
   options?: RequestInit
 ): Promise<deleteUserNotificationV2Response> => {
-  return customFetch<deleteUserNotificationV2Response>(
-    getDeleteUserNotificationV2Url(notificationId),
-    {
-      ...options,
-      method: 'DELETE',
-    }
-  );
+  const res = await fetch(getDeleteUserNotificationV2Url(notificationId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteUserNotificationV2Response['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteUserNotificationV2Response;
 };

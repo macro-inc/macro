@@ -4,9 +4,8 @@
  * contacts_service
  * OpenAPI spec version: 0.1.0
  */
-
-import { customFetch } from '../../dateConverter';
 import type { GetContactsResponse } from './schemas';
+
 export type getContactsResponse200 = {
   data: GetContactsResponse;
   status: 200;
@@ -49,8 +48,17 @@ export const getGetContactsUrl = () => {
 export const getContacts = async (
   options?: RequestInit
 ): Promise<getContactsResponse> => {
-  return customFetch<getContactsResponse>(getGetContactsUrl(), {
+  const res = await fetch(getGetContactsUrl(), {
     ...options,
     method: 'GET',
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getContactsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getContactsResponse;
 };

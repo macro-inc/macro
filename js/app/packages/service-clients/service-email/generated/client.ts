@@ -4,8 +4,6 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
-
-import { customFetch } from '../../dateConverter';
 import type {
   AddDraftAttachmentRequest,
   AddDraftAttachmentResponse,
@@ -43,6 +41,7 @@ import type {
   UpsertScheduledRequest,
   UpsertScheduledResponse,
 } from './schemas';
+
 /**
  * @summary Get an attachment by ID.
  */
@@ -95,10 +94,19 @@ export const getAttachment = async (
   id: string,
   options?: RequestInit
 ): Promise<getAttachmentResponse> => {
-  return customFetch<getAttachmentResponse>(getGetAttachmentUrl(id), {
+  const res = await fetch(getGetAttachmentUrl(id), {
     ...options,
     method: 'GET',
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAttachmentResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAttachmentResponse;
 };
 
 /**
@@ -154,13 +162,21 @@ export const getAttachmentDocumentId = async (
   id: string,
   options?: RequestInit
 ): Promise<getAttachmentDocumentIdResponse> => {
-  return customFetch<getAttachmentDocumentIdResponse>(
-    getGetAttachmentDocumentIdUrl(id),
-    {
-      ...options,
-      method: 'GET',
-    }
-  );
+  const res = await fetch(getGetAttachmentDocumentIdUrl(id), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAttachmentDocumentIdResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAttachmentDocumentIdResponse;
 };
 
 /**
@@ -210,12 +226,23 @@ export const cancelBackfillGmail = async (
   cancelBackfillParams: CancelBackfillParams,
   options?: RequestInit
 ): Promise<cancelBackfillGmailResponse> => {
-  return customFetch<cancelBackfillGmailResponse>(getCancelBackfillGmailUrl(), {
+  const res = await fetch(getCancelBackfillGmailUrl(), {
     ...options,
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(cancelBackfillParams),
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: cancelBackfillGmailResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as cancelBackfillGmailResponse;
 };
 
 /**
@@ -265,13 +292,21 @@ export const getGetBackfillGmailActiveUrl = () => {
 export const getBackfillGmailActive = async (
   options?: RequestInit
 ): Promise<getBackfillGmailActiveResponse> => {
-  return customFetch<getBackfillGmailActiveResponse>(
-    getGetBackfillGmailActiveUrl(),
-    {
-      ...options,
-      method: 'GET',
-    }
-  );
+  const res = await fetch(getGetBackfillGmailActiveUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getBackfillGmailActiveResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getBackfillGmailActiveResponse;
 };
 
 /**
@@ -320,10 +355,19 @@ export const getBackfillGmail = async (
   id: string,
   options?: RequestInit
 ): Promise<getBackfillGmailResponse> => {
-  return customFetch<getBackfillGmailResponse>(getGetBackfillGmailUrl(id), {
+  const res = await fetch(getGetBackfillGmailUrl(id), {
     ...options,
     method: 'GET',
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getBackfillGmailResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getBackfillGmailResponse;
 };
 
 /**
@@ -371,10 +415,19 @@ export const getListContactsUrl = () => {
 export const listContacts = async (
   options?: RequestInit
 ): Promise<listContactsResponse> => {
-  return customFetch<listContactsResponse>(getListContactsUrl(), {
+  const res = await fetch(getListContactsUrl(), {
     ...options,
     method: 'GET',
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listContactsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listContactsResponse;
 };
 
 /**
@@ -423,12 +476,21 @@ export const createDraft = async (
   createDraftRequest: CreateDraftRequest,
   options?: RequestInit
 ): Promise<createDraftResponse> => {
-  return customFetch<createDraftResponse>(getCreateDraftUrl(), {
+  const res = await fetch(getCreateDraftUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(createDraftRequest),
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createDraftResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createDraftResponse;
 };
 
 /**
@@ -492,13 +554,21 @@ export const getScheduledMessages = async (
   params?: GetScheduledMessagesParams,
   options?: RequestInit
 ): Promise<getScheduledMessagesResponse> => {
-  return customFetch<getScheduledMessagesResponse>(
-    getGetScheduledMessagesUrl(params),
-    {
-      ...options,
-      method: 'GET',
-    }
-  );
+  const res = await fetch(getGetScheduledMessagesUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getScheduledMessagesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getScheduledMessagesResponse;
 };
 
 /**
@@ -549,15 +619,23 @@ export const upsertScheduledMessage = async (
   upsertScheduledRequest: UpsertScheduledRequest,
   options?: RequestInit
 ): Promise<upsertScheduledMessageResponse> => {
-  return customFetch<upsertScheduledMessageResponse>(
-    getUpsertScheduledMessageUrl(id),
-    {
-      ...options,
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', ...options?.headers },
-      body: JSON.stringify(upsertScheduledRequest),
-    }
-  );
+  const res = await fetch(getUpsertScheduledMessageUrl(id), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(upsertScheduledRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: upsertScheduledMessageResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as upsertScheduledMessageResponse;
 };
 
 /**
@@ -613,13 +691,21 @@ export const deleteScheduledDraft = async (
   messageId: string,
   options?: RequestInit
 ): Promise<deleteScheduledDraftResponse> => {
-  return customFetch<deleteScheduledDraftResponse>(
-    getDeleteScheduledDraftUrl(messageId),
-    {
-      ...options,
-      method: 'DELETE',
-    }
-  );
+  const res = await fetch(getDeleteScheduledDraftUrl(messageId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteScheduledDraftResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteScheduledDraftResponse;
 };
 
 /**
@@ -674,10 +760,19 @@ export const deleteDraft = async (
   id: string,
   options?: RequestInit
 ): Promise<deleteDraftResponse> => {
-  return customFetch<deleteDraftResponse>(getDeleteDraftUrl(id), {
+  const res = await fetch(getDeleteDraftUrl(id), {
     ...options,
     method: 'DELETE',
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteDraftResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteDraftResponse;
 };
 
 /**
@@ -734,12 +829,21 @@ export const addDraftAttachment = async (
   addDraftAttachmentRequest: AddDraftAttachmentRequest,
   options?: RequestInit
 ): Promise<addDraftAttachmentResponse> => {
-  return customFetch<addDraftAttachmentResponse>(getAddDraftAttachmentUrl(id), {
+  const res = await fetch(getAddDraftAttachmentUrl(id), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(addDraftAttachmentRequest),
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: addDraftAttachmentResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as addDraftAttachmentResponse;
 };
 
 /**
@@ -799,13 +903,21 @@ export const removeDraftAttachment = async (
   attachmentId: string,
   options?: RequestInit
 ): Promise<removeDraftAttachmentResponse> => {
-  return customFetch<removeDraftAttachmentResponse>(
-    getRemoveDraftAttachmentUrl(id, attachmentId),
-    {
-      ...options,
-      method: 'DELETE',
-    }
-  );
+  const res = await fetch(getRemoveDraftAttachmentUrl(id, attachmentId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: removeDraftAttachmentResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as removeDraftAttachmentResponse;
 };
 
 /**
@@ -851,10 +963,15 @@ export const getInitUserUrl = () => {
 export const initUser = async (
   options?: RequestInit
 ): Promise<initUserResponse> => {
-  return customFetch<initUserResponse>(getInitUserUrl(), {
+  const res = await fetch(getInitUserUrl(), {
     ...options,
     method: 'POST',
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: initUserResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as initUserResponse;
 };
 
 /**
@@ -902,10 +1019,19 @@ export const getListLabelsUrl = () => {
 export const listLabels = async (
   options?: RequestInit
 ): Promise<listLabelsResponse> => {
-  return customFetch<listLabelsResponse>(getListLabelsUrl(), {
+  const res = await fetch(getListLabelsUrl(), {
     ...options,
     method: 'GET',
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listLabelsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listLabelsResponse;
 };
 
 /**
@@ -960,12 +1086,21 @@ export const createLabel = async (
   createLabelRequest: CreateLabelRequest,
   options?: RequestInit
 ): Promise<createLabelResponse> => {
-  return customFetch<createLabelResponse>(getCreateLabelUrl(), {
+  const res = await fetch(getCreateLabelUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(createLabelRequest),
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createLabelResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createLabelResponse;
 };
 
 /**
@@ -1020,10 +1155,19 @@ export const deleteLabel = async (
   id: string,
   options?: RequestInit
 ): Promise<deleteLabelResponse> => {
-  return customFetch<deleteLabelResponse>(getDeleteLabelUrl(id), {
+  const res = await fetch(getDeleteLabelUrl(id), {
     ...options,
     method: 'DELETE',
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteLabelResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteLabelResponse;
 };
 
 /**
@@ -1084,10 +1228,19 @@ export const listLinks = async (
   params?: ListLinksParams,
   options?: RequestInit
 ): Promise<listLinksResponse> => {
-  return customFetch<listLinksResponse>(getListLinksUrl(params), {
+  const res = await fetch(getListLinksUrl(params), {
     ...options,
     method: 'GET',
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listLinksResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listLinksResponse;
 };
 
 /**
@@ -1136,12 +1289,21 @@ export const sendMessage = async (
   sendMessageRequest: SendMessageRequest,
   options?: RequestInit
 ): Promise<sendMessageResponse> => {
-  return customFetch<sendMessageResponse>(getSendMessageUrl(), {
+  const res = await fetch(getSendMessageUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(sendMessageRequest),
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: sendMessageResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as sendMessageResponse;
 };
 
 export type getMessagesBatchResponse200 = {
@@ -1193,12 +1355,21 @@ export const getMessagesBatch = async (
   getMessagesBatchBody: string[],
   options?: RequestInit
 ): Promise<getMessagesBatchResponse> => {
-  return customFetch<getMessagesBatchResponse>(getGetMessagesBatchUrl(), {
+  const res = await fetch(getGetMessagesBatchUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(getMessagesBatchBody),
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getMessagesBatchResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getMessagesBatchResponse;
 };
 
 /**
@@ -1253,12 +1424,21 @@ export const addRemoveLabel = async (
   updateLabelBatchRequest: UpdateLabelBatchRequest,
   options?: RequestInit
 ): Promise<addRemoveLabelResponse> => {
-  return customFetch<addRemoveLabelResponse>(getAddRemoveLabelUrl(), {
+  const res = await fetch(getAddRemoveLabelUrl(), {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(updateLabelBatchRequest),
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: addRemoveLabelResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as addRemoveLabelResponse;
 };
 
 export type getMessageResponse200 = {
@@ -1310,10 +1490,19 @@ export const getMessage = async (
   id: string,
   options?: RequestInit
 ): Promise<getMessageResponse> => {
-  return customFetch<getMessageResponse>(getGetMessageUrl(id), {
+  const res = await fetch(getGetMessageUrl(id), {
     ...options,
     method: 'GET',
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getMessageResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getMessageResponse;
 };
 
 /**
@@ -1362,12 +1551,21 @@ export const patchSettings = async (
   patchSettingsRequest: PatchSettingsRequest,
   options?: RequestInit
 ): Promise<patchSettingsResponse> => {
-  return customFetch<patchSettingsResponse>(getPatchSettingsUrl(), {
+  const res = await fetch(getPatchSettingsUrl(), {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(patchSettingsRequest),
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: patchSettingsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as patchSettingsResponse;
 };
 
 /**
@@ -1415,10 +1613,19 @@ export const getDisableSyncUrl = () => {
 export const disableSync = async (
   options?: RequestInit
 ): Promise<disableSyncResponse> => {
-  return customFetch<disableSyncResponse>(getDisableSyncUrl(), {
+  const res = await fetch(getDisableSyncUrl(), {
     ...options,
     method: 'DELETE',
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: disableSyncResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as disableSyncResponse;
 };
 
 /**
@@ -1484,13 +1691,21 @@ export const previewsInboxCursor = async (
   params?: PreviewsInboxCursorParams,
   options?: RequestInit
 ): Promise<previewsInboxCursorResponse> => {
-  return customFetch<previewsInboxCursorResponse>(
-    getPreviewsInboxCursorUrl(view, params),
-    {
-      ...options,
-      method: 'GET',
-    }
-  );
+  const res = await fetch(getPreviewsInboxCursorUrl(view, params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: previewsInboxCursorResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as previewsInboxCursorResponse;
 };
 
 /**
@@ -1558,10 +1773,19 @@ export const getThread = async (
   params: GetThreadParams,
   options?: RequestInit
 ): Promise<getThreadResponse> => {
-  return customFetch<getThreadResponse>(getGetThreadUrl(id, params), {
+  const res = await fetch(getGetThreadUrl(id, params), {
     ...options,
     method: 'GET',
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getThreadResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getThreadResponse;
 };
 
 /**
@@ -1611,12 +1835,21 @@ export const archiveThread = async (
   archiveThreadRequest: ArchiveThreadRequest,
   options?: RequestInit
 ): Promise<archiveThreadResponse> => {
-  return customFetch<archiveThreadResponse>(getArchiveThreadUrl(id), {
+  const res = await fetch(getArchiveThreadUrl(id), {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(archiveThreadRequest),
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: archiveThreadResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as archiveThreadResponse;
 };
 
 export type getThreadMessagesHandlerResponse200 = {
@@ -1692,13 +1925,21 @@ export const getThreadMessagesHandler = async (
   params?: GetThreadMessagesHandlerParams,
   options?: RequestInit
 ): Promise<getThreadMessagesHandlerResponse> => {
-  return customFetch<getThreadMessagesHandlerResponse>(
-    getGetThreadMessagesHandlerUrl(id, params),
-    {
-      ...options,
-      method: 'GET',
-    }
-  );
+  const res = await fetch(getGetThreadMessagesHandlerUrl(id, params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getThreadMessagesHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getThreadMessagesHandlerResponse;
 };
 
 /**
@@ -1747,10 +1988,19 @@ export const threadSeen = async (
   id: string,
   options?: RequestInit
 ): Promise<threadSeenResponse> => {
-  return customFetch<threadSeenResponse>(getThreadSeenUrl(id), {
+  const res = await fetch(getThreadSeenUrl(id), {
     ...options,
     method: 'POST',
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: threadSeenResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as threadSeenResponse;
 };
 
 /**
@@ -1774,8 +2024,17 @@ export const getHealthHandlerUrl = () => {
 export const healthHandler = async (
   options?: RequestInit
 ): Promise<healthHandlerResponse> => {
-  return customFetch<healthHandlerResponse>(getHealthHandlerUrl(), {
+  const res = await fetch(getHealthHandlerUrl(), {
     ...options,
     method: 'GET',
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: healthHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as healthHandlerResponse;
 };

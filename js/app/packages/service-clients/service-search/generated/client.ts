@@ -4,8 +4,6 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
-
-import { customFetch } from '../../dateConverter';
 import type {
   ErrorResponse,
   SimpleUnifiedSearchBaseResponse,
@@ -14,6 +12,7 @@ import type {
   UnifiedSearchRequest,
   UnifiedSearchResponse,
 } from './models';
+
 /**
  * @summary Perform a search through all items
  */
@@ -73,12 +72,21 @@ export const unifiedSearch = async (
   params: UnifiedSearchParams,
   options?: RequestInit
 ): Promise<unifiedSearchResponse> => {
-  return customFetch<unifiedSearchResponse>(getUnifiedSearchUrl(params), {
+  const res = await fetch(getUnifiedSearchUrl(params), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(unifiedSearchRequest),
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: unifiedSearchResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as unifiedSearchResponse;
 };
 
 /**
@@ -144,13 +152,21 @@ export const simpleUnifiedSearch = async (
   params: SimpleUnifiedSearchParams,
   options?: RequestInit
 ): Promise<simpleUnifiedSearchResponse> => {
-  return customFetch<simpleUnifiedSearchResponse>(
-    getSimpleUnifiedSearchUrl(params),
-    {
-      ...options,
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...options?.headers },
-      body: JSON.stringify(unifiedSearchRequest),
-    }
-  );
+  const res = await fetch(getSimpleUnifiedSearchUrl(params), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(unifiedSearchRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: simpleUnifiedSearchResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as simpleUnifiedSearchResponse;
 };

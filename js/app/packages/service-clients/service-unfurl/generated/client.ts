@@ -4,8 +4,6 @@
  * unfurl_service
  * OpenAPI spec version: 0.1.0
  */
-
-import { customFetch } from '../../dateConverter';
 import type {
   GetUnfurlBulkBody,
   GetUnfurlBulkResponse,
@@ -13,6 +11,7 @@ import type {
   GetUnfurlResponse,
   ProxyRequestHandlerParams,
 } from './schemas';
+
 export type proxyRequestHandlerResponseDefault = {
   data: unknown;
   status: number;
@@ -46,13 +45,21 @@ export const proxyRequestHandler = async (
   params: ProxyRequestHandlerParams,
   options?: RequestInit
 ): Promise<proxyRequestHandlerResponse> => {
-  return customFetch<proxyRequestHandlerResponse>(
-    getProxyRequestHandlerUrl(params),
-    {
-      ...options,
-      method: 'GET',
-    }
-  );
+  const res = await fetch(getProxyRequestHandlerUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: proxyRequestHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as proxyRequestHandlerResponse;
 };
 
 export type getUnfurlResponse200 = {
@@ -110,10 +117,19 @@ export const getUnfurl = async (
   params: GetUnfurlParams,
   options?: RequestInit
 ): Promise<getUnfurlResponse> => {
-  return customFetch<getUnfurlResponse>(getGetUnfurlUrl(params), {
+  const res = await fetch(getGetUnfurlUrl(params), {
     ...options,
     method: 'GET',
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getUnfurlResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getUnfurlResponse;
 };
 
 export type getUnfurlBulkResponse200 = {
@@ -159,10 +175,19 @@ export const getUnfurlBulk = async (
   getUnfurlBulkBody: GetUnfurlBulkBody,
   options?: RequestInit
 ): Promise<getUnfurlBulkResponse> => {
-  return customFetch<getUnfurlBulkResponse>(getGetUnfurlBulkUrl(), {
+  const res = await fetch(getGetUnfurlBulkUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(getUnfurlBulkBody),
   });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getUnfurlBulkResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getUnfurlBulkResponse;
 };
