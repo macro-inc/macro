@@ -379,17 +379,9 @@ export const SoupViewContextProvider: FlowComponent<
     return transformed;
   };
 
-  const rows = createMemo(
-    (prev) => {
-      const next = entities().map((e) => attachMethods(e));
-
-      return reconcile(next)(prev);
-    },
-    [],
-    {
-      equals: false,
-    }
-  );
+  const rows = createMemo(() => {
+    return entities().map((e) => attachMethods(e));
+  });
 
   const context = {
     soup,
