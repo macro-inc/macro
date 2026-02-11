@@ -2,9 +2,12 @@ import { createSortState } from '@app/component/next-soup/create-sort-state';
 import {
   createFilterState,
   type FilterConfig,
-  SOUP_FILTERS,
-  FILTER_GROUPS,
 } from '@app/component/next-soup/filters';
+import {
+  FILTER_GROUPS,
+  type FilterGroup,
+  SOUP_FILTERS,
+} from '@app/component/next-soup/filters/filters';
 import { createSelectionState } from '@app/component/next-soup/selection-state';
 import { SORT_CONFIGS } from '@app/component/next-soup/soup-view/sort-options';
 import { isModality } from '@core/mobile/inputModality';
@@ -31,7 +34,8 @@ interface SoupContextOptions<
 > {
   initialData?: SoupEntity[];
   initialFilters?: TFilter['id'][];
-  filterConfigs?: readonly TFilter[];
+  filterConfigs?: TFilter[];
+  filterGroups?: FilterGroup[];
   wrapNavigation?: boolean;
 }
 
@@ -43,6 +47,7 @@ export const createSoupState = <
     initialData,
     initialFilters,
     filterConfigs,
+    filterGroups,
   }: SoupContextOptions<TFilter> = {
     wrapNavigation: false,
   }
@@ -53,8 +58,8 @@ export const createSoupState = <
 
   const filters = createFilterState<SoupEntity, FilterConfig<SoupEntity>>({
     filters: filterConfigs ?? SOUP_FILTERS,
-    groups: FILTER_GROUPS,
-    initialFilters: initialFilters,
+    groups: filterGroups ?? FILTER_GROUPS,
+    initialFilters,
   });
 
   const sort = createSortState(SORT_CONFIGS, ['updated_at']);

@@ -3,24 +3,19 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Mock external dependencies
 vi.mock('@app/component/next-soup/filters/filters', () => ({
-  SOUP_FILTERS: [],
+  SOUP_FILTERS: {},
   FILTER_GROUPS: [],
 }));
 
 vi.mock('@app/component/next-soup/filters', () => ({
-  createFiltersState: vi.fn(() => ({
-    predicates: () => [],
-    query: () => ({}),
+  createFilterState: vi.fn(() => ({
     active: () => [],
-    available: [],
     isActive: () => false,
-    set: vi.fn(),
     toggle: vi.fn(),
-    activate: vi.fn(),
-    deactivate: vi.fn(),
+    setAll: vi.fn(),
     clear: vi.fn(),
+    available: {},
   })),
-  SOUP_FILTERS: [],
 }));
 
 vi.mock('@app/component/next-soup/soup-view/sort-options', () => ({
