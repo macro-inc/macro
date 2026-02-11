@@ -4886,6 +4886,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "macro_user_id",
+ "redis",
  "rootcause",
  "tokio",
  "tracing",
