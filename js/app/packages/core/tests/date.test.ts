@@ -347,13 +347,17 @@ describe('Date Utilities (core/utils/date.ts)', () => {
     it('should convert valid ISO date string to Date object', () => {
       const result = convertDates('2025-02-11T10:30:00Z');
       expect(result).toBeInstanceOf(Date);
-      expect((result as Date).toISOString()).toBe('2025-02-11T10:30:00.000Z');
+      expect((result as unknown as Date).toISOString()).toBe(
+        '2025-02-11T10:30:00.000Z'
+      );
     });
 
     it('should convert valid ISO date string with milliseconds to Date object', () => {
       const result = convertDates('2025-02-11T10:30:00.123Z');
       expect(result).toBeInstanceOf(Date);
-      expect((result as Date).toISOString()).toBe('2025-02-11T10:30:00.123Z');
+      expect((result as unknown as Date).toISOString()).toBe(
+        '2025-02-11T10:30:00.123Z'
+      );
     });
 
     it('should convert valid ISO date string without Z suffix to Date object', () => {
