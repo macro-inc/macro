@@ -34,6 +34,10 @@ fn empty_repo() -> MockChannelMessagesRepo {
         .returning(|_| Box::pin(async { Ok(HashMap::new()) }));
     repo.expect_get_attachments_batch()
         .returning(|_| Box::pin(async { Ok(HashMap::new()) }));
+    repo.expect_get_channel_attachments()
+        .returning(|_, _, _| Box::pin(async { Ok(vec![]) }));
+    repo.expect_get_channel_participants()
+        .returning(|_| Box::pin(async { Ok(vec![]) }));
     repo
 }
 
@@ -155,4 +159,24 @@ async fn clamps_limit() {
         .unwrap();
 
     assert!(page.items.is_empty());
+}
+
+#[tokio::test]
+async fn returns_empty_attachments_page() {
+    let svc = ChannelMessagesServiceImpl::new(empty_repo());
+    let page = svc
+        .get_channel_attachments(Uuid::nil(), Query::Sort(CreatedAt, ()), 50)
+        .await
+        .unwrap();
+
+    assert!(page.items.is_empty());
+    assert!(page.next_cursor.is_none());
+}
+
+#[tokio::test]
+async fn returns_empty_participants_list() {
+    let svc = ChannelMessagesServiceImpl::new(empty_repo());
+    let participants = svc.get_channel_participants(Uuid::nil()).await.unwrap();
+
+    assert!(participants.is_empty());
 }

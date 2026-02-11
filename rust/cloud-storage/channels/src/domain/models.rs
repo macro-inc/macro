@@ -109,6 +109,83 @@ pub struct MessageAttachment {
     pub created_at: DateTime<Utc>,
 }
 
+/// An attachment in a channel (for the channel-level attachments listing).
+#[derive(Debug, Clone)]
+pub struct ChannelAttachment {
+    /// Attachment id.
+    pub id: Uuid,
+    /// Channel this attachment belongs to.
+    pub channel_id: Uuid,
+    /// Message this attachment is on.
+    pub message_id: Uuid,
+    /// Type of attached entity (e.g. "document").
+    pub entity_type: String,
+    /// Id of the attached entity.
+    pub entity_id: String,
+    /// Optional width (for images).
+    pub width: Option<i32>,
+    /// Optional height (for images).
+    pub height: Option<i32>,
+    /// When the attachment was created.
+    pub created_at: DateTime<Utc>,
+}
+
+impl Identify for ChannelAttachment {
+    type Id = Uuid;
+
+    fn id(&self) -> Self::Id {
+        self.id
+    }
+}
+
+impl SortOn<CreatedAt> for ChannelAttachment {
+    fn sort_on(sort_type: CreatedAt) -> impl FnMut(&Self) -> CursorVal<CreatedAt> {
+        move |a| CursorVal {
+            sort_type,
+            last_val: a.created_at,
+        }
+    }
+}
+
+/// Role of a channel participant.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ParticipantRole {
+    /// Channel owner.
+    Owner,
+    /// Channel admin.
+    Admin,
+    /// Regular member.
+    Member,
+}
+
+impl std::str::FromStr for ParticipantRole {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "owner" => Ok(Self::Owner),
+            "admin" => Ok(Self::Admin),
+            "member" => Ok(Self::Member),
+            other => Err(format!("unknown participant role: {other}")),
+        }
+    }
+}
+
+/// An active participant in a channel.
+#[derive(Debug, Clone)]
+pub struct ChannelParticipant {
+    /// Channel id.
+    pub channel_id: Uuid,
+    /// User id.
+    pub user_id: String,
+    /// Role in the channel.
+    pub role: ParticipantRole,
+    /// When the user joined.
+    pub joined_at: DateTime<Utc>,
+    /// When the user left (None if still active).
+    pub left_at: Option<DateTime<Utc>>,
+}
+
 /// Raw row returned from the top-level messages query.
 #[derive(Debug, Clone)]
 pub struct TopLevelMessageRow {

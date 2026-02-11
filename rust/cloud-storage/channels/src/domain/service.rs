@@ -1,6 +1,9 @@
 use crate::domain::{
-    models::{ChannelMessage, ThreadInfo, ThreadReply},
-    ports::{ChannelMessagesErr, ChannelMessagesPage, ChannelMessagesRepo, ChannelMessagesService},
+    models::{ChannelMessage, ChannelParticipant, ThreadInfo, ThreadReply},
+    ports::{
+        ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesPage, ChannelMessagesRepo,
+        ChannelMessagesService,
+    },
 };
 use models_pagination::{CreatedAt, PaginateOn, Query};
 use uuid::Uuid;
@@ -126,5 +129,43 @@ where
             .into_page();
 
         Ok(page)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_channel_attachments(
+        &self,
+        channel_id: Uuid,
+        query: Query<Uuid, CreatedAt, ()>,
+        limit: u16,
+    ) -> Result<ChannelAttachmentsPage, ChannelMessagesErr> {
+        let limit = limit.clamp(1, 100);
+
+        let attachments = self
+            .repo
+            .get_channel_attachments(channel_id, &query, limit)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        let page = attachments
+            .into_iter()
+            .paginate_on(limit.into(), CreatedAt)
+            .filter_on(())
+            .into_page();
+
+        Ok(page)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_channel_participants(
+        &self,
+        channel_id: Uuid,
+    ) -> Result<Vec<ChannelParticipant>, ChannelMessagesErr> {
+        let participants = self
+            .repo
+            .get_channel_participants(channel_id)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        Ok(participants)
     }
 }

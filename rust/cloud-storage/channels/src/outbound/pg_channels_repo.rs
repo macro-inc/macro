@@ -1,5 +1,8 @@
 use crate::domain::{
-    models::{CountedReaction, MessageAttachment, ThreadReplyRow, ThreadStats, TopLevelMessageRow},
+    models::{
+        ChannelAttachment, ChannelParticipant, CountedReaction, MessageAttachment, ParticipantRole,
+        ThreadReplyRow, ThreadStats, TopLevelMessageRow,
+    },
     ports::ChannelMessagesRepo,
 };
 use models_pagination::{CreatedAt, Query};
@@ -68,6 +71,29 @@ struct AttachmentRow {
     entity_type: String,
     entity_id: String,
     created_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Intermediate row for channel-level attachments.
+#[derive(Debug, sqlx::FromRow)]
+struct ChannelAttachmentRow {
+    id: Uuid,
+    channel_id: Uuid,
+    message_id: Uuid,
+    entity_type: String,
+    entity_id: String,
+    width: Option<i32>,
+    height: Option<i32>,
+    created_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Intermediate row for channel participants.
+#[derive(Debug, sqlx::FromRow)]
+struct ParticipantRow {
+    channel_id: Uuid,
+    user_id: String,
+    role: String,
+    joined_at: chrono::DateTime<chrono::Utc>,
+    left_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl ChannelMessagesRepo for PgChannelMessagesRepo {
@@ -293,5 +319,78 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
         }
 
         Ok(map)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_channel_attachments(
+        &self,
+        channel_id: Uuid,
+        query: &Query<Uuid, CreatedAt, ()>,
+        limit: u16,
+    ) -> Result<Vec<ChannelAttachment>, Self::Err> {
+        let (cursor_created_at, cursor_id) = match query.vals() {
+            (Some(id), Some(val)) => (Some(*val), Some(*id)),
+            _ => (None, None),
+        };
+
+        let rows = sqlx::query_as::<_, ChannelAttachmentRow>(
+            r#"
+            SELECT id, channel_id, message_id, entity_type, entity_id, width, height, created_at
+            FROM comms_attachments
+            WHERE channel_id = $1
+              AND ($2::timestamptz IS NULL OR (created_at, id) < ($2, $3))
+            ORDER BY created_at DESC, id DESC
+            LIMIT $4
+            "#,
+        )
+        .bind(channel_id)
+        .bind(cursor_created_at)
+        .bind(cursor_id)
+        .bind(i64::from(limit))
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| ChannelAttachment {
+                id: r.id,
+                channel_id: r.channel_id,
+                message_id: r.message_id,
+                entity_type: r.entity_type,
+                entity_id: r.entity_id,
+                width: r.width,
+                height: r.height,
+                created_at: r.created_at,
+            })
+            .collect())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_channel_participants(
+        &self,
+        channel_id: Uuid,
+    ) -> Result<Vec<ChannelParticipant>, Self::Err> {
+        let rows = sqlx::query_as::<_, ParticipantRow>(
+            r#"
+            SELECT channel_id, user_id, role::text AS role, joined_at, left_at
+            FROM comms_channel_participants
+            WHERE channel_id = $1 AND left_at IS NULL
+            ORDER BY joined_at ASC
+            "#,
+        )
+        .bind(channel_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| ChannelParticipant {
+                channel_id: r.channel_id,
+                user_id: r.user_id,
+                role: r.role.parse::<ParticipantRole>().unwrap_or(ParticipantRole::Member),
+                joined_at: r.joined_at,
+                left_at: r.left_at,
+            })
+            .collect())
     }
 }

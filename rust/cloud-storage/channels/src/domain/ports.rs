@@ -1,5 +1,6 @@
 use crate::domain::models::{
-    CountedReaction, MessageAttachment, ThreadReplyRow, ThreadStats, TopLevelMessageRow,
+    ChannelAttachment, ChannelParticipant, CountedReaction, MessageAttachment, ThreadReplyRow,
+    ThreadStats, TopLevelMessageRow,
 };
 use models_pagination::{CreatedAt, Query};
 use std::collections::HashMap;
@@ -43,6 +44,20 @@ pub trait ChannelMessagesRepo: Send + Sync + 'static {
         &self,
         message_ids: &[Uuid],
     ) -> impl Future<Output = Result<HashMap<Uuid, Vec<MessageAttachment>>, Self::Err>> + Send;
+
+    /// Fetch channel-level attachments, cursor-paginated on created_at DESC.
+    fn get_channel_attachments(
+        &self,
+        channel_id: Uuid,
+        query: &Query<Uuid, CreatedAt, ()>,
+        limit: u16,
+    ) -> impl Future<Output = Result<Vec<ChannelAttachment>, Self::Err>> + Send;
+
+    /// Fetch active participants for a channel.
+    fn get_channel_participants(
+        &self,
+        channel_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<ChannelParticipant>, Self::Err>> + Send;
 }
 
 /// Service for fetching paginated channel messages.
@@ -54,11 +69,29 @@ pub trait ChannelMessagesService: Send + Sync + 'static {
         query: Query<Uuid, CreatedAt, ()>,
         limit: u16,
     ) -> impl Future<Output = Result<ChannelMessagesPage, ChannelMessagesErr>> + Send;
+
+    /// Fetch a paginated page of channel-level attachments.
+    fn get_channel_attachments(
+        &self,
+        channel_id: Uuid,
+        query: Query<Uuid, CreatedAt, ()>,
+        limit: u16,
+    ) -> impl Future<Output = Result<ChannelAttachmentsPage, ChannelMessagesErr>> + Send;
+
+    /// Fetch active participants for a channel.
+    fn get_channel_participants(
+        &self,
+        channel_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<ChannelParticipant>, ChannelMessagesErr>> + Send;
 }
 
 /// A paginated page of channel messages.
 pub type ChannelMessagesPage =
     models_pagination::PaginatedCursor<super::models::ChannelMessage, Uuid, CreatedAt, ()>;
+
+/// A paginated page of channel attachments.
+pub type ChannelAttachmentsPage =
+    models_pagination::PaginatedCursor<ChannelAttachment, Uuid, CreatedAt, ()>;
 
 /// Errors that can occur when fetching channel messages.
 #[derive(Debug, thiserror::Error)]

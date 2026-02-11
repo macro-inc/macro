@@ -1,5 +1,6 @@
 use crate::domain::models::{
-    ChannelMessage, CountedReaction, MessageAttachment, ThreadInfo, ThreadReply,
+    ChannelAttachment, ChannelMessage, ChannelParticipant, CountedReaction, MessageAttachment,
+    ParticipantRole, ThreadInfo, ThreadReply,
 };
 use crate::domain::ports::{ChannelMessagesErr, ChannelMessagesService};
 use axum::{
@@ -58,6 +59,14 @@ where
             "/:channel_id/messages",
             get(get_channel_messages_handler::<S>),
         )
+        .route(
+            "/:channel_id/attachments",
+            get(get_channel_attachments_handler::<S>),
+        )
+        .route(
+            "/:channel_id/participants",
+            get(get_channel_participants_handler::<S>),
+        )
         .with_state(state)
 }
 
@@ -93,6 +102,72 @@ async fn get_channel_messages_handler<S: ChannelMessagesService>(
         .await?;
 
     Ok(Json(page.type_erase().map(ApiChannelMessage::from)))
+}
+
+/// Handler for `GET /channels/:channel_id/attachments`.
+#[utoipa::path(
+    get,
+    operation_id = "get_channel_attachments",
+    path = "/channels/{channel_id}/attachments",
+    params(
+        ("channel_id" = Uuid, Path, description = "Channel ID"),
+        ("limit" = Option<u16>, Query, description = "Page size (1-100, default 50)"),
+        ("cursor" = Option<String>, Query, description = "Base64 encoded cursor value"),
+    ),
+    responses(
+        (status = 200, body = ApiChannelAttachmentsPage),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+async fn get_channel_attachments_handler<S: ChannelMessagesService>(
+    State(state): State<ChannelsRouterState<S>>,
+    MacroUserExtractor { .. }: MacroUserExtractor,
+    Path(channel_id): Path<Uuid>,
+    Query(params): Query<Params>,
+    cursor: CursorExtractor<Uuid, CreatedAt, ()>,
+) -> Result<Json<PaginatedOpaqueCursor<ApiChannelAttachment>>, ChannelsHandlerErr> {
+    let limit = params.limit.unwrap_or(50);
+    let query = cursor.into_query(CreatedAt, ());
+
+    let page = state
+        .service
+        .get_channel_attachments(channel_id, query, limit)
+        .await?;
+
+    Ok(Json(page.type_erase().map(ApiChannelAttachment::from)))
+}
+
+/// Handler for `GET /channels/:channel_id/participants`.
+#[utoipa::path(
+    get,
+    operation_id = "get_channel_participants",
+    path = "/channels/{channel_id}/participants",
+    params(
+        ("channel_id" = Uuid, Path, description = "Channel ID"),
+    ),
+    responses(
+        (status = 200, body = Vec<ApiChannelParticipant>),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+async fn get_channel_participants_handler<S: ChannelMessagesService>(
+    State(state): State<ChannelsRouterState<S>>,
+    MacroUserExtractor { .. }: MacroUserExtractor,
+    Path(channel_id): Path<Uuid>,
+) -> Result<Json<Vec<ApiChannelParticipant>>, ChannelsHandlerErr> {
+    let participants = state
+        .service
+        .get_channel_participants(channel_id)
+        .await?;
+
+    Ok(Json(
+        participants
+            .into_iter()
+            .map(ApiChannelParticipant::from)
+            .collect(),
+    ))
 }
 
 // -- API response types --
@@ -262,6 +337,97 @@ impl From<MessageAttachment> for ApiMessageAttachment {
             entity_type: a.entity_type,
             entity_id: a.entity_id,
             created_at: a.created_at,
+        }
+    }
+}
+
+/// Paginated response of channel attachments.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ApiChannelAttachmentsPage {
+    /// Attachments on this page.
+    items: Vec<ApiChannelAttachment>,
+    /// Cursor for the next page, null if no more pages.
+    next_cursor: Option<String>,
+}
+
+/// A channel-level attachment.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ApiChannelAttachment {
+    /// Attachment id.
+    id: Uuid,
+    /// Channel id.
+    channel_id: Uuid,
+    /// Message id this attachment belongs to.
+    message_id: Uuid,
+    /// Type of entity.
+    entity_type: String,
+    /// Entity id.
+    entity_id: String,
+    /// Width (for images).
+    width: Option<i32>,
+    /// Height (for images).
+    height: Option<i32>,
+    /// When the attachment was created.
+    created_at: DateTime<Utc>,
+}
+
+impl From<ChannelAttachment> for ApiChannelAttachment {
+    fn from(a: ChannelAttachment) -> Self {
+        Self {
+            id: a.id,
+            channel_id: a.channel_id,
+            message_id: a.message_id,
+            entity_type: a.entity_type,
+            entity_id: a.entity_id,
+            width: a.width,
+            height: a.height,
+            created_at: a.created_at,
+        }
+    }
+}
+
+/// Participant role in a channel.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ApiParticipantRole {
+    /// Channel owner.
+    Owner,
+    /// Channel admin.
+    Admin,
+    /// Regular member.
+    Member,
+}
+
+impl From<ParticipantRole> for ApiParticipantRole {
+    fn from(r: ParticipantRole) -> Self {
+        match r {
+            ParticipantRole::Owner => Self::Owner,
+            ParticipantRole::Admin => Self::Admin,
+            ParticipantRole::Member => Self::Member,
+        }
+    }
+}
+
+/// A channel participant.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ApiChannelParticipant {
+    /// Channel id.
+    channel_id: Uuid,
+    /// User id.
+    user_id: String,
+    /// Role in the channel.
+    role: ApiParticipantRole,
+    /// When the user joined.
+    joined_at: DateTime<Utc>,
+}
+
+impl From<ChannelParticipant> for ApiChannelParticipant {
+    fn from(p: ChannelParticipant) -> Self {
+        Self {
+            channel_id: p.channel_id,
+            user_id: p.user_id,
+            role: ApiParticipantRole::from(p.role),
+            joined_at: p.joined_at,
         }
     }
 }
