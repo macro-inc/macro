@@ -44,9 +44,9 @@ export interface FreshSortConfig<T> {
 type FreshSortConfigWithDefaults = Required<FreshSortConfig<unknown>>;
 
 export interface TimestampedItem {
-  updatedAt?: number | string;
-  viewedAt?: number | string;
-  lastInteraction?: LastInteractionTimestamp | string;
+  updatedAt?: number | string | Date;
+  viewedAt?: number | string | Date;
+  lastInteraction?: LastInteractionTimestamp | string | Date;
 }
 
 export interface FreshSortResult<T> {
@@ -75,7 +75,7 @@ function extractTimestamp(
   item: TimestampedItem,
   useViewedAt: boolean = false
 ): number {
-  let timestamp: number | string | undefined;
+  let timestamp: number | string | Date | undefined;
 
   if (useViewedAt) {
     timestamp = item.viewedAt ?? item.updatedAt ?? item.lastInteraction;
@@ -84,6 +84,10 @@ function extractTimestamp(
   }
 
   if (timestamp === undefined || timestamp === null) return 0;
+
+  if (timestamp instanceof Date) {
+    return timestamp.getTime();
+  }
 
   if (typeof timestamp === 'number') {
     return timestamp;

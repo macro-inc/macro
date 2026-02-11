@@ -9,10 +9,15 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import { UserIcon } from '@core/component/UserIcon';
 import { ENABLE_CHAT_CHANNEL_ATTACHMENT } from '@core/constant/featureFlags';
-import { useQuickAccess } from '@core/context/quickAccess';
+import { useChannelsContext } from '@core/context/channels';
 import { useEmail } from '@core/context/user';
 import clickOutside from '@core/directive/clickOutside';
-import type { ChannelWithParticipants, IUser } from '@core/user';
+import {
+  type ChannelWithParticipants,
+  type IUser,
+  useAugmentUserWithDmActivity,
+  useContacts,
+} from '@core/user';
 import { getDateSuggestions } from '@core/util/dateParser';
 import {
   createFreshSearch,
@@ -27,7 +32,9 @@ import type { EntityData, WithSearch } from '@macro-entity';
 import {
   createUnifiedSearchInfiniteQuery,
   type EmailEntity,
+  useEmails,
 } from '@macro-entity';
+import { useHistoryQuery } from '@queries/history/history';
 import type { SearchArgs } from '@service-search/client';
 import { debounce } from '@solid-primitives/scheduled';
 import { globalSplitManager } from 'app/signal/splitLayout';
@@ -48,7 +55,6 @@ import {
   untrack,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { floatWithElement } from '../../directive/floatWithElement';
 import { floatWithSelection } from '../../directive/floatWithSelection';
 import {
@@ -73,7 +79,6 @@ import {
   handleUserMention,
   type UserMentionRecord,
 } from '../../utils/mentionsUtils';
-import { createLazyMemo } from '@solid-primitives/memo';
 import type { HistoryItem as Item } from '@queries/history/history';
 
 false && clickOutside;
@@ -418,8 +423,15 @@ export function MentionsMenuItem(props: {
   );
 }
 
-/** Props type for MentionsMenu implementations */
-type MentionsMenuProps = {
+export function MentionsMenu(props: Parameters<typeof MentionsMenuInner>[0]) {
+  return (
+    <Suspense>
+      <MentionsMenuInner {...props} />
+    </Suspense>
+  );
+}
+
+function MentionsMenuInner(props: {
   editor: LexicalEditor;
   menu: MenuOperations;
   /** pass in custom history list if necessary */
@@ -441,81 +453,63 @@ type MentionsMenuProps = {
   disableMentionTracking?: boolean;
   /** Fetch text then past in a fold-node for plain-text mentions (useful for AI)*/
   useSnapshotForDocuments?: boolean;
-};
-
-export function MentionsMenu(props: MentionsMenuProps) {
-  return (
-    <Suspense>
-      <MentionsMenuInner {...props} />
-    </Suspense>
-  );
-}
-
-/**
- * MentionsMenu implementation using pre-computed data from QuickFindContext.
- */
-function MentionsMenuInner(props: MentionsMenuProps) {
-  console.time('[MENTIONS MENU]: component invocation');
+}) {
   const [searchTerm, setSearchTerm] = createSignal<string>(
     props.menu.searchTerm()
   );
-
-  onMount(() => {
-    console.timeEnd('[MENTIONS MENU]: component invocation');
-  });
-
-  const quickAccess = useQuickAccess();
-  const mentionEntities = () => quickAccess.mentionEntities();
-
-  const history = createLazyMemo(() => {
+  const historyQuery = useHistoryQuery();
+  // TODO: support viewed at in history
+  const history = createMemo(() => {
     if (props.history) {
       return props.history().map(entityMapper('item'));
-    } else {
-      return mentionEntities().items;
     }
+    return historyQuery.data?.map(entityMapper('item')) ?? [];
   });
 
-  // Emails - use props override or pre-computed from QuickFind
-  const emails: Accessor<Entity<'email'>[]> = createLazyMemo(() => {
-    let result: Entity<'email'>[];
-    if (props.emails) {
-      result = props.emails().map(entityMapper('email')).filter(allItemFilter);
-    } else {
-      result = mentionEntities().emails;
-    }
-    return result;
+  let emails: Accessor<Entity<'email'>[]>;
+  if (props.emails) {
+    emails = createMemo(
+      () =>
+        props.emails?.().map(entityMapper('email')).filter(allItemFilter) ?? []
+    );
+  } else {
+    const emailsFromSource = useEmails();
+    emails = createMemo(
+      () =>
+        emailsFromSource().map(entityMapper('email')).filter(allItemFilter) ??
+        []
+    );
+  }
+
+  const contacts = useContacts();
+  const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
+
+  const users = createMemo((): Entity<'user'>[] => {
+    const list = props.users?.() ?? contacts();
+
+    return list
+      .map((user) => entityMapper('user')(augmentUserWithDmActivity(user)))
+      .filter(allItemFilter);
   });
 
-  // Users - use props override or pre-computed from QuickFind
-  const users = createLazyMemo((): Entity<'user'>[] => {
-    let result: Entity<'user'>[];
-    if (props.users) {
-      result = props.users().map(entityMapper('user')).filter(allItemFilter);
-    } else {
-      // Already in Entity format with DM activity, no mapping needed
-      result = mentionEntities().users as Entity<'user'>[];
-    }
-    return result;
-  });
+  let channels: Accessor<Entity<'channel'>[]>;
+  if (props.channels) {
+    channels = createMemo(
+      () =>
+        props.channels?.().map(entityMapper('channel')).filter(allItemFilter) ??
+        []
+    );
+  } else {
+    const { channels: userChannels } = useChannelsContext();
+    channels = createMemo(() => {
+      if (!ENABLE_CHAT_CHANNEL_ATTACHMENT && props.block === 'chat') {
+        return [];
+      }
+      return userChannels().map(entityMapper('channel')).filter(allItemFilter);
+    });
+  }
 
-  // Channels - use props override or pre-computed from QuickFind
-  const channels: Accessor<Entity<'channel'>[]> = createLazyMemo(() => {
-    let result: Entity<'channel'>[];
-    if (props.channels) {
-      result = props
-        .channels()
-        .map(entityMapper('channel'))
-        .filter(allItemFilter);
-    } else if (!ENABLE_CHAT_CHANNEL_ATTACHMENT && props.block === 'chat') {
-      result = [];
-    } else {
-      // Already in Entity format, no mapping needed
-      result = mentionEntities().channels as Entity<'channel'>[];
-    }
-    return result;
-  });
-
-  const args = (): SearchArgs => {
+  const args = createMemo((): SearchArgs => {
     return {
       params: {
         cursor: null,
@@ -528,20 +522,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         query: searchTerm(),
       },
     };
-  };
+  });
 
-  const shouldFetchEmails = createMemo(() => searchTerm().length > 0);
+  const emailUnifiedSearchInfiniteQuery =
+    createUnifiedSearchInfiniteQuery(args);
 
-  // Always create the query, but disable it until user types
-  const emailUnifiedSearchInfiniteQuery = createUnifiedSearchInfiniteQuery(
-    args,
-    {
-      disabled: () => !shouldFetchEmails(),
-    }
-  );
-
-  const foundEmails = createLazyMemo((): Entity<'email'>[] => {
-    console.time('[MENTIONS] foundEmails');
+  const foundEmails = createMemo((): Entity<'email'>[] => {
     if (emailUnifiedSearchInfiniteQuery.status === 'success') {
       function isEmail(
         e: WithSearch<EntityData>
@@ -559,25 +545,18 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         };
       }
 
-      const result = emailUnifiedSearchInfiniteQuery.data
+      return emailUnifiedSearchInfiniteQuery.data
         .filter(isEmail)
         .map(entityDataToMentionEntity);
-      console.timeEnd('[MENTIONS] foundEmails');
-      return result;
     } else {
-      console.timeEnd('[MENTIONS] foundEmails');
       return [];
     }
   });
 
   // Get open tabs from split manager
-  const openTabs = () => {
-    console.time('[MENTIONS] openTabs');
+  const openTabs = createMemo(() => {
     const splitManager = globalSplitManager();
-    if (!splitManager) {
-      console.timeEnd('[MENTIONS] openTabs');
-      return [];
-    }
+    if (!splitManager) return [];
 
     const splits = splitManager.splits();
     const historyItems = history();
@@ -621,13 +600,10 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       }
     }
 
-    const result = tabItems.filter(allItemFilter);
-    console.timeEnd('[MENTIONS] openTabs');
-    return result;
-  };
+    return tabItems.filter(allItemFilter);
+  });
 
-  const historyAndChannels = createLazyMemo(() => {
-    console.time('[MENTIONS] historyAndChannels');
+  const historyAndChannels = createMemo(() => {
     const historyItems = history().filter(allItemFilter);
     const channelItems = channels();
     const currentBlockId = useMaybeBlockId();
@@ -652,21 +628,20 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     // Open tabs are already included in history/channels, so we don't need to add them separately
     // The prioritization happens in filteredItems instead
 
-    const result = Array.from(itemMap.values());
-    console.timeEnd('[MENTIONS] historyAndChannels');
-    return result;
+    return Array.from(itemMap.values());
   });
 
   const [menuOpen, setMenuOpen] = [props.menu.isOpen, props.menu.setIsOpen];
 
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const [viewAllMode, setViewAllMode] = createSignal<ViewAllMode>(null);
-  const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
   const { isKeypressActive } = useIsKeyPressActive();
   const setSelectedIndexFromMouse = (index: number) => {
     if (isKeypressActive()) return;
     setSelectedIndex(index);
   };
+
+  let menuRef!: HTMLDivElement;
 
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
 
@@ -683,9 +658,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     (item) => item.kind === 'channel',
     getItemTimestamp
   );
-
-  const filteredItems = createLazyMemo(() => {
-    console.time('[MENTIONS] filteredItems');
+  const filteredItems = createMemo(() => {
     const allResults = itemSearch(historyAndChannels(), searchTerm()).map(
       (result) => {
         return result.item;
@@ -706,35 +679,27 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     }
 
     // Return open tabs first, then other items
-    const result = [...tabResults, ...otherResults];
-    console.timeEnd('[MENTIONS] filteredItems');
-    return result;
+    return [...tabResults, ...otherResults];
   });
 
   const currentUserEmail = useEmail();
-
-  const currentUserDomain = createLazyMemo(() => {
+  const currentUserDomain = createMemo(() => {
     const email = currentUserEmail();
     return email ? email.split('@')[1] : undefined;
   });
 
-  const userSearch = (() => {
-    console.time('[MENTIONS] createUserSearch');
-    const search = createFreshSearch<Entity<'user'>>(
-      FreshSearchPresets.baseUserSearch<Entity<'user'>>(
-        currentUserDomain,
-        (item) => item.data.email
-      ),
-      getItemSearchText,
-      (_item) => false,
-      getItemTimestamp
-    );
-    console.timeEnd('[MENTIONS] createUserSearch');
-    return search;
-  })();
+  const userSearch = createFreshSearch<Entity<'user'>>(
+    FreshSearchPresets.baseUserSearch<Entity<'user'>>(
+      currentUserDomain,
+      (item) => item.data.email
+    ),
+    getItemSearchText,
+    (_item) => false,
+    getItemTimestamp
+  );
 
   // Group aliases available in channel context
-  const specialGroups = createLazyMemo((): Entity<'group'>[] => {
+  const specialGroups = createMemo((): Entity<'group'>[] => {
     if (props.block !== 'channel') return [];
     if (!useMaybeBlockId()) return [];
 
@@ -749,16 +714,13 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       .map((g) => createGroupAlias(g.alias));
   });
 
-  const filteredUsers = createLazyMemo(() => {
-    console.time('[MENTIONS] filteredUsers');
+  const filteredUsers = createMemo(() => {
     const searchedUsers = userSearch(users(), searchTerm()).map((result) => {
       return result.item;
     });
-    const result = [...specialGroups(), ...searchedUsers] as CombinedEntity<
+    return [...specialGroups(), ...searchedUsers] as CombinedEntity<
       'user' | 'group'
     >[];
-    console.timeEnd('[MENTIONS] filteredUsers');
-    return result;
   });
 
   const emailSearch = createFreshSearch<Entity<'email'>>(
@@ -768,8 +730,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     getItemTimestamp
   );
 
-  const filteredEmails = createLazyMemo(() => {
-    console.time('[MENTIONS] filteredEmails');
+  const filteredEmails = createMemo(() => {
     const mail = emailSearch(emails(), searchTerm()).map(
       (result) => result.item
     );
@@ -785,80 +746,56 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       return [...local, ...unifiedSearch.filter((e) => !ids.has(e.id))];
     }
 
-    const result = merge(mail, otherMail);
-    console.timeEnd('[MENTIONS] filteredEmails');
-    return result;
+    return merge(mail, otherMail);
   });
 
-  const dateSuggestions = createLazyMemo(() => {
-    console.time('[MENTIONS] dateSuggestions');
+  const dateSuggestions = createMemo(() => {
     const suggestions = getDateSuggestions(searchTerm());
-    const result = suggestions
+    return suggestions
       .map((suggestion) => ({
         ...suggestion,
         id: `date-${suggestion.date.toISOString()}`,
       }))
       .map(entityMapper('date'));
-    console.timeEnd('[MENTIONS] dateSuggestions');
-    return result;
   });
 
   // The raw bins store the counts for all matching items
-  const rawBins = createLazyMemo<Record<MentionBins, number>>(() => {
-    console.time('[MENTIONS] rawBins');
-    const result = {
-      users: filteredUsers().length,
-      items: filteredItems().length,
-      dates: dateSuggestions().length,
-      emails: filteredEmails().length,
-    };
-    console.timeEnd('[MENTIONS] rawBins');
-    return result;
-  });
+  const rawBins = createMemo<Record<MentionBins, number>>(() => ({
+    users: filteredUsers().length,
+    items: filteredItems().length,
+    dates: dateSuggestions().length,
+    emails: filteredEmails().length,
+  }));
 
   // The bins is the limited and rounded count for each bucket
-  const bins = createLazyMemo(() => {
-    console.time('[MENTIONS] computeBins');
-    const result = computeBins(rawBins(), MAX_ITEMS);
-    console.timeEnd('[MENTIONS] computeBins');
-    return result;
-  });
+  const bins = createMemo(() => computeBins(rawBins(), MAX_ITEMS));
 
-  const combinedItems = createLazyMemo<CombinedEntity[]>(() => {
-    console.time('[MENTIONS] combinedItems');
+  const combinedItems = createMemo<CombinedEntity[]>(() => {
     const currentViewAllMode = viewAllMode();
 
     if (currentViewAllMode) {
       // in view all mode, show all items for that category only
-      let result: CombinedEntity[];
       switch (currentViewAllMode) {
         case 'users':
-          result = filteredUsers();
-          break;
+          return filteredUsers();
         case 'items':
-          result = filteredItems();
-          break;
+          return filteredItems();
         case 'dates':
-          result = dateSuggestions();
-          break;
+          return dateSuggestions();
         case 'emails':
-          result = filteredEmails();
-          break;
+          return filteredEmails();
         default:
-          result = [];
+          return [];
       }
-      return result;
     }
 
     // normal mode: show limited items from all categories
-    const result: CombinedEntity[] = [
+    return [
       ...filteredUsers().slice(0, bins().users),
       ...filteredItems().slice(0, bins().items),
       ...dateSuggestions().slice(0, bins().dates),
       ...filteredEmails().slice(0, bins().emails),
     ];
-    console.timeEnd('[MENTIONS] combinedItems');
-    return result;
   });
 
   const [escapeSpaceState, setEscapeSpaceState] = createSignal<
@@ -871,12 +808,8 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     }
   });
 
-  const selectedCategory = createLazyMemo<SelectedCategory>(() => {
-    console.time('[MENTIONS] selectedCategory');
-    if (viewAllMode()) {
-      console.timeEnd('[MENTIONS] selectedCategory');
-      return null; // no category selection in view all mode
-    }
+  const selectedCategory = createMemo<SelectedCategory>(() => {
+    if (viewAllMode()) return null; // no category selection in view all mode
 
     const index = selectedIndex();
     const { users, items, dates, emails } = bins();
@@ -885,7 +818,6 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
     if (users > 0) {
       if (index < currentIndex + users) {
-        console.timeEnd('[MENTIONS] selectedCategory');
         return 'users';
       }
       currentIndex += users;
@@ -893,7 +825,6 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
     if (items > 0) {
       if (index < currentIndex + items) {
-        console.timeEnd('[MENTIONS] selectedCategory');
         return 'items';
       }
       currentIndex += items;
@@ -901,7 +832,6 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
     if (dates > 0) {
       if (index < currentIndex + dates) {
-        console.timeEnd('[MENTIONS] selectedCategory');
         return 'dates';
       }
       currentIndex += dates;
@@ -909,12 +839,10 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
     if (emails > 0) {
       if (index < currentIndex + emails) {
-        console.timeEnd('[MENTIONS] selectedCategory');
         return 'emails';
       }
     }
 
-    console.timeEnd('[MENTIONS] selectedCategory');
     return null;
   });
 
@@ -950,7 +878,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         if (p >= combinedItems.length) {
           if (
             viewAllMode() === 'emails' &&
-            emailUnifiedSearchInfiniteQuery?.isFetching
+            emailUnifiedSearchInfiniteQuery.isFetching
           ) {
             return items.length - 1;
           } else {
@@ -997,12 +925,6 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         e.preventDefault();
         e.stopPropagation();
         handleArrowDown();
-        // Scroll virtualized list if in view all mode
-        if (viewAllMode()) {
-          virtualHandle()?.scrollToIndex(selectedIndex() + 1, {
-            align: 'nearest',
-          });
-        }
         break;
 
       case 'ArrowUp':
@@ -1011,12 +933,6 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         setSelectedIndex((prev) =>
           prev - 1 < 0 ? items.length - 1 : prev - 1
         );
-        // Scroll virtualized list if in view all mode
-        if (viewAllMode()) {
-          virtualHandle()?.scrollToIndex(selectedIndex() - 1, {
-            align: 'nearest',
-          });
-        }
         break;
 
       case 'ArrowLeft':
@@ -1039,7 +955,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
             const fullCount = currentRawBins[currentCategory];
             if (
               abbreviatedCount < fullCount ||
-              (emailUnifiedSearchInfiniteQuery?.hasNextPage &&
+              (emailUnifiedSearchInfiniteQuery.hasNextPage &&
                 currentCategory === 'emails')
             ) {
               handleViewAll(currentCategory);
@@ -1099,10 +1015,10 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     if (
       selectedIndex() >= combinedItems().length - 5 &&
       viewAllMode() === 'emails' &&
-      emailUnifiedSearchInfiniteQuery?.hasNextPage &&
-      !emailUnifiedSearchInfiniteQuery?.isFetching
+      emailUnifiedSearchInfiniteQuery.hasNextPage &&
+      !emailUnifiedSearchInfiniteQuery.isFetching
     ) {
-      emailUnifiedSearchInfiniteQuery?.fetchNextPage();
+      emailUnifiedSearchInfiniteQuery.fetchNextPage();
     }
     if (selectedIndex() >= combinedItems().length) {
       setSelectedIndex(combinedItems().length - 1);
@@ -1119,7 +1035,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     setSelectedIndex(0);
   };
 
-  const hasOnlyOneCategory = createLazyMemo(() => {
+  const hasOnlyOneCategory = createMemo(() => {
     const currentRawBins = rawBins();
     const categoriesWithMatches = Object.values(currentRawBins).filter(
       (count) => count > 0
@@ -1127,8 +1043,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     return categoriesWithMatches.length === 1;
   });
 
-  const inner = createLazyMemo(() => {
-    console.time('[MENTIONS] inner render');
+  const inner = createMemo(() => {
     const currentViewAllMode = viewAllMode();
 
     // ---- SINGLE BUCKET MODE -------------------------------------------------
@@ -1136,7 +1051,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       const allItems = combinedItems();
       const totalLength = () => allItems.length;
 
-      const renderViewAllOptions = createLazyMemo(() => {
+      const renderViewAllOptions = createMemo(() => {
         const categoryLabel = {
           users: 'People',
           items: 'Documents & Channels',
@@ -1171,32 +1086,25 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                 </button>
               </div>
             </div>
-            <VList
-              data={allItems}
-              ref={setVirtualHandle}
-              style={{
-                height: '256px',
-                'max-height': '100%',
-                width: '100%',
-              }}
-              class="scrollbar-hidden"
-            >
-              {(item, i) => (
-                <MentionsMenuItem
-                  item={item}
-                  index={i()}
-                  selected={i() === selectedIndex()}
-                  itemAction={itemAction}
-                  setIndex={setSelectedIndexFromMouse}
-                  setOpen={setMenuOpen}
-                />
-              )}
-            </VList>
+            <div class="max-h-64 overflow-y-auto scrollbar-hidden">
+              <For each={allItems}>
+                {(item, i) => (
+                  <MentionsMenuItem
+                    item={item}
+                    index={i()}
+                    selected={i() === selectedIndex()}
+                    itemAction={itemAction}
+                    setIndex={setSelectedIndexFromMouse}
+                    setOpen={setMenuOpen}
+                  />
+                )}
+              </For>
+            </div>
           </>
         );
       });
 
-      const result = (
+      return (
         <Show
           when={totalLength() > 0}
           fallback={<div class="px-2 text-ink-extra-muted">No results</div>}
@@ -1204,8 +1112,6 @@ function MentionsMenuInner(props: MentionsMenuProps) {
           {renderViewAllOptions()}
         </Show>
       );
-      console.timeEnd('[MENTIONS] inner render');
-      return result;
     }
 
     // ------ NORMAL MODE ------------------------------------------------------
@@ -1214,7 +1120,11 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     const dates = dateSuggestions().slice(0, bins().dates);
     const emailList = filteredEmails().slice(0, bins().emails);
     const totalLength = () =>
-      users.length + docs.length + dates.length + emailList.length;
+      users.length +
+      docs.length +
+      contacts.length +
+      dates.length +
+      emailList.length;
 
     const RenderOptions = () => {
       const options = [];
@@ -1303,9 +1213,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
           <ItemBin
             label="Emails"
             binType="emails"
-            isNextPage={() =>
-              emailUnifiedSearchInfiniteQuery.hasNextPage ?? false
-            }
+            isNextPage={() => emailUnifiedSearchInfiniteQuery.hasNextPage}
             totalCount={filteredEmails().length}
             showingCount={emailList.length}
             onViewAll={handleViewAll}
@@ -1315,7 +1223,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
               {(item, i) => (
                 <MentionsMenuItem
                   item={item}
-                  index={users.length + docs.length + dates.length + i()}
+                  index={i()}
                   selected={
                     users.length + docs.length + dates.length + i() ===
                     selectedIndex()
@@ -1342,18 +1250,16 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       );
     };
 
-    const result = (
+    return (
       <Show
         when={totalLength() > 0}
         fallback={<div class="px-2 text-ink-extra-muted">No results</div>}
       >
-        <div class="max-h-96 overflow-y-auto scrollbar-hidden">
+        <div>
           <Dynamic component={RenderOptions} />
         </div>
       </Show>
     );
-    console.timeEnd('[MENTIONS] inner render');
-    return result;
   });
 
   const clickOutsideHandler = (e: MouseEvent) => {
@@ -1384,13 +1290,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       <ScopedPortal scope={props.portalScope}>
         <div
           class="w-96 cursor-default select-none z-modal-content"
-          ref={(el) => {
-            clickOutside(el, () => clickOutsideHandler);
-            floatWithElement(el, floatWithElementProps);
-            floatWithSelection(el, floatWithSelectionProps);
-          }}
+          use:floatWithElement={floatWithElementProps()}
+          use:floatWithSelection={floatWithSelectionProps()}
+          use:clickOutside={clickOutsideHandler}
+          ref={menuRef}
         >
-          <div class="relative overflow-hidden ring-1 ring-edge bg-menu shadow-xl py-2 scrollbar-hidden">
+          <div class="relative overflow-hidden ring-1 ring-edge bg-menu shadow-xl py-2">
             {inner()}
           </div>
           <BozzyBracketInnerSibling animOnOpen={true} />

@@ -23,10 +23,6 @@ import {
   type FreshSortConfig,
 } from '@core/util/freshSort';
 
-// =============================================================================
-// Timing Utilities
-// =============================================================================
-
 type TimingResult = {
   operation: string;
   durationMs: number;
@@ -59,10 +55,6 @@ function measureTime<T>(fn: () => T): { result: T; durationMs: number } {
   const end = performance.now();
   return { result, durationMs: end - start };
 }
-
-// =============================================================================
-// UI Components
-// =============================================================================
 
 function Section(props: { title: string; children: JSX.Element }) {
   return (
@@ -107,10 +99,6 @@ function Button(props: {
   );
 }
 
-// =============================================================================
-// Bucket Overview
-// =============================================================================
-
 function BucketOverview() {
   const quickAccess = useQuickAccess();
 
@@ -148,10 +136,6 @@ function BucketOverview() {
     </Section>
   );
 }
-
-// =============================================================================
-// useList Timing Tests
-// =============================================================================
 
 function UseListTimingTests() {
   const quickAccess = useQuickAccess();
@@ -280,10 +264,6 @@ function UseListTimingTests() {
     </Section>
   );
 }
-
-// =============================================================================
-// Fresh Search Demo
-// =============================================================================
 
 function FreshSearchDemo() {
   const quickAccess = useQuickAccess();
@@ -544,10 +524,6 @@ function FreshSearchDemo() {
   );
 }
 
-// =============================================================================
-// Item Inspector
-// =============================================================================
-
 function ItemInspector() {
   const quickAccess = useQuickAccess();
   const [selectedBucket, setSelectedBucket] = createSignal<Bucket>('channel');
@@ -666,10 +642,6 @@ function ItemInspector() {
   );
 }
 
-// =============================================================================
-// Merge Benchmark
-// =============================================================================
-
 function MergeBenchmark() {
   const quickAccess = useQuickAccess();
   const { timings, logTiming, clearTimings } = useTimingLog();
@@ -764,10 +736,6 @@ function MergeBenchmark() {
     </Section>
   );
 }
-
-// =============================================================================
-// Main Component
-// =============================================================================
 
 export default function QuickAccessDemo() {
   const quickAccess = useQuickAccess();

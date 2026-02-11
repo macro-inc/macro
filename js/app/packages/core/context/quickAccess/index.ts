@@ -23,4 +23,7 @@ export {
   isCommandItem,
   isEntityOfType,
   isFromBucket,
+  getItemSearchText,
+  getItemTimestamps,
+  isChannelItem,
 } from './types';

@@ -8,40 +8,23 @@ import {
   useContacts,
 } from '@core/user';
 import type { ApiChannelWithLatest } from '@service-comms/generated/models';
-import {
-  useEmails,
-  type EmailEntity,
-  type ChannelEntity,
-  type ChatEntity,
-  type DocumentEntity,
-  type TaskEntity,
-  type ProjectEntity,
-  type EntityData,
-} from '@macro-entity';
+import { useEmails, type ChannelEntity } from '@macro-entity';
 import { useHistoryQuery, type HistoryItem } from '@queries/history/history';
 import { createAssertedContextProvider } from '../createContext';
-import type { Item } from '@service-storage/generated/schemas/item';
-import type { ChannelWithParticipants } from '@core/user';
 import type {
   Bucket,
   BucketCombination,
   EntityBucket,
-  EntityItem,
-  UserItem,
   QuickAccessItem,
   QuickAccessContextValue,
+  QuickAccessEntity,
 } from './types';
 import { BUCKET_COMBINATIONS } from './types';
 
-/**
- * Maps a HistoryItem to the appropriate EntityData type.
- * Note: ownerId defaults to empty string when not available from history.
- */
-function historyItemToEntity(item: HistoryItem): EntityData {
+function historyItemToEntity(item: HistoryItem): QuickAccessEntity {
   const base = {
     id: item.id,
     name: item.name,
-    ownerId: '', // Not available from history endpoint
     createdAt: item.createdAt ? new Date(item.createdAt).getTime() : undefined,
     updatedAt: item.updatedAt ? new Date(item.updatedAt).getTime() : undefined,
     viewedAt: item.viewedAt,
@@ -52,13 +35,13 @@ function historyItemToEntity(item: HistoryItem): EntityData {
       return {
         ...base,
         type: 'chat',
-      } satisfies ChatEntity;
+      } as QuickAccessEntity;
 
     case 'project':
       return {
         ...base,
         type: 'project',
-      } satisfies ProjectEntity;
+      } as QuickAccessEntity;
 
     case 'document': {
       if (item.subType?.type === 'task') {
@@ -67,21 +50,21 @@ function historyItemToEntity(item: HistoryItem): EntityData {
           type: 'document',
           fileType: 'md',
           subType: item.subType,
-        } satisfies TaskEntity;
+        } as QuickAccessEntity;
       }
       return {
         ...base,
         type: 'document',
         fileType: item.fileType ?? undefined,
         subType: item.subType,
-      } satisfies DocumentEntity;
+      } as QuickAccessEntity;
     }
 
     default:
       return {
         ...base,
         type: 'document',
-      } satisfies DocumentEntity;
+      } as QuickAccessEntity;
   }
 }
 
@@ -136,17 +119,28 @@ function getUserSearchText(user: IUser): string {
   return `${name} | ${email}`;
 }
 
-function getEntitySearchText(entity: EntityData): string {
+function getEntitySearchText(entity: QuickAccessEntity): string {
   return entity.name;
 }
 
 /**
- * Parses a timestamp that could be a number or ISO string.
+ * Parses a timestamp that could be a number or ISO string to a number (for sorting).
  */
 function parseTimestamp(value: number | string | null | undefined): number {
   if (value == null) return 0;
   if (typeof value === 'number') return value;
   return new Date(value).getTime();
+}
+
+/**
+ * Parses a timestamp that could be a number or ISO string to a Date object.
+ */
+function parseTimestampToDate(
+  value: number | string | null | undefined
+): Date | undefined {
+  if (value == null) return undefined;
+  if (typeof value === 'number') return new Date(value);
+  return new Date(value);
 }
 
 /**
@@ -201,7 +195,6 @@ export const [QuickAccessProvider, useQuickAccess] =
       const emails = useEmails();
       const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
 
-      // Build all items as a single sorted array (sorted once, filtered for buckets)
       const allItemsSorted = createLazyMemo<QuickAccessItem[]>(() => {
         const items: QuickAccessItem[] = [];
 
@@ -213,17 +206,20 @@ export const [QuickAccessProvider, useQuickAccess] =
 
           const bucket = getBucketForHistoryItem(item);
           const entity = historyItemToEntity(item);
-          const viewedAt = item.viewedAt;
-          const updatedAt = parseTimestamp(item.updatedAt);
-          const createdAt = parseTimestamp(item.createdAt);
+          const viewedAtMs = item.viewedAt;
+          const updatedAtMs = parseTimestamp(item.updatedAt);
 
           items.push({
             kind: 'entity',
             id: item.id,
             bucket,
             searchText: getEntitySearchText(entity),
-            sortTimestamp: viewedAt ?? updatedAt ?? 0,
-            timestamps: { viewedAt, updatedAt, createdAt },
+            sortTimestamp: viewedAtMs ?? updatedAtMs ?? 0,
+            timestamps: {
+              viewedAt: parseTimestampToDate(item.viewedAt),
+              updatedAt: parseTimestampToDate(item.updatedAt),
+              createdAt: parseTimestampToDate(item.createdAt),
+            },
             data: entity,
           });
         }
@@ -235,17 +231,19 @@ export const [QuickAccessProvider, useQuickAccess] =
           const isDm = channel.channel_type === 'direct_message';
           const bucket: Bucket = isDm ? 'dm' : 'channel';
           const entity = channelToEntity(channel);
-          const viewedAt = parseTimestamp(channel.viewed_at) || undefined;
-          const updatedAt = parseTimestamp(channel.updated_at) || undefined;
-          const createdAt = parseTimestamp(channel.created_at) || undefined;
+          const updatedAtMs = parseTimestamp(channel.updated_at) || undefined;
 
           items.push({
             kind: 'entity',
             id: channel.id,
             bucket,
             searchText: channel.name ?? '',
-            sortTimestamp: updatedAt ?? 0,
-            timestamps: { viewedAt, updatedAt, createdAt },
+            sortTimestamp: updatedAtMs ?? 0,
+            timestamps: {
+              viewedAt: parseTimestampToDate(channel.viewed_at),
+              updatedAt: parseTimestampToDate(channel.updated_at),
+              createdAt: parseTimestampToDate(channel.created_at),
+            },
             data: entity,
           });
         }
@@ -255,15 +253,19 @@ export const [QuickAccessProvider, useQuickAccess] =
         const contactData = contacts();
         for (const contact of contactData) {
           const augmentedUser = augmentUserWithDmActivity(contact);
-          const lastInteraction = augmentedUser.lastInteraction;
+          const lastInteractionMs = augmentedUser.lastInteraction;
 
           items.push({
             kind: 'user',
             id: augmentedUser.id,
             bucket: 'person',
             searchText: getUserSearchText(augmentedUser),
-            sortTimestamp: lastInteraction ?? 0,
-            timestamps: { lastInteraction },
+            sortTimestamp: lastInteractionMs ?? 0,
+            timestamps: {
+              lastInteraction: parseTimestampToDate(
+                augmentedUser.lastInteraction
+              ),
+            },
             data: augmentedUser,
           });
         }
@@ -272,17 +274,20 @@ export const [QuickAccessProvider, useQuickAccess] =
         // Sort by: viewedAt ?? updatedAt
         const emailData = emails();
         for (const email of emailData) {
-          const viewedAt = email.viewedAt;
-          const updatedAt = email.updatedAt;
-          const createdAt = email.createdAt;
+          const viewedAtMs = email.viewedAt;
+          const updatedAtMs = email.updatedAt;
 
           items.push({
             kind: 'entity',
             id: email.id,
             bucket: 'email',
             searchText: email.name ?? 'No Subject',
-            sortTimestamp: viewedAt ?? updatedAt ?? 0,
-            timestamps: { viewedAt, updatedAt, createdAt },
+            sortTimestamp: viewedAtMs ?? updatedAtMs ?? 0,
+            timestamps: {
+              viewedAt: parseTimestampToDate(email.viewedAt),
+              updatedAt: parseTimestampToDate(email.updatedAt),
+              createdAt: parseTimestampToDate(email.createdAt),
+            },
             data: email,
           });
         }
@@ -361,7 +366,6 @@ export const [QuickAccessProvider, useQuickAccess] =
         ...buckets: B[]
       ): Accessor<QuickAccessItem[]> => {
         return createMemo(() => {
-          // No buckets = return all items (already sorted)
           if (buckets.length === 0) {
             return preBakedLists().all;
           }
@@ -390,110 +394,12 @@ export const [QuickAccessProvider, useQuickAccess] =
 
       const refresh = () => {
         historyQuery.refetch();
-        // Note: channels and contacts refresh through their own mechanisms
       };
-
-      // Compatibility layer for MentionsMenu (returns data in Entity format)
-      // This matches the shape expected by mentionsUtils.ts
-      type MentionEntity<K extends string, D> = {
-        kind: K;
-        id: string;
-        data: D;
-      };
-      type MentionEntities = {
-        users: MentionEntity<'user', IUser>[];
-        items: MentionEntity<'item', Item>[];
-        channels: MentionEntity<'channel', ChannelWithParticipants>[];
-        emails: MentionEntity<'email', EmailEntity>[];
-      };
-
-      const mentionEntities = createMemo<MentionEntities>(() => {
-        const map = bucketLists();
-
-        // Users
-        const userItems = map.get('person') ?? [];
-        const users = userItems
-          .filter((item): item is UserItem => item.kind === 'user')
-          .map((item) => ({
-            kind: 'user' as const,
-            id: item.id,
-            data: item.data,
-          }));
-
-        // Items (document, note, task, chat, project)
-        const itemBuckets: Bucket[] = [
-          'document',
-          'note',
-          'task',
-          'chat',
-          'project',
-        ];
-        const historyItems: MentionEntity<'item', Item>[] = [];
-        for (const bucket of itemBuckets) {
-          const bucketItems = map.get(bucket) ?? [];
-          for (const item of bucketItems) {
-            if (item.kind === 'entity') {
-              // Map EntityData back to Item shape for MentionsMenu compatibility
-              const entity = item.data;
-              historyItems.push({
-                kind: 'item',
-                id: item.id,
-                data: entity as unknown as Item,
-              });
-            }
-          }
-        }
-
-        // Channels (channel + dm)
-        const channelBuckets: Bucket[] = ['channel', 'dm'];
-        const channelItems: MentionEntity<
-          'channel',
-          ChannelWithParticipants
-        >[] = [];
-        for (const bucket of channelBuckets) {
-          const bucketItems = map.get(bucket) ?? [];
-          for (const item of bucketItems) {
-            if (item.kind === 'entity' && item.data.type === 'channel') {
-              // Need original channel data for MentionsMenu
-              const channelData = channels().find((c) => c.id === item.id);
-              if (channelData) {
-                channelItems.push({
-                  kind: 'channel',
-                  id: item.id,
-                  data: channelData,
-                });
-              }
-            }
-          }
-        }
-
-        // Emails
-        const emailBucketItems = map.get('email') ?? [];
-        const emailItems = emailBucketItems
-          .filter(
-            (item): item is EntityItem<EmailEntity> =>
-              item.kind === 'entity' && item.data.type === 'email'
-          )
-          .map((item) => ({
-            kind: 'email' as const,
-            id: item.id,
-            data: item.data,
-          }));
-
-        return {
-          users,
-          items: historyItems,
-          channels: channelItems,
-          emails: emailItems,
-        };
-      });
 
       return {
         useList,
         isLoading,
         refresh,
-        /** @deprecated Use useList instead. Compatibility layer for MentionsMenu. */
-        mentionEntities,
       };
     }
   );
