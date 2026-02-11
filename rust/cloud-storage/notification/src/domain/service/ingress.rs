@@ -199,7 +199,7 @@ where
         &self,
         request: SendNotificationRequest<'a, T, U>,
     ) -> Result<Option<NotificationResult<'a>>, Report<SendNotificationError>> {
-        let request = self
+        let mut request = self
             .filter_recipients(request)
             .await
             .context(SendNotificationError::Other)?;
@@ -207,9 +207,6 @@ where
         if request.req.recipient_ids.is_empty() {
             return Ok(None);
         }
-
-        // Build queue messages first so we can extract the APNS collapse key
-        let mut request = request;
 
         let notification_id = Uuid::now_v7();
         let (queue_messages, apns_collapse_key) = self
