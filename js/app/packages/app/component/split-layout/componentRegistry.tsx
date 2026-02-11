@@ -137,6 +137,11 @@ if (LOCAL_ONLY) {
     'properties-debug',
     lazy(() => import('@core/component/Properties/debug/PropertiesDebug'))
   );
+
+  registerComponent(
+    'quick-access',
+    lazy(() => import('@core/context/quickAccess/debug/QuickAccessDemo'))
+  );
 }
 
 if (DEV_MODE_ENV) {
