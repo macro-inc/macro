@@ -228,6 +228,7 @@ impl StreamRepo for RedisStreamRepo {
         let keys = iter.collect::<Vec<_>>().await;
         Ok(keys
             .into_iter()
+            .filter_map(|s| s.ok())
             .filter_map(|s| StreamId::try_from(s).ok())
             .filter(|stream_id| stream_id.entity_id == entity_id)
             .collect())
