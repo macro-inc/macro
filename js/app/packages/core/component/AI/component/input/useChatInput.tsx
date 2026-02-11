@@ -1,7 +1,7 @@
 import { withAnalytics } from '@coparse/analytics';
 import { useBuildChatSendRequest } from '@core/component/AI/component/input/buildRequest';
 import { SMART_MODE_MODEL } from '@core/component/AI/constant';
-import { useChatContext } from '@core/component/AI/context';
+import { useChatInputContext } from '@core/component/AI/context';
 import { useChatAttachableHistory } from '@core/component/AI/signal/attachment';
 import type {
   CreateAndSend,
@@ -27,6 +27,8 @@ import { ChatAttachMenu } from './ChatAttachMenu';
 import type { Source } from './ToolsetSelector';
 import type { UseChatMarkdown } from './useChatMarkdownArea';
 import { cn } from '@ui/utils/classname';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { useAiDataConsentGate } from './useAiDataConsent';
 
 const { track, TrackingEvents } = withAnalytics();
 
@@ -37,6 +39,7 @@ export type ChatInputProps = {
   showActiveTabs?: boolean;
   captureEditor?: (editor: LexicalEditor) => void;
   autoFocusOnMount?: boolean;
+  chatId?: string;
 };
 
 export type ChatInputComponentProps = {
@@ -44,15 +47,15 @@ export type ChatInputComponentProps = {
 } & ChatInputProps;
 
 export function ChatInput(props: ChatInputComponentProps) {
-  const ctx = useChatContext();
-  const uploadQueue = ctx.uploadQueue;
-  const attachments = ctx.attachments;
-  const chatId = ctx.chatId;
-  const model = ctx.model;
-  const generating = ctx.isGenerating;
+  const input = useChatInputContext();
+  const uploadQueue = input.uploadQueue;
+  const attachments = input.attachments;
+  const model = input.model;
+  const generating = input.isGenerating;
 
   let containerRef!: HTMLDivElement;
   const toolsetSignal = createSignal<ToolSet>({ type: 'all' });
+  const { hasConsent, requestConsent, ConsentDialog } = useAiDataConsentGate();
 
   const [source] = createSignal<Source>('everything');
   const [showAttachMenu, setShowAttachMenu] = createSignal(false);
@@ -89,8 +92,13 @@ export function ChatInput(props: ChatInputComponentProps) {
   const sendMessage = createCallback(async (modelOverride?: Model) => {
     if (!canSendMessage()) return;
 
+    if (isNativeMobilePlatform() && !hasConsent()) {
+      requestConsent(() => sendMessage(modelOverride));
+      return;
+    }
+
     const request = await buildChatSendRequest({
-      chatId: chatId(),
+      chatId: props.chatId,
       userRequest: props.markdown.markdownText(),
       isPersistent: props.isPersistent,
       attachments: attachments.attached(),
@@ -283,6 +291,7 @@ export function ChatInput(props: ChatInputComponentProps) {
           <RightControls />
         </div>
       </div>
+      <ConsentDialog />
     </div>
   );
 }

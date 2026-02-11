@@ -9,6 +9,7 @@ pub struct LegacyUserInfo {
     pub tutorial_complete: bool,
     pub group: Option<String>,
     pub has_chrome_ext: bool,
+    pub ai_data_consent: bool,
 }
 
 pub async fn get_legacy_user_info(
@@ -25,7 +26,8 @@ pub async fn get_legacy_user_info(
             "name" as name,
             "tutorialComplete" as tutorial_complete,
             "group" as "group?",
-            "hasChromeExt" as has_chrome_ext
+            "hasChromeExt" as has_chrome_ext,
+            "aiDataConsent" as ai_data_consent
         FROM "User"
         WHERE "id" = $1
         "#,

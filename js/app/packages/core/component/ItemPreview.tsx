@@ -93,6 +93,7 @@ export function useItemPreviewData(entity: Accessor<ItemEntity>) {
     localProps?: Partial<Omit<ComponentProps<typeof EntityIcon>, 'targetType'>>
   ) => {
     return <EntityIcon targetType={targetType()} {...localProps} />;
+    // return <EntityIcon targetType={'task'} {...localProps} />;
   };
 
   return {
@@ -106,7 +107,7 @@ export function useItemPreviewData(entity: Accessor<ItemEntity>) {
 
 const DEFAULT_BUTTON_CLASS =
   'text-ink-base text-sm ring-1 ring-edge-muted rounded-xs hover:bg-panel-hover flex flex-row h-6 px-2 justify-center items-center';
-const DEFAULT_ICON_CLASS = 'flex justify-start items-center h-3.5 mr-2';
+const DEFAULT_ICON_CLASS = 'flex justify-start items-center w-3.5 h-3.5 mr-2';
 const DEFAULT_TEXT_CLASS = 'flex-1 text-left leading-5 min-w-0 truncate';
 
 interface StatusDisplayProps {
@@ -332,7 +333,7 @@ export function InlineItemPreview(props: ItemEntity) {
             <Match when={matches(loadedItem(), isAccessiblePreviewItem)}>
               <span class="inline-flex items-center gap-1">
                 <span class="w-4 h-4">
-                  <ItemEntityIcon size="xs" />
+                  <ItemEntityIcon size="fill" />
                 </span>
                 <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
                   {truncateString(name(), 80)}

@@ -36,6 +36,8 @@ pub struct GetLegacyUserPermissionsResponse {
     has_chrome_ext: bool,
     /// Whether the user has trialed through stripe
     has_trialed: bool,
+    /// Whether the user has consented to AI data sharing
+    ai_data_consent: bool,
 }
 
 #[derive(serde::Serialize, Debug, utoipa::ToSchema)]
@@ -158,5 +160,6 @@ pub async fn handler(
         },
         has_chrome_ext: legacy_user_info.has_chrome_ext,
         has_trialed,
+        ai_data_consent: legacy_user_info.ai_data_consent,
     })
 }

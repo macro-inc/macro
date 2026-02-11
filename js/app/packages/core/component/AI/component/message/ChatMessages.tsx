@@ -55,13 +55,13 @@ function messageContentIsEmpty(message: ChatMessageWithAttachments) {
 }
 
 export function ChatMessages(props: ChatMessagesProps) {
-  const ctx = useChatContext();
-  const [messages, setMessages] = [ctx.messages!, ctx.setMessages!];
-  const streamTuple:
-    | [Accessor<MessageStream | undefined>, Setter<MessageStream | undefined>]
-    | undefined =
-    ctx.stream && ctx.setStream ? [ctx.stream, ctx.setStream] : undefined;
-  const chatId = () => ctx.chatId?.();
+  const chat = useChatContext();
+  const [messages, setMessages] = [chat.messages, chat.setMessages];
+  const streamTuple: [
+    Accessor<MessageStream | undefined>,
+    Setter<MessageStream | undefined>,
+  ] = [chat.stream, chat.setStream];
+  const chatId = chat.chatId;
 
   const extendedStream = createMemo(() => {
     const s = streamTuple?.[0]?.();

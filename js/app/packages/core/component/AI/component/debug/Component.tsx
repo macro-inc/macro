@@ -6,7 +6,12 @@ import type {
 } from '@core/component/AI/types';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { createEffect, createSignal } from 'solid-js';
-import { ChatContextProvider, useChatContext } from '../../context';
+import {
+  ChatInputProvider,
+  ChatProvider,
+  useChatContext,
+  useChatInputContext,
+} from '../../context';
 import { useAttachments } from '../../signal/attachment';
 import { pausableStream } from '../../util/stream';
 import { ChatInput } from '../input/useChatInput';
@@ -86,16 +91,16 @@ function ChatModelSelector() {
 
 function ChatInputBox() {
   return (
-    <ChatContextProvider>
+    <ChatInputProvider>
       <ChatInputBoxInner />
-    </ChatContextProvider>
+    </ChatInputProvider>
   );
 }
 
 function ChatInputBoxInner() {
-  const ctx = useChatContext();
+  const input = useChatInputContext();
   const chatMarkdownArea = useChatMarkdownArea({
-    addAttachment: (a) => ctx.attachments.addAttachment(a),
+    addAttachment: (a) => input.attachments.addAttachment(a),
   });
 
   return (
@@ -103,12 +108,12 @@ function ChatInputBoxInner() {
       <div class="w-full h-full">
         <div class="flex gap-2 py-2">
           <DeprecatedTextButton
-            onClick={() => ctx.setIsGenerating(true)}
+            onClick={() => input.setIsGenerating(true)}
             theme="accent"
             text="Generate"
           />
           <DeprecatedTextButton
-            onClick={() => ctx.setIsGenerating(false)}
+            onClick={() => input.setIsGenerating(false)}
             theme="accent"
             text="Stop"
           />
@@ -124,16 +129,16 @@ function ChatInputBoxInner() {
 
 function ChatInputBoxConnected() {
   return (
-    <ChatContextProvider>
+    <ChatInputProvider>
       <ChatInputBoxConnectedInner />
-    </ChatContextProvider>
+    </ChatInputProvider>
   );
 }
 
 function ChatInputBoxConnectedInner() {
-  const ctx = useChatContext();
+  const input = useChatInputContext();
   const chatMarkdownArea = useChatMarkdownArea({
-    addAttachment: (a) => ctx.attachments.addAttachment(a),
+    addAttachment: (a) => input.attachments.addAttachment(a),
   });
 
   const [_gen, setGen] = createSignal(false);
@@ -170,14 +175,16 @@ function ChatInputBoxConnectedInner() {
 
 function StreamMessages() {
   return (
-    <ChatContextProvider messages={[]}>
-      <StreamMessagesInner />
-    </ChatContextProvider>
+    <ChatInputProvider>
+      <ChatProvider chatId="debug" messages={[]}>
+        <StreamMessagesInner />
+      </ChatProvider>
+    </ChatInputProvider>
   );
 }
 
 function StreamMessagesInner() {
-  const ctx = useChatContext();
+  const chat = useChatContext();
   const [stream, setStream] = createSignal<MessageStream>();
   const makeStream = () => delayStream(poem(), slowFirst);
 
@@ -188,7 +195,7 @@ function StreamMessagesInner() {
         onClick={() => {
           const poemStream = makeStream();
           setStream(poemStream);
-          ctx.setStream!(poemStream);
+          chat.setStream(poemStream);
         }}
       >
         Stream
@@ -205,28 +212,33 @@ function StaticMessages() {
   const messages = simpleMessageChain();
   console.log(JSON.stringify(messages, null, 2));
   return (
-    <ChatContextProvider messages={messages}>
-      <Item col label="Chat messages - static render">
-        <div data-chat-scroll class="min-h-0 max-h-[400px] overflow-y-auto">
-          <ChatMessages />
-        </div>
-      </Item>
-    </ChatContextProvider>
+    <ChatInputProvider>
+      <ChatProvider chatId="debug" messages={messages}>
+        <Item col label="Chat messages - static render">
+          <div data-chat-scroll class="min-h-0 max-h-[400px] overflow-y-auto">
+            <ChatMessages />
+          </div>
+        </Item>
+      </ChatProvider>
+    </ChatInputProvider>
   );
 }
 
 function FullChat() {
   return (
-    <ChatContextProvider messages={[]}>
-      <FullChatInner />
-    </ChatContextProvider>
+    <ChatInputProvider>
+      <ChatProvider chatId="debug" messages={[]}>
+        <FullChatInner />
+      </ChatProvider>
+    </ChatInputProvider>
   );
 }
 
 function FullChatInner() {
-  const ctx = useChatContext();
+  const input = useChatInputContext();
+  const chat = useChatContext();
   const chatMarkdownArea = useChatMarkdownArea({
-    addAttachment: (a) => ctx.attachments.addAttachment(a),
+    addAttachment: (a) => input.attachments.addAttachment(a),
   });
   const [_isGen, setIsGen] = createSignal(false);
   const [stream, setDebugStream] = createSignal<MessageStream>();
@@ -242,7 +254,7 @@ function FullChatInner() {
         return onSend(response);
       }
     } else {
-      ctx.addMessage!({
+      chat.addMessage({
         attachments: request.request.attachments ?? [],
         content: request.request.content,
         role: 'user',
@@ -250,7 +262,7 @@ function FullChatInner() {
       });
       const stream = request.call();
       console.log('set stream');
-      ctx.setStream!(stream);
+      chat.setStream(stream);
       setDebugStream(stream);
       setIsGen(true);
       createEffect(() => {
@@ -278,6 +290,7 @@ function FullChatInner() {
         <ChatMessages />
         <ChatInput
           markdown={chatMarkdownArea}
+          chatId={chat.chatId()}
           onSend={onSend}
           onStop={() => {}}
         />
@@ -293,15 +306,17 @@ function ToolCallRender() {
   ]);
 
   return (
-    <ChatContextProvider messages={initialMessages}>
-      <ToolCallRenderInner stream={stream} />
-    </ChatContextProvider>
+    <ChatInputProvider>
+      <ChatProvider chatId="debug" messages={initialMessages}>
+        <ToolCallRenderInner stream={stream} />
+      </ChatProvider>
+    </ChatInputProvider>
   );
 }
 
 function ToolCallRenderInner(props: { stream: MessageStream }) {
-  const ctx = useChatContext();
-  ctx.setStream!(props.stream);
+  const chat = useChatContext();
+  chat.setStream(props.stream);
 
   return (
     <Item label="Tool call - static">
@@ -424,14 +439,16 @@ function TableStream() {
   ]);
 
   return (
-    <ChatContextProvider messages={initialMessages}>
-      <TableStreamInner />
-    </ChatContextProvider>
+    <ChatInputProvider>
+      <ChatProvider chatId="debug" messages={initialMessages}>
+        <TableStreamInner />
+      </ChatProvider>
+    </ChatInputProvider>
   );
 }
 
 function TableStreamInner() {
-  const ctx = useChatContext();
+  const chat = useChatContext();
   const [isPaused, setIsPaused] = createSignal(false);
   const [isSlow, setIsSlow] = createSignal(false);
   const [showRaw, setShowRaw] = createSignal(false);
@@ -439,8 +456,8 @@ function TableStreamInner() {
   const [rawText, setRawText] = createSignal('');
 
   const startStream = () => {
-    ctx.setMessages!([]);
-    ctx.setStream!(undefined);
+    chat.setMessages([]);
+    chat.setStream(undefined);
     setRawText('');
     const baseStream = table();
     const controlled = pausableStream(baseStream, {
@@ -449,7 +466,7 @@ function TableStreamInner() {
       onChunk: (text) => setRawText((prev) => prev + text),
     });
     setStream(controlled);
-    ctx.setStream!(controlled);
+    chat.setStream(controlled);
   };
 
   return (
@@ -487,8 +504,8 @@ function TableStreamInner() {
           onClick={() => {
             setStream(undefined);
             setRawText('');
-            ctx.setMessages!([]);
-            ctx.setStream!(undefined);
+            chat.setMessages([]);
+            chat.setStream(undefined);
           }}
         />
       </div>

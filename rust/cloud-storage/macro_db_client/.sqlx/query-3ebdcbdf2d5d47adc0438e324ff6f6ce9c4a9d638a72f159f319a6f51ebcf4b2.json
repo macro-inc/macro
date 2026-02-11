@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            \"id\" as \"user_id\",\n            \"email\" as \"email\",\n            \"stripeCustomerId\" as \"stripe_customer_id?\",\n            \"name\" as name,\n            \"tutorialComplete\" as tutorial_complete,\n            \"group\" as \"group?\",\n            \"hasChromeExt\" as has_chrome_ext\n        FROM \"User\"\n        WHERE \"id\" = $1\n        ",
+  "query": "\n        SELECT\n            \"id\" as \"user_id\",\n            \"email\" as \"email\",\n            \"stripeCustomerId\" as \"stripe_customer_id?\",\n            \"name\" as name,\n            \"tutorialComplete\" as tutorial_complete,\n            \"group\" as \"group?\",\n            \"hasChromeExt\" as has_chrome_ext,\n            \"aiDataConsent\" as ai_data_consent\n        FROM \"User\"\n        WHERE \"id\" = $1\n        ",
   "describe": {
     "columns": [
       {
@@ -37,6 +37,11 @@
         "ordinal": 6,
         "name": "has_chrome_ext",
         "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "ai_data_consent",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
@@ -51,8 +56,9 @@
       true,
       false,
       true,
+      false,
       false
     ]
   },
-  "hash": "07ee049852183a95006bcc4c4add942c0331f2c229da351065f2e77111ec647f"
+  "hash": "3ebdcbdf2d5d47adc0438e324ff6f6ce9c4a9d638a72f159f319a6f51ebcf4b2"
 }
