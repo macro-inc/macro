@@ -136,7 +136,13 @@ const SoupFilters = () => {
   // These don't have query filters, just predicates.
   // The primitive handles mutual exclusivity via the 'focus' group.
   const toggleFocus = (id: 'signal' | 'noise') => {
-    soup.filters.toggle(id);
+    if (soup.filters.isActive(id)) {
+      soup.filters.toggle('explicit-noise');
+      soup.filters.deactivate('not-done');
+    } else {
+      soup.filters.toggle(id);
+      soup.filters.activate('not-done');
+    }
   };
 
   // === Notification filters ===
