@@ -64,7 +64,7 @@ export function createMessageListContextLookup<
   }
 
   for (const [messageIndex, message] of messages.entries()) {
-    const isNewMessage = !message.thread_id && isNewMessageFn(message);
+    const isNewMessage = isNewMessageFn(message);
     let threadIndex = -1;
     let previousNonThreadedMessage: T | undefined;
     let isParentNewMessage = false;
@@ -106,7 +106,8 @@ export function createMessageListContextLookup<
       message.thread_id !== undefined &&
       message.thread_id === lastTopLevelMessageId;
 
-    const isFirstNewMessage = isNewMessage && !foundFirstNewMessage;
+    const isFirstNewMessage =
+      isNewMessage && !message.thread_id && !foundFirstNewMessage;
     if (isFirstNewMessage) {
       foundFirstNewMessage = true;
     }

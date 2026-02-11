@@ -264,9 +264,9 @@ const Root: Component<MessageRootProps> = (props) => {
               class="relative flex-1 flex flex-col justify-start w-[calc(100%-28px)] min-w-0 pl-[var(--left-of-connector)]"
               classList={{
                 'border-l': !props.hideConnectors,
-                'border-accent': props.isNewMessage || props.isParentNewMessage,
+                'border-accent': props.isNewMessage,
                 'border-edge-muted':
-                  !props.isNewMessage && !props.isParentNewMessage,
+                  !props.isNewMessage,
                 'pt-1.5': !(
                   props.isConsecutive ||
                   props.isFirstMessage ||
@@ -288,7 +288,7 @@ const Root: Component<MessageRootProps> = (props) => {
                       <div
                         class={cn(
                           'absolute text-edge-muted -z-1',
-                          props.isParentNewMessage && 'text-accent'
+                          props.isNewMessage && 'text-accent'
                         )}
                         style={{
                           left: `calc((var(--thread-shift) - var(--left-of-connector) + var(--left-of-user-icon) + 1px) * -1)`,

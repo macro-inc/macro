@@ -68,18 +68,18 @@ export function MessageFlag(props: MessageFlagProps) {
   return (
     <div class="flex flex-row items-stretch justify-start ml-[var(--left-of-connector)]">
       <div class="flex flex-col items-center justify-center">
-        <div class="border-l border-edge-muted min-h-1/2 ]" />
+        <div class="border-l border-edge-muted min-h-1/2" />
         <div
           class={`border-l ${props.highlight ? 'border-accent' : 'border-edge-muted'} min-h-1/2 `}
         />
       </div>
       <div class="flex flex-col items-center justify-center">
         <div
-          class={`w-8 border-b ${props.highlight ? 'border-accent' : 'border-edge-muted'}`}
+          class={`w-7 border-b ${props.highlight ? 'border-accent' : 'border-edge-muted'}`}
         />
       </div>
       <div
-        class={`text-xs text-panel uppercase font-mono p-1 my-3 ${props.highlight ? 'bg-accent' : 'bg-edge'}`}
+        class={`text-xs text-panel uppercase font-mono p-1 my-6 mt ${props.highlight ? 'bg-accent' : 'bg-edge'}`}
       >
         {props.text}
       </div>
