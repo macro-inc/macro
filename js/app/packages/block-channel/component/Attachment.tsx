@@ -100,9 +100,7 @@ export function Attachment(props: AttachmentProps) {
                 }}
               >
                 <Close
-                  width={12}
-                  height={12}
-                  class="text-ink-muted group-hover:text-failure"
+                  class="text-ink-muted group-hover:text-failure size-12"
                 />
               </div>
             </Show>
