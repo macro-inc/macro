@@ -19,7 +19,17 @@ type MessageAttachmentsProps = {
 
 export function MessageAttachments(props: MessageAttachmentsProps) {
   return (
-    <div class={cn('allow-css-brackets mb-2', !(props.documentAttachments()?.length > 0 || props.imageAttachments()?.length > 0 || props.videoAttachments()?.length > 0) || props.isDeleted() && 'hidden')}>
+    <div
+      class={cn(
+        'allow-css-brackets mb-2',
+        !(
+          props.documentAttachments()?.length > 0 ||
+          props.imageAttachments()?.length > 0 ||
+          props.videoAttachments()?.length > 0
+        ) ||
+          (props.isDeleted() && 'hidden')
+      )}
+    >
       {/* Video attachments */}
       <Show when={props.videoAttachments()?.length > 0}>
         <For each={props.videoAttachments()}>

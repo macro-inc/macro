@@ -265,7 +265,8 @@ const Root: Component<MessageRootProps> = (props) => {
               classList={{
                 'border-l': !props.hideConnectors,
                 'border-accent': props.isNewMessage || props.isParentNewMessage,
-                'border-edge-muted': !props.isNewMessage && !props.isParentNewMessage,
+                'border-edge-muted':
+                  !props.isNewMessage && !props.isParentNewMessage,
                 'pt-1.5': !(
                   props.isConsecutive ||
                   props.isFirstMessage ||
@@ -295,7 +296,10 @@ const Root: Component<MessageRootProps> = (props) => {
                       />*/}
                       {/* Slanted Line Connector */}
                       <div
-                        class={cn('absolute text-edge-muted -z-1', props.isParentNewMessage && 'text-accent')}
+                        class={cn(
+                          'absolute text-edge-muted -z-1',
+                          props.isParentNewMessage && 'text-accent'
+                        )}
                         style={{
                           left: `calc((var(--thread-shift) - var(--left-of-connector) + var(--left-of-user-icon) + 1px) * -1)`,
                           bottom:
@@ -404,7 +408,7 @@ const Root: Component<MessageRootProps> = (props) => {
                     class="text-ink-muted border border-edge-muted bg-menu hover:bg-hover hover-transition-bg flex flex-row justify-center items-center relative px-0 py-0 mb-4"
                     style={{
                       width: 'var(--user-icon-width)',
-                      height: 'var(--user-icon-width)'
+                      height: 'var(--user-icon-width)',
                     }}
                   >
                     <IconPlus class="size-1/2" />
@@ -427,7 +431,8 @@ const Root: Component<MessageRootProps> = (props) => {
                   class="absolute border-l border-edge-muted"
                   style={{
                     left: `calc((var(--user-icon-width) / 2) * -1)`,
-                    height: 'calc(50% - (var(--user-icon-width) / 2 + 1px) / 24 * 18 + 1px)',
+                    height:
+                      'calc(50% - (var(--user-icon-width) / 2 + 1px) / 24 * 18 + 1px)',
                   }}
                 />
 

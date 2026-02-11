@@ -620,8 +620,10 @@ export function MessageContainer(props: MessageProps) {
             </MessageComponent>
             <Show when={isLastInCollapsedThread()}>
               <div
-                class={cn("border-l border-edge-muted pb-1",
-                  isParentNewMessage() && 'border-accent')}
+                class={cn(
+                  'border-l border-edge-muted pb-1',
+                  isParentNewMessage() && 'border-accent'
+                )}
                 style={{
                   'margin-left': `var(--left-of-connector)`,
                 }}

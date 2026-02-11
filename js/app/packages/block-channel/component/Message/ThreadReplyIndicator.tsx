@@ -30,7 +30,8 @@ export function ThreadReplyIndicator(props: {
   return (
     <div
       class={cn(
-        'flex flex-row gap-2 items-center justify-between pb-2 pt-2 text-xs w-full max-w-fit border-edge-muted border pr-2 select-none hover:bg-hover focus:bracket-offset-2', props.isParentNewMessage && 'border-accent'
+        'flex flex-row gap-2 items-center justify-between pb-2 pt-2 text-xs w-full max-w-fit border-edge-muted border pr-2 select-none hover:bg-hover focus:bracket-offset-2',
+        props.isParentNewMessage && 'border-accent'
       )}
       onClick={props.onClick}
       onKeyDown={onKeyDownClick(props.onClick)}
