@@ -4,6 +4,8 @@
  * static_file_service
  * OpenAPI spec version: 0.1.0
  */
+
+import { customFetch } from '../../dateConverter';
 import type {
   BulkDeleteRequest,
   BulkDeleteResponse,
@@ -12,7 +14,6 @@ import type {
   PutFileRequest,
   PutFileResponse,
 } from './schemas';
-
 export type putPresignedUrlResponse200 = {
   data: PutFileResponse;
   status: 200;
@@ -50,21 +51,12 @@ export const putPresignedUrl = async (
   putFileRequest: PutFileRequest,
   options?: RequestInit
 ): Promise<putPresignedUrlResponse> => {
-  const res = await fetch(getPutPresignedUrlUrl(), {
+  return customFetch<putPresignedUrlResponse>(getPutPresignedUrlUrl(), {
     ...options,
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(putFileRequest),
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: putPresignedUrlResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as putPresignedUrlResponse;
 };
 
 /**
@@ -120,23 +112,15 @@ export const handleBulkDeleteFile = async (
   bulkDeleteRequest: BulkDeleteRequest,
   options?: RequestInit
 ): Promise<handleBulkDeleteFileResponse> => {
-  const res = await fetch(getHandleBulkDeleteFileUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(bulkDeleteRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: handleBulkDeleteFileResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as handleBulkDeleteFileResponse;
+  return customFetch<handleBulkDeleteFileResponse>(
+    getHandleBulkDeleteFileUrl(),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(bulkDeleteRequest),
+    }
+  );
 };
 
 export type handleGetMetadataResponse200 = {
@@ -176,19 +160,13 @@ export const handleGetMetadata = async (
   fileId: string,
   options?: RequestInit
 ): Promise<handleGetMetadataResponse> => {
-  const res = await fetch(getHandleGetMetadataUrl(fileId), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: handleGetMetadataResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as handleGetMetadataResponse;
+  return customFetch<handleGetMetadataResponse>(
+    getHandleGetMetadataUrl(fileId),
+    {
+      ...options,
+      method: 'GET',
+    }
+  );
 };
 
 export type handleDeleteFileResponse200 = {
@@ -234,19 +212,10 @@ export const handleDeleteFile = async (
   fileId: string,
   options?: RequestInit
 ): Promise<handleDeleteFileResponse> => {
-  const res = await fetch(getHandleDeleteFileUrl(fileId), {
+  return customFetch<handleDeleteFileResponse>(getHandleDeleteFileUrl(fileId), {
     ...options,
     method: 'DELETE',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: handleDeleteFileResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as handleDeleteFileResponse;
 };
 
 export type getFileDocumentationResponse200 = {
@@ -280,19 +249,11 @@ export const getFileDocumentation = async (
   fileId: string,
   options?: RequestInit
 ): Promise<getFileDocumentationResponse> => {
-  const res = await fetch(getGetFileDocumentationUrl(fileId), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getFileDocumentationResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getFileDocumentationResponse;
+  return customFetch<getFileDocumentationResponse>(
+    getGetFileDocumentationUrl(fileId),
+    {
+      ...options,
+      method: 'GET',
+    }
+  );
 };

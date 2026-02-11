@@ -4,12 +4,13 @@
  * connection_gateway
  * OpenAPI spec version: 0.1.0
  */
+
+import { customFetch } from '../../dateConverter';
 import type {
   BatchSendMessageBody,
   SendMessageBody,
   SendMessageResponse,
 } from './schemas';
-
 export type batchSendMessageHandlerResponse200 = {
   data: SendMessageResponse;
   status: 200;
@@ -41,23 +42,15 @@ export const batchSendMessageHandler = async (
   batchSendMessageBody: BatchSendMessageBody,
   options?: RequestInit
 ): Promise<batchSendMessageHandlerResponse> => {
-  const res = await fetch(getBatchSendMessageHandlerUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(batchSendMessageBody),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: batchSendMessageHandlerResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as batchSendMessageHandlerResponse;
+  return customFetch<batchSendMessageHandlerResponse>(
+    getBatchSendMessageHandlerUrl(),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(batchSendMessageBody),
+    }
+  );
 };
 
 export type sendMessageHandlerResponse201 = {
@@ -109,21 +102,15 @@ export const sendMessageHandler = async (
   sendMessageBody: SendMessageBody,
   options?: RequestInit
 ): Promise<sendMessageHandlerResponse> => {
-  const res = await fetch(getSendMessageHandlerUrl(entityType, entityId), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(sendMessageBody),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: sendMessageHandlerResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as sendMessageHandlerResponse;
+  return customFetch<sendMessageHandlerResponse>(
+    getSendMessageHandlerUrl(entityType, entityId),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(sendMessageBody),
+    }
+  );
 };
 
 export type getEntityHandlerResponse200 = {
@@ -167,17 +154,11 @@ export const getEntityHandler = async (
   entityId: string,
   options?: RequestInit
 ): Promise<getEntityHandlerResponse> => {
-  const res = await fetch(getGetEntityHandlerUrl(entityType, entityId), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getEntityHandlerResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getEntityHandlerResponse;
+  return customFetch<getEntityHandlerResponse>(
+    getGetEntityHandlerUrl(entityType, entityId),
+    {
+      ...options,
+      method: 'GET',
+    }
+  );
 };

@@ -4,6 +4,8 @@
  * comms_service
  * OpenAPI spec version: 0.1.0
  */
+
+import { customFetch } from '../../dateConverter';
 import type {
   Activity,
   AddParticipantsRequest,
@@ -36,7 +38,6 @@ import type {
   PostTypingRequest,
   RemoveParticipantsRequest,
 } from './models';
-
 export type getActivityResponse200 = {
   data: ApiActivity[];
   status: 200;
@@ -79,19 +80,10 @@ export const getGetActivityUrl = () => {
 export const getActivity = async (
   options?: RequestInit
 ): Promise<getActivityResponse> => {
-  const res = await fetch(getGetActivityUrl(), {
+  return customFetch<getActivityResponse>(getGetActivityUrl(), {
     ...options,
     method: 'GET',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getActivityResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getActivityResponse;
 };
 
 export type getChannelsResponse200 = {
@@ -136,19 +128,10 @@ export const getGetChannelsUrl = () => {
 export const getChannels = async (
   options?: RequestInit
 ): Promise<getChannelsResponse> => {
-  const res = await fetch(getGetChannelsUrl(), {
+  return customFetch<getChannelsResponse>(getGetChannelsUrl(), {
     ...options,
     method: 'GET',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getChannelsResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getChannelsResponse;
 };
 
 export type postActivityResponse200 = {
@@ -194,21 +177,12 @@ export const postActivity = async (
   postActivityRequest: PostActivityRequest,
   options?: RequestInit
 ): Promise<postActivityResponse> => {
-  const res = await fetch(getPostActivityUrl(), {
+  return customFetch<postActivityResponse>(getPostActivityUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(postActivityRequest),
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: postActivityResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as postActivityResponse;
 };
 
 export type getAttachmentReferencesResponse200 = {
@@ -259,21 +233,13 @@ export const getAttachmentReferences = async (
   entityId: string,
   options?: RequestInit
 ): Promise<getAttachmentReferencesResponse> => {
-  const res = await fetch(getGetAttachmentReferencesUrl(entityType, entityId), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getAttachmentReferencesResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getAttachmentReferencesResponse;
+  return customFetch<getAttachmentReferencesResponse>(
+    getGetAttachmentReferencesUrl(entityType, entityId),
+    {
+      ...options,
+      method: 'GET',
+    }
+  );
 };
 
 export type createChannelResponse201 = {
@@ -325,21 +291,12 @@ export const createChannel = async (
   createChannelRequest: CreateChannelRequest,
   options?: RequestInit
 ): Promise<createChannelResponse> => {
-  const res = await fetch(getCreateChannelUrl(), {
+  return customFetch<createChannelResponse>(getCreateChannelUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(createChannelRequest),
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: createChannelResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as createChannelResponse;
 };
 
 /**
@@ -394,21 +351,12 @@ export const getOrCreateDm = async (
   getOrCreateDmRequest: GetOrCreateDmRequest,
   options?: RequestInit
 ): Promise<getOrCreateDmResponse> => {
-  const res = await fetch(getGetOrCreateDmUrl(), {
+  return customFetch<getOrCreateDmResponse>(getGetOrCreateDmUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(getOrCreateDmRequest),
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getOrCreateDmResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getOrCreateDmResponse;
 };
 
 /**
@@ -464,21 +412,12 @@ export const getOrCreatePrivate = async (
   getOrCreatePrivateRequest: GetOrCreatePrivateRequest,
   options?: RequestInit
 ): Promise<getOrCreatePrivateResponse> => {
-  const res = await fetch(getGetOrCreatePrivateUrl(), {
+  return customFetch<getOrCreatePrivateResponse>(getGetOrCreatePrivateUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(getOrCreatePrivateRequest),
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getOrCreatePrivateResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getOrCreatePrivateResponse;
 };
 
 export type getMessageWithContextResponse200 = {
@@ -539,21 +478,13 @@ export const getMessageWithContext = async (
   params: GetMessageWithContextParams,
   options?: RequestInit
 ): Promise<getMessageWithContextResponse> => {
-  const res = await fetch(getGetMessageWithContextUrl(params), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getMessageWithContextResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getMessageWithContextResponse;
+  return customFetch<getMessageWithContextResponse>(
+    getGetMessageWithContextUrl(params),
+    {
+      ...options,
+      method: 'GET',
+    }
+  );
 };
 
 export type getChannelResponse200 = {
@@ -615,19 +546,10 @@ export const getChannel = async (
   params?: GetChannelParams,
   options?: RequestInit
 ): Promise<getChannelResponse> => {
-  const res = await fetch(getGetChannelUrl(channelId, params), {
+  return customFetch<getChannelResponse>(getGetChannelUrl(channelId, params), {
     ...options,
     method: 'GET',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getChannelResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getChannelResponse;
 };
 
 export type deleteChannelResponse204 = {
@@ -673,19 +595,10 @@ export const deleteChannel = async (
   channelId: string,
   options?: RequestInit
 ): Promise<deleteChannelResponse> => {
-  const res = await fetch(getDeleteChannelUrl(channelId), {
+  return customFetch<deleteChannelResponse>(getDeleteChannelUrl(channelId), {
     ...options,
     method: 'DELETE',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: deleteChannelResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as deleteChannelResponse;
 };
 
 export type patchChannelResponse200 = {
@@ -718,21 +631,12 @@ export const patchChannel = async (
   patchChannelOptions: PatchChannelOptions,
   options?: RequestInit
 ): Promise<patchChannelResponse> => {
-  const res = await fetch(getPatchChannelUrl(channelId), {
+  return customFetch<patchChannelResponse>(getPatchChannelUrl(channelId), {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(patchChannelOptions),
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: patchChannelResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as patchChannelResponse;
 };
 
 /**
@@ -781,19 +685,10 @@ export const joinChannel = async (
   channelId: string,
   options?: RequestInit
 ): Promise<joinChannelResponse> => {
-  const res = await fetch(getJoinChannelUrl(channelId), {
+  return customFetch<joinChannelResponse>(getJoinChannelUrl(channelId), {
     ...options,
     method: 'POST',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: joinChannelResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as joinChannelResponse;
 };
 
 /**
@@ -842,19 +737,10 @@ export const leaveChannel = async (
   channelId: string,
   options?: RequestInit
 ): Promise<leaveChannelResponse> => {
-  const res = await fetch(getLeaveChannelUrl(channelId), {
+  return customFetch<leaveChannelResponse>(getLeaveChannelUrl(channelId), {
     ...options,
     method: 'POST',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: leaveChannelResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as leaveChannelResponse;
 };
 
 export type getMentionsForChannelResponse200 = {
@@ -901,21 +787,13 @@ export const getMentionsForChannel = async (
   channelId: string,
   options?: RequestInit
 ): Promise<getMentionsForChannelResponse> => {
-  const res = await fetch(getGetMentionsForChannelUrl(channelId), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getMentionsForChannelResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getMentionsForChannelResponse;
+  return customFetch<getMentionsForChannelResponse>(
+    getGetMentionsForChannelUrl(channelId),
+    {
+      ...options,
+      method: 'GET',
+    }
+  );
 };
 
 export type postMessageResponse201 = {
@@ -962,21 +840,12 @@ export const postMessage = async (
   postMessageRequest: PostMessageRequest,
   options?: RequestInit
 ): Promise<postMessageResponse> => {
-  const res = await fetch(getPostMessageUrl(channelId), {
+  return customFetch<postMessageResponse>(getPostMessageUrl(channelId), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(postMessageRequest),
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: postMessageResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as postMessageResponse;
 };
 
 export type deleteMessageResponse201 = {
@@ -1023,19 +892,13 @@ export const deleteMessage = async (
   messageId: string,
   options?: RequestInit
 ): Promise<deleteMessageResponse> => {
-  const res = await fetch(getDeleteMessageUrl(channelId, messageId), {
-    ...options,
-    method: 'DELETE',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: deleteMessageResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as deleteMessageResponse;
+  return customFetch<deleteMessageResponse>(
+    getDeleteMessageUrl(channelId, messageId),
+    {
+      ...options,
+      method: 'DELETE',
+    }
+  );
 };
 
 export type patchMessageResponse201 = {
@@ -1083,21 +946,15 @@ export const patchMessage = async (
   patchMessageRequest: PatchMessageRequest,
   options?: RequestInit
 ): Promise<patchMessageResponse> => {
-  const res = await fetch(getPatchMessageUrl(channelId, messageId), {
-    ...options,
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(patchMessageRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: patchMessageResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as patchMessageResponse;
+  return customFetch<patchMessageResponse>(
+    getPatchMessageUrl(channelId, messageId),
+    {
+      ...options,
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(patchMessageRequest),
+    }
+  );
 };
 
 /**
@@ -1147,21 +1004,15 @@ export const addParticipants = async (
   addParticipantsRequest: AddParticipantsRequest,
   options?: RequestInit
 ): Promise<addParticipantsResponse> => {
-  const res = await fetch(getAddParticipantsUrl(channelId), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(addParticipantsRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: addParticipantsResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as addParticipantsResponse;
+  return customFetch<addParticipantsResponse>(
+    getAddParticipantsUrl(channelId),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(addParticipantsRequest),
+    }
+  );
 };
 
 /**
@@ -1212,21 +1063,15 @@ export const removeParticipants = async (
   removeParticipantsRequest: RemoveParticipantsRequest,
   options?: RequestInit
 ): Promise<removeParticipantsResponse> => {
-  const res = await fetch(getRemoveParticipantsUrl(channelId), {
-    ...options,
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(removeParticipantsRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: removeParticipantsResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as removeParticipantsResponse;
+  return customFetch<removeParticipantsResponse>(
+    getRemoveParticipantsUrl(channelId),
+    {
+      ...options,
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(removeParticipantsRequest),
+    }
+  );
 };
 
 export type postReactionResponse201 = {
@@ -1273,21 +1118,12 @@ export const postReaction = async (
   postReactionRequest: PostReactionRequest,
   options?: RequestInit
 ): Promise<postReactionResponse> => {
-  const res = await fetch(getPostReactionUrl(channelId), {
+  return customFetch<postReactionResponse>(getPostReactionUrl(channelId), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(postReactionRequest),
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: postReactionResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as postReactionResponse;
 };
 
 export type postTypingResponse201 = {
@@ -1334,21 +1170,12 @@ export const postTyping = async (
   postTypingRequest: PostTypingRequest,
   options?: RequestInit
 ): Promise<postTypingResponse> => {
-  const res = await fetch(getPostTypingUrl(channelId), {
+  return customFetch<postTypingResponse>(getPostTypingUrl(channelId), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(postTypingRequest),
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: postTypingResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as postTypingResponse;
 };
 
 export type createMentionHandlerResponse201 = {
@@ -1389,23 +1216,15 @@ export const createMentionHandler = async (
   createEntityMentionRequest: CreateEntityMentionRequest,
   options?: RequestInit
 ): Promise<createMentionHandlerResponse> => {
-  const res = await fetch(getCreateMentionHandlerUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(createEntityMentionRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: createMentionHandlerResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as createMentionHandlerResponse;
+  return customFetch<createMentionHandlerResponse>(
+    getCreateMentionHandlerUrl(),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(createEntityMentionRequest),
+    }
+  );
 };
 
 export type deleteMentionHandlerResponse200 = {
@@ -1458,21 +1277,13 @@ export const deleteMentionHandler = async (
   mentionId: string,
   options?: RequestInit
 ): Promise<deleteMentionHandlerResponse> => {
-  const res = await fetch(getDeleteMentionHandlerUrl(mentionId), {
-    ...options,
-    method: 'DELETE',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: deleteMentionHandlerResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as deleteMentionHandlerResponse;
+  return customFetch<deleteMentionHandlerResponse>(
+    getDeleteMentionHandlerUrl(mentionId),
+    {
+      ...options,
+      method: 'DELETE',
+    }
+  );
 };
 
 export type getBatchChannelPreviewResponse200 = {
@@ -1519,21 +1330,13 @@ export const getBatchChannelPreview = async (
   getBatchChannelPreviewRequest: GetBatchChannelPreviewRequest,
   options?: RequestInit
 ): Promise<getBatchChannelPreviewResponse> => {
-  const res = await fetch(getGetBatchChannelPreviewUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(getBatchChannelPreviewRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getBatchChannelPreviewResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getBatchChannelPreviewResponse;
+  return customFetch<getBatchChannelPreviewResponse>(
+    getGetBatchChannelPreviewUrl(),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(getBatchChannelPreviewRequest),
+    }
+  );
 };

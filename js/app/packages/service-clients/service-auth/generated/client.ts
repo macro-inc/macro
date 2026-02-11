@@ -4,6 +4,8 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
+
+import { customFetch } from '../../dateConverter';
 import type {
   AppleLoginRequest,
   CreateAccountMergeRequest,
@@ -50,7 +52,6 @@ import type {
   UserQuota,
   UserTokensResponse,
 } from './schemas';
-
 /**
  * @summary Verifies the user's primary email for FusionAuth
  */
@@ -85,21 +86,13 @@ export const verifyFusionauthUserEmail = async (
   verificationId: string,
   options?: RequestInit
 ): Promise<verifyFusionauthUserEmailResponse> => {
-  const res = await fetch(getVerifyFusionauthUserEmailUrl(verificationId), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: verifyFusionauthUserEmailResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as verifyFusionauthUserEmailResponse;
+  return customFetch<verifyFusionauthUserEmailResponse>(
+    getVerifyFusionauthUserEmailUrl(verificationId),
+    {
+      ...options,
+      method: 'GET',
+    }
+  );
 };
 
 /**
@@ -136,23 +129,15 @@ export const resendFusionauthVerifyUserEmail = async (
   resendFusionauthVerifyUserEmailRequest: ResendFusionauthVerifyUserEmailRequest,
   options?: RequestInit
 ): Promise<resendFusionauthVerifyUserEmailResponse> => {
-  const res = await fetch(getResendFusionauthVerifyUserEmailUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(resendFusionauthVerifyUserEmailRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: resendFusionauthVerifyUserEmailResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as resendFusionauthVerifyUserEmailResponse;
+  return customFetch<resendFusionauthVerifyUserEmailResponse>(
+    getResendFusionauthVerifyUserEmailUrl(),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(resendFusionauthVerifyUserEmailRequest),
+    }
+  );
 };
 
 /**
@@ -195,21 +180,12 @@ export const generateEmailLink = async (
   generateEmailLinkRequest: GenerateEmailLinkRequest,
   options?: RequestInit
 ): Promise<generateEmailLinkResponse> => {
-  const res = await fetch(getGenerateEmailLinkUrl(), {
+  return customFetch<generateEmailLinkResponse>(getGenerateEmailLinkUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(generateEmailLinkRequest),
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: generateEmailLinkResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as generateEmailLinkResponse;
 };
 
 /**
@@ -244,19 +220,13 @@ export const verifyEmailLink = async (
   verificationId: string,
   options?: RequestInit
 ): Promise<verifyEmailLinkResponse> => {
-  const res = await fetch(getVerifyEmailLinkUrl(verificationId), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: verifyEmailLinkResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as verifyEmailLinkResponse;
+  return customFetch<verifyEmailLinkResponse>(
+    getVerifyEmailLinkUrl(verificationId),
+    {
+      ...options,
+      method: 'GET',
+    }
+  );
 };
 
 /**
@@ -280,19 +250,10 @@ export const getHealthHandlerUrl = () => {
 export const healthHandler = async (
   options?: RequestInit
 ): Promise<healthHandlerResponse> => {
-  const res = await fetch(getHealthHandlerUrl(), {
+  return customFetch<healthHandlerResponse>(getHealthHandlerUrl(), {
     ...options,
     method: 'GET',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: healthHandlerResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as healthHandlerResponse;
 };
 
 /**
@@ -351,19 +312,10 @@ export const macroApiToken = async (
   params: MacroApiTokenParams,
   options?: RequestInit
 ): Promise<macroApiTokenResponse> => {
-  const res = await fetch(getMacroApiTokenUrl(params), {
+  return customFetch<macroApiTokenResponse>(getMacroApiTokenUrl(params), {
     ...options,
     method: 'GET',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: macroApiTokenResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as macroApiTokenResponse;
 };
 
 /**
@@ -420,15 +372,10 @@ export const getRefreshUrl = () => {
 export const refresh = async (
   options?: RequestInit
 ): Promise<refreshResponse> => {
-  const res = await fetch(getRefreshUrl(), {
+  return customFetch<refreshResponse>(getRefreshUrl(), {
     ...options,
     method: 'POST',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: refreshResponse['data'] = body ? JSON.parse(body) : {};
-  return { data, status: res.status, headers: res.headers } as refreshResponse;
 };
 
 /**
@@ -483,21 +430,13 @@ export const getCreateInProgressLinkUrl = () => {
 export const createInProgressLink = async (
   options?: RequestInit
 ): Promise<createInProgressLinkResponse> => {
-  const res = await fetch(getCreateInProgressLinkUrl(), {
-    ...options,
-    method: 'POST',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: createInProgressLinkResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as createInProgressLinkResponse;
+  return customFetch<createInProgressLinkResponse>(
+    getCreateInProgressLinkUrl(),
+    {
+      ...options,
+      method: 'POST',
+    }
+  );
 };
 
 /**
@@ -546,21 +485,12 @@ export const appleLogin = async (
   appleLoginRequest: AppleLoginRequest,
   options?: RequestInit
 ): Promise<appleLoginResponse> => {
-  const res = await fetch(getAppleLoginUrl(), {
+  return customFetch<appleLoginResponse>(getAppleLoginUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(appleLoginRequest),
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: appleLoginResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as appleLoginResponse;
 };
 
 /**
@@ -609,21 +539,12 @@ export const passwordLogin = async (
   passwordRequest: PasswordRequest,
   options?: RequestInit
 ): Promise<passwordLoginResponse> => {
-  const res = await fetch(getPasswordLoginUrl(), {
+  return customFetch<passwordLoginResponse>(getPasswordLoginUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(passwordRequest),
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: passwordLoginResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as passwordLoginResponse;
 };
 
 /**
@@ -680,21 +601,12 @@ export const passwordlessLogin = async (
   passwordlessRequest: PasswordlessRequest,
   options?: RequestInit
 ): Promise<passwordlessLoginResponse> => {
-  const res = await fetch(getPasswordlessLoginUrl(), {
+  return customFetch<passwordlessLoginResponse>(getPasswordlessLoginUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(passwordlessRequest),
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: passwordlessLoginResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as passwordlessLoginResponse;
 };
 
 /**
@@ -747,15 +659,10 @@ export const ssoLogin = async (
   params: SsoLoginParams,
   options?: RequestInit
 ): Promise<ssoLoginResponse> => {
-  const res = await fetch(getSsoLoginUrl(params), {
+  return customFetch<ssoLoginResponse>(getSsoLoginUrl(params), {
     ...options,
     method: 'GET',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: ssoLoginResponse['data'] = body ? JSON.parse(body) : {};
-  return { data, status: res.status, headers: res.headers } as ssoLoginResponse;
 };
 
 /**
@@ -779,15 +686,10 @@ export const getLogoutUrl = () => {
 export const logout = async (
   options?: RequestInit
 ): Promise<logoutResponse> => {
-  const res = await fetch(getLogoutUrl(), {
+  return customFetch<logoutResponse>(getLogoutUrl(), {
     ...options,
     method: 'POST',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: logoutResponse['data'] = body ? JSON.parse(body) : {};
-  return { data, status: res.status, headers: res.headers } as logoutResponse;
 };
 
 /**
@@ -846,21 +748,12 @@ export const createMergeRequest = async (
   createAccountMergeRequest: CreateAccountMergeRequest,
   options?: RequestInit
 ): Promise<createMergeRequestResponse> => {
-  const res = await fetch(getCreateMergeRequestUrl(), {
+  return customFetch<createMergeRequestResponse>(getCreateMergeRequestUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(createAccountMergeRequest),
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: createMergeRequestResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as createMergeRequestResponse;
 };
 
 /**
@@ -904,19 +797,13 @@ export const verifyMergeRequest = async (
   code: string,
   options?: RequestInit
 ): Promise<verifyMergeRequestResponse> => {
-  const res = await fetch(getVerifyMergeRequestUrl(code), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: verifyMergeRequestResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as verifyMergeRequestResponse;
+  return customFetch<verifyMergeRequestResponse>(
+    getVerifyMergeRequestUrl(code),
+    {
+      ...options,
+      method: 'GET',
+    }
+  );
 };
 
 /**
@@ -982,21 +869,13 @@ export const passwordlessCallback = async (
   params: PasswordlessCallbackParams,
   options?: RequestInit
 ): Promise<passwordlessCallbackResponse> => {
-  const res = await fetch(getPasswordlessCallbackUrl(code, params), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: passwordlessCallbackResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as passwordlessCallbackResponse;
+  return customFetch<passwordlessCallbackResponse>(
+    getPasswordlessCallbackUrl(code, params),
+    {
+      ...options,
+      method: 'GET',
+    }
+  );
 };
 
 /**
@@ -1044,19 +923,10 @@ export const getOauthRedirectUrl = () => {
 export const oauthRedirect = async (
   options?: RequestInit
 ): Promise<oauthRedirectResponse> => {
-  const res = await fetch(getOauthRedirectUrl(), {
+  return customFetch<oauthRedirectResponse>(getOauthRedirectUrl(), {
     ...options,
     method: 'GET',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: oauthRedirectResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as oauthRedirectResponse;
 };
 
 /**
@@ -1117,19 +987,10 @@ export const oauth2Callback = async (
   provider: string,
   options?: RequestInit
 ): Promise<oauth2CallbackResponse> => {
-  const res = await fetch(getOauth2CallbackUrl(provider), {
+  return customFetch<oauth2CallbackResponse>(getOauth2CallbackUrl(provider), {
     ...options,
     method: 'GET',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: oauth2CallbackResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as oauth2CallbackResponse;
 };
 
 /**
@@ -1171,19 +1032,10 @@ export const getGetPermissionsUrl = () => {
 export const getPermissions = async (
   options?: RequestInit
 ): Promise<getPermissionsResponse> => {
-  const res = await fetch(getGetPermissionsUrl(), {
+  return customFetch<getPermissionsResponse>(getGetPermissionsUrl(), {
     ...options,
     method: 'GET',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getPermissionsResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getPermissionsResponse;
 };
 
 /**
@@ -1226,19 +1078,10 @@ export const getGetUserPermissionsUrl = () => {
 export const getUserPermissions = async (
   options?: RequestInit
 ): Promise<getUserPermissionsResponse> => {
-  const res = await fetch(getGetUserPermissionsUrl(), {
+  return customFetch<getUserPermissionsResponse>(getGetUserPermissionsUrl(), {
     ...options,
     method: 'GET',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getUserPermissionsResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getUserPermissionsResponse;
 };
 
 /**
@@ -1280,19 +1123,10 @@ export const getSessionCreationUrl = () => {
 export const sessionCreation = async (
   options?: RequestInit
 ): Promise<sessionCreationResponse> => {
-  const res = await fetch(getSessionCreationUrl(), {
+  return customFetch<sessionCreationResponse>(getSessionCreationUrl(), {
     ...options,
     method: 'POST',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: sessionCreationResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as sessionCreationResponse;
 };
 
 /**
@@ -1341,19 +1175,10 @@ export const sessionLogin = async (
   sessionCode: string,
   options?: RequestInit
 ): Promise<sessionLoginResponse> => {
-  const res = await fetch(getSessionLoginUrl(sessionCode), {
+  return customFetch<sessionLoginResponse>(getSessionLoginUrl(sessionCode), {
     ...options,
     method: 'GET',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: sessionLoginResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as sessionLoginResponse;
 };
 
 /**
@@ -1396,21 +1221,12 @@ export const createTeam = async (
   createTeamRequest: CreateTeamRequest,
   options?: RequestInit
 ): Promise<createTeamResponse> => {
-  const res = await fetch(getCreateTeamUrl(), {
+  return customFetch<createTeamResponse>(getCreateTeamUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(createTeamRequest),
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: createTeamResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as createTeamResponse;
 };
 
 /**
@@ -1457,15 +1273,10 @@ export const joinTeam = async (
   teamInviteId: string,
   options?: RequestInit
 ): Promise<joinTeamResponse> => {
-  const res = await fetch(getJoinTeamUrl(teamInviteId), {
+  return customFetch<joinTeamResponse>(getJoinTeamUrl(teamInviteId), {
     ...options,
     method: 'GET',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: joinTeamResponse['data'] = body ? JSON.parse(body) : {};
-  return { data, status: res.status, headers: res.headers } as joinTeamResponse;
 };
 
 /**
@@ -1514,19 +1325,13 @@ export const rejectInvitation = async (
   teamInviteId: string,
   options?: RequestInit
 ): Promise<rejectInvitationResponse> => {
-  const res = await fetch(getRejectInvitationUrl(teamInviteId), {
-    ...options,
-    method: 'DELETE',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: rejectInvitationResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as rejectInvitationResponse;
+  return customFetch<rejectInvitationResponse>(
+    getRejectInvitationUrl(teamInviteId),
+    {
+      ...options,
+      method: 'DELETE',
+    }
+  );
 };
 
 /**
@@ -1574,19 +1379,10 @@ export const getGetUserTeamsUrl = () => {
 export const getUserTeams = async (
   options?: RequestInit
 ): Promise<getUserTeamsResponse> => {
-  const res = await fetch(getGetUserTeamsUrl(), {
+  return customFetch<getUserTeamsResponse>(getGetUserTeamsUrl(), {
     ...options,
     method: 'GET',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getUserTeamsResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getUserTeamsResponse;
 };
 
 /**
@@ -1634,19 +1430,10 @@ export const getGetUserInvitesUrl = () => {
 export const getUserInvites = async (
   options?: RequestInit
 ): Promise<getUserInvitesResponse> => {
-  const res = await fetch(getGetUserInvitesUrl(), {
+  return customFetch<getUserInvitesResponse>(getGetUserInvitesUrl(), {
     ...options,
     method: 'GET',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getUserInvitesResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getUserInvitesResponse;
 };
 
 /**
@@ -1699,15 +1486,10 @@ export const getTeam = async (
   teamId: string,
   options?: RequestInit
 ): Promise<getTeamResponse> => {
-  const res = await fetch(getGetTeamUrl(teamId), {
+  return customFetch<getTeamResponse>(getGetTeamUrl(teamId), {
     ...options,
     method: 'GET',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getTeamResponse['data'] = body ? JSON.parse(body) : {};
-  return { data, status: res.status, headers: res.headers } as getTeamResponse;
 };
 
 /**
@@ -1758,19 +1540,10 @@ export const deleteTeam = async (
   teamId: string,
   options?: RequestInit
 ): Promise<deleteTeamResponse> => {
-  const res = await fetch(getDeleteTeamUrl(teamId), {
+  return customFetch<deleteTeamResponse>(getDeleteTeamUrl(teamId), {
     ...options,
     method: 'DELETE',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: deleteTeamResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as deleteTeamResponse;
 };
 
 /**
@@ -1826,21 +1599,12 @@ export const patchTeam = async (
   patchTeamRequest: PatchTeamRequest,
   options?: RequestInit
 ): Promise<patchTeamResponse> => {
-  const res = await fetch(getPatchTeamUrl(teamId), {
+  return customFetch<patchTeamResponse>(getPatchTeamUrl(teamId), {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(patchTeamRequest),
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: patchTeamResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as patchTeamResponse;
 };
 
 /**
@@ -1902,21 +1666,12 @@ export const inviteToTeam = async (
   inviteToTeamRequest: InviteToTeamRequest,
   options?: RequestInit
 ): Promise<inviteToTeamResponse> => {
-  const res = await fetch(getInviteToTeamUrl(teamId), {
+  return customFetch<inviteToTeamResponse>(getInviteToTeamUrl(teamId), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(inviteToTeamRequest),
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: inviteToTeamResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as inviteToTeamResponse;
 };
 
 /**
@@ -1965,19 +1720,10 @@ export const getTeamInvites = async (
   teamId: string,
   options?: RequestInit
 ): Promise<getTeamInvitesResponse> => {
-  const res = await fetch(getGetTeamInvitesUrl(teamId), {
+  return customFetch<getTeamInvitesResponse>(getGetTeamInvitesUrl(teamId), {
     ...options,
     method: 'GET',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getTeamInvitesResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getTeamInvitesResponse;
 };
 
 /**
@@ -2033,19 +1779,13 @@ export const reinviteToTeam = async (
   teamInviteId: string,
   options?: RequestInit
 ): Promise<reinviteToTeamResponse> => {
-  const res = await fetch(getReinviteToTeamUrl(teamId, teamInviteId), {
-    ...options,
-    method: 'POST',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: reinviteToTeamResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as reinviteToTeamResponse;
+  return customFetch<reinviteToTeamResponse>(
+    getReinviteToTeamUrl(teamId, teamInviteId),
+    {
+      ...options,
+      method: 'POST',
+    }
+  );
 };
 
 /**
@@ -2105,19 +1845,13 @@ export const removeUserFromTeam = async (
   removeUserId: string,
   options?: RequestInit
 ): Promise<removeUserFromTeamResponse> => {
-  const res = await fetch(getRemoveUserFromTeamUrl(teamId, removeUserId), {
-    ...options,
-    method: 'DELETE',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: removeUserFromTeamResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as removeUserFromTeamResponse;
+  return customFetch<removeUserFromTeamResponse>(
+    getRemoveUserFromTeamUrl(teamId, removeUserId),
+    {
+      ...options,
+      method: 'DELETE',
+    }
+  );
 };
 
 /**
@@ -2160,21 +1894,12 @@ export const createUser = async (
   createUserRequest: CreateUserRequest,
   options?: RequestInit
 ): Promise<createUserResponse> => {
-  const res = await fetch(getCreateUserUrl(), {
+  return customFetch<createUserResponse>(getCreateUserUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(createUserRequest),
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: createUserResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as createUserResponse;
 };
 
 /**
@@ -2217,21 +1942,12 @@ export const getUserNames = async (
   postGetNamesRequestBody: PostGetNamesRequestBody,
   options?: RequestInit
 ): Promise<getUserNamesResponse> => {
-  const res = await fetch(getGetUserNamesUrl(), {
+  return customFetch<getUserNamesResponse>(getGetUserNamesUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(postGetNamesRequestBody),
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getUserNamesResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getUserNamesResponse;
 };
 
 /**
@@ -2281,23 +1997,15 @@ export const getUserNamesWithEmail = async (
   getNamesWithEmailRequestBody: GetNamesWithEmailRequestBody,
   options?: RequestInit
 ): Promise<getUserNamesWithEmailResponse> => {
-  const res = await fetch(getGetUserNamesWithEmailUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(getNamesWithEmailRequestBody),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getUserNamesWithEmailResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getUserNamesWithEmailResponse;
+  return customFetch<getUserNamesWithEmailResponse>(
+    getGetUserNamesWithEmailUrl(),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(getNamesWithEmailRequestBody),
+    }
+  );
 };
 
 /**
@@ -2346,21 +2054,12 @@ export const patchUserGroup = async (
   patchUserGroupRequest: PatchUserGroupRequest,
   options?: RequestInit
 ): Promise<patchUserGroupResponse> => {
-  const res = await fetch(getPatchUserGroupUrl(), {
+  return customFetch<patchUserGroupResponse>(getPatchUserGroupUrl(), {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(patchUserGroupRequest),
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: patchUserGroupResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as patchUserGroupResponse;
 };
 
 /**
@@ -2406,21 +2105,13 @@ export const getGetLegacyUserPermissionsUrl = () => {
 export const getLegacyUserPermissions = async (
   options?: RequestInit
 ): Promise<getLegacyUserPermissionsResponse> => {
-  const res = await fetch(getGetLegacyUserPermissionsUrl(), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getLegacyUserPermissionsResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getLegacyUserPermissionsResponse;
+  return customFetch<getLegacyUserPermissionsResponse>(
+    getGetLegacyUserPermissionsUrl(),
+    {
+      ...options,
+      method: 'GET',
+    }
+  );
 };
 
 /**
@@ -2481,19 +2172,13 @@ export const getUserLinkExists = async (
   params: GetUserLinkExistsParams,
   options?: RequestInit
 ): Promise<getUserLinkExistsResponse> => {
-  const res = await fetch(getGetUserLinkExistsUrl(params), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getUserLinkExistsResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getUserLinkExistsResponse;
+  return customFetch<getUserLinkExistsResponse>(
+    getGetUserLinkExistsUrl(params),
+    {
+      ...options,
+      method: 'GET',
+    }
+  );
 };
 
 /**
@@ -2535,19 +2220,10 @@ export const getGetUserInfoUrl = () => {
 export const getUserInfo = async (
   options?: RequestInit
 ): Promise<getUserInfoResponse> => {
-  const res = await fetch(getGetUserInfoUrl(), {
+  return customFetch<getUserInfoResponse>(getGetUserInfoUrl(), {
     ...options,
     method: 'GET',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getUserInfoResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getUserInfoResponse;
 };
 
 /**
@@ -2589,19 +2265,10 @@ export const getDeleteUserUrl = () => {
 export const deleteUser = async (
   options?: RequestInit
 ): Promise<deleteUserResponse> => {
-  const res = await fetch(getDeleteUserUrl(), {
+  return customFetch<deleteUserResponse>(getDeleteUserUrl(), {
     ...options,
     method: 'DELETE',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: deleteUserResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as deleteUserResponse;
 };
 
 /**
@@ -2643,19 +2310,10 @@ export const getGetUserNameUrl = () => {
 export const getUserName = async (
   options?: RequestInit
 ): Promise<getUserNameResponse> => {
-  const res = await fetch(getGetUserNameUrl(), {
+  return customFetch<getUserNameResponse>(getGetUserNameUrl(), {
     ...options,
     method: 'GET',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getUserNameResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getUserNameResponse;
 };
 
 /**
@@ -2710,19 +2368,10 @@ export const putUserName = async (
   params?: PutUserNameParams,
   options?: RequestInit
 ): Promise<putUserNameResponse> => {
-  const res = await fetch(getPutUserNameUrl(params), {
+  return customFetch<putUserNameResponse>(getPutUserNameUrl(params), {
     ...options,
     method: 'PUT',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: putUserNameResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as putUserNameResponse;
 };
 
 /**
@@ -2772,23 +2421,12 @@ export const patchUserOnboarding = async (
   patchUserOnboardingRequest: PatchUserOnboardingRequest,
   options?: RequestInit
 ): Promise<patchUserOnboardingResponse> => {
-  const res = await fetch(getPatchUserOnboardingUrl(), {
+  return customFetch<patchUserOnboardingResponse>(getPatchUserOnboardingUrl(), {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(patchUserOnboardingRequest),
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: patchUserOnboardingResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as patchUserOnboardingResponse;
 };
 
 /**
@@ -2839,21 +2477,10 @@ export const getGetUserOrganizationUrl = () => {
 export const getUserOrganization = async (
   options?: RequestInit
 ): Promise<getUserOrganizationResponse> => {
-  const res = await fetch(getGetUserOrganizationUrl(), {
+  return customFetch<getUserOrganizationResponse>(getGetUserOrganizationUrl(), {
     ...options,
     method: 'GET',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getUserOrganizationResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getUserOrganizationResponse;
 };
 
 /**
@@ -2908,19 +2535,13 @@ export const putProfilePicture = async (
   params: PutProfilePictureParams,
   options?: RequestInit
 ): Promise<putProfilePictureResponse> => {
-  const res = await fetch(getPutProfilePictureUrl(params), {
-    ...options,
-    method: 'PUT',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: putProfilePictureResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as putProfilePictureResponse;
+  return customFetch<putProfilePictureResponse>(
+    getPutProfilePictureUrl(params),
+    {
+      ...options,
+      method: 'PUT',
+    }
+  );
 };
 
 /**
@@ -2964,23 +2585,12 @@ export const postProfilePictures = async (
   getProfilePicturesRequestBody: GetProfilePicturesRequestBody,
   options?: RequestInit
 ): Promise<postProfilePicturesResponse> => {
-  const res = await fetch(getPostProfilePicturesUrl(), {
+  return customFetch<postProfilePicturesResponse>(getPostProfilePicturesUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(getProfilePicturesRequestBody),
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: postProfilePicturesResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as postProfilePicturesResponse;
 };
 
 /**
@@ -3031,19 +2641,10 @@ export const getGetUserQuotaUrl = () => {
 export const getUserQuota = async (
   options?: RequestInit
 ): Promise<getUserQuotaResponse> => {
-  const res = await fetch(getGetUserQuotaUrl(), {
+  return customFetch<getUserQuotaResponse>(getGetUserQuotaUrl(), {
     ...options,
     method: 'GET',
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getUserQuotaResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getUserQuotaResponse;
 };
 
 /**
@@ -3099,23 +2700,15 @@ export const createCheckoutSession = async (
   createCheckoutSessionRequest: CreateCheckoutSessionRequest,
   options?: RequestInit
 ): Promise<createCheckoutSessionResponse> => {
-  const res = await fetch(getCreateCheckoutSessionUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(createCheckoutSessionRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: createCheckoutSessionResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as createCheckoutSessionResponse;
+  return customFetch<createCheckoutSessionResponse>(
+    getCreateCheckoutSessionUrl(),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(createCheckoutSessionRequest),
+    }
+  );
 };
 
 /**
@@ -3159,23 +2752,12 @@ export const createPortalSession = async (
   createPortalSessionRequest: CreatePortalSessionRequest,
   options?: RequestInit
 ): Promise<createPortalSessionResponse> => {
-  const res = await fetch(getCreatePortalSessionUrl(), {
+  return customFetch<createPortalSessionResponse>(getCreatePortalSessionUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(createPortalSessionRequest),
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: createPortalSessionResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as createPortalSessionResponse;
 };
 
 /**
@@ -3224,19 +2806,10 @@ export const patchUserTutorial = async (
   patchUserTutorialRequest: PatchUserTutorialRequest,
   options?: RequestInit
 ): Promise<patchUserTutorialResponse> => {
-  const res = await fetch(getPatchUserTutorialUrl(), {
+  return customFetch<patchUserTutorialResponse>(getPatchUserTutorialUrl(), {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(patchUserTutorialRequest),
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: patchUserTutorialResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as patchUserTutorialResponse;
 };
