@@ -1993,6 +1993,7 @@ dependencies = [
  "futures",
  "http-body-util",
  "itertools 0.14.0",
+ "last_online_tracker",
  "macro_auth",
  "macro_aws_config",
  "macro_entrypoint",
@@ -4877,6 +4878,17 @@ dependencies = [
  "tower-service",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "last_online_tracker"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "macro_user_id",
+ "rootcause",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
