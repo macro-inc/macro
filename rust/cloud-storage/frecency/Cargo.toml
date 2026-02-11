@@ -15,6 +15,7 @@ postgres = ["dep:recursion", "dep:serde_json", "dep:sqlx"]
 [dependencies]
 anyhow = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
+cowlike = { path = "../cowlike" }
 filter_ast = { path = "../filter_ast" }
 item_filters = { path = "../item_filters" }
 macro_env_var = { path = "../macro_env_var", optional = true }

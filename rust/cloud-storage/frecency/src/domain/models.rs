@@ -1,11 +1,9 @@
 //! This crate provides the utilities to compute aggregate frecency scores from some input event
 use chrono::{DateTime, Utc};
 use item_filters::ast::EntityFilterAst;
-use macro_user_id::{cowlike::CowLike, error::ParseErr, user_id::MacroUserIdStr};
-use model_entity::{
-    Entity, TrackAction, TrackingData,
-    as_owned::{IntoOwned, ShallowClone},
-};
+use cowlike::CowLike;
+use macro_user_id::{error::ParseErr, user_id::MacroUserIdStr};
+use model_entity::{Entity, TrackAction, TrackingData};
 use num_traits::ToPrimitive;
 use ordered_float::OrderedFloat;
 use serde::{Deserialize, Serialize};
@@ -76,7 +74,7 @@ impl<'a> AggregateId<'a> {
     pub(crate) fn from_event_record<T>(r: &'a EventRecordWithId<'a, T>) -> Result<Self, ParseErr> {
         Ok(AggregateId {
             user_id: MacroUserIdStr::parse_from_str(r.event_record.event.entity.user_id.as_ref())?,
-            entity: r.event_record.event.entity.extra.extra.shallow_clone(),
+            entity: r.event_record.event.entity.extra.extra.copied(),
         })
     }
 

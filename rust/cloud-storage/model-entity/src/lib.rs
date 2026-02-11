@@ -3,6 +3,7 @@
 //! Please avoid writing real business logic in this crate unless it is applicable specifically to only the
 //! types that exist inside this crate.
 
+use cowlike::CowLike;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, str::FromStr};
 pub use strum::ParseError;
@@ -11,8 +12,6 @@ use utoipa::ToSchema;
 
 #[cfg(test)]
 mod tests;
-
-pub mod as_owned;
 
 /// The type of an entity in Macro
 #[derive(
@@ -176,4 +175,76 @@ pub struct TrackingData<'a> {
     pub entity: UserEntityConnection<'a>,
     /// the event that occurred
     pub action: TrackAction,
+}
+
+impl<'a> CowLike<'a> for Entity<'a> {
+    type Owned<'b> = Entity<'b>;
+
+    fn into_owned(self) -> Entity<'static> {
+        Entity {
+            entity_type: self.entity_type,
+            entity_id: Cow::Owned(self.entity_id.into_owned()),
+        }
+    }
+
+    fn copied(&'a self) -> Self {
+        Entity {
+            entity_type: self.entity_type,
+            entity_id: Cow::Borrowed(&self.entity_id),
+        }
+    }
+}
+
+impl<'a> CowLike<'a> for EntityConnection<'a> {
+    type Owned<'b> = EntityConnection<'b>;
+
+    fn into_owned(self) -> EntityConnection<'static> {
+        EntityConnection {
+            extra: self.extra.into_owned(),
+            connection_id: Cow::Owned(self.connection_id.into_owned()),
+        }
+    }
+
+    fn copied(&'a self) -> Self {
+        EntityConnection {
+            extra: self.extra.copied(),
+            connection_id: Cow::Borrowed(&self.connection_id),
+        }
+    }
+}
+
+impl<'a> CowLike<'a> for UserEntityConnection<'a> {
+    type Owned<'b> = UserEntityConnection<'b>;
+
+    fn into_owned(self) -> UserEntityConnection<'static> {
+        UserEntityConnection {
+            user_id: Cow::Owned(self.user_id.into_owned()),
+            extra: self.extra.into_owned(),
+        }
+    }
+
+    fn copied(&'a self) -> Self {
+        UserEntityConnection {
+            user_id: Cow::Borrowed(&self.user_id),
+            extra: self.extra.copied(),
+        }
+    }
+}
+
+impl<'a> CowLike<'a> for TrackingData<'a> {
+    type Owned<'b> = TrackingData<'b>;
+
+    fn into_owned(self) -> TrackingData<'static> {
+        TrackingData {
+            entity: self.entity.into_owned(),
+            action: self.action,
+        }
+    }
+
+    fn copied(&'a self) -> Self {
+        TrackingData {
+            entity: self.entity.copied(),
+            action: self.action,
+        }
+    }
 }
