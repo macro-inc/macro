@@ -7,7 +7,7 @@ import { Dynamic } from 'solid-js/web';
 import { formatDocumentName } from '@service-storage/util/filename';
 import { createProfilePictureQuery } from '../queries/auth';
 import type { EntityData } from '../types/entity';
-import type { EntityClickHandler } from './EntityWithEverything';
+import type { SearchLocation } from '../types/search';
 
 interface EntityProps<T extends EntityData> extends ParentProps {
   entity: T;
@@ -17,6 +17,19 @@ interface EntityProps<T extends EntityData> extends ParentProps {
   onClick?: EntityClickHandler<T>;
   ref?: Ref<HTMLDivElement>;
 }
+type EntityClickEvent = Parameters<
+  JSX.EventHandler<HTMLDivElement, MouseEvent>
+>[0];
+type EntityClickProps<T extends EntityData, E> = {
+  type: 'entity' | 'entity-project-path';
+  entity: T;
+  projectEntity?: T;
+  event: E;
+  location?: SearchLocation;
+};
+type EntityClickHandler<T extends EntityData> = (
+  args: EntityClickProps<T, EntityClickEvent>
+) => void;
 
 export function Entity<T extends EntityData = EntityData>(
   props: EntityProps<T>

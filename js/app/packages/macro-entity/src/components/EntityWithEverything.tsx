@@ -74,26 +74,6 @@ import type {
 } from '../types/search';
 import { KeyPropertiesGrid } from './EntityPropertyValues';
 
-export type EntityClickEvent = Parameters<
-  JSX.EventHandler<HTMLDivElement, MouseEvent>
->[0];
-type EntityPointerDownEvent = Parameters<
-  JSX.EventHandler<HTMLDivElement, PointerEvent>
->[0];
-type EntityClickProps<T extends EntityData, E> = {
-  type: 'entity' | 'entity-project-path';
-  entity: T;
-  projectEntity?: T;
-  event: E;
-  location?: SearchLocation;
-};
-export type EntityClickHandler<T extends EntityData> = (
-  args: EntityClickProps<T, EntityClickEvent>
-) => void;
-export type EntityPointerDownHandler<T extends EntityData> = (
-  args: EntityClickProps<T, EntityPointerDownEvent>
-) => void;
-
 export const ENTITY_HEIGHT = 40;
 
 function UnreadIndicator(props: { active?: boolean }) {
