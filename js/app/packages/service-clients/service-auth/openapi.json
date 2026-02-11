@@ -2955,9 +2955,14 @@
           "licenseStatus",
           "tutorialComplete",
           "hasChromeExt",
-          "hasTrialed"
+          "hasTrialed",
+          "aiDataConsent"
         ],
         "properties": {
+          "aiDataConsent": {
+            "type": "boolean",
+            "description": "Whether the user has consented to AI data sharing"
+          },
           "email": {
             "type": "string",
             "description": "The user's email"
