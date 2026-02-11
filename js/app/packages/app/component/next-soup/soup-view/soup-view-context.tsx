@@ -115,7 +115,7 @@ export const SoupViewContextProvider: FlowComponent<
 
   const unifiedSearchIncludeArray = createMemo<UnifiedSearchIndex[]>(
     () => {
-      let types = soup.filters.predicates();
+      let types = soup.filters.activeIds();
       // NOTE: empty array means search all
       if (types.length === 0) types = [];
       const includeArray: UnifiedSearchIndex[] = [];

@@ -1,19 +1,23 @@
 import { createMemo, createSignal, type Accessor } from 'solid-js';
 
-/** Filter predicate function */
-export type FilterPredicate<T> = (entity: T, ...args: unknown[]) => boolean;
+export type FilterPredicate<T> = (entity: T, ...args: any[]) => boolean;
 
-/** Filter configuration */
 export type FilterConfig<T> = {
   readonly id: string;
   readonly predicate: FilterPredicate<T>;
   readonly group?: string;
 };
 
-/** Options for creating filter state */
+export type FilterGroupConfig = {
+  readonly id: string;
+  readonly allowMultiple?: boolean;
+};
+
 export type CreateFilterStateOptions<T, TFilter extends FilterConfig<T>> = {
   /** All available filter configurations */
   readonly filters: readonly TFilter[];
+  /** Filter group configurations */
+  readonly groups?: readonly FilterGroupConfig[];
   /** Initial active filter IDs */
   readonly initialFilters?: readonly string[];
   /** Callback when filters change */
@@ -44,14 +48,46 @@ export type FilterState<T, TFilter extends FilterConfig<T>> = {
   readonly available: readonly TFilter[];
 };
 
+/**
+ * Creates reactive filter state.
+ *
+ * Handles filter toggling with group-based mutual exclusivity:
+ * - Filters without a group can be combined freely
+ * - Filters with a group replace other filters in the same group
+ *
+ * @example
+ * ```ts
+ * const filters = createFilterState({
+ *   filters: SOUP_FILTERS,
+ *   initialFilters: ['signal'],
+ *   onChange: (filters) => console.log('Filters changed:', filters),
+ * });
+ *
+ * // Toggle a filter
+ * filters.toggle('email');
+ *
+ * // Check active state
+ * const isEmailActive = filters.isActive('email');
+ *
+ * // Get active filter configs for predicates
+ * const activeFilters = filters.active();
+ * ```
+ */
 export function createFilterState<T, TFilter extends FilterConfig<T>>(
   options: CreateFilterStateOptions<T, TFilter>
 ): FilterState<T, TFilter> {
-  const { filters: availableFilters, initialFilters = [], onChange } = options;
+  const {
+    filters: availableFilters,
+    groups = [],
+    initialFilters = [],
+    onChange,
+  } = options;
 
-  // Create a lookup map for O(1) filter retrieval
   const filterMap = new Map<string, TFilter>(
     availableFilters.map((f) => [f.id, f])
+  );
+  const groupMap = new Map<string, FilterGroupConfig>(
+    groups.map((g) => [g.id, g])
   );
 
   // Initialize with initial filters
@@ -77,7 +113,7 @@ export function createFilterState<T, TFilter extends FilterConfig<T>>(
     onChange?.(next);
   };
 
-  // Activate a filter (respecting group exclusivity)
+  // Activate a filter (respecting group exclusivity based on allowMultiple)
   const activate = (id: string) => {
     const config = getFilter(id);
     if (!config) {
@@ -90,10 +126,20 @@ export function createFilterState<T, TFilter extends FilterConfig<T>>(
 
     const current = activeFilters();
 
-    // If filter has a group, remove other filters in same group
     if (config.group) {
-      const withoutSameGroup = current.filter((f) => f.group !== config.group);
-      updateFilters([...withoutSameGroup, config]);
+      const groupConfig = groupMap.get(config.group);
+      const allowMultiple = groupConfig?.allowMultiple ?? false;
+
+      if (allowMultiple) {
+        // Allow multiple selections in this group
+        updateFilters([...current, config]);
+      } else {
+        // Mutual exclusivity: remove other filters in same group
+        const withoutSameGroup = current.filter(
+          (f) => f.group !== config.group
+        );
+        updateFilters([...withoutSameGroup, config]);
+      }
     } else {
       // No group, just add
       updateFilters([...current, config]);

@@ -52,9 +52,9 @@ export const createSoupState = <
   });
 
   const filters = createFilterState<SoupEntity, FilterConfig<SoupEntity>>({
-    configs: filterConfigs ?? SOUP_FILTERS,
+    filters: filterConfigs ?? SOUP_FILTERS,
     groups: FILTER_GROUPS,
-    initialPredicates: initialFilters,
+    initialFilters: initialFilters,
   });
 
   const sort = createSortState(SORT_CONFIGS, ['updated_at']);

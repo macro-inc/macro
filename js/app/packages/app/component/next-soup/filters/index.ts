@@ -2,20 +2,16 @@ export {
   agentFilter,
   documentFilter,
   emailFilter,
-  EXCLUDE,
   fileFilter,
   FILTER_GROUPS,
   type FilterGroup,
-  NIL_UUID,
   notDoneFilter,
   peopleFilter,
   projectFilter,
-  QUERY_FILTERS,
-  type QueryFilterKey,
-  SOUP_FILTERS,
   taskFilter,
   teamsFilter,
   unreadFilter,
+  SOUP_FILTERS,
 } from './filters';
 
 export {
@@ -25,10 +21,7 @@ export {
 } from './signal-filters';
 
 export {
-  createFiltersState,
+  createFilterState,
   type FilterConfig,
-  type FilterGroupConfig,
   type FilterPredicate,
-  type FiltersState,
-  type FiltersStateOptions,
-} from './create-filters-state';
+} from './create-filter-state';
