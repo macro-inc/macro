@@ -1,10 +1,9 @@
-import {
-  ChatInputProvider,
-  ChatProvider,
-  useChatInputContext,
-} from '@core/component/AI/context';
 import { ChatInput } from '@core/component/AI/component/input/useChatInput';
 import { useChatMarkdownArea } from '@core/component/AI/component/input/useChatMarkdownArea';
+import {
+  ChatInputProvider,
+  useChatInputContext,
+} from '@core/component/AI/context';
 import type { Attachment, Model, Send } from '@core/component/AI/types';
 import { asEditRequest } from '@core/component/AI/types/util';
 import { onMount } from 'solid-js';
