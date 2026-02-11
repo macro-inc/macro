@@ -5,8 +5,9 @@ import { useInfiniteQuery } from '@tanstack/solid-query';
 import { isErr } from 'core/util/maybeResult';
 import { type Accessor, createMemo } from 'solid-js';
 import type { EmailEntity } from '../types/entity';
-import { createApiTokenQuery } from './auth';
+import { createApiTokenQuery, withApiTokenRetry } from './auth';
 import { queryKeys } from './key';
+import { SafeFetchInit } from '@core/util/safeFetch';
 
 export type FetchPaginatedEmailsParams = PreviewsInboxCursorParams & {
   // path parameter
@@ -14,15 +15,24 @@ export type FetchPaginatedEmailsParams = PreviewsInboxCursorParams & {
 };
 
 const fetchPaginatedEmails = async ({
+  apiToken,
   view,
   ...params
-}: FetchPaginatedEmailsParams) => {
-  const result = await emailClient.getPreviews({
-    view,
-    limit: params.limit,
-    sort_method: params.sort_method,
-    cursor: params.cursor,
-  });
+}: FetchPaginatedEmailsParams & { apiToken: string }) => {
+  const Authorization = `Bearer ${apiToken}`;
+  const init: SafeFetchInit = {
+    headers: { Authorization },
+  };
+
+  const result = await emailClient.getPreviews(
+    {
+      view,
+      limit: params.limit,
+      sort_method: params.sort_method,
+      cursor: params.cursor,
+    },
+    init
+  );
 
   if (isErr(result)) {
     throw new Error('Failed to fetch email');
@@ -59,7 +69,10 @@ export function createEmailsInfiniteQuery(
   return useInfiniteQuery(() => {
     return {
       queryKey: queryKeys.email({ infinite: true, ...params() }),
-      queryFn: ({ pageParam }) => fetchPaginatedEmails(pageParam),
+      queryFn: ({ pageParam }) =>
+        withApiTokenRetry(authQuery, (apiToken) =>
+          fetchPaginatedEmails({ apiToken, ...pageParam })
+        ),
       initialPageParam: params(),
       getNextPageParam: ({ next_cursor: cursor }) =>
         cursor ? { ...params(), cursor } : undefined,
