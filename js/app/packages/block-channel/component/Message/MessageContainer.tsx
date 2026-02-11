@@ -544,7 +544,7 @@ export function MessageContainer(props: MessageProps) {
               isConsecutive={isConsecutive()}
               timestamp={message.created_at}
               shouldHover={contextMenuOpen() || topBarEmojiMenuOpen()}
-              hoverActions={
+              hoverActions={() => (
                 <ActionMenu
                   messageId={message.id}
                   channelId={props.channelId}
@@ -552,7 +552,7 @@ export function MessageContainer(props: MessageProps) {
                   actions={actions()}
                   setReactionMenuActivated={setTopBarEmojiMenuOpen}
                 />
-              }
+              )}
               threadDepth={threadDepth()}
               hasThreadChildren={hasThreadChildren() || shouldShowFirstReply()}
               isFirstInThread={isFirstInThread()}

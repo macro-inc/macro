@@ -36,7 +36,7 @@ export type MessageRootProps = {
   isLastMessage: boolean;
   isConsecutive?: boolean;
   timestamp?: string;
-  hoverActions?: JSX.Element;
+  hoverActions?: () => JSX.Element;
   shouldHover?: boolean;
   threadDepth?: number;
   hasThreadChildren?: boolean;
@@ -206,7 +206,7 @@ const Root: Component<MessageRootProps> = (props) => {
     isFirstMessage: () => props.isFirstMessage,
     isLastMessage: () => props.isLastMessage,
     isConsecutive: () => props.isConsecutive,
-    hoverActions: () => props.hoverActions,
+    hoverActions: props.hoverActions,
     threadDepth: () => props.threadDepth,
     isFirstInThread: () => props.isFirstInThread,
     isLastInThread: () => props.isLastInThread,
@@ -350,7 +350,11 @@ const Root: Component<MessageRootProps> = (props) => {
                 })}
               </div>
             </Show>
-            <div class="border border-edge bg-panel">{props.hoverActions}</div>
+            <Show when={hover()}>
+              <div class="border border-edge bg-panel">
+                {props.hoverActions()}
+              </div>
+            </Show>
           </div>
         </Show>
         <Show when={props.isLastInThread}>
