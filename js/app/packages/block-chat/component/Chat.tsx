@@ -8,8 +8,10 @@ import { ChatInput } from '@core/component/AI/component/input/useChatInput';
 import { useChatMarkdownArea } from '@core/component/AI/component/input/useChatMarkdownArea';
 import { ChatMessages } from '@core/component/AI/component/message/ChatMessages';
 import {
-  ChatContextProvider,
+  ChatInputProvider,
+  ChatProvider,
   useChatContext,
+  useChatInputContext,
 } from '@core/component/AI/context';
 import { useEntityDropAttachment } from '@core/component/AI/hook/useEntityDropAttachment';
 import { getPendingSend } from '@core/component/AI/signal/pendingSend';
@@ -47,14 +49,17 @@ export function Chat(props: { data: ChatData }) {
   const loadedState = getChatInputStoredState(props.data.chat.id);
 
   return (
-    <ChatContextProvider
-      chatId={props.data.chat.id}
-      messages={props.data.chat.messages}
+    <ChatInputProvider
       initialAttachments={loadedState.attachments}
       model={loadedState.model}
     >
-      <ChatInner data={props.data} loadedInputText={loadedState.input} />
-    </ChatContextProvider>
+      <ChatProvider
+        chatId={props.data.chat.id}
+        messages={props.data.chat.messages}
+      >
+        <ChatInner data={props.data} loadedInputText={loadedState.input} />
+      </ChatProvider>
+    </ChatInputProvider>
   );
 }
 
@@ -62,7 +67,8 @@ function ChatInner(props: {
   data: ChatData;
   loadedInputText: string | undefined;
 }) {
-  const ctx = useChatContext();
+  const input = useChatInputContext();
+  const chat = useChatContext();
   const canEdit = useCanEdit();
   const disabled = () => !canEdit();
   const scopeId = blockHotkeyScopeSignal.get;
@@ -73,7 +79,7 @@ function ChatInner(props: {
 
   const chatMarkdownArea = useChatMarkdownArea({
     initialValue: props.loadedInputText,
-    addAttachment: (a) => ctx.attachments.addAttachment(a),
+    addAttachment: (a) => input.attachments.addAttachment(a),
   });
 
   // Local stream signal for cancelStream and registerToolHandler
@@ -94,7 +100,7 @@ function ChatInner(props: {
   const chatId = useBlockId();
   const { droppable, isDraggingOver } = useEntityDropAttachment(
     'chat-input-' + chatId,
-    ctx.attachments
+    input.attachments
   );
   false && droppable;
 
@@ -111,16 +117,16 @@ function ChatInner(props: {
         return onSend(response);
       }
     } else {
-      ctx.addMessage!({
+      chat.addMessage({
         attachments: request.request.attachments ?? [],
         content: request.request.content,
         role: 'user',
         id: '',
       });
       const stream = request.call();
-      ctx.setStream!(stream);
+      chat.setStream(stream);
       setStream(stream);
-      ctx.setIsGenerating(true);
+      input.setIsGenerating(true);
       invalidateUserQuota();
       createEffect(() => {
         if (stream.data().length > 0) {
@@ -129,7 +135,7 @@ function ChatInner(props: {
       });
       createEffect(() => {
         if (stream.isDone()) {
-          ctx.setIsGenerating(false);
+          input.setIsGenerating(false);
           invalidateUserQuota();
         }
       });
@@ -141,10 +147,10 @@ function ChatInner(props: {
   };
 
   createEffect(() => {
-    const input = chatMarkdownArea.markdownText();
-    const attached = ctx.attachments.attached();
-    const model_ = ctx.model();
-    saveChatState({ attachments: attached, input, model: model_ });
+    const inputText = chatMarkdownArea.markdownText();
+    const attached = input.attachments.attached();
+    const model_ = input.model();
+    saveChatState({ attachments: attached, input: inputText, model: model_ });
   });
 
   const setPendingLocation = pendingLocationParamsSignal.set;
@@ -224,6 +230,7 @@ function ChatInner(props: {
           <div class="w-3xl">
             <ChatInput
               markdown={chatMarkdownArea}
+              chatId={chat.chatId()}
               onSend={onSend}
               onStop={cancelStream}
               captureEditor={setChatEditor}

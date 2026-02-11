@@ -1,7 +1,9 @@
 export {
-  ChatContextProvider,
+  ChatInputProvider,
+  useChatInputContext,
+  ChatProvider,
   useChatContext,
   useChatContextOptional,
-  type ChatContextValue,
-  type ChatContextProviderProps,
+  type ChatInputState,
+  type ChatState,
 } from './ChatContext';

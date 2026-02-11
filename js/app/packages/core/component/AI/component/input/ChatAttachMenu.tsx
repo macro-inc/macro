@@ -1,6 +1,6 @@
 import { withAnalytics } from '@coparse/analytics';
 import { SUPPORTED_ATTACHMENT_EXTENSIONS } from '@core/component/AI/constant';
-import { useChatContext } from '@core/component/AI/context';
+import { useChatInputContext } from '@core/component/AI/context';
 import {
   useChatAttachableHistory,
   useGetChatAttachmentInfo,
@@ -56,8 +56,8 @@ function truncate(str: string, maxLength: number = 30) {
 // TODO: create a shared component for chat attach menu and block channel AttachMenu
 // TODO: add other supported attachment types, e.g. chat/channel
 export function ChatAttachMenu(props: ChatAttachMenuProps) {
-  const ctx = useChatContext();
-  const uploadQueue = ctx.uploadQueue;
+  const chatInput = useChatInputContext();
+  const uploadQueue = chatInput.uploadQueue;
 
   const [position, setPosition] = createSignal({ x: 0, y: 0 });
   const [popupRef, setPopupRef] = createSignal<HTMLDivElement>();

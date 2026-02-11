@@ -5,7 +5,7 @@ import { fileDrop } from '@core/directive/fileDrop';
 const { track, TrackingEvents } = withAnalytics();
 
 import { SUPPORTED_ATTACHMENT_EXTENSIONS } from '@core/component/AI/constant';
-import { useChatContext } from '@core/component/AI/context';
+import { useChatInputContext } from '@core/component/AI/context';
 import type { Accessor, Component, ParentProps } from 'solid-js';
 import { createSignal, Show } from 'solid-js';
 
@@ -23,8 +23,8 @@ type DragDropWrapperProps = ParentProps<{
  * to its children. Shows a visual overlay when files are dragged over the area.
  */
 export const DragDropWrapper: Component<DragDropWrapperProps> = (props) => {
-  const ctx = useChatContext();
-  const uploadQueue = ctx.uploadQueue;
+  const input = useChatInputContext();
+  const uploadQueue = input.uploadQueue;
 
   const [isFileDragging, setIsFileDragging] = createSignal(false);
 

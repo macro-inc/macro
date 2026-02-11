@@ -1,6 +1,7 @@
 import {
-  ChatContextProvider,
-  useChatContext,
+  ChatInputProvider,
+  ChatProvider,
+  useChatInputContext,
 } from '@core/component/AI/context';
 import { ChatInput } from '@core/component/AI/component/input/useChatInput';
 import { useChatMarkdownArea } from '@core/component/AI/component/input/useChatMarkdownArea';
@@ -9,16 +10,17 @@ import { asEditRequest } from '@core/component/AI/types/util';
 import { onMount } from 'solid-js';
 
 function EditableChatMessageInner(props: {
+  chatId: string;
   initialText: string;
   attachments: Attachment[];
   onAccept: (r: Send) => void;
   onCancel: () => void;
   model: Model;
 }) {
-  const ctx = useChatContext();
+  const input = useChatInputContext();
   const chatMarkdownArea = useChatMarkdownArea({
     initialValue: props.initialText,
-    addAttachment: (a) => ctx.attachments.addAttachment(a),
+    addAttachment: (a) => input.attachments.addAttachment(a),
   });
 
   onMount(() => {
@@ -35,6 +37,7 @@ function EditableChatMessageInner(props: {
     <div onKeyDown={handleKey} class="w-full">
       <ChatInput
         markdown={chatMarkdownArea}
+        chatId={props.chatId}
         onSend={(request) => {
           if (request.type === 'send') props.onAccept(asEditRequest(request));
         }}
@@ -52,19 +55,19 @@ export function EditableChatMessage(props: {
   model: Model;
 }) {
   return (
-    <ChatContextProvider
-      chatId={props.chatId}
+    <ChatInputProvider
       model={props.model}
       isGenerating={false}
       initialAttachments={props.attachments}
     >
       <EditableChatMessageInner
+        chatId={props.chatId}
         initialText={props.initialText}
         attachments={props.attachments}
         onAccept={props.onAccept}
         onCancel={props.onCancel}
         model={props.model}
       />
-    </ChatContextProvider>
+    </ChatInputProvider>
   );
 }

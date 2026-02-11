@@ -1,7 +1,9 @@
-import { ChatContextProvider } from '@core/component/AI/context';
+import {
+  ChatInputProvider,
+  useChatInputContext,
+} from '@core/component/AI/context';
 import { ChatInput } from '@core/component/AI/component/input/useChatInput';
 import { useChatMarkdownArea } from '@core/component/AI/component/input/useChatMarkdownArea';
-import { useChatContext } from '@core/component/AI/context';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import type { CreateAndSend, Send } from '@core/component/AI/types';
 import { isErr } from '@core/util/maybeResult';
@@ -15,10 +17,10 @@ function SoupChatInputInner() {
   let containerRef!: HTMLDivElement;
   const splitPanelContext = useSplitPanelOrThrow();
   const soup = useSoup();
-  const ctx = useChatContext();
+  const input = useChatInputContext();
 
   const chatMarkdownArea = useChatMarkdownArea({
-    addAttachment: (a) => ctx.attachments.addAttachment(a),
+    addAttachment: (a) => input.attachments.addAttachment(a),
   });
 
   const [attachHotkeys] = useHotkeyDOMScope('soup.chatInput');
@@ -79,8 +81,8 @@ function SoupChatInputInner() {
 
 export function SoupChatInput() {
   return (
-    <ChatContextProvider autoAttach={false}>
+    <ChatInputProvider autoAttach={false}>
       <SoupChatInputInner />
-    </ChatContextProvider>
+    </ChatInputProvider>
   );
 }
