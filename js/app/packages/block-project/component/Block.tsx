@@ -110,7 +110,6 @@ const Block: Component = () => {
     filterConfigs: [
       {
         id: 'project-content',
-        label: 'Project content',
         predicate: (entity) => PROJECT_ENTITY_TYPES.includes(entity.type),
       },
     ],
