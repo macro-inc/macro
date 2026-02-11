@@ -188,7 +188,10 @@ fn test_channel_updated_at_uses_max_from_message_results() {
     });
 
     // Should return 3000 (max from message results), not 1000 (metadata)
-    assert_eq!(channel.updated_at(), Some(DateTime::from_timestamp(3000, 0).unwrap()));
+    assert_eq!(
+        channel.updated_at(),
+        Some(DateTime::from_timestamp(3000, 0).unwrap())
+    );
 }
 
 #[test]
@@ -213,7 +216,10 @@ fn test_channel_updated_at_falls_back_to_metadata_when_no_results() {
     });
 
     // Should return 1000 (metadata) since no message results
-    assert_eq!(channel.updated_at(), Some(DateTime::from_timestamp(1000, 0).unwrap()));
+    assert_eq!(
+        channel.updated_at(),
+        Some(DateTime::from_timestamp(1000, 0).unwrap())
+    );
 }
 
 #[test]
@@ -257,7 +263,10 @@ fn test_channel_updated_at_falls_back_to_metadata_when_results_have_no_updated_a
     });
 
     // Should return 1000 (metadata) since all message results have None for updated_at
-    assert_eq!(channel.updated_at(), Some(DateTime::from_timestamp(1000, 0).unwrap()));
+    assert_eq!(
+        channel.updated_at(),
+        Some(DateTime::from_timestamp(1000, 0).unwrap())
+    );
 }
 
 #[test]

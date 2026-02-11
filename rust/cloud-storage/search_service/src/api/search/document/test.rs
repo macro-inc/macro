@@ -220,18 +220,9 @@ fn test_document_history_timestamps() {
 
     // Verify that timestamps were copied from the document history
     assert_eq!(result.len(), 1);
-    assert_eq!(
-        result[0].metadata.as_ref().unwrap().created_at,
-        now
-    );
-    assert_eq!(
-        result[0].metadata.as_ref().unwrap().updated_at,
-        now
-    );
-    assert_eq!(
-        result[0].metadata.as_ref().unwrap().viewed_at,
-        Some(now)
-    );
+    assert_eq!(result[0].metadata.as_ref().unwrap().created_at, now);
+    assert_eq!(result[0].metadata.as_ref().unwrap().updated_at, now);
+    assert_eq!(result[0].metadata.as_ref().unwrap().viewed_at, Some(now));
 }
 
 #[test]
@@ -294,14 +285,8 @@ fn test_document_history_null_viewed_at() {
 
     // Verify that timestamps were copied correctly and viewed_at is None
     assert_eq!(result.len(), 1);
-    assert_eq!(
-        result[0].metadata.as_ref().unwrap().created_at,
-        now
-    );
-    assert_eq!(
-        result[0].metadata.as_ref().unwrap().updated_at,
-        now
-    );
+    assert_eq!(result[0].metadata.as_ref().unwrap().created_at, now);
+    assert_eq!(result[0].metadata.as_ref().unwrap().updated_at, now);
     assert_eq!(result[0].metadata.as_ref().unwrap().viewed_at, None);
 }
 
