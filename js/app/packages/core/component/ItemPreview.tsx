@@ -284,8 +284,8 @@ function ItemPreviewInner(props: ItemPreviewProps) {
                     }
                     content={
                       <PopupPreview
-                        mouseEnter={() => { }}
-                        mouseLeave={() => { }}
+                        mouseEnter={() => {}}
+                        mouseLeave={() => {}}
                         documentInfo={{
                           id: accessibleItem().id,
                           type: blockName() as BlockName,
