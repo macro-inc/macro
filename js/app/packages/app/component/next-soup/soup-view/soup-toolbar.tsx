@@ -132,9 +132,6 @@ const SoupFilters = () => {
 
   const [sortDropdownOpen, setSortDropdownOpen] = createSignal(false);
 
-  // === Focus filters (signal/noise) ===
-  // These don't have query filters, just predicates.
-  // The primitive handles mutual exclusivity via the 'focus' group.
   const toggleFocus = (id: 'signal' | 'noise') => {
     if (soup.filters.isActive(id)) {
       soup.filters.toggle('explicit-noise');
@@ -145,13 +142,10 @@ const SoupFilters = () => {
     }
   };
 
-  // === Notification filters ===
   const toggleUnread = () => {
     soup.filters.toggle('unread');
   };
 
-  // === Entity type filters ===
-  // These have associated query filters that need to be set/cleared
   const toggleEntityType = (id: EntityTypeFilterId) => {
     const willBeActive = !soup.filters.isActive(id);
     batch(() => {
