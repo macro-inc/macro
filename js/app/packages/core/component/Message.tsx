@@ -281,16 +281,38 @@ const Root: Component<MessageRootProps> = (props) => {
                 <Show when={!props.isConsecutive}>
                   <div class="relative">
                     <Show when={props.isFirstInThread}>
-                      <div
-                        class="absolute border-b border-l border-edge-muted"
+                      {/*<div
+                        class="absolute border-b border-l border-[red]"
                         style={{
                           left: `calc((var(--thread-shift) - var(--left-of-connector) + var(--left-of-user-icon) + 0.5px) * -1)`,
                           top: '.5px',
-                          width: `calc(var(--thread-shift) - var(--left-of-connector) + var(--left-of-user-icon) + 0.5px)`,
+                          width: `calc(var(--thread-shift) - var(--left-of-connector) + var(--left-of-user-icon))`,
                           height: '50%',
                           'border-bottom-left-radius': `calc(var(--thread-shift) / 2)`,
                         }}
-                      />
+                      />*/}
+                      <div
+                        class="absolute text-edge-muted -z-1"
+                        style={{
+                          left: `calc((var(--thread-shift) - var(--left-of-connector) + var(--left-of-user-icon) + 1px) * -1)`,
+                          bottom:
+                            'calc(var(--user-icon-width) / 2 - 0.0375 * var(--user-icon-width))',
+                          width: `calc(var(--thread-shift) - var(--left-of-connector) + var(--left-of-user-icon) + 3px)`,
+                        }}
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 18"
+                          width="100%"
+                        >
+                          <path
+                            stroke="currentColor"
+                            vector-effect="non-scaling-stroke"
+                            d="M23 17 4 6.0303C2.5 5.1643.5 4 .5.5"
+                          />
+                        </svg>
+                      </div>
                     </Show>
                     <Show
                       when={props.customIcon || props.customIconTargetType}
@@ -396,14 +418,34 @@ const Root: Component<MessageRootProps> = (props) => {
                 ref={(el) => props.setThreadAppendMountTarget?.(el)}
               >
                 <div
-                  class="absolute border-b border-l border-edge-muted"
+                  class="absolute border-l border-edge-muted"
                   style={{
                     left: `calc((var(--user-icon-width) / 2) * -1)`,
-                    width: `calc(var(--user-icon-width) / 2)`,
-                    height: '50%',
-                    'border-bottom-left-radius': `calc(var(--thread-shift) / 2)`,
+                    height: 'calc(50% - (var(--user-icon-width) / 2 + 1px) / 24 * 18 + 1px)',
                   }}
                 />
+
+                <div
+                  class="absolute text-edge-muted -z-1"
+                  style={{
+                    left: `calc((var(--user-icon-width) / 2) * -1)`,
+                    bottom: '50%',
+                    width: `calc(var(--user-icon-width) / 2 + 1px)`,
+                  }}
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 18"
+                    width="100%"
+                  >
+                    <path
+                      stroke="currentColor"
+                      vector-effect="non-scaling-stroke"
+                      d="M23 17 4 6.0303C2.5 5.1643.5 4 .5.5"
+                    />
+                  </svg>
+                </div>
               </div>
             </Show>
           </div>
