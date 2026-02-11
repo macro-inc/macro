@@ -117,7 +117,10 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     const shadow = hostContainer.attachShadow({ mode: 'open' });
     // Style that uses a CSS variable to control image visibility
     const styleEl = document.createElement('style');
-    styleEl.textContent = `img{display: var(--macro-email-img-display, initial); max-width: 100% !important; height: auto !important;}`;
+    const fontOverride = isPersonal()
+      ? `*:not(code):not(pre):not(code *):not(pre *){font-family: system-ui, sans-serif !important; font-size: inherit !important; line-height: 1.5 !important;}`
+      : '';
+    styleEl.textContent = `img{display: var(--macro-email-img-display, initial); max-width: 100% !important; height: auto !important;}${fontOverride}`;
     shadow.appendChild(styleEl);
     const messageDiv = document.createElement('div');
     messageDiv.innerHTML = source()?.mainContent ?? '';
@@ -166,7 +169,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     showFullHTML();
     const root = host().shadowRoot;
     if (root) {
-      if (isPersonal()) {
+      if (isPersonal() || !source()?.hasTable) {
         queueMicrotask(() => {
           untrack(() => {
             const theme: ThemeColorParams = {
@@ -181,7 +184,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
             processEmailColors(root, theme);
           });
         });
-      } else if (source()?.hasTable) {
+      } else {
         const contentWrapper = root.querySelector('div');
         if (contentWrapper instanceof HTMLElement) {
           contentWrapper.style.setProperty(

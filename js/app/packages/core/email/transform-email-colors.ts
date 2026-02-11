@@ -34,6 +34,7 @@ export function processEmailColors(root: Node, theme: ThemeColorParams) {
   const { inkL, inkC, inkH, panelL, accentL, accentC, accentH } = theme;
 
   const themeIsDarkModish = inkL > panelL;
+  stripContentBackgrounds(root);
   const textNodeColors = computeTextNodeColor(root);
   textNodeColors.forEach((textNodeColor) => {
     // if the text has a background color set, trust that the email sender's choices and don't change anything
@@ -99,6 +100,31 @@ function setAnchorStyle(node: Node, style: string, value: string) {
   const anchorElement = parentElement?.closest('a');
   if (anchorElement) {
     anchorElement.style.setProperty(style, value, 'important');
+  }
+}
+
+const LIGHT_BG_THRESHOLD = 0.85;
+
+/** Remove light/white backgrounds from all elements, preserving colored/dark backgrounds (buttons, banners).
+ *  Uses getComputedStyle to resolve all color formats (named colors, hex, rgb, etc.) */
+function stripContentBackgrounds(root: Node) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+  let el = walker.nextNode();
+  while (el) {
+    if (el instanceof HTMLElement) {
+      const bgColor = getComputedStyle(el).backgroundColor;
+      if (bgColor && bgColor.startsWith('rgb')) {
+        const rgba = normalizeRGBA(parseRGBA(bgColor));
+        if (rgba && rgba.a > 0) {
+          const oklch = rgbaToOklch(rgba);
+          if (oklch && oklch.l > LIGHT_BG_THRESHOLD) {
+            el.style.setProperty('background-color', 'transparent', 'important');
+            el.removeAttribute('bgcolor');
+          }
+        }
+      }
+    }
+    el = walker.nextNode();
   }
 }
 
