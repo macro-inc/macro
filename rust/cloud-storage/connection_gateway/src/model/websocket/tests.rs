@@ -1,7 +1,8 @@
 use cool_asserts::assert_matches;
-use model_entity::{Entity, EntityType, TrackAction};
+use model_entity::{Entity, EntityType};
 use serde_json::{Value, json};
 
+use crate::model::tracking::TrackAction;
 use crate::model::websocket::{ToWebsocketMessage, TrackEntityMessage};
 
 fn get_json() -> Value {

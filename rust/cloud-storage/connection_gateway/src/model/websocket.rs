@@ -1,4 +1,5 @@
-use model_entity::{Entity, TrackAction};
+use super::tracking::TrackAction;
+use model_entity::Entity;
 use utoipa::ToSchema;
 
 #[cfg(test)]

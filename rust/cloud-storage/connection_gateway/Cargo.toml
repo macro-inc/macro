@@ -30,6 +30,7 @@ macro_aws_config = { path = "../macro_aws_config" }
 aws-sdk-secretsmanager = { workspace = true }
 axum = { workspace = true, features = ["macros", "tower-log", "ws"] }
 chrono = { workspace = true }
+cowlike = { path = "../cowlike" }
 dashmap = { workspace = true }
 ensure_exists = { path = "../ensure_exists", features = ["dynamodb"] }
 frecency = { path = "../frecency", features = [
