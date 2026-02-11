@@ -15,7 +15,6 @@ import {
   useContext,
 } from 'solid-js';
 import { BozzyBracket } from './BozzyBracket';
-import { DeprecatedIconButton } from './DeprecatedIconButton';
 import {
   CustomEntityIcon,
   EntityIcon,
