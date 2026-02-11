@@ -3,8 +3,15 @@ import { useIsAuthenticated } from '@core/auth';
 import { AiChatEmptyState } from '@core/component/AI/component/AIChatEmptyState';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { useBuildChatSendRequest } from '@core/component/AI/component/input/buildRequest';
-import { useChatInput } from '@core/component/AI/component/input/useChatInput';
+import { ChatInput } from '@core/component/AI/component/input/useChatInput';
+import { useChatMarkdownArea } from '@core/component/AI/component/input/useChatMarkdownArea';
 import { ChatMessages } from '@core/component/AI/component/message/ChatMessages';
+import {
+  ChatInputProvider,
+  ChatProvider,
+  useChatContext,
+  useChatInputContext,
+} from '@core/component/AI/context';
 import { useEntityDropAttachment } from '@core/component/AI/hook/useEntityDropAttachment';
 import { getPendingSend } from '@core/component/AI/signal/pendingSend';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
@@ -54,7 +61,6 @@ import {
   cognitionApiServiceClient,
   cognitionWebsocketServiceClient,
 } from '@service-cognition/client';
-import { createCognitionWebsocketEffect } from '@service-cognition/websocket';
 import { refetchHistory, useHistoryQuery } from '@queries/history/history';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
 import type { LexicalEditor } from 'lexical';
@@ -64,6 +70,7 @@ import {
   createMemo,
   createSignal,
   For,
+  type JSXElement,
   on,
   onCleanup,
   type Setter,
@@ -74,8 +81,8 @@ import {
 import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
 import { Button } from '@ui/components/Button';
 import { Hotkey } from '@core/component/Hotkey';
-import { setPreviewData } from '@queries/preview';
 import { AccessLevel } from '@service-cognition/generated/schemas/accessLevel';
+import { useWaitChatRename } from '../../../macro-entity/src/queries/rename';
 
 type ChatData = {
   messages: ChatMessageWithAttachments[];
@@ -272,82 +279,100 @@ function TopBar(props: {
   );
 }
 
-export function Rightbar(props: {
-  chatId: string | undefined;
-  chatName: string | undefined;
-  stream: Accessor<MessageStream | undefined>;
-  onSend: (args: CreateAndSend | Send) => void;
-  stopGenerating: () => void;
-  onUnmount?: () => void;
-  messages: Accessor<ChatMessageWithAttachments[]>;
-  initialState?: {
-    model: Model | undefined;
-    attachments: Attachment[];
-    text: string | undefined;
-  };
-  userPermissions: Accessor<Permissions>;
-  setState: {
-    setChatId: (chatId: string | undefined) => void;
-    setModel: Setter<Model | undefined>;
-    setAttachments: Setter<Attachment[]>;
-    setText: Setter<string | undefined>;
-    setMessages: Setter<ChatMessageWithAttachments[]>;
-    setStream: Setter<MessageStream | undefined>;
-  };
-  isBig?: boolean;
-  setIsBig?: (val: boolean) => void;
-}) {
+/** Renders messages + stream effects. Only mounted inside ChatProvider. */
+function RightbarChatArea(props: { isBig?: boolean }) {
+  const chat = useChatContext();
+  const input = useChatInputContext();
   const [messagesContainerRef, setMessagesContainerRef] =
     createSignal<HTMLElement>();
 
   createEffect(() => {
-    const stream_ = props.stream();
+    const stream_ = chat.stream();
     if (stream_ && stream_.data().length > 0) {
       invalidateUserQuota();
     }
   });
 
   createEffect(() => {
-    const stream_ = props.stream();
+    const stream_ = chat.stream();
     if (!stream_ || stream_.isDone()) {
-      setIsGenerating(false);
+      input.setIsGenerating(false);
       if (stream_?.isDone()) {
         invalidateUserQuota();
       }
       return;
     } else {
-      setIsGenerating(true);
+      input.setIsGenerating(true);
     }
   });
 
-  registerToolHandler(props.stream);
+  registerToolHandler(chat.stream);
 
-  const stopGenerating = props.stopGenerating;
+  return (
+    <>
+      <Show when={chat.messages().length === 0}>
+        <div class="h-full flex flex-col items-center justify-center">
+          <AiChatEmptyState />
+        </div>
+      </Show>
+      <Show when={chat.messages().length > 0 || !props.isBig}>
+        <div class="relative flex-1 min-h-0 w-full">
+          <div
+            data-chat-scroll
+            class="size-full overflow-y-auto overflow-x-hidden scroll-smooth flex justify-center scrollbar-hidden"
+            ref={setMessagesContainerRef}
+          >
+            <div class="w-full macro-message-width">
+              <ChatMessages messageActions={undefined} />
+            </div>
+          </div>
+          <CustomScrollbar scrollContainer={messagesContainerRef} />
+        </div>
+      </Show>
+    </>
+  );
+}
+
+export function Rightbar(props: {
+  chatId: string | undefined;
+  onSend: (args: CreateAndSend | Send) => void;
+  stopGenerating: () => void;
+  chatName: string | undefined;
+  isBig?: boolean;
+  userPermissions: Accessor<Permissions>;
+  onUnmount?: () => void;
+  initialState?: {
+    model: Model | undefined;
+    attachments: Attachment[];
+    text: string | undefined;
+  };
+  setState: {
+    setChatId: (chatId: string | undefined) => void;
+    setModel: Setter<Model | undefined>;
+    setAttachments: Setter<Attachment[]>;
+    setText: Setter<string | undefined>;
+  };
+  children?: JSXElement;
+}) {
+  const input = useChatInputContext();
 
   // NOTE: due to mount race condition in the markdown area, we need to set the initial value here
-  const {
-    ChatInput,
-    setChatId,
-    attachments,
-    chatMarkdownArea,
-    model,
-    setModel,
-    setIsGenerating,
-    uploadQueue,
-  } = useChatInput({ initialValue: props.initialState?.text });
+  const chatMarkdownArea = useChatMarkdownArea({
+    initialValue: props.initialState?.text,
+    addAttachment: (a) => input.attachments.addAttachment(a),
+  });
 
   // Entity drag-and-drop support
   const { droppable, isDraggingOver } = useEntityDropAttachment(
     'rightbar-chat-input',
-    attachments
+    input.attachments
   );
   false && droppable;
 
   createEffect(() => {
-    setChatId(props.chatId);
     if (!props.initialState) return;
-    setModel(props.initialState.model);
-    attachments.setAttached(props.initialState.attachments);
+    input.setModel(props.initialState.model);
+    input.attachments.setAttached(props.initialState.attachments);
   });
 
   onCleanup(() => {
@@ -355,10 +380,10 @@ export function Rightbar(props: {
   });
 
   createEffect(() => {
-    const input = chatMarkdownArea.markdownText();
-    const attached = attachments.attached();
-    const model_ = model();
-    props.setState.setText(input);
+    const inputText = chatMarkdownArea.markdownText();
+    const attached = input.attachments.attached();
+    const model_ = input.model();
+    props.setState.setText(inputText);
     props.setState.setAttachments(attached);
     props.setState.setModel(model_);
   });
@@ -415,7 +440,6 @@ export function Rightbar(props: {
   return (
     <DragDropWrapper
       class="relative flex flex-col size-full select-none"
-      uploadQueue={uploadQueue}
       isEntityDraggingOver={isDraggingOver}
     >
       <div class="overflow-hidden size-full flex flex-col items-center relative">
@@ -427,38 +451,17 @@ export function Rightbar(props: {
           userPermissions={props.userPermissions}
         />
         <div class="flex flex-col flex-1 min-h-0 p-2 w-full items-center">
-          <Show when={props.messages().length === 0}>
-            <div class="h-full flex flex-col items-center justify-center">
-              <AiChatEmptyState />
-            </div>
-          </Show>
-          <Show when={props.messages().length > 0 || !props.isBig}>
-            <div class="relative flex-1 min-h-0 w-full">
-              <div
-                data-chat-scroll
-                class="size-full overflow-y-auto overflow-x-hidden scroll-smooth flex justify-center scrollbar-hidden"
-                ref={setMessagesContainerRef}
-              >
-                <div class="w-full macro-message-width">
-                  <ChatMessages
-                    chatId={props.chatId}
-                    messages={[props.messages, props.setState.setMessages]}
-                    messageActions={undefined}
-                    stream={[props.stream, props.setState.setStream]}
-                  />
-                </div>
-              </div>
-              <CustomScrollbar scrollContainer={messagesContainerRef} />
-            </div>
-          </Show>
+          {props.children}
 
           <div class="w-full">
             <div class="flex-shrink-0 pt-2 macro-message-width mx-auto">
               <ChatInput
+                markdown={chatMarkdownArea}
+                chatId={props.chatId}
                 isPersistent
                 showActiveTabs
                 onSend={props.onSend}
-                onStop={stopGenerating}
+                onStop={props.stopGenerating}
                 captureEditor={setEditor}
               />
             </div>
@@ -542,42 +545,6 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
     saveChatState();
   });
 
-  // TODO: move this into a shared util: see dcs websocket extraction and connection websocket bulk upload
-  const CHAT_RENAME_TIMEOUT_MS = 60000;
-  const chatRenameMap = new Map<
-    string,
-    {
-      callback: (name: string | undefined) => void;
-      clearTimeout: () => void;
-    }
-  >();
-  const waitChatRename = async (chatId: string) => {
-    const dispose = createCognitionWebsocketEffect('chat_renamed', (data) => {
-      if (data.chat_id !== chatId) return;
-      const chatInfo = chatRenameMap.get(chatId);
-      if (!chatInfo) return;
-      chatInfo.callback(data.name);
-      dispose();
-    });
-
-    return new Promise<string | undefined>((accept) => {
-      // always run this after timeout
-      setTimeout(() => {
-        dispose();
-        chatRenameMap.delete(chatId);
-      }, CHAT_RENAME_TIMEOUT_MS);
-
-      const errorTimeout = setTimeout(() => {
-        accept(undefined);
-      }, CHAT_RENAME_TIMEOUT_MS);
-
-      chatRenameMap.set(chatId, {
-        callback: accept,
-        clearTimeout: () => clearTimeout(errorTimeout),
-      });
-    });
-  };
-
   const { showPaywall } = usePaywallState();
 
   const onSend = async (request: Send | CreateAndSend) => {
@@ -596,19 +563,8 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
       setChatId(newChatId);
       setUserAccessLevel(AccessLevel.owner);
 
-      // TODO: move this into a separate resource so we don't have to refetch history
-      // refetch history immediately to have the new chat id
-      // then rename again when the server provides a default name
       refetchHistory();
-      waitChatRename(newChatId).then((name) => {
-        refetchHistory();
-        if (name) {
-          setPreviewData(newChatId, (prev) => ({
-            ...prev,
-            name,
-          }));
-        }
-      });
+      useWaitChatRename(newChatId);
       return await onSend(response);
     } else if (request.type === 'send') {
       setMessages((p) => {
@@ -770,26 +726,45 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
             tr={!bigChatOpen() && !settingsOpen()}
           >
             <Suspense>
-              <Rightbar
-                chatId={chatId()}
-                chatName={chatName()}
-                messages={messages}
-                onUnmount={getChatInputState}
-                initialState={initialChatState()}
-                onSend={onSend}
-                stream={stream}
-                stopGenerating={stopGenerating}
-                userPermissions={userPermissions}
-                setState={{
-                  setChatId,
-                  setModel,
-                  setAttachments,
-                  setText,
-                  setMessages,
-                  setStream,
-                }}
-                isBig={bigChatOpen()}
-              />
+              <ChatInputProvider>
+                <Rightbar
+                  chatId={chatId()}
+                  chatName={chatName()}
+                  onUnmount={getChatInputState}
+                  initialState={initialChatState()}
+                  onSend={onSend}
+                  stopGenerating={stopGenerating}
+                  userPermissions={userPermissions}
+                  setState={{
+                    setChatId,
+                    setModel,
+                    setAttachments,
+                    setText,
+                  }}
+                  isBig={bigChatOpen()}
+                >
+                  <Show
+                    when={chatId()}
+                    fallback={
+                      <div class="h-full flex flex-col items-center justify-center">
+                        <AiChatEmptyState />
+                      </div>
+                    }
+                  >
+                    {(id) => (
+                      <ChatProvider
+                        chatId={id()}
+                        external={{
+                          messages: [messages, setMessages],
+                          stream: [stream, setStream],
+                        }}
+                      >
+                        <RightbarChatArea isBig={bigChatOpen()} />
+                      </ChatProvider>
+                    )}
+                  </Show>
+                </Rightbar>
+              </ChatInputProvider>
             </Suspense>
           </SplitlikeContainer>
         </div>

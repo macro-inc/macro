@@ -6,7 +6,7 @@
 use crate::domain::models::apple::{APNSPushNotification, Aps};
 use crate::domain::models::mobile::{MessageAttributes, PushType};
 use crate::domain::models::queue_message::{
-    APNSTargets, ClearPushIdentifier, ConnGatewayNotification, EmailNotification, Node, Notif,
+    APNSTargets, ClearPushIdentifier, ConnGatewayNotification, EmailNotification, Node,
     NotificationChannel, QueueMessage,
 };
 use crate::domain::models::request::{
@@ -388,10 +388,9 @@ where
                 message_type: message_type.clone(),
                 rate_limit: rate_limit.clone(),
                 content: Node {
-                    notif: NotificationChannel::ConnGateway(ConnGatewayNotification {
-                        notif: Notif::clone_from_request(notification_id, notification),
-                        recipients: notification.req.recipient_ids.iter().cloned().collect(),
-                    }),
+                    notif: NotificationChannel::ConnGateway(
+                        ConnGatewayNotification::clone_from_request(notification_id, notification),
+                    ),
                     on_failure: None,
                 },
             });
@@ -417,7 +416,7 @@ where
 
             if !ios_endpoints.is_empty()
                 && let Some((apns_notif, attributes)) =
-                    build_apns(notification.req.notification.clone())
+                    build_apns(notification.req.notification.clone(), notification_id)
             {
                 apns_collapse_key = Some(attributes.collapse_key.clone());
                 messages.push(QueueMessage {

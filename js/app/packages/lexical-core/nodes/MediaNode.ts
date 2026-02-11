@@ -185,13 +185,13 @@ export abstract class MediaNode<
     element.setAttribute('data-src-type', this.__srcType);
     element.setAttribute(`data-${this.getMediaType()}-id`, this.__id);
     element.setAttribute('data-scale', this.__scale.toString());
-    if (this.__constrainedWidth !== undefined) {
+    if (this.__constrainedWidth != null) {
       element.setAttribute(
         'data-constrained-width',
         this.__constrainedWidth.toString()
       );
     }
-    if (this.__constrainedHeight !== undefined) {
+    if (this.__constrainedHeight != null) {
       element.setAttribute(
         'data-constrained-height',
         this.__constrainedHeight.toString()

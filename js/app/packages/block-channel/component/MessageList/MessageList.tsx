@@ -59,7 +59,7 @@ false && observedSize;
 type ThreadRow = {
   id: string;
   message: Message;
-  children: Message[];
+  children: Accessor<Message[]>;
 };
 
 type MessageListItemProps = {
@@ -374,6 +374,11 @@ function MessageListImpl(props: MessageListProps) {
 
   const [isNearBottom, setIsNearBottom] = createSignal(true);
   const [initialScrollComplete, setInitialScrollComplete] = createSignal(false);
+  const [isScrolledBackSignificantly, setIsScrolledBackSignificantly] =
+    createSignal(false);
+  const [isScrollingDown, setIsScrollingDown] = createSignal(false);
+  let prevScrollOffset: number | undefined;
+  let downwardScrollAccumulator = 0;
 
   // Navigation methods for keyboard navigation
   const navigateToMessage = (messageId: string): boolean => {
@@ -659,7 +664,8 @@ function MessageListImpl(props: MessageListProps) {
   const threadRows = mapArray(
     () => filteredTopLevelMessages().toReversed(),
     (message) => {
-      const children = (viewThreads[message.id] ?? []).filter(messageFilterFn);
+      const children = () =>
+        (viewThreads[message.id] ?? []).filter(messageFilterFn);
       return { id: message.id, message, children };
     }
   );
@@ -706,6 +712,36 @@ function MessageListImpl(props: MessageListProps) {
     const THRESHOLD = 100;
     const distanceFromBottom = handle.scrollOffset;
     return distanceFromBottom <= THRESHOLD;
+  };
+
+  const checkIfScrolledBackSignificantly = () => {
+    const handle = virtualHandle();
+    if (!handle) return false;
+    const THRESHOLD = 2000;
+    return handle.scrollOffset > THRESHOLD;
+  };
+
+  // Track scroll direction.
+  // Requires 100px of cumulative downward scrolling before triggering.
+  // Any upward scroll resets the accumulator immediately.
+  const updateScrollDirection = () => {
+    const handle = virtualHandle();
+    if (handle && prevScrollOffset !== undefined) {
+      const currentOffset = handle.scrollOffset;
+      const delta = prevScrollOffset - currentOffset; // positive = scrolling down
+      if (delta > 0) {
+        downwardScrollAccumulator += delta;
+        if (downwardScrollAccumulator >= 100) {
+          setIsScrollingDown(true);
+        }
+      } else if (delta < 0) {
+        downwardScrollAccumulator = 0;
+        setIsScrollingDown(false);
+      }
+    }
+    if (handle) {
+      prevScrollOffset = handle.scrollOffset;
+    }
   };
 
   const lastMessageReaction = createMemo(() => {
@@ -806,6 +842,9 @@ function MessageListImpl(props: MessageListProps) {
     const nearBottom = checkIfNearBottom();
     setIsNearBottom(nearBottom);
 
+    setIsScrolledBackSignificantly(checkIfScrolledBackSignificantly());
+    updateScrollDirection();
+
     if (!nearBottom && dismissJumpToLatest()) {
       setDismissJumpToLatest(false);
     }
@@ -881,7 +920,7 @@ function MessageListImpl(props: MessageListProps) {
 
   const ThreadRowItem = (rowProps: { row: ThreadRow }) => {
     const row = () => rowProps.row;
-    const threadChildren = () => row().children;
+    const threadChildren = () => row().children();
     const threadState = createMemo(() =>
       listContext.getThreadState(row().message.id)
     );
@@ -1020,7 +1059,8 @@ function MessageListImpl(props: MessageListProps) {
             initialScrollComplete() &&
             !dismissJumpToLatest() &&
             !showJumpToUnviewedMessages() &&
-            !isNearBottom()
+            isScrolledBackSignificantly() &&
+            isScrollingDown()
           }
         >
           <DeprecatedTextButton

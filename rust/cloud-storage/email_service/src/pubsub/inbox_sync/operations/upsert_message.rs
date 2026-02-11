@@ -229,10 +229,12 @@ async fn handle_attachment_upload(
     let (document_atts, media_atts) = tokio::try_join!(
         email_db_client::attachments::provider::upload::new_email_document_atts(
             &ctx.db,
+            link.id,
             &payload.provider_message_id,
         ),
         email_db_client::attachments::provider::upload::new_email_media_atts(
             &ctx.db,
+            link.id,
             &payload.provider_message_id,
         )
     )

@@ -9,6 +9,7 @@ use comms_service::CommsHandlerState;
 use connection_gateway_client::client::ConnectionGatewayClient;
 use dynamodb_client::DynamodbClient;
 use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
+use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_env_var::env_var;
@@ -55,6 +56,9 @@ type PropertiesService = PropertiesServiceImpl<
     NotificationServiceImpl<NotificationIngressType>,
 >;
 
+/// Type alias for the entity access service.
+pub(crate) type EntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
+
 /// Type alias for the ChannelServiceImpl used by comms
 pub(crate) type CommsChannelService =
     ChannelServiceImpl<PgCommsRepo, UserRepoImpl, FrecencyPgStorage>;
@@ -85,6 +89,7 @@ pub(crate) struct ApiContext {
     pub comms_state: CommsState,
     pub permissions_token_secret:
         LocalOrRemoteSecret<comms_service::DocumentPermissionJwtSecretKey>,
+    pub entity_access_service: Arc<EntityAccessService>,
 }
 
 env_var! {

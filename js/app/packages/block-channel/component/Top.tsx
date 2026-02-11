@@ -17,6 +17,7 @@ import HashIcon from '@icon/regular/hash.svg';
 import LinkIcon from '@icon/regular/link.svg';
 import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
 import type { ChannelType } from '@service-comms/generated/models/channelType';
+import { ChannelTypeEnum } from '@service-comms/client';
 import { useUserId } from '@core/context/user';
 import { createMemo, Show } from 'solid-js';
 import { AttachmentsModal } from './AttachmentsModal';
@@ -37,7 +38,7 @@ function TopIcon(props: TopIconProps) {
 
   return (
     <Show
-      when={props.channelType === 'direct_message' && recipient()}
+      when={props.channelType === ChannelTypeEnum.DirectMessage && recipient()}
       fallback={<HashIcon class="w-4 h-4" />}
     >
       {(recipient) => {
@@ -98,7 +99,8 @@ export function Top(props: TopProps) {
               id={props.channelId}
               itemType="channel"
               lockRename={
-                props.channelType === 'direct_message' || !isAdminOrOwner()
+                props.channelType === ChannelTypeEnum.DirectMessage ||
+                !isAdminOrOwner()
               }
             />
           </div>
@@ -109,7 +111,7 @@ export function Top(props: TopProps) {
       </SplitHeaderRight>
       <SplitToolbarRight>
         <div class="p-1 flex flex-row gap-1 items-center h-full">
-          <Show when={props.channelType === 'public'}>
+          <Show when={props.channelType === ChannelTypeEnum.Public}>
             <DeprecatedIconButton
               theme="clear"
               size="sm"
@@ -124,7 +126,7 @@ export function Top(props: TopProps) {
             buttonSize="sm"
           />
           <AttachmentsModal />
-          <Show when={props.channelType !== 'direct_message'}>
+          <Show when={props.channelType !== ChannelTypeEnum.DirectMessage}>
             <ParticipantManager
               channelId={props.channelId}
               channelType={props.channelType}

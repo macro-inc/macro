@@ -40,6 +40,59 @@ new aws.vpc.SecurityGroupEgressRule(`opensearch-all-out`, {
   tags,
 });
 
+// Create CloudWatch Log Groups for OpenSearch logs
+const indexSlowLogGroup = new aws.cloudwatch.LogGroup(
+  `opensearch-index-slow-logs-${stack}`,
+  {
+    name: `/aws/opensearch/domains/macro-opensearch-${stack}/index-slow-logs`,
+    retentionInDays: stack === 'prod' ? 30 : 7,
+    tags,
+  }
+);
+
+const searchSlowLogGroup = new aws.cloudwatch.LogGroup(
+  `opensearch-search-slow-logs-${stack}`,
+  {
+    name: `/aws/opensearch/domains/macro-opensearch-${stack}/search-slow-logs`,
+    retentionInDays: stack === 'prod' ? 30 : 7,
+    tags,
+  }
+);
+
+const applicationLogGroup = new aws.cloudwatch.LogGroup(
+  `opensearch-application-logs-${stack}`,
+  {
+    name: `/aws/opensearch/domains/macro-opensearch-${stack}/application-logs`,
+    retentionInDays: stack === 'prod' ? 7 : 3,
+    tags,
+  }
+);
+
+// Create CloudWatch Logs Resource Policy to allow OpenSearch to write logs
+const opensearchLogsPolicy = new aws.cloudwatch.LogResourcePolicy(
+  `opensearch-logs-policy-${stack}`,
+  {
+    policyName: `opensearch-logs-policy-${stack}`,
+    policyDocument: JSON.stringify({
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Effect: 'Allow',
+          Principal: {
+            Service: 'es.amazonaws.com',
+          },
+          Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
+          Resource: [
+            indexSlowLogGroup.arn.apply((arn) => `${arn}:*`),
+            searchSlowLogGroup.arn.apply((arn) => `${arn}:*`),
+            applicationLogGroup.arn.apply((arn) => `${arn}:*`),
+          ],
+        },
+      ],
+    }),
+  }
+);
+
 // Create an OpenSearch domain
 const opensearchDomain = new aws.opensearch.Domain(
   `macro-opensearch-${stack}`,
@@ -116,9 +169,26 @@ const opensearchDomain = new aws.opensearch.Domain(
           }
         : undefined,
     ipAddressType: stack === 'prod' ? 'ipv4' : 'dualstack', // vpc doesn't have ipv6 for prod
-    // TODO: figure out logging configuration
+    logPublishingOptions: [
+      {
+        logType: 'INDEX_SLOW_LOGS',
+        cloudwatchLogGroupArn: indexSlowLogGroup.arn,
+        enabled: true,
+      },
+      {
+        logType: 'SEARCH_SLOW_LOGS',
+        cloudwatchLogGroupArn: searchSlowLogGroup.arn,
+        enabled: true,
+      },
+      {
+        logType: 'ES_APPLICATION_LOGS',
+        cloudwatchLogGroupArn: applicationLogGroup.arn,
+        enabled: true,
+      },
+    ],
     tags,
-  }
+  },
+  { dependsOn: [opensearchLogsPolicy] }
 );
 
 // export the domain endpoint

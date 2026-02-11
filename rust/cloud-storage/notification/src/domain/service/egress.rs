@@ -11,6 +11,7 @@ use crate::domain::ports::{
     EmailSender, NotificationEgress, NotificationQueue, NotificationRepository, NotificationSender,
     RateLimitPort, WebSocketSender,
 };
+use either::Either;
 use rootcause::prelude::ResultExt;
 use rootcause::{Report, report};
 
@@ -93,18 +94,18 @@ where
         mut recursion_tail: Vec<Result<DeliverySuccess, Report>>,
     ) -> Vec<Result<DeliverySuccess, Report>> {
         let result = match &node.notif {
-            NotificationChannel::ConnGateway(conn) => self.deliver_conn_gateway(conn).await,
-            NotificationChannel::Ios(apns) => self.deliver_ios(apns).await,
-            NotificationChannel::Email(email) => self.deliver_email(email).await,
+            NotificationChannel::ConnGateway(conn) => {
+                Either::Left([self.deliver_conn_gateway(conn).await])
+            }
+            NotificationChannel::Email(email) => Either::Left([self.deliver_email(email).await]),
+            NotificationChannel::Ios(apns) => Either::Right(self.deliver_ios(apns).await),
         };
-        recursion_tail.push(result);
-        let res = recursion_tail
-            .last()
-            .expect("we just pushed, this cannot fail");
+        let all_failed = result.iter().all(Result::is_err);
+        recursion_tail.extend(result.into_iter());
 
-        match (res, node.on_failure) {
-            (Ok(_), _) | (Err(_), None) => recursion_tail,
-            (Err(_), Some(fallback)) => {
+        match (all_failed, node.on_failure) {
+            (false, _) | (true, None) => recursion_tail,
+            (true, Some(fallback)) => {
                 Box::pin(self.deliver_notification_inner(message_type, *fallback, recursion_tail))
                     .await
             }
@@ -126,13 +127,17 @@ where
     async fn deliver_ios(
         &self,
         apns: &crate::domain::models::queue_message::APNSTargets<serde_json::Value>,
-    ) -> Result<DeliverySuccess, Report> {
+    ) -> Vec<Result<DeliverySuccess, Report>> {
+        let mut out = Vec::with_capacity(apns.ios_device_endpoints.len());
         for endpoint in &apns.ios_device_endpoints {
-            self.mobile
+            let res = self
+                .mobile
                 .send_ios_push_notification(endpoint, &apns.notif, &apns.attributes)
-                .await?;
+                .await
+                .map(|()| DeliverySuccess::Ios);
+            out.push(res)
         }
-        Ok(DeliverySuccess::Ios)
+        out
     }
 
     /// Deliver via email.
@@ -173,16 +178,16 @@ where
             // Deliver the notification (body is already parsed as QueueMessage)
             let delivery_results = self.deliver_notification(message.body).await;
 
-            // Check if all deliveries succeeded
-            let all_succeeded = delivery_results.iter().all(Result::is_ok);
+            // Check if any deliveries succeeded
+            let any_succeeded = delivery_results.iter().any(Result::is_ok);
 
             // Add results (stripping the DeliveryFailure context for the trait return type)
             for result in delivery_results {
                 results.push(result.map_err(Report::from));
             }
 
-            // Delete from queue only if all deliveries succeeded
-            if all_succeeded && let Err(e) = self.queue.delete_message(&receipt_handle).await {
+            // Delete from queue if any deliveries succeeded
+            if any_succeeded && let Err(e) = self.queue.delete_message(&receipt_handle).await {
                 // if delete queue fails push it into the results
                 results.push(Err(e))
             }

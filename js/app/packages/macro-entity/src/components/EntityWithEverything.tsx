@@ -13,19 +13,17 @@ import ChatIcon from '@icon/regular/chat.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import {
   getAllNotificationsFromGroup,
-  getMetadata,
   getMostRecentNotification,
-  isChannelMessageReply,
   type NotificationStack,
   stackNotifications,
-  type TypedNotification,
-  tryToTypedNotification,
+  type UnifiedNotification,
 } from '@notifications';
 import { formatDocumentName } from '@service-storage/util/filename';
 import { syncServiceClient } from '@service-sync/client';
+import { ChannelTypeEnum } from '@service-comms/client';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable } from '@thisbeyond/solid-dnd';
-import { getIconConfig } from 'core/component/EntityIcon';
+import { getEntityIconConfig } from 'core/component/EntityIcon';
 import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import { UserIcon } from 'core/component/UserIcon';
@@ -322,10 +320,14 @@ function NotificationRow(props: {
       return 'mentioned you';
     }
 
-    const metadata = tryToTypedNotification(
-      props.notification
-    )?.notificationMetadata;
-    if (!metadata || !('messageContent' in metadata)) return '';
+    const tag = (props.notification as UnifiedNotification).notificationMetadata
+      .tag;
+    if (
+      tag !== 'channel_mention' &&
+      tag !== 'channel_message_send' &&
+      tag !== 'channel_message_reply'
+    )
+      return '';
 
     return 'message';
   };
@@ -338,17 +340,17 @@ function NotificationRow(props: {
       return '';
     }
 
-    const typed = tryToTypedNotification(props.notification);
-    if (!typed) return '';
-    const metadata = getMetadata(typed);
+    const n = props.notification as UnifiedNotification;
+    const tag = n.notificationMetadata.tag;
     if (
-      !metadata ||
-      !('messageContent' in metadata) ||
-      metadata.messageContent === undefined
-    )
+      tag !== 'channel_mention' &&
+      tag !== 'channel_message_send' &&
+      tag !== 'channel_message_reply'
+    ) {
       return '';
+    }
 
-    const content = metadata.messageContent;
+    const content = n.notificationMetadata.content.messageContent;
     return (
       <Show
         when={content?.trim()}
@@ -411,7 +413,7 @@ function NotificationRow(props: {
  * Shared row component for stacked notifications (new messages and replies)
  */
 function StackedNotificationRow(props: {
-  notifications: TypedNotification[];
+  notifications: UnifiedNotification[];
   title: JSX.Element;
   icon: (props: { class?: string }) => JSX.Element;
   onClick?: (e: EntityClickEvent) => void;
@@ -439,14 +441,16 @@ function StackedNotificationRow(props: {
   const messageContent = createMemo(() => {
     const notification = mostRecent();
     if (!notification) return '';
-    const typed = tryToTypedNotification(notification);
-    if (!typed) return '';
-    const metadata = getMetadata(typed);
-    if (metadata && 'messageContent' in metadata) {
-      const content = metadata.messageContent as string | null | undefined;
-      return content?.trim() ?? '';
+    const tag = notification.notificationMetadata.tag;
+    if (
+      tag !== 'channel_mention' &&
+      tag !== 'channel_message_send' &&
+      tag !== 'channel_message_reply'
+    ) {
+      return '';
     }
-    return '';
+    const content = notification.notificationMetadata.content.messageContent;
+    return content?.trim() ?? '';
   });
 
   return (
@@ -539,12 +543,9 @@ function StackedRepliesRow(props: {
   const threadParentSenderId = () => {
     const notification = props.group.notifications[0];
     if (!notification) return '';
-    const typed = tryToTypedNotification(notification);
-    if (!typed || !isChannelMessageReply(typed)) return '';
-    const metadata = getMetadata(
-      typed as TypedNotification<'channel_message_reply'>
-    );
-    return metadata?.threadParentSenderId ?? '';
+    const meta = notification.notificationMetadata;
+    if (meta.tag !== 'channel_message_reply') return '';
+    return meta.content.threadParentSenderId ?? '';
   };
 
   const { firstName } = useDisplayNameParts(tryMacroId(threadParentSenderId()));
@@ -762,29 +763,7 @@ export function EntityWithEverything(
   const { keydownDataDuringTask } = trackKeydownDuringTask();
   const userEmail = useEmail();
 
-  const getIcon = createMemo(() => {
-    switch (props.entity.type) {
-      case 'channel':
-        switch (props.entity.channelType) {
-          case 'direct_message':
-            return getIconConfig('directMessage');
-          case 'organization':
-            return getIconConfig('company');
-          default:
-            return getIconConfig('channel');
-        }
-      case 'document':
-        if (isTaskEntity(props.entity)) return getIconConfig('task');
-        if (props.entity.fileType) return getIconConfig(props.entity.fileType);
-        return getIconConfig('default');
-      case 'chat':
-        return getIconConfig('chat');
-      case 'project':
-        return getIconConfig('project');
-      case 'email':
-        return getIconConfig(props.entity.isRead ? 'emailRead' : 'email');
-    }
-  });
+  const getIcon = createMemo(() => getEntityIconConfig(props.entity));
 
   /**
    * TODO (seamus + teo) : These notifications are being attached to the wrong
@@ -1077,7 +1056,7 @@ export function EntityWithEverything(
                 <Show
                   when={
                     props.entity.type === 'channel' &&
-                    props.entity.channelType === 'direct_message'
+                    props.entity.channelType === ChannelTypeEnum.DirectMessage
                   }
                   fallback={
                     <Dynamic
@@ -1217,7 +1196,7 @@ export function EntityWithEverything(
     <div
       use:draggable
       data-checked={props.checked}
-      class="everything-entity w-full relative group/entity hover:bg-hover/30 text-sm touch:mobile-width:text-base mx-[1px]"
+      class="everything-entity w-full relative group/entity hover:bg-hover/30 text-sm touch:mobile-width:text-base"
       style={{
         'min-height': `${ENTITY_HEIGHT}px`,
       }}
@@ -1381,7 +1360,7 @@ export function EntityWithEverything(
               <Show
                 when={
                   props.entity.type === 'channel' &&
-                  props.entity.channelType === 'direct_message'
+                  props.entity.channelType === ChannelTypeEnum.DirectMessage
                 }
                 fallback={
                   <Dynamic
@@ -1539,7 +1518,7 @@ function DirectMessageIcon(props: { entity: EntityData }) {
           .at(0)
       : undefined;
 
-  const Fallback = () => <EntityIcon targetType="directMessage" />;
+  const Fallback = () => <EntityIcon targetType="direct_message" />;
 
   return (
     <div class="bg-panel size-5 rounded-full p-[2px]">

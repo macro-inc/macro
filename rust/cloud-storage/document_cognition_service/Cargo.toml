@@ -17,6 +17,10 @@ path = "src/bin/backfill_search.rs"
 name = "document_cognition_service_openapi"
 path = "src/openapi.rs"
 
+[[bin]]
+name = "document_cognition_service_models"
+path = "src/models_bin.rs"
+
 [features]
 local = []
 local_queue = []

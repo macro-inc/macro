@@ -1,180 +1,79 @@
 import type { UnifiedNotification } from '@service-notification/client';
-import type {
-  ChannelInviteMetadata,
-  ChannelMentionMetadata,
-  ChannelMessageSendMetadata,
-  ChannelReplyMetadata,
-  DocumentMentionMetadata,
-  InviteToTeamMetadata,
-  ItemSharedMetadata,
-  ItemSharedOrganizationMetadata,
-  NewEmailMetadata,
-  NotificationEventType,
-  TaskAssignedMetadata,
-} from '@service-notification/generated/schemas';
+import { match } from 'ts-pattern';
 
-export interface NotificationMetadataByType {
-  [NotificationEventType.item_shared_user]: ItemSharedMetadata;
-  [NotificationEventType.item_shared_organization]: ItemSharedOrganizationMetadata;
-  [NotificationEventType.channel_mention]: ChannelMentionMetadata;
-  [NotificationEventType.document_mention]: DocumentMentionMetadata;
-  [NotificationEventType.channel_invite]: ChannelInviteMetadata;
-  [NotificationEventType.channel_message_send]: ChannelMessageSendMetadata;
-  [NotificationEventType.channel_message_reply]: ChannelReplyMetadata;
-  [NotificationEventType.channel_message_document]: DocumentMentionMetadata;
-  [NotificationEventType.new_email]: NewEmailMetadata;
-  [NotificationEventType.invite_to_team]: InviteToTeamMetadata;
-  [NotificationEventType.reject_team_invite]: null;
-  [NotificationEventType.task_assigned]: TaskAssignedMetadata;
+// Helper functions for derived notification data
+
+export function getNotificationAction(n: UnifiedNotification): string {
+  return match(n.notificationMetadata.tag)
+    .with('channel_mention', () => 'mentioned you in')
+    .with('document_mention', () => 'sent a document')
+    .with('mentioned_in_document_comment', () => 'mentioned you in')
+    .with('channel_message_send', () => 'sent a message in')
+    .with('channel_message_reply', () => 'replied in')
+    .with('channel_invite', () => 'invited you to')
+    .with('new_email', () => 'sent a new email')
+    .with('invite_to_team', () => 'invited you to')
+    .with('task_assigned', () => 'assigned you a task')
+    .exhaustive();
 }
 
-export type UnifiedNotificationMetadata =
-  NotificationMetadataByType[keyof NotificationMetadataByType];
-
-/**
- * A notification with a specific event type.
- * Use `getMetadata(notification)` to access the typed metadata content.
- */
-export type TypedNotification<
-  T extends NotificationEventType = NotificationEventType,
-> = UnifiedNotification & {
-  notificationEventType: T;
-};
-
-/**
- * Extract the typed metadata content from a notification.
- * The API returns notificationMetadata in { tag, content } format.
- * The connection gateway returns notificationMetadata as a flat object.
- * This function handles both formats.
- */
-export function getMetadata<T extends NotificationEventType>(
-  n: TypedNotification<T>
-): T extends keyof NotificationMetadataByType
-  ? NotificationMetadataByType[T]
-  : never {
-  const metadata = n.notificationMetadata as
-    | { tag: string; content: unknown }
-    | Record<string, unknown>;
-
-  // Check if metadata is in { tag, content } format (from API)
-  // or flat format (from connection gateway)
-  const content =
-    'content' in metadata && 'tag' in metadata ? metadata.content : metadata;
-
-  return content as T extends keyof NotificationMetadataByType
-    ? NotificationMetadataByType[T]
-    : never;
-}
-
-function isNotificationType<T extends NotificationEventType>(
-  n: UnifiedNotification,
-  type: T
-): n is TypedNotification<T> {
-  return n.notificationEventType === type;
-}
-
-export function isItemSharedUser(
+export function getNotificationTargetName(
   n: UnifiedNotification
-): n is TypedNotification<'item_shared_user'> {
-  return isNotificationType(n, 'item_shared_user');
+): string | undefined {
+  const m = n.notificationMetadata;
+  return match(m)
+    .with({ tag: 'channel_invite' }, (m) => m.content.channelName)
+    .with({ tag: 'document_mention' }, (m) => m.content.documentName)
+    .with(
+      { tag: 'mentioned_in_document_comment' },
+      (m) => m.content.documentName
+    )
+    .with({ tag: 'invite_to_team' }, (m) => m.content.teamName)
+    .with({ tag: 'task_assigned' }, (m) => m.content.taskName ?? undefined)
+    .with({ tag: 'channel_mention' }, () => undefined)
+    .with({ tag: 'channel_message_send' }, () => undefined)
+    .with({ tag: 'channel_message_reply' }, () => undefined)
+    .with({ tag: 'new_email' }, () => undefined)
+    .exhaustive();
 }
 
-export function isItemSharedOrganization(
+export function getNotificationContent(
   n: UnifiedNotification
-): n is TypedNotification<'item_shared_organization'> {
-  return isNotificationType(n, 'item_shared_organization');
+): string | undefined {
+  const m = n.notificationMetadata;
+  return match(m)
+    .with({ tag: 'channel_mention' }, (m) => m.content.messageContent)
+    .with({ tag: 'channel_message_send' }, (m) => m.content.messageContent)
+    .with({ tag: 'channel_message_reply' }, (m) => m.content.messageContent)
+    .with({ tag: 'document_mention' }, (m) => m.content.documentName)
+    .with({ tag: 'mentioned_in_document_comment' }, (m) => m.content.text)
+    .with({ tag: 'new_email' }, (m) => m.content.subject)
+    .with({ tag: 'task_assigned' }, (m) => m.content.taskName ?? undefined)
+    .with({ tag: 'channel_invite' }, () => undefined)
+    .with({ tag: 'invite_to_team' }, () => undefined)
+    .exhaustive();
 }
 
-export function isChannelMention(
-  n: UnifiedNotification
-): n is TypedNotification<'channel_mention'> {
-  return isNotificationType(n, 'channel_mention');
-}
-
-export function isDocumentMention(
-  n: UnifiedNotification
-): n is TypedNotification<'document_mention'> {
-  return isNotificationType(n, 'document_mention');
-}
-
-export function isChannelInvite(
-  n: UnifiedNotification
-): n is TypedNotification<'channel_invite'> {
-  return isNotificationType(n, 'channel_invite');
-}
-
-export function isChannelMessageSend(
-  n: UnifiedNotification
-): n is TypedNotification<'channel_message_send'> {
-  return isNotificationType(n, 'channel_message_send');
-}
-
-export function isChannelMessageReply(
-  n: UnifiedNotification
-): n is TypedNotification<'channel_message_reply'> {
-  return isNotificationType(n, 'channel_message_reply');
-}
-
-export function isChannelMessageDocument(
-  n: UnifiedNotification
-): n is TypedNotification<'channel_message_document'> {
-  return isNotificationType(n, 'channel_message_document');
-}
-
-export function isNewEmail(
-  n: UnifiedNotification
-): n is TypedNotification<'new_email'> {
-  return isNotificationType(n, 'new_email');
-}
-
-export function isInviteToTeam(
-  n: UnifiedNotification
-): n is TypedNotification<'invite_to_team'> {
-  return isNotificationType(n, 'invite_to_team');
-}
-
-export function isRejectTeamInvite(
-  n: UnifiedNotification
-): n is TypedNotification<'reject_team_invite'> {
-  return isNotificationType(n, 'reject_team_invite');
-}
-
-export function extractMetadata<T extends NotificationEventType>(
-  notification: UnifiedNotification,
-  type: T
-): T extends keyof NotificationMetadataByType
-  ? NotificationMetadataByType[T]
-  : null {
-  if (
-    !('notificationEventType' in notification) ||
-    notification.notificationEventType !== type ||
-    !('notificationMetadata' in notification)
-  ) {
-    return null as any;
-  }
-  return notification.notificationMetadata as any;
-}
-
-export function isNotificationWithMetadata(
-  notification: UnifiedNotification
-): notification is UnifiedNotification & {
-  notificationEventType: keyof NotificationMetadataByType;
-  notificationMetadata: UnifiedNotificationMetadata;
-} {
-  return (
-    'notificationMetadata' in notification &&
-    notification.notificationMetadata != null &&
-    'notificationEventType' in notification
-  );
-}
-
-export type UnifiedNotificationWithMetadata<
-  T extends keyof NotificationMetadataByType = keyof NotificationMetadataByType,
-> = TypedNotification<T>;
-
-export function tryToTypedNotification(
-  notification: UnifiedNotification
-): TypedNotification<NotificationEventType> | null {
-  if (!isNotificationWithMetadata(notification)) return null;
-  return notification as TypedNotification<NotificationEventType>;
+export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
+  const m = n.notificationMetadata;
+  return match(m)
+    .with(
+      { tag: 'channel_mention' },
+      (m) => m.content.channelType !== 'directMessage'
+    )
+    .with(
+      { tag: 'channel_message_send' },
+      (m) => m.content.channelType !== 'directMessage'
+    )
+    .with(
+      { tag: 'channel_message_reply' },
+      (m) => m.content.channelType !== 'directMessage'
+    )
+    .with({ tag: 'new_email' }, () => false)
+    .with({ tag: 'task_assigned' }, () => true)
+    .with({ tag: 'document_mention' }, () => true)
+    .with({ tag: 'mentioned_in_document_comment' }, () => true)
+    .with({ tag: 'channel_invite' }, () => true)
+    .with({ tag: 'invite_to_team' }, () => true)
+    .exhaustive();
 }

@@ -422,22 +422,6 @@ export const StorageService = new Svc('Document++ Storage Service API')
     modifies: true,
     throws: withFetchErrors('INVALID_RESPONSE'),
   })
-  .fn('createTextDocument', {
-    description: 'Creates a new text document',
-    args: {
-      ...schemas.createDocumentHandlerBody.omit({
-        sha: true,
-      }).shape,
-      text: z.string().describe('The text content of the document'),
-    },
-    result: {
-      metadata:
-        schemas.createDocumentHandlerResponse.shape.data._def.left.shape
-          .documentMetadata,
-    },
-    modifies: true,
-    throws: withFetchErrors('INVALID_RESPONSE'),
-  })
   .fn('copyDocument', {
     description: schemas.copyDocumentHandlerResponse.description!,
     args: {

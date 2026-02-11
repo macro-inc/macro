@@ -1,10 +1,12 @@
 //! Domain models for the notification service.
 
 use macro_user_id::user_id::MacroUserIdStr;
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 pub(crate) mod android;
 pub mod apple;
+
+pub mod email_notification_digest;
 pub mod mobile;
 pub(crate) mod queue_message;
 pub mod rate_limit;
@@ -35,7 +37,7 @@ pub struct NotificationIdAndCollapseKey {
 ///
 /// The metadata field is generic so callers can deserialize it into
 /// whatever type they need without this crate depending on the caller's models.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserNotificationRow<T> {
     /// The user who owns this notification.
     pub owner_id: MacroUserIdStr<'static>,
@@ -66,11 +68,68 @@ pub struct UserNotificationRow<T> {
     pub sender_id: Option<MacroUserIdStr<'static>>,
 }
 
+impl<T> UserNotificationRow<T> {
+    /// map the inner T to some U
+    pub fn map<F, U>(self, f: F) -> UserNotificationRow<U>
+    where
+        F: FnOnce(T) -> U,
+    {
+        let UserNotificationRow {
+            owner_id,
+            notification_id,
+            notification_event_type,
+            entity,
+            sent,
+            done,
+            created_at,
+            viewed_at,
+            updated_at,
+            deleted_at,
+            notification_metadata,
+            sender_id,
+        } = self;
+
+        UserNotificationRow {
+            owner_id,
+            notification_id,
+            notification_event_type,
+            entity,
+            sent,
+            done,
+            created_at,
+            viewed_at,
+            updated_at,
+            deleted_at,
+            notification_metadata: f(notification_metadata),
+            sender_id,
+        }
+    }
+}
+
 /// A notification metadata value tagged with the notification event type.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaggedContent<T> {
     tag: String,
     content: T,
+}
+
+impl<T: Notification> TaggedContent<T> {
+    /// create a new value from a notification T
+    pub fn new(val: T) -> Self {
+        TaggedContent {
+            tag: T::TYPE_NAME.to_string(),
+            content: val,
+        }
+    }
+
+    /// convert the inner to a type erased json value
+    pub fn serialize(self) -> TaggedContent<serde_json::Value> {
+        let TaggedContent { tag, content } = self;
+        TaggedContent {
+            tag,
+            content: serde_json::to_value(&content).expect("serde json serialize cant fail"),
+        }
+    }
 }
 
 impl<T> UserNotificationRow<T> {
@@ -233,5 +292,7 @@ pub trait NotificationExtIos: Notification {
     fn into_apns<'a>(
         self,
         sender_id: Option<MacroUserIdStr<'a>>,
+        entity: &Entity<'_>,
+        notification_id: uuid::Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>>;
 }

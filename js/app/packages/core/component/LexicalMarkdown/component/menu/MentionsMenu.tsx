@@ -371,13 +371,7 @@ export function MentionsMenuItem(props: {
         return (
           <EntityIcon
             size="xs"
-            targetType={
-              props.item.data.channel_type === 'direct_message'
-                ? 'directMessage'
-                : props.item.data.channel_type === 'organization'
-                  ? 'company'
-                  : 'channel'
-            }
+            targetType={props.item.data.channel_type || 'channel'}
           />
         );
 
@@ -1159,7 +1153,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                 </span>
                 <button
                   type="button"
-                  class="text-xs font-medium text-ink-muted hover:text-ink hover:underline cursor-pointer"
+                  class="text-xs font-medium text-ink-muted hover:text-ink hover:underline"
                   onMouseDown={(e) => {
                     e.preventDefault();
                     e.stopPropagation();

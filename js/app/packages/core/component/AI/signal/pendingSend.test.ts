@@ -50,7 +50,7 @@ describe('pendingSend signal', () => {
           created_at: '2025-01-01T00:00:00Z',
         } as any,
       ],
-      model: 'claude-opus-4-5' as any,
+      model: 'claude-opus-4-6' as any,
     };
 
     setPendingSendData(data);
@@ -58,6 +58,6 @@ describe('pendingSend signal', () => {
 
     expect(result?.content).toBe('Message with attachment');
     expect(result?.attachments).toHaveLength(1);
-    expect(result?.model).toBe('claude-opus-4-5');
+    expect(result?.model).toBe('claude-opus-4-6');
   });
 });

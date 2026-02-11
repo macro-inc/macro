@@ -6,14 +6,16 @@ import {
 } from '@queries/channel/channel';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import type { ItemType } from '@service-storage/client';
+import { ChannelTypeEnum } from '@service-comms/client';
 import type { EntityData } from '../types/entity';
 import { queryClient } from './client';
-import { queryKeys } from './key';
 import { type InfiniteData, useMutation } from '@tanstack/solid-query';
 import { toast } from '@core/component/Toast/Toast';
 import type { SoupPage } from '@service-storage/generated/schemas';
-import { setPreviewData } from '@queries/preview';
+import { setPreviewName } from '@queries/preview';
 import { setHistoryItemName } from '@queries/history/history';
+import { createCognitionWebsocketEffect } from '@service-cognition/websocket';
+import { soupKeys } from '@queries/soup/keys';
 
 type RenamableEntity = Pick<EntityData, 'id' | 'type' | 'name'> &
   Partial<EntityData>;
@@ -40,6 +42,8 @@ type EntityRenameData = {
   oldName: string;
   newName: string;
 };
+
+type EntityRenameOptimisticInfo = Omit<EntityRenameData, 'oldName'>;
 
 type EntityIdToNameMap = Map<string, string>;
 
@@ -78,7 +82,7 @@ const validateEntityRename = (entity: EntityData): void => {
   switch (entity.type) {
     case 'channel':
       // NOTE: channel type is undefined if provided from the split modal due to casting in createEntityData
-      if (entity.channelType === 'direct_message') {
+      if (entity.channelType === ChannelTypeEnum.DirectMessage) {
         throw new Error('Direct messages do not support renaming');
       }
       break;
@@ -105,7 +109,7 @@ function updateEntityNamesInDssQueryData(
         case 'channel': {
           const itemId = item.data.channel.id;
           const newName = updates.get(itemId);
-          if (!newName) return item;
+          if (newName === undefined) return item;
           item.data.channel.name = newName;
           break;
         }
@@ -114,7 +118,7 @@ function updateEntityNamesInDssQueryData(
         case 'project': {
           const itemId = item.data.id;
           const newName = updates.get(itemId);
-          if (!newName) return item;
+          if (newName === undefined) return item;
           item.data.name = newName;
           break;
         }
@@ -130,15 +134,15 @@ function updateEntityNamesInDssQueryData(
   };
 }
 
-const renameDssSetData = (entities: EntityRenameData[]) => {
+const renameDssSetData = (entities: EntityRenameOptimisticInfo[]) => {
   const updates: EntityIdToNameMap = new Map(
     entities.map((e) => [e.id, e.newName])
   );
 
   queryClient.cancelQueries({
-    queryKey: queryKeys.all.dss,
+    queryKey: soupKeys.items._def,
   });
-  queryClient.setQueriesData({ queryKey: queryKeys.all.dss }, (prev) =>
+  queryClient.setQueriesData({ queryKey: soupKeys.items._def }, (prev) =>
     updateEntityNamesInDssQueryData(
       prev as InfiniteData<SoupPage, unknown> | undefined,
       updates
@@ -147,7 +151,7 @@ const renameDssSetData = (entities: EntityRenameData[]) => {
 };
 
 const renameChannelSetData = (
-  entities: EntityRenameData[]
+  entities: EntityRenameOptimisticInfo[]
 ): ChannelRenameContexts => {
   const contexts: ChannelRenameContexts = new Map();
 
@@ -166,23 +170,24 @@ const renameChannelSetData = (
   return contexts;
 };
 
-const renamePreviewSetData = (entities: EntityRenameData[]) => {
-  entities.forEach(({ id, newName }) => {
-    setPreviewData(id, (prev) => ({
-      ...prev,
+const renamePreviewSetData = (entities: EntityRenameOptimisticInfo[]) => {
+  entities.forEach(({ id, newName, itemType }) => {
+    setPreviewName({
+      itemId: id,
       name: newName,
-    }));
+      itemType,
+    });
   });
 };
 
-const renameHistorySetData = (entities: EntityRenameData[]) => {
+const renameHistorySetData = (entities: EntityRenameOptimisticInfo[]) => {
   entities.forEach(({ id, newName }) => {
     setHistoryItemName(id, newName);
   });
 };
 
 function performOptimisticRenameUpdates(
-  entities: EntityRenameData[]
+  entities: EntityRenameOptimisticInfo[]
 ): RenameRollbackContext {
   renamePreviewSetData(entities);
   renameHistorySetData(entities);
@@ -337,4 +342,31 @@ export function createBulkRenameDssEntityMutation() {
     onMutate: bulkRenameOnMutate,
     onSettled: bulkRenameOnSettled,
   }));
+}
+
+const CHAT_RENAME_TIMEOUT_MS = 20000;
+
+/**
+ * Waits for a chat rename to complete and updates the query cache(s).
+ * If noDispose is true, the effect will not be disposed after completion/timeout.
+ * Returns a dispose function to cancel the wait.
+ */
+export function useWaitChatRename(chatId: string, noDispose?: boolean) {
+  if (!noDispose) {
+    setTimeout(() => {
+      dispose();
+    }, CHAT_RENAME_TIMEOUT_MS);
+  }
+
+  const dispose = createCognitionWebsocketEffect('chat_renamed', (data) => {
+    if (data.chat_id !== chatId) return;
+    performOptimisticRenameUpdates([
+      { id: chatId, newName: data.name, itemType: 'chat' },
+    ]);
+    if (!noDispose) {
+      dispose();
+    }
+  });
+
+  return dispose;
 }

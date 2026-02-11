@@ -1,9 +1,6 @@
-import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
-import { PreviewPanel } from '@app/component/PreviewPanel';
+import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 import { SplitPanelContext } from '@app/component/split-layout/context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
-import { UnifiedListView } from '@app/component/UnifiedListView';
-import { PROJECT_VIEWCONFIG_BASE } from '@app/component/ViewConfig';
 import { getIsSpecialProject } from '@block-project/isSpecial';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
@@ -11,42 +8,39 @@ import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { ENABLE_PROJECT_VIEW_PREVIEW } from '@core/constant/featureFlags';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { fileSelector } from '@core/directive/fileSelector';
-import { registerHotkey } from '@core/hotkey/hotkeys';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import {
   handleFileFolderDrop,
   type UploadInput,
   uploadFiles,
 } from '@core/util/upload';
-import { throttledDependent } from '@core/util/debounce';
-import {
-  queryKeys,
-  useQueryClient as useEntityQueryClient,
-} from '@macro-entity';
+import { useQueryClient } from '@queries/client';
+import { soupKeys } from '@queries/soup/keys';
 import { refetchResources } from '@service-storage/util/refetchResources';
 import { toast } from 'core/component/Toast/Toast';
-import {
-  type Component,
-  createMemo,
-  createRenderEffect,
-  createSignal,
-  onCleanup,
-  Show,
-  untrack,
-} from 'solid-js';
-import { projectBlockDataSignal } from '../signal/projectBlockData';
+import { type Component, createSignal, Show } from 'solid-js';
 import { TopBar } from './TopBar';
+import { SoupContextProvider } from '@app/component/next-soup/soup-context';
+import {
+  createSoupState,
+  type SoupState,
+} from '@app/component/next-soup/create-soup-state';
+import { SoupViewContextProvider } from '@app/component/next-soup/soup-view/soup-view-context';
+import { SoupViewList } from '@app/component/next-soup/soup-view/soup-view';
+import { NIL_UUID } from '@app/component/next-soup/filters/filters';
 
 // HACK: prevent lint error on custom directive
 false && fileFolderDrop;
 false && fileSelector;
 
+const PROJECT_ENTITY_TYPES = ['document', 'task', 'chat', 'project'];
+
 const Block: Component = () => {
   const [isDragging, setIsDragging] = createSignal(false);
   const projectId = useBlockId();
   const isSpecialProject = getIsSpecialProject(projectId);
-  const name = () => projectBlockDataSignal()?.projectMetadata.name;
-  const entityQueryClient = useEntityQueryClient();
+  const queryClient = useQueryClient();
 
   const handleFileUpload = async (files: UploadInput[]) => {
     if (files.length === 0) return;
@@ -67,8 +61,8 @@ const Block: Component = () => {
       // show documents that were immediately uploaded
       const successfulUploads = uploads.filter((result) => !result.pending);
       if (successfulUploads.length > 0) {
-        entityQueryClient.invalidateQueries({
-          queryKey: queryKeys.all.dss,
+        queryClient.invalidateQueries({
+          queryKey: soupKeys.items._def,
         });
         refetchResources();
       }
@@ -80,8 +74,8 @@ const Block: Component = () => {
         .map((result) => result.projectId);
       if (pendingFolderUploads.length > 0) {
         await Promise.all(pendingFolderUploads);
-        entityQueryClient.invalidateQueries({
-          queryKey: queryKeys.all.dss,
+        queryClient.invalidateQueries({
+          queryKey: soupKeys.items._def,
         });
         refetchResources();
       }
@@ -91,21 +85,13 @@ const Block: Component = () => {
     }
   };
 
-  const orchestrator = useGlobalBlockOrchestrator();
-  const splitPanelContext = useSplitPanelOrThrow();
-  const {
-    selectedView,
-    setSelectedView,
-    setViewDataStore,
-    isRenderedFromPreview,
-    viewsDataStore: viewsData,
-  } = splitPanelContext.soupContext;
-  const [preview, setPreview] = splitPanelContext.previewState;
-  const view = createMemo(() => viewsData[selectedView()]);
-  const selectedEntity = () => view().selectedEntity;
-  const throttledSelectedEntity = throttledDependent(selectedEntity, 150);
+  const previewPanel = useMaybePreviewPanel();
 
-  if (!isRenderedFromPreview) {
+  const splitPanelContext = useSplitPanelOrThrow();
+
+  const [preview, setPreview] = splitPanelContext.previewState;
+
+  if (!previewPanel) {
     registerHotkey({
       hotkey: ['space'],
       scopeId: splitPanelContext.splitHotkeyScope,
@@ -119,31 +105,23 @@ const Block: Component = () => {
     });
   }
 
-  createRenderEffect(() => {
-    const previousView = untrack(selectedView);
-
-    setSelectedView(projectId);
-
-    setViewDataStore(projectId, {
-      ...PROJECT_VIEWCONFIG_BASE,
-      id: projectId,
-      view: name() ?? 'folder',
-      multiSelectEntities: [],
-      filters: {
-        ...PROJECT_VIEWCONFIG_BASE.filters,
-        projectFilter: projectId,
+  const projectSoup = createSoupState({
+    initialFilters: ['project-content'],
+    filterConfigs: [
+      {
+        id: 'project-content',
+        predicate: (entity) => PROJECT_ENTITY_TYPES.includes(entity.type),
       },
-    });
-
-    onCleanup(() => {
-      setSelectedView(previousView);
-      setViewDataStore(projectId, undefined);
-    });
+    ],
+    filterGroups: [],
   });
+
+  const [attachHotkeys, projectViewScope] = useHotkeyDOMScope('project-view');
 
   return (
     <DocumentBlockContainer>
       <div
+        ref={attachHotkeys}
         class="w-full h-full bg-panel flex flex-col relative"
         use:fileFolderDrop={{
           onDragStart: () => setIsDragging(true),
@@ -158,7 +136,16 @@ const Block: Component = () => {
           <FileDropOverlay>Upload to this folder</FileDropOverlay>
         </Show>
         <TopBar />
-        <Show when={ENABLE_PROJECT_VIEW_PREVIEW} fallback={<UnifiedListView />}>
+        <Show
+          when={ENABLE_PROJECT_VIEW_PREVIEW}
+          fallback={
+            <ProjectEntityList
+              projectId={projectId}
+              soup={projectSoup}
+              scopeId={projectViewScope}
+            />
+          }
+        >
           <div class="flex size-full">
             <SplitPanelContext.Provider
               value={{
@@ -167,19 +154,49 @@ const Block: Component = () => {
                   preview() ? { side: 'left', percentage: 30 } : undefined,
               }}
             >
-              <UnifiedListView hideToolbar={isRenderedFromPreview} />
-            </SplitPanelContext.Provider>
-            <Show when={preview()}>
-              <PreviewPanel
-                selectedEntity={throttledSelectedEntity()}
-                orchestrator={orchestrator}
-                splitPanelContext={splitPanelContext}
+              <ProjectEntityList
+                projectId={projectId}
+                soup={projectSoup}
+                scopeId={projectViewScope}
               />
-            </Show>
+            </SplitPanelContext.Provider>
           </div>
         </Show>
       </div>
     </DocumentBlockContainer>
+  );
+};
+
+const ProjectEntityList = (props: {
+  scopeId: string;
+  projectId: string;
+  soup: SoupState;
+}) => {
+  return (
+    <SoupContextProvider soup={props.soup}>
+      <SoupViewContextProvider
+        soup={props.soup}
+        queryFilters={{
+          channel_filters: {
+            channel_ids: [NIL_UUID],
+          },
+          chat_filters: {
+            project_ids: [props.projectId],
+          },
+          project_filters: {
+            project_ids: [props.projectId],
+          },
+          document_filters: {
+            project_ids: [props.projectId],
+          },
+          email_filters: {
+            recipients: [NIL_UUID],
+          },
+        }}
+      >
+        <SoupViewList customScrollbarHidden={true} scopeId={props.scopeId} />
+      </SoupViewContextProvider>
+    </SoupContextProvider>
   );
 };
 

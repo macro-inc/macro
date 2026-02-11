@@ -8,6 +8,6 @@ version = "0.1.0"
 test-comptime = []
 
 [dependencies]
-paste = "1"
+paste = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }

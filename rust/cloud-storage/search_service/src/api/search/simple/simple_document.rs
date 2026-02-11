@@ -13,6 +13,7 @@ pub(in crate::api::search) struct FilterDocumentResponse {
     pub ids_only: bool,
 }
 
+#[tracing::instrument(skip(ctx, filters), err)]
 pub(in crate::api::search) async fn filter_documents(
     ctx: &SearchHandlerState,
     user_id: &str,

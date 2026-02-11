@@ -8,7 +8,7 @@ use axum::{
 use std::borrow::Cow;
 
 use crate::{api::context::ApiContext, generate_password::generate_random_password};
-use authentication_service::service::fusionauth_client::error::FusionAuthClientError;
+use fusionauth::error::FusionAuthClientError;
 use model::{
     authentication::login::{request::PasswordlessRequest, response::SsoRequiredResponse},
     response::EmptyResponse,
@@ -96,7 +96,7 @@ pub async fn handler(
                     tracing::trace!(email=%lowercase_email, "user does not exist, we need to create user");
                     let fusionauth_user_id = ctx
                     .auth_client
-                    .create_user(authentication_service::service::fusionauth_client::user::create::User {
+                    .create_user(fusionauth::user::create::User {
                         email: (&lowercase_email).into(),
                         password: generate_random_password().into(),
                         username: None,
@@ -108,24 +108,6 @@ pub async fn handler(
                     })?;
 
                     tracing::trace!(fusionauth_user_id, "created new fusionauth user");
-
-                    // Register user in fusionauth application
-                    match ctx.auth_client.register_user(&fusionauth_user_id).await {
-                        Ok(_) => {}
-                        Err(e) => {
-                            tracing::error!(error=?e, email=%lowercase_email, "unable to register user in fusionauth");
-                            match e {
-                                FusionAuthClientError::UserAlreadyRegistered => {
-                                    tracing::trace!(fusionauth_user_id=?fusionauth_user_id, "user already registered");
-                                }
-                                _ => {
-                                    tracing::error!(error=?e, "unable to register user in fusionauth");
-                                    return Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-                                        .into_response());
-                                }
-                            }
-                        }
-                    }
                 }
                 _ => {
                     tracing::error!(error=?e, email=%lowercase_email, "unable to get user id");

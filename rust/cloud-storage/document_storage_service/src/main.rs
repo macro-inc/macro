@@ -274,6 +274,11 @@ async fn main() -> anyhow::Result<()> {
         frecency_storage,
         comms_state,
         permissions_token_secret: comms_permissions_token_secret,
+        entity_access_service: Arc::new(
+            entity_access::domain::service::EntityAccessServiceImpl::new(
+                entity_access::outbound::PgAccessRepository::new(db.clone()),
+            ),
+        ),
     };
 
     api::setup_and_serve(api_context).await?;

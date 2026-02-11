@@ -2095,6 +2095,54 @@
         }
       }
     },
+    "/entity/{entity_type}/{entity_id}/permissions": {
+      "get": {
+        "tags": ["entity::get_entity_permission"],
+        "summary": "Get the current user's permission for a given entity.",
+        "operationId": "get_entity_permission",
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "description": "Entity type (document, chat, project, thread, email_thread, channel)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "description": "Entity ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityPermissionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Entity not found"
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": ["health"],
@@ -6089,6 +6137,69 @@
           }
         }
       },
+      "EntityPermission": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Permission for item-based entities (document, chat, project, thread).",
+            "required": ["access_level", "type"],
+            "properties": {
+              "access_level": {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The access level the user has."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["access_level"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Permission for channel-based entities.",
+            "required": ["role", "type"],
+            "properties": {
+              "role": {
+                "$ref": "#/components/schemas/ParticipantRole",
+                "description": "The role the user has in the channel."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["channel_role"]
+              }
+            }
+          }
+        ],
+        "description": "A user's permission for an entity, discriminated by entity kind.\n\nItems (documents, chats, projects, threads) use access levels.\nChannels use participant roles."
+      },
+      "EntityPermissionResponse": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["permission", "status"],
+            "properties": {
+              "permission": {
+                "$ref": "#/components/schemas/EntityPermission"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["access"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["status"],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["no_access"]
+              }
+            }
+          }
+        ],
+        "description": "API response envelope for entity permissions."
+      },
       "EntityReference": {
         "type": "object",
         "description": "Entity reference for entity-type property values.",
@@ -6891,6 +7002,7 @@
       },
       "ParticipantRole": {
         "type": "string",
+        "description": "The role a user has within a channel.",
         "enum": ["owner", "admin", "member"]
       },
       "PatchProjectRequestV2": {

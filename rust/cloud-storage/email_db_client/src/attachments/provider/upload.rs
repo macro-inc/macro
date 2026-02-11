@@ -236,6 +236,7 @@ pub async fn fetch_job_attachments_for_backfill(
 #[tracing::instrument(skip(db), err)]
 pub async fn new_email_document_atts(
     db: &Pool<Postgres>,
+    link_id: Uuid,
     message_provider_id: &str,
 ) -> anyhow::Result<Vec<AttachmentUploadMetadata>> {
     // query for conditions 1-4: claim attachments atomically and return metadata
@@ -249,7 +250,8 @@ pub async fn new_email_document_atts(
                 FROM email_attachments a
                 JOIN email_messages m ON a.message_id = m.id
                 LEFT JOIN document_email de ON de.email_attachment_id = a.id
-                WHERE m.provider_id = $1
+                WHERE m.link_id = $2
+                    AND m.provider_id = $1
                     AND a.filename IS NOT NULL
                     {}
                     AND de.email_attachment_id IS NULL
@@ -300,6 +302,7 @@ pub async fn new_email_document_atts(
 
     let rows = sqlx::query(&query1)
         .bind(message_provider_id)
+        .bind(link_id)
         .fetch_all(db)
         .await?;
 
@@ -322,7 +325,8 @@ pub async fn new_email_document_atts(
             FROM email_messages m
             JOIN email_threads t ON m.thread_id = t.id
             JOIN email_links l ON t.link_id = l.id
-            WHERE m.provider_id = $1
+            WHERE m.link_id = $2
+                AND m.provider_id = $1
         ),
         previously_contacted_emails AS (
             SELECT DISTINCT ec.email_address
@@ -355,7 +359,8 @@ pub async fn new_email_document_atts(
                 FROM email_attachments a
                 JOIN email_messages m ON a.message_id = m.id
                 LEFT JOIN document_email de ON de.email_attachment_id = a.id
-                WHERE m.provider_id = $1
+                WHERE m.link_id = $2
+                    AND m.provider_id = $1
                     AND de.email_attachment_id IS NULL
                     AND a.upload_claimed_at IS NULL
                     AND a.filename IS NOT NULL
@@ -390,6 +395,7 @@ pub async fn new_email_document_atts(
 
     let rows = sqlx::query(&query2)
         .bind(message_provider_id)
+        .bind(link_id)
         .fetch_all(db)
         .await?;
 
@@ -409,6 +415,7 @@ pub async fn new_email_document_atts(
 #[tracing::instrument(skip(db), err)]
 pub async fn new_email_media_atts(
     db: &Pool<Postgres>,
+    link_id: Uuid,
     message_provider_id: &str,
 ) -> anyhow::Result<Vec<AttachmentUploadMetadata>> {
     let query = format!(
@@ -421,7 +428,8 @@ pub async fn new_email_media_atts(
                 FROM email_attachments a
                 JOIN email_messages m ON a.message_id = m.id
                 LEFT JOIN email_attachments_sfs eas ON eas.attachment_id = a.id
-                WHERE m.provider_id = $1
+                WHERE m.link_id = $2
+                    AND m.provider_id = $1
                     AND {}
                     AND eas.attachment_id IS NULL
                     AND a.upload_claimed_at IS NULL
@@ -450,6 +458,7 @@ pub async fn new_email_media_atts(
 
     let rows = sqlx::query(&query)
         .bind(message_provider_id)
+        .bind(link_id)
         .fetch_all(db)
         .await?;
 

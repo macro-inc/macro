@@ -608,17 +608,19 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   }
 
   const [accessoryStore, setAccessoryStore] = createAccessoryStore();
-  plugins.use(
-    generatePlugin({
-      completionSignal: completionSignal,
-      isGeneratingSignal,
-      generatedAndWaitingSignal,
-      menuSignal: generateMenuSignal,
-      setContext: generateContextSignal[1],
-      accessories: accessoryStore,
-      setAccessories: setAccessoryStore,
-    })
-  );
+  if (ENABLE_MARKDOWN_AI_GENERATE) {
+    plugins.use(
+      generatePlugin({
+        completionSignal: completionSignal,
+        isGeneratingSignal,
+        generatedAndWaitingSignal,
+        menuSignal: generateMenuSignal,
+        setContext: generateContextSignal[1],
+        accessories: accessoryStore,
+        setAccessories: setAccessoryStore,
+      })
+    );
+  }
   plugins.use(
     codePlugin({
       accessories: accessoryStore,
@@ -934,7 +936,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
         <Show when={isBlankMarkdown()}>
           <div class="pointer-events-none text-ink-placeholder absolute top-0">
             {canEdit()
-              ? `Press '/' for commands, '@' to reference files, 'space' for AI writing...`
+              ? `Press '/' for commands, '@' to reference files${ENABLE_MARKDOWN_AI_GENERATE ? ", 'space' for AI writing..." : '...'}`
               : `This document is blank...`}
           </div>
         </Show>

@@ -1,4 +1,9 @@
-import { useChatInput } from '@core/component/AI/component/input/useChatInput';
+import {
+  ChatInputProvider,
+  useChatInputContext,
+} from '@core/component/AI/context';
+import { ChatInput } from '@core/component/AI/component/input/useChatInput';
+import { useChatMarkdownArea } from '@core/component/AI/component/input/useChatMarkdownArea';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import type { CreateAndSend, Send } from '@core/component/AI/types';
 import { isErr } from '@core/util/maybeResult';
@@ -6,13 +11,18 @@ import { cognitionApiServiceClient } from '@service-cognition/client';
 import { useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import { onMount, Show } from 'solid-js';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
+import { useSoup } from '@app/component/next-soup/soup-context';
 
-export function SoupChatInput() {
+function SoupChatInputInner() {
   let containerRef!: HTMLDivElement;
   const splitPanelContext = useSplitPanelOrThrow();
-  const [preview] = splitPanelContext.previewState;
+  const soup = useSoup();
+  const input = useChatInputContext();
 
-  const { ChatInput } = useChatInput();
+  const chatMarkdownArea = useChatMarkdownArea({
+    addAttachment: (a) => input.attachments.addAttachment(a),
+  });
+
   const [attachHotkeys] = useHotkeyDOMScope('soup.chatInput');
 
   onMount(() => {
@@ -46,7 +56,7 @@ export function SoupChatInput() {
   };
 
   return (
-    <Show when={!preview()}>
+    <Show when={!soup.previewEntity()}>
       <div
         ref={containerRef}
         class="absolute z-10 bottom-0 pb-2 px-2 flex justify-center w-full pointer-events-none"
@@ -57,6 +67,7 @@ export function SoupChatInput() {
         <div class="w-full max-w-3xl">
           <div class="pointer-events-auto">
             <ChatInput
+              markdown={chatMarkdownArea}
               onSend={handleSend}
               isPersistent={true}
               autoFocusOnMount={false}
@@ -65,5 +76,13 @@ export function SoupChatInput() {
         </div>
       </div>
     </Show>
+  );
+}
+
+export function SoupChatInput() {
+  return (
+    <ChatInputProvider autoAttach={false}>
+      <SoupChatInputInner />
+    </ChatInputProvider>
   );
 }

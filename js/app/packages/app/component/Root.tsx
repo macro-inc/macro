@@ -37,6 +37,7 @@ import {
   prefetchUserInfo,
   useUserInfoQuery,
 } from '@queries/auth/user-info';
+import { invalidateUserNotifications } from '@queries/notification/user-notifications';
 import { MetaProvider, Title } from '@solidjs/meta';
 import {
   HashRouter,
@@ -52,7 +53,6 @@ import { detect } from 'detect-browser';
 import {
   createEffect,
   type JSX,
-  lazy,
   Match,
   onCleanup,
   onMount,
@@ -261,10 +261,6 @@ const ROUTES: RouteDefinition[] = [
     ),
   },
   {
-    path: '/new/:block',
-    component: lazy(() => import('./NewRoute')),
-  },
-  {
     // This splat route must be last to catch all unmatched routes
     path: '*404',
     component: NotFound,
@@ -289,6 +285,18 @@ export function ConfiguredGlobalAppStateProvider(props: ParentProps) {
     connectionGatewayWebsocket,
     onNotification
   );
+
+  if (isNativeMobilePlatform()) {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        invalidateUserNotifications();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    onCleanup(() =>
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    );
+  }
 
   const blockOrchestrator = createBlockOrchestrator();
 

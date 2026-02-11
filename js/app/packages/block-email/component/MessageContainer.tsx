@@ -13,7 +13,8 @@ import { VideoPreview } from '@core/component/VideoPreview';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
-import { queryKeys, useQueryClient } from '@macro-entity';
+import { useQueryClient } from '@queries/client';
+import { soupKeys } from '@queries/soup/keys';
 import { logger } from '@observability';
 import { emailClient } from '@service-email/client';
 import type {
@@ -134,14 +135,14 @@ export function MessageContainer(props: MessageContainerProps) {
     );
   });
 
+  const { openWithSplit } = useSplitLayout();
+  const queryClient = useQueryClient();
   const draftAttachments = createMemo(() => {
     return props.message.attachments_draft ?? [];
   });
 
-  const { replaceOrInsertSplit } = useSplitLayout();
-  const entityQueryClient = useQueryClient();
-
   const onClickAttachment = async (
+    event: MouseEvent,
     attachment: Attachment,
     fileType: FileType | undefined
   ) => {
@@ -177,15 +178,15 @@ export function MessageContainer(props: MessageContainerProps) {
       );
     }
 
-    entityQueryClient.invalidateQueries({
-      queryKey: queryKeys.all.dss,
+    queryClient.invalidateQueries({
+      queryKey: soupKeys.items._def,
     });
 
     const blockName = fileType ? fileTypeToBlockName(fileType) : 'unknown';
-    replaceOrInsertSplit({
-      type: blockName,
-      id: document_id,
-    })?.activate?.();
+    openWithSplit(
+      { type: blockName, id: document_id },
+      { preferNewSplit: event.shiftKey }
+    );
   };
 
   const handleExpand = () => {
@@ -283,8 +284,8 @@ export function MessageContainer(props: MessageContainerProps) {
                         fileName: attachment.filename ?? '',
                         mimeType: attachment.mime_type ?? undefined,
                       }}
-                      onClick={(fileType) =>
-                        onClickAttachment(attachment, fileType)
+                      onClick={(event, fileType) =>
+                        onClickAttachment(event, attachment, fileType)
                       }
                     />
                   )}

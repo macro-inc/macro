@@ -55,15 +55,15 @@ export type MessageRootProps = {
 };
 
 type MessageContextValue = {
-  focused: boolean;
-  isFirstMessage: boolean;
-  isLastMessage: boolean;
-  isConsecutive?: boolean;
-  hoverActions?: JSX.Element;
-  threadDepth?: number;
-  isFirstInThread?: boolean;
-  isLastInThread?: boolean;
-  isDeleted?: boolean;
+  focused: Accessor<boolean>;
+  isFirstMessage: Accessor<boolean>;
+  isLastMessage: Accessor<boolean>;
+  isConsecutive: Accessor<boolean | undefined>;
+  hoverActions: Accessor<JSX.Element | undefined>;
+  threadDepth: Accessor<number | undefined>;
+  isFirstInThread: Accessor<boolean | undefined>;
+  isLastInThread: Accessor<boolean | undefined>;
+  isDeleted: Accessor<boolean | undefined>;
   hover: Accessor<boolean>;
   setHover: Setter<boolean>;
 };
@@ -112,7 +112,7 @@ const TopBar: Component<MessageTopBarProps> = (props) => {
     'tagIcon',
   ]);
   return (
-    <Show when={!context.isConsecutive}>
+    <Show when={!context.isConsecutive()}>
       <div class="font-mono flex flex-row items-center justify-between">
         {/*  Name */}
         <div class="shrink-1 min-w-0 text-sm touch:mobile-width:text-base truncate text-ink-muted">
@@ -202,17 +202,17 @@ const Root: Component<MessageRootProps> = (props) => {
   const [hover, setHover] = createSignal(false);
   const [replySize, setReplySize] = createSignal<DOMRect>();
   const ctx: MessageContextValue = {
-    focused: props.focused,
-    isFirstMessage: props.isFirstMessage,
-    isLastMessage: props.isLastMessage,
-    isConsecutive: props.isConsecutive,
-    hoverActions: props.hoverActions,
-    threadDepth: props.threadDepth,
-    isFirstInThread: props.isFirstInThread,
-    isLastInThread: props.isLastInThread,
-    isDeleted: props.isDeleted,
-    hover: hover,
-    setHover: setHover,
+    focused: () => props.focused,
+    isFirstMessage: () => props.isFirstMessage,
+    isLastMessage: () => props.isLastMessage,
+    isConsecutive: () => props.isConsecutive,
+    hoverActions: () => props.hoverActions,
+    threadDepth: () => props.threadDepth,
+    isFirstInThread: () => props.isFirstInThread,
+    isLastInThread: () => props.isLastInThread,
+    isDeleted: () => props.isDeleted,
+    hover,
+    setHover,
   };
 
   const replyHeight = createMemo(() => {

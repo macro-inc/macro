@@ -1,16 +1,12 @@
 import { lastExecutedCommand } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import { createMemo } from 'solid-js';
-import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
+import { useSoup } from '@app/component/next-soup/soup-context';
 
 export function useNavigatedFromJK() {
-  const {
-    soupContext: {
-      entitiesSignal: [_entities],
-    },
-  } = useSplitPanelOrThrow();
+  const soup = useSoup();
   const navigatedFromJK = createMemo(() => {
-    const entities = _entities();
+    const entities = soup.data();
     if (!entities) return false;
     return (
       entities.length > 0 &&
