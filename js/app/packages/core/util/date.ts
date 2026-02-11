@@ -113,7 +113,7 @@ export const compareDateAsc = (
   return compareAsc(dateA, dateB);
 };
 
-const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z?$/;
+const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z?$/;
 
 /**
  * Recursively converts ISO date strings to Date objects in an object, array, or primitive value.
