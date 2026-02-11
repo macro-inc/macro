@@ -22,6 +22,8 @@ import {
   type EntityWithValidIcon,
 } from './EntityIcon';
 import { UserIcon } from './UserIcon';
+import { Button } from '@ui/components/Button';
+import { cn } from '@ui/utils/classname';
 
 false && observedSize;
 
@@ -262,8 +264,8 @@ const Root: Component<MessageRootProps> = (props) => {
               class="relative flex-1 flex flex-col justify-start w-[calc(100%-28px)] min-w-0 pl-[var(--left-of-connector)]"
               classList={{
                 'border-l': !props.hideConnectors,
-                'border-accent': props.isNewMessage ?? false,
-                'border-edge-muted': !props.isNewMessage,
+                'border-accent': props.isNewMessage || props.isParentNewMessage,
+                'border-edge-muted': !props.isNewMessage && !props.isParentNewMessage,
                 'pt-1.5': !(
                   props.isConsecutive ||
                   props.isFirstMessage ||
@@ -291,8 +293,9 @@ const Root: Component<MessageRootProps> = (props) => {
                           'border-bottom-left-radius': `calc(var(--thread-shift) / 2)`,
                         }}
                       />*/}
+                      {/* Slanted Line Connector */}
                       <div
-                        class="absolute text-edge-muted -z-1"
+                        class={cn('absolute text-edge-muted -z-1', props.isParentNewMessage && 'text-accent')}
                         style={{
                           left: `calc((var(--thread-shift) - var(--left-of-connector) + var(--left-of-user-icon) + 1px) * -1)`,
                           bottom:
@@ -395,14 +398,17 @@ const Root: Component<MessageRootProps> = (props) => {
                   }}
                   onMouseEnter={() => setHover(false)}
                 >
-                  <DeprecatedIconButton
-                    icon={IconPlus}
-                    theme="base"
-                    iconSize={16}
+                  <Button
                     onClick={props.onThreadAppend}
-                    border
                     tabIndex={0}
-                  />
+                    class="text-ink-muted border border-edge-muted bg-menu hover:bg-hover hover-transition-bg flex flex-row justify-center items-center relative px-0 py-0 mb-4"
+                    style={{
+                      width: 'var(--user-icon-width)',
+                      height: 'var(--user-icon-width)'
+                    }}
+                  >
+                    <IconPlus class="size-1/2" />
+                  </Button>
                 </div>
               }
             >

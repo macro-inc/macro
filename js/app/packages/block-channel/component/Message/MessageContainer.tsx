@@ -57,6 +57,7 @@ import { MessageAttachments } from './MessageAttachments';
 import { MessageReactions } from './MessageReactions';
 import { ThreadReplyIndicator } from './ThreadReplyIndicator';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
+import { cn } from '@ui/utils/classname';
 
 type MessageFlagProps = {
   text: string;
@@ -619,7 +620,8 @@ export function MessageContainer(props: MessageProps) {
             </MessageComponent>
             <Show when={isLastInCollapsedThread()}>
               <div
-                class="border-l border-edge-muted pb-1"
+                class={cn("border-l border-edge-muted pb-1",
+                  isParentNewMessage() && 'border-accent')}
                 style={{
                   'margin-left': `var(--left-of-connector)`,
                 }}
@@ -638,6 +640,7 @@ export function MessageContainer(props: MessageProps) {
                     users={threadReplyUsers()}
                     onClick={handleThreadToggle}
                     isThreadOpen={threadState()?.threadExpanded}
+                    isParentNewMessage={isParentNewMessage()}
                   />
                 </div>
               </div>
