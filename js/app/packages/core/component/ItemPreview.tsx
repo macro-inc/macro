@@ -32,7 +32,6 @@ import {
   getPreviewItemIconType,
 } from './EntityIcon';
 import { cn } from '@ui/utils/classname';
-import { Dynamic } from 'solid-js/web';
 
 export function useItemPreviewData(entity: Accessor<ItemEntity>) {
   const [item] = useItemPreview(entity);
@@ -285,8 +284,8 @@ function ItemPreviewInner(props: ItemPreviewProps) {
                     }
                     content={
                       <PopupPreview
-                        mouseEnter={() => {}}
-                        mouseLeave={() => {}}
+                        mouseEnter={() => { }}
+                        mouseLeave={() => { }}
                         documentInfo={{
                           id: accessibleItem().id,
                           type: blockName() as BlockName,
