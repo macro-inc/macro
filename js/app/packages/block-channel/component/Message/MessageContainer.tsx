@@ -57,6 +57,7 @@ import { MessageAttachments } from './MessageAttachments';
 import { MessageReactions } from './MessageReactions';
 import { ThreadReplyIndicator } from './ThreadReplyIndicator';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
+import { cn } from '@ui/utils/classname';
 
 type MessageFlagProps = {
   text: string;
@@ -67,18 +68,18 @@ export function MessageFlag(props: MessageFlagProps) {
   return (
     <div class="flex flex-row items-stretch justify-start ml-[var(--left-of-connector)]">
       <div class="flex flex-col items-center justify-center">
-        <div class="border-l border-edge-muted min-h-1/2 ]" />
+        <div class="border-l border-edge-muted min-h-1/2" />
         <div
           class={`border-l ${props.highlight ? 'border-accent' : 'border-edge-muted'} min-h-1/2 `}
         />
       </div>
       <div class="flex flex-col items-center justify-center">
         <div
-          class={`w-8 border-b ${props.highlight ? 'border-accent' : 'border-edge-muted'}`}
+          class={`w-7 border-b ${props.highlight ? 'border-accent' : 'border-edge-muted'}`}
         />
       </div>
       <div
-        class={`text-xs text-panel uppercase font-mono p-1 my-3 ${props.highlight ? 'bg-accent' : 'bg-edge'}`}
+        class={`text-xs text-panel uppercase font-mono p-1 my-6 mt ${props.highlight ? 'bg-accent' : 'bg-edge'}`}
       >
         {props.text}
       </div>
@@ -86,17 +87,12 @@ export function MessageFlag(props: MessageFlagProps) {
   );
 }
 
-type NewIndicatorProps = {
-  setNewIndicatorShown: Setter<number | undefined>;
-  id: number;
-};
-
-function NewMessageIndicator(props: NewIndicatorProps) {
-  onMount(() => {
-    props.setNewIndicatorShown(props.id);
-  });
-
-  return <MessageFlag text="New" highlight />;
+function NewMessageIndicator(props: { onClick?: () => void }) {
+  return (
+    <button type="button" class="w-full text-left" onClick={props.onClick}>
+      <MessageFlag text="New" highlight />
+    </button>
+  );
 }
 
 type MessageProps = {
@@ -107,8 +103,6 @@ type MessageProps = {
   orderedMessages: Accessor<MessageType[]>;
   threadChildren?: MessageType[];
   threadSiblings?: MessageType[];
-  newIndicatorShown: Accessor<number | undefined>;
-  setNewIndicatorShown: Setter<number | undefined>;
   virtualHandle: VirtualizerHandle;
   container?: HTMLDivElement;
   listContext: MessageListContext;
@@ -117,6 +111,7 @@ type MessageProps = {
   channelId: Accessor<string>;
   attachments: Attachment[];
   reactions: GetChannelResponseReactions;
+  onDismissNewMessages?: () => void;
 };
 
 export function MessageContainer(props: MessageProps) {
@@ -515,17 +510,8 @@ export function MessageContainer(props: MessageProps) {
           <MessageFlag text={formatRelativeDate(message.created_at)} />
         </Show>
         {/* New message indicator */}
-        <Show
-          when={
-            isNewMessage() &&
-            (!props.newIndicatorShown() ||
-              props.newIndicatorShown() === props.index())
-          }
-        >
-          <NewMessageIndicator
-            id={props.index()}
-            setNewIndicatorShown={props.setNewIndicatorShown}
-          />
+        <Show when={props.listContext.isFirstNewMessage}>
+          <NewMessageIndicator onClick={props.onDismissNewMessages} />
         </Show>
         {/* Message item */}
 
@@ -544,7 +530,7 @@ export function MessageContainer(props: MessageProps) {
               isConsecutive={isConsecutive()}
               timestamp={message.created_at}
               shouldHover={contextMenuOpen() || topBarEmojiMenuOpen()}
-              hoverActions={
+              hoverActions={() => (
                 <ActionMenu
                   messageId={message.id}
                   channelId={props.channelId}
@@ -552,7 +538,7 @@ export function MessageContainer(props: MessageProps) {
                   actions={actions()}
                   setReactionMenuActivated={setTopBarEmojiMenuOpen}
                 />
-              }
+              )}
               threadDepth={threadDepth()}
               hasThreadChildren={hasThreadChildren() || shouldShowFirstReply()}
               isFirstInThread={isFirstInThread()}
@@ -619,7 +605,10 @@ export function MessageContainer(props: MessageProps) {
             </MessageComponent>
             <Show when={isLastInCollapsedThread()}>
               <div
-                class="border-l border-edge-muted pb-1"
+                class={cn(
+                  'border-l border-edge-muted pb-1',
+                  isParentNewMessage() && 'border-accent'
+                )}
                 style={{
                   'margin-left': `var(--left-of-connector)`,
                 }}
@@ -638,6 +627,7 @@ export function MessageContainer(props: MessageProps) {
                     users={threadReplyUsers()}
                     onClick={handleThreadToggle}
                     isThreadOpen={threadState()?.threadExpanded}
+                    isParentNewMessage={isParentNewMessage()}
                   />
                 </div>
               </div>

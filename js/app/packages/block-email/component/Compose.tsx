@@ -67,8 +67,7 @@ import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
 import { useMaybeEmailContext } from '@block-email/component/EmailContext';
 import { decodeBase64Utf8 } from '@block-email/util/decodeBase64';
 import { stickyGate } from '@core/util/debounce';
-import { queryClient } from '@queries/client';
-import { soupKeys } from '@queries/soup/keys';
+import { invalidateSoupEntity } from '@queries/soup/cache';
 
 const DRAFT_DEBOUNCE_MS = 1000;
 
@@ -573,11 +572,9 @@ export function EmailCompose(props: EmailComposeProps) {
   };
 
   const unscheduleMessageMutation = useUnscheduleMessageMutation({
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
       toast.success('Email unscheduled');
-      queryClient.invalidateQueries({
-        queryKey: soupKeys.items._def,
-      });
+      invalidateSoupEntity(vars.draftID);
     },
     onError: () => {
       toast.failure('Failed to unschedule email');

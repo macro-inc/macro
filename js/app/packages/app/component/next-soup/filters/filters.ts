@@ -8,11 +8,9 @@ import {
   type EntityWithValidIcon,
   getIconConfig,
 } from '@core/component/EntityIcon';
-import type {
-  SoupItemsQueryArgs,
-  SoupItemsQueryFilters,
-} from '@queries/soup/items';
+import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import { codeFileExtensions } from '@block-code/util/languageSupport';
+import type { FilterConfig } from './create-filter-state';
 import type { Component } from 'solid-js';
 import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
 import { AnimatedChatIcon } from '@macro-icons/wide/animating/chat';
@@ -21,6 +19,22 @@ import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
 import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
 import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
 import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
+
+export const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+
+/**
+ * Array containing NIL_UUID, used to exclude an entity type from query results.
+ *
+ * @example
+ * ```ts
+ * filters.set({
+ *   query: {
+ *     chat_filters: { chat_ids: EXCLUDE },  // Exclude all chats
+ *   }
+ * });
+ * ```
+ */
+export const EXCLUDE: string[] = [NIL_UUID];
 
 /**
  * Unread filter - entity has unread content.
@@ -52,17 +66,6 @@ export function notDoneFilter(entity: WithNotification<EntityData>) {
     !!entity.notifications && entity.notifications().some(({ done }) => !done)
   );
 }
-
-/** Filter predicate function */
-export type FilterPredicate<T> = (entity: T) => boolean;
-
-/** Filter configuration */
-export type FilterConfig<T> = {
-  readonly id: string;
-  readonly label: string;
-  readonly predicate: FilterPredicate<T>;
-  readonly group?: string;
-};
 
 /** Filter group configuration */
 export type FilterGroup = {
@@ -123,10 +126,8 @@ export function fileFilter(entity: EntityData): boolean {
   return !['md', 'canvas'].includes(fileType);
 }
 
-export function teamsAndPeopleFilter(entity: EntityData): boolean {
-  if (entity.type !== 'channel') return false;
-
-  return true;
+export function channelsFilter(entity: EntityData): boolean {
+  return entity.type === 'channel';
 }
 
 export const SOUP_FILTERS = [
@@ -206,9 +207,9 @@ export const SOUP_FILTERS = [
     group: 'type',
   },
   {
-    id: 'teams-and-people',
-    label: 'Groups',
-    predicate: teamsAndPeopleFilter,
+    id: 'channels',
+    label: 'Channels',
+    predicate: channelsFilter,
     group: 'type',
   },
 ] as const;
@@ -298,77 +299,80 @@ export const getFolderFileTypes = (type: 'soup' | 'search') => {
   });
 };
 
-export const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+export const QUERY_FILTERS = {
+  /** Docs filter - markdown and canvas documents (excludes tasks) */
+  document: {
+    channel_filters: { channel_ids: EXCLUDE },
+    chat_filters: { chat_ids: EXCLUDE },
+    email_filters: { recipients: EXCLUDE },
+    project_filters: { project_ids: EXCLUDE },
+    document_filters: { file_types: ['md', 'canvas'] },
+  },
 
-const buildDefaultValue = (entityTypes: string[], required: string[]) => {
-  const hasNoEntityTypes = entityTypes.length === 0;
+  /** Tasks filter - markdown documents with task subType */
+  task: {
+    channel_filters: { channel_ids: EXCLUDE },
+    chat_filters: { chat_ids: EXCLUDE },
+    email_filters: { recipients: EXCLUDE },
+    project_filters: { project_ids: EXCLUDE },
+    document_filters: { file_types: ['md'] },
+  },
 
-  const hasSomeRequiredType = required.some((t) => entityTypes.includes(t));
+  /** Mail filter - emails */
+  email: {
+    channel_filters: { channel_ids: EXCLUDE },
+    chat_filters: { chat_ids: EXCLUDE },
+    document_filters: { document_ids: EXCLUDE },
+    project_filters: { project_ids: EXCLUDE },
+    email_filters: {},
+  },
 
-  if (hasSomeRequiredType || hasNoEntityTypes) {
-    return [];
-  }
+  /** People filter - direct message channels */
+  people: {
+    chat_filters: { chat_ids: EXCLUDE },
+    document_filters: { document_ids: EXCLUDE },
+    email_filters: { recipients: EXCLUDE },
+    project_filters: { project_ids: EXCLUDE },
+    channel_filters: {},
+  },
 
-  return [NIL_UUID];
-};
+  /** Teams filter - group channels (non-DM) */
+  teams: {
+    chat_filters: { chat_ids: EXCLUDE },
+    document_filters: { document_ids: EXCLUDE },
+    email_filters: { recipients: EXCLUDE },
+    project_filters: { project_ids: EXCLUDE },
+    channel_filters: {},
+  },
 
-export const buildDssFiltersRequest = (
-  filters: FilterConfig<EntityData>[],
-  context?: {
-    extra?: SoupItemsQueryFilters;
-    isSearchActive?: boolean;
-    emailActive?: boolean;
-  }
-): SoupItemsQueryArgs['body'] => {
-  const entityTypes = filters
-    .filter((f) => ENTITY_TYPE_FILTERS.includes(f.id as EntityTypeFilters))
-    .map((f) => f.id);
+  /** Agents filter - chats */
+  agent: {
+    channel_filters: { channel_ids: EXCLUDE },
+    document_filters: { document_ids: EXCLUDE },
+    email_filters: { recipients: EXCLUDE },
+    project_filters: { project_ids: EXCLUDE },
+    chat_filters: {},
+  },
 
-  const {
-    channel_filters,
-    document_filters,
-    chat_filters,
-    email_filters,
-    project_filters,
-  } = context?.extra ?? {};
+  /** Files filter - non-markdown documents (code, images, pdfs, etc.) */
+  file: {
+    channel_filters: { channel_ids: EXCLUDE },
+    chat_filters: { chat_ids: EXCLUDE },
+    email_filters: { recipients: EXCLUDE },
+    document_filters: { file_types: getFolderFileTypes('soup') },
+  },
 
-  return {
-    channel_filters: {
-      ...channel_filters,
-      channel_ids:
-        channel_filters?.channel_ids ??
-        buildDefaultValue(entityTypes, ['teams', 'people']),
-    },
-    document_filters: {
-      ...document_filters,
-      document_ids:
-        document_filters?.document_ids ??
-        buildDefaultValue(entityTypes, ['file', 'document', 'task']),
-      project_ids: document_filters?.project_ids ?? [],
-      file_types: document_filters?.file_types ?? [],
-    },
-    chat_filters: {
-      ...chat_filters,
-      chat_ids:
-        chat_filters?.chat_ids ?? buildDefaultValue(entityTypes, ['agent']),
-      project_ids: chat_filters?.project_ids ?? [],
-    },
-    email_filters: {
-      ...email_filters,
-      recipients:
-        email_filters?.recipients ??
-        (context?.emailActive &&
-        !context.isSearchActive &&
-        (entityTypes.includes('email') || entityTypes.length === 0)
-          ? []
-          : [NIL_UUID]),
-    },
-    project_filters: {
-      ...project_filters,
-      project_ids:
-        project_filters?.project_ids ??
-        buildDefaultValue(entityTypes, ['file']),
-    },
-    emailView: 'all',
-  };
-};
+  /** Channels filter - all channels (teams and people) */
+  channels: {
+    chat_filters: { chat_ids: EXCLUDE },
+    document_filters: { document_ids: EXCLUDE },
+    email_filters: { recipients: EXCLUDE },
+    project_filters: { project_ids: EXCLUDE },
+    channel_filters: {},
+  },
+
+  /** Default - include all entity types (no filter active) */
+  default: {},
+} satisfies Record<string, SoupItemsQueryFilters>;
+
+export type QueryFilterKey = keyof typeof QUERY_FILTERS;

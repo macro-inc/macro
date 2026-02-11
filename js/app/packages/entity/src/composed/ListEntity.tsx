@@ -97,7 +97,7 @@ function NarrowLayout(props: LayoutProps) {
         <Show when={props.unread}>
           <UnreadIndicator active />
         </Show>
-        <div class="size-4">
+        <div class="size-4 shrink-0">
           <Entity.Icon entity={props.entity} />
         </div>
         <Switch>
@@ -159,10 +159,10 @@ function NarrowLayout(props: LayoutProps) {
                 <Show when={entity().latestMessage}>
                   {(msg) => (
                     <div class="flex items-center gap-2 w-full truncate">
-                      <span class="font-semibold truncate">
+                      <span class="font-semibold truncate min-w-min max-w-1/3">
                         <DisplayName id={msg().senderId} format="firstName" />
                       </span>
-                      <span class="text-ink/50 font-medium truncate inline-flex items-center">
+                      <span class="text-ink/50 font-medium truncate inline-flex items-center shrink">
                         <StaticMarkdown
                           theme={unifiedListMarkdownTheme}
                           markdown={msg().content}
@@ -217,7 +217,7 @@ function WideLayout(props: LayoutProps) {
         placement="content"
         class="font-semibold truncate items-center gap-2 flex"
       >
-        <div class="size-4">
+        <div class="size-4 shrink-0">
           <Entity.Icon entity={props.entity} />
         </div>
         <Switch>
@@ -265,7 +265,7 @@ function WideLayout(props: LayoutProps) {
                   {(msg) => (
                     <>
                       <DisplayName id={msg().senderId} format="firstName" />
-                      <span class="text-ink/50 font-medium truncate inline-flex items-center">
+                      <span class="text-ink/50 font-medium truncate inline-flex shrink items-center">
                         <StaticMarkdown
                           theme={unifiedListMarkdownTheme}
                           markdown={msg().content}

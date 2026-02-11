@@ -15,13 +15,14 @@ import {
   useContext,
 } from 'solid-js';
 import { BozzyBracket } from './BozzyBracket';
-import { DeprecatedIconButton } from './DeprecatedIconButton';
 import {
   CustomEntityIcon,
   EntityIcon,
   type EntityWithValidIcon,
 } from './EntityIcon';
 import { UserIcon } from './UserIcon';
+import { Button } from '@ui/components/Button';
+import { cn } from '@ui/utils/classname';
 
 false && observedSize;
 
@@ -36,7 +37,7 @@ export type MessageRootProps = {
   isLastMessage: boolean;
   isConsecutive?: boolean;
   timestamp?: Date;
-  hoverActions?: JSX.Element;
+  hoverActions?: () => JSX.Element;
   shouldHover?: boolean;
   threadDepth?: number;
   hasThreadChildren?: boolean;
@@ -205,7 +206,7 @@ const Root: Component<MessageRootProps> = (props) => {
     isFirstMessage: () => props.isFirstMessage,
     isLastMessage: () => props.isLastMessage,
     isConsecutive: () => props.isConsecutive,
-    hoverActions: () => props.hoverActions,
+    hoverActions: () => props.hoverActions?.(),
     threadDepth: () => props.threadDepth,
     isFirstInThread: () => props.isFirstInThread,
     isLastInThread: () => props.isLastInThread,
@@ -261,7 +262,7 @@ const Root: Component<MessageRootProps> = (props) => {
               class="relative flex-1 flex flex-col justify-start w-[calc(100%-28px)] min-w-0 pl-[var(--left-of-connector)]"
               classList={{
                 'border-l': !props.hideConnectors,
-                'border-accent': props.isNewMessage ?? false,
+                'border-accent': props.isNewMessage,
                 'border-edge-muted': !props.isNewMessage,
                 'pt-1.5': !(
                   props.isConsecutive ||
@@ -280,16 +281,32 @@ const Root: Component<MessageRootProps> = (props) => {
                 <Show when={!props.isConsecutive}>
                   <div class="relative">
                     <Show when={props.isFirstInThread}>
+                      {/* Slanted Line Connector */}
                       <div
-                        class="absolute border-b border-l border-edge-muted"
+                        class={cn(
+                          'absolute text-edge-muted -z-1',
+                          props.isNewMessage && 'text-accent'
+                        )}
                         style={{
-                          left: `calc((var(--thread-shift) - var(--left-of-connector) + var(--left-of-user-icon) + 0.5px) * -1)`,
-                          top: '.5px',
-                          width: `calc(var(--thread-shift) - var(--left-of-connector) + var(--left-of-user-icon) + 0.5px)`,
-                          height: '50%',
-                          'border-bottom-left-radius': `calc(var(--thread-shift) / 2)`,
+                          left: `calc((var(--thread-shift) - var(--left-of-connector) + var(--left-of-user-icon) + 1px) * -1)`,
+                          bottom:
+                            'calc(var(--user-icon-width) / 2 - 0.0375 * var(--user-icon-width))',
+                          width: `calc(var(--thread-shift) - var(--left-of-connector) + var(--left-of-user-icon) + 3px)`,
                         }}
-                      />
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 18"
+                          width="100%"
+                        >
+                          <path
+                            stroke="currentColor"
+                            vector-effect="non-scaling-stroke"
+                            d="M23 17 4 6.0303C2.5 5.1643.5 4 .5.5"
+                          />
+                        </svg>
+                      </div>
                     </Show>
                     <Show
                       when={props.customIcon || props.customIconTargetType}
@@ -351,7 +368,11 @@ const Root: Component<MessageRootProps> = (props) => {
                 </div>
               )}
             </Show>
-            <div class="border border-edge bg-panel">{props.hoverActions}</div>
+            <Show when={hover()}>
+              <div class="border border-edge bg-panel">
+                {props.hoverActions?.()}
+              </div>
+            </Show>
           </div>
         </Show>
         <Show when={props.isLastInThread}>
@@ -374,14 +395,17 @@ const Root: Component<MessageRootProps> = (props) => {
                   }}
                   onMouseEnter={() => setHover(false)}
                 >
-                  <DeprecatedIconButton
-                    icon={IconPlus}
-                    theme="base"
-                    iconSize={16}
+                  <Button
                     onClick={props.onThreadAppend}
-                    border
                     tabIndex={0}
-                  />
+                    class="text-ink-muted border border-edge-muted bg-menu hover:bg-hover hover-transition-bg flex flex-row justify-center items-center relative px-0 py-0 mb-4"
+                    style={{
+                      width: 'var(--user-icon-width)',
+                      height: 'var(--user-icon-width)',
+                    }}
+                  >
+                    <IconPlus class="size-1/2" />
+                  </Button>
                 </div>
               }
             >
@@ -397,14 +421,35 @@ const Root: Component<MessageRootProps> = (props) => {
                 ref={(el) => props.setThreadAppendMountTarget?.(el)}
               >
                 <div
-                  class="absolute border-b border-l border-edge-muted"
+                  class="absolute border-l border-edge-muted"
                   style={{
                     left: `calc((var(--user-icon-width) / 2) * -1)`,
-                    width: `calc(var(--user-icon-width) / 2)`,
-                    height: '50%',
-                    'border-bottom-left-radius': `calc(var(--thread-shift) / 2)`,
+                    height:
+                      'calc(50% - (var(--user-icon-width) / 2 + 1px) / 24 * 18 + 1px)',
                   }}
                 />
+
+                <div
+                  class="absolute text-edge-muted -z-1"
+                  style={{
+                    left: `calc((var(--user-icon-width) / 2) * -1)`,
+                    bottom: '50%',
+                    width: `calc(var(--user-icon-width) / 2 + 1px)`,
+                  }}
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 18"
+                    width="100%"
+                  >
+                    <path
+                      stroke="currentColor"
+                      vector-effect="non-scaling-stroke"
+                      d="M23 17 4 6.0303C2.5 5.1643.5 4 .5.5"
+                    />
+                  </svg>
+                </div>
               </div>
             </Show>
           </div>

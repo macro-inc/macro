@@ -21,17 +21,20 @@ import {
   createSignal,
   onMount,
   createEffect,
+  batch,
   type Component,
 } from 'solid-js';
 import {
   ANIMATED_ICONS,
   ENTITY_TYPE_FILTER_CONFIGS,
-  type FilterID,
+  EXCLUDE,
   getEntityTypeFilterIcon,
+  QUERY_FILTERS,
 } from '@app/component/next-soup/filters/filters';
 import { ENABLE_ANIMATED_ICONS } from '@core/constant/featureFlags';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
+import { useEmailLinksStatus } from '@core/email-link';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { createElementSize } from '@solid-primitives/resize-observer';
@@ -59,11 +62,18 @@ const ENTITY_TYPE_SHORTCUTS: Record<
 };
 
 export const SoupToolbar = () => {
-  const { soup } = useSoupView();
+  const { soup, setQueryFilters } = useSoupView();
 
   const [scrollContainerRef, setScrollContainerRef] = createSignal<
     HTMLDivElement | undefined
   >(undefined);
+
+  const handleClear = () => {
+    batch(() => {
+      soup.filters.clear();
+      setQueryFilters(QUERY_FILTERS.default);
+    });
+  };
 
   return (
     <>
@@ -89,7 +99,7 @@ export const SoupToolbar = () => {
             <button
               type="button"
               class="flex items-center gap-1.5 px-2.5 rounded-full text-ink-muted hover:text-accent hover:bg-accent/20 active:bg-accent active:text-panel"
-              onClick={soup.filters.clear}
+              onClick={handleClear}
             >
               <XIcon class="size-4.5" />
               <span class="text-xs touch:mobile-width:text-sm leading-none">
@@ -106,38 +116,74 @@ export const SoupToolbar = () => {
   );
 };
 
+type EntityTypeFilterId =
+  | 'document'
+  | 'task'
+  | 'people'
+  | 'teams'
+  | 'agent'
+  | 'file';
+
 const SoupFilters = () => {
-  const { soup, setSearchText } = useSoupView();
+  const { soup, setSearchText, isSearchDisabled, setQueryFilters } =
+    useSoupView();
   const panel = useSplitPanelOrThrow();
+  const emailActive = useEmailLinksStatus();
 
   const [sortDropdownOpen, setSortDropdownOpen] = createSignal(false);
 
-  const toggleFilter = (filter: FilterID) => {
-    soup.filters.toggle(filter);
-  };
-
-  const toggleSignalFilter = () => {
-    // If we're going to be removing the signal filter,
-    // we should replace it with the explicit-noise filter
-    if (soup.filters.isActive('signal')) {
-      toggleFilter('explicit-noise');
+  const toggleFocus = (id: 'signal' | 'noise') => {
+    if (soup.filters.isActive(id)) {
+      soup.filters.toggle('explicit-noise');
       soup.filters.deactivate('not-done');
     } else {
-      toggleFilter('signal');
+      soup.filters.toggle(id);
       soup.filters.activate('not-done');
     }
   };
 
-  const toggleNoiseFilter = () => {
-    // If we're going to be removing the noise filter,
-    // we should replace it with the explicit-noise filter
-    if (soup.filters.isActive('noise')) {
-      toggleFilter('explicit-noise');
-      soup.filters.deactivate('not-done');
-    } else {
-      toggleFilter('noise');
-      soup.filters.activate('not-done');
-    }
+  const toggleUnread = () => {
+    soup.filters.toggle('unread');
+  };
+
+  const toggleEntityType = (id: EntityTypeFilterId) => {
+    const willBeActive = !soup.filters.isActive(id);
+    batch(() => {
+      soup.filters.toggle(id);
+      setQueryFilters(willBeActive ? QUERY_FILTERS[id] : QUERY_FILTERS.default);
+    });
+  };
+
+  // Email has special handling for email integration status
+  const toggleEmail = () => {
+    const willBeActive = !soup.filters.isActive('email');
+    batch(() => {
+      soup.filters.toggle('email');
+      if (willBeActive) {
+        const shouldIncludeEmails = emailActive() && isSearchDisabled();
+        setQueryFilters({
+          ...QUERY_FILTERS.email,
+          email_filters: {
+            recipients: shouldIncludeEmails ? [] : EXCLUDE,
+          },
+        });
+      } else {
+        setQueryFilters(QUERY_FILTERS.default);
+      }
+    });
+  };
+
+  const entityTypeToggleHandlers: Record<
+    (typeof ENTITY_TYPE_FILTER_CONFIGS)[number]['id'],
+    () => void
+  > = {
+    document: () => toggleEntityType('document'),
+    task: () => toggleEntityType('task'),
+    email: toggleEmail,
+    people: () => toggleEntityType('people'),
+    teams: () => toggleEntityType('teams'),
+    agent: () => toggleEntityType('agent'),
+    file: () => toggleEntityType('file'),
   };
 
   const togglePreview = () => {
@@ -162,53 +208,53 @@ const SoupFilters = () => {
     {
       hotkey: 'i',
       description: 'Toggle Inbox',
-      handler: toggleSignalFilter,
+      handler: () => toggleFocus('signal'),
     },
     {
       hotkey: 'o',
       description: 'Toggle Other',
-      handler: toggleNoiseFilter,
+      handler: () => toggleFocus('noise'),
     },
     // Entity type filter hotkeys
     {
       hotkey: ENTITY_TYPE_SHORTCUTS.document,
       description: 'Filter by Docs',
-      handler: () => toggleFilter('document'),
+      handler: () => toggleEntityType('document'),
     },
     {
       hotkey: ENTITY_TYPE_SHORTCUTS.task,
       description: 'Filter by Tasks',
-      handler: () => toggleFilter('task'),
+      handler: () => toggleEntityType('task'),
     },
     {
       hotkey: ENTITY_TYPE_SHORTCUTS.email,
       description: 'Filter by Mail',
-      handler: () => toggleFilter('email'),
+      handler: toggleEmail,
     },
     {
       hotkey: ENTITY_TYPE_SHORTCUTS.people,
       description: 'Filter by People',
-      handler: () => toggleFilter('people'),
+      handler: () => toggleEntityType('people'),
     },
     {
       hotkey: ENTITY_TYPE_SHORTCUTS.teams,
       description: 'Filter by Teams',
-      handler: () => toggleFilter('teams'),
+      handler: () => toggleEntityType('teams'),
     },
     {
       hotkey: ENTITY_TYPE_SHORTCUTS.agent,
       description: 'Filter by Agents',
-      handler: () => toggleFilter('agent'),
+      handler: () => toggleEntityType('agent'),
     },
     {
       hotkey: ENTITY_TYPE_SHORTCUTS.file,
       description: 'Filter by Files',
-      handler: () => toggleFilter('file'),
+      handler: () => toggleEntityType('file'),
     },
     {
       hotkey: 'u',
       description: 'Filter by Unread',
-      handler: () => toggleFilter('unread'),
+      handler: toggleUnread,
     },
     {
       hotkey: 's',
@@ -219,8 +265,11 @@ const SoupFilters = () => {
       hotkey: '/',
       description: 'Clear filters',
       handler: () => {
-        soup.filters.clear();
-        setSearchText('');
+        batch(() => {
+          soup.filters.clear();
+          setQueryFilters(QUERY_FILTERS.default);
+          setSearchText('');
+        });
       },
     },
     {
@@ -257,7 +306,7 @@ const SoupFilters = () => {
         label="Inbox"
         shortcut="i"
         isActive={soup.filters.isActive('signal')}
-        onClick={toggleSignalFilter}
+        onClick={() => toggleFocus('signal')}
       />
       {/* Other toggle */}
       <FilterButton
@@ -266,7 +315,7 @@ const SoupFilters = () => {
         label="Other"
         shortcut="o"
         isActive={soup.filters.isActive('noise')}
-        onClick={toggleNoiseFilter}
+        onClick={() => toggleFocus('noise')}
       />
       <FilterDivider />
       {/* Unread filter */}
@@ -280,7 +329,7 @@ const SoupFilters = () => {
               'text-ink-muted hover:text-accent hover:bg-accent/20':
                 !soup.filters.isActive('unread'),
             }}
-            onClick={() => soup.filters.toggle('unread')}
+            onClick={toggleUnread}
           >
             <svg
               class="size-4"
@@ -313,7 +362,7 @@ const SoupFilters = () => {
                 label={filter.label ?? ''}
                 shortcut={shortcut}
                 isActive={() => soup.filters.isActive(filter.id)}
-                onClick={() => toggleFilter(filter.id)}
+                onClick={entityTypeToggleHandlers[filter.id]}
                 paddingClass="px-2.5"
               />
             );

@@ -729,8 +729,8 @@ html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
 
 @media (min-width: 640px) {
   :root {
-    --thread-shift: 46px;
-    --user-icon-width: 40px;
+    --thread-shift: 40px;
+    --user-icon-width: 36px;
     --left-of-connector: 28px;
     --left-of-user-icon: calc(var(--left-of-connector) - var(--user-icon-width) / 2);
   }

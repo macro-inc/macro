@@ -3,13 +3,9 @@ import {
   createSoupState,
   type SoupState,
 } from '@app/component/next-soup/create-soup-state';
-import {
-  buildDssFiltersRequest,
-  getFolderFileTypes,
-} from '@app/component/next-soup/filters/filters';
+import { getFolderFileTypes } from '@app/component/next-soup/filters/filters';
 import { sortEntitiesForSearch } from '@app/component/next-soup/soup-view/sort-options';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
-import { useEmailLinksStatus } from '@core/email-link';
 import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
 import { fuzzyMatch } from '@core/util/fuzzy';
@@ -30,6 +26,7 @@ import {
   createSignal,
   type FlowComponent,
   on,
+  type Setter,
   Suspense,
   useContext,
 } from 'solid-js';
@@ -70,6 +67,7 @@ interface SoupViewContextValues {
   setSearchText: (value: string) => void;
   isSearchDisabled: Accessor<boolean>;
   rows: Accessor<SoupRow[]>;
+  setQueryFilters: Setter<SoupItemsQueryFilters>;
 }
 
 export const SoupViewContext = createContext<SoupViewContextValues>();
@@ -98,9 +96,9 @@ export const SoupViewContextProvider: FlowComponent<
 > = (props) => {
   const soup = props.soup ?? createSoupState();
 
-  const emailActive = useEmailLinksStatus();
-
   const [searchText, setSearchText] = createSignal('');
+  const [internalQueryFilters, setQueryFilters] =
+    createSignal<SoupItemsQueryFilters>({});
 
   const debouncedSearchForLocal = debouncedDependent(
     searchText,
@@ -173,25 +171,33 @@ export const SoupViewContextProvider: FlowComponent<
   );
 
   const queryFilters = createMemo(() => {
-    const base = buildDssFiltersRequest(soup.filters.active(), {
-      extra: props.queryFilters,
-      isSearchActive: !isSearchDisabled(),
-      emailActive: emailActive(),
-    });
+    const base = internalQueryFilters();
 
-    if (soup.filters.isActive('file')) {
-      if (base.document_filters?.file_types) {
-        base.document_filters.file_types = getFolderFileTypes('soup');
-      }
-    }
-
-    if (soup.filters.isActive('task')) {
-      if (base.document_filters?.file_types) {
-        base.document_filters.file_types = ['md'];
-      }
-    }
-
-    return base;
+    return {
+      ...base,
+      ...props.queryFilters,
+      // Deep merge individual filter objects if both exist
+      channel_filters: {
+        ...base.channel_filters,
+        ...props.queryFilters?.channel_filters,
+      },
+      chat_filters: {
+        ...base.chat_filters,
+        ...props.queryFilters?.chat_filters,
+      },
+      document_filters: {
+        ...base.document_filters,
+        ...props.queryFilters?.document_filters,
+      },
+      email_filters: {
+        ...base.email_filters,
+        ...props.queryFilters?.email_filters,
+      },
+      project_filters: {
+        ...base.project_filters,
+        ...props.queryFilters?.project_filters,
+      },
+    };
   });
 
   const searchFilters = createMemo(() => {
@@ -411,6 +417,7 @@ export const SoupViewContextProvider: FlowComponent<
     searchText,
     setSearchText,
     isSearchDisabled,
+    setQueryFilters,
   };
 
   return (
