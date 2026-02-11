@@ -212,23 +212,32 @@ export function MessageList(props: MessageListProps) {
     const targetBounds = targetEl.getBoundingClientRect();
     const containerBounds = container.getBoundingClientRect();
     const currentOffset = handle.scrollOffset;
-    const targetTop = targetBounds.top - containerBounds.top + currentOffset;
-    const targetBottom = targetTop + targetBounds.height;
-    const visibleTop = currentOffset;
-    const visibleBottom = currentOffset + handle.viewportSize;
+
+    const visualTop = targetBounds.top - containerBounds.top;
+    const visualBottom = targetBounds.bottom - containerBounds.top;
+
+    const targetTop = currentOffset + handle.viewportSize - visualTop;
+    const targetBottom = currentOffset + handle.viewportSize - visualBottom;
+
+    const visibleBottomEdge = currentOffset;
+    const visibleTopEdge = currentOffset + handle.viewportSize;
 
     const nextOffset = match(align)
-      .with('start', () => targetTop)
-      .with('end', () => targetBottom - handle.viewportSize)
-      .with(
-        'center',
-        () => targetTop - (handle.viewportSize - targetBounds.height) / 2
-      )
+      .with('start', () => targetTop - handle.viewportSize)
+      .with('end', () => targetBottom)
+      .with('center', () => {
+        // Center the element in the viewport
+        const elementCenter = (targetTop + targetBottom) / 2;
+        return elementCenter - handle.viewportSize / 2;
+      })
       .otherwise(() => {
-        if (targetTop < visibleTop) {
-          return targetTop;
-        } else if (targetBottom > visibleBottom) {
-          return targetBottom - handle.viewportSize;
+        // 'nearest': only scroll if element is out of view
+        if (targetTop > visibleTopEdge) {
+          // Element is above the visible area, scroll up to show it
+          return targetTop - handle.viewportSize;
+        } else if (targetBottom < visibleBottomEdge) {
+          // Element is below the visible area, scroll down to show it
+          return targetBottom;
         }
         return undefined;
       });
