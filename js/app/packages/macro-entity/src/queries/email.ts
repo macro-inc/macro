@@ -1,16 +1,11 @@
 import type { PreviewViewStandardLabel } from '@service-email/generated/schemas';
-import type { ApiPaginatedThreadCursor } from '@service-email/generated/schemas/apiPaginatedThreadCursor';
 import type { PreviewsInboxCursorParams } from '@service-email/generated/schemas/previewsInboxCursorParams';
+import { emailClient } from '@service-email/client';
 import { useInfiniteQuery } from '@tanstack/solid-query';
-import { SERVER_HOSTS } from 'core/constant/servers';
-import { platformFetch } from 'core/util/platformFetch';
+import { isErr } from 'core/util/maybeResult';
 import { type Accessor, createMemo } from 'solid-js';
 import type { EmailEntity } from '../types/entity';
-import {
-  createApiTokenQuery,
-  handleFetchResponse,
-  withApiTokenRetry,
-} from './auth';
+import { createApiTokenQuery } from './auth';
 import { queryKeys } from './key';
 
 export type FetchPaginatedEmailsParams = PreviewsInboxCursorParams & {
@@ -19,30 +14,21 @@ export type FetchPaginatedEmailsParams = PreviewsInboxCursorParams & {
 };
 
 const fetchPaginatedEmails = async ({
-  apiToken,
   view,
   ...params
-}: FetchPaginatedEmailsParams & {
-  apiToken?: string;
-}) => {
-  if (!apiToken) throw new Error('No API token provided');
-  const Authorization = `Bearer ${apiToken}`;
-
-  const url = new URL(
-    `${SERVER_HOSTS['email-service']}/email/threads/previews/cursor/${view}`
-  );
-  Object.entries(params).forEach(([key, value]) => {
-    if (value) url.searchParams.set(key, value.toString());
+}: FetchPaginatedEmailsParams) => {
+  const result = await emailClient.getPreviews({
+    view,
+    limit: params.limit,
+    sort_method: params.sort_method,
+    cursor: params.cursor,
   });
 
-  const response = await platformFetch(url.toString(), {
-    headers: { Authorization },
-  });
+  if (isErr(result)) {
+    throw new Error('Failed to fetch email');
+  }
 
-  await handleFetchResponse(response, 'Failed to fetch email');
-
-  const previews: ApiPaginatedThreadCursor = await response.json();
-  return previews;
+  return result[1];
 };
 
 export function createEmailsInfiniteQuery(
@@ -73,10 +59,7 @@ export function createEmailsInfiniteQuery(
   return useInfiniteQuery(() => {
     return {
       queryKey: queryKeys.email({ infinite: true, ...params() }),
-      queryFn: ({ pageParam }) =>
-        withApiTokenRetry(authQuery, (apiToken) =>
-          fetchPaginatedEmails({ apiToken, ...pageParam })
-        ),
+      queryFn: ({ pageParam }) => fetchPaginatedEmails(pageParam),
       initialPageParam: params(),
       getNextPageParam: ({ next_cursor: cursor }) =>
         cursor ? { ...params(), cursor } : undefined,
