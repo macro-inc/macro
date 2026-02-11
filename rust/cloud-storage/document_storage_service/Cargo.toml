@@ -48,6 +48,7 @@ comms = { path = "../comms", features = ["outbound"] }
 connection_gateway = { path = "../connection_gateway" }
 document_sub_type = { path = "../document_sub_type" }
 dynamodb_client = { path = "../dynamodb_client" }
+entity_access = { path = "../entity_access", features = ["schema"] }
 email = { path = "../email", features = ["outbound", "ports"] }
 frecency = { path = "../frecency", features = ["postgres"] }
 futures = { workspace = true }

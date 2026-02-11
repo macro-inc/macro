@@ -10,7 +10,7 @@ import {
   toggleKonsoleVisibility,
 } from '@app/component/command/state';
 import { EntitySelectionToolbarModal } from '@app/component/EntitySelectionToolbarModal';
-import type { EntityData } from '@macro-entity';
+import type { EntityData } from '@entity';
 
 interface SoupEntitySelectionToolbarProps {
   selected: EntityData[];

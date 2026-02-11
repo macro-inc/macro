@@ -2,7 +2,7 @@ import {
   isTaskEntity,
   type TaskEntityWithProperties,
   type EntityData,
-} from '@macro-entity';
+} from '@entity';
 import { useUserId } from '@core/context/user';
 import { createMemo } from 'solid-js';
 import {
@@ -52,17 +52,6 @@ const getLabelTokens = (
   }
 
   return tokens.map((token) => token.toUpperCase());
-};
-
-/** Check if entity was recently viewed (within last 24 hours) */
-const hasRecentlyViewed = (entity: EntityData): boolean => {
-  if (!entity.viewedAt) return false;
-
-  const now = Date.now();
-  const viewedAt = new Date(entity.viewedAt).getTime();
-  const oneDayMs = 24 * 60 * 60 * 1000;
-
-  return now - viewedAt < oneDayMs;
 };
 
 type EmailEntity = Extract<EntityData, { type: 'email' }>;
@@ -132,29 +121,29 @@ const getCurrentUserId = () => {
  *
  * Classification:
  * - Channels: Always signal (explicit membership)
- * - Chats: Signal if recently viewed
- * - Documents: Tasks always signal, others if recently viewed
+ * - Chats: Always signal
+ * - Documents: Docs always signal, tasks depending on conditions
  * - Emails: Based on priority/depriority labels and metadata
- * - Projects: Signal if recently viewed
+ * - Projects: Always signal
  */
 export function signalFilter(entity: EntityData): boolean {
   switch (entity.type) {
     case 'channel':
       return true;
     case 'chat':
-      return hasRecentlyViewed(entity);
+      return true;
     case 'document': {
       if (isTaskEntity(entity)) {
         const currentUserId = getCurrentUserId();
         return isSignalTask(entity as TaskEntityWithProperties, currentUserId);
       }
 
-      return hasRecentlyViewed(entity);
+      return true;
     }
     case 'email':
       return isSignalEmail(entity) || entity.isDraft;
     case 'project':
-      return hasRecentlyViewed(entity);
+      return true;
   }
 }
 

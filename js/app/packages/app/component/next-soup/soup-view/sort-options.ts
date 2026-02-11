@@ -5,7 +5,7 @@ import {
   type WithSearch,
   type EntityData,
   type WithNotification,
-} from '@macro-entity';
+} from '@entity';
 
 export type SystemSortOption =
   | 'updated_at'
@@ -63,10 +63,6 @@ export const SORT_CONFIGS = {
   frecency: {
     id: 'frecency',
     fn: sortByFrecencyScore,
-  },
-  notified_at: {
-    id: 'notified_at',
-    fn: sortByNotifiedAt,
   },
 } satisfies Record<string, SortConfig<SoupEntity>>;
 

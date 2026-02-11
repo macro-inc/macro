@@ -42,7 +42,7 @@ vi.mock('@core/component/EntityIcon', () => ({
 }));
 
 import { createSoupState } from './create-soup-state';
-import type { EntityData } from '@macro-entity';
+import type { EntityData } from '../../../entity/src';
 
 const createTestEntity = (id: string, name?: string): EntityData => ({
   id,

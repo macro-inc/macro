@@ -1,8 +1,4 @@
-import {
-  isTaskEntity,
-  type EntityData,
-  type WithNotification,
-} from '@macro-entity';
+import { isTaskEntity, type EntityData, type WithNotification } from '@entity';
 import {
   signalFilter,
   noiseFilter,
@@ -15,6 +11,14 @@ import {
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import { codeFileExtensions } from '@block-code/util/languageSupport';
 import type { FilterConfig } from './create-filters-state';
+import type { Component } from 'solid-js';
+import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
+import { AnimatedChatIcon } from '@macro-icons/wide/animating/chat';
+import { AnimatedEmailIcon } from '@macro-icons/wide/animating/email';
+import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
+import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
+import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
+import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
 
 export const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
@@ -250,6 +254,22 @@ const ENTITY_TYPE_TO_ICON_TYPE: Record<EntityTypeFilters, EntityWithValidIcon> =
 
 export const getEntityTypeFilterIcon = (filter: EntityTypeFilters) => {
   return getIconConfig(ENTITY_TYPE_TO_ICON_TYPE[filter]);
+};
+
+/**
+ * Mapping of entity type filter IDs to their animated icon components.
+ * Used to provide hover animations on filter buttons.
+ */
+export const ANIMATED_ICONS: Partial<
+  Record<EntityTypeFilters, Component<{ triggerAnimation?: boolean }>>
+> = {
+  document: AnimatedFileMdIcon,
+  agent: AnimatedStarIcon,
+  people: AnimatedChatIcon,
+  teams: AnimatedChannelIcon,
+  task: AnimatedTaskIcon,
+  email: AnimatedEmailIcon,
+  file: AnimatedFolderIcon,
 };
 
 export const getFilterWithID = (filterID: FilterID) => {

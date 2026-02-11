@@ -1068,7 +1068,7 @@ function MentionsMenuInner(props: {
                 </span>
                 <button
                   type="button"
-                  class="text-xs font-medium text-ink-muted hover:text-ink hover:underline cursor-pointer"
+                  class="text-xs font-medium text-ink-muted hover:text-ink hover:underline"
                   onMouseDown={(e) => {
                     e.preventDefault();
                     e.stopPropagation();

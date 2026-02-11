@@ -47,6 +47,8 @@ const FUSIONAUTH_CLIENT_SECRET_KEY = config.require(
 const STRIPE_SECRET_KEY = config.require(`stripe_secret_key`);
 const fusionauthClientIdSecretKey = config.require(`fusionauth_client_id`);
 
+const FUSIONAUTH_TENANT_ID = config.require('fusionauth_tenant_id');
+
 const FUSIONAUTH_CLIENT_ID = aws.secretsmanager
   .getSecretVersionOutput({
     secretId: fusionauthClientIdSecretKey,
@@ -191,8 +193,8 @@ const service = new AuthenticationService('authentication-service', {
       value: pulumi.interpolate`${FUSIONAUTH_CLIENT_SECRET_KEY}`,
     },
     {
-      name: 'FUSIONAUTH_APPLICATION_ID',
-      value: pulumi.interpolate`${FUSIONAUTH_CLIENT_ID}`,
+      name: 'FUSIONAUTH_TENANT_ID',
+      value: FUSIONAUTH_TENANT_ID,
     },
     { name: 'ISSUER', value: pulumi.interpolate`${FUSIONAUTH_ISSUER}` },
     {

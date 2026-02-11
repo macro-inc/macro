@@ -18,7 +18,6 @@ import { Hotkey } from '@core/component/Hotkey';
 import { setCreateMenuOpen } from '../Launcher';
 import { useHasPaidAccess } from '@core/auth';
 import { TOKENS } from '@core/hotkey/tokens';
-import { QuickAccess } from './QuickAccess';
 import { Button } from '@ui/components/Button';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import { isMobile } from '@core/mobile/isMobile';
@@ -174,7 +173,6 @@ export function Dock() {
                 <div class="w-full"/>
 
                 <Show when={ENABLE_DOCK_NOTITIFCATIONS}>
-                  <QuickAccess />
                   <GlobalNotificationBell notificationSource={notificationSource} />
                 </Show>
               </div>

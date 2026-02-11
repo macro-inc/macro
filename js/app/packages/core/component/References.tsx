@@ -68,7 +68,7 @@ export function References(props: ReferenceProps) {
 
     return response[1].references;
   });
-  const { replaceOrInsertSplit } = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
   const blockOrchestrator = useGlobalBlockOrchestrator();
 
   const messageLocation = async (
@@ -83,33 +83,52 @@ export function References(props: ReferenceProps) {
     });
   };
 
-  const navigateToMessage = (
-    channelId: string,
-    messageId: string,
-    threadId?: string
-  ) => {
-    replaceOrInsertSplit({
-      type: 'channel',
-      id: channelId,
+  const navigateToItem = ({
+    event,
+    blockId,
+    blockName,
+  }: {
+    event?: KeyboardEvent | MouseEvent;
+    blockName: BlockName | BlockAlias;
+    blockId: string;
+  }) => {
+    openWithSplit(
+      { type: blockName, id: blockId },
+      { preferNewSplit: event?.shiftKey !== true }
+    );
+  };
+
+  const navigateToMessage = ({
+    channelId,
+    messageId,
+    threadId,
+    event,
+  }: {
+    event?: KeyboardEvent | MouseEvent;
+    channelId: string;
+    messageId: string;
+    threadId?: string;
+  }) => {
+    navigateToItem({
+      event,
+      blockName: 'channel',
+      blockId: channelId,
     });
     messageLocation(channelId, messageId, threadId);
   };
 
-  const navigateToItem = (
-    blockName: BlockName | BlockAlias,
-    blockId: string
+  const navigateToGenericReference = (
+    item: PreviewItem,
+    event?: KeyboardEvent | MouseEvent
   ) => {
-    replaceOrInsertSplit({
-      type: blockName,
-      id: blockId,
-    });
-  };
-
-  const navigateToGenericReference = (item: PreviewItem) => {
     if (isAccessiblePreviewItem(item) && item.type === 'document') {
       const blockId = item.id;
       const blockType = fileTypeToBlockName(item.fileType);
-      navigateToItem(blockType, blockId);
+      navigateToItem({
+        event,
+        blockName: blockType,
+        blockId,
+      });
     } else {
       toast.failure('Failed to open reference');
     }
@@ -172,8 +191,12 @@ export function References(props: ReferenceProps) {
               const hasMessageContent =
                 ref.message_content && ref.message_content.trim().length > 0;
 
-              const navHandlers = useSplitNavigationHandler(() =>
-                navigateToMessage(ref.channel_id, ref.message_id)
+              const navHandlers = useSplitNavigationHandler((e) =>
+                navigateToMessage({
+                  event: e,
+                  channelId: ref.channel_id,
+                  messageId: ref.message_id,
+                })
               );
 
               return (
@@ -213,8 +236,8 @@ export function References(props: ReferenceProps) {
                 type: ref.source_entity_type as ItemType,
               }));
 
-              const navHandlers = useSplitNavigationHandler(() =>
-                navigateToGenericReference(item())
+              const navHandlers = useSplitNavigationHandler((e) =>
+                navigateToGenericReference(item(), e)
               );
 
               return (

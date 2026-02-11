@@ -4,6 +4,8 @@ import XIcon from '@icon/regular/x.svg?component-solid';
 import PreviewIcon from '@macro-icons/wide/preview.svg';
 import NoiseIcon from '@macro-icons/wide/noise.svg';
 import SignalIcon from '@macro-icons/wide/signal.svg';
+import { AnimatedNoiseIcon } from '@macro-icons/wide/animating/noise';
+import { AnimatedSignalIcon } from '@macro-icons/wide/animating/signal';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
@@ -23,11 +25,13 @@ import {
   type Component,
 } from 'solid-js';
 import {
+  ANIMATED_ICONS,
   ENTITY_TYPE_FILTER_CONFIGS,
   EXCLUDE,
   getEntityTypeFilterIcon,
   QUERY_FILTERS,
 } from '@app/component/next-soup/filters/filters';
+import { ENABLE_ANIMATED_ICONS } from '@core/constant/featureFlags';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useEmailLinksStatus } from '@core/email-link';
@@ -298,6 +302,7 @@ const SoupFilters = () => {
       {/* Inbox toggle */}
       <FilterButton
         icon={SignalIcon}
+        animatedIcon={AnimatedSignalIcon}
         label="Inbox"
         shortcut="i"
         isActive={soup.filters.isActive('signal')}
@@ -306,6 +311,7 @@ const SoupFilters = () => {
       {/* Other toggle */}
       <FilterButton
         icon={NoiseIcon}
+        animatedIcon={AnimatedNoiseIcon}
         label="Other"
         shortcut="o"
         isActive={soup.filters.isActive('noise')}
@@ -347,10 +353,12 @@ const SoupFilters = () => {
           {(filter) => {
             const iconConfig = () => getEntityTypeFilterIcon(filter.id);
             const shortcut = ENTITY_TYPE_SHORTCUTS[filter.id];
+            const animatedIcon = ANIMATED_ICONS[filter.id];
 
             return (
               <FilterButton
                 icon={iconConfig().icon}
+                animatedIcon={animatedIcon}
                 label={filter.label ?? ''}
                 shortcut={shortcut}
                 isActive={() => soup.filters.isActive(filter.id)}
@@ -593,6 +601,7 @@ export const ShortcutLabel: Component<{ label: string; shortcut: string }> = (
 
 export interface FilterButtonProps {
   icon: Component<{ class?: string }>;
+  animatedIcon?: Component<{ triggerAnimation?: boolean }>;
   label: string;
   shortcut: string;
   isActive: (() => boolean) | boolean;
@@ -600,34 +609,51 @@ export interface FilterButtonProps {
   paddingClass?: string;
 }
 
-export const FilterButton: Component<FilterButtonProps> = (props) => (
-  <div class="flex items-center mr-0.5 shrink-0">
-    <Tooltip
-      tooltip={<LabelAndHotKey label={props.label} shortcut={props.shortcut} />}
-    >
-      <button
-        type="button"
-        class={`flex items-center gap-1 h-[22px] touch:mobile-width:h-9 ${props.paddingClass ?? 'pl-2 pr-2.5'} active:bg-accent active:text-panel rounded-full`}
-        classList={{
-          'bg-accent text-panel':
-            typeof props.isActive === 'function'
-              ? props.isActive()
-              : props.isActive,
-          'text-ink-muted hover:text-accent hover:bg-accent/20':
-            !(typeof props.isActive === 'function'
-              ? props.isActive()
-              : props.isActive),
-        }}
-        onClick={props.onClick}
+export const FilterButton: Component<FilterButtonProps> = (props) => {
+  const [isHovered, setIsHovered] = createSignal(false);
+
+  const isActive = () =>
+    typeof props.isActive === 'function' ? props.isActive() : props.isActive;
+
+  return (
+    <div class="flex items-center mr-0.5 shrink-0">
+      <Tooltip
+        tooltip={
+          <LabelAndHotKey label={props.label} shortcut={props.shortcut} />
+        }
       >
-        <Dynamic component={props.icon} class="size-3.5" />
-        <span class="leading-none">
-          <ShortcutLabel label={props.label} shortcut={props.shortcut} />
-        </span>
-      </button>
-    </Tooltip>
-  </div>
-);
+        <button
+          type="button"
+          class={`flex items-center gap-1 h-[22px] touch:mobile-width:h-9 ${props.paddingClass ?? 'pl-2 pr-2.5'} active:bg-accent active:text-panel rounded-full`}
+          classList={{
+            'bg-accent text-panel': isActive(),
+            'text-ink-muted hover:text-accent hover:bg-accent/20': !isActive(),
+          }}
+          onClick={props.onClick}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
+          <Show
+            when={ENABLE_ANIMATED_ICONS && props.animatedIcon}
+            fallback={<Dynamic component={props.icon} class="size-3.5" />}
+          >
+            {(Icon) => (
+              <div class="size-3.5 overflow-visible">
+                <Dynamic
+                  component={Icon()}
+                  triggerAnimation={isHovered() || isActive()}
+                />
+              </div>
+            )}
+          </Show>
+          <span class="leading-none">
+            <ShortcutLabel label={props.label} shortcut={props.shortcut} />
+          </span>
+        </button>
+      </Tooltip>
+    </div>
+  );
+};
 
 export const FilterDivider: Component = () => (
   <div class="mx-0.5 w-px h-5 bg-edge-muted/50 shrink-0" />

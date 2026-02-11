@@ -14,7 +14,7 @@ import { type Accessor, createMemo } from 'solid-js';
  * Creates a droppable zone and handles converting dropped entities to attachments.
  *
  * @param droppableId - Unique ID for the droppable zone
- * @param attachments - The attachments object from useChatInput
+ * @param attachments - The attachments object from ChatContext
  * @returns Object with droppable directive and isDraggingOver signal
  */
 export function useEntityDropAttachment(

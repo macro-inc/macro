@@ -2,7 +2,7 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { MenuItem } from '@core/component/Menu';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import type { EntityData } from '@macro-entity';
+import type { EntityData } from '@entity';
 import {
   makeCopyAction,
   makeDeleteAction,

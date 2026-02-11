@@ -1,6 +1,6 @@
 import { createSortState } from '@app/component/next-soup/create-sort-state';
 import {
-  createFiltersState,
+  createFilterState,
   type FilterConfig,
   SOUP_FILTERS,
   FILTER_GROUPS,
@@ -8,7 +8,7 @@ import {
 import { createSelectionState } from '@app/component/next-soup/selection-state';
 import { SORT_CONFIGS } from '@app/component/next-soup/soup-view/sort-options';
 import { isModality } from '@core/mobile/inputModality';
-import type { EntityData, WithSearch } from '@macro-entity';
+import type { EntityData, WithSearch } from '@entity';
 import { createMemo, createSignal } from 'solid-js';
 
 type SoupEntity = EntityData | WithSearch<EntityData>;
@@ -51,7 +51,7 @@ export const createSoupState = <
     getItemId: (i) => i.id,
   });
 
-  const filters = createFiltersState<SoupEntity, FilterConfig<SoupEntity>>({
+  const filters = createFilterState<SoupEntity, FilterConfig<SoupEntity>>({
     configs: filterConfigs ?? SOUP_FILTERS,
     groups: FILTER_GROUPS,
     initialPredicates: initialFilters,
@@ -94,8 +94,7 @@ export const createSoupState = <
 
   const getItemAt = (index: number): SoupEntity | undefined => data()[index];
 
-  // Navigation implementation
-  const setFocus = (index: number): NavigationResult<SoupEntity> => {
+  const calculateFocusItem = (index: number) => {
     const visibleRows = data();
     if (visibleRows.length === 0) return undefined;
 
@@ -109,8 +108,26 @@ export const createSoupState = <
     const row = visibleRows[targetIndex];
     if (!row) return undefined;
 
-    setFocusedId(row.id);
     return { item: row, index: targetIndex };
+  };
+
+  // Navigation implementation
+  const setFocus = (index: number): NavigationResult<SoupEntity> => {
+    const result = calculateFocusItem(index);
+
+    if (result) {
+      setFocusedId(result.item.id);
+    }
+
+    return result;
+  };
+
+  const peek = (offset: number) => {
+    const current = focusedIndex();
+    if (current === -1) {
+      return calculateFocusItem(offset > 0 ? 0 : data().length - 1);
+    }
+    return calculateFocusItem(current + offset);
   };
 
   const navigateBy = (offset: number): NavigationResult<SoupEntity> => {
@@ -154,12 +171,7 @@ export const createSoupState = <
       },
       toFirst: () => setFocus(0),
       toLast: () => setFocus(data().length - 1),
-      peekOffset: (offset: number) => {
-        const current = focusedIndex();
-        const next = navigateBy(offset);
-        setFocus(current);
-        return next;
-      },
+      peekOffset: peek,
     },
 
     items: {

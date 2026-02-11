@@ -26,8 +26,12 @@ import {
 import { PopupPreview } from './DocumentPreview';
 import { HoverCard } from './HoverCard';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
-import { DeprecatedTextButton } from './DeprecatedTextButton';
-import { EntityIcon, getPreviewItemIconType } from './EntityIcon';
+import {
+  EntityIcon,
+  type EntityIconProps,
+  getPreviewItemIconType,
+} from './EntityIcon';
+import { cn } from '@ui/utils/classname';
 
 export function useItemPreviewData(entity: Accessor<ItemEntity>) {
   const [item] = useItemPreview(entity);
@@ -62,11 +66,11 @@ export function useItemPreviewData(entity: Accessor<ItemEntity>) {
     id: string,
     fileType?: FileType,
     subType?: NamedSubType,
-    altKey?: boolean
+    shiftKey?: boolean
   ) {
     const _type = subType ?? fileType ?? type;
     if (!_type) return;
-    openItem(_type, id, openInNewSplitForMention(altKey, true));
+    openItem(_type, id, openInNewSplitForMention(shiftKey, true));
   }
 
   const name = () => {
@@ -100,14 +104,31 @@ export function useItemPreviewData(entity: Accessor<ItemEntity>) {
   };
 }
 
-function ButtonNoAccess() {
+const DEFAULT_BUTTON_CLASS =
+  'text-ink-base text-sm ring-1 ring-edge-muted rounded-xs hover:bg-panel-hover flex flex-row h-6 px-2 justify-center items-center';
+const DEFAULT_ICON_CLASS = 'flex justify-start items-center h-3.5 mr-2';
+const DEFAULT_TEXT_CLASS = 'flex-1 text-left leading-5 min-w-0 truncate';
+
+interface StatusDisplayProps {
+  class?: string;
+  iconClass?: string;
+  textClass?: string;
+}
+
+function ButtonNoAccess(props: StatusDisplayProps) {
   return (
-    <DeprecatedTextButton
-      theme="base"
-      icon={() => <EyeSlash class="text-ink-muted w-4 h-4" />}
-      disabled
-      text="No Access"
-    />
+    <div
+      class={cn(
+        DEFAULT_BUTTON_CLASS,
+        'opacity-50 cursor-not-allowed',
+        props.class
+      )}
+    >
+      <div class={cn(DEFAULT_ICON_CLASS, props.iconClass)}>
+        <EyeSlash class="text-ink-muted w-3.5 h-3.5" />
+      </div>
+      <div class={cn(DEFAULT_TEXT_CLASS, props.textClass)}>No Access</div>
+    </div>
   );
 }
 
@@ -122,14 +143,20 @@ function InlineNoAccess() {
   );
 }
 
-function ButtonDeleted() {
+function ButtonDeleted(props: StatusDisplayProps) {
   return (
-    <DeprecatedTextButton
-      theme="base"
-      icon={() => <TrashSimple class="text-ink-muted w-4 h-4" />}
-      disabled
-      text="Deleted"
-    />
+    <div
+      class={cn(
+        DEFAULT_BUTTON_CLASS,
+        'opacity-50 cursor-not-allowed',
+        props.class
+      )}
+    >
+      <div class={cn(DEFAULT_ICON_CLASS, props.iconClass)}>
+        <TrashSimple class="text-ink-muted w-3.5 h-3.5" />
+      </div>
+      <div class={cn(DEFAULT_TEXT_CLASS, props.textClass)}>Deleted</div>
+    </div>
   );
 }
 
@@ -144,18 +171,22 @@ function InlineDeleted() {
   );
 }
 
-function ButtonLoading() {
+function ButtonLoading(props: StatusDisplayProps) {
   return (
-    <DeprecatedTextButton
-      theme="base"
-      icon={() => (
-        <div class="w-4 h-4 animate-spin">
+    <div
+      class={cn(
+        DEFAULT_BUTTON_CLASS,
+        'opacity-50 cursor-not-allowed',
+        props.class
+      )}
+    >
+      <div class={cn(DEFAULT_ICON_CLASS, props.iconClass)}>
+        <div class="w-3.5 h-3.5 animate-spin">
           <LoadingSpinner />
         </div>
-      )}
-      text="Loading..."
-      disabled
-    />
+      </div>
+      <div class={cn(DEFAULT_TEXT_CLASS, props.textClass)}>Loading...</div>
+    </div>
   );
 }
 
@@ -170,7 +201,22 @@ function InlineLoading() {
   );
 }
 
-export function ItemPreview(props: ItemEntity) {
+export type ItemPreviewProps = ItemEntity & {
+  /** Custom class for the button wrapper */
+  class?: string;
+  /** Custom class for the icon container */
+  iconClass?: string;
+  /** Custom class for the text/name */
+  textClass?: string;
+  /** Disable hover card popup */
+  disableHoverCard?: boolean;
+  /** Max length for text truncation */
+  maxLength?: number;
+  /** Icon size (defaults to 'fill') */
+  iconSize?: EntityIconProps['size'];
+};
+
+export function ItemPreview(props: ItemPreviewProps) {
   return (
     <Suspense>
       <ItemPreviewInner {...props} />
@@ -178,14 +224,24 @@ export function ItemPreview(props: ItemEntity) {
   );
 }
 
-function ItemPreviewInner(props: ItemEntity) {
+function ItemPreviewInner(props: ItemPreviewProps) {
   const { item, name, onPreviewClick, targetType, ItemEntityIcon } =
     useItemPreviewData(() => props);
+
+  const maxLength = () => props.maxLength ?? 80;
+  const iconSize = () => props.iconSize ?? 'fill';
+  const buttonClass = () => cn(DEFAULT_BUTTON_CLASS, props.class);
+  const iconClass = () => cn(DEFAULT_ICON_CLASS, props.iconClass);
+  const textClass = () => cn(DEFAULT_TEXT_CLASS, props.textClass);
 
   return (
     <Switch>
       <Match when={item().loading}>
-        <ButtonLoading />
+        <ButtonLoading
+          class={props.class}
+          iconClass={props.iconClass}
+          textClass={props.textClass}
+        />
       </Match>
       <Match when={matches(item(), (i) => !i.loading)}>
         {(loadedItem) => (
@@ -197,6 +253,7 @@ function ItemPreviewInner(props: ItemEntity) {
                   const itemType = accessibleItem().type;
                   return fileTypeToBlockName(type ?? itemType);
                 };
+
                 const navHandlers =
                   useSplitNavigationHandler<HTMLButtonElement>((e) => {
                     const item = accessibleItem();
@@ -205,22 +262,22 @@ function ItemPreviewInner(props: ItemEntity) {
                       item.id,
                       item.fileType,
                       item.subType?.type as NamedSubType | undefined,
-                      e.altKey
+                      e.shiftKey
                     );
                   });
+
                 return (
                   <HoverCard
-                    disabled={isTouchDevice() || !blockName()}
+                    disabled={
+                      props.disableHoverCard || isTouchDevice() || !blockName()
+                    }
                     trigger={
-                      <button
-                        class="text-ink-base text-sm ring-1 ring-edge-muted rounded-xs hover:bg-panel-hover flex flex-row h-6 px-2 justify-center items-center"
-                        {...navHandlers}
-                      >
-                        <div class="flex justify-start items-center h-3.5 mr-2">
-                          <ItemEntityIcon size="fill" />
+                      <button class={buttonClass()} {...navHandlers}>
+                        <div class={iconClass()}>
+                          <ItemEntityIcon size={iconSize()} />
                         </div>
-                        <div class="flex-1 text-left leading-5 min-w-0 truncate">
-                          {truncateString(name(), 80)}
+                        <div class={textClass()}>
+                          {truncateString(name(), maxLength())}
                         </div>
                       </button>
                     }
@@ -241,10 +298,18 @@ function ItemPreviewInner(props: ItemEntity) {
               }}
             </Match>
             <Match when={loadedItem().access === 'no_access'}>
-              <ButtonNoAccess />
+              <ButtonNoAccess
+                class={props.class}
+                iconClass={props.iconClass}
+                textClass={props.textClass}
+              />
             </Match>
             <Match when={loadedItem().access === 'does_not_exist'}>
-              <ButtonDeleted />
+              <ButtonDeleted
+                class={props.class}
+                iconClass={props.iconClass}
+                textClass={props.textClass}
+              />
             </Match>
           </Switch>
         )}

@@ -19,7 +19,7 @@ import {
   getScopeElement,
   runCommand,
 } from '@core/hotkey/utils';
-import { isSearchEntity } from '@macro-entity';
+import { isSearchEntity } from '@entity';
 import type { Accessor } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { SoupState } from '../create-soup-state';
@@ -28,7 +28,6 @@ import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils
 type UseSoupViewHotkeysOptions = {
   splitId: string;
   scopeId: string;
-  domRef: Accessor<HTMLElement | undefined>;
   soup: SoupState;
   splitHandle: SplitHandle;
   virtualizerHandle: Accessor<VirtualizerHandle | undefined>;
@@ -292,5 +291,22 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       }
       return false;
     },
+  });
+
+  registerHotkey({
+    hotkey: ['shift+enter'],
+    scopeId,
+    description: 'Open in new split',
+    condition: () => soup.focus.id() !== undefined,
+    keyDownHandler: () => {
+      const entity = soup.focus.item();
+      if (!entity) return false;
+      openEntityInSplitFromUnifiedList(entity, {
+        splitHandle,
+        openInNewSplit: true,
+      });
+      return true;
+    },
+    hide: true,
   });
 };

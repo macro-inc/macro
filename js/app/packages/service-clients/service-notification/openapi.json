@@ -147,35 +147,6 @@
         }
       }
     },
-    "/notifications": {
-      "post": {
-        "tags": ["notification::create_notification"],
-        "summary": "Creates a notification.\nWill generate an id for the notification.",
-        "operationId": "create_notification",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateNotification"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Notification"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/unsubscribe": {
       "get": {
         "tags": ["unsubscribe::get_unsubscribes"],
@@ -1111,9 +1082,6 @@
           }
         ]
       },
-      "ChannelMessageDocumentMetadata": {
-        "$ref": "#/components/schemas/DocumentMentionMetadata"
-      },
       "ChannelMessageSendMetadata": {
         "allOf": [
           {
@@ -1231,27 +1199,23 @@
         "enum": ["ios", "android"]
       },
       "DocumentMentionMetadata": {
-        "allOf": [
-          {},
-          {
-            "type": "object",
-            "required": ["documentName", "owner"],
-            "properties": {
-              "documentName": {
-                "type": "string",
-                "description": "The name of the document"
-              },
-              "fileType": {
-                "type": ["string", "null"],
-                "description": "The file type of the document"
-              },
-              "owner": {
-                "type": "string",
-                "description": "The owner of the document"
-              }
-            }
+        "type": "object",
+        "description": "Someone mentioned a document in a channel",
+        "required": ["documentName", "owner"],
+        "properties": {
+          "documentName": {
+            "type": "string",
+            "description": "The name of the document"
+          },
+          "fileType": {
+            "type": ["string", "null"],
+            "description": "The file type of the document"
+          },
+          "owner": {
+            "type": "string",
+            "description": "The owner of the document"
           }
-        ]
+        }
       },
       "EmptyResponse": {
         "type": "object",
@@ -1370,37 +1334,47 @@
           }
         }
       },
-      "ItemSharedOrganizationMetadata": {
+      "MentionedInDocumentCommentMetadata": {
         "type": "object",
-        "description": "Metadata for when a item is shared with an organization",
-        "required": ["orgUserIds", "itemType", "itemId", "sharedBy"],
+        "description": "Notification sent when a user is mentioned in a document comment.",
+        "required": [
+          "documentName",
+          "owner",
+          "mentionId",
+          "commentId",
+          "threadId",
+          "text"
+        ],
         "properties": {
-          "itemId": {
+          "commentId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "the comment id"
+          },
+          "documentName": {
             "type": "string",
-            "description": "The name/title of the shared item (optional)"
+            "description": "The name of the document."
           },
-          "itemName": {
+          "fileType": {
             "type": ["string", "null"],
-            "description": "The name/title of the shared item"
+            "description": "The file type of the document."
           },
-          "itemType": {
-            "$ref": "#/components/schemas/EntityType",
-            "description": "The type of item being shared"
-          },
-          "orgUserIds": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "List of user IDs that the item is shared with"
-          },
-          "permissionLevel": {
-            "type": ["string", "null"],
-            "description": "Permission level granted (read, write, admin, etc.)"
-          },
-          "sharedBy": {
+          "mentionId": {
             "type": "string",
-            "description": "The user who shared the item"
+            "description": "The mention ID."
+          },
+          "owner": {
+            "type": "string",
+            "description": "The owner of the document."
+          },
+          "text": {
+            "type": "string",
+            "description": "the text of the comment"
+          },
+          "threadId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "the thread id"
           }
         }
       },
@@ -1433,6 +1407,7 @@
             "required": ["content", "tag"],
             "properties": {
               "content": {
+                "$ref": "#/components/schemas/ChannelMentionMetadata",
                 "description": "Someone mentioned you in a channel."
               },
               "tag": {
@@ -1443,11 +1418,12 @@
           },
           {
             "type": "object",
-            "description": "Someone mentioned you in a document.",
+            "description": "Someone mentioned a document in a channel.",
             "required": ["content", "tag"],
             "properties": {
               "content": {
-                "description": "Someone mentioned you in a document."
+                "$ref": "#/components/schemas/DocumentMentionMetadata",
+                "description": "Someone mentioned a document in a channel."
               },
               "tag": {
                 "type": "string",
@@ -1457,10 +1433,26 @@
           },
           {
             "type": "object",
+            "description": "User was mentioned in a comment in a document",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/MentionedInDocumentCommentMetadata",
+                "description": "User was mentioned in a comment in a document"
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["mentioned_in_document_comment"]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "The user was invited to a channel.",
             "required": ["content", "tag"],
             "properties": {
               "content": {
+                "$ref": "#/components/schemas/ChannelInviteMetadata",
                 "description": "The user was invited to a channel."
               },
               "tag": {
@@ -1475,6 +1467,7 @@
             "required": ["content", "tag"],
             "properties": {
               "content": {
+                "$ref": "#/components/schemas/ChannelMessageSendMetadata",
                 "description": "A user sent a message in a channel."
               },
               "tag": {
@@ -1489,6 +1482,7 @@
             "required": ["content", "tag"],
             "properties": {
               "content": {
+                "$ref": "#/components/schemas/ChannelReplyMetadata",
                 "description": "Someone replied to a thread in a channel that the user is part of."
               },
               "tag": {
@@ -1503,6 +1497,7 @@
             "required": ["content", "tag"],
             "properties": {
               "content": {
+                "$ref": "#/components/schemas/NewEmailMetadata",
                 "description": "A new email has been sent to the user."
               },
               "tag": {
@@ -1517,6 +1512,7 @@
             "required": ["content", "tag"],
             "properties": {
               "content": {
+                "$ref": "#/components/schemas/InviteToTeamMetadata",
                 "description": "A user was invited to a team."
               },
               "tag": {
@@ -1531,6 +1527,7 @@
             "required": ["content", "tag"],
             "properties": {
               "content": {
+                "$ref": "#/components/schemas/TaskAssignedMetadata",
                 "description": "A user was assigned to a task."
               },
               "tag": {
@@ -1541,35 +1538,6 @@
           }
         ],
         "description": "Mirrors [`model_notifications::NotificationEvent`] but uses `tag` / `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait."
-      },
-      "Notification": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/Entity"
-          },
-          {
-            "$ref": "#/components/schemas/NotificationTemporalData"
-          },
-          {
-            "$ref": "#/components/schemas/NotificationEvent"
-          },
-          {
-            "type": "object",
-            "required": ["id", "serviceSender"],
-            "properties": {
-              "id": {
-                "type": "string",
-                "format": "uuid"
-              },
-              "senderId": {
-                "type": ["string", "null"]
-              },
-              "serviceSender": {
-                "type": "string"
-              }
-            }
-          }
-        ]
       },
       "NotificationBulkRequest": {
         "type": "object",
@@ -1586,230 +1554,9 @@
           }
         }
       },
-      "NotificationEvent": {
-        "oneOf": [
-          {
-            "type": "object",
-            "description": "An Item was shared with a specific user",
-            "required": ["notificationMetadata", "notificationEventType"],
-            "properties": {
-              "notificationEventType": {
-                "type": "string",
-                "enum": ["item_shared_user"]
-              },
-              "notificationMetadata": {
-                "$ref": "#/components/schemas/ItemSharedMetadata",
-                "description": "An Item was shared with a specific user"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "A item was shared with an organization",
-            "required": ["notificationMetadata", "notificationEventType"],
-            "properties": {
-              "notificationEventType": {
-                "type": "string",
-                "enum": ["item_shared_organization"]
-              },
-              "notificationMetadata": {
-                "$ref": "#/components/schemas/ItemSharedOrganizationMetadata",
-                "description": "A item was shared with an organization"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "Someone mentioned you in a channel",
-            "required": ["notificationMetadata", "notificationEventType"],
-            "properties": {
-              "notificationEventType": {
-                "type": "string",
-                "enum": ["channel_mention"]
-              },
-              "notificationMetadata": {
-                "$ref": "#/components/schemas/ChannelMentionMetadata",
-                "description": "Someone mentioned you in a channel"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "Someone mentioned you in a document",
-            "required": ["notificationMetadata", "notificationEventType"],
-            "properties": {
-              "notificationEventType": {
-                "type": "string",
-                "enum": ["document_mention"]
-              },
-              "notificationMetadata": {
-                "$ref": "#/components/schemas/DocumentMentionMetadata",
-                "description": "Someone mentioned you in a document"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "The user was invited to a channel",
-            "required": ["notificationMetadata", "notificationEventType"],
-            "properties": {
-              "notificationEventType": {
-                "type": "string",
-                "enum": ["channel_invite"]
-              },
-              "notificationMetadata": {
-                "$ref": "#/components/schemas/ChannelInviteMetadata",
-                "description": "The user was invited to a channel"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "A user sent a message in a channel",
-            "required": ["notificationMetadata", "notificationEventType"],
-            "properties": {
-              "notificationEventType": {
-                "type": "string",
-                "enum": ["channel_message_send"]
-              },
-              "notificationMetadata": {
-                "$ref": "#/components/schemas/ChannelMessageSendMetadata",
-                "description": "A user sent a message in a channel"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "Someone replied to a thread in a channel that the user is part of",
-            "required": ["notificationMetadata", "notificationEventType"],
-            "properties": {
-              "notificationEventType": {
-                "type": "string",
-                "enum": ["channel_message_reply"]
-              },
-              "notificationMetadata": {
-                "$ref": "#/components/schemas/ChannelReplyMetadata",
-                "description": "Someone replied to a thread in a channel that the user is part of"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "If a document is included via mention or attachment on a message",
-            "required": ["notificationMetadata", "notificationEventType"],
-            "properties": {
-              "notificationEventType": {
-                "type": "string",
-                "enum": ["channel_message_document"]
-              },
-              "notificationMetadata": {
-                "$ref": "#/components/schemas/ChannelMessageDocumentMetadata",
-                "description": "If a document is included via mention or attachment on a message"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "A new email has been sent to the user",
-            "required": ["notificationMetadata", "notificationEventType"],
-            "properties": {
-              "notificationEventType": {
-                "type": "string",
-                "enum": ["new_email"]
-              },
-              "notificationMetadata": {
-                "$ref": "#/components/schemas/NewEmailMetadata",
-                "description": "A new email has been sent to the user"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "A user was invited to a team",
-            "required": ["notificationMetadata", "notificationEventType"],
-            "properties": {
-              "notificationEventType": {
-                "type": "string",
-                "enum": ["invite_to_team"]
-              },
-              "notificationMetadata": {
-                "$ref": "#/components/schemas/InviteToTeamMetadata",
-                "description": "A user was invited to a team"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "A team invite was rejected",
-            "required": ["notificationEventType"],
-            "properties": {
-              "notificationEventType": {
-                "type": "string",
-                "enum": ["reject_team_invite"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "A user was assigned to a task",
-            "required": ["notificationMetadata", "notificationEventType"],
-            "properties": {
-              "notificationEventType": {
-                "type": "string",
-                "enum": ["task_assigned"]
-              },
-              "notificationMetadata": {
-                "$ref": "#/components/schemas/TaskAssignedMetadata",
-                "description": "A user was assigned to a task"
-              }
-            }
-          }
-        ],
-        "description": "The types of events that the notification system is aware of"
-      },
-      "NotificationEventType": {
-        "type": "string",
-        "description": "Auto-generated discriminant enum variants",
-        "enum": [
-          "item_shared_user",
-          "item_shared_organization",
-          "channel_mention",
-          "document_mention",
-          "channel_invite",
-          "channel_message_send",
-          "channel_message_reply",
-          "channel_message_document",
-          "new_email",
-          "invite_to_team",
-          "reject_team_invite",
-          "task_assigned"
-        ]
-      },
       "NotificationServiceApiVersion": {
         "type": "string",
         "enum": ["v1"]
-      },
-      "NotificationTemporalData": {
-        "type": "object",
-        "required": ["createdAt", "viewedAt", "updatedAt", "deletedAt"],
-        "properties": {
-          "createdAt": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64"
-          },
-          "updatedAt": {
-            "type": ["integer", "null"],
-            "format": "int64"
-          },
-          "viewedAt": {
-            "type": ["integer", "null"],
-            "format": "int64"
-          }
-        }
       },
       "PushNotificationData": {
         "type": "object",
@@ -1852,42 +1599,6 @@
             "type": "string"
           }
         }
-      },
-      "UserNotification": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/Entity"
-          },
-          {
-            "$ref": "#/components/schemas/NotificationTemporalData"
-          },
-          {
-            "$ref": "#/components/schemas/NotificationEvent"
-          },
-          {
-            "type": "object",
-            "required": ["id", "sent", "done"],
-            "properties": {
-              "done": {
-                "type": "boolean",
-                "description": "If the notification is \"done\""
-              },
-              "id": {
-                "type": "string",
-                "format": "uuid",
-                "description": "The id of the notification. Self-generated uuidv7"
-              },
-              "senderId": {
-                "type": ["string", "null"],
-                "description": "user id of the macro user who generated the notification"
-              },
-              "sent": {
-                "type": "boolean",
-                "description": "If the notification has been sent"
-              }
-            }
-          }
-        ]
       },
       "UserUnsubscribe": {
         "type": "object",

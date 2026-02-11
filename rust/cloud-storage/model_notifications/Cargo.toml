@@ -14,6 +14,7 @@ model-entity = { path = "../model-entity" }
 models_comms = { path = "../models_comms" }
 models_pagination = { path = "../models_pagination" }
 notification = { path = "../notification" }
+paste = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }

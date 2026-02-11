@@ -17,3 +17,4 @@ config:
   authentication-service:macro_api_token_expiry_seconds: 3600
   authentication-service:stripe_webhook_secret_key: stripe-webhook-secret-prod
   authentication-service:stripe_price_id: stripe-price-id-prod
+  authentication-service:fusionauth_tenant_id: a3e53c3d-8d6a-3e92-d64c-fa3bf30a60be

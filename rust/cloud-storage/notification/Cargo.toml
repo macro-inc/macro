@@ -13,9 +13,11 @@ axum = [
   "models_pagination/axum",
   "schema",
 ]
+docs = ["dep:aquamarine"]
 schema = ["dep:utoipa"]
 
 [dependencies]
+aquamarine = { version = "0.6", optional = true }
 aws-sdk-sesv2 = { workspace = true }
 aws-sdk-sns = { workspace = true }
 aws-sdk-sqs = { workspace = true }

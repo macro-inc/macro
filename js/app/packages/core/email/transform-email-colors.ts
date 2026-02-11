@@ -18,6 +18,9 @@ export interface ThemeColorParams {
 
 const CONTRAST_THRESHOLD = 0.5;
 const EPSILON = 0.0001;
+// Chroma threshold for distinguishing grey-ish colors (e.g. #3c4043)
+// from intentionally chromatic colors (e.g. #1a73e8)
+const CHROMATIC_THRESHOLD = 0.04;
 
 type RGBA = { r: number; g: number; b: number; a: number };
 type OKLCH = { l: number; c: number; h: number; a?: number };
@@ -36,18 +39,18 @@ export function processEmailColors(root: Node, theme: ThemeColorParams) {
     // if the text has a background color set, trust that the email sender's choices and don't change anything
     if ((textNodeColor.bg?.a ?? 0) > 0) return;
     if (!textNodeColor.fg) return;
-    // if the text is inside an anchor tag, set the color to the accent ink color
-    if (textNodeColor.insideAnchor) {
-      setAnchorStyle(
-        textNodeColor.node,
-        'color',
-        `oklch(${accentL} ${accentC} ${accentH})`
-      );
-      setAnchorStyle(
-        textNodeColor.node,
-        'text-decoration-color',
-        `oklch(${accentL} ${accentC} ${accentH})`
-      );
+    // if the text is inside an anchor tag with a chromatic color, use the accent color;
+    // grey/monochrome links fall through to normal text processing
+    if (
+      textNodeColor.insideAnchor &&
+      textNodeColor.fg.c > CHROMATIC_THRESHOLD
+    ) {
+      const accentColor = `oklch(${accentL} ${accentC} ${accentH})`;
+      setAnchorStyle(textNodeColor.node, 'color', accentColor);
+      setAnchorStyle(textNodeColor.node, 'text-decoration-color', accentColor);
+      // Also set color on the text node's parent to override intermediate elements
+      // (e.g. <a><font color="#000000">text</font></a>)
+      setNodeColor(textNodeColor.node, accentColor);
       return;
     }
 
@@ -87,7 +90,7 @@ export function processEmailColors(root: Node, theme: ThemeColorParams) {
 function setNodeColor(node: Node, color: string) {
   const parentElement = node.parentElement;
   if (parentElement) {
-    parentElement.style.color = color;
+    parentElement.style.setProperty('color', color, 'important');
   }
 }
 
@@ -95,7 +98,7 @@ function setAnchorStyle(node: Node, style: string, value: string) {
   const parentElement = node.parentElement;
   const anchorElement = parentElement?.closest('a');
   if (anchorElement) {
-    anchorElement.style.setProperty(style, value);
+    anchorElement.style.setProperty(style, value, 'important');
   }
 }
 
@@ -197,12 +200,24 @@ export function computeTextNodeColor(root: Node): TextNodeContrast[] {
       const fg = cs.color.startsWith('rgb')
         ? normalizeRGBA(parseRGBA(cs.color))
         : null;
-      const bg = cs.backgroundColor.startsWith('rgb')
-        ? normalizeRGBA(parseRGBA(cs.backgroundColor))
-        : null;
+      // Walk up ancestors to find the effective background color,
+      // since background-color doesn't inherit in CSS
+      let bgRgba: RGBA | null = null;
+      let bgEl: Element | null = el;
+      while (bgEl && bgEl !== root) {
+        const bgCs = getComputedStyle(bgEl);
+        const parsed = bgCs.backgroundColor.startsWith('rgb')
+          ? normalizeRGBA(parseRGBA(bgCs.backgroundColor))
+          : null;
+        if (parsed && parsed.a > 0) {
+          bgRgba = parsed;
+          break;
+        }
+        bgEl = bgEl.parentElement;
+      }
       if (fg) {
         const fgOklch = rgbaToOklch(fg);
-        const bgOklch = rgbaToOklch(bg);
+        const bgOklch = rgbaToOklch(bgRgba);
         const insideAnchor = el.closest('a') !== null;
         out.push({
           text: n.textContent || '',

@@ -53,7 +53,7 @@ function MenuContent(props: { projectId: string }) {
   }) => {
     const { blockName, createFn, loading } = spec;
 
-    const shouldInsert = pressedKeys().has('opt');
+    const shouldInsert = pressedKeys().has('shift');
 
     const tryCreate = async () => {
       try {

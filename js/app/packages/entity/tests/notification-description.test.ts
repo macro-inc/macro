@@ -89,21 +89,26 @@ describe('notification-description helpers', () => {
       expect(getActionVerb('channel_message_send')).toBe('sent a message');
     });
 
-    it('returns correct verb for item_shared_user', () => {
-      expect(getActionVerb('item_shared_user')).toBe('shared');
-    });
-
-    it('returns correct verb for item_shared_organization', () => {
-      expect(getActionVerb('item_shared_organization')).toBe('shared');
+    it('returns correct verb for mentioned_in_document_comment', () => {
+      expect(getActionVerb('mentioned_in_document_comment')).toBe(
+        'mentioned you'
+      );
     });
 
     it('returns correct verb for new_email', () => {
       expect(getActionVerb('new_email')).toBe('sent an email');
     });
 
-    it('returns default verb for unknown types', () => {
-      expect(getActionVerb('channel_invite' as any)).toBe('notified you');
-      expect(getActionVerb('task_assigned' as any)).toBe('notified you');
+    it('returns correct verb for channel_invite', () => {
+      expect(getActionVerb('channel_invite')).toBe('invited you');
+    });
+
+    it('returns correct verb for invite_to_team', () => {
+      expect(getActionVerb('invite_to_team')).toBe('invited you');
+    });
+
+    it('returns correct verb for task_assigned', () => {
+      expect(getActionVerb('task_assigned')).toBe('assigned you');
     });
   });
 
@@ -150,23 +155,45 @@ describe('notification-description helpers', () => {
       });
     });
 
-    describe('item_shared_user', () => {
+    describe('mentioned_in_document_comment', () => {
       it('returns singular for count of 1', () => {
-        expect(getTypeNoun('item_shared_user', 1)).toBe('share');
+        expect(getTypeNoun('mentioned_in_document_comment', 1)).toBe('mention');
       });
 
       it('returns plural for count greater than 1', () => {
-        expect(getTypeNoun('item_shared_user', 2)).toBe('shares');
+        expect(getTypeNoun('mentioned_in_document_comment', 2)).toBe(
+          'mentions'
+        );
       });
     });
 
-    describe('item_shared_organization', () => {
+    describe('channel_invite', () => {
       it('returns singular for count of 1', () => {
-        expect(getTypeNoun('item_shared_organization', 1)).toBe('share');
+        expect(getTypeNoun('channel_invite', 1)).toBe('invite');
       });
 
       it('returns plural for count greater than 1', () => {
-        expect(getTypeNoun('item_shared_organization', 3)).toBe('shares');
+        expect(getTypeNoun('channel_invite', 3)).toBe('invites');
+      });
+    });
+
+    describe('invite_to_team', () => {
+      it('returns singular for count of 1', () => {
+        expect(getTypeNoun('invite_to_team', 1)).toBe('invite');
+      });
+
+      it('returns plural for count greater than 1', () => {
+        expect(getTypeNoun('invite_to_team', 2)).toBe('invites');
+      });
+    });
+
+    describe('task_assigned', () => {
+      it('returns singular for count of 1', () => {
+        expect(getTypeNoun('task_assigned', 1)).toBe('task');
+      });
+
+      it('returns plural for count greater than 1', () => {
+        expect(getTypeNoun('task_assigned', 5)).toBe('tasks');
       });
     });
 
@@ -177,18 +204,6 @@ describe('notification-description helpers', () => {
 
       it('returns plural for count greater than 1', () => {
         expect(getTypeNoun('new_email', 2)).toBe('emails');
-      });
-    });
-
-    describe('unknown types', () => {
-      it('returns generic singular for count of 1', () => {
-        expect(getTypeNoun('channel_invite' as any, 1)).toBe('notification');
-        expect(getTypeNoun('task_assigned' as any, 1)).toBe('notification');
-      });
-
-      it('returns generic plural for count greater than 1', () => {
-        expect(getTypeNoun('channel_invite' as any, 2)).toBe('notifications');
-        expect(getTypeNoun('task_assigned' as any, 5)).toBe('notifications');
       });
     });
 

@@ -6,10 +6,6 @@ publish = false
 version = "0.1.0"
 
 [[bin]]
-name = "notification_email_poller_worker"
-path = "src/notification_email_poller_worker.rs"
-
-[[bin]]
 name = "notification_service"
 path = "src/main.rs"
 
@@ -55,7 +51,7 @@ models_comms = { path = "../models_comms" }
 models_pagination = { path = "../models_pagination", features = ["axum"] }
 notification = { path = "../notification", features = ["axum"] }
 notification_db_client = { path = "../notification_db_client" }
-paste = "1"
+paste = { workspace = true }
 redis = { workspace = true }
 regex = { workspace = true }
 secretsmanager_client = { path = "../secretsmanager_client" }

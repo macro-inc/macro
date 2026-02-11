@@ -29,6 +29,7 @@ import {
   BR_TAG_TO_LINE_BREAK,
   HR,
   HTML_ENTITY_TRANSFORMERS,
+  isConversionOnlyTransformer,
   LINK_XML,
   MARK_XML,
   PRESERVE_LINES,
@@ -36,6 +37,8 @@ import {
 } from './transformers';
 import { UNKNOWN_MENTION } from './unknownMention';
 import { E_WATERMARK, I_WATERMARK } from './watermark';
+
+export { isConversionOnlyTransformer };
 
 /**
  * Internal transformers for converting markdown between Lexical state and markdown.

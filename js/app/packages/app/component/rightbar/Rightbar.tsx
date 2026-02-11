@@ -3,8 +3,13 @@ import { useIsAuthenticated } from '@core/auth';
 import { AiChatEmptyState } from '@core/component/AI/component/AIChatEmptyState';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { useBuildChatSendRequest } from '@core/component/AI/component/input/buildRequest';
-import { useChatInput } from '@core/component/AI/component/input/useChatInput';
+import { ChatInput } from '@core/component/AI/component/input/useChatInput';
+import { useChatMarkdownArea } from '@core/component/AI/component/input/useChatMarkdownArea';
 import { ChatMessages } from '@core/component/AI/component/message/ChatMessages';
+import {
+  ChatContextProvider,
+  useChatContext,
+} from '@core/component/AI/context';
 import { useEntityDropAttachment } from '@core/component/AI/hook/useEntityDropAttachment';
 import { getPendingSend } from '@core/component/AI/signal/pendingSend';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
@@ -272,81 +277,70 @@ function TopBar(props: {
 }
 
 export function Rightbar(props: {
-  chatId: string | undefined;
-  chatName: string | undefined;
-  stream: Accessor<MessageStream | undefined>;
   onSend: (args: CreateAndSend | Send) => void;
   stopGenerating: () => void;
+  chatName: string | undefined;
+  isBig?: boolean;
+  userPermissions: Accessor<Permissions>;
   onUnmount?: () => void;
-  messages: Accessor<ChatMessageWithAttachments[]>;
   initialState?: {
     model: Model | undefined;
     attachments: Attachment[];
     text: string | undefined;
   };
-  userPermissions: Accessor<Permissions>;
   setState: {
     setChatId: (chatId: string | undefined) => void;
     setModel: Setter<Model | undefined>;
     setAttachments: Setter<Attachment[]>;
     setText: Setter<string | undefined>;
-    setMessages: Setter<ChatMessageWithAttachments[]>;
-    setStream: Setter<MessageStream | undefined>;
   };
-  isBig?: boolean;
-  setIsBig?: (val: boolean) => void;
 }) {
+  const ctx = useChatContext();
   const [messagesContainerRef, setMessagesContainerRef] =
     createSignal<HTMLElement>();
 
   createEffect(() => {
-    const stream_ = props.stream();
+    const stream_ = ctx.stream?.();
     if (stream_ && stream_.data().length > 0) {
       invalidateUserQuota();
     }
   });
 
   createEffect(() => {
-    const stream_ = props.stream();
+    const stream_ = ctx.stream?.();
     if (!stream_ || stream_.isDone()) {
-      setIsGenerating(false);
+      ctx.setIsGenerating(false);
       if (stream_?.isDone()) {
         invalidateUserQuota();
       }
       return;
     } else {
-      setIsGenerating(true);
+      ctx.setIsGenerating(true);
     }
   });
 
-  registerToolHandler(props.stream);
+  registerToolHandler(ctx.stream!);
 
   const stopGenerating = props.stopGenerating;
 
   // NOTE: due to mount race condition in the markdown area, we need to set the initial value here
-  const {
-    ChatInput,
-    setChatId,
-    attachments,
-    chatMarkdownArea,
-    model,
-    setModel,
-    setIsGenerating,
-    uploadQueue,
-  } = useChatInput({ initialValue: props.initialState?.text });
+  const chatMarkdownArea = useChatMarkdownArea({
+    initialValue: props.initialState?.text,
+    addAttachment: (a) => ctx.attachments.addAttachment(a),
+  });
 
   // Entity drag-and-drop support
   const { droppable, isDraggingOver } = useEntityDropAttachment(
     'rightbar-chat-input',
-    attachments
+    ctx.attachments
   );
   false && droppable;
 
   createEffect(() => {
-    setChatId(props.chatId);
+    ctx.setChatId(ctx.chatId());
     if (!props.initialState) return;
-    setModel(props.initialState.model);
-    attachments.setAttached(props.initialState.attachments);
+    ctx.setModel(props.initialState.model);
+    ctx.attachments.setAttached(props.initialState.attachments);
   });
 
   onCleanup(() => {
@@ -355,8 +349,8 @@ export function Rightbar(props: {
 
   createEffect(() => {
     const input = chatMarkdownArea.markdownText();
-    const attached = attachments.attached();
-    const model_ = model();
+    const attached = ctx.attachments.attached();
+    const model_ = ctx.model();
     props.setState.setText(input);
     props.setState.setAttachments(attached);
     props.setState.setModel(model_);
@@ -414,24 +408,23 @@ export function Rightbar(props: {
   return (
     <DragDropWrapper
       class="relative flex flex-col size-full select-none"
-      uploadQueue={uploadQueue}
       isEntityDraggingOver={isDraggingOver}
     >
       <div class="overflow-hidden size-full flex flex-col items-center relative">
         <div class="absolute inset-0 pointer-events-none" use:droppable />
         <TopBar
-          chatId={props.chatId}
+          chatId={ctx.chatId()}
           setChatId={props.setState.setChatId}
           chatName={props.chatName}
           userPermissions={props.userPermissions}
         />
         <div class="flex flex-col flex-1 min-h-0 p-2 w-full items-center">
-          <Show when={props.messages().length === 0}>
+          <Show when={ctx.messages!().length === 0}>
             <div class="h-full flex flex-col items-center justify-center">
               <AiChatEmptyState />
             </div>
           </Show>
-          <Show when={props.messages().length > 0 || !props.isBig}>
+          <Show when={ctx.messages!().length > 0 || !props.isBig}>
             <div class="relative flex-1 min-h-0 w-full">
               <div
                 data-chat-scroll
@@ -439,12 +432,7 @@ export function Rightbar(props: {
                 ref={setMessagesContainerRef}
               >
                 <div class="w-full macro-message-width">
-                  <ChatMessages
-                    chatId={props.chatId}
-                    messages={[props.messages, props.setState.setMessages]}
-                    messageActions={undefined}
-                    stream={[props.stream, props.setState.setStream]}
-                  />
+                  <ChatMessages messageActions={undefined} />
                 </div>
               </div>
               <CustomScrollbar scrollContainer={messagesContainerRef} />
@@ -454,6 +442,7 @@ export function Rightbar(props: {
           <div class="w-full">
             <div class="flex-shrink-0 pt-2 macro-message-width mx-auto">
               <ChatInput
+                markdown={chatMarkdownArea}
                 isPersistent
                 showActiveTabs
                 onSend={props.onSend}
@@ -722,26 +711,29 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
             tr={!bigChatOpen() && !settingsOpen()}
           >
             <Suspense>
-              <Rightbar
-                chatId={chatId()}
-                chatName={chatName()}
-                messages={messages}
-                onUnmount={getChatInputState}
-                initialState={initialChatState()}
-                onSend={onSend}
-                stream={stream}
-                stopGenerating={stopGenerating}
-                userPermissions={userPermissions}
-                setState={{
-                  setChatId,
-                  setModel,
-                  setAttachments,
-                  setText,
-                  setMessages,
-                  setStream,
+              <ChatContextProvider
+                external={{
+                  chatId: [chatId, setChatId],
+                  messages: [messages, setMessages],
+                  stream: [stream, setStream],
                 }}
-                isBig={bigChatOpen()}
-              />
+              >
+                <Rightbar
+                  chatName={chatName()}
+                  onUnmount={getChatInputState}
+                  initialState={initialChatState()}
+                  onSend={onSend}
+                  stopGenerating={stopGenerating}
+                  userPermissions={userPermissions}
+                  setState={{
+                    setChatId,
+                    setModel,
+                    setAttachments,
+                    setText,
+                  }}
+                  isBig={bigChatOpen()}
+                />
+              </ChatContextProvider>
             </Suspense>
           </SplitlikeContainer>
         </div>

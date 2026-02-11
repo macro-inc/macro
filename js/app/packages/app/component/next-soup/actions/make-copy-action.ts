@@ -1,5 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
-import type { EntityData } from '@macro-entity';
+import type { EntityData } from '@entity';
 import type { SoupState } from '../create-soup-state';
 import { createBulkCopyDssEntityMutation } from '../../../../macro-entity/src/queries/dss';
 

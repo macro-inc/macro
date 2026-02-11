@@ -3,8 +3,10 @@ import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/S
 import { macroIdToEmail, tryMacroId, useDisplayName } from '@core/user';
 import { formatDate } from '@core/util/date';
 import {
-  extractNotificationData,
-  tryToTypedNotification,
+  getNotificationAction,
+  getNotificationContent,
+  getNotificationTargetName,
+  shouldShowNotificationTarget,
   type UnifiedNotification,
 } from '@notifications';
 import { Show } from 'solid-js';
@@ -15,42 +17,44 @@ type NotificationRendererProps = {
 };
 
 export function NotificationRenderer(props: NotificationRendererProps) {
-  const typed = () => tryToTypedNotification(props.notification);
-  const data = () => {
-    const t = typed();
-    if (!t) return null;
-    const result = extractNotificationData(t);
-    if (result === 'no_extractor' || result === 'no_extracted_data') {
-      return null;
-    }
-    return result;
+  const time = () => formatDate(props.notification.createdAt);
+  const actorId = () => props.notification.senderId ?? '';
+  const macroId = () => tryMacroId(actorId());
+  const [actorName] = useDisplayName(macroId());
+  const emailFallback = () => {
+    const mid = macroId();
+    return mid ? macroIdToEmail(mid) : actorId() || undefined;
+  };
+  const displayName = () => actorName() || emailFallback() || 'Someone';
+
+  const action = () => getNotificationAction(props.notification);
+  const targetName = () => getNotificationTargetName(props.notification);
+  const content = () => getNotificationContent(props.notification);
+  const showTarget = () => shouldShowNotificationTarget(props.notification);
+  const isChannel = () => props.notification.entity_type === 'channel';
+  const entityId = () => props.notification.entity_id;
+
+  const emailMeta = () => {
+    const meta = props.notification.notificationMetadata;
+    if (meta.tag !== 'new_email') return null;
+    return { subject: meta.content.subject, snippet: meta.content.snippet };
   };
 
-  const time = () => formatDate(props.notification.createdAt);
-
   return (
-    <Show when={data()}>
-      {(d) => {
-        const actorId = d().actor?.id ?? '';
-        const macroId = tryMacroId(actorId);
-        const [actorName] = useDisplayName(macroId);
-        const emailFallback = macroId
-          ? macroIdToEmail(macroId)
-          : actorId || undefined;
-        const displayName = () => actorName() || emailFallback || 'Someone';
-
+    <Show when={props.notification.notificationMetadata}>
+      {(_metadata) => {
         if (props.mode === 'preview') {
           return (
             <div class="truncate flex items-baseline gap-[0.2em] text-xs text-ink-muted font-medium font-sans">
               <span class="font-medium text-ink">{displayName()}</span>
-              <span class="font-normal">{d().action}</span>
-              <Show when={d().target?.type === 'channel' && d().target?.id}>
+              <span class="font-normal">{action()}</span>
+              <Show when={showTarget() && isChannel() && entityId()}>
                 <div class="self-center max-h-[1lh]">
-                  <InlineItemPreview id={d().target!.id!} type="channel" />
+                  <InlineItemPreview id={entityId()} type="channel" />
                 </div>
               </Show>
-              <Show when={d().target?.name && d().target?.type !== 'channel'}>
-                <span class="font-medium text-ink">{d().target!.name}</span>
+              <Show when={showTarget() && targetName() && !isChannel()}>
+                <span class="font-medium text-ink">{targetName()}</span>
               </Show>
               <span class="text-ink-extra-muted ml-2 font-mono uppercase font-normal">
                 {time()}
@@ -62,31 +66,27 @@ export function NotificationRenderer(props: NotificationRendererProps) {
         return (
           <>
             <div class="text-sm text-ink inline-flex items-center gap-1">
-              <span class="font-medium">{displayName()}</span> {d().action}{' '}
-              <Show when={d().target?.type === 'channel' && d().target?.id}>
-                <InlineItemPreview id={d().target!.id!} type="channel" />
+              <span class="font-medium">{displayName()}</span> {action()}{' '}
+              <Show when={showTarget() && isChannel() && entityId()}>
+                <InlineItemPreview id={entityId()} type="channel" />
               </Show>
-              <Show when={d().target?.name && d().target?.type !== 'channel'}>
-                <span class="font-medium">{d().target!.name}</span>
+              <Show when={showTarget() && targetName() && !isChannel()}>
+                <span class="font-medium">{targetName()}</span>
               </Show>
             </div>
 
-            <Show when={d().content}>
+            <Show when={content()}>
               <div class="text-xs text-ink-muted">
-                <StaticMarkdown markdown={d().content || ''} />
+                <StaticMarkdown markdown={content() || ''} />
               </div>
             </Show>
 
-            <Show when={d().meta?.permissionLevel}>
-              <div class="text-xs text-ink-muted">
-                You now have {d().meta!.permissionLevel} access
-              </div>
-            </Show>
-
-            <Show when={d().meta?.snippet}>
-              <div class="text-xs text-ink-muted">
-                {d().meta!.subject} - {d().meta!.snippet}
-              </div>
+            <Show when={emailMeta()}>
+              {(meta) => (
+                <div class="text-xs text-ink-muted">
+                  {meta().subject} - {meta().snippet}
+                </div>
+              )}
             </Show>
           </>
         );

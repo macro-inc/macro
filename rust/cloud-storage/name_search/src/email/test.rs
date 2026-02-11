@@ -404,7 +404,7 @@ async fn test_search_email_subjects_searches_oldest_message(
     // 2. Middle (2024-02-02): "Re: Re: Monthly Invoice - December"
     // 3. Newest (2024-12-02): "Re: Re: Re: Payment Processed"
 
-    // Searching for "Monthly Invoice" should find the thread because the oldest message matches
+    // Searching for "Monthly Invoice" should find the thread because a message matches
     let response = search_email_subjects(
         &pool,
         &user_id,
@@ -422,7 +422,7 @@ async fn test_search_email_subjects_searches_oldest_message(
             .eq("22222222-2222-2222-2222-222222222222")
     }));
 
-    // Searching for "Payment Processed" should NOT find it because oldest message doesn't match
+    // Searching for "Payment Processed" should also find it because we search all messages in the thread
     let response = search_email_subjects(
         &pool,
         &user_id,
@@ -434,7 +434,7 @@ async fn test_search_email_subjects_searches_oldest_message(
     )
     .await?;
 
-    assert!(!response.items.iter().any(|r| {
+    assert!(response.items.iter().any(|r| {
         r.entity_id
             .to_string()
             .eq("22222222-2222-2222-2222-222222222222")

@@ -1,16 +1,9 @@
-import {
-  getMetadata,
-  isChannelMention,
-  isChannelMessageReply,
-  isChannelMessageSend,
-  type TypedNotification,
-  tryToTypedNotification,
-} from './notification-metadata';
 import type { UnifiedNotification } from './types';
+import type { NotificationType } from '@core/types';
 
 export interface NotificationStack {
-  type: TypedNotification['notificationEventType'];
-  notifications: TypedNotification[];
+  type: NotificationType;
+  notifications: UnifiedNotification[];
 }
 
 /**
@@ -36,11 +29,8 @@ export function getAllNotificationsFromGroup(
  */
 export function getThreadId(group: NotificationStack): string {
   const notification = group.notifications[0];
-  if (notification.notificationEventType === 'channel_message_reply') {
-    const metadata = getMetadata(
-      notification as TypedNotification<'channel_message_reply'>
-    );
-    return metadata?.threadId ?? '';
+  if (notification.notificationMetadata.tag === 'channel_message_reply') {
+    return notification.notificationMetadata.content.threadId ?? '';
   }
   return '';
 }
@@ -51,21 +41,32 @@ export function getThreadId(group: NotificationStack): string {
 export function stackNotifications(
   notifications: UnifiedNotification[]
 ): NotificationStack[] {
+  const isChannelMention = (n: UnifiedNotification) =>
+    n.notificationMetadata.tag === 'channel_mention';
+  const isChannelMessageSend = (n: UnifiedNotification) =>
+    n.notificationMetadata.tag === 'channel_message_send';
+  const isChannelMessageReply = (n: UnifiedNotification) =>
+    n.notificationMetadata.tag === 'channel_message_reply';
+
   // Collect mention messageIds for shadowing
   const mentionedMsgIds = new Set(
     notifications
       .filter(isChannelMention)
-      .map((n) => getMetadata(n).messageId)
+      .flatMap((n) =>
+        n.notificationMetadata.tag === 'channel_mention'
+          ? [n.notificationMetadata.content.messageId]
+          : []
+      )
       .filter(Boolean)
   );
 
-  const isShadowed = (
-    n:
-      | TypedNotification<'channel_message_send'>
-      | TypedNotification<'channel_message_reply'>
-  ) => {
-    const metadata = getMetadata(n);
-    return metadata.messageId && mentionedMsgIds.has(metadata.messageId);
+  const isShadowed = (n: UnifiedNotification) => {
+    const tag = n.notificationMetadata.tag;
+    if (tag === 'channel_message_send' || tag === 'channel_message_reply') {
+      const messageId = n.notificationMetadata.content.messageId;
+      return messageId && mentionedMsgIds.has(messageId);
+    }
+    return false;
   };
 
   // Partition by type
@@ -88,11 +89,7 @@ export function stackNotifications(
     ...mentions.flatMap((n) => makeStack('channel_mention', [n])),
     ...makeStack('channel_message_send', newMsgs),
     ...makeReplyStacks(replies),
-    ...others.flatMap((n) => {
-      const typed = tryToTypedNotification(n);
-      if (!typed) return [];
-      return makeStack(typed.notificationEventType, [typed]);
-    }),
+    ...others.flatMap((n) => makeStack(n.notificationMetadata.tag, [n])),
   ];
 
   // Sort: mentions first, then by recency
@@ -125,17 +122,20 @@ const groupBy: <T, K>(items: T[], keyFn: (item: T) => K) => Map<K, T[]> =
   });
 
 function makeStack(
-  type: TypedNotification['notificationEventType'],
-  notifications: TypedNotification[]
+  type: NotificationType,
+  notifications: UnifiedNotification[]
 ): NotificationStack[] {
   if (notifications.length === 0) return [];
   return [{ type, notifications: sortByRecency(notifications) }];
 }
 
-function makeReplyStacks(
-  replies: TypedNotification<'channel_message_reply'>[]
-): NotificationStack[] {
-  const byThread = groupBy(replies, (r) => getMetadata(r)?.threadId ?? '');
+function makeReplyStacks(replies: UnifiedNotification[]): NotificationStack[] {
+  const byThread = groupBy(replies, (r) => {
+    if (r.notificationMetadata.tag === 'channel_message_reply') {
+      return r.notificationMetadata.content.threadId ?? '';
+    }
+    return '';
+  });
   return [...byThread.entries()]
     .filter(([threadId]) => threadId !== '')
     .map(([, group]) => ({

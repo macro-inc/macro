@@ -1,7 +1,3 @@
-import {
-  isDraggingOverChannelSignal,
-  isValidChannelDragSignal,
-} from '@block-channel/signal/attachment';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
 import {
   $convertSingleMentionToCard,
@@ -13,7 +9,6 @@ import {
   replaceCheckboxesWithMentions,
 } from '@block-channel/utils/taskModeConversion';
 import { useTaskMode } from '@block-channel/hooks/taskmode';
-import { isInBlock } from '@core/block';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import {
@@ -117,6 +112,10 @@ type BaseInputProps = {
   closeDraft?: () => void;
   /** whether this input is for a reply (affects styling) */
   isReplyInput?: boolean;
+  /** whether a file is being dragged over the parent channel container */
+  isDraggingOverChannel?: Accessor<boolean>;
+  /** whether the dragged file is a valid channel attachment */
+  isValidChannelDrag?: Accessor<boolean>;
 };
 
 /** the time after a user stops typing before we consider them idle. we want smooth remote changes, but local changes should happen more immediately. */
@@ -129,13 +128,8 @@ export function BaseInput(props: BaseInputProps) {
   const key = props.inputAttachments.key;
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(false);
   const [isDraggedOver, setIsDraggedOver] = createSignal(false);
-  const [isValidChannelDrag] = isInBlock()
-    ? isValidChannelDragSignal
-    : createSignal(false);
-
-  const [isDraggingOverChannel, setIsDraggingOverChannel] = isInBlock()
-    ? isDraggingOverChannelSignal
-    : createSignal(false);
+  const isDraggingOverChannel = props.isDraggingOverChannel ?? (() => false);
+  const isValidChannelDrag = props.isValidChannelDrag ?? (() => true);
 
   const attachments = () => props.inputAttachments.store[key] ?? [];
 
@@ -460,7 +454,6 @@ export function BaseInput(props: BaseInputProps) {
       ref={containerRef}
       use:fileFolderDrop={{
         onDrop: (files, folders) => {
-          setIsDraggingOverChannel(false);
           handleFileFolderDrop(files, folders, (uploadEntries) =>
             handleFileUpload(uploadEntries, {
               store: props.inputAttachments.store,

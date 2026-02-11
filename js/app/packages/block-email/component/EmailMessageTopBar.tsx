@@ -18,6 +18,7 @@ import {
   getSenderDisplayName,
   isMessageFromCurrentUser,
 } from '../util/emailUser';
+import { useEmailContext } from './EmailContext';
 import { type EmailMessageAction, MessageActions } from './MessageActions';
 
 interface EmailMessageTopBarProps {
@@ -114,7 +115,7 @@ function ExpandedHeader(props: {
   onClose: () => void;
 }): JSX.Element {
   return (
-    <div class="flex flex-col gap-1 text-sm">
+    <div class="flex flex-col gap-1 text-sm select-children cursor-text">
       <div class="flex flex-row gap-2">
         <span class="text-ink-extra-muted min-w-10">From</span>
         <span class="select-text cursor-text">
@@ -207,6 +208,26 @@ function CollapsedHeader(props: {
 export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
   const [isHovering, setIsHovering] = createSignal(false);
   const userEmail = useEmail();
+  const context = useEmailContext();
+
+  // Wraps setExpandedHeader with scroll compensation.
+  // The message list uses flex-col-reverse, so expanding the header
+  // shifts content above upward. This adjusts scrollTop to keep the
+  // visual position stable.
+  const toggleExpandedHeader = (expanded: boolean) => {
+    const scrollContainer = context.messagesListRef();
+    if (!scrollContainer) {
+      props.setExpandedHeader(expanded);
+      return;
+    }
+    const prevScrollHeight = scrollContainer.scrollHeight;
+    const prevScrollTop = scrollContainer.scrollTop;
+    props.setExpandedHeader(expanded);
+    requestAnimationFrame(() => {
+      const delta = scrollContainer.scrollHeight - prevScrollHeight;
+      scrollContainer.scrollTop = prevScrollTop - delta;
+    });
+  };
 
   const _isFromCurrentUser = createMemo(() =>
     isMessageFromCurrentUser(props.message, userEmail())
@@ -252,7 +273,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
           fallback={
             <ExpandedHeader
               message={props.message}
-              onClose={() => props.setExpandedHeader(false)}
+              onClose={() => toggleExpandedHeader(false)}
             />
           }
         >
@@ -260,7 +281,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
             senderName={senderName()}
             recipientSummary={recipientSummary()}
             isHovering={isHovering()}
-            onExpand={() => props.setExpandedHeader(true)}
+            onExpand={() => toggleExpandedHeader(true)}
             message={props.message}
             focused={props.focused}
             setShowReply={props.setShowReply}

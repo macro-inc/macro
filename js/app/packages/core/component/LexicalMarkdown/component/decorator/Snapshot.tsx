@@ -87,7 +87,7 @@ function SnapshotInner(props: SnapshotDecoratorProps) {
       props.blockName,
       props.documentId,
       {},
-      openInNewSplitForMention(e?.altKey, e != null)
+      openInNewSplitForMention(e?.shiftKey, e != null)
     );
   });
 

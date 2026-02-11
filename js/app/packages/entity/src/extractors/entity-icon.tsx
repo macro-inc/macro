@@ -36,12 +36,7 @@ function DirectMessageIcon(props: { entity: ChannelEntity }) {
 export function EntityIcon(props: EntityIconProps) {
   const iconType = () => {
     return match(props.entity)
-      .when(isChannelEntity, ({ channelType }) =>
-        match(channelType)
-          .with('direct_message', () => 'directMessage' as const)
-          .with('organization', () => 'company' as const)
-          .otherwise(() => 'channel')
-      )
+      .when(isChannelEntity, ({ channelType }) => channelType)
       .when(isTaskEntity, () => 'task')
       .with({ type: 'document' }, ({ fileType }) => {
         return fileType ?? 'default';
@@ -58,7 +53,7 @@ export function EntityIcon(props: EntityIconProps) {
     else return 'default' as const;
   };
 
-  const isDirectMessage = () => iconType() === 'directMessage';
+  const isDirectMessage = () => iconType() === 'direct_message';
 
   return (
     <Show
