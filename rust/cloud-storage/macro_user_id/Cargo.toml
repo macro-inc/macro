@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+cowlike = { path = "../cowlike" }
 doppleganger = { workspace = true }
 nom = { workspace = true }
 serde = { workspace = true }
