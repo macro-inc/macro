@@ -99,7 +99,7 @@ export function Attachment(props: AttachmentProps) {
                   props.remove?.(props.attachment);
                 }}
               >
-                <Close class="text-ink-muted group-hover:text-failure size-12" />
+                <Close class="text-ink-muted group-hover:text-failure size-3" />
               </div>
             </Show>
           </div>
