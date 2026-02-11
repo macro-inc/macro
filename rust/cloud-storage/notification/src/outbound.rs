@@ -9,4 +9,5 @@ pub mod push_notification_checker;
 pub mod queue;
 pub mod rate_limit;
 pub mod repository;
+pub mod user_existence_checker;
 pub mod websocket;
