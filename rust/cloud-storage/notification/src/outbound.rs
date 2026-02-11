@@ -3,6 +3,7 @@
 //! These modules contain implementations of the domain ports that connect
 //! to external services like Redis, PostgreSQL, WebSocket gateways, etc.
 
+pub mod digest_batcher;
 pub mod email;
 pub mod mobile;
 pub mod push_notification_checker;

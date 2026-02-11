@@ -1,3 +1,4 @@
+use crate::domain::models::{TaggedContent, UserNotificationRow};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use std::time::Duration;
@@ -9,6 +10,54 @@ pub trait UserExistenceChecker: Send + Sync + 'static {
         &self,
         id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<bool, Report>> + Send;
+}
+
+/// A batch of notifications ready to be sent as a digest email.
+pub struct DigestBatch {
+    /// The user to send the digest to.
+    pub user_id: MacroUserIdStr<'static>,
+    /// The notifications to include in the digest.
+    pub notifications: Vec<UserNotificationRow<TaggedContent<serde_json::Value>>>,
+}
+
+/// Result of attempting to claim a digest batch.
+pub enum ClaimResult {
+    /// A digest batch is ready and was claimed.
+    Ready(DigestBatch),
+    /// No digests are pending.
+    Empty,
+    /// Digests are pending but none are ready yet. Contains duration until the next one is ready.
+    Wait(Duration),
+}
+
+/// Trait for batching notifications into digests for delayed email delivery.
+///
+/// Implementations should handle:
+/// - Adding notifications to a user's pending digest
+/// - Scheduling when the digest should be sent
+/// - Atomically claiming digests for processing to prevent duplicates
+pub trait DigestBatcher: Send + Sync + 'static {
+    /// Add a notification to a user's pending digest batch.
+    ///
+    /// If this is the first notification for the user, schedules the digest
+    /// to be sent after `send_after` duration.
+    fn add_to_digest(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification: &UserNotificationRow<TaggedContent<serde_json::Value>>,
+        send_after: Duration,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Claim and return one digest batch that is ready to be sent.
+    ///
+    /// Returns:
+    /// - `ClaimResult::Ready(batch)` - a batch was claimed and is ready to send
+    /// - `ClaimResult::Empty` - no digests are pending
+    /// - `ClaimResult::Wait(duration)` - digests are pending but not ready; wait this long
+    ///
+    /// The claim is atomic - only one caller will receive a given user's digest
+    /// even with concurrent workers.
+    fn claim_ready_digest(&self) -> impl Future<Output = Result<ClaimResult, Report>> + Send;
 }
 
 /// trait for checking whether or not a user has push notifications enabled

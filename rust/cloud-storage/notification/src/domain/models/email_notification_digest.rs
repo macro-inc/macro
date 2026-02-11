@@ -275,3 +275,26 @@ impl<T: Notification> PushNotificationsDisabled<T> {
         })
     }
 }
+
+/// a struct which is able to drive the state machine to a decision on a given notification
+pub struct StateMachineDriver<U, N, O> {
+    user_checker: U,
+    notification_checker: N,
+    online_checker: O,
+}
+
+impl<U, N, O> StateMachineDriver<U, N, O>
+where
+    U: UserExistenceChecker,
+    N: PushNotificationChecker,
+    O: LastOnlineChecker,
+{
+    /// create a new instance of self
+    pub fn new(user_checker: U, notification_checker: N, online_checker: O) -> Self {
+        StateMachineDriver {
+            user_checker,
+            notification_checker,
+            online_checker,
+        }
+    }
+}
