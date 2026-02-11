@@ -121,6 +121,31 @@ describe('createMessageListContextLookup', () => {
     expect(context.msg4.isParentNewMessage).toBe(false);
   });
 
+  it('should mark only the first new message as isFirstNewMessage', () => {
+    const context = createMessageListContextLookup({
+      messages: mockMessages,
+      isNewMessageFn: alwaysNewMessage,
+    });
+
+    // msg0 is the first non-threaded message marked as new
+    expect(context.msg0.isFirstNewMessage).toBe(true);
+    expect(context.msg1.isFirstNewMessage).toBe(false);
+    expect(context.msg2.isFirstNewMessage).toBe(false);
+    expect(context.msg3.isFirstNewMessage).toBe(false);
+    expect(context.msg4.isFirstNewMessage).toBe(false);
+  });
+
+  it('should not mark any message as isFirstNewMessage when none are new', () => {
+    const context = createMessageListContextLookup({
+      messages: mockMessages,
+      isNewMessageFn: neverNewMessage,
+    });
+
+    expect(context.msg0.isFirstNewMessage).toBe(false);
+    expect(context.msg1.isFirstNewMessage).toBe(false);
+    expect(context.msg4.isFirstNewMessage).toBe(false);
+  });
+
   it('should identify messages in the last thread when messages are threaded to last top-level', () => {
     const messagesWithLastThread: MinimalMessage[] = [
       {

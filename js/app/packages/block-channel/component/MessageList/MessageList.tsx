@@ -79,6 +79,7 @@ const createDefaultMessageListContext = (index: Accessor<number>) =>
   createMemo<MessageListContext>(() => ({
     index: index(),
     isNewMessage: false,
+    isFirstNewMessage: false,
     isParentNewMessage: false,
     threadIndex: -1,
     previousNonThreadedMessage: undefined,
@@ -361,7 +362,6 @@ function MessageListImpl(props: MessageListProps) {
   const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
 
-  const [newIndicatorShown, setNewIndicatorShown] = createSignal<number>();
   const [hasUserScrolled, setHasUserScrolled] = createSignal(false);
   const [messageListContext, setMessageListContext] =
     createStore<MessageListContextLookup>({});
@@ -435,7 +435,11 @@ function MessageListImpl(props: MessageListProps) {
     });
   });
 
-  const lastViewed = createMemo(() => {
+  // Snapshot the lastViewed time so it reflects the pre-session value.
+  // Without this, the activity mutation on channel open would update
+  // lastViewed reactively, causing the "New" indicator to disappear.
+  const lastViewed = createMemo<string | null | undefined>((prev) => {
+    if (prev !== undefined) return prev;
     return props?.latestActivity?.viewed_at;
   });
 
@@ -906,8 +910,6 @@ function MessageListImpl(props: MessageListProps) {
       orderedMessages={props.orderedMessages}
       threadChildren={params.threadChildren}
       threadSiblings={params.threadSiblings}
-      newIndicatorShown={newIndicatorShown}
-      setNewIndicatorShown={setNewIndicatorShown}
       virtualHandle={virtualHandle()!}
       container={containerRef()}
       listContext={params.listContext}

@@ -284,16 +284,6 @@ const Root: Component<MessageRootProps> = (props) => {
                 <Show when={!props.isConsecutive}>
                   <div class="relative">
                     <Show when={props.isFirstInThread}>
-                      {/*<div
-                        class="absolute border-b border-l border-[red]"
-                        style={{
-                          left: `calc((var(--thread-shift) - var(--left-of-connector) + var(--left-of-user-icon) + 0.5px) * -1)`,
-                          top: '.5px',
-                          width: `calc(var(--thread-shift) - var(--left-of-connector) + var(--left-of-user-icon))`,
-                          height: '50%',
-                          'border-bottom-left-radius': `calc(var(--thread-shift) / 2)`,
-                        }}
-                      />*/}
                       {/* Slanted Line Connector */}
                       <div
                         class={cn(

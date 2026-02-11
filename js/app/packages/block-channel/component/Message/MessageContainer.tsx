@@ -87,16 +87,7 @@ export function MessageFlag(props: MessageFlagProps) {
   );
 }
 
-type NewIndicatorProps = {
-  setNewIndicatorShown: Setter<number | undefined>;
-  id: number;
-};
-
-function NewMessageIndicator(props: NewIndicatorProps) {
-  onMount(() => {
-    props.setNewIndicatorShown(props.id);
-  });
-
+function NewMessageIndicator() {
   return <MessageFlag text="New" highlight />;
 }
 
@@ -108,8 +99,6 @@ type MessageProps = {
   orderedMessages: Accessor<MessageType[]>;
   threadChildren?: MessageType[];
   threadSiblings?: MessageType[];
-  newIndicatorShown: Accessor<number | undefined>;
-  setNewIndicatorShown: Setter<number | undefined>;
   virtualHandle: VirtualizerHandle;
   container?: HTMLDivElement;
   listContext: MessageListContext;
@@ -516,17 +505,8 @@ export function MessageContainer(props: MessageProps) {
           <MessageFlag text={formatRelativeDate(message.created_at)} />
         </Show>
         {/* New message indicator */}
-        <Show
-          when={
-            isNewMessage() &&
-            (!props.newIndicatorShown() ||
-              props.newIndicatorShown() === props.index())
-          }
-        >
-          <NewMessageIndicator
-            id={props.index()}
-            setNewIndicatorShown={props.setNewIndicatorShown}
-          />
+        <Show when={props.listContext.isFirstNewMessage}>
+          <NewMessageIndicator />
         </Show>
         {/* Message item */}
 

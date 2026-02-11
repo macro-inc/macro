@@ -24,7 +24,10 @@ import {
   createEffectOnEntityTypeNotification,
   useEntityHasUnreadNotifications,
 } from '@notifications';
-import { useUpdateChannelsActivityMutation } from '@queries/channel/activity';
+import {
+  invalidateChannelsActivity,
+  useUpdateChannelsActivityMutation,
+} from '@queries/channel/activity';
 import type { Message } from '@service-comms/generated/models';
 import { connectionGatewayClient } from '@service-connection/client';
 import { useBeforeLeave, useSearchParams } from '@solidjs/router';
@@ -86,7 +89,11 @@ export function Channel(props: {
 
   const [openedChannel, setOpenedChannel] = createSignal<Date>();
 
-  const updateActivityMutation = useUpdateChannelsActivityMutation();
+  const updateActivityMutation = useUpdateChannelsActivityMutation({
+    onSuccess: () => {
+      invalidateChannelsActivity();
+    },
+  });
 
   const updateActivityOnOpen = () => {
     setOpenedChannel(new Date());
