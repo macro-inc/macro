@@ -89,11 +89,7 @@ export function MessageFlag(props: MessageFlagProps) {
 
 function NewMessageIndicator(props: { onClick?: () => void }) {
   return (
-    <button
-      type="button"
-      class="w-full text-left"
-      onClick={props.onClick}
-    >
+    <button type="button" class="w-full text-left" onClick={props.onClick}>
       <MessageFlag text="New" highlight />
     </button>
   );
