@@ -4,9 +4,7 @@ import {
   compareDesc,
   differenceInWeeks,
   isToday,
-  isValid,
   isYesterday,
-  parseISO,
 } from 'date-fns';
 
 const EPOCH_ZERO = new Date(0);
@@ -115,10 +113,17 @@ export const compareDateAsc = (
 
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z?$/;
 
+export const convertIsoString = (isoString: string): Date | undefined => {
+  if (ISO_DATE_REGEX.test(isoString)) {
+    return new Date(isoString);
+  }
+  return undefined;
+};
+
 /**
  * Recursively converts ISO date strings to Date objects in an object, array, or primitive value.
  * - If a string matches ISO date format and is valid, it's converted to a Date object
- * - If a string matches ISO date format but is invalid, returns undefined
+ * - If a string matches ISO date format but is invalid, returns a Date with getTime() NaN
  * - null values remain null
  * - Recursively processes arrays and objects
  *
@@ -142,12 +147,9 @@ export function convertDates<T>(obj: T): T {
   }
 
   if (typeof obj === 'string') {
-    if (ISO_DATE_REGEX.test(obj)) {
-      const date = parseISO(obj);
-      if (isValid(date)) {
-        return date as unknown as T;
-      }
-      return undefined as T;
+    const date = convertIsoString(obj);
+    if (date) {
+      return date as unknown as T;
     }
     return obj;
   }

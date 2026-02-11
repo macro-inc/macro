@@ -366,9 +366,10 @@ describe('Date Utilities (core/utils/date.ts)', () => {
       expect(result).toBeInstanceOf(Date);
     });
 
-    it('should return undefined for invalid date string', () => {
+    it('should return invalid Date for invalid date string', () => {
       const result = convertDates('2025-13-32T10:30:00Z');
-      expect(result).toBeUndefined();
+      expect(result).toBeInstanceOf(Date);
+      expect((result as unknown as Date).getTime()).toBe(NaN);
     });
 
     it('should return string unchanged if not ISO date format', () => {
