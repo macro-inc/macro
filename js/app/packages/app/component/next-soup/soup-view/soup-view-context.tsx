@@ -6,7 +6,6 @@ import {
 import { getFolderFileTypes } from '@app/component/next-soup/filters/filters';
 import { sortEntitiesForSearch } from '@app/component/next-soup/soup-view/sort-options';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
-import { useEmailLinksStatus } from '@core/email-link';
 import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
 import { fuzzyMatch } from '@core/util/fuzzy';
@@ -96,8 +95,6 @@ export const SoupViewContextProvider: FlowComponent<
   SoupViewContextProviderProps
 > = (props) => {
   const soup = props.soup ?? createSoupState();
-
-  const emailActive = useEmailLinksStatus();
 
   const [searchText, setSearchText] = createSignal('');
   const [internalQueryFilters, setQueryFilters] =

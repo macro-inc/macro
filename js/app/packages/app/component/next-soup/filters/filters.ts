@@ -10,7 +10,7 @@ import {
 } from '@core/component/EntityIcon';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import { codeFileExtensions } from '@block-code/util/languageSupport';
-import type { FilterConfig } from './create-filters-state';
+import type { FilterConfig } from './create-filter-state';
 import type { Component } from 'solid-js';
 import { AnimatedChannelIcon } from '@macro-icons/wide/animating/channel';
 import { AnimatedChatIcon } from '@macro-icons/wide/animating/chat';

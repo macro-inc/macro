@@ -60,7 +60,7 @@ export function MobileDock() {
   const isInboxActive = () =>
     soup.filters.isActive('signal') && splitIsUnifiedList();
   const isPeopleTeamsActive = () =>
-    soup.filters.isActive('teams-and-people') && splitIsUnifiedList();
+    soup.filters.isActive('channels') && splitIsUnifiedList();
   const isTasksActive = () =>
     soup.filters.isActive('task') && splitIsUnifiedList();
   const isAllActive = () =>
@@ -120,7 +120,7 @@ export function MobileDock() {
           ensureUnifiedList();
           batch(() => {
             toggleSignalFilter(false);
-            activateFilter('teams-and-people');
+            activateFilter('channels');
           });
         }}
       />
