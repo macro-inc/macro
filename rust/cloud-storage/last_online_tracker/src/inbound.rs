@@ -13,16 +13,13 @@ pub struct LastOnlineWorker {
 }
 
 pub struct RecordOnDrop {
-    val: Option<MacroUserIdStr<'static>>,
+    val: MacroUserIdStr<'static>,
     tx: tokio::sync::mpsc::Sender<MacroUserIdStr<'static>>,
 }
 
 impl Drop for RecordOnDrop {
     fn drop(&mut self) {
-        let Some(val) = self.val.take() else {
-            return;
-        };
-        if let Err(e) = self.tx.try_send(val) {
+        if let Err(e) = self.tx.try_send(self.val.clone()) {
             tracing::error!("{e:?}");
         }
     }
@@ -30,7 +27,7 @@ impl Drop for RecordOnDrop {
 
 impl LastOnlineWorker {
     pub fn new<T: SystemTime, R: LastOnlineRepo>(service: LastOnlineService<T, R>) -> Self {
-        let (tx, mut rx) = tokio::sync::mpsc::channel(25);
+        let (tx, mut rx) = tokio::sync::mpsc::channel(100);
 
         let handle = tokio::task::spawn(async move {
             while let Some(user) = rx.recv().await {
@@ -41,12 +38,13 @@ impl LastOnlineWorker {
         LastOnlineWorker { tx, handle }
     }
 
-    /// returns a guard which records the users online time when going out of scope
+    /// returns a guard which records the users online time during creation and also during drop
     pub fn new_guard(&self, user: MacroUserIdStr<'static>) -> RecordOnDrop {
         let tx = self.tx.clone();
-        RecordOnDrop {
-            val: Some(user),
-            tx,
+        if let Err(e) = tx.try_send(user.clone()) {
+            tracing::error!("{e:?}");
         }
+
+        RecordOnDrop { val: user, tx }
     }
 }
