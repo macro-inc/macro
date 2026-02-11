@@ -1,5 +1,8 @@
 //! Redis-backed implementation of [DigestBatcher].
 
+#[cfg(all(test, feature = "redis-tests"))]
+mod test;
+
 use crate::domain::models::email_notification_digest::ports::{
     ClaimResult, DigestBatch, DigestBatcher,
 };

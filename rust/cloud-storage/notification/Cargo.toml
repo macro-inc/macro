@@ -14,16 +14,17 @@ axum = [
   "schema",
 ]
 docs = ["dep:aquamarine"]
+redis-tests = []
 schema = ["dep:utoipa"]
 
 [dependencies]
 aquamarine = { version = "0.6", optional = true }
 aws-sdk-sesv2 = { workspace = true }
-cowlike = { path = "../cowlike" }
 aws-sdk-sns = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
+cowlike = { path = "../cowlike" }
 either = { workspace = true }
 hex = { workspace = true }
 itertools = { workspace = true }
@@ -32,7 +33,11 @@ model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
 models_pagination = { path = "../models_pagination" }
-redis = { workspace = true, features = ["tokio-native-tls-comp"] }
+redis = { workspace = true, features = [
+  "aio",
+  "tokio-comp",
+  "tokio-native-tls-comp",
+] }
 reqwest = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }

@@ -13,6 +13,7 @@ pub trait UserExistenceChecker: Send + Sync + 'static {
 }
 
 /// A batch of notifications ready to be sent as a digest email.
+#[derive(Debug)]
 pub struct DigestBatch {
     /// The user to send the digest to.
     pub user_id: MacroUserIdStr<'static>,
@@ -21,6 +22,7 @@ pub struct DigestBatch {
 }
 
 /// Result of attempting to claim a digest batch.
+#[derive(Debug)]
 pub enum ClaimResult {
     /// A digest batch is ready and was claimed.
     Ready(DigestBatch),
