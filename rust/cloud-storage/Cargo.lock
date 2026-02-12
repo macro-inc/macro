@@ -5212,8 +5212,6 @@ name = "macro_project_utils"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "macro_db_client",
- "model",
  "sqlx",
  "tokio",
  "tracing",
