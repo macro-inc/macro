@@ -53,7 +53,7 @@ import type {
   ChannelEntity,
   DocumentEntity,
   EmailEntity,
-} from '@macro-entity';
+} from '@entity';
 import type { PreviewItem } from '@queries/preview';
 import type { Component, JSX } from 'solid-js';
 import { Dynamic } from 'solid-js/web';

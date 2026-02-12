@@ -3,7 +3,8 @@ import type { Attachment } from '@core/component/AI/types';
 import { useChannelsContext } from '@core/context/channels';
 import type { ChannelWithParticipants } from '@core/user';
 import { isOk } from '@core/util/maybeResult';
-import { type EmailEntity, useEmails } from '@macro-entity';
+import { useEmails } from '@macro-entity';
+import type { EmailEntity } from '@entity';
 import type {
   AttachmentType,
   ChannelType,

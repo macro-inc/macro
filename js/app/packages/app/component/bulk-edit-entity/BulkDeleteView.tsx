@@ -1,4 +1,4 @@
-import type { EntityData } from '@macro-entity';
+import type { EntityData } from '@entity';
 import { createBulkDeleteDssItemsMutation } from '../../../macro-entity/src/queries/dss';
 import { konsoleContextInformation } from '../command/KonsoleItem';
 import {

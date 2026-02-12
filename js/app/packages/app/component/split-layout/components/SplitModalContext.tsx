@@ -1,5 +1,5 @@
 import { EntityModal } from '@app/component/EntityModal/EntityModal';
-import type { EntityData } from '@macro-entity';
+import type { EntityData } from '@entity';
 import type { ItemType } from '@service-storage/client';
 import {
   createContext,

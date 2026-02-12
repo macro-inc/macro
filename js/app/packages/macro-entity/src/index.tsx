@@ -9,4 +9,3 @@ export { createEmailsInfiniteQuery } from './queries/email';
 export { queryKeys } from './queries/key';
 export { useEmails } from './source/email';
 export type * from './types/drag';
-export * from './types/entity';

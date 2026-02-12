@@ -11,7 +11,8 @@ import {
 import { useAugmentUserWithDmActivity, useContacts } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
 import { useEmail } from '@core/context/user';
-import { createEmailsInfiniteQuery, type EmailEntity } from '@macro-entity';
+import { createEmailsInfiniteQuery } from '@macro-entity';
+import type { EmailEntity } from '@entity';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { useHistoryQuery } from '@queries/history/history';

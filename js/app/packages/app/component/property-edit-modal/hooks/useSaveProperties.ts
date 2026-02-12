@@ -7,7 +7,7 @@ import {
   isInstantiatedProperty,
   macroEntityToPropertyEntityType,
 } from '@core/component/Properties/utils';
-import type { EntityData } from '@macro-entity';
+import type { EntityData } from '@entity';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 
 export function useSavePropertyForMultiEntitites() {

@@ -28,7 +28,7 @@ import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import ClockIcon from '@icon/regular/clock.svg';
 import EmailIcon from '@icon/regular/envelope.svg';
 import UsersIcon from '@icon/regular/users.svg';
-import { type EmailEntity, useEmails } from '@macro-entity';
+import { useEmails } from '@macro-entity';
 import { useHistoryQuery } from '@queries/history/history';
 import {
   useSearchSoupQuery,
@@ -78,7 +78,7 @@ import {
   type UserMentionRecord,
 } from '../../utils/mentionsUtils';
 import type { HistoryItem as Item } from '@queries/history/history';
-import { EntityData, WithSearch } from '@entity';
+import { EntityData, WithSearch, type EmailEntity } from '@entity';
 
 false && clickOutside;
 false && floatWithSelection;

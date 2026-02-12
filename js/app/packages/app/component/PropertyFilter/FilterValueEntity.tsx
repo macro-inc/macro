@@ -14,7 +14,8 @@ import { usePropertyEntityDisplay } from '@core/component/Properties/hooks/usePr
 import { useAugmentUserWithDmActivity, useContacts } from '@core/user';
 import { useEmail } from '@core/context/user';
 import { createFreshSearch } from '@core/util/freshSort';
-import { createEmailsInfiniteQuery, type EmailEntity } from '@macro-entity';
+import { createEmailsInfiniteQuery } from '@macro-entity';
+import type { EmailEntity } from '@entity';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import XIcon from '@phosphor-icons/core/assets/regular/x.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';

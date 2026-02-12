@@ -3,7 +3,7 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { trackMention } from '@core/signal/mention';
 import type { ChannelWithParticipants, IUser } from '@core/user';
 import type { ParsedDate } from '@core/util/dateParser';
-import type { EmailEntity } from '@macro-entity';
+import type { EmailEntity } from '@entity';
 import { waitBulkUploadStatus } from '@service-connection/bulkUpload';
 import type { DocumentMentionMetadata } from '@service-notification/client';
 import type { BasicDocument } from '@service-storage/generated/schemas/basicDocument';
