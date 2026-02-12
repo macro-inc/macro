@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   compareDateAsc,
   compareDateDesc,
-  convertDates,
+  convertIsoString,
   formatDate,
 } from '../util/date';
 
@@ -407,154 +407,40 @@ describe('Date Utilities (core/utils/date.ts)', () => {
     });
   });
 
-  describe('convertDates', () => {
-    it('should convert valid ISO date string to Date object', () => {
-      const result = convertDates('2025-02-11T10:30:00Z');
+  describe('convertIsoString', () => {
+    it('should convert valid ISO date string with Z suffix', () => {
+      const result = convertIsoString('2025-02-11T10:30:00Z');
       expect(result).toBeInstanceOf(Date);
-      expect((result as unknown as Date).toISOString()).toBe(
-        '2025-02-11T10:30:00.000Z'
-      );
+      expect(result!.toISOString()).toBe('2025-02-11T10:30:00.000Z');
     });
 
-    it('should convert valid ISO date string with milliseconds to Date object', () => {
-      const result = convertDates('2025-02-11T10:30:00.123Z');
+    it('should convert valid ISO date string with milliseconds', () => {
+      const result = convertIsoString('2025-02-11T10:30:00.123Z');
       expect(result).toBeInstanceOf(Date);
-      expect((result as unknown as Date).toISOString()).toBe(
-        '2025-02-11T10:30:00.123Z'
-      );
+      expect(result!.toISOString()).toBe('2025-02-11T10:30:00.123Z');
     });
 
-    it('should convert valid ISO date string without Z suffix to Date object', () => {
-      const result = convertDates('2025-02-11T10:30:00');
-      expect(result).toBeInstanceOf(Date);
+    it('should convert valid ISO date string without Z suffix', () => {
+      const result = convertIsoString('2025-02-11T10:30:00');
       expect(result).toBeInstanceOf(Date);
     });
 
-    it('should return invalid Date for invalid date string', () => {
-      const result = convertDates('2025-13-32T10:30:00Z');
+    it('should return undefined for non-ISO string', () => {
+      expect(convertIsoString('hello world')).toBeUndefined();
+    });
+
+    it('should return undefined for date-only string', () => {
+      expect(convertIsoString('2025-02-11')).toBeUndefined();
+    });
+
+    it('should return undefined for empty string', () => {
+      expect(convertIsoString('')).toBeUndefined();
+    });
+
+    it('should return Date with NaN time for impossible date values', () => {
+      const result = convertIsoString('2025-13-32T10:30:00Z');
       expect(result).toBeInstanceOf(Date);
-      expect((result as unknown as Date).getTime()).toBe(NaN);
-    });
-
-    it('should return string unchanged if not ISO date format', () => {
-      const result = convertDates('hello world');
-      expect(result).toBe('hello world');
-    });
-
-    it('should return null for null input', () => {
-      const result = convertDates(null);
-      expect(result).toBeNull();
-    });
-
-    it('should return undefined for undefined input', () => {
-      const result = convertDates(undefined);
-      expect(result).toBeUndefined();
-    });
-
-    it('should convert date strings in objects', () => {
-      const input = {
-        createdAt: '2025-02-11T10:30:00Z',
-        name: 'test',
-        count: 42,
-      };
-      const result = convertDates(input);
-      expect(result.createdAt).toBeInstanceOf(Date);
-      expect(result.name).toBe('test');
-      expect(result.count).toBe(42);
-    });
-
-    it('should convert date strings in nested objects', () => {
-      const input = {
-        user: {
-          createdAt: '2025-02-11T10:30:00Z',
-          profile: {
-            lastLogin: '2025-02-10T08:00:00Z',
-          },
-        },
-      };
-      const result = convertDates(input);
-      expect(result.user.createdAt).toBeInstanceOf(Date);
-      expect(result.user.profile.lastLogin).toBeInstanceOf(Date);
-    });
-
-    it('should convert date strings in arrays', () => {
-      const input = [
-        '2025-02-11T10:30:00Z',
-        '2025-02-10T08:00:00Z',
-        'not a date',
-      ];
-      const result = convertDates(input);
-      expect(result[0]).toBeInstanceOf(Date);
-      expect(result[1]).toBeInstanceOf(Date);
-      expect(result[2]).toBe('not a date');
-    });
-
-    it('should convert date strings in arrays of objects', () => {
-      const input = [
-        { date: '2025-02-11T10:30:00Z', name: 'first' },
-        { date: '2025-02-10T08:00:00Z', name: 'second' },
-      ];
-      const result = convertDates(input);
-      expect(result[0].date).toBeInstanceOf(Date);
-      expect(result[1].date).toBeInstanceOf(Date);
-      expect(result[0].name).toBe('first');
-      expect(result[1].name).toBe('second');
-    });
-
-    it('should handle mixed data types in objects', () => {
-      const input = {
-        date: '2025-02-11T10:30:00Z',
-        nullValue: null,
-        undefinedValue: undefined,
-        number: 123,
-        boolean: true,
-        string: 'hello',
-        array: [1, 2, 3],
-      };
-      const result = convertDates(input);
-      expect(result.date).toBeInstanceOf(Date);
-      expect(result.nullValue).toBeNull();
-      expect(result.undefinedValue).toBeUndefined();
-      expect(result.number).toBe(123);
-      expect(result.boolean).toBe(true);
-      expect(result.string).toBe('hello');
-      expect(result.array).toEqual([1, 2, 3]);
-    });
-
-    it('should handle deeply nested structures', () => {
-      const input = {
-        level1: {
-          level2: {
-            level3: {
-              date: '2025-02-11T10:30:00Z',
-              items: [
-                { date: '2025-02-10T08:00:00Z' },
-                { date: '2025-02-09T06:00:00Z' },
-              ],
-            },
-          },
-        },
-      };
-      const result = convertDates(input);
-      expect(result.level1.level2.level3.date).toBeInstanceOf(Date);
-      expect(result.level1.level2.level3.items[0].date).toBeInstanceOf(Date);
-      expect(result.level1.level2.level3.items[1].date).toBeInstanceOf(Date);
-    });
-
-    it('should preserve non-date primitive types', () => {
-      expect(convertDates(42)).toBe(42);
-      expect(convertDates(true)).toBe(true);
-      expect(convertDates(false)).toBe(false);
-    });
-
-    it('should handle empty objects', () => {
-      const result = convertDates({});
-      expect(result).toEqual({});
-    });
-
-    it('should handle empty arrays', () => {
-      const result = convertDates([]);
-      expect(result).toEqual([]);
+      expect(result!.getTime()).toBe(NaN);
     });
   });
 });
