@@ -3,6 +3,7 @@
 //! This service handles the worker-facing side of notifications:
 //! consuming from the queue and delivering via WebSocket, push, and email.
 
+use crate::domain::models::RateLimitResult;
 use crate::domain::models::queue_message::{
     ConnGatewayNotification, DeliveryFailure, DeliverySuccess, EmailNotification, Node,
     NotificationChannel, QueueMessage,
@@ -69,13 +70,13 @@ where
         // Check rate limit if configured
         if let Some((key, config)) = message.rate_limit {
             match self.rate_limiter.check_and_increment(key, config).await {
-                Ok(crate::domain::models::RateLimitResult::Exceeded(exceeded)) => {
+                Ok(RateLimitResult::Exceeded(exceeded)) => {
                     return vec![Err(report!(exceeded).context(DeliveryFailure::RateLimit))];
                 }
-                Err(e) => return vec![Err(e.context(DeliveryFailure::RateLimit))],
-                Ok(_) => {
+                Ok(RateLimitResult::Allowed { .. }) => {
                     // Rate limit allowed, continue
                 }
+                Err(e) => return vec![Err(e.context(DeliveryFailure::Other))],
             }
         }
 

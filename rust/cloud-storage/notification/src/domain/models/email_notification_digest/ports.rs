@@ -1,4 +1,6 @@
-use crate::domain::models::{TaggedContent, UserNotificationRow};
+use crate::domain::models::{
+    TaggedContent, UserNotificationRow, email_notification_digest::PushNotificationsEnabled,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use std::time::Duration;
@@ -45,7 +47,6 @@ pub trait DigestBatcher: Send + Sync + 'static {
     /// to be sent after `send_after` duration.
     fn add_to_digest(
         &self,
-        user_id: MacroUserIdStr<'_>,
         notification: &UserNotificationRow<TaggedContent<serde_json::Value>>,
         send_after: Duration,
     ) -> impl Future<Output = Result<(), Report>> + Send;

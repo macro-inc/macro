@@ -53,12 +53,11 @@ impl RedisDigestBatcher {
 impl DigestBatcher for RedisDigestBatcher {
     async fn add_to_digest(
         &self,
-        user_id: MacroUserIdStr<'_>,
         notification: &UserNotificationRow<TaggedContent<serde_json::Value>>,
         send_after: Duration,
     ) -> Result<(), Report> {
         let mut conn = self.conn.clone();
-        let user_id_str = user_id.as_ref();
+        let user_id_str = notification.owner_id.as_ref();
         let digest_key = Self::digest_key(user_id_str);
 
         let serialized = serde_json::to_string(notification)?;

@@ -85,7 +85,7 @@ async fn test_add_to_digest_creates_pending_entry() {
     let notification = create_test_notification(user.clone(), "test message");
 
     batcher
-        .add_to_digest(user.clone(), &notification, Duration::from_secs(60))
+        .add_to_digest(&notification, Duration::from_secs(60))
         .await
         .expect("Failed to add to digest");
 
@@ -117,15 +117,15 @@ async fn test_add_multiple_notifications_same_user() {
     let notif3 = create_test_notification(user.clone(), "message 3");
 
     batcher
-        .add_to_digest(user.clone(), &notif1, Duration::from_secs(60))
+        .add_to_digest(&notif1, Duration::from_secs(60))
         .await
         .unwrap();
     batcher
-        .add_to_digest(user.clone(), &notif2, Duration::from_secs(60))
+        .add_to_digest(&notif2, Duration::from_secs(60))
         .await
         .unwrap();
     batcher
-        .add_to_digest(user.clone(), &notif3, Duration::from_secs(60))
+        .add_to_digest(&notif3, Duration::from_secs(60))
         .await
         .unwrap();
 
@@ -165,7 +165,7 @@ async fn test_claim_ready_digest_returns_wait_when_not_ready() {
 
     // Add with 60 second delay
     batcher
-        .add_to_digest(user.clone(), &notification, Duration::from_secs(60))
+        .add_to_digest(&notification, Duration::from_secs(60))
         .await
         .unwrap();
 
@@ -193,7 +193,7 @@ async fn test_claim_ready_digest_returns_batch_when_ready() {
 
     // Add with 0 second delay (immediately ready)
     batcher
-        .add_to_digest(user.clone(), &notification, Duration::from_secs(0))
+        .add_to_digest(&notification, Duration::from_secs(0))
         .await
         .unwrap();
 
@@ -236,7 +236,7 @@ async fn test_new_notifications_during_processing_not_lost() {
     // Add first notification (immediately ready)
     let notif1 = create_test_notification(user.clone(), "first");
     batcher
-        .add_to_digest(user.clone(), &notif1, Duration::from_secs(0))
+        .add_to_digest(&notif1, Duration::from_secs(0))
         .await
         .unwrap();
 
@@ -249,7 +249,7 @@ async fn test_new_notifications_during_processing_not_lost() {
     // Add another notification after the claim (simulating concurrent add)
     let notif2 = create_test_notification(user.clone(), "second");
     batcher
-        .add_to_digest(user.clone(), &notif2, Duration::from_secs(0))
+        .add_to_digest(&notif2, Duration::from_secs(0))
         .await
         .unwrap();
 
@@ -282,11 +282,11 @@ async fn test_multiple_users_independent() {
 
     // Add notifications for both users
     batcher
-        .add_to_digest(user1.clone(), &notif1, Duration::from_secs(0))
+        .add_to_digest(&notif1, Duration::from_secs(0))
         .await
         .unwrap();
     batcher
-        .add_to_digest(user2.clone(), &notif2, Duration::from_secs(0))
+        .add_to_digest(&notif2, Duration::from_secs(0))
         .await
         .unwrap();
 
