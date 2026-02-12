@@ -62,7 +62,7 @@ const ENTITY_TYPE_SHORTCUTS: Record<
 };
 
 export const SoupToolbar = () => {
-  const { soup, setQueryFilters, setSearchText } = useSoupView();
+  const { soup, setSearchText, setQueryFilters } = useSoupView();
 
   const [scrollContainerRef, setScrollContainerRef] = createSignal<
     HTMLDivElement | undefined
@@ -71,8 +71,8 @@ export const SoupToolbar = () => {
   const handleClear = () => {
     batch(() => {
       soup.filters.clear();
-      setQueryFilters(QUERY_FILTERS.default);
       setSearchText('');
+      setQueryFilters(QUERY_FILTERS.default);
     });
   };
 

@@ -67,6 +67,7 @@ interface SoupViewContextValues {
   setSearchText: (value: string) => void;
   isSearchDisabled: Accessor<boolean>;
   rows: Accessor<SoupRow[]>;
+  queryFilters: Accessor<SoupItemsQueryFilters>;
   setQueryFilters: Setter<SoupItemsQueryFilters>;
 }
 
@@ -216,7 +217,11 @@ export const SoupViewContextProvider: FlowComponent<
     }
 
     return {
-      channel: channel_filters?.channel_ids?.length ? channel_filters : null,
+      channel:
+        channel_filters?.channel_ids?.length ||
+        channel_filters?.channel_types?.length
+          ? channel_filters
+          : null,
       chat:
         chat_filters?.chat_ids?.length || chat_filters?.project_ids?.length
           ? chat_filters
@@ -417,6 +422,7 @@ export const SoupViewContextProvider: FlowComponent<
     searchText,
     setSearchText,
     isSearchDisabled,
+    queryFilters,
     setQueryFilters,
   };
 
