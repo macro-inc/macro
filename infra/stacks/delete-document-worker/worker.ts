@@ -239,7 +239,7 @@ export class Worker extends pulumi.ComponentResource {
                   Name: 'datadog',
                   Host: 'http-intake.logs.us5.datadoghq.com',
                   apikey: DATADOG_API_KEY,
-                  dd_service: `delete-document-worker-${stack}`,
+                  dd_service: 'delete-document-worker',
                   dd_source: 'fargate',
                   dd_tags: 'project:cloudstorage',
                   provider: 'ecs',
