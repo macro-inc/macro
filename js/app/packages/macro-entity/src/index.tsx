@@ -2,7 +2,6 @@ export { Provider } from './components/Provider';
 export { useQueryClient } from './queries/client';
 export {
   createMoveToProjectDssEntityMutation,
-  createCopyDssEntityMutation,
   optimisticUpdateDssItemViewedAt,
 } from './queries/dss';
 export { createEmailsInfiniteQuery } from './queries/email';

@@ -14,7 +14,6 @@ import {
   getSoupEntityById,
   optimisticUpdateSoupEntity,
   invalidateSoupEntity,
-  refetchSoupEntity,
 } from '@queries/soup/cache';
 
 export function createBulkDeleteDssItemsMutation() {
@@ -111,45 +110,6 @@ export function createMoveToProjectDssEntityMutation() {
       }
 
       invalidateAfterMove([id], type === 'project', failed);
-    },
-  }));
-}
-
-export function createCopyDssEntityMutation() {
-  return useMutation(() => ({
-    mutationFn: async ({
-      entity: { id, type, name },
-    }: {
-      entity: EntityData & { type: 'document' | 'chat' };
-    }) => {
-      const newId = await copyItem({
-        itemType: type,
-        id,
-        name,
-      });
-
-      if (!newId) {
-        throw new Error(`Failed to copy ${type} with id ${id}`);
-      }
-
-      return newId;
-    },
-    onMutate: async () => {
-      queryClient.cancelQueries({
-        queryKey: soupKeys.items._def,
-      });
-      // For copy operations, we don't need optimistic updates since we're creating a new item
-      // The new item will be added when the mutation completes and queries are invalidated
-    },
-    onSettled: (data, error, { entity: { id, type } }) => {
-      if (error) {
-        console.error(`Failed to copy dss item ${id}`, data, error);
-        toast.failure('Failed to copy item');
-      }
-      if (data) {
-        refetchSoupEntity(data, type as 'document' | 'chat');
-      }
-      queryClient.invalidateQueries({ queryKey: ['entity'] });
     },
   }));
 }
