@@ -6,7 +6,7 @@ on:
 jobs:
   migrate-db:
     name: Run Database Migrations (dev)
-    runs-on: db-migrator-runner
+    runs-on: db-migrator
     steps:
       - name: Run migrations for dev
         uses: ./.github/actions/migrate-cloud-storage-db
