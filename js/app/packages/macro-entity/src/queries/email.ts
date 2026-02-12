@@ -7,7 +7,7 @@ import { type Accessor, createMemo } from 'solid-js';
 import type { EmailEntity } from '../types/entity';
 import { createApiTokenQuery, withApiTokenRetry } from './auth';
 import { queryKeys } from './key';
-import { SafeFetchInit } from '@core/util/safeFetch';
+import type { SafeFetchInit } from '@core/util/safeFetch';
 
 export type FetchPaginatedEmailsParams = PreviewsInboxCursorParams & {
   // path parameter
