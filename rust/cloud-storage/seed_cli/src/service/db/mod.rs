@@ -11,6 +11,7 @@ use mockall::automock;
 /// Wrapper around the database connection pool.
 pub struct SeedDb {
     /// The macrodb pool
+    #[allow(unused)]
     inner: sqlx::PgPool,
 }
 
