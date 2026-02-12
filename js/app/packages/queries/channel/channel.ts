@@ -1,3 +1,4 @@
+import type { DateValue } from '@core/util/date';
 import {
   catchToResult,
   isErr,
@@ -73,14 +74,14 @@ type WithChannelId<T> = T & { channelId: string };
 
 export type UpdateChannelNameContext = {
   previousName: string | null | undefined;
-  previousUpdatedAt: string;
+  previousUpdatedAt: DateValue;
 };
 
 /** Helper to update channel name in both single channel and list queries. */
 function updateChannelNameInQueries(
   channelId: string,
   name: string | null | undefined,
-  updatedAt: string
+  updatedAt: DateValue
 ): void {
   const queryKey = channelKeys.withID(channelId).queryKey;
   const listQueryKey = channelKeys.listChannels.queryKey;

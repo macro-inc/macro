@@ -1,5 +1,6 @@
 import { TrackingEvents, withAnalytics } from '@coparse/analytics';
 import { toast } from '@core/component/Toast/Toast';
+import type { DateValue } from '@core/util/date';
 import { throwOnErr } from '@core/util/maybeResult';
 import { softInvalidateChannelWithID } from '@queries/channel/channel';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
@@ -50,8 +51,8 @@ export type DeleteMessageContext = {
 export type UpdateMessageContext = {
   messageId: string;
   previousContent: string;
-  previousEditedAt: string | null | undefined;
-  previousUpdatedAt: string;
+  previousEditedAt: DateValue | null | undefined;
+  previousUpdatedAt: DateValue;
 };
 
 /**
