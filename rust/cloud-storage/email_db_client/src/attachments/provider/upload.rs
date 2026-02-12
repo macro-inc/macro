@@ -472,7 +472,6 @@ pub async fn new_email_media_atts(
 
 pub async fn fetch_attachment_upload_metadata_by_id(
     db: &Pool<Postgres>,
-    link_id: Uuid,
     attachment_id: Uuid,
 ) -> anyhow::Result<Option<AttachmentUploadMetadata>> {
     let row = sqlx::query_as!(
@@ -493,10 +492,9 @@ pub async fn fetch_attachment_upload_metadata_by_id(
         JOIN email_messages m ON a.message_id = m.id
         JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
         JOIN email_threads t ON m.thread_id = t.id
-        WHERE a.id = $1 AND t.link_id = $2
+        WHERE a.id = $1
         "#,
-        attachment_id,
-        link_id
+        attachment_id
     )
     .fetch_optional(db)
     .await?;

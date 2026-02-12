@@ -172,7 +172,7 @@ export function $mentionItemFromNode(node: MentionNode): ItemMention {
       fileType = 'rss';
     } else if (blockName === 'email') {
       fileType = 'email';
-      itemType = 'email';
+      itemType = 'thread';
     } else if (blockName === 'unknown') {
       fileType = 'unknown';
     }
@@ -679,7 +679,7 @@ function registerMentionsPlugin(
                 fileType = 'unknown';
               }
               onCreateMention({
-                itemType: blockName === 'email' ? 'email' : itemType,
+                itemType: blockName === 'email' ? 'thread' : itemType,
                 itemId: node.getDocumentId(),
                 fileType,
                 documentName,

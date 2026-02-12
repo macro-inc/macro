@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            a.id AS attachment_db_id,\n            m.provider_id as \"email_provider_id!\",\n            a.provider_attachment_id as \"provider_attachment_id!\",\n            a.filename as \"filename?\",\n            a.mime_type as \"mime_type!\",\n            m.internal_date_ts as \"internal_date_ts!\",\n            m.id as message_db_id,\n            m.thread_id as thread_db_id,\n            from_contact.email_address as sender_email,\n            m.subject as subject\n        FROM email_attachments a\n        JOIN email_messages m ON a.message_id = m.id\n        JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id\n        JOIN email_threads t ON m.thread_id = t.id\n        WHERE a.id = $1 AND t.link_id = $2\n        ",
+  "query": "\n        SELECT\n            a.id AS attachment_db_id,\n            m.provider_id as \"email_provider_id!\",\n            a.provider_attachment_id as \"provider_attachment_id!\",\n            a.filename as \"filename?\",\n            a.mime_type as \"mime_type!\",\n            m.internal_date_ts as \"internal_date_ts!\",\n            m.id as message_db_id,\n            m.thread_id as thread_db_id,\n            from_contact.email_address as sender_email,\n            m.subject as subject\n        FROM email_attachments a\n        JOIN email_messages m ON a.message_id = m.id\n        JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id\n        JOIN email_threads t ON m.thread_id = t.id\n        WHERE a.id = $1\n        ",
   "describe": {
     "columns": [
       {
@@ -56,7 +56,6 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid",
         "Uuid"
       ]
     },
@@ -73,5 +72,5 @@
       true
     ]
   },
-  "hash": "b3cccb591b27205ca6ed2b1575606e62d2f22b14691b9c428438b9452cae83da"
+  "hash": "be835e7de49553e947e0d265f8f681321d099febed2ed002dac6d706bf4ec173"
 }
