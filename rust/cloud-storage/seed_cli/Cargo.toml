@@ -1,0 +1,24 @@
+[package]
+edition = "2024"
+name = "seed_cli"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+clap = { workspace = true }
+reqwest = { workspace = true }
+macro_entrypoint = { path = "../macro_entrypoint" }
+tracing = { workspace = true }
+tokio = { workspace = true }
+macro_env_var = { path = "../macro_env_var" }
+macro_env = { path = "../macro_env" }
+sqlx = { workspace = true }
+macro_user_id = { path = "../macro_user_id" }
+fusionauth = { path = "../fusionauth" }
+mockall = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

@@ -7936,6 +7936,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "seed_cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "fusionauth",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_env_var",
+ "macro_user_id",
+ "mockall",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "selectors"
 version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

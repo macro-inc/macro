@@ -4,12 +4,7 @@ import {
   SYSTEM_PROPERTY_IDS,
 } from '@core/component/Properties/constants';
 import { throwOnErr } from '@core/util/maybeResult';
-import {
-  type InfiniteData,
-  type QueryKey,
-  useMutation,
-  useQuery,
-} from '@tanstack/solid-query';
+import { type QueryKey, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import {
   entityPropertyFromApi,
@@ -24,13 +19,17 @@ import {
   propertiesServiceClient,
 } from '../../service-clients/service-properties/client';
 import type { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
-import type { SoupPage } from '../../service-clients/service-storage/generated/schemas/soupPage';
-import type { SoupProperty } from '../../service-clients/service-storage/generated/schemas/soupProperty';
+import type { SoupPropertyValue } from '../../service-clients/service-storage/generated/schemas/soupPropertyValue';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { propertiesKeys } from './keys';
-import { soupKeys } from '../soup/keys';
 import type { BulkEntityPropertiesData } from './bulk';
+import {
+  getSoupEntityById,
+  optimisticUpdateSoupEntity,
+  invalidateSoupEntity,
+  type SoupTransaction,
+} from '../soup/cache';
 
 export function useEntityPropertiesQuery(
   entityType: Accessor<EntityType>,
@@ -96,16 +95,14 @@ export type SaveEntityPropertyParams = {
   apiValues: PropertyApiValues;
 };
 
-type SaveEntityPropertyContext = {
-  previousDss: [QueryKey, InfiniteData<SoupPage, unknown> | undefined][];
-};
+type SaveEntityPropertyContext = SoupTransaction | undefined;
 
 /**
  * Converts PropertyApiValues to the SoupProperty value format for optimistic updates.
  */
 function apiValuesToSoupPropertyValue(
   apiValues: PropertyApiValues
-): { type: string; value: unknown } | null {
+): SoupPropertyValue {
   switch (apiValues.valueType) {
     case 'STRING':
       return apiValues.value != null
@@ -141,53 +138,6 @@ function apiValuesToSoupPropertyValue(
   }
 }
 
-/**
- * Updates a specific property in DSS data for optimistic updates.
- */
-function updateDssProperty(
-  data: InfiniteData<SoupPage, unknown> | undefined,
-  entityId: string,
-  propertyDefinitionId: string,
-  newValue: { type: string; value: unknown } | null
-): InfiniteData<SoupPage, unknown> | undefined {
-  if (!data) return data;
-
-  return {
-    ...data,
-    pages: data.pages.map((page) => ({
-      ...page,
-      items: page.items.map((item) => {
-        if ('data' in item && item.data && 'id' in item.data) {
-          const itemData = item.data as {
-            id: string;
-            properties?: SoupProperty[];
-          };
-          if (itemData.id === entityId && itemData.properties) {
-            const updatedProperties = itemData.properties.map((prop) => {
-              if (prop.definition.id === propertyDefinitionId) {
-                return {
-                  ...prop,
-                  value: newValue,
-                };
-              }
-              return prop;
-            });
-            return {
-              ...item,
-              data: {
-                ...item.data,
-                properties: updatedProperties,
-              },
-            } as typeof item;
-          }
-        }
-        return item;
-      }),
-    })),
-    pageParams: data.pageParams,
-  };
-}
-
 export function useSaveEntityPropertyMutation(
   callbacks?: MutationCallbacks<
     void,
@@ -218,53 +168,37 @@ export function useSaveEntityPropertyMutation(
     onMutate: async (
       vars: SaveEntityPropertyParams
     ): Promise<SaveEntityPropertyContext> => {
-      // Cancel any in-flight DSS queries that might overwrite our optimistic update
-      await queryClient.cancelQueries({ queryKey: soupKeys.items._def });
+      const current = getSoupEntityById(vars.entityId);
+      if (!current || current.tag === 'channel') return;
 
-      // Snapshot previous DSS data for rollback
-      const previousDss = queryClient.getQueriesData<
-        InfiniteData<SoupPage, unknown>
-      >({
-        queryKey: soupKeys.items._def,
-      });
-
-      // Convert API values to soup property value format
       const soupValue = apiValuesToSoupPropertyValue(vars.apiValues);
-
-      // Optimistically update DSS queries
-      queryClient.setQueriesData<InfiniteData<SoupPage, unknown>>(
-        { queryKey: soupKeys.items._def },
-        (old) =>
-          updateDssProperty(
-            old,
-            vars.entityId,
-            vars.property.propertyDefinitionId,
-            soupValue
-          )
-      );
-
-      return { previousDss };
+      if (current.data.properties) {
+        return optimisticUpdateSoupEntity({
+          tag: current.tag,
+          data: {
+            id: current.data.id,
+            properties: current.data.properties.map((prop) =>
+              prop.definition.id === vars.property.propertyDefinitionId
+                ? { ...prop, value: soupValue }
+                : prop
+            ),
+          },
+          frecency_score: current.frecency_score,
+        });
+      }
     },
     onError: (
       error: Error,
       _vars: SaveEntityPropertyParams,
-      context: SaveEntityPropertyContext | undefined
+      context: SaveEntityPropertyContext
     ) => {
+      context?.rollback();
       console.error('Failed to save property', error);
       toast.failure('Failed to save property');
-
-      // Rollback optimistic updates
-      if (context) {
-        for (const [key, data] of context.previousDss) {
-          queryClient.setQueryData(key, data);
-        }
-      }
     },
     onSettled: (_data, _error, variables) => {
       invalidatePropertiesForEntity(variables.entityType, variables.entityId);
-
-      // Invalidate DSS to ensure consistency with server state
-      queryClient.invalidateQueries({ queryKey: soupKeys.items._def });
+      invalidateSoupEntity(variables.entityId);
     },
     ...(callbacks
       ? withCallbacks<
@@ -363,7 +297,7 @@ export type SetPropertyStatusCompleteParams = {
 type SetPropertyStatusCompleteContext = {
   previousEntityProperties: [QueryKey, Property[] | undefined][];
   previousBulkProperties: [QueryKey, BulkEntityPropertiesData | undefined][];
-  previousDss: [QueryKey, InfiniteData<SoupPage, unknown> | undefined][];
+  soupTxn?: SoupTransaction;
 };
 
 /**
@@ -402,45 +336,6 @@ function updateStatusPropertyToCompleted<
   });
 }
 
-/**
- * Updates DSS query data to set the status property to COMPLETED for a given entity.
- */
-function updateDssStatusToCompleted(
-  data: InfiniteData<SoupPage, unknown> | undefined,
-  entityId: string
-): InfiniteData<SoupPage, unknown> | undefined {
-  if (!data) return data;
-
-  return {
-    ...data,
-    pages: data.pages.map((page) => ({
-      ...page,
-      items: page.items.map((item) => {
-        // SoupApiItem has { tag, data } structure where data contains the entity
-        if ('data' in item && item.data && 'id' in item.data) {
-          const itemData = item.data as {
-            id: string;
-            properties?: SoupProperty[];
-          };
-          if (itemData.id === entityId && itemData.properties) {
-            // Use Object.assign to preserve the original type while updating properties
-            const updatedData = {
-              ...item.data,
-              properties: updateStatusPropertyToCompleted(itemData.properties),
-            };
-            return {
-              ...item,
-              data: updatedData,
-            } as typeof item;
-          }
-        }
-        return item;
-      }),
-    })),
-    pageParams: data.pageParams,
-  };
-}
-
 /** Sets the status property to complete for an entity (mark as done) */
 export function useSetPropertyStatusCompleteMutation(
   callbacks?: MutationCallbacks<
@@ -463,7 +358,7 @@ export function useSetPropertyStatusCompleteMutation(
     onMutate: async (
       vars: SetPropertyStatusCompleteParams
     ): Promise<SetPropertyStatusCompleteContext> => {
-      // Cancel any in-flight queries that might overwrite our optimistic update
+      // Cancel any in-flight property queries
       await Promise.all([
         queryClient.cancelQueries({
           queryKey: propertiesKeys.entity({
@@ -475,10 +370,9 @@ export function useSetPropertyStatusCompleteMutation(
           predicate: ({ queryKey }) =>
             bulkIncludesEntityPredicate(queryKey, vars.entityId),
         }),
-        queryClient.cancelQueries({ queryKey: soupKeys.items._def }),
       ]);
 
-      // Snapshot previous data for rollback
+      // Snapshot previous property data for rollback
       const previousEntityProperties = queryClient.getQueriesData<Property[]>({
         queryKey: propertiesKeys.entity({
           entityType: vars.entityType,
@@ -491,12 +385,6 @@ export function useSetPropertyStatusCompleteMutation(
           predicate: ({ queryKey }) =>
             bulkIncludesEntityPredicate(queryKey, vars.entityId),
         });
-
-      const previousDss = queryClient.getQueriesData<
-        InfiniteData<SoupPage, unknown>
-      >({
-        queryKey: soupKeys.items._def,
-      });
 
       // Optimistically update entity properties query
       queryClient.setQueriesData<Property[]>(
@@ -527,15 +415,26 @@ export function useSetPropertyStatusCompleteMutation(
       );
 
       // Optimistically update soup queries (embedded properties on entities)
-      queryClient.setQueriesData<InfiniteData<SoupPage, unknown>>(
-        { queryKey: soupKeys.items._def },
-        (old) => updateDssStatusToCompleted(old, vars.entityId)
-      );
+      const current = getSoupEntityById(vars.entityId);
+
+      let soupTxn: SoupTransaction | undefined;
+      if (current && current.tag !== 'channel' && current.data.properties) {
+        soupTxn = optimisticUpdateSoupEntity({
+          tag: current.tag,
+          data: {
+            id: current.data.id,
+            properties: updateStatusPropertyToCompleted(
+              current.data.properties
+            ),
+          },
+          frecency_score: current.frecency_score,
+        });
+      }
 
       return {
         previousEntityProperties,
         previousBulkProperties,
-        previousDss,
+        soupTxn,
       };
     },
     onError: (
@@ -545,23 +444,19 @@ export function useSetPropertyStatusCompleteMutation(
     ) => {
       console.error('Failed to set status complete', error);
 
-      // Rollback optimistic updates
       if (context) {
+        context.soupTxn?.rollback();
         for (const [key, data] of context.previousEntityProperties) {
           queryClient.setQueryData(key, data);
         }
         for (const [key, data] of context.previousBulkProperties) {
           queryClient.setQueryData(key, data);
         }
-        for (const [key, data] of context.previousDss) {
-          queryClient.setQueryData(key, data);
-        }
       }
     },
     onSettled: (_data, _error, variables) => {
       invalidatePropertiesForEntity(variables.entityType, variables.entityId);
-      // Also invalidate soup items to ensure consistency
-      queryClient.invalidateQueries({ queryKey: soupKeys.items._def });
+      invalidateSoupEntity(variables.entityId);
     },
     ...(callbacks
       ? withCallbacks<
@@ -635,11 +530,9 @@ export function useBulkSaveEntityPropertiesMutation(
           entityGroups.forEach((entityIds, entityType) => {
             entityIds.forEach((entityId) => {
               invalidatePropertiesForEntity(entityType, entityId);
+              invalidateSoupEntity(entityId);
             });
           });
-
-          // Invalidate soup/DSS queries to ensure UI updates reactively
-          queryClient.invalidateQueries({ queryKey: soupKeys.items._def });
         },
       },
       callbacks

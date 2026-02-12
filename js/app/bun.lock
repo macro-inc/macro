@@ -36,6 +36,7 @@
         "@lexical/table": "^0.32.1",
         "@lexical/utils": "^0.32.1",
         "@lukemorales/query-key-factory": "^1.3.4",
+        "@normy/query-core": "^0.21.0",
         "@panzoom/panzoom": "^4.6.0",
         "@phosphor-icons/core": "^2.1.1",
         "@solid-primitives/audio": "^1.4.2",
@@ -844,6 +845,10 @@
     "@nodelib/fs.stat": ["@nodelib/fs.stat@2.0.5", "", {}, "sha512-RkhPPp2zrqDAQA/2jNhnztcPAlv64XdhIp7a7454A5ovI7Bukxgt7MX7udwAu3zg1DcpPU0rz3VV1SeaqvY4+A=="],
 
     "@nodelib/fs.walk": ["@nodelib/fs.walk@1.2.8", "", { "dependencies": { "@nodelib/fs.scandir": "2.1.5", "fastq": "^1.6.0" } }, "sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg=="],
+
+    "@normy/core": ["@normy/core@0.14.0", "", { "dependencies": { "@babel/runtime": "^7.23.5", "deepmerge": "4.3.1" } }, "sha512-3I0S62BNEIlvSL10TutHsLvTxguRoXEjs6b/udSUnxlKFVgrAIdW4F4tJDiZsJQrWRi6A6V3Eo5Dzji3zyn40Q=="],
+
+    "@normy/query-core": ["@normy/query-core@0.21.0", "", { "dependencies": { "@normy/core": "0.14.0" }, "peerDependencies": { "@tanstack/query-core": ">=5.4.3" } }, "sha512-O1GM0wqXIHHiWremrbvGG3ZuDxPsg+k9DDin+7sjkK/jHT2ER2MVodoMG40sB3I+zCKCdGVDi+/nZlb36m/mmA=="],
 
     "@nothing-but/utils": ["@nothing-but/utils@0.17.0", "", {}, "sha512-TuCHcHLOqDL0SnaAxACfuRHBNRgNJcNn9X0GiH5H3YSDBVquCr3qEIG3FOQAuMyZCbu9w8nk2CHhOsn7IvhIwQ=="],
 

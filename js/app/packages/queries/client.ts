@@ -2,6 +2,7 @@ import { QueryClient } from '@tanstack/solid-query';
 import { createPerQueryIDBStore } from './persistence/per-query-idb';
 import { partialMatchKey } from '@tanstack/query-core';
 import { createPersistenceKey, setupQueryPersistence } from './persistence';
+import { initSoupNormalizer } from './soup/cache';
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -44,6 +45,9 @@ setupQueryPersistence({
     },
   ],
 });
+
+// Subscribe to query cache events for automatic normalization of soup entities
+initSoupNormalizer(queryClient);
 
 export function useQueryClient() {
   return queryClient;
