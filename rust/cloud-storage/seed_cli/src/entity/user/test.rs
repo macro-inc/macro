@@ -22,6 +22,7 @@ fn parse_user_create() {
             }
             other => panic!("expected Create, got {other:?}"),
         },
+        other => panic!("expected User, got {other:?}"),
     }
 }
 
@@ -37,6 +38,7 @@ fn parse_user_bulk_create() {
             }
             other => panic!("expected BulkCreate, got {other:?}"),
         },
+        other => panic!("expected User, got {other:?}"),
     }
 }
 

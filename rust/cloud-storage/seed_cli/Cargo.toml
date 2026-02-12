@@ -19,6 +19,10 @@ sqlx = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 fusionauth = { path = "../fusionauth" }
 mockall = { workspace = true }
+comms_db_client = { path = "../comms_db_client" }
+model = { path = "../model" }
+csv = { workspace = true }
+uuid = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"
