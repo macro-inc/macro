@@ -69,8 +69,9 @@ pub async fn main() -> anyhow::Result<()> {
 /// Transforms the docker-network url to be localhost
 fn transform_docker_url(url: &str) -> String {
     if let Some(rest) = url.strip_prefix("http://")
-        && let Some(colon_pos) = rest.find(':') {
-            return format!("http://localhost{}", &rest[colon_pos..]);
-        }
+        && let Some(colon_pos) = rest.find(':')
+    {
+        return format!("http://localhost{}", &rest[colon_pos..]);
+    }
     url.to_string()
 }
