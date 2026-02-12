@@ -266,6 +266,31 @@ export function buildSingleEntityFilter(
   );
 }
 
+/**
+ * Optimistically update the viewedAt timestamp for a soup item.
+ * Updates the item across all soup queries if it exists.
+ */
+export function optimisticUpdateSoupItemViewedAt(itemId: string) {
+  const current = getSoupEntityById(itemId);
+  if (!current) return;
+
+  const now = new Date();
+
+  if (current.tag === 'channel') {
+    optimisticUpdateSoupEntity({
+      tag: 'channel',
+      data: { channel: { id: itemId }, viewed_at: now.toISOString() },
+      frecency_score: current.frecency_score,
+    });
+  } else {
+    optimisticUpdateSoupEntity({
+      tag: current.tag,
+      data: { id: itemId, viewedAt: now.getTime() },
+      frecency_score: current.frecency_score,
+    });
+  }
+}
+
 /** @private */
 function getSearchResultId(result: UnifiedSearchResponseItem): string {
   return match(result)

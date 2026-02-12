@@ -243,28 +243,3 @@ export function createBulkMoveToProjectDssEntityMutation() {
     },
   }));
 }
-
-/**
- * Optimistically update the viewedAt timestamp for a DSS item.
- * Updates the item across all DSS queries if it exists.
- */
-export function optimisticUpdateDssItemViewedAt(itemId: string) {
-  const current = getSoupEntityById(itemId);
-  if (!current) return;
-
-  const now = new Date();
-
-  if (current.tag === 'channel') {
-    optimisticUpdateSoupEntity({
-      tag: 'channel',
-      data: { channel: { id: itemId }, viewed_at: now.toISOString() },
-      frecency_score: current.frecency_score,
-    });
-  } else {
-    optimisticUpdateSoupEntity({
-      tag: current.tag,
-      data: { id: itemId, viewedAt: now.getTime() },
-      frecency_score: current.frecency_score,
-    });
-  }
-}
