@@ -1,14 +1,8 @@
 import { useReactToMessage } from '@block-channel/hooks/reactions';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import clickOutside from '@core/directive/clickOutside';
-import type { CountedReaction } from '@service-comms/generated/models';
-import {
-  type Accessor,
-  type Component,
-  For,
-  onMount,
-  type Setter,
-} from 'solid-js';
+import type { GetChannelResponseReactions } from '@service-comms/generated/models';
+import { type Accessor, type Component, For, type Setter } from 'solid-js';
 import { ReactionSelector } from '../ReactionSelector';
 import type { MessageAction } from './actions';
 
@@ -24,13 +18,10 @@ export type Action = {
 export function ActionMenu(props: {
   messageId: string;
   channelId: Accessor<string>;
-  reactions: Accessor<CountedReaction[]>;
+  reactions: Accessor<GetChannelResponseReactions>;
   actions: MessageAction[];
   setReactionMenuActivated?: Setter<boolean>;
 }) {
-  onMount(() => {
-    console.log('MOUNTING ACTION MENU');
-  });
   // default emojis
   const defaultEmojis = ['❤️', '👍', '😂'];
 

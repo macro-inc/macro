@@ -1,24 +1,17 @@
 import { withAnalytics } from '@coparse/analytics';
 import { useBuildChatSendRequest } from '@core/component/AI/component/input/buildRequest';
-import { DEFAULT_MODEL, SMART_MODE_MODEL } from '@core/component/AI/constant';
-import {
-  useAttachments,
-  useChatAttachableHistory,
-} from '@core/component/AI/signal/attachment';
+import { SMART_MODE_MODEL } from '@core/component/AI/constant';
+import { useChatInputContext } from '@core/component/AI/context';
+import { useChatAttachableHistory } from '@core/component/AI/signal/attachment';
 import type {
-  Attachment,
-  Attachments,
   CreateAndSend,
   Model,
   Send,
   ToolSet,
-  UploadQueue,
 } from '@core/component/AI/types';
-import { useUploadAttachment } from '@core/component/AI/util/uploadToChat';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { Hotkey, modifierMap } from '@core/component/Hotkey';
 import { Tooltip } from '@core/component/Tooltip';
-import { ENABLE_AI_AUTO_TAB_ATTACHMENTS } from '@core/constant/featureFlags';
 import { pressedKeys } from '@core/hotkey/state';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ArrowUp from '@icon/bold/arrow-up-bold.svg';
@@ -28,17 +21,14 @@ import Stop from '@phosphor-icons/core/regular/stop.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button } from '@ui/components/Button';
 import type { LexicalEditor } from 'lexical';
-import type { Accessor, Component, Setter } from 'solid-js';
-import { createEffect, createSignal, Match, on, Show, Switch } from 'solid-js';
-import { useTabAttachments } from '../../signal/tabAttachments';
+import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
 import { AttachmentList } from './Attachment';
 import { ChatAttachMenu } from './ChatAttachMenu';
 import type { Source } from './ToolsetSelector';
-import {
-  type UseChatMarkdown,
-  useChatMarkdownArea,
-} from './useChatMarkdownArea';
+import type { UseChatMarkdown } from './useChatMarkdownArea';
 import { cn } from '@ui/utils/classname';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { useAiDataConsentGate } from './useAiDataConsent';
 
 const { track, TrackingEvents } = withAnalytics();
 
@@ -49,112 +39,23 @@ export type ChatInputProps = {
   showActiveTabs?: boolean;
   captureEditor?: (editor: LexicalEditor) => void;
   autoFocusOnMount?: boolean;
+  chatId?: string;
 };
 
-type ChatInputInternalProps = {
-  uploadQueue: UploadQueue;
-  isGenerating: Accessor<boolean>;
-  attachments: Attachments;
-  chatId: Accessor<string | undefined>;
-  model: Accessor<Model>;
-  setModel: Setter<Model>;
+export type ChatInputComponentProps = {
   markdown: UseChatMarkdown;
 } & ChatInputProps;
 
-export type ChatInput = {
-  ChatInput: Component<ChatInputProps>;
-  uploadQueue: UploadQueue;
-  setChatId: (chatId: string | undefined) => void;
-  chatId: Accessor<string | undefined>;
-  model: Accessor<Model>;
-  setModel: (model?: Model) => void;
-  attachments: Attachments;
-  isGenerating: Accessor<boolean>;
-  setIsGenerating: (generating: boolean) => void;
-  chatMarkdownArea: UseChatMarkdown;
-};
+export function ChatInput(props: ChatInputComponentProps) {
+  const input = useChatInputContext();
+  const uploadQueue = input.uploadQueue;
+  const attachments = input.attachments;
+  const model = input.model;
+  const generating = input.isGenerating;
 
-export function useChatInput(
-  args: {
-    chatId?: string;
-    model?: Model;
-    isGenerating?: boolean;
-    initialAttachments?: Attachment[];
-    initialValue?: string;
-    autoAttach?: boolean;
-  } = {}
-): ChatInput {
-  const [chatId, setChatId] = createSignal<string | undefined>(args.chatId);
-  const [model, setModel] = createSignal<Model>(args.model ?? DEFAULT_MODEL);
-  const [isGenerating, setIsGenerating] = createSignal<boolean>(
-    args.isGenerating ?? false
-  );
-  const uploadQueue = useUploadAttachment();
-  const attachments = useAttachments(args.initialAttachments);
-
-  const chatMarkdownArea = useChatMarkdownArea({
-    initialValue: args.initialValue,
-    addAttachment: (a) => {
-      attachments.addAttachment(a);
-    },
-  });
-
-  const tabAttachments = useTabAttachments();
-  if (ENABLE_AI_AUTO_TAB_ATTACHMENTS && args.autoAttach !== false) {
-    createEffect(
-      on(tabAttachments, (tabs, p) => {
-        for (const prev of p ?? []) {
-          // remove stuff from closed tabs
-          if (!tabs.find((t) => t.attachmentId === prev.attachmentId)) {
-            attachments.removeAttachment(prev.attachmentId);
-          }
-        }
-        for (const tab of tabs) {
-          attachments.addAttachment(tab);
-        }
-      })
-    );
-  }
-
-  const ChatInputComponent = (innerProps: ChatInputProps) => (
-    <ChatInput
-      {...innerProps}
-      chatId={chatId}
-      uploadQueue={uploadQueue}
-      model={model}
-      setModel={setModel}
-      isGenerating={isGenerating}
-      attachments={attachments}
-      markdown={chatMarkdownArea}
-    />
-  );
-
-  const setModelWithDefault = (model?: Model) => {
-    if (model === undefined) {
-      setModel(DEFAULT_MODEL);
-    } else {
-      setModel(model);
-    }
-  };
-
-  return {
-    setChatId,
-    chatId,
-    model,
-    setModel: setModelWithDefault,
-    attachments,
-    isGenerating,
-    setIsGenerating,
-    uploadQueue,
-    ChatInput: ChatInputComponent,
-    chatMarkdownArea,
-  };
-}
-
-function ChatInput(props: ChatInputInternalProps) {
   let containerRef!: HTMLDivElement;
-  const generating = props.isGenerating ?? (() => false);
   const toolsetSignal = createSignal<ToolSet>({ type: 'all' });
+  const { hasConsent, requestConsent, ConsentDialog } = useAiDataConsentGate();
 
   const [source] = createSignal<Source>('everything');
   const [showAttachMenu, setShowAttachMenu] = createSignal(false);
@@ -162,18 +63,17 @@ function ChatInput(props: ChatInputInternalProps) {
     createSignal<HTMLDivElement>();
 
   createEffect(() => {
-    const uploaded = props.uploadQueue.popComplete();
+    const uploaded = uploadQueue.popComplete();
     uploaded
       .filter((upload) => upload.type === 'ok')
       .forEach((upload) => {
         track(TrackingEvents.CHAT.ATTACHMENT.ADD);
-        props.attachments.addAttachment(upload.attachment);
+        attachments.addAttachment(upload.attachment);
       });
   });
 
   const isEmptyInput = () => props.markdown.markdownText().trim().length === 0;
-  const hasUploadingAttachments = () =>
-    props.uploadQueue.uploading().length > 0;
+  const hasUploadingAttachments = () => uploadQueue.uploading().length > 0;
   const canSendMessage = () =>
     !isEmptyInput() && !generating() && !hasUploadingAttachments();
 
@@ -192,12 +92,17 @@ function ChatInput(props: ChatInputInternalProps) {
   const sendMessage = createCallback(async (modelOverride?: Model) => {
     if (!canSendMessage()) return;
 
+    if (isNativeMobilePlatform() && !hasConsent()) {
+      requestConsent(() => sendMessage(modelOverride));
+      return;
+    }
+
     const request = await buildChatSendRequest({
-      chatId: props.chatId(),
+      chatId: props.chatId,
       userRequest: props.markdown.markdownText(),
       isPersistent: props.isPersistent,
-      attachments: props.attachments.attached(),
-      model: modelOverride ?? props.model(),
+      attachments: attachments.attached(),
+      model: modelOverride ?? model(),
       toolset: toolsetSignal[0](),
       source: source(),
     });
@@ -225,8 +130,7 @@ function ChatInput(props: ChatInputInternalProps) {
   const availableAttachments = useChatAttachableHistory();
 
   const hasAttachments = () =>
-    props.attachments.attached().length > 0 ||
-    props.uploadQueue.uploading().length > 0;
+    attachments.attached().length > 0 || uploadQueue.uploading().length > 0;
 
   const LeftButton = () => (
     <div ref={setAttachMenuAnchorRef} class="shrink-0">
@@ -316,15 +220,13 @@ function ChatInput(props: ChatInputInternalProps) {
       <Show when={hasAttachments()}>
         <div class="px-2 pt-2 w-full">
           <AttachmentList
-            attached={props.attachments.attached}
+            attached={attachments.attached}
             removeAttachment={(id) => {
               track(TrackingEvents.CHAT.ATTACHMENT.REMOVE);
-              props.attachments.removeAttachment(id);
+              attachments.removeAttachment(id);
             }}
             uploading={() =>
-              props.uploadQueue
-                .uploading()
-                .map((uploading) => uploading.preview)
+              uploadQueue.uploading().map((uploading) => uploading.preview)
             }
           />
         </div>
@@ -338,9 +240,8 @@ function ChatInput(props: ChatInputInternalProps) {
           open={showAttachMenu()}
           onAttach={(attachment) => {
             track(TrackingEvents.CHAT.ATTACHMENT.ADD);
-            props.attachments.addAttachment(attachment);
+            attachments.addAttachment(attachment);
           }}
-          uploadQueue={props.uploadQueue}
         />
       </Show>
 
@@ -365,7 +266,7 @@ function ChatInput(props: ChatInputInternalProps) {
             dontFocusOnMount={
               isTouchDevice() || props.autoFocusOnMount === false
             }
-            onPasteFile={props.uploadQueue.upload}
+            onPasteFile={uploadQueue.upload}
             captureEditor={props.captureEditor}
           />
         </div>
@@ -390,6 +291,7 @@ function ChatInput(props: ChatInputInternalProps) {
           <RightControls />
         </div>
       </div>
+      <ConsentDialog />
     </div>
   );
 }

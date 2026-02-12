@@ -67,13 +67,6 @@ export function useChannelName(channelId: string, fallback?: string) {
   return createMemo(() => ctx.channelsById()[channelId]?.name ?? fallback);
 }
 
-export function useChannelType(channelId: string, fallback?: string) {
-  const ctx = useChannelsContext();
-  return createMemo(
-    () => ctx.channelsById()[channelId]?.channel_type ?? fallback
-  );
-}
-
 export function useChannelActivity(channelId: string) {
   const ctx = useChannelsContext();
   return createMemo(() => ctx.activityByChannelId()[channelId]);

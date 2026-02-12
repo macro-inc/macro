@@ -1,4 +1,9 @@
-import { useChatInput } from '@core/component/AI/component/input/useChatInput';
+import {
+  ChatInputProvider,
+  useChatInputContext,
+} from '@core/component/AI/context';
+import { ChatInput } from '@core/component/AI/component/input/useChatInput';
+import { useChatMarkdownArea } from '@core/component/AI/component/input/useChatMarkdownArea';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import type { CreateAndSend, Send } from '@core/component/AI/types';
 import { isErr } from '@core/util/maybeResult';
@@ -8,12 +13,16 @@ import { onMount, Show } from 'solid-js';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import { useSoup } from '@app/component/next-soup/soup-context';
 
-export function SoupChatInput() {
+function SoupChatInputInner() {
   let containerRef!: HTMLDivElement;
   const splitPanelContext = useSplitPanelOrThrow();
   const soup = useSoup();
+  const input = useChatInputContext();
 
-  const { ChatInput } = useChatInput({ autoAttach: false });
+  const chatMarkdownArea = useChatMarkdownArea({
+    addAttachment: (a) => input.attachments.addAttachment(a),
+  });
+
   const [attachHotkeys] = useHotkeyDOMScope('soup.chatInput');
 
   onMount(() => {
@@ -58,6 +67,7 @@ export function SoupChatInput() {
         <div class="w-full max-w-3xl">
           <div class="pointer-events-auto">
             <ChatInput
+              markdown={chatMarkdownArea}
               onSend={handleSend}
               isPersistent={true}
               autoFocusOnMount={false}
@@ -66,5 +76,13 @@ export function SoupChatInput() {
         </div>
       </div>
     </Show>
+  );
+}
+
+export function SoupChatInput() {
+  return (
+    <ChatInputProvider autoAttach={false}>
+      <SoupChatInputInner />
+    </ChatInputProvider>
   );
 }

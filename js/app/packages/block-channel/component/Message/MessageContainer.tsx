@@ -2,9 +2,9 @@ import { useMessageListContext } from '@block-channel/component/MessageList/Mess
 import { COLLAPSED_THREAD_INDEX_CUTOFF } from '@block-channel/constants';
 import { useReactToMessage } from '@block-channel/hooks/reactions';
 import type {
-  ApiChannelMessage,
-  ApiMessageAttachment,
-} from '@service-comms/client';
+  Attachment,
+  GetChannelResponseReactions,
+} from '@service-comms/generated/models';
 import type { MessageListContext } from '@block-channel/utils/listContext';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
@@ -28,6 +28,7 @@ import { isEmojiOnly } from '@core/util/string';
 import { formatRelativeDate, isSameDay } from '@core/util/time';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { usePatchMessageMutation } from '@queries/channel/message';
+import type { Message as MessageType } from '@service-comms/generated/models/message';
 import { useUserId } from '@core/context/user';
 import { activeElement } from 'app/signal/focus';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
@@ -56,6 +57,7 @@ import { MessageAttachments } from './MessageAttachments';
 import { MessageReactions } from './MessageReactions';
 import { ThreadReplyIndicator } from './ThreadReplyIndicator';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
+import { cn } from '@ui/utils/classname';
 
 type MessageFlagProps = {
   text: string;
@@ -66,18 +68,18 @@ export function MessageFlag(props: MessageFlagProps) {
   return (
     <div class="flex flex-row items-stretch justify-start ml-[var(--left-of-connector)]">
       <div class="flex flex-col items-center justify-center">
-        <div class="border-l border-edge-muted min-h-1/2 ]" />
+        <div class="border-l border-edge-muted min-h-1/2" />
         <div
           class={`border-l ${props.highlight ? 'border-accent' : 'border-edge-muted'} min-h-1/2 `}
         />
       </div>
       <div class="flex flex-col items-center justify-center">
         <div
-          class={`w-8 border-b ${props.highlight ? 'border-accent' : 'border-edge-muted'}`}
+          class={`w-7 border-b ${props.highlight ? 'border-accent' : 'border-edge-muted'}`}
         />
       </div>
       <div
-        class={`text-xs text-panel uppercase font-mono p-1 my-3 ${props.highlight ? 'bg-accent' : 'bg-edge'}`}
+        class={`text-xs text-panel uppercase font-mono p-1 my-6 mt ${props.highlight ? 'bg-accent' : 'bg-edge'}`}
       >
         {props.text}
       </div>
@@ -85,37 +87,31 @@ export function MessageFlag(props: MessageFlagProps) {
   );
 }
 
-type NewIndicatorProps = {
-  setNewIndicatorShown: Setter<number | undefined>;
-  id: number;
-};
-
-function NewMessageIndicator(props: NewIndicatorProps) {
-  onMount(() => {
-    props.setNewIndicatorShown(props.id);
-  });
-
-  return <MessageFlag text="New" highlight />;
+function NewMessageIndicator(props: { onClick?: () => void }) {
+  return (
+    <button type="button" class="w-full text-left" onClick={props.onClick}>
+      <MessageFlag text="New" highlight />
+    </button>
+  );
 }
 
 type MessageProps = {
-  message: ApiChannelMessage;
+  message: MessageType;
   lastViewed: Accessor<string | null | undefined>;
   isFocused: boolean;
   index: Accessor<number>;
-  orderedMessages: Accessor<ApiChannelMessage[]>;
-  threadChildren?: ApiChannelMessage[];
-  threadSiblings?: ApiChannelMessage[];
-  newIndicatorShown: Accessor<number | undefined>;
-  setNewIndicatorShown: Setter<number | undefined>;
+  orderedMessages: Accessor<MessageType[]>;
+  threadChildren?: MessageType[];
+  threadSiblings?: MessageType[];
   virtualHandle: VirtualizerHandle;
   container?: HTMLDivElement;
   listContext: MessageListContext;
   setMessageContainerRef?: Setter<HTMLDivElement | undefined>;
   isTarget: boolean;
   channelId: Accessor<string>;
-  /** Parent thread ID when this message is a thread reply */
-  parentThreadId?: string;
+  attachments: Attachment[];
+  reactions: GetChannelResponseReactions;
+  onDismissNewMessages?: () => void;
 };
 
 export function MessageContainer(props: MessageProps) {
@@ -190,28 +186,20 @@ export function MessageContainer(props: MessageProps) {
     return !isSameDay(new Date(message.created_at), new Date(prev.created_at));
   };
 
-  // We consider a message consecutive if it's from the same user and the same day and in the same thread context.
+  // We consider a message consecutive if it's from the same user and the same day and has the same thread id.
   const isConsecutive = () => {
     const prevMessage_ = previousMessage();
     if (!prevMessage_) return false;
-
-    // Check same thread context
-    if (props.parentThreadId) {
-      // Current is a thread child — prev must be a sibling in the same thread
-      const prevIsSibling =
-        props.threadSiblings?.some((s) => s.id === prevMessage_.id) ?? false;
-      if (!prevIsSibling) return false;
-    }
-    // If current is top-level, allow consecutive with any previous top-level message
-
+    const prevSenderId = prevMessage_?.sender_id;
     return (
-      prevMessage_.sender_id === message.sender_id &&
+      (prevMessage_.thread_id ?? '') === (message.thread_id ?? '') &&
+      prevSenderId === message.sender_id &&
       isSameDay(new Date(prevMessage_.created_at), new Date(message.created_at))
     );
   };
 
   const threadState = createMemo(() => {
-    const threadID = props.parentThreadId;
+    const threadID = message.thread_id;
     if (!threadID) return;
 
     return listContext.getThreadState(threadID);
@@ -237,7 +225,7 @@ export function MessageContainer(props: MessageProps) {
 
   // currently arbitrarily limiting thread depth to 1, in the future we may want to support deeper threads
   const threadDepth = createMemo(() => {
-    return props.parentThreadId ? 1 : 0;
+    return message.thread_id ? 1 : 0;
   });
 
   const hasThreadChildren = createMemo(() => {
@@ -246,15 +234,13 @@ export function MessageContainer(props: MessageProps) {
 
   const isFirstInThread = createMemo(() => {
     return (
-      !!props.parentThreadId &&
-      previousMessage()?.id !== props.parentThreadId &&
-      !props.threadSiblings?.some((s) => s.id === previousMessage()?.id)
+      !!message.thread_id && previousMessage()?.thread_id !== message.thread_id
     );
   });
 
   const isLastInThread = createMemo(() => {
     return (
-      !!props.parentThreadId && props.threadSiblings?.at(-1)?.id === message.id
+      !!message.thread_id && props.threadSiblings?.at(-1)?.id === message.id
     );
   });
 
@@ -304,32 +290,30 @@ export function MessageContainer(props: MessageProps) {
     return [];
   });
 
-  const attachments = createMemo(() => message.attachments);
+  const attachments = createMemo(() =>
+    props.attachments.filter((a) => a.message_id === message.id)
+  );
   const imageAttachments = createMemo(() =>
-    attachments().filter(
-      (a: ApiMessageAttachment) => a.entity_type === STATIC_IMAGE
-    )
+    attachments().filter((a: Attachment) => a.entity_type === STATIC_IMAGE)
   );
   const videoAttachments = createMemo(() =>
-    attachments().filter(
-      (a: ApiMessageAttachment) => a.entity_type === STATIC_VIDEO
-    )
+    attachments().filter((a: Attachment) => a.entity_type === STATIC_VIDEO)
   );
   const documentAttachments = createMemo(() =>
     attachments().filter(
-      (a: ApiMessageAttachment) => !isStaticAttachmentType(a.entity_type)
+      (a: Attachment) => !isStaticAttachmentType(a.entity_type)
     )
   );
 
   const reactToMessage = useReactToMessage(
     props.channelId,
-    () => message.reactions
+    () => props.reactions
   );
 
   const react = (emoji: string) => reactToMessage(emoji, message.id);
 
   const onThreadAppend = () => {
-    const threadId = props.parentThreadId;
+    const threadId = message.thread_id;
     if (!threadId) return;
     listContext.createReply(threadId, true);
     listContext.scrollToIndex(props.index(), {
@@ -348,7 +332,7 @@ export function MessageContainer(props: MessageProps) {
     channelId: message.channel_id,
     messageId: message.id,
     messageContent: message.content ?? '',
-    threadId: props.parentThreadId,
+    threadId: message.thread_id ?? undefined,
     senderId: message.sender_id,
     onEdit: () => setEditing(true),
     onReply: onCreateReply,
@@ -385,7 +369,7 @@ export function MessageContainer(props: MessageProps) {
     scopeId: scopeId,
     description: 'Reply to message',
     condition: () => {
-      return props.isFocused && !props.parentThreadId;
+      return props.isFocused && !message.thread_id;
     },
     keyDownHandler: () => {
       const focusedIndex = props
@@ -401,7 +385,7 @@ export function MessageContainer(props: MessageProps) {
   });
 
   const expandThreadCondition = createMemo(() => {
-    const hasThreadParent = !!props.parentThreadId;
+    const hasThreadParent = !!message.thread_id;
     if (!hasThreadParent && !hasThreadChildren()) return false;
 
     if (hasThreadParent) {
@@ -422,7 +406,7 @@ export function MessageContainer(props: MessageProps) {
   });
 
   const setThreadExpansion = (shouldExpand: boolean) => {
-    const threadId = hasThreadChildren() ? message.id : props.parentThreadId;
+    const threadId = hasThreadChildren() ? message.id : message.thread_id;
     if (!threadId) return;
 
     listContext.toggleThread(threadId, shouldExpand);
@@ -446,10 +430,10 @@ export function MessageContainer(props: MessageProps) {
     hotkey: 'arrowleft',
     scopeId: scopeId,
     description: 'Go to thread parent',
-    condition: () => !!props.parentThreadId,
+    condition: () => !!message.thread_id,
     keyDownHandler: () => {
       setThreadExpansion(false);
-      const parentId = props.parentThreadId;
+      const parentId = message.thread_id;
       if (!parentId) return true;
 
       // Ensure the parent message is in view before focusing
@@ -474,15 +458,15 @@ export function MessageContainer(props: MessageProps) {
   });
 
   const handleThreadToggle = () => {
-    if (!props.parentThreadId) return;
+    if (!message.thread_id) return;
     const threadState_ = threadState();
 
     if (!threadState_) {
-      listContext.toggleThread(props.parentThreadId, true);
+      listContext.toggleThread(message.thread_id, true);
       return;
     }
 
-    listContext.toggleThread(props.parentThreadId);
+    listContext.toggleThread(message.thread_id);
   };
 
   const { isKeypressActive } = useIsKeyPressActive();
@@ -516,27 +500,18 @@ export function MessageContainer(props: MessageProps) {
         {/* Date separator */}
         <Show
           when={
-            !props.parentThreadId &&
+            !message.thread_id &&
             (props.index() === 0 ||
               (props.index() > 0 &&
-                !props.parentThreadId &&
+                !message.thread_id &&
                 newDayPreviousNonThreadMessage()))
           }
         >
           <MessageFlag text={formatRelativeDate(message.created_at)} />
         </Show>
         {/* New message indicator */}
-        <Show
-          when={
-            isNewMessage() &&
-            (!props.newIndicatorShown() ||
-              props.newIndicatorShown() === props.index())
-          }
-        >
-          <NewMessageIndicator
-            id={props.index()}
-            setNewIndicatorShown={props.setNewIndicatorShown}
-          />
+        <Show when={props.listContext.isFirstNewMessage}>
+          <NewMessageIndicator onClick={props.onDismissNewMessages} />
         </Show>
         {/* Message item */}
 
@@ -555,15 +530,15 @@ export function MessageContainer(props: MessageProps) {
               isConsecutive={isConsecutive()}
               timestamp={message.created_at}
               shouldHover={contextMenuOpen() || topBarEmojiMenuOpen()}
-              hoverActions={
+              hoverActions={() => (
                 <ActionMenu
                   messageId={message.id}
                   channelId={props.channelId}
-                  reactions={() => message.reactions}
+                  reactions={() => props.reactions}
                   actions={actions()}
                   setReactionMenuActivated={setTopBarEmojiMenuOpen}
                 />
-              }
+              )}
               threadDepth={threadDepth()}
               hasThreadChildren={hasThreadChildren() || shouldShowFirstReply()}
               isFirstInThread={isFirstInThread()}
@@ -575,10 +550,10 @@ export function MessageContainer(props: MessageProps) {
               shouldShowThreadAppendInput={shouldShowThreadAppendInput()}
               isTarget={props.isTarget}
               setThreadAppendMountTarget={(el) => {
-                if (!props.parentThreadId) return;
+                if (!message.thread_id) return;
 
                 listContext.registerThreadAppendMountTarget(
-                  props.parentThreadId,
+                  message.thread_id,
                   el
                 );
               }}
@@ -622,15 +597,18 @@ export function MessageContainer(props: MessageProps) {
               />
               <Show when={!message.deleted_at}>
                 <MessageReactions
-                  messageId={message.id}
+                  messageId={props.message?.id ?? ''}
                   channelId={props.channelId}
-                  reactions={() => message.reactions}
+                  reactions={() => props.reactions}
                 />
               </Show>
             </MessageComponent>
             <Show when={isLastInCollapsedThread()}>
               <div
-                class="border-l border-edge-muted pb-1"
+                class={cn(
+                  'border-l border-edge-muted pb-1',
+                  isParentNewMessage() && 'border-accent'
+                )}
                 style={{
                   'margin-left': `var(--left-of-connector)`,
                 }}
@@ -649,6 +627,7 @@ export function MessageContainer(props: MessageProps) {
                     users={threadReplyUsers()}
                     onClick={handleThreadToggle}
                     isThreadOpen={threadState()?.threadExpanded}
+                    isParentNewMessage={isParentNewMessage()}
                   />
                 </div>
               </div>
@@ -759,7 +738,10 @@ export function MessageContainer(props: MessageProps) {
           </MessageComponent>
         </Show>
         <Show when={isLastMessage()}>
-          <TypingIndicator previousMessage={message} />
+          <TypingIndicator
+            // threadId={message.thread_id ?? undefined}
+            previousMessage={message}
+          />
         </Show>
       </div>
     </div>

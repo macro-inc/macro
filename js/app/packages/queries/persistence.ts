@@ -23,7 +23,6 @@ export type PersistScope = Readonly<{
   maxAgeMs: number;
   buster: string;
   shouldPersist: (queryKey: QueryKey) => boolean;
-  transformData?: (data: unknown) => unknown;
 }>;
 
 type QueryClientLike = {
@@ -96,13 +95,10 @@ async function handleRestore(
  */
 function handleUpdate(scope: PersistScope, query: Query): void {
   if (query.state.status !== 'success') return;
-  const data = scope.transformData
-    ? scope.transformData(query.state.data)
-    : query.state.data;
   scope.store.set({
     queryHash: query.queryHash,
     queryKey: query.queryKey,
-    data,
+    data: query.state.data,
     dataUpdatedAt: query.state.dataUpdatedAt,
     persistedAt: Date.now(),
     buster: scope.buster,

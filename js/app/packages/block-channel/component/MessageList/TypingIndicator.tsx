@@ -2,11 +2,12 @@ import { useBlockId } from '@core/block';
 import { Message } from '@core/component/Message';
 import { idToDisplayName } from '@core/user';
 import { getTypingUsersForChannel } from '@queries/channel/typing';
+import type { Message as MessageType } from '@service-comms/generated/models/message';
 import { createMemo, Show } from 'solid-js';
 
 type TypingIndicatorProps = {
   threadId?: string;
-  previousMessage?: { sender_id: string };
+  previousMessage?: MessageType;
 };
 
 export function TypingIndicator(props: TypingIndicatorProps) {

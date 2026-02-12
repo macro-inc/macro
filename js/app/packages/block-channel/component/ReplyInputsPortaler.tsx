@@ -3,7 +3,7 @@ import {
   type SendMessageArgs,
   useSendChannelMessage,
 } from '@block-channel/hooks/message';
-import type { ApiChannelMessage } from '@service-comms/client';
+import type { MessageWithThreadId } from '@block-channel/signal/threads';
 import {
   clearDraftMessage,
   loadDraftMessage,
@@ -25,7 +25,7 @@ import type { SetStoreFunction } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
 import { BaseInput } from './BaseInput';
 
-export type ThreadStoreData = Record<string, ApiChannelMessage[]>;
+export type ThreadStoreData = Record<string, MessageWithThreadId[]>;
 
 export type ReplyInputsPortalerProps = {
   channelId: string;
@@ -94,10 +94,11 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
   const onFocusLeaveStart = (e: KeyboardEvent, threadId: string) => {
     e.preventDefault();
     e.stopPropagation();
-    // Find the thread children from the threads store
-    const threadChildren = props.threads[threadId] ?? [];
-    if (!threadChildren.length) return;
-    const lastMessageId = threadChildren[threadChildren.length - 1].id;
+    const orderedMessages = listContext
+      .orderedMessages()
+      .filter((item) => item.thread_id === threadId);
+    if (!orderedMessages.length) return;
+    const lastMessageId = orderedMessages[orderedMessages.length - 1].id;
     const lastMessageBody = blockRef()?.querySelector(
       `[data-message-body-id="${lastMessageId}"]`
     );

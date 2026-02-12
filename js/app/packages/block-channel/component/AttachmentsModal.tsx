@@ -19,7 +19,6 @@ import { createMemo, Show, Suspense } from 'solid-js';
 import { VList } from 'virtua/solid';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
 import { useChannelContext } from '@block-channel/hooks/channel';
-import { useChannelAttachmentsQuery } from '@queries/channel/channel-attachments';
 
 const DRAWER_ID = 'attachments';
 
@@ -28,7 +27,6 @@ export function AttachmentsModal() {
   const currentBlockId = useBlockId();
   const { openWithSplit } = useSplitLayout();
   const channelContext = useChannelContext();
-  const attachmentsQuery = useChannelAttachmentsQuery(() => currentBlockId);
 
   const mentionsQuery = useMentionsQuery(() => currentBlockId);
 
@@ -39,19 +37,7 @@ export function AttachmentsModal() {
           makeAttachmentFromMention(m, currentBlockId)
         );
 
-
-    // const channelAttachments: Attachment[] = channelContext
-    //   .messages()
-    //   .flatMap((msg) =>
-    //     msg.attachments.map((a) => ({
-    //       ...a,
-    //       channel_id: currentBlockId,
-    //       message_id: msg.id,
-    //     }))
-    //   );
-    //
-    //
-    const channelAttachments = [];
+    const channelAttachments = channelContext.attachments() ?? [];
     const safeAttachments = filterSafeAttachments(channelAttachments);
     const all = [...safeAttachments, ...mentions];
     return all

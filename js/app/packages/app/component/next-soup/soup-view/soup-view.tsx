@@ -120,8 +120,8 @@ const stateCache = new Map<
       filters: string[];
       sort: SystemSortOption[];
     };
-    virtualCache: CacheSnapshot;
-    scrollOffset: number;
+    virtualCache?: CacheSnapshot;
+    scrollOffset?: number;
   }
 >();
 
@@ -156,14 +156,13 @@ export const SoupView = () => {
 
 interface SoupViewListProps {
   customScrollbarHidden?: boolean;
+  scopeId?: string;
 }
 
 export const SoupViewList = (props: SoupViewListProps) => {
   const panel = useSplitPanelOrThrow();
-  const { soup, source, rows: _rows, searchText } = useSoupView();
+  const { soup, source, rows, searchText } = useSoupView();
   const { getSplitCount } = useSplitLayout();
-
-  const rows = createMemo(() => _rows());
 
   const { isKeypressActive } = useIsKeyPressActive();
 
@@ -220,7 +219,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
   const [attachHotkeys, soupViewScope] = useHotkeyDOMScope('soup-view');
 
   const scopeId = createMemo(() => {
-    return previewPanel ? soupViewScope : panel.splitHotkeyScope;
+    return previewPanel
+      ? soupViewScope
+      : (props.scopeId ?? panel.splitHotkeyScope);
   });
 
   // Register navigation hotkeys
@@ -445,16 +446,14 @@ export const SoupViewList = (props: SoupViewListProps) => {
   onCleanup(() => {
     const virtualHandle = virtualizerHandle();
 
-    if (!virtualHandle) return;
-
     stateCache.set(getCacheKey(), {
       soup: {
         focus: soup.focus.id(),
         filters: soup.filters.activeIds(),
         sort: soup.sort.active().map((s) => s.id),
       },
-      virtualCache: virtualHandle.cache,
-      scrollOffset: virtualHandle.scrollOffset,
+      virtualCache: virtualHandle?.cache,
+      scrollOffset: virtualHandle?.scrollOffset,
     });
   });
 
@@ -472,12 +471,12 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
     soup.focus.set(cached.soup.focus);
     for (const id of cached.soup.filters) {
-      soup.filters.toggle(id);
+      soup.filters.activate(id);
     }
 
     soup.sort.setAll(cached.soup.sort);
 
-    handle?.scrollTo(cached.scrollOffset);
+    handle?.scrollTo(cached.scrollOffset ?? 0);
     registerFocusEffects(false);
   };
 
@@ -562,81 +561,59 @@ export const SoupViewList = (props: SoupViewListProps) => {
                           entity={row.original}
                           entityTimestamp={timestamp()}
                         >
-                          <div
-                            class="flex flex-col w-full min-w-0"
-                            style={{
-                              'padding-left': `${row.depth * 8}px`,
+                          <ListEntity
+                            entity={row.original}
+                            timestamp={timestamp()}
+                            highlighted={
+                              panel.isPanelActive() && row.isFocused()
+                            }
+                            onMouseMove={() => {
+                              if (isKeypressActive()) return;
+                              if (soup.previewEntity()) return;
+                              soup.focus.set(row.original.id);
                             }}
-                          >
-                            <Show
-                              when={!row.isGrouped()}
-                              fallback={
-                                <div class="bg-accent flex gap-2 items-center px-2 py-1 text-input font-medium">
-                                  <button
-                                    type="button"
-                                    onClick={() => row.toggleExpanded()}
-                                  >
-                                    {row.isExpanded() ? 'Close' : 'Open'}
-                                  </button>
-                                  <span>{row.original.name}</span>
-                                </div>
-                              }
-                            >
-                              <ListEntity
-                                entity={row.original}
-                                timestamp={timestamp()}
-                                highlighted={
-                                  panel.isPanelActive() && row.isFocused()
-                                }
-                                onMouseMove={() => {
-                                  if (isKeypressActive()) return;
-                                  if (soup.previewEntity()) return;
-                                  soup.focus.set(row.original.id);
-                                }}
-                                showUnrollNotifications={
-                                  soup.filters.isActive('signal') &&
-                                  !soup.filters.isActive('noise')
-                                }
-                                checked={row.isSelected()}
-                                onChecked={(next: boolean, shiftKey: boolean) =>
-                                  handleMultiSelectChecked({
-                                    entity: row.original,
-                                    entityIndex: i(),
-                                    next,
-                                    shiftKey: shiftKey ?? false,
-                                  })
-                                }
-                                onClick={(event: MouseEvent) => {
-                                  onEntityClick({
-                                    type: 'entity',
-                                    entity: row.original,
-                                    event,
-                                    location: undefined,
-                                  });
-                                }}
-                                onProjectClick={(projectEntity, event) => {
-                                  onEntityClick({
-                                    type: 'project',
-                                    projectEntity,
-                                    entity: row.original,
-                                    event,
-                                    location: undefined,
-                                  });
-                                }}
-                                onContentHitClick={(
-                                  e: PointerEvent | MouseEvent,
-                                  location?: SearchLocation
-                                ) => {
-                                  onEntityClick({
-                                    type: 'entity',
-                                    entity: row.original,
-                                    event: e,
-                                    location,
-                                  });
-                                }}
-                              />
-                            </Show>
-                          </div>
+                            showUnrollNotifications={
+                              soup.filters.isActive('signal') &&
+                              !soup.filters.isActive('noise')
+                            }
+                            checked={row.isSelected()}
+                            onChecked={(next: boolean, shiftKey: boolean) =>
+                              handleMultiSelectChecked({
+                                entity: row.original,
+                                entityIndex: i(),
+                                next,
+                                shiftKey: shiftKey ?? false,
+                              })
+                            }
+                            onClick={(event: MouseEvent) => {
+                              onEntityClick({
+                                type: 'entity',
+                                entity: row.original,
+                                event,
+                                location: undefined,
+                              });
+                            }}
+                            onProjectClick={(projectEntity, event) => {
+                              onEntityClick({
+                                type: 'project',
+                                projectEntity,
+                                entity: row.original,
+                                event,
+                                location: undefined,
+                              });
+                            }}
+                            onContentHitClick={(
+                              e: PointerEvent | MouseEvent,
+                              location?: SearchLocation
+                            ) => {
+                              onEntityClick({
+                                type: 'entity',
+                                entity: row.original,
+                                event: e,
+                                location,
+                              });
+                            }}
+                          />
                         </SoupEntityContextMenu>
                       </EntityRow>
                     );

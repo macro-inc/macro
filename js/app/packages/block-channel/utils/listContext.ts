@@ -1,13 +1,18 @@
+import type { Message } from '@service-comms/generated/models/message';
+
 export type MinimalMessage = {
   id: string;
   created_at: string;
   sender_id: string;
+  thread_id?: string | null;
 };
 
-export type MessageListContext<T extends MinimalMessage = MinimalMessage> = {
+export type MessageListContext<T extends MinimalMessage = Message> = {
   index: number;
   isNewMessage: boolean;
   isParentNewMessage: boolean;
+  /** True only for the first (oldest) new message — where the "New" indicator should appear */
+  isFirstNewMessage: boolean;
   threadIndex: number;
   /** The previous non-threaded message outside of the current thread */
   previousNonThreadedMessage: T | undefined;
@@ -15,18 +20,16 @@ export type MessageListContext<T extends MinimalMessage = MinimalMessage> = {
   isInLastThread: boolean;
 };
 
-export type MessageListContextLookup<
-  T extends MinimalMessage = MinimalMessage,
-> = Record<string, MessageListContext<T>>;
+export type MessageListContextLookup<T extends MinimalMessage = Message> =
+  Record<string, MessageListContext<T>>;
 
-function findLastNonThreadedMessageIndex<T extends MinimalMessage>(
-  messages: T[],
-  fromIndex: number,
-  getThreadId: (message: T) => string | undefined
+function findLastNonThreadedMessageIndex(
+  messages: MinimalMessage[],
+  fromIndex: number
 ) {
   for (let i = fromIndex; i >= 0; i--) {
     const message = messages[i];
-    if (!getThreadId(message)) {
+    if (!message.thread_id) {
       return i;
     }
   }
@@ -34,19 +37,18 @@ function findLastNonThreadedMessageIndex<T extends MinimalMessage>(
 }
 
 export function createMessageListContextLookup<
-  T extends MinimalMessage = MinimalMessage,
+  T extends MinimalMessage = Message,
 >({
   messages,
   isNewMessageFn,
-  getThreadId = () => undefined,
 }: {
   messages: T[];
   isNewMessageFn: (message: T) => boolean;
-  getThreadId?: (message: T) => string | undefined;
 }) {
   const context: MessageListContextLookup<T> = {};
   const threadIndexCounters = new Map<string, number>();
   const messagesById = new Map<string, [number, T]>();
+  let foundFirstNewMessage = false;
 
   for (const [index, message] of messages.entries()) {
     messagesById.set(message.id, [index, message]);
@@ -55,31 +57,30 @@ export function createMessageListContextLookup<
   // Find the last top-level message (last message without a thread_id)
   let lastTopLevelMessageId: string | undefined;
   for (let i = messages.length - 1; i >= 0; i--) {
-    if (!getThreadId(messages[i])) {
+    if (!messages[i].thread_id) {
       lastTopLevelMessageId = messages[i].id;
       break;
     }
   }
 
   for (const [messageIndex, message] of messages.entries()) {
-    const threadId = getThreadId(message);
-    const isNewMessage = !threadId && isNewMessageFn(message);
+    const isNewMessage = isNewMessageFn(message);
     let threadIndex = -1;
     let previousNonThreadedMessage: T | undefined;
     let isParentNewMessage = false;
     let backTrackIndex = messageIndex;
 
-    if (threadId) {
-      const foundParent = messagesById.get(threadId);
+    if (message.thread_id) {
+      const foundParent = messagesById.get(message.thread_id);
 
       if (foundParent) {
         const [parentIndex, parentMessage] = foundParent;
         backTrackIndex = parentIndex;
         isParentNewMessage = isNewMessageFn(parentMessage);
 
-        const currentCount = threadIndexCounters.get(threadId) || 0;
+        const currentCount = threadIndexCounters.get(message.thread_id) || 0;
         threadIndex = currentCount;
-        threadIndexCounters.set(threadId, currentCount + 1);
+        threadIndexCounters.set(message.thread_id, currentCount + 1);
       } else {
         console.error(
           'expected parent message for threaded message not found',
@@ -91,8 +92,7 @@ export function createMessageListContextLookup<
     if (messagesById.has(message.id)) {
       const previousNonThreadedMessageIndex = findLastNonThreadedMessageIndex(
         messages,
-        backTrackIndex - 1,
-        getThreadId
+        backTrackIndex - 1
       );
 
       if (previousNonThreadedMessageIndex >= 0) {
@@ -102,13 +102,20 @@ export function createMessageListContextLookup<
 
     // Check if message is in the last thread
     const isInLastThread =
-      threadId !== null &&
-      threadId !== undefined &&
-      threadId === lastTopLevelMessageId;
+      message.thread_id !== null &&
+      message.thread_id !== undefined &&
+      message.thread_id === lastTopLevelMessageId;
+
+    const isFirstNewMessage =
+      isNewMessage && !message.thread_id && !foundFirstNewMessage;
+    if (isFirstNewMessage) {
+      foundFirstNewMessage = true;
+    }
 
     context[message.id] = {
       index: messageIndex,
       isNewMessage: isNewMessage,
+      isFirstNewMessage,
       isParentNewMessage: isParentNewMessage,
       threadIndex,
       previousNonThreadedMessage,

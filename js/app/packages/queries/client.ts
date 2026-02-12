@@ -2,7 +2,7 @@ import { QueryClient } from '@tanstack/solid-query';
 import { createPerQueryIDBStore } from './persistence/per-query-idb';
 import { partialMatchKey } from '@tanstack/query-core';
 import { createPersistenceKey, setupQueryPersistence } from './persistence';
-import type { ChannelMessagesData } from './channel/channel-messages';
+import { initSoupNormalizer } from './soup/cache';
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -33,22 +33,7 @@ setupQueryPersistence({
       }),
       maxAgeMs: SEVEN_DAYS_MS,
       buster,
-      shouldPersist: (key) => partialMatchKey(key, ['channel', 'withID']),
-    },
-    {
-      store: createPerQueryIDBStore({
-        dbName: createPersistenceKey('channel-messages', 1),
-      }),
-      maxAgeMs: SEVEN_DAYS_MS,
-      buster,
-      shouldPersist: (key) => partialMatchKey(key, ['channel', 'messages']),
-      transformData: (data) => {
-        const d = data as ChannelMessagesData;
-        return {
-          pages: d.pages.slice(0, 1),
-          pageParams: d.pageParams.slice(0, 1),
-        };
-      },
+      shouldPersist: (key) => partialMatchKey(key, ['channel']),
     },
     {
       store: createPerQueryIDBStore({
@@ -60,6 +45,9 @@ setupQueryPersistence({
     },
   ],
 });
+
+// Subscribe to query cache events for automatic normalization of soup entities
+initSoupNormalizer(queryClient);
 
 export function useQueryClient() {
   return queryClient;

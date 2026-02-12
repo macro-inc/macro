@@ -4,8 +4,15 @@ import { TopBar } from '@block-chat/component/TopBar';
 import type { ChatData } from '@block-chat/definition';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { useBuildChatSendRequest } from '@core/component/AI/component/input/buildRequest';
-import { useChatInput } from '@core/component/AI/component/input/useChatInput';
-import { useChatMessages } from '@core/component/AI/component/message';
+import { ChatInput } from '@core/component/AI/component/input/useChatInput';
+import { useChatMarkdownArea } from '@core/component/AI/component/input/useChatMarkdownArea';
+import { ChatMessages } from '@core/component/AI/component/message/ChatMessages';
+import {
+  ChatInputProvider,
+  ChatProvider,
+  useChatContext,
+  useChatInputContext,
+} from '@core/component/AI/context';
 import { useEntityDropAttachment } from '@core/component/AI/hook/useEntityDropAttachment';
 import { getPendingSend } from '@core/component/AI/signal/pendingSend';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
@@ -39,6 +46,29 @@ import { createEffect, createSignal, Show } from 'solid-js';
 import { pendingLocationParamsSignal } from '../signal/pendingLocationParams';
 
 export function Chat(props: { data: ChatData }) {
+  const loadedState = getChatInputStoredState(props.data.chat.id);
+
+  return (
+    <ChatInputProvider
+      initialAttachments={loadedState.attachments}
+      model={loadedState.model}
+    >
+      <ChatProvider
+        chatId={props.data.chat.id}
+        messages={props.data.chat.messages}
+      >
+        <ChatInner data={props.data} loadedInputText={loadedState.input} />
+      </ChatProvider>
+    </ChatInputProvider>
+  );
+}
+
+function ChatInner(props: {
+  data: ChatData;
+  loadedInputText: string | undefined;
+}) {
+  const input = useChatInputContext();
+  const chat = useChatContext();
   const canEdit = useCanEdit();
   const disabled = () => !canEdit();
   const scopeId = blockHotkeyScopeSignal.get;
@@ -47,6 +77,12 @@ export function Chat(props: { data: ChatData }) {
   const [chatEditor, setChatEditor] = createSignal<LexicalEditor>();
   const [scrollRef, setScrollRef] = createSignal<HTMLElement>();
 
+  const chatMarkdownArea = useChatMarkdownArea({
+    initialValue: props.loadedInputText,
+    addAttachment: (a) => input.attachments.addAttachment(a),
+  });
+
+  // Local stream signal for cancelStream and registerToolHandler
   const [stream, setStream] = createSignal<MessageStream>();
   const cancelStream = () => {
     const s = stream();
@@ -57,45 +93,14 @@ export function Chat(props: { data: ChatData }) {
       s.close();
     }
   };
-  const {
-    ChatMessages,
-    addMessage,
-    setStream: setMessagesStream,
-  } = useChatMessages({
-    messages: props.data.chat.messages,
-    chatId: props.data.chat.id,
-    editDisabled: disabled,
-    pendingLocationParams: pendingLocationParamsSignal.get,
-  });
+
   const blockHandle = blockHandleSignal.get;
-
-  const loadedState = getChatInputStoredState(props.data.chat.id);
-
-  const {
-    ChatInput,
-    setIsGenerating,
-    attachments,
-    chatMarkdownArea,
-    model,
-    setModel,
-    uploadQueue,
-  } = useChatInput({
-    chatId: props.data.chat.id,
-    initialValue: loadedState.input,
-  });
-
-  if (loadedState.attachments) {
-    attachments.setAttached(loadedState.attachments);
-  }
-  if (loadedState.model) {
-    setModel(loadedState.model);
-  }
 
   // Entity drag-and-drop support
   const chatId = useBlockId();
   const { droppable, isDraggingOver } = useEntityDropAttachment(
     'chat-input-' + chatId,
-    attachments
+    input.attachments
   );
   false && droppable;
 
@@ -112,16 +117,16 @@ export function Chat(props: { data: ChatData }) {
         return onSend(response);
       }
     } else {
-      addMessage({
+      chat.addMessage({
         attachments: request.request.attachments ?? [],
         content: request.request.content,
         role: 'user',
         id: '',
       });
       const stream = request.call();
-      setMessagesStream(stream);
+      chat.setStream(stream);
       setStream(stream);
-      setIsGenerating(true);
+      input.setIsGenerating(true);
       invalidateUserQuota();
       createEffect(() => {
         if (stream.data().length > 0) {
@@ -130,7 +135,7 @@ export function Chat(props: { data: ChatData }) {
       });
       createEffect(() => {
         if (stream.isDone()) {
-          setIsGenerating(false);
+          input.setIsGenerating(false);
           invalidateUserQuota();
         }
       });
@@ -142,10 +147,10 @@ export function Chat(props: { data: ChatData }) {
   };
 
   createEffect(() => {
-    const input = chatMarkdownArea.markdownText();
-    const attached = attachments.attached();
-    const model_ = model();
-    saveChatState({ attachments: attached, input, model: model_ });
+    const inputText = chatMarkdownArea.markdownText();
+    const attached = input.attachments.attached();
+    const model_ = input.model();
+    saveChatState({ attachments: attached, input: inputText, model: model_ });
   });
 
   const setPendingLocation = pendingLocationParamsSignal.set;
@@ -201,7 +206,6 @@ export function Chat(props: { data: ChatData }) {
   return (
     <DragDropWrapper
       class="size-full bg-panel overscroll-none overflow-hidden flex flex-col"
-      uploadQueue={uploadQueue}
       isEntityDraggingOver={isDraggingOver}
     >
       <TopBar />
@@ -213,7 +217,10 @@ export function Chat(props: { data: ChatData }) {
           ref={setScrollRef}
         >
           <div class="mx-auto w-full max-w-3xl">
-            <ChatMessages />
+            <ChatMessages
+              editDisabled={disabled()}
+              pendingLocationParams={pendingLocationParamsSignal.get}
+            />
           </div>
         </div>
         <CustomScrollbar scrollContainer={scrollRef} />
@@ -222,6 +229,8 @@ export function Chat(props: { data: ChatData }) {
         <div class="flex w-full justify-center pb-2 px-4">
           <div class="w-3xl">
             <ChatInput
+              markdown={chatMarkdownArea}
+              chatId={chat.chatId()}
               onSend={onSend}
               onStop={cancelStream}
               captureEditor={setChatEditor}

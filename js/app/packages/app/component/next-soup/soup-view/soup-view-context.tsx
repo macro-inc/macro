@@ -3,13 +3,9 @@ import {
   createSoupState,
   type SoupState,
 } from '@app/component/next-soup/create-soup-state';
-import {
-  buildDssFiltersRequest,
-  getFolderFileTypes,
-} from '@app/component/next-soup/filters/filters';
+import { getFolderFileTypes } from '@app/component/next-soup/filters/filters';
 import { sortEntitiesForSearch } from '@app/component/next-soup/soup-view/sort-options';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
-import { useEmailLinksStatus } from '@core/email-link';
 import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
 import { fuzzyMatch } from '@core/util/fuzzy';
@@ -30,9 +26,11 @@ import {
   createSignal,
   type FlowComponent,
   on,
+  type Setter,
   Suspense,
   useContext,
 } from 'solid-js';
+import { reconcile } from 'solid-js/store';
 import { match } from 'ts-pattern';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 300;
@@ -40,6 +38,7 @@ const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
 
 type Row<T> = {
   original: T;
+  id: string;
   depth: number;
   isSelected: () => boolean;
   isExpanded: () => boolean;
@@ -68,6 +67,7 @@ interface SoupViewContextValues {
   setSearchText: (value: string) => void;
   isSearchDisabled: Accessor<boolean>;
   rows: Accessor<SoupRow[]>;
+  setQueryFilters: Setter<SoupItemsQueryFilters>;
 }
 
 export const SoupViewContext = createContext<SoupViewContextValues>();
@@ -96,9 +96,9 @@ export const SoupViewContextProvider: FlowComponent<
 > = (props) => {
   const soup = props.soup ?? createSoupState();
 
-  const emailActive = useEmailLinksStatus();
-
   const [searchText, setSearchText] = createSignal('');
+  const [internalQueryFilters, setQueryFilters] =
+    createSignal<SoupItemsQueryFilters>({});
 
   const debouncedSearchForLocal = debouncedDependent(
     searchText,
@@ -171,25 +171,33 @@ export const SoupViewContextProvider: FlowComponent<
   );
 
   const queryFilters = createMemo(() => {
-    const base = buildDssFiltersRequest(soup.filters.active(), {
-      extra: props.queryFilters,
-      isSearchActive: !isSearchDisabled(),
-      emailActive: emailActive(),
-    });
+    const base = internalQueryFilters();
 
-    if (soup.filters.isActive('file')) {
-      if (base.document_filters?.file_types) {
-        base.document_filters.file_types = getFolderFileTypes('soup');
-      }
-    }
-
-    if (soup.filters.isActive('task')) {
-      if (base.document_filters?.file_types) {
-        base.document_filters.file_types = ['md'];
-      }
-    }
-
-    return base;
+    return {
+      ...base,
+      ...props.queryFilters,
+      // Deep merge individual filter objects if both exist
+      channel_filters: {
+        ...base.channel_filters,
+        ...props.queryFilters?.channel_filters,
+      },
+      chat_filters: {
+        ...base.chat_filters,
+        ...props.queryFilters?.chat_filters,
+      },
+      document_filters: {
+        ...base.document_filters,
+        ...props.queryFilters?.document_filters,
+      },
+      email_filters: {
+        ...base.email_filters,
+        ...props.queryFilters?.email_filters,
+      },
+      project_filters: {
+        ...base.project_filters,
+        ...props.queryFilters?.project_filters,
+      },
+    };
   });
 
   const searchFilters = createMemo(() => {
@@ -285,6 +293,7 @@ export const SoupViewContextProvider: FlowComponent<
   ): SoupRow => {
     return {
       original: entity,
+      id: entity.id,
       depth,
       isFocused() {
         return soup.focus.id() === entity.id;
@@ -304,43 +313,67 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
+  const items = createMemo(
+    (prev) => {
+      const itemsData = itemsQuery.data;
+      const searchData = searchQuery.data;
+
+      if (!itemsData && !searchData) return [];
+
+      const isSearching = searchText().length > 0;
+
+      const items = itemsData ?? [];
+      const searchItems = isSearching ? (searchData ?? []) : [];
+
+      let transformed: SoupEntity[] = [...searchItems];
+
+      if (isSearching) {
+        transformed.push(...nameFuzzySearchFilter(items));
+      } else {
+        transformed.push(...items);
+      }
+
+      const next = reconcile(transformed)(prev);
+
+      for (let i = 0; i < next.length; i++) {
+        const entity = next[i];
+        if (entity.notifications) continue;
+        next[i] = attachNotifications(entity);
+      }
+
+      return next;
+    },
+    [],
+    {
+      equals: false,
+    }
+  );
+
   const entities = () => {
-    const itemsData = itemsQuery.data;
-    const searchData = searchQuery.data;
-
-    if (!itemsData && !searchData) return [];
-
     const filters = soup.filters.active();
+    let transformed = items();
+
+    const next = [];
+
+    for (const entity of transformed) {
+      if (!filters.every((f) => f.predicate(entity))) {
+        continue;
+      }
+
+      next.push(entity);
+    }
+
+    transformed = deduplicateEntities(next);
 
     const isSearching = searchText().length > 0;
-
-    const items = itemsData ?? [];
-    const searchItems = isSearching ? (searchData ?? []) : [];
-
-    let transformed: SoupEntity[] = [...searchItems];
-
     if (isSearching) {
-      transformed.push(...nameFuzzySearchFilter(items));
-    } else {
-      transformed.push(...items);
-    }
-
-    transformed = transformed.map(attachNotifications);
-
-    for (const filter of filters) {
-      transformed = transformed.filter(filter.predicate);
-    }
-
-    transformed = deduplicateEntities(transformed);
-
-    if (isSearching) {
-      transformed = transformed.toSorted(sortEntitiesForSearch);
+      transformed.sort(sortEntitiesForSearch);
     }
 
     const sorts = soup.sort.active();
 
     if (sorts.length > 0) {
-      transformed = transformed.toSorted((a, b) => {
+      transformed.sort((a, b) => {
         for (const sort of sorts) {
           const result = sort.fn(a, b);
           if (result !== 0) return result;
@@ -352,9 +385,9 @@ export const SoupViewContextProvider: FlowComponent<
     return transformed;
   };
 
-  const rows = () => {
+  const rows = createMemo(() => {
     return entities().map((e) => attachMethods(e));
-  };
+  });
 
   const context = {
     soup,
@@ -384,6 +417,7 @@ export const SoupViewContextProvider: FlowComponent<
     searchText,
     setSearchText,
     isSearchDisabled,
+    setQueryFilters,
   };
 
   return (

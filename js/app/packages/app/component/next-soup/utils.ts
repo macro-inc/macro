@@ -21,7 +21,12 @@ import {
   PROPERTY_OPTION_IDS,
   SYSTEM_PROPERTY_IDS,
 } from '@core/component/Properties/constants';
-import { soupKeys } from '@queries/soup/keys';
+import {
+  removeSoupEntities,
+  getSoupEntityById,
+  optimisticUpdateSoupEntity,
+  invalidateSoupEntity,
+} from '@queries/soup/cache';
 import { match } from 'ts-pattern';
 
 const mergeSearchEntities = <T extends EntityData>(
@@ -369,24 +374,26 @@ export async function archiveEmail(
   id: string,
   options: { isDone: boolean; optimisticallyExclude?: boolean }
 ) {
-  await Promise.all([
-    queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
-    queryClient.cancelQueries({ queryKey: soupKeys.items._def }),
-  ]);
+  await queryClient.cancelQueries({ queryKey: queryKeys.all.email });
 
   const previousEmail = queryClient.getQueriesData<{
     pages: { items: EntityData[] }[];
   }>({
     queryKey: queryKeys.all.email,
   });
-  const previousEmailThreadItemFromDss = queryClient.getQueriesData<{
-    pages: { items: EntityData[] }[];
-  }>({
-    queryKey: soupKeys.items._def,
-  });
 
-  const applyOptimistic = (data?: {
-    pages: { items: (EntityData | { data: EntityData })[] }[];
+  const current = getSoupEntityById(id);
+  const soupTxn = options.optimisticallyExclude
+    ? removeSoupEntities(new Set([id]))
+    : optimisticUpdateSoupEntity({
+        tag: 'emailThread',
+        data: { id, inboxVisible: false },
+        frecency_score: current?.frecency_score ?? 0,
+      });
+
+  // Optimistic update for email queries
+  const applyEmailOptimistic = (data?: {
+    pages: { items: EntityData[] }[];
   }) => {
     if (!data) return data;
 
@@ -395,58 +402,29 @@ export async function archiveEmail(
       pages: data.pages.map((page) => ({
         ...page,
         items: options.optimisticallyExclude
-          ? page.items.filter((item) => {
-              if ('data' in item) {
-                return item.data.id !== id;
-              }
-              return item.id !== id;
-            })
-          : page.items.map((item) => {
-              if ('data' in item) {
-                return item.data.id === id
-                  ? {
-                      ...item,
-                      data: {
-                        ...item.data,
-                        inboxVisible: false,
-                      },
-                    }
-                  : item;
-              }
-              return item.id === id
-                ? {
-                    ...item,
-                    inboxVisible: false,
-                  }
-                : item;
-            }),
+          ? page.items.filter((item) => item.id !== id)
+          : page.items.map((item) =>
+              item.id === id ? { ...item, inboxVisible: false } : item
+            ),
       })),
     };
   };
 
-  for (const [key, data] of [
-    ...previousEmailThreadItemFromDss,
-    ...previousEmail,
-  ]) {
-    queryClient.setQueryData(key, applyOptimistic(data));
+  for (const [key, data] of previousEmail) {
+    queryClient.setQueryData(key, applyEmailOptimistic(data));
   }
 
   try {
-    // server mutation
     await emailClient.flagArchived({ value: !options.isDone, id });
   } catch (_err) {
-    // rollback on error
+    soupTxn.rollback();
     for (const [key, data] of previousEmail) {
       queryClient.setQueryData(key, data);
     }
-    for (const [key, data] of previousEmailThreadItemFromDss) {
-      queryClient.setQueryData(key, data);
-    }
   } finally {
-    // revalidate
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
-      queryClient.invalidateQueries({ queryKey: soupKeys.items._def }),
+      invalidateSoupEntity(id),
     ]);
   }
 }

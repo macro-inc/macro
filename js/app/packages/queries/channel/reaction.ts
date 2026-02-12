@@ -3,16 +3,15 @@ import { throwOnErr } from '@core/util/maybeResult';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import {
   commsServiceClient,
-  type ApiChannelMessage,
   type MessageResponse,
 } from '@service-comms/client';
-import type { PostReactionRequest } from '@service-comms/generated/models';
+import type {
+  GetChannelResponse,
+  PostReactionRequest,
+} from '@service-comms/generated/models';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
-import {
-  softInvalidateChannelMessages,
-  type ChannelMessagesData,
-} from './channel-messages';
+import { softInvalidateChannelWithID } from './channel';
 import { channelKeys, ChannelNonceKeys } from './keys';
 import { createMutationNonce } from '../nonce';
 
@@ -34,234 +33,196 @@ export type RemoveReactionContext = {
 };
 
 /**
- * Map across all pages to find and update a specific message by ID.
- */
-function updateMessageInPages(
-  data: ChannelMessagesData,
-  messageId: string,
-  updater: (message: ApiChannelMessage) => ApiChannelMessage
-): ChannelMessagesData {
-  return {
-    ...data,
-    pages: data.pages.map((page) => ({
-      ...page,
-      items: page.items.map((m) => (m.id === messageId ? updater(m) : m)),
-    })),
-  };
-}
-
-/**
- * Find a message or thread reply and update its reactions.
- * Returns the updated data and whether the target was found.
- */
-function updateReactionsForMessage(
-  data: ChannelMessagesData,
-  messageId: string,
-  updater: (
-    reactions: { emoji: string; users: string[] }[]
-  ) => { emoji: string; users: string[] }[]
-): { data: ChannelMessagesData; found: boolean } {
-  // Check top-level messages
-  for (const page of data.pages) {
-    if (page.items.some((m) => m.id === messageId)) {
-      return {
-        data: updateMessageInPages(data, messageId, (m) => ({
-          ...m,
-          reactions: updater(m.reactions),
-        })),
-        found: true,
-      };
-    }
-  }
-
-  // Check thread replies
-  for (const page of data.pages) {
-    for (const msg of page.items) {
-      if (msg.thread.preview.some((r) => r.id === messageId)) {
-        const updated = {
-          ...data,
-          pages: data.pages.map((p) => ({
-            ...p,
-            items: p.items.map((m) => {
-              if (m.id !== msg.id) return m;
-              return {
-                ...m,
-                thread: {
-                  ...m.thread,
-                  preview: m.thread.preview.map((r) =>
-                    r.id === messageId
-                      ? { ...r, reactions: updater(r.reactions) }
-                      : r
-                  ),
-                },
-              };
-            }),
-          })),
-        };
-        return { data: updated, found: true };
-      }
-    }
-  }
-
-  return { data, found: false };
-}
-
-/**
  * Optimistically add a reaction to a message.
+ * Returns minimal context for rollback.
  */
 export function optimisticAddReaction(
   vars: WithChannelId<
     WithUserId<Pick<PostReactionRequest, 'emoji' | 'message_id'>>
   >
 ): AddReactionContext | undefined {
-  const queryKey = channelKeys.messages(vars.channelId).queryKey;
+  const queryKey = channelKeys.withID(vars.channelId).queryKey;
   queryClient.cancelQueries({ queryKey });
 
   let context: AddReactionContext | undefined;
 
-  queryClient.setQueryData<ChannelMessagesData>(queryKey, (prev) => {
-    if (!prev?.pages?.length) return prev;
+  queryClient.setQueriesData(
+    { queryKey },
+    (prev: GetChannelResponse | undefined) => {
+      if (!prev) return prev;
 
-    const result = updateReactionsForMessage(
-      prev,
-      vars.message_id,
-      (reactions) => {
-        const existing = reactions.find((r) => r.emoji === vars.emoji);
-        if (existing?.users.includes(vars.userId)) return reactions;
+      const messageReactions = prev.reactions[vars.message_id] ?? [];
+      const existing = messageReactions.find((r) => r.emoji === vars.emoji);
 
-        context = {
-          messageId: vars.message_id,
-          emoji: vars.emoji,
-          userId: vars.userId,
-          wasNewReaction: !existing,
-        };
+      if (existing?.users.includes(vars.userId)) return prev;
 
-        return existing
-          ? reactions.map((r) =>
-              r.emoji === vars.emoji
-                ? { ...r, users: [...r.users, vars.userId] }
-                : r
-            )
-          : [...reactions, { emoji: vars.emoji, users: [vars.userId] }];
-      }
-    );
+      context = {
+        messageId: vars.message_id,
+        emoji: vars.emoji,
+        userId: vars.userId,
+        wasNewReaction: !existing,
+      };
 
-    return result.data;
-  });
+      const updatedMessageReactions = existing
+        ? messageReactions.map((r) =>
+            r.emoji === vars.emoji
+              ? { ...r, users: [...r.users, vars.userId] }
+              : r
+          )
+        : [...messageReactions, { emoji: vars.emoji, users: [vars.userId] }];
+
+      return {
+        ...prev,
+        reactions: {
+          ...prev.reactions,
+          [vars.message_id]: updatedMessageReactions,
+        },
+      };
+    }
+  );
 
   return context;
 }
 
 /**
- * Rollback an optimistic add reaction.
+ * Rollback an optimistic add reaction by removing the user's reaction.
  */
 export function rollbackAddReaction(
   channelId: string,
   context: AddReactionContext
 ): void {
-  const queryKey = channelKeys.messages(channelId).queryKey;
+  const queryKey = channelKeys.withID(channelId).queryKey;
 
-  queryClient.setQueryData<ChannelMessagesData>(queryKey, (prev) => {
-    if (!prev?.pages?.length) return prev;
+  queryClient.setQueriesData(
+    { queryKey },
+    (prev: GetChannelResponse | undefined) => {
+      if (!prev) return prev;
 
-    const result = updateReactionsForMessage(
-      prev,
-      context.messageId,
-      (reactions) => {
-        if (context.wasNewReaction) {
-          return reactions.filter((r) => r.emoji !== context.emoji);
+      const messageReactions = prev.reactions[context.messageId];
+      if (!messageReactions) return prev;
+
+      if (context.wasNewReaction) {
+        const updated = messageReactions.filter(
+          (r) => r.emoji !== context.emoji
+        );
+        if (updated.length === 0) {
+          const { [context.messageId]: _, ...rest } = prev.reactions;
+          return { ...prev, reactions: rest };
         }
-        return reactions.map((r) =>
+        return {
+          ...prev,
+          reactions: { ...prev.reactions, [context.messageId]: updated },
+        };
+      } else {
+        const updated = messageReactions.map((r) =>
           r.emoji === context.emoji
             ? { ...r, users: r.users.filter((id) => id !== context.userId) }
             : r
         );
+        return {
+          ...prev,
+          reactions: { ...prev.reactions, [context.messageId]: updated },
+        };
       }
-    );
-
-    return result.data;
-  });
+    }
+  );
 }
 
 /**
  * Optimistically remove a reaction from a message.
+ * Returns minimal context for rollback.
  */
 export function optimisticRemoveReaction(
   vars: WithChannelId<
     WithUserId<Pick<PostReactionRequest, 'emoji' | 'message_id'>>
   >
 ): RemoveReactionContext | undefined {
-  const queryKey = channelKeys.messages(vars.channelId).queryKey;
+  const queryKey = channelKeys.withID(vars.channelId).queryKey;
   queryClient.cancelQueries({ queryKey });
 
   let context: RemoveReactionContext | undefined;
 
-  queryClient.setQueryData<ChannelMessagesData>(queryKey, (prev) => {
-    if (!prev?.pages?.length) return prev;
+  queryClient.setQueriesData(
+    { queryKey },
+    (prev: GetChannelResponse | undefined) => {
+      if (!prev) return prev;
 
-    const result = updateReactionsForMessage(
-      prev,
-      vars.message_id,
-      (reactions) => {
-        const existing = reactions.find((r) => r.emoji === vars.emoji);
-        if (!existing?.users.includes(vars.userId)) return reactions;
+      const messageReactions = prev.reactions[vars.message_id];
+      const existing = messageReactions?.find((r) => r.emoji === vars.emoji);
+      if (!existing?.users.includes(vars.userId)) return prev;
 
-        context = {
-          messageId: vars.message_id,
-          emoji: vars.emoji,
-          userId: vars.userId,
-          wasLastUser: existing.users.length === 1,
-        };
+      context = {
+        messageId: vars.message_id,
+        emoji: vars.emoji,
+        userId: vars.userId,
+        wasLastUser: existing.users.length === 1,
+      };
 
-        return reactions
-          .map((r) =>
-            r.emoji === vars.emoji
-              ? { ...r, users: r.users.filter((id) => id !== vars.userId) }
-              : r
-          )
-          .filter((r) => r.users.length > 0);
+      const updated = messageReactions
+        .map((r) =>
+          r.emoji === vars.emoji
+            ? { ...r, users: r.users.filter((id) => id !== vars.userId) }
+            : r
+        )
+        .filter((r) => r.users.length > 0);
+
+      if (updated.length === 0) {
+        const { [vars.message_id]: _, ...rest } = prev.reactions;
+        return { ...prev, reactions: rest };
       }
-    );
 
-    return result.data;
-  });
+      return {
+        ...prev,
+        reactions: { ...prev.reactions, [vars.message_id]: updated },
+      };
+    }
+  );
 
   return context;
 }
 
 /**
- * Rollback an optimistic remove reaction.
+ * Rollback an optimistic remove reaction by re-adding the user's reaction.
  */
 export function rollbackRemoveReaction(
   channelId: string,
   context: RemoveReactionContext
 ): void {
-  const queryKey = channelKeys.messages(channelId).queryKey;
+  const queryKey = channelKeys.withID(channelId).queryKey;
 
-  queryClient.setQueryData<ChannelMessagesData>(queryKey, (prev) => {
-    if (!prev?.pages?.length) return prev;
+  queryClient.setQueriesData(
+    { queryKey },
+    (prev: GetChannelResponse | undefined) => {
+      if (!prev) return prev;
 
-    const result = updateReactionsForMessage(
-      prev,
-      context.messageId,
-      (reactions) => {
-        const existing = reactions.find((r) => r.emoji === context.emoji);
-        if (existing) {
-          return reactions.map((r) =>
-            r.emoji === context.emoji
-              ? { ...r, users: [...r.users, context.userId] }
-              : r
-          );
-        }
-        return [
-          ...reactions,
-          { emoji: context.emoji, users: [context.userId] },
-        ];
+      const messageReactions = prev.reactions[context.messageId] ?? [];
+
+      const existing = messageReactions.find((r) => r.emoji === context.emoji);
+
+      if (existing) {
+        const updated = messageReactions.map((r) =>
+          r.emoji === context.emoji
+            ? { ...r, users: [...r.users, context.userId] }
+            : r
+        );
+        return {
+          ...prev,
+          reactions: { ...prev.reactions, [context.messageId]: updated },
+        };
       }
-    );
 
-    return result.data;
-  });
+      return {
+        ...prev,
+        reactions: {
+          ...prev.reactions,
+          [context.messageId]: [
+            ...messageReactions,
+            { emoji: context.emoji, users: [context.userId] },
+          ],
+        },
+      };
+    }
+  );
 }
 
 type ReactionParams = {
@@ -334,7 +295,7 @@ export function useAddReactionMutation(
         },
         onSettled: (_, __, vars) => {
           addReactionNonce.cleanup(vars);
-          softInvalidateChannelMessages(vars.channelId);
+          softInvalidateChannelWithID(vars.channelId);
         },
       },
       callbacks
@@ -392,7 +353,7 @@ export function useRemoveReactionMutation(
         },
         onSettled: (_, __, vars) => {
           removeReactionNonce.cleanup(vars);
-          softInvalidateChannelMessages(vars.channelId);
+          softInvalidateChannelWithID(vars.channelId);
         },
       },
       callbacks

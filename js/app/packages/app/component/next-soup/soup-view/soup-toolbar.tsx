@@ -4,6 +4,8 @@ import XIcon from '@icon/regular/x.svg?component-solid';
 import PreviewIcon from '@macro-icons/wide/preview.svg';
 import NoiseIcon from '@macro-icons/wide/noise.svg';
 import SignalIcon from '@macro-icons/wide/signal.svg';
+import { AnimatedNoiseIcon } from '@macro-icons/wide/animating/noise';
+import { AnimatedSignalIcon } from '@macro-icons/wide/animating/signal';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
@@ -19,15 +21,20 @@ import {
   createSignal,
   onMount,
   createEffect,
+  batch,
   type Component,
 } from 'solid-js';
 import {
+  ANIMATED_ICONS,
   ENTITY_TYPE_FILTER_CONFIGS,
-  type FilterID,
+  EXCLUDE,
   getEntityTypeFilterIcon,
+  QUERY_FILTERS,
 } from '@app/component/next-soup/filters/filters';
+import { ENABLE_ANIMATED_ICONS } from '@core/constant/featureFlags';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
+import { useEmailLinksStatus } from '@core/email-link';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { createElementSize } from '@solid-primitives/resize-observer';
@@ -55,11 +62,18 @@ const ENTITY_TYPE_SHORTCUTS: Record<
 };
 
 export const SoupToolbar = () => {
-  const { soup } = useSoupView();
+  const { soup, setQueryFilters } = useSoupView();
 
   const [scrollContainerRef, setScrollContainerRef] = createSignal<
     HTMLDivElement | undefined
   >(undefined);
+
+  const handleClear = () => {
+    batch(() => {
+      soup.filters.clear();
+      setQueryFilters(QUERY_FILTERS.default);
+    });
+  };
 
   return (
     <>
@@ -85,7 +99,7 @@ export const SoupToolbar = () => {
             <button
               type="button"
               class="flex items-center gap-1.5 px-2.5 rounded-full text-ink-muted hover:text-accent hover:bg-accent/20 active:bg-accent active:text-panel"
-              onClick={soup.filters.clear}
+              onClick={handleClear}
             >
               <XIcon class="size-4.5" />
               <span class="text-xs touch:mobile-width:text-sm leading-none">
@@ -102,38 +116,74 @@ export const SoupToolbar = () => {
   );
 };
 
+type EntityTypeFilterId =
+  | 'document'
+  | 'task'
+  | 'people'
+  | 'teams'
+  | 'agent'
+  | 'file';
+
 const SoupFilters = () => {
-  const { soup, setSearchText } = useSoupView();
+  const { soup, setSearchText, isSearchDisabled, setQueryFilters } =
+    useSoupView();
   const panel = useSplitPanelOrThrow();
+  const emailActive = useEmailLinksStatus();
 
   const [sortDropdownOpen, setSortDropdownOpen] = createSignal(false);
 
-  const toggleFilter = (filter: FilterID) => {
-    soup.filters.toggle(filter);
+  const toggleFocus = (id: 'signal' | 'noise') => {
+    if (soup.filters.isActive(id)) {
+      soup.filters.toggle('explicit-noise');
+      soup.filters.deactivate('not-done');
+    } else {
+      soup.filters.toggle(id);
+      soup.filters.activate('not-done');
+    }
   };
 
-  const toggleSignalFilter = () => {
-    // If we're going to be removing the signal filter,
-    // we should replace it with the explicit-noise filter
-    if (soup.filters.isActive('signal')) {
-      toggleFilter('explicit-noise');
-    } else {
-      toggleFilter('signal');
-    }
-
-    toggleFilter('not-done');
+  const toggleUnread = () => {
+    soup.filters.toggle('unread');
   };
 
-  const toggleNoiseFilter = () => {
-    // If we're going to be removing the noise filter,
-    // we should replace it with the explicit-noise filter
-    if (soup.filters.isActive('noise')) {
-      toggleFilter('explicit-noise');
-    } else {
-      toggleFilter('noise');
-    }
+  const toggleEntityType = (id: EntityTypeFilterId) => {
+    const willBeActive = !soup.filters.isActive(id);
+    batch(() => {
+      soup.filters.toggle(id);
+      setQueryFilters(willBeActive ? QUERY_FILTERS[id] : QUERY_FILTERS.default);
+    });
+  };
 
-    toggleFilter('not-done');
+  // Email has special handling for email integration status
+  const toggleEmail = () => {
+    const willBeActive = !soup.filters.isActive('email');
+    batch(() => {
+      soup.filters.toggle('email');
+      if (willBeActive) {
+        const shouldIncludeEmails = emailActive() && isSearchDisabled();
+        setQueryFilters({
+          ...QUERY_FILTERS.email,
+          email_filters: {
+            recipients: shouldIncludeEmails ? [] : EXCLUDE,
+          },
+        });
+      } else {
+        setQueryFilters(QUERY_FILTERS.default);
+      }
+    });
+  };
+
+  const entityTypeToggleHandlers: Record<
+    (typeof ENTITY_TYPE_FILTER_CONFIGS)[number]['id'],
+    () => void
+  > = {
+    document: () => toggleEntityType('document'),
+    task: () => toggleEntityType('task'),
+    email: toggleEmail,
+    people: () => toggleEntityType('people'),
+    teams: () => toggleEntityType('teams'),
+    agent: () => toggleEntityType('agent'),
+    file: () => toggleEntityType('file'),
   };
 
   const togglePreview = () => {
@@ -158,53 +208,53 @@ const SoupFilters = () => {
     {
       hotkey: 'i',
       description: 'Toggle Inbox',
-      handler: toggleSignalFilter,
+      handler: () => toggleFocus('signal'),
     },
     {
       hotkey: 'o',
       description: 'Toggle Other',
-      handler: toggleNoiseFilter,
+      handler: () => toggleFocus('noise'),
     },
     // Entity type filter hotkeys
     {
       hotkey: ENTITY_TYPE_SHORTCUTS.document,
       description: 'Filter by Docs',
-      handler: () => toggleFilter('document'),
+      handler: () => toggleEntityType('document'),
     },
     {
       hotkey: ENTITY_TYPE_SHORTCUTS.task,
       description: 'Filter by Tasks',
-      handler: () => toggleFilter('task'),
+      handler: () => toggleEntityType('task'),
     },
     {
       hotkey: ENTITY_TYPE_SHORTCUTS.email,
       description: 'Filter by Mail',
-      handler: () => toggleFilter('email'),
+      handler: toggleEmail,
     },
     {
       hotkey: ENTITY_TYPE_SHORTCUTS.people,
       description: 'Filter by People',
-      handler: () => toggleFilter('people'),
+      handler: () => toggleEntityType('people'),
     },
     {
       hotkey: ENTITY_TYPE_SHORTCUTS.teams,
       description: 'Filter by Teams',
-      handler: () => toggleFilter('teams'),
+      handler: () => toggleEntityType('teams'),
     },
     {
       hotkey: ENTITY_TYPE_SHORTCUTS.agent,
       description: 'Filter by Agents',
-      handler: () => toggleFilter('agent'),
+      handler: () => toggleEntityType('agent'),
     },
     {
       hotkey: ENTITY_TYPE_SHORTCUTS.file,
       description: 'Filter by Files',
-      handler: () => toggleFilter('file'),
+      handler: () => toggleEntityType('file'),
     },
     {
       hotkey: 'u',
       description: 'Filter by Unread',
-      handler: () => toggleFilter('unread'),
+      handler: toggleUnread,
     },
     {
       hotkey: 's',
@@ -215,8 +265,11 @@ const SoupFilters = () => {
       hotkey: '/',
       description: 'Clear filters',
       handler: () => {
-        soup.filters.clear();
-        setSearchText('');
+        batch(() => {
+          soup.filters.clear();
+          setQueryFilters(QUERY_FILTERS.default);
+          setSearchText('');
+        });
       },
     },
     {
@@ -249,18 +302,20 @@ const SoupFilters = () => {
       {/* Inbox toggle */}
       <FilterButton
         icon={SignalIcon}
+        animatedIcon={AnimatedSignalIcon}
         label="Inbox"
         shortcut="i"
         isActive={soup.filters.isActive('signal')}
-        onClick={toggleSignalFilter}
+        onClick={() => toggleFocus('signal')}
       />
       {/* Other toggle */}
       <FilterButton
         icon={NoiseIcon}
+        animatedIcon={AnimatedNoiseIcon}
         label="Other"
         shortcut="o"
         isActive={soup.filters.isActive('noise')}
-        onClick={toggleNoiseFilter}
+        onClick={() => toggleFocus('noise')}
       />
       <FilterDivider />
       {/* Unread filter */}
@@ -274,7 +329,7 @@ const SoupFilters = () => {
               'text-ink-muted hover:text-accent hover:bg-accent/20':
                 !soup.filters.isActive('unread'),
             }}
-            onClick={() => soup.filters.toggle('unread')}
+            onClick={toggleUnread}
           >
             <svg
               class="size-4"
@@ -298,14 +353,16 @@ const SoupFilters = () => {
           {(filter) => {
             const iconConfig = () => getEntityTypeFilterIcon(filter.id);
             const shortcut = ENTITY_TYPE_SHORTCUTS[filter.id];
+            const animatedIcon = ANIMATED_ICONS[filter.id];
 
             return (
               <FilterButton
                 icon={iconConfig().icon}
+                animatedIcon={animatedIcon}
                 label={filter.label ?? ''}
                 shortcut={shortcut}
                 isActive={() => soup.filters.isActive(filter.id)}
-                onClick={() => toggleFilter(filter.id)}
+                onClick={entityTypeToggleHandlers[filter.id]}
                 paddingClass="px-2.5"
               />
             );
@@ -544,6 +601,7 @@ export const ShortcutLabel: Component<{ label: string; shortcut: string }> = (
 
 export interface FilterButtonProps {
   icon: Component<{ class?: string }>;
+  animatedIcon?: Component<{ triggerAnimation?: boolean }>;
   label: string;
   shortcut: string;
   isActive: (() => boolean) | boolean;
@@ -551,34 +609,51 @@ export interface FilterButtonProps {
   paddingClass?: string;
 }
 
-export const FilterButton: Component<FilterButtonProps> = (props) => (
-  <div class="flex items-center mr-0.5 shrink-0">
-    <Tooltip
-      tooltip={<LabelAndHotKey label={props.label} shortcut={props.shortcut} />}
-    >
-      <button
-        type="button"
-        class={`flex items-center gap-1 h-[22px] touch:mobile-width:h-9 ${props.paddingClass ?? 'pl-2 pr-2.5'} active:bg-accent active:text-panel rounded-full`}
-        classList={{
-          'bg-accent text-panel':
-            typeof props.isActive === 'function'
-              ? props.isActive()
-              : props.isActive,
-          'text-ink-muted hover:text-accent hover:bg-accent/20':
-            !(typeof props.isActive === 'function'
-              ? props.isActive()
-              : props.isActive),
-        }}
-        onClick={props.onClick}
+export const FilterButton: Component<FilterButtonProps> = (props) => {
+  const [isHovered, setIsHovered] = createSignal(false);
+
+  const isActive = () =>
+    typeof props.isActive === 'function' ? props.isActive() : props.isActive;
+
+  return (
+    <div class="flex items-center mr-0.5 shrink-0">
+      <Tooltip
+        tooltip={
+          <LabelAndHotKey label={props.label} shortcut={props.shortcut} />
+        }
       >
-        <Dynamic component={props.icon} class="size-3.5" />
-        <span class="leading-none">
-          <ShortcutLabel label={props.label} shortcut={props.shortcut} />
-        </span>
-      </button>
-    </Tooltip>
-  </div>
-);
+        <button
+          type="button"
+          class={`flex items-center gap-1 h-[22px] touch:mobile-width:h-9 ${props.paddingClass ?? 'pl-2 pr-2.5'} active:bg-accent active:text-panel rounded-full`}
+          classList={{
+            'bg-accent text-panel': isActive(),
+            'text-ink-muted hover:text-accent hover:bg-accent/20': !isActive(),
+          }}
+          onClick={props.onClick}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
+          <Show
+            when={ENABLE_ANIMATED_ICONS && props.animatedIcon}
+            fallback={<Dynamic component={props.icon} class="size-3.5" />}
+          >
+            {(Icon) => (
+              <div class="size-3.5 overflow-visible">
+                <Dynamic
+                  component={Icon()}
+                  triggerAnimation={isHovered() || isActive()}
+                />
+              </div>
+            )}
+          </Show>
+          <span class="leading-none">
+            <ShortcutLabel label={props.label} shortcut={props.shortcut} />
+          </span>
+        </button>
+      </Tooltip>
+    </div>
+  );
+};
 
 export const FilterDivider: Component = () => (
   <div class="mx-0.5 w-px h-5 bg-edge-muted/50 shrink-0" />

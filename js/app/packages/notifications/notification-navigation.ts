@@ -28,11 +28,14 @@ function openSplitIfNotOpen(
     existing.activate();
     return;
   }
-  layoutManager.createNewSplit({
-    content: { type, id },
-    activate: true,
-    referredFrom: null,
-  });
+  layoutManager.openWithSplit(
+    { type, id },
+    {
+      activate: true,
+      referredFrom: null,
+      preferNewSplit: true,
+    }
+  );
 }
 
 /**

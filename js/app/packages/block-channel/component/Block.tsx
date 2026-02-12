@@ -1,12 +1,12 @@
 import { useBlockId } from '@core/block';
-import { useChannelName, useChannelType } from '@core/context/channels';
+import { useChannelName } from '@core/context/channels';
 import { EntityPermissionsGate } from '@core/component/EntityPermissionsGate';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { type JSXElement, onMount, Suspense } from 'solid-js';
 import { Channel } from './Channel';
 import { URL_PARAMS } from '@block-channel/constants';
 import type { TargetMessageInfo } from '@block-channel/component/MessageList/MessageList';
-import { useChannelMessagesQuery } from '@queries/channel/channel-messages';
+import { useChannelQuery } from '@queries/channel/channel';
 import { ChannelContextProvider } from '@block-channel/hooks/channel';
 
 export function WithTopBar(props: { children: JSXElement }) {
@@ -28,8 +28,7 @@ export type BlockChannelProps = IncomingParams & {};
 export default function BlockChannel(props: BlockChannelProps) {
   const channelId = useBlockId();
   const channelName = useChannelName(channelId);
-  const channelType = useChannelType(channelId);
-  const messagesQuery = useChannelMessagesQuery(() => channelId);
+  const channelQuery = useChannelQuery(() => channelId);
 
   const targetMessage = () => {
     const messageID = props[URL_PARAMS.message];
@@ -45,13 +44,11 @@ export default function BlockChannel(props: BlockChannelProps) {
   return (
     <EntityPermissionsGate entityType="channel" entityId={channelId}>
       <Suspense fallback={<ChannelBlockSuspenseFallback />}>
-        <ChannelContextProvider
-          messagesQuery={messagesQuery}
-          channelName={channelName}
-          channelType={channelType}
-        >
-          <Channel channelId={channelId} target={targetMessage()} />
-        </ChannelContextProvider>
+        <DocumentBlockContainer title={channelName() ?? 'Channel'}>
+          <ChannelContextProvider query={channelQuery}>
+            <Channel channelId={channelId} target={targetMessage()} />
+          </ChannelContextProvider>
+        </DocumentBlockContainer>
       </Suspense>
     </EntityPermissionsGate>
   );

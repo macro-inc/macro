@@ -8,15 +8,14 @@ import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { ENABLE_PROJECT_VIEW_PREVIEW } from '@core/constant/featureFlags';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { fileSelector } from '@core/directive/fileSelector';
-import { registerHotkey } from '@core/hotkey/hotkeys';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import {
   handleFileFolderDrop,
   type UploadInput,
   uploadFiles,
 } from '@core/util/upload';
-import { useQueryClient } from '@queries/client';
-import { soupKeys } from '@queries/soup/keys';
+import { refetchSoupEntity } from '@queries/soup/cache';
 import { refetchResources } from '@service-storage/util/refetchResources';
 import { toast } from 'core/component/Toast/Toast';
 import { type Component, createSignal, Show } from 'solid-js';
@@ -40,7 +39,6 @@ const Block: Component = () => {
   const [isDragging, setIsDragging] = createSignal(false);
   const projectId = useBlockId();
   const isSpecialProject = getIsSpecialProject(projectId);
-  const queryClient = useQueryClient();
 
   const handleFileUpload = async (files: UploadInput[]) => {
     if (files.length === 0) return;
@@ -58,12 +56,14 @@ const Block: Component = () => {
 
       const uploads = results.filter((result) => !result.failed);
 
-      // show documents that were immediately uploaded
+      // refetch successfully uploaded documents into soup
       const successfulUploads = uploads.filter((result) => !result.pending);
+      for (const upload of successfulUploads) {
+        if (upload.type === 'document') {
+          refetchSoupEntity(upload.documentId, 'document');
+        }
+      }
       if (successfulUploads.length > 0) {
-        queryClient.invalidateQueries({
-          queryKey: soupKeys.items._def,
-        });
         refetchResources();
       }
 
@@ -73,10 +73,12 @@ const Block: Component = () => {
         .filter((result) => result.type === 'folder')
         .map((result) => result.projectId);
       if (pendingFolderUploads.length > 0) {
-        await Promise.all(pendingFolderUploads);
-        queryClient.invalidateQueries({
-          queryKey: soupKeys.items._def,
-        });
+        const resolved = await Promise.all(pendingFolderUploads);
+        for (const projectId of resolved) {
+          if (projectId) {
+            refetchSoupEntity(projectId, 'project');
+          }
+        }
         refetchResources();
       }
     } catch (error) {
@@ -110,16 +112,18 @@ const Block: Component = () => {
     filterConfigs: [
       {
         id: 'project-content',
-        label: 'Project content',
         predicate: (entity) => PROJECT_ENTITY_TYPES.includes(entity.type),
       },
     ],
     filterGroups: [],
   });
 
+  const [attachHotkeys, projectViewScope] = useHotkeyDOMScope('project-view');
+
   return (
     <DocumentBlockContainer>
       <div
+        ref={attachHotkeys}
         class="w-full h-full bg-panel flex flex-col relative"
         use:fileFolderDrop={{
           onDragStart: () => setIsDragging(true),
@@ -137,7 +141,11 @@ const Block: Component = () => {
         <Show
           when={ENABLE_PROJECT_VIEW_PREVIEW}
           fallback={
-            <ProjectEntityList projectId={projectId} soup={projectSoup} />
+            <ProjectEntityList
+              projectId={projectId}
+              soup={projectSoup}
+              scopeId={projectViewScope}
+            />
           }
         >
           <div class="flex size-full">
@@ -148,7 +156,11 @@ const Block: Component = () => {
                   preview() ? { side: 'left', percentage: 30 } : undefined,
               }}
             >
-              <ProjectEntityList projectId={projectId} soup={projectSoup} />
+              <ProjectEntityList
+                projectId={projectId}
+                soup={projectSoup}
+                scopeId={projectViewScope}
+              />
             </SplitPanelContext.Provider>
           </div>
         </Show>
@@ -157,7 +169,11 @@ const Block: Component = () => {
   );
 };
 
-const ProjectEntityList = (props: { projectId: string; soup: SoupState }) => {
+const ProjectEntityList = (props: {
+  scopeId: string;
+  projectId: string;
+  soup: SoupState;
+}) => {
   return (
     <SoupContextProvider soup={props.soup}>
       <SoupViewContextProvider
@@ -180,7 +196,7 @@ const ProjectEntityList = (props: { projectId: string; soup: SoupState }) => {
           },
         }}
       >
-        <SoupViewList customScrollbarHidden={true} />
+        <SoupViewList customScrollbarHidden={true} scopeId={props.scopeId} />
       </SoupViewContextProvider>
     </SoupContextProvider>
   );
