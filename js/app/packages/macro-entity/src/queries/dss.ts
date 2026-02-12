@@ -17,27 +17,6 @@ import {
   refetchSoupEntity,
 } from '@queries/soup/cache';
 
-export function createDeleteDssItemMutation() {
-  return useMutation(() => ({
-    mutationFn: async ({ id, type }: EntityData) => {
-      const success = await deleteItem({ id, itemType: type });
-      return { success };
-    },
-    onMutate: async ({ id }: EntityData) => {
-      return removeSoupEntities(new Set([id]));
-    },
-    onSettled: (data, error, entity, context) => {
-      if (data?.success === false || error) {
-        context?.rollback();
-        console.error(`Failed to delete dss item ${entity}`, data, error);
-        toast.failure('Failed to delete item');
-      }
-
-      invalidateSoupEntity(entity.id);
-    },
-  }));
-}
-
 export function createBulkDeleteDssItemsMutation() {
   const isUnsupportedEntity = (entity: EntityData) => {
     const type = entity.type;
