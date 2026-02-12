@@ -1,5 +1,4 @@
 export { Provider } from './components/Provider';
-export { UnreadIndicator } from './components/Unread';
 export { useQueryClient } from './queries/client';
 export {
   createChatsInfiniteQuery,
