@@ -117,7 +117,7 @@ export type ItemMention = {
     | 'rss'
     | 'contact'
     | 'date'
-    | 'email'
+    | 'thread'
     | 'unknown'
     | 'color'
     | 'group';
