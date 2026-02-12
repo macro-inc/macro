@@ -11,24 +11,14 @@ import {
   createMemo,
   createSignal,
   type ParentProps,
-  Show,
   splitProps,
 } from 'solid-js';
-import { createStore } from 'solid-js/store';
 import {
-  DEFAULT_FILTERS as defaultFilters,
   FilterContext,
   type FilterState,
   useFilterContext,
 } from '../contexts/filter';
-import { useUserId } from '../queries/auth';
-import type { EntityData } from '../types/entity';
-import type { Filters } from '../types/filter';
-import type { WithNotification } from '../types/notification';
 import { containsAllSameValues } from '../utils/arrayCompare';
-import { FileTypeFilter } from './filters/FileType';
-import { OwnerTypeFilter } from './filters/OwnerType';
-import { UnreadSwitch } from './Unread';
 
 export function Filter(props: ParentProps<FilterContext>) {
   const [localProps, filterContext] = splitProps(props, ['children']);
@@ -40,165 +30,6 @@ export function Filter(props: ParentProps<FilterContext>) {
       </div>
     </FilterContext.Provider>
   );
-}
-
-type CreateFilterContext = {
-  [key in keyof Filters]?: FilterState[key] | Filters[key];
-};
-export function createFilter<
-  T extends WithNotification<EntityData> = WithNotification<EntityData>,
->(context: CreateFilterContext = {}) {
-  const filterContext = Object.entries(context).reduce<FilterContext>(
-    (acc, [key, value]) => {
-      if (Array.isArray(value) && typeof value[0] === 'function') {
-        // @ts-expect-error
-        acc[key] = value;
-        // @ts-expect-error
-        acc.defaultFilters[key] = value[0]();
-      } else {
-        // @ts-expect-error
-        acc[key] = createSignal(value);
-        // @ts-expect-error
-        acc.defaultFilters[key] = value;
-      }
-
-      return acc;
-    },
-    { defaultFilters }
-  );
-  const [filterState, setFilterState] = createStore<FilterContext>({
-    ...filterContext,
-  });
-
-  const resetFilter = () => setFilterState({ ...filterContext });
-
-  const fileTypeFilter = createMemo(
-    () => {
-      const filter = filterState.fileTypeFilter?.[0]();
-      if (!filter) return [];
-
-      return filter;
-    },
-    [],
-    { equals: containsAllSameValues }
-  );
-
-  const userId = useUserId();
-
-  const filterFn = createMemo(
-    () => {
-      const unreadFilter = filterState.unreadFilter?.[0]();
-      const ownerType = filterState.ownerTypeFilter?.[0]();
-      const fileFilterArray = fileTypeFilter();
-      return (entity: T) => {
-        if (unreadFilter)
-          return !!entity.notifications && entity.notifications().length > 0;
-
-        if (ownerType && ownerType !== 'all') {
-          return (ownerType === 'me') === (entity.ownerId === userId());
-        }
-        if (fileFilterArray.length > 0) {
-          if (
-            entity.type === 'document' &&
-            entity.fileType &&
-            !fileFilterArray.includes(entity.fileType.toLowerCase())
-          )
-            return false;
-        }
-
-        return true;
-      };
-    },
-    undefined,
-    { equals: false }
-  );
-
-  const FilterComponent = (props: ParentProps) => {
-    return (
-      <Filter {...filterState}>
-        <Show when={filterState.unreadFilter}>
-          {(unreadFilter) => (
-            <UnreadSwitch
-              checked={unreadFilter()[0]()}
-              onChange={unreadFilter()[1]}
-            />
-          )}
-        </Show>
-        <Show when={filterState.fileTypeFilter}>
-          <FileTypeFilter />
-        </Show>
-        <Show when={filterState.ownerTypeFilter}>
-          <OwnerTypeFilter />
-        </Show>
-        {props.children}
-        <FilterOptions onReset={resetFilter}>
-          <Show when={filterContext.unreadFilter}>
-            {(contextFilter) => (
-              <MenuItem
-                text="Unread Filter"
-                selectorType="checkbox"
-                checked={!!filterState.unreadFilter}
-                onClick={() => {
-                  const unreadFilter = filterState.unreadFilter;
-                  if (unreadFilter) {
-                    unreadFilter[1](false);
-                    setFilterState('unreadFilter', undefined);
-                  } else {
-                    contextFilter()[1](true);
-                    setFilterState('unreadFilter', contextFilter());
-                  }
-                }}
-                closeOnSelect
-              />
-            )}
-          </Show>
-          <Show when={filterContext.fileTypeFilter}>
-            {(contextFilter) => (
-              <MenuItem
-                text="FileType Filter"
-                selectorType="checkbox"
-                checked={!!filterState.fileTypeFilter}
-                onClick={() => {
-                  const fileTypeFilter = filterState.fileTypeFilter;
-                  if (fileTypeFilter) {
-                    setFilterState('fileTypeFilter', undefined);
-                  } else {
-                    setFilterState('fileTypeFilter', contextFilter());
-                  }
-                }}
-                closeOnSelect
-              />
-            )}
-          </Show>
-          <Show when={filterContext.ownerTypeFilter}>
-            {(contextFilter) => (
-              <MenuItem
-                text="OwnerType Filter"
-                selectorType="checkbox"
-                checked={!!filterState.ownerTypeFilter}
-                onClick={() => {
-                  const ownerTypeFilter = filterState.ownerTypeFilter;
-                  if (ownerTypeFilter) {
-                    setFilterState('ownerTypeFilter', undefined);
-                  } else {
-                    setFilterState('ownerTypeFilter', contextFilter());
-                  }
-                }}
-                closeOnSelect
-              />
-            )}
-          </Show>
-        </FilterOptions>
-      </Filter>
-    );
-  };
-
-  return {
-    FilterComponent,
-    filterState,
-    filterFn,
-    resetFilter,
-  };
 }
 
 interface FilterOptionsProps extends ParentProps {

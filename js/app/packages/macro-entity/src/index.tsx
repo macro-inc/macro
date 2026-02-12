@@ -1,4 +1,3 @@
-export { createFilter } from './components/Filter';
 export { Provider } from './components/Provider';
 export * from './components/Sort';
 export { UnreadIndicator } from './components/Unread';
