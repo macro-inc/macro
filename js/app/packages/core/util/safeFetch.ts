@@ -1,4 +1,3 @@
-import { convertDates } from './date';
 import {
   err,
   type MaybeResult,
@@ -214,11 +213,7 @@ export async function safeFetch<
         }
 
         const data = await response.json();
-        // TODO: once we port to proper generated service client, we can handle string->Date conversion in the client
-        // this will let us only convert fields that need it vs. arbitrarily looping through all fields of arbitrary JSON
-        // however, the current overhead is quite small (1ms for 100kb/1500 channel messages) so it's not horrible as a temporary measure
-        const convertedData = convertDates(data);
-        return ok(convertedData as T);
+        return ok(data as T);
       }
     } catch (error) {
       if (error instanceof TypeError && error.message === 'Failed to fetch') {
