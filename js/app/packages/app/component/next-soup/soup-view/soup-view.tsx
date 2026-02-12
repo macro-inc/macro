@@ -72,6 +72,7 @@ import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { usePropertyEditorHotkeys } from '@app/component/property-edit-modal/hooks/usePropertyEditorHotkeys';
+import { SoupItemsQueryFilters } from '@queries/soup/items';
 
 const DEFAULT_ENTITY_HEIGHT = 40;
 
@@ -118,6 +119,7 @@ const stateCache = new Map<
     soup: {
       focus: string | undefined;
       filters: string[];
+      queryFilters: SoupItemsQueryFilters;
       sort: SystemSortOption[];
     };
     virtualCache?: CacheSnapshot;
@@ -161,7 +163,8 @@ interface SoupViewListProps {
 
 export const SoupViewList = (props: SoupViewListProps) => {
   const panel = useSplitPanelOrThrow();
-  const { soup, source, rows, searchText } = useSoupView();
+  const { soup, source, rows, searchText, setQueryFilters, queryFilters } =
+    useSoupView();
   const { getSplitCount } = useSplitLayout();
 
   const { isKeypressActive } = useIsKeyPressActive();
@@ -450,6 +453,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
       soup: {
         focus: soup.focus.id(),
         filters: soup.filters.activeIds(),
+        queryFilters: queryFilters(),
         sort: soup.sort.active().map((s) => s.id),
       },
       virtualCache: virtualHandle?.cache,
@@ -457,10 +461,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
     });
   });
 
-  const registerVirtualizerHandler = (
-    handle: VirtualizerHandle | undefined
-  ) => {
-    setVirtualizerHandle(handle);
+  let restored = false;
+  const restoreState = () => {
+    if (restored) return;
+
+    restored = true;
 
     const cached = stateCache.get(getCacheKey());
 
@@ -474,10 +479,20 @@ export const SoupViewList = (props: SoupViewListProps) => {
       soup.filters.activate(id);
     }
 
+    setQueryFilters(cached.soup.queryFilters);
+
     soup.sort.setAll(cached.soup.sort);
 
-    handle?.scrollTo(cached.scrollOffset ?? 0);
+    virtualizerHandle()?.scrollTo(cached.scrollOffset ?? 0);
     registerFocusEffects(false);
+  };
+
+  const registerVirtualizerHandler = (
+    handle: VirtualizerHandle | undefined
+  ) => {
+    setVirtualizerHandle(handle);
+
+    restoreState();
   };
 
   return (
