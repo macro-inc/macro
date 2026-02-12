@@ -13,7 +13,7 @@ import {
 } from './auth';
 import { queryKeys } from './key';
 
-export type FetchPaginatedEmailsParams = PreviewsInboxCursorParams & {
+type FetchPaginatedEmailsParams = PreviewsInboxCursorParams & {
   // path parameter
   view: PreviewViewStandardLabel;
 };
