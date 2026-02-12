@@ -78,8 +78,9 @@ impl<T, Svc> FromRef<DocumentRouterState<T, Svc>> for Arc<Svc> {
     }
 }
 
+/// Path parameters for document endpoints (document_id extraction).
 #[derive(Deserialize)]
-struct Params {
+pub struct Params {
     document_id: String,
 }
 
@@ -158,7 +159,7 @@ async fn ensure_document_exists(
         (status = 500, body = ErrorResponse),
     )
 )]
-async fn get_document_handler<T: DocumentService, Svc: EntityAccessService>(
+pub async fn get_document_handler<T: DocumentService, Svc: EntityAccessService>(
     State(state): State<DocumentRouterState<T, Svc>>,
     access: DocumentAccessExtractor<ViewAccessLevel, Svc>,
     user_context: Extension<UserContext>,
@@ -196,7 +197,7 @@ async fn get_document_handler<T: DocumentService, Svc: EntityAccessService>(
         (status = 500, body = ErrorResponse),
     )
 )]
-async fn get_location_v3_handler<T: DocumentService, Svc: EntityAccessService>(
+pub async fn get_location_v3_handler<T: DocumentService, Svc: EntityAccessService>(
     _access: DocumentAccessExtractor<ViewAccessLevel, Svc>,
     State(state): State<DocumentRouterState<T, Svc>>,
     Extension(document_context): Extension<DocumentBasic>,
@@ -235,7 +236,7 @@ async fn get_location_v3_handler<T: DocumentService, Svc: EntityAccessService>(
         (status = 500, body = ErrorResponse),
     )
 )]
-async fn delete_document_handler<T: DocumentService, Svc: EntityAccessService>(
+pub async fn delete_document_handler<T: DocumentService, Svc: EntityAccessService>(
     _access: DocumentAccessExtractor<OwnerAccessLevel, Svc>,
     State(state): State<DocumentRouterState<T, Svc>>,
     user_context: Extension<UserContext>,

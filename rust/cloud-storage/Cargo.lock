@@ -2740,6 +2740,7 @@ dependencies = [
  "connection_gateway",
  "cool_asserts",
  "document_sub_type",
+ "documents",
  "dynamodb_client",
  "email",
  "entity_access",
