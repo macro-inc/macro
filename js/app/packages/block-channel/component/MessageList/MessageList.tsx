@@ -28,6 +28,7 @@ import type {
   Message,
 } from '@queries/channel/types';
 import { useUserId } from '@core/context/user';
+import type { DateValue } from '@core/util/date';
 import { debounce } from '@solid-primitives/scheduled';
 import {
   type Accessor,
@@ -449,7 +450,7 @@ function MessageListImpl(props: MessageListProps) {
   // Snapshot the lastViewed time so it reflects the pre-session value.
   // Without this, the activity mutation on channel open would update
   // lastViewed reactively, causing the "New" indicator to disappear.
-  const lastViewed = createMemo<string | null | undefined>((prev) => {
+  const lastViewed = createMemo<DateValue | null | undefined>((prev) => {
     if (prev !== undefined) return prev;
     return props?.latestActivity?.viewed_at;
   });

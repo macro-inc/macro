@@ -22,6 +22,7 @@ import {
   STATIC_VIDEO,
 } from '@core/store/cacheChannelInput';
 import { tryMacroId, useDisplayName } from '@core/user';
+import type { DateValue } from '@core/util/date';
 import { isEmojiOnly } from '@core/util/string';
 import { formatRelativeDate, isSameDay } from '@core/util/time';
 import { ContextMenu } from '@kobalte/core/context-menu';
@@ -95,7 +96,7 @@ function NewMessageIndicator(props: { onClick?: () => void }) {
 
 type MessageProps = {
   message: MessageType;
-  lastViewed: Accessor<string | null | undefined>;
+  lastViewed: Accessor<DateValue | null | undefined>;
   isFocused: boolean;
   index: Accessor<number>;
   orderedMessages: Accessor<MessageType[]>;

@@ -2,6 +2,7 @@ import { useChannelsContext } from '@core/context/channels';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { activeScope } from '@core/hotkey/state';
 import { mapFromListsByKey } from '@core/util/compareUtils';
+import type { DateValue } from '@core/util/date';
 import { useHistoryQuery } from '@queries/history/history';
 import type { Channel } from '@service-comms/generated/models/channel';
 import type { ChannelType } from '@service-comms/generated/models/channelType';
@@ -9,7 +10,7 @@ import { ChannelTypeEnum } from '@service-comms/client';
 import { createMemo } from 'solid-js';
 import type { CommandItemCard } from './KonsoleItem';
 
-type ChannelWithViewedAt = Channel & { viewed_at?: string };
+type ChannelWithViewedAt = Channel & { viewed_at?: DateValue };
 
 const FILTER_PERSISTENT_CHATS = false;
 

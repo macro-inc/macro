@@ -2,6 +2,7 @@ import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer'
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import { filterSafeAttachments } from '@block-channel/utils/attachments';
 import { type BlockAlias, type BlockName, useBlockId } from '@core/block';
+import type { DateValue } from '@core/util/date';
 import { InlineItemPreview } from '@core/component/ItemPreview';
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
@@ -187,8 +188,8 @@ function AttachmentItem(props: AttachmentItemProps) {
   );
 }
 
-const formatTimestamp = (date: string) => {
-  const d = new Date(date);
+const formatTimestamp = (date: DateValue) => {
+  const d = date instanceof Date ? date : new Date(date);
   const datePart = d
     .toLocaleDateString('en-US', {
       month: 'numeric',

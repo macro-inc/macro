@@ -20,7 +20,7 @@ import {
 } from '../util/emailUser';
 import { useEmailContext } from './EmailContext';
 import { type EmailMessageAction, MessageActions } from './MessageActions';
-import type { DateValue } from 'core/util/date';
+import type { DateValue } from '@core/util/date';
 
 interface EmailMessageTopBarProps {
   message: MessageWithBodyReplyless;
