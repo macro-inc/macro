@@ -29,7 +29,7 @@ export function channelAttachmentsQueryOptions(channelId: string) {
     },
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage: ChannelAttachmentsPage) =>
-      lastPage.next_cursor,
+      lastPage.next_cursor ?? null,
     staleTime: Infinity,
   };
 }
@@ -38,14 +38,12 @@ export function useChannelAttachmentsQuery(channelId: Accessor<string>) {
   return useInfiniteQuery(() => channelAttachmentsQueryOptions(channelId()));
 }
 
-/**
- * Attachments query with a derived O(1) lookup map.
- * The map rebuilds only when query data changes.
- */
 export function useChannelAttachmentsWithIndex(channelId: Accessor<string>) {
   const query = useChannelAttachmentsQuery(channelId);
   const byId = createMemo(() => {
-    const flat = flattenAttachments(query.data);
+    const flat = flattenAttachments(
+      query.data as ChannelAttachmentsData | undefined
+    );
     return new Map(flat.map((a) => [a.id, a]));
   });
   return { query, byId };

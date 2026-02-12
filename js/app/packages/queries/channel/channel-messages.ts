@@ -28,7 +28,8 @@ export function channelMessagesQueryOptions(channelId: string) {
       );
     },
     initialPageParam: null as string | null,
-    getNextPageParam: (lastPage: ChannelMessagesPage) => lastPage.next_cursor,
+    getNextPageParam: (lastPage: ChannelMessagesPage) =>
+      lastPage.next_cursor ?? null,
     staleTime: Infinity,
   };
 }
@@ -36,15 +37,10 @@ export function channelMessagesQueryOptions(channelId: string) {
 export function useChannelMessagesQuery(channelId: Accessor<string>) {
   return useInfiniteQuery(() => channelMessagesQueryOptions(channelId()));
 }
-
-/**
- * Messages query with a derived O(1) lookup map.
- * The map rebuilds only when query data changes.
- */
 export function useChannelMessagesWithIndex(channelId: Accessor<string>) {
   const query = useChannelMessagesQuery(channelId);
   const byId = createMemo(() => {
-    const flat = flattenMessages(query.data);
+    const flat = flattenMessages(query.data as ChannelMessagesData | undefined);
     return new Map(flat.map((m) => [m.id, m]));
   });
   return { query, byId };
