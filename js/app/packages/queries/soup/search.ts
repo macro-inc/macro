@@ -1,6 +1,6 @@
 import { ENABLE_SEARCH_SERVICE } from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/maybeResult';
-import type { WithSearch, EntityData } from '@macro-entity';
+import type { WithSearch, EntityData } from '@entity';
 import { soupKeys } from '@queries/soup/keys';
 import { useSearchResponseItemMapper } from '@queries/soup/transform-utils';
 import { searchClient } from '@service-search/client';

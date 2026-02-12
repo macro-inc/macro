@@ -20,7 +20,7 @@ import type {
   ProjectEntity,
   EmailEntity,
   ChannelEntity,
-} from '@macro-entity';
+} from '@entity';
 import { useHistoryQuery } from '@queries/history/history';
 import type { ChannelType } from '@service-comms/generated/models';
 import type {
