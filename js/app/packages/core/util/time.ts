@@ -1,3 +1,5 @@
+import type { DateValue } from './date';
+
 /**
  * Formats a date string according to relative time rules, eg:
  * - Same day: "Today"
@@ -8,7 +10,7 @@
  * @param value - Date object or ISO date string to format
  * @returns Formatted date string
  */
-export function formatRelativeDate(value: Date | string | number): string {
+export function formatRelativeDate(value: DateValue): string {
   const date = value instanceof Date ? value : new Date(value);
   const now = new Date();
 
@@ -38,7 +40,7 @@ export function formatRelativeDate(value: Date | string | number): string {
  * @param value Date object or ISO date string to format
  * @returns Time string like "4:26 PM" or "12:30 PM"
  */
-export function formatTime(value: Date | string | number): string {
+export function formatTime(value: DateValue): string {
   const date = value instanceof Date ? value : new Date(value);
   return date.toLocaleTimeString('en-US', {
     hour: 'numeric',

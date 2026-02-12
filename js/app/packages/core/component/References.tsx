@@ -20,7 +20,7 @@ import { InlineItemPreview } from './ItemPreview';
 import { StaticMarkdown } from './LexicalMarkdown/component/core/StaticMarkdown';
 import { UserIcon } from './UserIcon';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
-import { compareDateDesc, parseDate } from '@core/util/date';
+import { compareDateDesc, type DateValue } from '@core/util/date';
 
 export type ReferenceProps = {
   documentId: string;
@@ -150,7 +150,8 @@ export function References(props: ReferenceProps) {
     );
   });
 
-  const formatTimestamp = (timestamp: Date) => {
+  const formatTimestamp = (input: DateValue) => {
+    const timestamp = input instanceof Date ? input : new Date(input);
     const datePart = timestamp
       .toLocaleDateString('en-US', {
         month: 'numeric',
@@ -201,9 +202,7 @@ export function References(props: ReferenceProps) {
                     <div class="bg-ink-extra-muted size-2" />
                     <div>{hasMessageContent ? 'REFERENCE' : 'ATTACHMENT'}</div>
                     <div class="grow" />
-                    <div>
-                      {formatTimestamp(parseDate(ref.attachment_created_at))}
-                    </div>
+                    <div>{formatTimestamp(ref.attachment_created_at)}</div>
                   </div>
 
                   <span class="inline-flex items-center gap-2 pl-4 text-sm">
@@ -244,7 +243,7 @@ export function References(props: ReferenceProps) {
                     <div class="bg-ink-extra-muted size-2" />
                     <div>MENTION</div>
                     <div class="grow" />
-                    <div>{formatTimestamp(parseDate(ref.created_at))}</div>
+                    <div>{formatTimestamp(ref.created_at)}</div>
                   </div>
 
                   <span class="inline-flex items-center gap-1 text-sm pl-4">
