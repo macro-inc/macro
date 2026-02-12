@@ -2,9 +2,11 @@ import { tz } from '@date-fns/tz';
 import {
   compareAsc,
   compareDesc,
+  DateArg,
   differenceInWeeks,
   isToday,
   isYesterday,
+  toDate,
 } from 'date-fns';
 
 const EPOCH_ZERO = new Date(0);
@@ -113,6 +115,7 @@ export const compareDateAsc = (
 
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z?$/;
 
+/** Parses a string into a Date object. Keeps the original value if it's nullish. */
 export function parseDate(value: string): Date;
 export function parseDate(value: string | null): Date | null;
 export function parseDate(value: string | undefined): Date | undefined;
@@ -122,7 +125,7 @@ export function parseDate(
 export function parseDate(
   value: string | null | undefined
 ): Date | null | undefined {
-  if (value == null) return value as null | undefined;
+  if (value == null) return value;
   return new Date(value);
 }
 

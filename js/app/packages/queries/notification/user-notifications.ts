@@ -13,6 +13,7 @@ import {
 } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { notificationKeys } from './keys';
+import type { UnifiedNotification } from '@notifications/types';
 
 function convertNotification(n: ApiUserNotification): Omit<
   ApiUserNotification,
@@ -399,7 +400,7 @@ export async function getNotificationById(
 }
 
 export function optimisticInsertNotification(
-  notification: Omit<NotificationItem, 'ownerId'>
+  notification: UnifiedNotification
 ) {
   const item = notification as NotificationItem;
 
