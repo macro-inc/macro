@@ -55,6 +55,7 @@ import {
   on,
   onCleanup,
   Show,
+  Suspense,
   Switch,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
@@ -143,8 +144,10 @@ export const SoupView = () => {
       }}
     >
       <SoupViewContextProvider soup={soup}>
-        <div class="relative flex-grow min-h-0 flex max-sm:flex-col flex-row size-full">
-          <SoupToolbar />
+        <div class="relative flex-grow min-h-1 flex max-sm:flex-col flex-row size-full">
+          <Suspense>
+            <SoupToolbar />
+          </Suspense>
           <SoupViewFileDropzone>
             <SoupViewList />
           </SoupViewFileDropzone>
