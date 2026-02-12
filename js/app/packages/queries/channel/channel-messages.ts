@@ -5,7 +5,7 @@ import {
   type ChannelMessagesPage,
 } from '@service-comms/client';
 import { type InfiniteData, useInfiniteQuery } from '@tanstack/solid-query';
-import type { Accessor } from 'solid-js';
+import { type Accessor, createMemo } from 'solid-js';
 import { queryClient } from '../client';
 import { channelKeys } from './keys';
 
@@ -35,6 +35,19 @@ export function channelMessagesQueryOptions(channelId: string) {
 
 export function useChannelMessagesQuery(channelId: Accessor<string>) {
   return useInfiniteQuery(() => channelMessagesQueryOptions(channelId()));
+}
+
+/**
+ * Messages query with a derived O(1) lookup map.
+ * The map rebuilds only when query data changes.
+ */
+export function useChannelMessagesWithIndex(channelId: Accessor<string>) {
+  const query = useChannelMessagesQuery(channelId);
+  const byId = createMemo(() => {
+    const flat = flattenMessages(query.data);
+    return new Map(flat.map((m) => [m.id, m]));
+  });
+  return { query, byId };
 }
 
 /**

@@ -5,7 +5,7 @@ import {
   type ChannelAttachmentsPage,
 } from '@service-comms/client';
 import { type InfiniteData, useInfiniteQuery } from '@tanstack/solid-query';
-import type { Accessor } from 'solid-js';
+import { type Accessor, createMemo } from 'solid-js';
 import { queryClient } from '../client';
 import { channelKeys } from './keys';
 
@@ -36,6 +36,19 @@ export function channelAttachmentsQueryOptions(channelId: string) {
 
 export function useChannelAttachmentsQuery(channelId: Accessor<string>) {
   return useInfiniteQuery(() => channelAttachmentsQueryOptions(channelId()));
+}
+
+/**
+ * Attachments query with a derived O(1) lookup map.
+ * The map rebuilds only when query data changes.
+ */
+export function useChannelAttachmentsWithIndex(channelId: Accessor<string>) {
+  const query = useChannelAttachmentsQuery(channelId);
+  const byId = createMemo(() => {
+    const flat = flattenAttachments(query.data);
+    return new Map(flat.map((a) => [a.id, a]));
+  });
+  return { query, byId };
 }
 
 /**
