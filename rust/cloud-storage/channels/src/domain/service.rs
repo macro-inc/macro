@@ -44,7 +44,6 @@ where
     ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
         let limit = limit.clamp(1, 100);
 
-        // 1. Fetch top-level messages (lightweight — no LATERAL join).
         let rows = self
             .repo
             .get_top_level_messages(channel_id, &query, limit)
@@ -53,14 +52,12 @@ where
 
         let parent_ids: Vec<Uuid> = rows.iter().map(|r| r.id).collect();
 
-        // 2. Fetch thread data (stats + preview replies) in a single query.
         let thread_data = self
             .repo
             .get_thread_data(&parent_ids, THREAD_PREVIEW_COUNT)
             .await
             .map_err(anyhow::Error::from)?;
 
-        // 3. Collect all message IDs (parents + preview replies) for reactions/attachments.
         let mut all_ids: Vec<Uuid> = parent_ids.clone();
         for td in thread_data.values() {
             for reply in &td.preview_replies {
@@ -68,15 +65,14 @@ where
             }
         }
 
-        // 4. Fetch reactions + attachments in parallel over all IDs.
         let (reactions, attachments) = tokio::join!(
             self.repo.get_reactions_batch(&all_ids),
             self.repo.get_attachments_batch(&all_ids),
         );
+
         let reactions = reactions.map_err(anyhow::Error::from)?;
         let attachments = attachments.map_err(anyhow::Error::from)?;
 
-        // 5. Assemble ChannelMessages.
         let messages: Vec<ChannelMessage> = rows
             .into_iter()
             .map(|row| {

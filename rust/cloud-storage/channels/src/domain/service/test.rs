@@ -1,8 +1,6 @@
 use super::*;
 use crate::domain::{
-    models::{
-        CountedReaction, MessageAttachment, ThreadData, ThreadReplyRow, TopLevelMessageRow,
-    },
+    models::{CountedReaction, MessageAttachment, ThreadData, ThreadReplyRow, TopLevelMessageRow},
     ports::MockChannelMessagesRepo,
 };
 use chrono::Utc;

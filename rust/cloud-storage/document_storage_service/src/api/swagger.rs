@@ -65,6 +65,11 @@ use crate::{
         },
     },
 };
+use channels::inbound::axum_router::{
+    ApiChannelAttachment, ApiChannelAttachmentsPage, ApiChannelMessage, ApiChannelMessagesPage,
+    ApiChannelParticipant, ApiCountedReaction, ApiMessageAttachment, ApiParticipantRole,
+    ApiThreadInfo, ApiThreadReply,
+};
 use document_sub_type::DocumentSubType;
 use model::document::response::{
     CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
@@ -108,11 +113,6 @@ use models_soup::email_thread::{
 };
 use models_soup::item::SoupItem;
 use models_soup::project::SoupProject;
-use channels::inbound::axum_router::{
-    ApiChannelAttachment, ApiChannelAttachmentsPage, ApiChannelMessage, ApiChannelMessagesPage,
-    ApiChannelParticipant, ApiCountedReaction, ApiMessageAttachment, ApiParticipantRole,
-    ApiThreadInfo, ApiThreadReply,
-};
 use soup::inbound::axum_router::{PostSoupRequest, SoupApiItem, SoupApiSort, SoupPage};
 use utoipa::OpenApi;
 

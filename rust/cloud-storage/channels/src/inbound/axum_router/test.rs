@@ -1,9 +1,14 @@
 use super::*;
-use crate::domain::models::{ChannelAttachment, ChannelMessage, ChannelParticipant, ParticipantRole};
+use crate::domain::models::{
+    ChannelAttachment, ChannelMessage, ChannelParticipant, ParticipantRole,
+};
 use crate::domain::ports::{
     ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesPage, ChannelMessagesService,
 };
-use axum::{Extension, Router, http::{Request, StatusCode}};
+use axum::{
+    Extension, Router,
+    http::{Request, StatusCode},
+};
 use http_body_util::BodyExt;
 use model_user::UserContext;
 use models_pagination::{CreatedAt, PaginateOn, Query};

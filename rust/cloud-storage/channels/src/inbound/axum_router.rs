@@ -160,10 +160,7 @@ pub async fn get_channel_participants_handler<S: ChannelMessagesService>(
     MacroUserExtractor { .. }: MacroUserExtractor,
     Path(channel_id): Path<Uuid>,
 ) -> Result<Json<Vec<ApiChannelParticipant>>, ChannelsHandlerErr> {
-    let participants = state
-        .service
-        .get_channel_participants(channel_id)
-        .await?;
+    let participants = state.service.get_channel_participants(channel_id).await?;
 
     Ok(Json(
         participants
@@ -172,8 +169,6 @@ pub async fn get_channel_participants_handler<S: ChannelMessagesService>(
             .collect(),
     ))
 }
-
-// -- API response types --
 
 /// Paginated response of channel messages.
 #[derive(Debug, Serialize, utoipa::ToSchema)]
@@ -434,8 +429,6 @@ impl From<ChannelParticipant> for ApiChannelParticipant {
         }
     }
 }
-
-// -- Error types --
 
 /// Errors from the channels handler.
 #[derive(Debug, thiserror::Error)]

@@ -356,7 +356,10 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
             .map(|r| ChannelParticipant {
                 channel_id: r.channel_id,
                 user_id: r.user_id,
-                role: r.role.parse::<ParticipantRole>().unwrap_or(ParticipantRole::Member),
+                role: r
+                    .role
+                    .parse::<ParticipantRole>()
+                    .unwrap_or(ParticipantRole::Member),
                 joined_at: r.joined_at,
                 left_at: r.left_at,
             })
