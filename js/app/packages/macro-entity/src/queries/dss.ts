@@ -38,7 +38,7 @@ import {
   withApiTokenRetry,
 } from './auth';
 import { queryClient } from './client';
-import { type DssQueryKey, dssQueryKeyHashFn, queryKeys } from './key';
+import { queryKeys } from './key';
 import { soupKeys } from '@queries/soup/keys';
 import {
   removeSoupEntities,
@@ -335,53 +335,6 @@ const selectData: (
       )
   );
 };
-
-export function createChatsInfiniteQuery(
-  args?: GetItemsSoupParams | Accessor<GetItemsSoupParams>
-) {
-  const params = () => {
-    const argParams = typeof args === 'function' ? args() : args;
-    const limit =
-      argParams?.limit && argParams.limit > 0 && argParams.limit <= 500
-        ? argParams.limit
-        : 500;
-    return {
-      ...argParams,
-      limit,
-    };
-  };
-
-  const authQuery = createApiTokenQuery();
-  return useInfiniteQuery(() => ({
-    queryKey: queryKeys.chat({ infinite: true, ...params() }),
-    queryHash: dssQueryKeyHashFn(
-      queryKeys.chat({ infinite: true, ...params() }) as DssQueryKey
-    ),
-    queryFn: ({ pageParam }) =>
-      withApiTokenRetry(authQuery, (apiToken) =>
-        fetchPaginatedDocumentsGet({ apiToken, ...pageParam })
-      ),
-    initialPageParam: params(),
-    getNextPageParam: ({ next_cursor: cursor }) =>
-      cursor ? { ...params(), cursor } : undefined,
-    select: (data) =>
-      data.pages.flatMap(({ items }) =>
-        items
-          .filter((item) => item.tag === 'chat')
-          .filter((item) => !item.data.isPersistent)
-          .map(
-            (item): ChatEntity => ({
-              ...item.data,
-              type: item.tag,
-              frecencyScore: item.frecency_score,
-              viewedAt: item.data.viewedAt ?? undefined,
-              projectId: item.data.projectId ?? undefined,
-            })
-          )
-      ),
-    enabled: authQuery.isSuccess,
-  }));
-}
 
 export function createDeleteDssItemMutation() {
   return useMutation(() => ({

@@ -1,7 +1,6 @@
 export { Provider } from './components/Provider';
 export { useQueryClient } from './queries/client';
 export {
-  createChatsInfiniteQuery,
   createDeleteDssItemMutation,
   createDssInfiniteQuery,
   createMoveToProjectDssEntityMutation,
