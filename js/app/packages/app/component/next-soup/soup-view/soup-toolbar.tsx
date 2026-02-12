@@ -555,7 +555,9 @@ const SearchBar = () => {
         >
           <SearchIcon class="size-4.5 shrink-0" />
           <span
-            ref={(el) => (measureSpan = el)}
+            ref={(el) => {
+              measureSpan = el;
+            }}
             class="invisible absolute whitespace-pre"
             aria-hidden="true"
           />
