@@ -102,7 +102,7 @@ export function getEntityTimestampedItem<T extends CombinedEntity>(
       };
     case 'channel':
       return {
-        updatedAt: parseDate(item.data.updated_at as string | undefined),
+        updatedAt: parseDate(item.data.updated_at),
       };
     case 'user':
       return {

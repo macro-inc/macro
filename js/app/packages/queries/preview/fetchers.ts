@@ -177,7 +177,7 @@ async function fetchProjectPreviews(
       type: 'project' as const,
       loading: false as const,
       ...rest,
-      updatedAt: parseDate(updatedAt as string | undefined),
+      updatedAt: parseDate(updatedAt),
     };
   });
 }
