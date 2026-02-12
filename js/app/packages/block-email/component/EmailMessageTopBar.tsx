@@ -162,7 +162,7 @@ function CollapsedHeader(props: {
   return (
     <div class="flex flex-row w-full items-center justify-between">
       <div class="flex flex-row items-center gap-1 text-sm min-w-0">
-        <span class="text-ink truncate">
+        <span class="text-ink font-semibold truncate">
           {props.senderName}
           <span style={{ padding: '0 0.375em' }}>to</span>
           {props.recipientSummary}
