@@ -4681,6 +4681,13 @@
             },
             "description": "Channel IDs to search within. Examples: ['general']. Empty to search all accessible channels."
           },
+          "channel_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Channel types to filter by. Examples: ['public'], ['direct_message', 'private']. Empty to search all channel types."
+          },
           "importance": {
             "type": ["boolean", "null"],
             "description": "Filter by channel importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."

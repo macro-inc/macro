@@ -3677,6 +3677,12 @@ export const postItemsSoupBody = zod
           .describe(
             "Channel IDs to search within. Examples: ['general']. Empty to search all accessible channels."
           ),
+        channel_types: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            "Channel types to filter by. Examples: ['public'], ['direct_message', 'private']. Empty to search all channel types."
+          ),
         importance: zod
           .boolean()
           .nullish()
