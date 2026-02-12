@@ -1,3 +1,4 @@
+import { max } from 'date-fns';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   compareDateAsc,
@@ -340,6 +341,40 @@ describe('Date Utilities (core/utils/date.ts)', () => {
     it('should return 0 when one is null and other is undefined', () => {
       expect(compareDateAsc(null, undefined)).toBe(0);
       expect(compareDateAsc(undefined, null)).toBe(0);
+    });
+  });
+
+  describe('date-fns max with RFC 3339 strings', () => {
+    it('should correctly pick the latest of RFC 3339 strings', () => {
+      const earlier = '2025-06-10T08:00:00Z';
+      const later = '2025-06-14T12:00:00Z';
+
+      const result = max([earlier, later]);
+      expect(result).toEqual(new Date(later));
+    });
+
+    it('should correctly pick the latest when strings differ only by time', () => {
+      const earlier = '2025-06-14T08:00:00Z';
+      const later = '2025-06-14T20:30:00Z';
+
+      const result = max([earlier, later]);
+      expect(result).toEqual(new Date(later));
+    });
+
+    it('should handle a single string', () => {
+      const only = '2025-06-14T12:00:00Z';
+
+      const result = max([only]);
+      expect(result).toEqual(new Date(only));
+    });
+
+    it('should handle multiple strings', () => {
+      const a = '2025-01-01T00:00:00Z';
+      const b = '2025-12-31T23:59:59Z';
+      const c = '2025-06-15T12:00:00Z';
+
+      const result = max([a, b, c]);
+      expect(result).toEqual(new Date(b));
     });
   });
 
