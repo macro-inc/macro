@@ -78,12 +78,12 @@ export const SoupToolbar = () => {
   return (
     <>
       <SplitHeaderLeft>
-        <div class="relative h-full">
+        <div class="relative h-full w-full">
           <ScrollIndicators scrollRef={scrollContainerRef()} />
 
           <div
             ref={setScrollContainerRef}
-            class="flex items-center h-full overflow-x-auto scrollbar-hidden overscroll-none text-xs touch:mobile-width:text-sm"
+            class="flex items-center h-full w-full overflow-x-auto scrollbar-hidden overscroll-none text-xs touch:mobile-width:text-sm"
           >
             <SoupFilters />
             <SearchBar />
@@ -516,10 +516,14 @@ const SearchBar = () => {
   onCleanup(searchHotkey.dispose);
 
   return (
-    <div class="flex items-center shrink-0 touch:mobile-width:-order-2">
-      <Tooltip tooltip={<LabelAndHotKey label="Filter" shortcut="⌘F" />}>
+    <div class="flex items-center grow min-w-0 max-w-75 touch:mobile-width:-order-2">
+      <Tooltip
+        class="grow"
+        placement="bottom-start"
+        tooltip={<LabelAndHotKey label="Filter" shortcut="⌘F" />}
+      >
         <div
-          class="relative flex items-center gap-1.5 h-[22px] touch:mobile-width:h-9 px-2.5 rounded-full touch:mobile-width:min-w-35"
+          class="relative flex items-center gap-1.5 grow h-[22px] touch:mobile-width:h-9 px-2.5 rounded-full touch:mobile-width:min-w-35"
           classList={{
             'bg-accent text-panel': !!searchText() && !searchFocused(),
             'text-ink-muted hover:text-accent hover:bg-accent/20':
@@ -553,12 +557,9 @@ const SearchBar = () => {
                 e.currentTarget.blur();
               }
             }}
-            class="p-0 bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 cursor-default"
+            class="p-0 grow bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 cursor-default"
             style={{
-              width:
-                !searchText() && !searchFocused()
-                  ? '0'
-                  : `${Math.max(5, searchText().length + 1)}ch`,
+              width: !searchText() && !searchFocused() ? '0' : undefined,
             }}
           />
         </div>
