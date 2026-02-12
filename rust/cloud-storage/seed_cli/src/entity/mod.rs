@@ -1,6 +1,7 @@
 //! Entity module containing all seed CLI entity subcommands.
 
 pub mod channel;
+pub mod channel_message;
 pub mod user;
 
 use clap::Subcommand;
@@ -14,6 +15,8 @@ pub enum EntityCommand {
     User(user::UserArgs),
     /// Manage channel seed data
     Channel(channel::ChannelArgs),
+    /// Manage channel message seed data
+    ChannelMessage(channel_message::ChannelMessageArgs),
 }
 
 impl EntityCommand {
@@ -22,6 +25,7 @@ impl EntityCommand {
         match self {
             EntityCommand::User(args) => args.execute(ctx).await,
             EntityCommand::Channel(args) => args.execute(ctx).await,
+            EntityCommand::ChannelMessage(args) => args.execute(ctx).await,
         }
     }
 }

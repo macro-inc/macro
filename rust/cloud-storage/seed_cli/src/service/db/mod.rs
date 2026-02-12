@@ -9,6 +9,7 @@ pub use SeedDb as Db;
 use mockall::automock;
 
 use comms_db_client::channels::create_channel::CreateChannelOptions;
+use comms_db_client::messages::create_message::CreateMessageOptions;
 
 /// Wrapper around the database connection pool.
 pub struct SeedDb {
@@ -32,5 +33,16 @@ impl SeedDb {
         let id =
             comms_db_client::channels::create_channel::create_channel(&self.inner, options).await?;
         Ok(id)
+    }
+
+    /// Create a message in the database.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn create_message(
+        &self,
+        options: CreateMessageOptions,
+    ) -> anyhow::Result<uuid::Uuid> {
+        let message =
+            comms_db_client::messages::create_message::create_message(&self.inner, options).await?;
+        Ok(message.id)
     }
 }
