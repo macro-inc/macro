@@ -7,7 +7,7 @@ export {
 } from './queries/dss';
 export { createEmailsInfiniteQuery } from './queries/email';
 export { queryKeys } from './queries/key';
-export { createEmailSource, type EmailSource, useEmails } from './source/email';
+export { useEmails } from './source/email';
 export type * from './types/drag';
 export * from './types/entity';
 export * from './types/notification';
