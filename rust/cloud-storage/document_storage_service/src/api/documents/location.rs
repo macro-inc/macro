@@ -23,8 +23,7 @@ use cloudfront_sign::{SignedOptions, get_signed_url};
 use model::{
     document::{
         CONVERTED_DOCUMENT_FILE_NAME, DocumentBasic, FileType, FileTypeExt,
-        build_cloud_storage_bucket_document_key,
-        response::LocationResponseData,
+        build_cloud_storage_bucket_document_key, response::LocationResponseData,
     },
     response::{GenericErrorResponse, GenericResponse, PresignedUrl},
     user::UserContext,
@@ -36,48 +35,6 @@ pub struct Params {
 }
 
 static DOCUMENT_DOES_NOT_EXIST: &str = "document does not exist in s3";
-
-/// Internal handler for `GET /documents/:document_id/location_v3`.
-///
-/// Delegates to the documents hex crate service.
-#[tracing::instrument(skip(state, document_context))]
-pub async fn internal_get_location_handler_v3(
-    State(state): State<ApiContext>,
-    Extension(document_context): Extension<DocumentBasic>,
-    Path(Params { document_id }): Path<Params>,
-    Query(params): Query<documents_hex::domain::models::LocationQueryParams>,
-) -> Response<Body> {
-    use documents_hex::domain::ports::DocumentService;
-
-    match state
-        .documents_state
-        .service
-        .get_document_location(&document_context, &document_id, params)
-        .await
-    {
-        Ok(response_data) => {
-            let json_bytes = serde_json::to_vec(&response_data).unwrap();
-            Response::builder()
-                .status(StatusCode::OK)
-                .header("content-type", "application/json")
-                .header("Cache-Control", "max-age=300")
-                .body(Body::from(json_bytes))
-                .unwrap()
-        }
-        Err(e) => {
-            tracing::error!(error=?e, "unable to get document location");
-            let status_code = match &e {
-                _ if e.to_string().contains("not found") => StatusCode::NOT_FOUND,
-                _ if e.to_string().contains("does not exist in storage") => StatusCode::GONE,
-                _ => StatusCode::INTERNAL_SERVER_ERROR,
-            };
-            GenericResponse::builder()
-                .message("unable to get document location")
-                .is_error(true)
-                .send(status_code)
-        }
-    }
-}
 
 /// Gets the presigned url(s) for the document. aka location
 #[utoipa::path(

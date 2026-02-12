@@ -95,9 +95,9 @@ fn api_router(state: ApiContext) -> Router {
                 .merge(documents_hex::inbound::axum_router::documents_router(
                     state.documents_state.clone(),
                 ))
-                .layer(ServiceBuilder::new().layer(
-                    axum::middleware::from_fn(macro_middleware::connection_drop_prevention_handler),
-                )),
+                .layer(ServiceBuilder::new().layer(axum::middleware::from_fn(
+                    macro_middleware::connection_drop_prevention_handler,
+                ))),
         )
         .nest(
             "/history",

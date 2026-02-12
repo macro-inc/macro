@@ -7,11 +7,11 @@ use comms::{
 };
 use comms_service::CommsHandlerState;
 use connection_gateway_client::client::ConnectionGatewayClient;
-use dynamodb_client::DynamodbClient;
-use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
 use documents_hex::domain::service::DocumentServiceImpl;
 use documents_hex::inbound::axum_router::DocumentRouterState;
 use documents_hex::outbound::pg_document_repo::PgDocumentRepo;
+use dynamodb_client::DynamodbClient;
+use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;

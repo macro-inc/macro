@@ -13,6 +13,10 @@ use comms::{
 };
 use config::{Config, Environment};
 use connection_gateway_client::client::ConnectionGatewayClient;
+use documents_hex::domain::models::CloudFrontConfig;
+use documents_hex::domain::service::DocumentServiceImpl;
+use documents_hex::inbound::axum_router::DocumentRouterState;
+use documents_hex::outbound::pg_document_repo::PgDocumentRepo;
 use dynamodb_client::DynamodbClient;
 use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
@@ -27,10 +31,6 @@ use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
 };
 use secretsmanager_client::SecretManager;
-use documents_hex::domain::models::CloudFrontConfig;
-use documents_hex::domain::service::DocumentServiceImpl;
-use documents_hex::inbound::axum_router::DocumentRouterState;
-use documents_hex::outbound::pg_document_repo::PgDocumentRepo;
 use soup::{
     domain::service::SoupImpl, inbound::axum_router::SoupRouterState,
     outbound::pg_soup_repo::PgSoupRepo,
@@ -266,8 +266,7 @@ async fn main() -> anyhow::Result<()> {
             .document_storage_service_cloudfront_signer_private_key
             .as_ref()
             .to_string(),
-        presigned_url_expiry_seconds: config
-            .document_storage_service_presigned_url_expiry_seconds,
+        presigned_url_expiry_seconds: config.document_storage_service_presigned_url_expiry_seconds,
         browser_cache_expiry_seconds: config
             .document_storage_service_presigned_url_browser_cache_expiry_seconds,
     };
