@@ -36,6 +36,7 @@ import type {
   SoupPage,
 } from '@service-storage/generated/schemas';
 import type { UseQueryResult } from '@tanstack/solid-query';
+import { max } from 'date-fns';
 
 const SEARCH_MATCH_LENGTH = 60;
 
@@ -239,9 +240,7 @@ export const useSearchResponseItemMapper = () => {
           .map((m) => m.sent_at)
           .filter((m) => m != null);
         const latestMessageSentAt =
-          messagesSentAt.length > 0
-            ? new Date(Math.max(...messagesSentAt.map((d) => d.getTime())))
-            : null;
+          messagesSentAt.length > 0 ? max(messagesSentAt) : null;
 
         return {
           type: 'email',
