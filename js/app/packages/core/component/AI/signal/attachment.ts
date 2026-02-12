@@ -136,7 +136,7 @@ export const useGetChatAttachmentInfo = () => {
       return getDocumentAttachment(mention.itemId);
     } else if (mention.itemType === 'channel') {
       return getChannelAttachment(mention);
-    } else if (mention.itemType === 'email') {
+    } else if (mention.itemType === 'thread') {
       return getEmailAttachment(mention);
     } else if (mention.itemType === 'project') {
       return getProjectAttachment(mention.itemId);

@@ -246,8 +246,9 @@ const getDocumentMentionItemType = (
     case 'chat':
     case 'channel':
     case 'project':
-    case 'email':
       return itemType;
+    case 'email':
+      return 'thread';
     default:
       console.error(`Invalid item type: ${itemType} for document mention node`);
       return 'document';
