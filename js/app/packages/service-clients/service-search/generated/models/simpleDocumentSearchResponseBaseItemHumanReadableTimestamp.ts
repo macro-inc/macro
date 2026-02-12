@@ -23,5 +23,5 @@ export interface SimpleDocumentSearchResponseBaseItemHumanReadableTimestamp {
   /** The raw content of the document */
   raw_content?: SimpleDocumentSearchResponseBaseItemHumanReadableTimestampRawContent;
   /** The time the document was last updated */
-  updated_at: Date;
+  updated_at: string;
 }

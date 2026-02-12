@@ -8,4 +8,4 @@
 /**
  * The time the document was deleted
  */
-export type DocumentMetadataDeletedAt = Date | null;
+export type DocumentMetadataDeletedAt = string | null;

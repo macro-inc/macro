@@ -8,7 +8,7 @@ import type { SearchHighlight } from './searchHighlight';
 
 export interface SimpleProjectSearchResponseBaseItemHumanReadableTimestamp {
   /** The time the project was created */
-  created_at: Date;
+  created_at: string;
   /** The highlights on the project */
   highlight: SearchHighlight;
   /** The project id */
@@ -16,7 +16,7 @@ export interface SimpleProjectSearchResponseBaseItemHumanReadableTimestamp {
   /** The project name */
   project_name: string;
   /** The time the project was last updated */
-  updated_at: Date;
+  updated_at: string;
   /** The id of the user who created the project */
   user_id: string;
 }

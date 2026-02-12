@@ -7,5 +7,5 @@
 
 export interface UpsertScheduledResponse {
   message_id: string;
-  send_time: Date;
+  send_time: string;
 }

@@ -13,7 +13,7 @@ export interface Channel {
   /** type of the channel */
   channel_type: ChannelType;
   /** timestamp of when the channel was created */
-  created_at: Date;
+  created_at: string;
   /** uuid of the channel */
   id: string;
   /** string name of the channel */
@@ -26,5 +26,5 @@ export interface Channel {
   /** id of the user who created the channel */
   owner_id: string;
   /** timestamp of when the channel was last updated */
-  updated_at: Date;
+  updated_at: string;
 }

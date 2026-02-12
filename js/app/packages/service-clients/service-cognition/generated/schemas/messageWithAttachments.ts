@@ -8,5 +8,5 @@
 export interface MessageWithAttachments {
   attachmentIds: string[];
   content: string;
-  date: Date;
+  date: string;
 }

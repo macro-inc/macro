@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type DocumentMetadataViewedAt = Date | null;
+export type DocumentMetadataViewedAt = string | null;

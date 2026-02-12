@@ -10,9 +10,9 @@ export interface View {
 is up to the frontend. The structure and composition of view configuration
 is still very much in flux. */
   config: unknown;
-  createdAt: Date;
+  createdAt: string;
   id: string;
   name: string;
-  updatedAt: Date;
+  updatedAt: string;
   userId: string;
 }

@@ -15,10 +15,10 @@ export interface NewChatMessage {
   attachments?: NewChatMessageAttachments;
   /** Content of the message */
   content: ChatMessageContent;
-  createdAt: Date;
+  createdAt: string;
   /** The model used to generate the chat */
   model: Model;
   /** Whether the chat is from the user or system */
   role: Role;
-  updatedAt: Date;
+  updatedAt: string;
 }

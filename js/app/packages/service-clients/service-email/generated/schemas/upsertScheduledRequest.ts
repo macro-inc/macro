@@ -7,5 +7,5 @@
 
 export interface UpsertScheduledRequest {
   /** The time to send the message (ISO 8601 format) */
-  send_time: Date;
+  send_time: string;
 }

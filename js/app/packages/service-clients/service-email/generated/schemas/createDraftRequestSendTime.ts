@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type CreateDraftRequestSendTime = Date | null;
+export type CreateDraftRequestSendTime = string | null;

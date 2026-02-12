@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ThreadPreviewCursorViewedAt = Date | null;
+export type ThreadPreviewCursorViewedAt = string | null;

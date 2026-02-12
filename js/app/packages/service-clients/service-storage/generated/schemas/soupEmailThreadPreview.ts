@@ -13,7 +13,7 @@ import type { SoupEmailThreadPreviewSnippet } from './soupEmailThreadPreviewSnip
 import type { SoupEmailThreadPreviewViewedAt } from './soupEmailThreadPreviewViewedAt';
 
 export interface SoupEmailThreadPreview {
-  createdAt: Date;
+  createdAt: string;
   id: string;
   inboxVisible: boolean;
   isDraft: boolean;
@@ -26,7 +26,7 @@ export interface SoupEmailThreadPreview {
   senderName?: SoupEmailThreadPreviewSenderName;
   senderPhotoUrl?: SoupEmailThreadPreviewSenderPhotoUrl;
   snippet?: SoupEmailThreadPreviewSnippet;
-  sortTs: Date;
-  updatedAt: Date;
+  sortTs: string;
+  updatedAt: string;
   viewedAt?: SoupEmailThreadPreviewViewedAt;
 }

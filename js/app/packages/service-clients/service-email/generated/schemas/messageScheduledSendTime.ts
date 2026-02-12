@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type MessageScheduledSendTime = Date | null;
+export type MessageScheduledSendTime = string | null;

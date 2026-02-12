@@ -8,4 +8,4 @@
 /**
  * the last time the user viewed the channel
  */
-export type ActivityViewedAt = Date | null;
+export type ActivityViewedAt = string | null;

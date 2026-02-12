@@ -8,4 +8,4 @@
 /**
  * The time the chat was created
  */
-export type ChatCreatedAt = Date | null;
+export type ChatCreatedAt = string | null;

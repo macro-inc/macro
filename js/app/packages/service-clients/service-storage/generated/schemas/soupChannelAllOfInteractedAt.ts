@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type SoupChannelAllOfInteractedAt = Date | null;
+export type SoupChannelAllOfInteractedAt = string | null;

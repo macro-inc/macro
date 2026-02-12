@@ -10,10 +10,10 @@ import type { PropertyOptionValue } from './propertyOptionValue';
  * A selectable option for select-type properties (service representation).
  */
 export interface PropertyOption {
-  created_at: Date;
+  created_at: string;
   display_order: number;
   id: string;
   property_definition_id: string;
-  updated_at: Date;
+  updated_at: string;
   value: PropertyOptionValue;
 }

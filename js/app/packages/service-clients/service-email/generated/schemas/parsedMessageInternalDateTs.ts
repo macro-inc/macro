@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ParsedMessageInternalDateTs = Date | null;
+export type ParsedMessageInternalDateTs = string | null;

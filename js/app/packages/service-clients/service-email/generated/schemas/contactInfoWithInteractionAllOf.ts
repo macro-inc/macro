@@ -6,5 +6,5 @@
  */
 
 export type ContactInfoWithInteractionAllOf = {
-  last_interaction: Date;
+  last_interaction: string;
 };

@@ -8,4 +8,4 @@
 /**
  * The time the document was created
  */
-export type DocumentResponseMetadataCreatedAt = Date | null;
+export type DocumentResponseMetadataCreatedAt = string | null;

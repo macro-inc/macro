@@ -8,4 +8,4 @@
 /**
  * When the notification was last updated.
  */
-export type ApiUserNotificationAllOfUpdatedAt = Date | null;
+export type ApiUserNotificationAllOfUpdatedAt = string | null;

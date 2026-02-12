@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ChannelMetadataViewedAt = Date | null;
+export type ChannelMetadataViewedAt = string | null;

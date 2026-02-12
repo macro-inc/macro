@@ -11,7 +11,7 @@ export interface ChannelParticipant {
   /** id of the channel */
   channel_id: string;
   /** timestamp of when the user joined the channel */
-  joined_at: Date;
+  joined_at: string;
   /** timestamp of when the user left the channel */
   left_at?: ChannelParticipantLeftAt;
   /** type of the participant */

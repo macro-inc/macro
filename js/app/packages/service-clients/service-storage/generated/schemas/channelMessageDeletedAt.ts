@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ChannelMessageDeletedAt = Date | null;
+export type ChannelMessageDeletedAt = string | null;
