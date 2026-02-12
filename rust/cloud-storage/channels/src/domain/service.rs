@@ -53,18 +53,17 @@ where
 
         let parent_ids: Vec<Uuid> = rows.iter().map(|r| r.id).collect();
 
-        // 2. Fetch thread stats + previews in parallel (both keyed on parent_ids).
-        let (thread_stats, thread_previews) = tokio::join!(
-            self.repo.get_thread_stats(&parent_ids),
-            self.repo.get_thread_previews(&parent_ids, THREAD_PREVIEW_COUNT),
-        );
-        let thread_stats = thread_stats.map_err(anyhow::Error::from)?;
-        let thread_previews = thread_previews.map_err(anyhow::Error::from)?;
+        // 2. Fetch thread data (stats + preview replies) in a single query.
+        let thread_data = self
+            .repo
+            .get_thread_data(&parent_ids, THREAD_PREVIEW_COUNT)
+            .await
+            .map_err(anyhow::Error::from)?;
 
         // 3. Collect all message IDs (parents + preview replies) for reactions/attachments.
         let mut all_ids: Vec<Uuid> = parent_ids.clone();
-        for replies in thread_previews.values() {
-            for reply in replies {
+        for td in thread_data.values() {
+            for reply in &td.preview_replies {
                 all_ids.push(reply.id);
             }
         }
@@ -81,11 +80,10 @@ where
         let messages: Vec<ChannelMessage> = rows
             .into_iter()
             .map(|row| {
-                let stats = thread_stats.get(&row.id);
-                let preview_replies = thread_previews
-                    .get(&row.id)
-                    .map(|replies| {
-                        replies
+                let td = thread_data.get(&row.id);
+                let preview_replies = td
+                    .map(|td| {
+                        td.preview_replies
                             .iter()
                             .map(|r| ThreadReply {
                                 id: r.id,
@@ -111,8 +109,8 @@ where
                     edited_at: row.edited_at,
                     deleted_at: row.deleted_at,
                     thread: ThreadInfo {
-                        reply_count: stats.map_or(0, |s| s.reply_count),
-                        latest_reply_at: stats.and_then(|s| s.latest_reply_at),
+                        reply_count: td.map_or(0, |td| td.reply_count),
+                        latest_reply_at: td.and_then(|td| td.latest_reply_at),
                         preview: preview_replies,
                     },
                     reactions: reactions.get(&row.id).cloned().unwrap_or_default(),

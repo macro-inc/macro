@@ -108,6 +108,11 @@ use models_soup::email_thread::{
 };
 use models_soup::item::SoupItem;
 use models_soup::project::SoupProject;
+use channels::inbound::axum_router::{
+    ApiChannelAttachment, ApiChannelAttachmentsPage, ApiChannelMessage, ApiChannelMessagesPage,
+    ApiChannelParticipant, ApiCountedReaction, ApiMessageAttachment, ApiParticipantRole,
+    ApiThreadInfo, ApiThreadReply,
+};
 use soup::inbound::axum_router::{PostSoupRequest, SoupApiItem, SoupApiSort, SoupPage};
 use utoipa::OpenApi;
 
@@ -177,6 +182,11 @@ use utoipa::OpenApi;
         // items
         soup::inbound::axum_router::get_soup_handler,
         soup::inbound::axum_router::post_soup_handler,
+
+        // channels
+        channels::inbound::axum_router::get_channel_messages_handler,
+        channels::inbound::axum_router::get_channel_attachments_handler,
+        channels::inbound::axum_router::get_channel_participants_handler,
 
         // pins
         pins::add_pin::add_pin_handler,
@@ -297,6 +307,18 @@ use utoipa::OpenApi;
             SoupMessageListVisibility,
             SoupLabelType,
             PostSoupRequest,
+
+            // Channels
+            ApiChannelMessagesPage,
+            ApiChannelMessage,
+            ApiThreadInfo,
+            ApiThreadReply,
+            ApiCountedReaction,
+            ApiMessageAttachment,
+            ApiChannelAttachmentsPage,
+            ApiChannelAttachment,
+            ApiChannelParticipant,
+            ApiParticipantRole,
 
             DocumentSubType,
 

@@ -1,7 +1,7 @@
 use crate::domain::{
     models::{
         ChannelAttachment, ChannelParticipant, CountedReaction, MessageAttachment, ParticipantRole,
-        ThreadReplyRow, ThreadStats, TopLevelMessageRow,
+        ThreadData, ThreadReplyRow, TopLevelMessageRow,
     },
     ports::ChannelMessagesRepo,
 };
@@ -35,17 +35,9 @@ struct TopLevelRow {
     deleted_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-/// Intermediate row for thread stats batch query.
+/// Intermediate row for the merged thread data query (stats + preview replies).
 #[derive(Debug, sqlx::FromRow)]
-struct ThreadStatsRow {
-    thread_id: Uuid,
-    reply_count: i64,
-    latest_reply_at: Option<chrono::DateTime<chrono::Utc>>,
-}
-
-/// Intermediate row for thread preview replies.
-#[derive(Debug, sqlx::FromRow)]
-struct PreviewRow {
+struct ThreadDataRow {
     id: Uuid,
     thread_id: Uuid,
     sender_id: String,
@@ -53,6 +45,8 @@ struct PreviewRow {
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
     edited_at: Option<chrono::DateTime<chrono::Utc>>,
+    reply_count: i64,
+    latest_reply_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Intermediate row for reactions.
@@ -157,56 +151,21 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn get_thread_stats(
-        &self,
-        parent_ids: &[Uuid],
-    ) -> Result<HashMap<Uuid, ThreadStats>, Self::Err> {
-        if parent_ids.is_empty() {
-            return Ok(HashMap::new());
-        }
-
-        let rows = sqlx::query_as::<_, ThreadStatsRow>(
-            r#"
-            SELECT
-                thread_id,
-                COUNT(*) AS reply_count,
-                MAX(created_at)::timestamptz AS latest_reply_at
-            FROM comms_messages
-            WHERE thread_id = ANY($1) AND deleted_at IS NULL
-            GROUP BY thread_id
-            "#,
-        )
-        .bind(parent_ids)
-        .fetch_all(&self.pool)
-        .await?;
-
-        Ok(rows
-            .into_iter()
-            .map(|r| {
-                (
-                    r.thread_id,
-                    ThreadStats {
-                        reply_count: r.reply_count,
-                        latest_reply_at: r.latest_reply_at,
-                    },
-                )
-            })
-            .collect())
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn get_thread_previews(
+    async fn get_thread_data(
         &self,
         parent_ids: &[Uuid],
         preview_count: u16,
-    ) -> Result<HashMap<Uuid, Vec<ThreadReplyRow>>, Self::Err> {
+    ) -> Result<HashMap<Uuid, ThreadData>, Self::Err> {
         if parent_ids.is_empty() {
             return Ok(HashMap::new());
         }
 
-        let rows = sqlx::query_as::<_, PreviewRow>(
+        let rows = sqlx::query_as::<_, ThreadDataRow>(
             r#"
-            SELECT id, thread_id, sender_id, content, created_at, updated_at, edited_at::timestamptz AS edited_at
+            SELECT
+                id, thread_id, sender_id, content, created_at, updated_at,
+                edited_at::timestamptz AS edited_at,
+                reply_count, latest_reply_at
             FROM (
                 SELECT
                     r.id,
@@ -216,6 +175,8 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                     r.created_at,
                     r.updated_at,
                     r.edited_at,
+                    COUNT(*) OVER (PARTITION BY r.thread_id) AS reply_count,
+                    MAX(r.created_at) OVER (PARTITION BY r.thread_id)::timestamptz AS latest_reply_at,
                     ROW_NUMBER() OVER (PARTITION BY r.thread_id ORDER BY r.created_at DESC) AS rn
                 FROM comms_messages r
                 WHERE r.thread_id = ANY($1) AND r.deleted_at IS NULL
@@ -229,9 +190,14 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
         .fetch_all(&self.pool)
         .await?;
 
-        let mut map: HashMap<Uuid, Vec<ThreadReplyRow>> = HashMap::new();
+        let mut map: HashMap<Uuid, ThreadData> = HashMap::new();
         for r in rows {
-            map.entry(r.thread_id).or_default().push(ThreadReplyRow {
+            let entry = map.entry(r.thread_id).or_insert_with(|| ThreadData {
+                reply_count: r.reply_count,
+                latest_reply_at: r.latest_reply_at,
+                preview_replies: Vec::new(),
+            });
+            entry.preview_replies.push(ThreadReplyRow {
                 id: r.id,
                 thread_id: r.thread_id,
                 sender_id: r.sender_id,

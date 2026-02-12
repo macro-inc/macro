@@ -59,6 +59,7 @@ import {
   invalidateChannelWithID,
   useChannelQuery,
 } from '@queries/channel/channel';
+import { useChannelMessagesQuery } from '@queries/channel/channel-messages';
 
 false && fileFolderDrop;
 
@@ -84,10 +85,15 @@ export function Channel(props: {
   target?: TargetMessageInfo;
 }) {
   const channelContext = useChannelContext();
+  const messagesQuery = useChannelMessagesQuery(() => props.channelId);
   const channelQuery = useChannelQuery(() => props.channelId);
   const latestActivity = useChannelActivity(props.channelId);
 
   const [openedChannel, setOpenedChannel] = createSignal<Date>();
+
+  onMount(() => {
+    console.log(messagesQuery.data);
+  });
 
   const updateActivityMutation = useUpdateChannelsActivityMutation({
     onSuccess: () => {

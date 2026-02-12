@@ -598,6 +598,172 @@
         }
       }
     },
+    "/channels/{channel_id}/attachments": {
+      "get": {
+        "tags": ["channels::inbound::axum_router"],
+        "summary": "Handler for `GET /channels/:channel_id/attachments`.",
+        "operationId": "get_channel_attachments",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size (1-100, default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Base64 encoded cursor value",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiChannelAttachmentsPage"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/messages": {
+      "get": {
+        "tags": ["channels::inbound::axum_router"],
+        "summary": "Handler for `GET /channels/:channel_id/messages`.",
+        "operationId": "get_channel_messages",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size (1-100, default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Base64 encoded cursor value",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiChannelMessagesPage"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/participants": {
+      "get": {
+        "tags": ["channels::inbound::axum_router"],
+        "summary": "Handler for `GET /channels/:channel_id/participants`.",
+        "operationId": "get_channel_participants",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ApiChannelParticipant"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents": {
       "get": {
         "tags": ["document"],
@@ -4518,6 +4684,321 @@
             }
           }
         ]
+      },
+      "ApiChannelAttachment": {
+        "type": "object",
+        "description": "A channel-level attachment.",
+        "required": [
+          "id",
+          "channel_id",
+          "message_id",
+          "entity_type",
+          "entity_id",
+          "created_at"
+        ],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel id."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the attachment was created."
+          },
+          "entity_id": {
+            "type": "string",
+            "description": "Entity id."
+          },
+          "entity_type": {
+            "type": "string",
+            "description": "Type of entity."
+          },
+          "height": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Height (for images)."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Attachment id."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Message id this attachment belongs to."
+          },
+          "width": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Width (for images)."
+          }
+        }
+      },
+      "ApiChannelAttachmentsPage": {
+        "type": "object",
+        "description": "Paginated response of channel attachments.",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiChannelAttachment"
+            },
+            "description": "Attachments on this page."
+          },
+          "next_cursor": {
+            "type": ["string", "null"],
+            "description": "Cursor for the next page, null if no more pages."
+          }
+        }
+      },
+      "ApiChannelMessage": {
+        "type": "object",
+        "description": "A top-level channel message with thread info.",
+        "required": [
+          "id",
+          "channel_id",
+          "sender_id",
+          "content",
+          "created_at",
+          "updated_at",
+          "thread",
+          "reactions",
+          "attachments"
+        ],
+        "properties": {
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiMessageAttachment"
+            },
+            "description": "Attachments on this message."
+          },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel id."
+          },
+          "content": {
+            "type": "string",
+            "description": "Message content."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the message was created."
+          },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the message was soft-deleted."
+          },
+          "edited_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the message was edited."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Message id."
+          },
+          "reactions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiCountedReaction"
+            },
+            "description": "Reactions on this message."
+          },
+          "sender_id": {
+            "type": "string",
+            "description": "Sender user id."
+          },
+          "thread": {
+            "$ref": "#/components/schemas/ApiThreadInfo",
+            "description": "Thread metadata and preview."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the message was last updated."
+          }
+        }
+      },
+      "ApiChannelMessagesPage": {
+        "type": "object",
+        "description": "Paginated response of channel messages.",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiChannelMessage"
+            },
+            "description": "Messages on this page."
+          },
+          "next_cursor": {
+            "type": ["string", "null"],
+            "description": "Cursor for the next page, null if no more pages."
+          }
+        }
+      },
+      "ApiChannelParticipant": {
+        "type": "object",
+        "description": "A channel participant.",
+        "required": ["channel_id", "user_id", "role", "joined_at"],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel id."
+          },
+          "joined_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the user joined."
+          },
+          "role": {
+            "$ref": "#/components/schemas/ApiParticipantRole",
+            "description": "Role in the channel."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User id."
+          }
+        }
+      },
+      "ApiCountedReaction": {
+        "type": "object",
+        "description": "A reaction with emoji and user list.",
+        "required": ["emoji", "users"],
+        "properties": {
+          "emoji": {
+            "type": "string",
+            "description": "The emoji string."
+          },
+          "users": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "User ids who added this reaction."
+          }
+        }
+      },
+      "ApiMessageAttachment": {
+        "type": "object",
+        "description": "An attachment on a message.",
+        "required": ["id", "entity_type", "entity_id", "created_at"],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the attachment was created."
+          },
+          "entity_id": {
+            "type": "string",
+            "description": "Entity id."
+          },
+          "entity_type": {
+            "type": "string",
+            "description": "Type of entity."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Attachment id."
+          }
+        }
+      },
+      "ApiParticipantRole": {
+        "type": "string",
+        "description": "Participant role in a channel.",
+        "enum": ["owner", "admin", "member"]
+      },
+      "ApiThreadInfo": {
+        "type": "object",
+        "description": "Thread metadata and preview replies.",
+        "required": ["reply_count", "preview"],
+        "properties": {
+          "latest_reply_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Timestamp of the latest reply."
+          },
+          "preview": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiThreadReply"
+            },
+            "description": "Last N replies for thread preview."
+          },
+          "reply_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total reply count."
+          }
+        }
+      },
+      "ApiThreadReply": {
+        "type": "object",
+        "description": "A thread reply shown in preview.",
+        "required": [
+          "id",
+          "sender_id",
+          "content",
+          "created_at",
+          "updated_at",
+          "reactions",
+          "attachments"
+        ],
+        "properties": {
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiMessageAttachment"
+            },
+            "description": "Attachments on this reply."
+          },
+          "content": {
+            "type": "string",
+            "description": "Reply content."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the reply was created."
+          },
+          "edited_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the reply was edited."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Reply id."
+          },
+          "reactions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiCountedReaction"
+            },
+            "description": "Reactions on this reply."
+          },
+          "sender_id": {
+            "type": "string",
+            "description": "Sender user id."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the reply was last updated."
+          }
+        }
       },
       "BasicDocument": {
         "type": "object",

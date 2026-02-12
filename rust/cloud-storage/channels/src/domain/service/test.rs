@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::{
     models::{
-        CountedReaction, MessageAttachment, ThreadReplyRow, ThreadStats, TopLevelMessageRow,
+        CountedReaction, MessageAttachment, ThreadData, ThreadReplyRow, TopLevelMessageRow,
     },
     ports::MockChannelMessagesRepo,
 };
@@ -26,9 +26,7 @@ fn empty_repo() -> MockChannelMessagesRepo {
     let mut repo = MockChannelMessagesRepo::new();
     repo.expect_get_top_level_messages()
         .returning(|_, _, _| Box::pin(async { Ok(vec![]) }));
-    repo.expect_get_thread_stats()
-        .returning(|_| Box::pin(async { Ok(HashMap::new()) }));
-    repo.expect_get_thread_previews()
+    repo.expect_get_thread_data()
         .returning(|_, _| Box::pin(async { Ok(HashMap::new()) }));
     repo.expect_get_reactions_batch()
         .returning(|_| Box::pin(async { Ok(HashMap::new()) }));
@@ -79,22 +77,17 @@ async fn returns_messages_with_thread_info() {
             Box::pin(async move { Ok(vec![r]) })
         });
 
-    repo.expect_get_thread_stats().returning(move |_| {
+    let reply_clone = reply_row.clone();
+    repo.expect_get_thread_data().returning(move |_, _| {
         let mut map = HashMap::new();
         map.insert(
             parent_id,
-            ThreadStats {
+            ThreadData {
                 reply_count: 5,
                 latest_reply_at: Some(latest_reply),
+                preview_replies: vec![reply_clone.clone()],
             },
         );
-        Box::pin(async move { Ok(map) })
-    });
-
-    let reply_clone = reply_row.clone();
-    repo.expect_get_thread_previews().returning(move |_, _| {
-        let mut map = HashMap::new();
-        map.insert(parent_id, vec![reply_clone.clone()]);
         Box::pin(async move { Ok(map) })
     });
 
@@ -143,9 +136,7 @@ async fn clamps_limit() {
     repo.expect_get_top_level_messages()
         .withf(|_, _, limit| *limit == 100)
         .returning(|_, _, _| Box::pin(async { Ok(vec![]) }));
-    repo.expect_get_thread_stats()
-        .returning(|_| Box::pin(async { Ok(HashMap::new()) }));
-    repo.expect_get_thread_previews()
+    repo.expect_get_thread_data()
         .returning(|_, _| Box::pin(async { Ok(HashMap::new()) }));
     repo.expect_get_reactions_batch()
         .returning(|_| Box::pin(async { Ok(HashMap::new()) }));

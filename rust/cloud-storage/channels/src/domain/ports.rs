@@ -1,6 +1,6 @@
 use crate::domain::models::{
-    ChannelAttachment, ChannelParticipant, CountedReaction, MessageAttachment, ThreadReplyRow,
-    ThreadStats, TopLevelMessageRow,
+    ChannelAttachment, ChannelParticipant, CountedReaction, MessageAttachment, ThreadData,
+    TopLevelMessageRow,
 };
 use models_pagination::{CreatedAt, Query};
 use std::collections::HashMap;
@@ -20,18 +20,12 @@ pub trait ChannelMessagesRepo: Send + Sync + 'static {
         limit: u16,
     ) -> impl Future<Output = Result<Vec<TopLevelMessageRow>, Self::Err>> + Send;
 
-    /// Batch-fetch thread statistics (reply count + latest reply timestamp) for parent messages.
-    fn get_thread_stats(
-        &self,
-        parent_ids: &[Uuid],
-    ) -> impl Future<Output = Result<HashMap<Uuid, ThreadStats>, Self::Err>> + Send;
-
-    /// Fetch the last N replies per parent message (for thread previews).
-    fn get_thread_previews(
+    /// Batch-fetch thread data (stats + preview replies) for parent messages in a single query.
+    fn get_thread_data(
         &self,
         parent_ids: &[Uuid],
         preview_count: u16,
-    ) -> impl Future<Output = Result<HashMap<Uuid, Vec<ThreadReplyRow>>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<HashMap<Uuid, ThreadData>, Self::Err>> + Send;
 
     /// Batch-fetch reactions for a set of message ids.
     fn get_reactions_batch(

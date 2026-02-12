@@ -89,7 +89,7 @@ where
     )
 )]
 #[tracing::instrument(err, skip_all)]
-async fn get_channel_messages_handler<S: ChannelMessagesService>(
+pub async fn get_channel_messages_handler<S: ChannelMessagesService>(
     State(state): State<ChannelsRouterState<S>>,
     MacroUserExtractor { .. }: MacroUserExtractor,
     Path(channel_id): Path<Uuid>,
@@ -123,7 +123,7 @@ async fn get_channel_messages_handler<S: ChannelMessagesService>(
     )
 )]
 #[tracing::instrument(err, skip_all)]
-async fn get_channel_attachments_handler<S: ChannelMessagesService>(
+pub async fn get_channel_attachments_handler<S: ChannelMessagesService>(
     State(state): State<ChannelsRouterState<S>>,
     MacroUserExtractor { .. }: MacroUserExtractor,
     Path(channel_id): Path<Uuid>,
@@ -155,7 +155,7 @@ async fn get_channel_attachments_handler<S: ChannelMessagesService>(
     )
 )]
 #[tracing::instrument(err, skip_all)]
-async fn get_channel_participants_handler<S: ChannelMessagesService>(
+pub async fn get_channel_participants_handler<S: ChannelMessagesService>(
     State(state): State<ChannelsRouterState<S>>,
     MacroUserExtractor { .. }: MacroUserExtractor,
     Path(channel_id): Path<Uuid>,

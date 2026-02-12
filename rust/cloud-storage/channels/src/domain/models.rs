@@ -207,16 +207,18 @@ pub struct TopLevelMessageRow {
     pub deleted_at: Option<DateTime<Utc>>,
 }
 
-/// Thread statistics for a parent message.
+/// Combined thread statistics and preview replies from a single query.
 #[derive(Debug, Clone)]
-pub struct ThreadStats {
-    /// Number of replies in this thread.
+pub struct ThreadData {
+    /// Total number of replies in this thread.
     pub reply_count: i64,
     /// Timestamp of the latest reply.
     pub latest_reply_at: Option<DateTime<Utc>>,
+    /// Last N replies for the thread preview (oldest-first).
+    pub preview_replies: Vec<ThreadReplyRow>,
 }
 
-/// Raw row returned from the thread previews query.
+/// Raw row returned from the thread data query.
 #[derive(Debug, Clone)]
 pub struct ThreadReplyRow {
     /// Reply id.
