@@ -6,8 +6,14 @@ on:
 jobs:
   migrate-db:
     name: Run Database Migrations (dev)
-    runs-on: db-migrator
+    runs-on: db-migrator-runner
     steps:
+      # This is needed to checkout the action files
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github/
+
       - name: Run migrations for dev
         uses: ./.github/actions/migrate-cloud-storage-db
         with:
