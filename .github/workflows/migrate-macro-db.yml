@@ -1,20 +1,24 @@
 name: Migrate Macro Database
-
 on:
   workflow_dispatch:
-
+    inputs:
+      environment:
+        description: 'Environment to run migrations for'
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
 jobs:
   migrate-db:
-    name: Run Database Migrations (dev)
+    name: Run Database Migrations (${{ inputs.environment }})
     runs-on: db-migrator
     steps:
-      # This is needed to checkout the action files
       - uses: actions/checkout@v4
         with:
           sparse-checkout: |
             .github/
-
-      - name: Run migrations for dev
+      - name: Run migrations
         uses: ./.github/actions/migrate-cloud-storage-db
         with:
-          environment: dev
+          environment: ${{ inputs.environment }}

@@ -12,6 +12,7 @@ runs:
     - uses: actions/checkout@v4
       with:
         sparse-checkout: |
+          .github/
           rust/cloud-storage/macro_db_client
     
     - name: Get database URL from Secrets Manager
@@ -48,4 +49,4 @@ runs:
         DATABASE_URL: ${{ steps.get-db-url.outputs.database_url }}
       run: |
         echo "Running migrations for ${{ inputs.environment }} environment..."
-        cargo sqlx migrate info
+        cargo sqlx migrate run
