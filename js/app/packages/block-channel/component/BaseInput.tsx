@@ -494,7 +494,7 @@ export function BaseInput(props: BaseInputProps) {
         />
       </Show>
       <div
-        class="transition-all duration-150 px-3 pt-2 sm:pb-4 overflow-y-auto placeholder:text-ink-placeholder text-ink w-full text-sm touch:mobile-width:text-base"
+        class="transition-all duration-150 px-3 pt-2 pb-2 @min-[40rem]:pb-4 overflow-y-auto placeholder:text-ink-placeholder text-ink w-full text-sm touch:mobile-width:text-base"
         onClick={(e) => {
           e.stopPropagation();
           focusMarkdownArea();

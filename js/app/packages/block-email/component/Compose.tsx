@@ -697,7 +697,7 @@ export function EmailCompose(props: EmailComposeProps) {
         </Switch>
 
         <div
-          class="macro-message-width mx-auto w-full max-h-full my-12 overflow-hidden px-4"
+          class="macro-message-width macro-message-padding mx-auto w-full max-h-full my-12 overflow-hidden"
           classList={{
             'pointer-events-none opacity-50': hasLinkError(),
           }}

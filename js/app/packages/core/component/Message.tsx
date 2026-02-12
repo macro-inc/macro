@@ -132,7 +132,7 @@ const TopBar: Component<MessageTopBarProps> = (props) => {
         </Show>
         {/* Date - hidden when hovering since it shows above hover actions */}
         <Show when={local.timestamp && !context.hover()}>
-          <div class="text-xs touch:mobile-width:text-sm text-ink-muted">
+          <div class="text-xs touch:mobile-width:text-sm text-ink-muted min-w-0 shrink-2 truncate">
             {local.timestamp &&
               formatDate(new Date(local.timestamp).getTime() / 1000)}
           </div>
@@ -260,7 +260,7 @@ const Root: Component<MessageRootProps> = (props) => {
             data-message-body-id={props.id}
           >
             <div
-              class="relative flex-1 flex flex-col justify-start w-[calc(100%-28px)] min-w-0 pl-[var(--left-of-connector)]"
+              class="relative flex flex-col pl-[calc(var(--user-icon-width)/2+var(--body-padding))] ml-[var(--left-of-connector)]"
               classList={{
                 'border-l': !props.hideConnectors,
                 'border-accent': props.isNewMessage,
@@ -272,9 +272,6 @@ const Root: Component<MessageRootProps> = (props) => {
                 ),
                 'pb-2': !props.isLastMessage,
                 'pb-4': props.hasThreadChildren ?? false,
-              }}
-              style={{
-                'margin-left': `var(--left-of-connector)`,
               }}
             >
               {/* User Icon */}
@@ -386,9 +383,6 @@ const Root: Component<MessageRootProps> = (props) => {
               fallback={
                 <div
                   class="w-min -translate-x-1/2 icon-plus allow-css-brackets"
-                  classList={{
-                    'pb-3': props.isLastInThread && props.isLastMessage,
-                  }}
                   style={{
                     'margin-left': `calc(var(--thread-shift) + var(--left-of-connector))`,
                   }}
@@ -397,13 +391,11 @@ const Root: Component<MessageRootProps> = (props) => {
                   <Button
                     onClick={props.onThreadAppend}
                     tabIndex={0}
-                    class="text-ink-muted border border-edge-muted bg-menu hover:bg-hover hover-transition-bg flex flex-row justify-center items-center relative px-0 py-0 mb-4"
-                    style={{
-                      width: 'var(--user-icon-width)',
-                      height: 'var(--user-icon-width)',
-                    }}
+                    class="text-ink-muted flex flex-row justify-center items-center relative px-0 py-0 mb-3 hover:bg-transparent active:border-transparent active:bg-transparent active:text-inherit hover:opacity-100"
                   >
-                    <IconPlus class="size-1/2" />
+                    <div class="border border-edge-muted bg-menu hover:bg-hover hover-transition-bg flex flex-row justify-center items-center ml-2 mr-2 mb-2 size-[var(--user-icon-width)] touch:min-h-[var(--user-icon-width)] touch:min-w-[var(--user-icon-width)]">
+                      <IconPlus class="size-1/2" />
+                    </div>
                   </Button>
                 </div>
               }

@@ -56,7 +56,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
   return (
     <div class="shrink-0 flex justify-center w-full">
       {/* These pl/pr below are needed to align with expanded messages at mobile width. */}
-      <div class="macro-message-width w-full pl-2 pr-4 sm:px-0">
+      <div class="macro-message-width macro-message-margin w-full pl-2 pr-4 sm:px-0">
         <BozzyBracket active={props.isFocused} hover={hover()} class="">
           <div
             class="relative flex flex-row items-center w-full pb-2 cursor-pointer transition-all"

@@ -439,9 +439,9 @@ export function Channel(props: {
             setOrderedMessages={setOrderedMessages}
             onNavigationReady={setMessageListNav}
           />
-          <div class="shrink-0 w-full px-4 pb-2">
+          <div class="shrink-0 w-full pb-2 @min-[40rem]:px-4">
             {/* seamus: note this element is below the scroll so we translate it back to account for the scroll above */}
-            <div class="mx-auto -translate-x-1 w-full macro-message-width">
+            <div class="mx-auto w-full macro-message-width macro-message-padding">
               <Suspense>
                 <ChannelInput
                   channelId={props.channelId}

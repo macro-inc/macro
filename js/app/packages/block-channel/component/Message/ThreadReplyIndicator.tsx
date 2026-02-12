@@ -81,7 +81,7 @@ export function ThreadReplyIndicator(props: {
         <p class="text-accent-ink font-medium min-w-[60px] shrink-0">
           {countText()}
         </p>
-        <div class="min-w-[17ch] hidden @sm:block">
+        <div class="min-w-[17ch] hidden @min-[40rem]:block">
           <Switch>
             <Match when={hover()}>
               <p class="text-ink-muted">
