@@ -8,6 +8,7 @@ import {
   toDate,
 } from 'date-fns';
 
+/** Represents a Date or an Api RFC3339 string response that can be parsed into a Date object. */
 export type DateValue = Date | string;
 
 const EPOCH_ZERO = new Date(0);
