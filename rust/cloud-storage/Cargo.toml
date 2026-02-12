@@ -41,6 +41,7 @@ members = [
   "email_validator",
   "entity_access",
   "frecency",
+  "fusionauth",
   "gmail_client",
   "integration_tests/*",
   "lambda_client",
@@ -100,6 +101,7 @@ members = [
   "search_service_client",
   "search_upload_handler",
   "secretsmanager_client",
+  "seed_cli",
   "ses_client",
   "sha_cleanup_worker",
   "sns_client",
@@ -142,6 +144,7 @@ base64 = "0.22.1"
 cached = { version = "0.54.0", features = ["async_tokio_rt_multi_thread"] }
 chrono = { version = "0.4.39", features = ["serde"] }
 clap = { version = "4.5.20", features = ["derive"] }
+csv = "1"
 cloudfront_sign = "0.3.0"
 cookie = "0.18.1"
 dashmap = "6.1.0"

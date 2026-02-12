@@ -193,10 +193,6 @@ const service = new AuthenticationService('authentication-service', {
       value: pulumi.interpolate`${FUSIONAUTH_CLIENT_SECRET_KEY}`,
     },
     {
-      name: 'FUSIONAUTH_APPLICATION_ID',
-      value: pulumi.interpolate`${FUSIONAUTH_CLIENT_ID}`,
-    },
-    {
       name: 'FUSIONAUTH_TENANT_ID',
       value: FUSIONAUTH_TENANT_ID,
     },
