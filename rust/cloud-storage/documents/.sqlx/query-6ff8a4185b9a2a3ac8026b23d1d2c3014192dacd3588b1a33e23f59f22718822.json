@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT \"modificationData\" as modification_data\n            FROM \"DocumentInstanceModificationData\"\n            WHERE \"documentInstanceId\" = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "modification_data",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6ff8a4185b9a2a3ac8026b23d1d2c3014192dacd3588b1a33e23f59f22718822"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM \"OrganizationDefaultSharePermission\"\n        WHERE \"organization_id\" = $1\n    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e11187ed1bd1944597258bbdefa8ec23de215edc1de1d020d418e2e89b17424e"
+}

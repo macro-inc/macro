@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM \"UserItemAccess\"\n        WHERE \"user_id\" = ANY($1) \n          AND \"item_id\" = $2 \n          AND \"item_type\" = $3\n          AND \"granted_from_channel_id\" = $4\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4d769c5d33741ec4fffebbbe6aa655e807a7d52f0cbde4e5e958375ce73b699f"
+}

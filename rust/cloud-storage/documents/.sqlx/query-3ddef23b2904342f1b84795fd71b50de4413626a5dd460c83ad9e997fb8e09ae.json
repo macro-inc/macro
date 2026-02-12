@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE \"Chat\" SET \"deletedAt\" = NOW() WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3ddef23b2904342f1b84795fd71b50de4413626a5dd460c83ad9e997fb8e09ae"
+}

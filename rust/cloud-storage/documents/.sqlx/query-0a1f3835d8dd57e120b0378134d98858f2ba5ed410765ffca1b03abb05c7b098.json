@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM\n                in_progress_user_link\n            WHERE\n                id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0a1f3835d8dd57e120b0378134d98858f2ba5ed410765ffca1b03abb05c7b098"
+}

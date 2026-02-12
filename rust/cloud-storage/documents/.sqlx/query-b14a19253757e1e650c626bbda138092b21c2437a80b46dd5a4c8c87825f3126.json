@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO \"Document\" (owner, name, \"fileType\", \"documentFamilyId\", \"branchedFromId\", \"branchedFromVersionId\", \"projectId\")\n                VALUES ($1, $2, $3, $4, $5, $6, $7)\n                RETURNING id, \"createdAt\"::timestamptz as created_at, \"updatedAt\"::timestamptz as updated_at;\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Int8",
+        "Text",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "b14a19253757e1e650c626bbda138092b21c2437a80b46dd5a4c8c87825f3126"
+}

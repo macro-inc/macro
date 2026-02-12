@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO \"ChatPermission\" (\"chatId\", \"sharePermissionId\")\n            VALUES ($1, $2)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b662ef77f95aaa2a86030fbed4f11de74d311cc1a6096e49372e6cc18581b523"
+}

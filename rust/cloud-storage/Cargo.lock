@@ -2860,6 +2860,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "documents"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "axum-extra",
+ "chrono",
+ "cloudfront_sign",
+ "document_sub_type",
+ "entity_access",
+ "futures",
+ "http-body-util",
+ "macro_db_migrator",
+ "macro_project_utils",
+ "macro_user_id",
+ "mockall",
+ "model",
+ "model-error-response",
+ "model_user",
+ "models_permissions",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "sync_service_client",
+ "thiserror 2.0.17",
+ "tokio",
+ "tower 0.5.2",
+ "tracing",
+ "urlencoding",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
 name = "docx_unzip_handler"
 version = "0.1.0"
 dependencies = [

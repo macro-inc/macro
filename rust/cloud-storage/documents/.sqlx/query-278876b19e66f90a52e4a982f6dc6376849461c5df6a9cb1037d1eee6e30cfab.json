@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            COALESCE(db.id, di.id) as \"id!\",\n            d.uploaded\n        FROM\n            \"Document\" d\n        LEFT JOIN LATERAL (\n            SELECT\n                i.id\n            FROM\n                \"DocumentInstance\" i\n            WHERE\n                i.\"documentId\" = d.id\n            ORDER BY\n                i.\"createdAt\" ASC\n            LIMIT 1\n        ) di ON d.\"fileType\" IS DISTINCT FROM 'docx'\n        LEFT JOIN LATERAL (\n            SELECT\n                b.id\n            FROM\n                \"DocumentBom\" b\n            WHERE\n                b.\"documentId\" = d.id\n            ORDER BY\n                b.\"createdAt\" ASC\n            LIMIT 1\n        ) db ON d.\"fileType\" = 'docx'\n        WHERE\n            d.id = $1\n        LIMIT 1\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "uploaded",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      false
+    ]
+  },
+  "hash": "278876b19e66f90a52e4a982f6dc6376849461c5df6a9cb1037d1eee6e30cfab"
+}

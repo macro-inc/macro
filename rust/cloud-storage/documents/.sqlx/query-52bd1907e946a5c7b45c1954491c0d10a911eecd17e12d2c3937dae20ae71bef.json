@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COUNT(*) as \"count\"\n            FROM \"Chat\" c\n            WHERE c.\"userId\" = $1 and c.\"deletedAt\" IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "52bd1907e946a5c7b45c1954491c0d10a911eecd17e12d2c3937dae20ae71bef"
+}

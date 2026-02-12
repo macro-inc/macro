@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            db.id\n        FROM \"DocumentBom\" db\n        JOIN \"Document\" d ON db.\"documentId\" = d.id\n        WHERE db.\"documentId\" = $1\n        ORDER BY db.\"createdAt\" DESC\n        LIMIT 1\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "874a0c4d1f171a6b97f75dd0e0c2df35b86bb10ef4bb518fb4594fe81d282606"
+}

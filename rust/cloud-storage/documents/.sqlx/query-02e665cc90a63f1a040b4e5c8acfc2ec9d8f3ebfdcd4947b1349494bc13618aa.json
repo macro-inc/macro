@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM\n                in_progress_user_link\n            WHERE\n                created_at < $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamp"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "02e665cc90a63f1a040b4e5c8acfc2ec9d8f3ebfdcd4947b1349494bc13618aa"
+}

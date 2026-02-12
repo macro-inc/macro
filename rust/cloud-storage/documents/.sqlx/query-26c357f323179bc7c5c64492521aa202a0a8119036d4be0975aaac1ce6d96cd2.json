@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                u.email\n            FROM \"UserHistory\" uh\n            JOIN \"User\" u ON uh.\"userId\" = u.id\n            WHERE uh.\"itemId\" = $1 AND uh.\"itemType\" = 'document'\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "26c357f323179bc7c5c64492521aa202a0a8119036d4be0975aaac1ce6d96cd2"
+}
