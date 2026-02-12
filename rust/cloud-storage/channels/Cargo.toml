@@ -20,7 +20,6 @@ ports = ["dep:tokio"]
 anyhow = { workspace = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
-macro_user_id = { path = "../macro_user_id" }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
 models_pagination = { path = "../models_pagination" }
@@ -33,5 +32,8 @@ utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+http-body-util = { workspace = true }
 mockall = { workspace = true }
+serde_json = { workspace = true }
 tokio = { workspace = true }
+tower = { workspace = true }

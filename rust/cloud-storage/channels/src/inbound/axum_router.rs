@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use crate::domain::models::{
     ChannelAttachment, ChannelMessage, ChannelParticipant, CountedReaction, MessageAttachment,
     ParticipantRole, ThreadInfo, ThreadReply,
