@@ -517,7 +517,6 @@ const SearchBar = () => {
     description: 'Search',
     keyDownHandler: () => {
       ref()?.focus();
-      if (ref()?.value) ref()?.select();
       return true;
     },
   });
