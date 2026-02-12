@@ -2,7 +2,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { useChannelMarkdownArea } from '@block-channel/component/MarkdownArea';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
-import { formatDate, parseDate } from '@core/util/date';
+import { formatDate } from '@core/util/date';
 import {
   type Component,
   createEffect,
@@ -481,7 +481,7 @@ function PlaygroundContent() {
     /** @ts-ignore */
     return {
       id: `custom-${Date.now()}`,
-      createdAt: Math.floor(Date.now() / 1000),
+      createdAt: new Date().toISOString(),
       eventItemId: 'channel-custom',
       eventItemType: 'channel',
       senderId: 'user-custom',

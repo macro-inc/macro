@@ -6,6 +6,7 @@ import type { Accessor } from 'solid-js';
 import type { FilterResult } from 'fuzzy';
 import fuzzy from 'fuzzy';
 import { differenceInMilliseconds } from 'date-fns';
+import type { DateValue } from './date';
 import { fuzzyScoreCommaSpaceSeparated } from './fuzzy';
 import {
   type ParsedDuration,
@@ -48,9 +49,9 @@ export interface FreshSortConfig<T> {
 type FreshSortConfigWithDefaults = Required<FreshSortConfig<unknown>>;
 
 export interface TimestampedItem {
-  updatedAt?: Date | null;
-  viewedAt?: Date | null;
-  lastInteraction?: Date | null;
+  updatedAt?: DateValue | null;
+  viewedAt?: DateValue | null;
+  lastInteraction?: DateValue | null;
 }
 
 export interface FreshSortResult<T> {
@@ -78,7 +79,7 @@ const DEFAULT_CONFIG = {
 function extractTimestamp(
   item: TimestampedItem,
   useViewedAt: boolean = false
-): Date | null {
+): DateValue | null {
   if (useViewedAt) {
     return item.viewedAt ?? item.updatedAt ?? item.lastInteraction ?? null;
   }
@@ -87,7 +88,7 @@ function extractTimestamp(
 }
 
 function calculateTimeScore(
-  timestamp: Date | null,
+  timestamp: DateValue | null,
   config: FreshSortConfigWithDefaults
 ): number {
   if (!timestamp) return 0;

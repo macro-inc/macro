@@ -1,4 +1,4 @@
-import { formatEmailDate, parseDate } from '@core/util/date';
+import { formatEmailDate } from '@core/util/date';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
 import { $createQuoteNode } from '@lexical/rich-text';
 import { $dfsIterator } from '@lexical/utils';
@@ -52,7 +52,7 @@ function buildHeaderDescriptor(
   replyType: ReplyType | undefined
 ): HeaderDescriptor {
   const replyingToDate = replyingTo.internal_date_ts ?? replyingTo.created_at;
-  const formattedDate = formatEmailDate(parseDate(replyingToDate));
+  const formattedDate = formatEmailDate(replyingToDate);
 
   if (replyType === 'forward') {
     const lines: string[] = [];

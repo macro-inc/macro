@@ -61,8 +61,8 @@ function createMockMessage(overrides: Partial<Message> = {}): Message {
     channel_id: 'channel-1',
     sender_id: 'user-1',
     content: 'Test message',
-    created_at: new Date('2024-01-01T00:00:00.000Z'),
-    updated_at: new Date('2024-01-01T00:00:00.000Z'),
+    created_at: '2024-01-01T00:00:00.000Z',
+    updated_at: '2024-01-01T00:00:00.000Z',
     deleted_at: undefined,
     edited_at: undefined,
     thread_id: undefined,
@@ -93,8 +93,8 @@ function createMockChannelResponse(
       id: 'channel-1',
       name: 'Test Channel',
       owner_id: 'user-1',
-      created_at: new Date('2024-01-01T00:00:00.000Z'),
-      updated_at: new Date('2024-01-01T00:00:00.000Z'),
+      created_at: '2024-01-01T00:00:00.000Z',
+      updated_at: '2024-01-01T00:00:00.000Z',
       channel_type: 'direct_message',
     },
     messages: [],
@@ -449,7 +449,7 @@ describe('optimisticUpdateChannelMessage', () => {
   });
 
   it('should rollback correctly using returned context', () => {
-    const originalUpdatedAt = new Date('2024-01-01T00:00:00.000Z');
+    const originalUpdatedAt = '2024-01-01T00:00:00.000Z';
     const msg1 = createMockMessage({
       id: 'msg-1',
       content: 'Original',
@@ -744,7 +744,7 @@ describe('optimisticUpdateChannelName', () => {
   });
 
   it('should update channel name and timestamp', () => {
-    const originalUpdatedAt = new Date('2024-01-01T00:00:00.000Z');
+    const originalUpdatedAt = '2024-01-01T00:00:00.000Z';
     seedQueryCache('channel-1', createMockChannelResponse());
 
     const context = optimisticUpdateChannelName({
@@ -780,8 +780,6 @@ describe('optimisticUpdateChannelName', () => {
     // Verify rollback restored original state
     const cached = getChannelFromCache('channel-1');
     expect(cached?.channel.name).toBe('Test Channel');
-    expect(cached?.channel.updated_at).toEqual(
-      new Date('2024-01-01T00:00:00.000Z')
-    );
+    expect(cached?.channel.updated_at).toEqual('2024-01-01T00:00:00.000Z');
   });
 });

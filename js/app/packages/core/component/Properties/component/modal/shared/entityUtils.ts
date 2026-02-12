@@ -4,7 +4,6 @@ import type { EntityType } from '@service-properties/generated/schemas/entityTyp
 import type { Accessor } from 'solid-js';
 import type { FreshSortConfig, TimestampedItem } from '@core/util/freshSort';
 import type { HistoryItem as Item } from '@queries/history/history';
-import { parseDate } from '@core/util/date';
 
 /** Combined entity type for unified handling across entity selectors */
 export type CombinedEntity =
@@ -102,7 +101,7 @@ export function getEntityTimestampedItem<T extends CombinedEntity>(
       };
     case 'channel':
       return {
-        updatedAt: parseDate(item.data.updated_at),
+        updatedAt: item.data.updated_at,
       };
     case 'user':
       return {

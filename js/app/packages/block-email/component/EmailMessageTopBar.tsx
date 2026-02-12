@@ -20,7 +20,6 @@ import {
 } from '../util/emailUser';
 import { useEmailContext } from './EmailContext';
 import { type EmailMessageAction, MessageActions } from './MessageActions';
-import { parseDate } from '@core/util/date';
 
 interface EmailMessageTopBarProps {
   message: MessageWithBodyReplyless;
@@ -40,8 +39,8 @@ interface Recipient {
   email?: string | null;
 }
 
-function formatFullDate(date: Date): string {
-  return date
+function formatFullDate(date: string | Date): string {
+  return new Date(date)
     .toLocaleString('en-US', {
       weekday: 'long',
       year: 'numeric',
@@ -54,15 +53,16 @@ function formatFullDate(date: Date): string {
     .replace(',', '');
 }
 
-export function formatShortDate(date: Date): string {
-  if (date.getFullYear() !== new Date().getFullYear()) {
-    return date.toLocaleDateString('en-US', {
+export function formatShortDate(date: string | Date): string {
+  const d = new Date(date);
+  if (d.getFullYear() !== new Date().getFullYear()) {
+    return d.toLocaleDateString('en-US', {
       month: 'numeric',
       day: 'numeric',
       year: '2-digit',
     });
   }
-  return date.toLocaleDateString('en-US', {
+  return d.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
   });
@@ -135,9 +135,7 @@ function ExpandedHeader(props: {
       <RecipientRow label="Bcc" recipients={props.message.bcc} bold />
       <div class="flex flex-row items-center gap-2 text-ink-extra-muted">
         <Show when={props.message.internal_date_ts}>
-          <span>
-            {formatFullDate(parseDate(props.message.internal_date_ts!))}
-          </span>
+          <span>{formatFullDate(props.message.internal_date_ts!)}</span>
         </Show>
         <DeprecatedIconButton
           theme="clear"
@@ -199,7 +197,7 @@ function CollapsedHeader(props: {
         />
         <Show when={props.message.internal_date_ts}>
           <div class="text-xs touch:mobile-width:text-sm text-ink">
-            {formatShortDate(parseDate(props.message.internal_date_ts!))}
+            {formatShortDate(props.message.internal_date_ts!)}
           </div>
         </Show>
       </div>

@@ -2,7 +2,7 @@ import type { Message } from '@queries/channel/types';
 
 export type MinimalMessage = {
   id: string;
-  created_at: Date;
+  created_at: string;
   sender_id: string;
   thread_id?: string | null;
 };

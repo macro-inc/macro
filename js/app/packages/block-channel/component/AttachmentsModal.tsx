@@ -11,7 +11,6 @@ import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { tryMacroId, useDisplayName } from '@core/user';
 import BracketLeft from '@macro-icons/macro-group-bracket-left.svg';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
-import { parseDate } from '@core/util/date';
 import type { MessageMention } from '@service-comms/generated/models';
 import type { Attachment } from '@queries/channel/types';
 import type { ItemType } from '@service-storage/client';
@@ -123,7 +122,7 @@ function makeAttachmentFromMention(
 ): Attachment {
   return {
     channel_id: channelId,
-    created_at: parseDate(mention.created_at),
+    created_at: mention.created_at,
     entity_id: mention.entity_id,
     entity_type: mention.entity_type,
     id: mention.message_id,
@@ -188,8 +187,9 @@ function AttachmentItem(props: AttachmentItemProps) {
   );
 }
 
-const formatTimestamp = (date: Date) => {
-  const datePart = date
+const formatTimestamp = (date: string) => {
+  const d = new Date(date);
+  const datePart = d
     .toLocaleDateString('en-US', {
       month: 'numeric',
       day: 'numeric',
@@ -197,7 +197,7 @@ const formatTimestamp = (date: Date) => {
     })
     .replaceAll('/', '-');
 
-  const timePart = date.toLocaleTimeString('en-US', {
+  const timePart = d.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: 'numeric',
   });

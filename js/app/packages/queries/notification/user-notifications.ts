@@ -1,5 +1,4 @@
 import type { Maybe } from '@core/types';
-import { parseDate } from '@core/util/date';
 import { type MaybeResult, throwOnErr } from '@core/util/maybeResult';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { notificationServiceClient } from '@service-notification/client';
@@ -15,22 +14,11 @@ import { queryClient } from '../client';
 import { notificationKeys } from './keys';
 import type { UnifiedNotification } from '@notifications/types';
 
-function convertNotification(n: ApiUserNotification): Omit<
-  ApiUserNotification,
-  'createdAt' | 'updatedAt' | 'deletedAt' | 'viewedAt'
-> & {
-  createdAt?: Date | null;
-  updatedAt?: Date | null;
-  deletedAt?: Date | null;
-  viewedAt?: Date | null;
-} {
-  return {
-    ...n,
-    createdAt: parseDate(n.createdAt),
-    updatedAt: parseDate(n.updatedAt),
-    deletedAt: parseDate(n.deletedAt),
-    viewedAt: parseDate(n.viewedAt),
-  };
+function stripOwnerId({
+  ownerId: _,
+  ...rest
+}: ApiUserNotification): UnifiedNotification {
+  return rest;
 }
 
 export { notificationKeys } from './keys';
@@ -82,7 +70,7 @@ export function useUserNotificationsQuery(args?: { limit?: number }) {
         GetAllUserNotificationsResponse,
         UserNotificationsPageParam
       >
-    ) => data.pages.flatMap(({ items }) => items.map(convertNotification)),
+    ) => data.pages.flatMap(({ items }) => items.map(stripOwnerId)),
   }));
 }
 
@@ -134,7 +122,7 @@ export function useEntityNotificationsQuery(args: {
         GetAllUserNotificationsResponse,
         EntityNotificationsPageParam
       >
-    ) => data.pages.flatMap(({ items }) => items.map(convertNotification)),
+    ) => data.pages.flatMap(({ items }) => items.map(stripOwnerId)),
   }));
 }
 
@@ -188,7 +176,7 @@ export function useEntitiesNotificationsQuery(args: {
         GetAllUserNotificationsResponse,
         EntitiesNotificationsPageParam
       >
-    ) => data.pages.flatMap(({ items }) => items.map(convertNotification)),
+    ) => data.pages.flatMap(({ items }) => items.map(stripOwnerId)),
     enabled: args.eventItemIds().length > 0,
   }));
 }
@@ -388,7 +376,7 @@ type NotificationItem = GetAllUserNotificationsResponse['items'][number];
  */
 export async function getNotificationById(
   notificationId: string
-): Promise<ReturnType<typeof convertNotification> | undefined> {
+): Promise<UnifiedNotification | undefined> {
   const res = await throwOnErr(async () => {
     return await notificationServiceClient.getUserNotificationById(
       notificationId
@@ -396,7 +384,7 @@ export async function getNotificationById(
   });
 
   if (!res) return undefined;
-  return convertNotification(res as NotificationItem);
+  return stripOwnerId(res as NotificationItem);
 }
 
 export function optimisticInsertNotification(

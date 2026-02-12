@@ -1,6 +1,5 @@
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { PropertyOption } from '@service-properties/generated/schemas/propertyOption';
-import { parseDate } from '@core/util/date';
 import type { Property, PropertyDefinitionDomain, ValueType } from '../types';
 import { nanoid } from 'nanoid';
 
@@ -28,8 +27,8 @@ export function toPropertyDefinitionDomain(
     owner: definition.owner,
     specificEntityType: definition.specific_entity_type,
     options,
-    createdAt: parseDate(definition.created_at),
-    updatedAt: parseDate(definition.updated_at),
+    createdAt: definition.created_at,
+    updatedAt: definition.updated_at,
   };
 }
 

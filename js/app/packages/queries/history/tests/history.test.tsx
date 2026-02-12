@@ -16,8 +16,8 @@ function createItem(overrides: Partial<Item> = {}): Item {
     name: 'Test Item',
     type: 'document',
     userId: 'user-1',
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     ...overrides,
   } as Item;
 }

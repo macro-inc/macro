@@ -4,7 +4,6 @@ import {
 } from '@core/constant/allBlocks';
 import { useChannelsContext } from '@core/context/channels';
 import { emailToId } from '@core/user';
-import { parseDate } from '@core/util/date';
 import {
   truncateSearchMatch,
   mergeAdjacentMacroEmTags,
@@ -73,7 +72,7 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
             SEARCH_MATCH_LENGTH
           ),
           senderId: r.sender_id!,
-          sentAt: parseDate(r.created_at!),
+          sentAt: r.created_at!,
           location: {
             type: 'channel' as const,
             threadId: r.thread_id ?? undefined,
@@ -134,7 +133,7 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
           ),
           sender: r.pretty_sender!,
           senderId: emailToId(r.sender),
-          sentAt: parseDate(r.sent_at!),
+          sentAt: r.sent_at!,
           location: {
             type: 'email' as const,
             messageId: r.message_id!,
@@ -206,8 +205,8 @@ export const useSearchResponseItemMapper = () => {
           id: result.document_id,
           name: result.name || blockNameToDefaultFile(result.file_type),
           ownerId: result.owner_id,
-          createdAt: parseDate(result.metadata?.created_at),
-          updatedAt: parseDate(result.metadata?.updated_at),
+          createdAt: result.metadata?.created_at,
+          updatedAt: result.metadata?.updated_at,
           fileType: result.file_type || undefined,
           projectId: result.metadata?.project_id ?? undefined,
           search,
@@ -248,9 +247,9 @@ export const useSearchResponseItemMapper = () => {
           id: result.thread_id,
           name,
           ownerId: result.owner_id,
-          createdAt: latestMessageSentAt ?? parseDate(result.created_at),
-          updatedAt: latestMessageSentAt ?? parseDate(result.updated_at),
-          viewedAt: parseDate(result.viewed_at),
+          createdAt: latestMessageSentAt ?? result.created_at,
+          updatedAt: latestMessageSentAt ?? result.updated_at,
+          viewedAt: result.viewed_at,
           isRead: singleMessage
             ? !messageHits[0].labels.includes('UNREAD')
             : false,
@@ -286,8 +285,8 @@ export const useSearchResponseItemMapper = () => {
           id: result.chat_id,
           name,
           ownerId: result.user_id,
-          createdAt: parseDate(result.metadata?.created_at),
-          updatedAt: parseDate(result.metadata?.updated_at),
+          createdAt: result.metadata?.created_at,
+          updatedAt: result.metadata?.updated_at,
           projectId: result.metadata?.project_id ?? undefined,
           search,
         };
@@ -307,10 +306,10 @@ export const useSearchResponseItemMapper = () => {
           id: result.channel_id,
           name: channelWithLatest?.name ?? blockNameToDefaultFile('channel'),
           ownerId: result.owner_id ?? '',
-          createdAt: parseDate(result.metadata?.created_at),
-          updatedAt: parseDate(result.metadata?.updated_at),
+          createdAt: result.metadata?.created_at,
+          updatedAt: result.metadata?.updated_at,
           channelType: result.channel_type as ChannelType,
-          interactedAt: parseDate(result.metadata?.interacted_at),
+          interactedAt: result.metadata?.interacted_at,
           participantIds: channelWithLatest?.participants?.map(
             (p) => p.user_id
           ),
@@ -329,8 +328,8 @@ export const useSearchResponseItemMapper = () => {
           id: result.id,
           name: result.name,
           ownerId: result.owner_id,
-          createdAt: parseDate(result.created_at),
-          updatedAt: parseDate(result.updated_at),
+          createdAt: result.created_at,
+          updatedAt: result.updated_at,
           projectId: result.metadata?.parent_project_id ?? undefined,
           search,
         };
@@ -387,24 +386,24 @@ export const mapSoupPageToEntityList: (
         if (item.tag === 'chat') {
           return {
             ...item.data,
-            createdAt: parseDate(item.data.createdAt),
-            updatedAt: parseDate(item.data.updatedAt),
+            createdAt: item.data.createdAt,
+            updatedAt: item.data.updatedAt,
             type: item.tag,
             name: item.data.name || 'New Chat',
             frecencyScore: item.frecency_score,
-            viewedAt: parseDate(item.data.viewedAt),
+            viewedAt: item.data.viewedAt,
             projectId: item.data.projectId ?? undefined,
           };
         }
 
         if (item.tag === 'project') {
           return {
-            createdAt: parseDate(item.data.createdAt),
-            updatedAt: parseDate(item.data.updatedAt),
+            createdAt: item.data.createdAt,
+            updatedAt: item.data.updatedAt,
             id: item.data.id,
             ownerId: item.data.ownerId,
             frecencyScore: item.frecency_score,
-            viewedAt: parseDate(item.data.viewedAt),
+            viewedAt: item.data.viewedAt,
             projectId: item.data.parentId ?? undefined,
             type: item.tag,
             name: item.data.name || 'New Project',
@@ -419,8 +418,8 @@ export const mapSoupPageToEntityList: (
 
           return {
             ...item.data,
-            createdAt: parseDate(item.data.createdAt),
-            updatedAt: parseDate(item.data.updatedAt),
+            createdAt: item.data.createdAt,
+            updatedAt: item.data.updatedAt,
             senderEmail: item.data.senderEmail ?? undefined,
             senderName: item.data.senderName ?? undefined,
             snippet: item.data.snippet ?? undefined,
@@ -428,7 +427,7 @@ export const mapSoupPageToEntityList: (
             type: 'email',
             name: item.data.name || 'Email Thread',
             frecencyScore: item.frecency_score,
-            viewedAt: parseDate(item.data.viewedAt),
+            viewedAt: item.data.viewedAt,
             participants,
           };
         }
@@ -441,17 +440,15 @@ export const mapSoupPageToEntityList: (
             channelType: item.data.channel.channel_type,
             ownerId: item.data.channel.owner_id,
             frecencyScore: item.frecency_score ?? 0,
-            updatedAt: parseDate(item.data.channel.updated_at),
-            createdAt: parseDate(item.data.channel.created_at),
+            updatedAt: item.data.channel.updated_at,
+            createdAt: item.data.channel.created_at,
             participantIds: item.data.participants.map((p) => p.user_id),
-            viewedAt: parseDate(item.data.viewed_at ?? item.data.interacted_at),
+            viewedAt: item.data.viewed_at ?? item.data.interacted_at,
             latestMessage: item.data.latest_non_thread_message
               ? {
                   content: item.data.latest_non_thread_message.content,
                   senderId: item.data.latest_non_thread_message.sender_id,
-                  createdAt: parseDate(
-                    item.data.latest_non_thread_message.created_at
-                  ),
+                  createdAt: item.data.latest_non_thread_message.created_at,
                 }
               : undefined,
           };
@@ -460,11 +457,11 @@ export const mapSoupPageToEntityList: (
 
         return {
           ...item.data,
-          createdAt: parseDate(item.data.createdAt),
-          updatedAt: parseDate(item.data.updatedAt),
+          createdAt: item.data.createdAt,
+          updatedAt: item.data.updatedAt,
           type: item.tag,
           frecencyScore: item.frecency_score,
-          viewedAt: parseDate(item.data.viewedAt),
+          viewedAt: item.data.viewedAt,
           fileType: item.data.fileType ?? undefined,
           projectId: item.data.projectId ?? undefined,
           subType:

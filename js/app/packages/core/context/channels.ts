@@ -1,5 +1,5 @@
 import { createMemo, type Accessor } from 'solid-js';
-import { parseDate } from '@core/util/date';
+import type { DateValue } from '@core/util/date';
 import type {
   ApiActivity as ChannelsActivity,
   ApiChannelWithLatest,
@@ -77,7 +77,7 @@ export function useChannelActivity(channelId: string) {
  * activity with that user. Useful for ranking/sorting users by recency of
  * interaction.
  */
-export function useDmActivityByUserId(): Accessor<Map<string, Date>> {
+export function useDmActivityByUserId(): Accessor<Map<string, DateValue>> {
   const { channels } = useChannelsContext();
   const currentUserId = useUserId();
 
@@ -86,7 +86,7 @@ export function useDmActivityByUserId(): Accessor<Map<string, Date>> {
     if (!currentUser) return new Map();
 
     const allChannels = channels();
-    const map = new Map<string, Date>();
+    const map = new Map<string, DateValue>();
 
     for (const channel of allChannels) {
       if (channel.channel_type !== ChannelTypeEnum.DirectMessage) continue;
@@ -96,7 +96,7 @@ export function useDmActivityByUserId(): Accessor<Map<string, Date>> {
       );
       if (!otherParticipant) continue;
 
-      map.set(otherParticipant.user_id, parseDate(channel.updated_at));
+      map.set(otherParticipant.user_id, channel.updated_at);
     }
 
     return map;

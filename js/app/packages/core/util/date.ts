@@ -1,13 +1,15 @@
 import { tz } from '@date-fns/tz';
+import type { DateArg } from 'date-fns';
 import {
   compareAsc,
   compareDesc,
-  DateArg,
   differenceInWeeks,
   isToday,
   isYesterday,
   toDate,
 } from 'date-fns';
+
+export type DateValue = DateArg<Date>;
 
 const EPOCH_ZERO = new Date(0);
 
@@ -26,15 +28,16 @@ export interface FormatDateOptions {
  *     single day offsets, 'Thursday' for a day within the week and '01/23/2025' for dates outside the week.
  */
 export const formatDate = (
-  date: Date | null | undefined,
+  date: DateValue | null | undefined,
   options?: FormatDateOptions
 ) => {
   if (!date) return '';
+  const d = toDate(date);
   const { timeZone, showTime } = options ?? {};
   const timeZoneOpts = timeZone ? { in: tz(timeZone) } : {};
   const now = new Date();
 
-  const time = date.toLocaleTimeString('en-US', {
+  const time = d.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
@@ -50,14 +53,14 @@ export const formatDate = (
   }
 
   if (differenceInWeeks(now, date) < 1) {
-    const weekday = date.toLocaleDateString(undefined, {
+    const weekday = d.toLocaleDateString(undefined, {
       weekday: 'long',
       timeZone,
     });
     return showTime ? `${weekday} at ${time}` : weekday;
   }
 
-  const displayDate = date.toLocaleDateString(undefined, {
+  const displayDate = d.toLocaleDateString(undefined, {
     month: '2-digit',
     day: '2-digit',
     year: '2-digit',
@@ -71,12 +74,13 @@ export const formatDate = (
  * @param date - Date object or Unix timestamp in seconds
  * @returns Formatted date string
  */
-export const formatEmailDate = (date: Date) => {
-  const weekday = date.toLocaleDateString('en-US', { weekday: 'short' });
-  const month = date.toLocaleDateString('en-US', { month: 'short' });
-  const day = date.getDate();
-  const year = date.getFullYear();
-  const time = date.toLocaleTimeString('en-US', {
+export const formatEmailDate = (date: DateValue) => {
+  const d = toDate(date);
+  const weekday = d.toLocaleDateString('en-US', { weekday: 'short' });
+  const month = d.toLocaleDateString('en-US', { month: 'short' });
+  const day = d.getDate();
+  const year = d.getFullYear();
+  const time = d.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
@@ -91,8 +95,8 @@ export const formatEmailDate = (date: Date) => {
  * @returns Positive if a > b, negative if a < b, zero if equal
  */
 export const compareDateDesc = (
-  a: Date | null | undefined,
-  b: Date | null | undefined
+  a: DateValue | null | undefined,
+  b: DateValue | null | undefined
 ): number => {
   const dateA = a ?? EPOCH_ZERO;
   const dateB = b ?? EPOCH_ZERO;
@@ -105,8 +109,8 @@ export const compareDateDesc = (
  * @returns Positive if a > b, negative if a < b, zero if equal
  */
 export const compareDateAsc = (
-  a: Date | null | undefined,
-  b: Date | null | undefined
+  a: DateValue | null | undefined,
+  b: DateValue | null | undefined
 ): number => {
   const dateA = a ?? EPOCH_ZERO;
   const dateB = b ?? EPOCH_ZERO;

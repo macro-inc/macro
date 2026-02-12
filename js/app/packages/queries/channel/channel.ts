@@ -9,7 +9,6 @@ import { commsServiceClient } from '@service-comms/client';
 import type { getChannelResponseError } from '@service-comms/generated/client';
 import type { ApiChannelWithLatest } from '@service-comms/generated/models';
 import type { GetChannelResponse } from './types';
-import { convertGetChannelResponse } from './types';
 import {
   type QueryClient,
   type UseBaseQueryOptions,
@@ -35,7 +34,7 @@ export function channelQueryOptions(channelId: string): ChannelQueryOptions {
           })
       );
 
-      return convertGetChannelResponse(result);
+      return result;
     },
     staleTime: Infinity,
   };
@@ -74,14 +73,14 @@ type WithChannelId<T> = T & { channelId: string };
 
 export type UpdateChannelNameContext = {
   previousName: string | null | undefined;
-  previousUpdatedAt: Date;
+  previousUpdatedAt: string;
 };
 
 /** Helper to update channel name in both single channel and list queries. */
 function updateChannelNameInQueries(
   channelId: string,
   name: string | null | undefined,
-  updatedAt: Date
+  updatedAt: string
 ): void {
   const queryKey = channelKeys.withID(channelId).queryKey;
   const listQueryKey = channelKeys.listChannels.queryKey;
@@ -140,7 +139,7 @@ export function optimisticUpdateChannelName(
     };
   }
 
-  const now = new Date();
+  const now = new Date().toISOString();
   updateChannelNameInQueries(vars.channelId, vars.name, now);
 
   return context;

@@ -146,10 +146,7 @@ export function References(props: ReferenceProps) {
   const sortedReferences = createMemo(() => {
     const refs = references() ?? [];
     return refs.sort((a, b) =>
-      compareDateDesc(
-        parseDate(getReferenceCreatedAt(a)),
-        parseDate(getReferenceCreatedAt(b))
-      )
+      compareDateDesc(getReferenceCreatedAt(a), getReferenceCreatedAt(b))
     );
   });
 

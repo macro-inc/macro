@@ -3,7 +3,7 @@ import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { NotificationType } from '@core/types';
-import type { UnifiedNotification } from '@service-notification/client';
+import type { UnifiedNotification } from './types';
 import { getNotificationById } from '@queries/notification/user-notifications';
 import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';

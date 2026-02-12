@@ -4,7 +4,6 @@ import type {
   Message as ApiMessage,
 } from '@service-comms/generated/models';
 import type { GetChannelResponse } from './types';
-import { convertAttachment, convertMessage } from './types';
 import { queryClient } from '../client';
 import { softInvalidateChannelWithID } from './channel';
 import { channelKeys, ChannelNonceKeys } from './keys';
@@ -59,7 +58,7 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
 
         return {
           ...prev,
-          messages: [...prev.messages, convertMessage(payload)],
+          messages: [...prev.messages, payload],
         };
       });
     } catch (error) {
@@ -122,9 +121,9 @@ export function handleCommsAttachment(payload: CommsAttachmentPayload): void {
         if (!prev) return prev;
 
         const existingIds = new Set(prev.attachments.map((a) => a.id));
-        const newAttachments = payload.attachments
-          .filter((a) => !existingIds.has(a.id))
-          .map(convertAttachment);
+        const newAttachments = payload.attachments.filter(
+          (a) => !existingIds.has(a.id)
+        );
 
         return {
           ...prev,

@@ -8,7 +8,6 @@ import {
   isMessageFromCurrentUser,
 } from '../util/emailUser';
 import { formatShortDate } from './EmailMessageTopBar';
-import { parseDate } from '@core/util/date';
 
 interface CollapsedMessageProps {
   message: MessageWithBodyReplyless;
@@ -118,7 +117,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
             {/* Date */}
             <div class="text-xs touch:mobile-width:text-sm text-ink shrink-0 ml-4 pr-2">
               {props.message.internal_date_ts &&
-                formatShortDate(parseDate(props.message.internal_date_ts))}
+                formatShortDate(props.message.internal_date_ts)}
             </div>
           </div>
         </BozzyBracket>

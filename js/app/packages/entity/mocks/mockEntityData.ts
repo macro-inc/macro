@@ -135,8 +135,8 @@ export const createMockNotification = (
   notificationEventType: 'document_mention',
   entity_id: 'doc_123',
   entity_type: 'document',
-  createdAt: MOCK_TIMESTAMPS.today,
-  updatedAt: MOCK_TIMESTAMPS.today,
+  createdAt: MOCK_TIMESTAMPS.today.toISOString(),
+  updatedAt: MOCK_TIMESTAMPS.today.toISOString(),
   deletedAt: null,
   viewedAt: null,
   notificationMetadata: {
@@ -151,19 +151,19 @@ export const MOCK_NOTIFICATIONS: Notification[] = [
     id: 'notif_mention_1',
     notificationEventType: 'document_mention',
     senderId: MOCK_USER_IDS.teamMember1,
-    createdAt: MOCK_TIMESTAMPS.today,
+    createdAt: MOCK_TIMESTAMPS.today.toISOString(),
   }),
   createMockNotification({
     id: 'notif_task_1',
     notificationEventType: 'task_assigned',
     senderId: MOCK_USER_IDS.teamMember2,
-    createdAt: MOCK_TIMESTAMPS.yesterday,
+    createdAt: MOCK_TIMESTAMPS.yesterday.toISOString(),
   }),
   createMockNotification({
     id: 'notif_channel_1',
     notificationEventType: 'channel_message_send',
     senderId: MOCK_USER_IDS.sharedUser,
-    createdAt: MOCK_TIMESTAMPS.lastWeek,
+    createdAt: MOCK_TIMESTAMPS.lastWeek.toISOString(),
     entity_type: 'channel',
   }),
 ];
@@ -661,8 +661,8 @@ export const MOCK_ENTITY_VERY_OLD: DocumentEntity = {
   name: 'Archive Document 2020',
   ownerId: MOCK_USER_IDS.owner,
   fileType: 'md',
-  createdAt: new Date('2020-01-01'),
-  updatedAt: new Date('2020-06-15'),
+  createdAt: new Date('2020-01-01').toISOString(),
+  updatedAt: new Date('2020-06-15').toISOString(),
   frecencyScore: 0.12,
 };
 

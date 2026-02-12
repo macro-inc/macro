@@ -1,4 +1,4 @@
-import { compareDateDesc, parseDate } from '@core/util/date';
+import { compareDateDesc } from '@core/util/date';
 import type { UnifiedNotification } from './types';
 import type { NotificationType } from '@core/types';
 

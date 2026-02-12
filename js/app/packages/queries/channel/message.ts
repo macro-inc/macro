@@ -50,8 +50,8 @@ export type DeleteMessageContext = {
 export type UpdateMessageContext = {
   messageId: string;
   previousContent: string;
-  previousEditedAt: Date | null | undefined;
-  previousUpdatedAt: Date;
+  previousEditedAt: string | null | undefined;
+  previousUpdatedAt: string;
 };
 
 /**
@@ -72,7 +72,7 @@ export function optimisticInsertChannelMessage(
       if (!prev) return prev;
 
       context = { optimisticId: vars.optimisticId };
-      const now = new Date();
+      const now = new Date().toISOString();
 
       const newMessage: Message = {
         id: vars.optimisticId,
@@ -89,7 +89,7 @@ export function optimisticInsertChannelMessage(
       const newAttachments: Attachment[] = vars.attachments.map((a) => ({
         id: crypto.randomUUID(),
         channel_id: vars.channelId,
-        created_at: new Date(),
+        created_at: new Date().toISOString(),
         message_id: vars.optimisticId,
         ...a,
       }));
@@ -280,7 +280,7 @@ export function optimisticUpdateChannelMessage(
         previousUpdatedAt: message.updated_at,
       };
 
-      const now = new Date();
+      const now = new Date().toISOString();
 
       return {
         ...prev,

@@ -52,7 +52,7 @@ export function optimisticAddParticipants(
           user_id: userId,
           role: 'member',
           left_at: null,
-          joined_at: new Date(),
+          joined_at: new Date().toISOString(),
           channel_id: vars.channelId,
         })
       );

@@ -31,6 +31,11 @@ describe('Date Utilities (core/utils/date.ts)', () => {
       expect(result).toMatch('2:15 PM');
     });
 
+    it('should accept ISO string input', () => {
+      const result = formatDate('2025-06-14T14:15:00.000Z');
+      expect(result).toMatch('2:15 PM');
+    });
+
     it('should show correct time for now with no params and new york system time', () => {
       process.env.TZ = NEW_YORK_TZ;
       const result = formatDate(mockNow);
@@ -298,6 +303,22 @@ describe('Date Utilities (core/utils/date.ts)', () => {
       expect(sorted[1]).toEqual(new Date('2025-03-15T00:00:00.000Z'));
       expect(sorted[2]).toEqual(new Date('2025-01-01T00:00:00.000Z'));
     });
+
+    it('should work with ISO string inputs', () => {
+      const older = '2025-01-01T00:00:00.000Z';
+      const newer = '2025-12-31T23:59:59.000Z';
+
+      expect(compareDateDesc(newer, older)).toBeLessThan(0);
+      expect(compareDateDesc(older, newer)).toBeGreaterThan(0);
+    });
+
+    it('should work with mixed string and Date inputs', () => {
+      const olderString = '2025-01-01T00:00:00.000Z';
+      const newerDate = new Date('2025-12-31T23:59:59.000Z');
+
+      expect(compareDateDesc(newerDate, olderString)).toBeLessThan(0);
+      expect(compareDateDesc(olderString, newerDate)).toBeGreaterThan(0);
+    });
   });
 
   describe('compareDateAsc', () => {
@@ -341,6 +362,14 @@ describe('Date Utilities (core/utils/date.ts)', () => {
     it('should return 0 when one is null and other is undefined', () => {
       expect(compareDateAsc(null, undefined)).toBe(0);
       expect(compareDateAsc(undefined, null)).toBe(0);
+    });
+
+    it('should work with ISO string inputs', () => {
+      const older = '2025-01-01T00:00:00.000Z';
+      const newer = '2025-12-31T23:59:59.000Z';
+
+      expect(compareDateAsc(older, newer)).toBeLessThan(0);
+      expect(compareDateAsc(newer, older)).toBeGreaterThan(0);
     });
   });
 

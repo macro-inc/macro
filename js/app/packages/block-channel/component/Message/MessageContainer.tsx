@@ -95,7 +95,7 @@ function NewMessageIndicator(props: { onClick?: () => void }) {
 
 type MessageProps = {
   message: MessageType;
-  lastViewed: Accessor<Date | null | undefined>;
+  lastViewed: Accessor<string | null | undefined>;
   isFocused: boolean;
   index: Accessor<number>;
   orderedMessages: Accessor<MessageType[]>;

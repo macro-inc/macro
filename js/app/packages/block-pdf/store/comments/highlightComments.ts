@@ -15,7 +15,6 @@ import type {
 import { getHighlightsFromSelection } from '@block-pdf/util/pdfjsUtils';
 import { createBlockMemo, createBlockSignal } from '@core/block';
 import { useUserId } from '@core/context/user';
-import { parseDate } from '@core/util/date';
 import { createCallback } from '@solid-primitives/rootless';
 import { batch } from 'solid-js';
 import { produce } from 'solid-js/store';
@@ -78,7 +77,7 @@ const getHighlightThread = (
     replies.push({
       ...commentBase,
       id: comment.commentId,
-      createdAt: parseDate(comment.createdAt),
+      createdAt: comment.createdAt,
       owner: comment.owner,
       author: comment.sender || comment.owner,
       text: comment.text,
@@ -88,7 +87,7 @@ const getHighlightThread = (
   const root: PdfRoot = {
     ...commentBase,
     id: rootComment.commentId,
-    createdAt: parseDate(rootComment.createdAt),
+    createdAt: rootComment.createdAt,
     owner: rootComment.owner,
     author: rootComment.sender || rootComment.owner,
     text: rootComment.text,

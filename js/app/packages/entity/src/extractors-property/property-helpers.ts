@@ -9,7 +9,6 @@ import {
   PROPERTY_OPTION_IDS,
   NUMBER_DECIMAL_PLACES,
 } from '@core/component/Properties/constants';
-import { parseDate } from '@core/util/date';
 import { nanoid } from 'nanoid';
 
 const EPOCH_ZERO = new Date(0);
@@ -184,8 +183,8 @@ export function soupPropertyToProperty(soupProperty: SoupProperty): Property {
     options,
     owner: definition.owner,
     specificEntityType: definition.specific_entity_type,
-    createdAt: parseDate(definition.created_at),
-    updatedAt: parseDate(definition.updated_at),
+    createdAt: definition.created_at,
+    updatedAt: definition.updated_at,
   };
 
   const valueType = definition.data_type as ValueType;

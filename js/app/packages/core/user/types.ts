@@ -1,3 +1,4 @@
+import type { DateValue } from '@core/util/date';
 import type { Accessor } from 'solid-js';
 
 export type { ChannelWithParticipants } from '@service-comms/generated/models';
@@ -13,7 +14,7 @@ export type IUser = {
   id: string;
   email: string;
   name: string;
-  lastInteraction?: Date;
+  lastInteraction?: DateValue;
 };
 
 type BaseUserName = {

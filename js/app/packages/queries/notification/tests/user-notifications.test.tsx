@@ -54,7 +54,7 @@ function createMockNotification(
     id: `notification-${Math.random().toString(36).slice(2)}`,
     entity_id: 'entity-1',
     entity_type: 'document',
-    createdAt: new Date(),
+    createdAt: new Date().toISOString(),
     updatedAt: null,
     viewedAt: null,
     deletedAt: null,
@@ -167,7 +167,7 @@ describe('notification mutations', () => {
       await mutatePromise;
 
       const notifications = getNotificationsFromCache();
-      expect(notifications[0].viewedAt).toBeInstanceOf(Date);
+      expect(typeof notifications[0].viewedAt).toBe('string');
       expect(notifications[1].viewedAt).toBe(null);
 
       cleanup();
@@ -227,7 +227,7 @@ describe('notification mutations', () => {
 
       const notifications = getNotificationsFromCache();
       expect(notifications[0].viewedAt).toBe(null); // n1 unchanged
-      expect(notifications[1].viewedAt).toBeInstanceOf(Date); // n2 updated
+      expect(typeof notifications[1].viewedAt).toBe('string'); // n2 updated
 
       cleanup();
     });

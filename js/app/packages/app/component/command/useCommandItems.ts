@@ -2,7 +2,6 @@ import { useChannelsContext } from '@core/context/channels';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { activeScope } from '@core/hotkey/state';
 import { mapFromListsByKey } from '@core/util/compareUtils';
-import { parseDate } from '@core/util/date';
 import { useHistoryQuery } from '@queries/history/history';
 import type { Channel } from '@service-comms/generated/models/channel';
 import type { ChannelType } from '@service-comms/generated/models/channelType';
@@ -99,8 +98,8 @@ export function useCommandItems() {
             ? (channel as any).participants
             : undefined,
       },
-      updatedAt: parseDate(channel.updated_at),
-      viewedAt: parseDate((channel as ChannelWithViewedAt).viewed_at),
+      updatedAt: channel.updated_at,
+      viewedAt: (channel as ChannelWithViewedAt).viewed_at,
     }));
 
     return mapFromListsByKey<CommandItemCard>(

@@ -6,7 +6,7 @@ import {
   type EntityData,
   type WithNotification,
 } from '@entity';
-import { compareDateDesc, parseDate } from '@core/util/date';
+import { compareDateDesc } from '@core/util/date';
 
 export type SystemSortOption =
   | 'updated_at'
