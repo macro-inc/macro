@@ -172,6 +172,10 @@ pub struct ChannelFilters {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sender_ids: Vec<String>,
 
+    /// Channel types to filter by. Examples: ['public'], ['direct_message', 'private']. Empty to search all channel types.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub channel_types: Vec<String>,
+
     /// Filter by channel importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub importance: Option<bool>,
@@ -185,6 +189,7 @@ impl IsEmpty for ChannelFilters {
             org_id,
             channel_ids,
             sender_ids,
+            channel_types,
             importance,
         } = self;
         thread_ids.is_empty()
@@ -192,6 +197,7 @@ impl IsEmpty for ChannelFilters {
             && org_id.is_none()
             && channel_ids.is_empty()
             && sender_ids.is_empty()
+            && channel_types.is_empty()
             && importance.is_none()
     }
 }
