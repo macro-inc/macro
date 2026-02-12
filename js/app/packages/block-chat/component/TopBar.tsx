@@ -21,7 +21,7 @@ import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import Notepad from '@icon/regular/notepad.svg';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
 import { onCleanup, onMount } from 'solid-js';
-import { useWaitChatRename } from '../../macro-entity/src/queries/rename';
+import { useWaitChatRename } from '@macro-entity';
 
 export function TopBar() {
   const blockId = useBlockId();

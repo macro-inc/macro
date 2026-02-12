@@ -82,7 +82,7 @@ import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
 import { Button } from '@ui/components/Button';
 import { Hotkey } from '@core/component/Hotkey';
 import { AccessLevel } from '@service-cognition/generated/schemas/accessLevel';
-import { useWaitChatRename } from '../../../macro-entity/src/queries/rename';
+import { useWaitChatRename } from '@macro-entity';
 
 type ChatData = {
   messages: ChatMessageWithAttachments[];
