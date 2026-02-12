@@ -31,7 +31,7 @@ export const formatDate = (
   options?: FormatDateOptions
 ) => {
   if (!date) return '';
-  const d = toDate(date);
+  const d = date instanceof Date ? date : toDate(date);
   const { timeZone, showTime } = options ?? {};
   const timeZoneOpts = timeZone ? { in: tz(timeZone) } : {};
   const now = new Date();
