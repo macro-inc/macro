@@ -4,7 +4,9 @@
 mod test;
 
 use std::borrow::Cow;
+use std::path::Path;
 
+use anyhow::Context;
 use clap::{Args, Subcommand};
 
 use crate::config::SeedCliContext;
@@ -24,10 +26,6 @@ pub enum UserCommand {
     Create(CreateArgs),
     /// Bulk create multiple users
     BulkCreate(BulkCreateArgs),
-    /// Delete a user
-    Delete(DeleteArgs),
-    /// Read user information
-    Read(ReadArgs),
 }
 
 /// Arguments for creating a single user.
@@ -46,30 +44,12 @@ pub struct BulkCreateArgs {
     pub file_path: String,
 }
 
-/// Arguments for deleting a user.
-#[derive(Debug, Args)]
-pub struct DeleteArgs {
-    /// The ID of the user to delete
-    #[arg(long)]
-    pub id: String,
-}
-
-/// Arguments for reading user information.
-#[derive(Debug, Args)]
-pub struct ReadArgs {
-    /// The ID of the user to read.
-    #[arg(long)]
-    pub id: Option<String>,
-}
-
 impl UserArgs {
     /// Execute the user command.
     pub async fn execute(self, ctx: SeedCliContext) -> anyhow::Result<()> {
         match self.command {
             UserCommand::Create(args) => create(args, ctx).await,
             UserCommand::BulkCreate(args) => bulk_create(args, ctx).await,
-            UserCommand::Delete(args) => delete(args, ctx).await,
-            UserCommand::Read(args) => read(args, ctx).await,
         }
     }
 }
@@ -95,17 +75,48 @@ async fn create(args: CreateArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
 #[tracing::instrument(skip(ctx), err)]
 async fn bulk_create(args: BulkCreateArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
     tracing::info!("bulk creating users");
-    todo!()
-}
 
-#[tracing::instrument(skip(ctx), err)]
-async fn delete(args: DeleteArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
-    tracing::info!("deleting user");
-    todo!()
-}
+    let content = std::fs::read_to_string(Path::new(&args.file_path))
+        .with_context(|| format!("failed to read csv file: {}", args.file_path))?;
 
-#[tracing::instrument(skip(ctx), err)]
-async fn read(args: ReadArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
-    tracing::info!("reading user");
-    todo!()
+    let emails: Vec<&str> = content
+        .lines()
+        .map(|line| line.trim())
+        .filter(|line| !line.is_empty() && *line != "email")
+        .collect();
+
+    if emails.is_empty() {
+        anyhow::bail!("no emails found in csv file");
+    }
+
+    println!("Found {} emails to create", emails.len());
+
+    let mut created = 0;
+    let mut failed = 0;
+
+    for email in &emails {
+        match ctx
+            .fusionauth_client
+            .create_user(fusionauth::user::create::User {
+                email: Cow::Borrowed(email),
+                username: Some(Cow::Borrowed(email)),
+                password: "hardcodeLocalPassword123!".into(),
+            })
+            .await
+        {
+            Ok(user_id) => {
+                println!("Created user {email} with id {user_id}");
+                created += 1;
+            }
+            Err(e) => {
+                tracing::error!(error=?e, email, "failed to create user");
+                println!("Failed to create user {email}: {e}");
+                failed += 1;
+            }
+        }
+    }
+
+    println!("\nBulk create complete: {created} created, {failed} failed");
+
+    Ok(())
 }

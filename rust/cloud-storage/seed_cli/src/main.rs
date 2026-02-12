@@ -36,7 +36,11 @@ pub async fn main() -> anyhow::Result<()> {
     let db = PgPoolOptions::new()
         .min_connections(1)
         .max_connections(50)
-        .connect(&env_vars.database_url)
+        .connect(
+            &env_vars
+                .database_url
+                .replace("postgres:5432", "localhost:5432"),
+        )
         .await
         .context("could not connect to db")?;
     tracing::trace!("initialized db");

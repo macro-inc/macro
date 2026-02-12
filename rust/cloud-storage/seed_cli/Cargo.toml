@@ -19,3 +19,6 @@ sqlx = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 fusionauth = { path = "../fusionauth" }
 mockall = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
