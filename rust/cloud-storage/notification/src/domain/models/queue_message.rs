@@ -2,7 +2,9 @@
 
 use crate::domain::models::{
     Notification, RateLimitConfig, RateLimitKey, SendNotificationRequest, TaggedContent,
-    apple::APNSPushNotification, mobile::MessageAttributes,
+    apple::APNSPushNotification,
+    email_notification_digest::{BatchSend, PushNotificationsEnabled},
+    mobile::MessageAttributes,
 };
 use chrono::{DateTime, Utc};
 use cowlike::CowLike;
@@ -11,6 +13,9 @@ use model_entity::Entity;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
+
+#[cfg(test)]
+mod test;
 
 /// APNS push notification targets.
 #[derive(Debug, Serialize, Deserialize)]
@@ -21,6 +26,11 @@ pub struct APNSTargets<T> {
     pub attributes: MessageAttributes,
     /// The iOS device endpoints to deliver to.
     pub ios_device_endpoints: Vec<String>,
+    /// if the state machine returned that the decision is incomplete
+    /// then we pass the state of the machine into the queue such that it
+    /// can be resumed on the egress side.
+    #[serde(default)]
+    pub bulk_digest_state_machine: Option<BatchSend<PushNotificationsEnabled>>,
 }
 
 /// Email notification payload.

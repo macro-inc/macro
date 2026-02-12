@@ -26,6 +26,8 @@ pub mod ports;
 mod test;
 
 /// Send as part of a batched digest email (collected over 5-30 minutes).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct BatchSend<T>(T);
 
 /// Send immediately as a single notification email.
@@ -214,7 +216,7 @@ impl<T: Notification> AccountDoesNotExist<T> {
 /// State indicating the user has push notifications enabled.
 ///
 /// If push was delivered successfully, don't send email. Otherwise, batch send.
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct PushNotificationsEnabled {
     /// the inner value which has become adjacently tagged
     /// We lose the compiler typing here because we need to store this value

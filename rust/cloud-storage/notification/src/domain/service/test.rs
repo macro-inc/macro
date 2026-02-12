@@ -1381,6 +1381,7 @@ async fn test_egress_ios_attempts_all_endpoints_even_if_some_fail() {
                     endpoint3.to_string(),
                     endpoint4.to_string(),
                 ],
+                bulk_digest_state_machine: None,
             })),
             on_failure: None,
         },
