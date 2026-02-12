@@ -6,7 +6,7 @@ on:
 jobs:
   migrate-db:
     name: Run Database Migrations (dev)
-    runs-on: db-migrator-runner
+    runs-on: db-migrator
     steps:
       # This is needed to checkout the action files
       - uses: actions/checkout@v4
