@@ -1,6 +1,7 @@
 import { ENABLE_SEARCH_SERVICE } from '@core/constant/featureFlags';
 import { useSearch } from '@core/signal/search';
 import { isErr } from '@core/util/maybeResult';
+import { parseDate } from '@core/util/date';
 import {
   extractSearchSnippet,
   extractSearchTerms,
@@ -53,7 +54,7 @@ function createDocumentItems(
               highlightTerms: extractSearchTerms(content),
             }),
           },
-          updatedAt: doc.metadata?.updated_at,
+          updatedAt: parseDate(doc.metadata?.updated_at),
         });
       }
     });
@@ -80,7 +81,7 @@ function createEmailItems(email: UnifiedSearchResponseItem): CommandItemCard[] {
           id: email.thread_id,
           name: email.name ?? '',
           sender: result.sender!,
-          timestamp: result.sent_at ?? email.updated_at,
+          timestamp: parseDate(result.sent_at ?? email.updated_at),
           is_read: !result.labels.includes('UNREAD'),
           // TODO: This should be the attachments from the email, need to update the search service to return them
           attachments: [],
@@ -129,7 +130,7 @@ function createChatItems(chat: UnifiedSearchResponseItem): CommandItemCard[] {
           matchIndex: index,
           senderId: chat.user_id,
         },
-        updatedAt: chat.metadata?.updated_at,
+        updatedAt: parseDate(chat.metadata?.updated_at),
       });
     });
   }
@@ -165,7 +166,7 @@ function createChannelItems(
           matchIndex: index,
           senderId: result.sender_id!,
         },
-        updatedAt: channel.metadata?.updated_at,
+        updatedAt: parseDate(channel.metadata?.updated_at),
       });
     });
   }

@@ -1,4 +1,5 @@
 import { createMemo, type Accessor } from 'solid-js';
+import { parseDate } from '@core/util/date';
 import type {
   ApiActivity as ChannelsActivity,
   ApiChannelWithLatest,
@@ -95,8 +96,7 @@ export function useDmActivityByUserId(): Accessor<Map<string, Date>> {
       );
       if (!otherParticipant) continue;
 
-      const timestamp = channel.updated_at;
-      map.set(otherParticipant.user_id, timestamp);
+      map.set(otherParticipant.user_id, parseDate(channel.updated_at));
     }
 
     return map;

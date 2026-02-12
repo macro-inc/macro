@@ -7,7 +7,7 @@ import {
   useBlockName,
 } from '@core/block';
 import { isErr } from '@core/util/maybeResult';
-import { compareDateAsc } from '@core/util/date';
+import { compareDateAsc, parseDate } from '@core/util/date';
 import { createConnectionBlockWebsocketEffect } from '@service-connection/websocket';
 import { useUserId } from '@core/context/user';
 import { storageServiceClient } from '@service-storage/client';
@@ -44,7 +44,7 @@ export const sortComments = (a: Comment, b: Comment) => {
   } else if (b.order != null) {
     return 1;
   }
-  return compareDateAsc(a.createdAt, b.createdAt);
+  return compareDateAsc(parseDate(a.createdAt), parseDate(b.createdAt));
 };
 
 async function fetchComments() {

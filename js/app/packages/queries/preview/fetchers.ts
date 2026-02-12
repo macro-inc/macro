@@ -1,5 +1,6 @@
 import { itemToSafeName } from '@core/constant/allBlocks';
 import { isErr } from '@core/util/maybeResult';
+import { parseDate } from '@core/util/date';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { commsServiceClient } from '@service-comms/client';
 import { emailClient } from '@service-email/client';
@@ -97,7 +98,7 @@ async function fetchDocumentPreviews(ids: string[]): Promise<PreviewItem[]> {
           name: doc.document_name,
           fileType: doc.file_type as FileType,
           owner: doc.owner,
-          updatedAt: doc.updated_at,
+          updatedAt: parseDate(doc.updated_at),
           subType:
             doc.sub_type === null || doc.sub_type === undefined
               ? undefined
@@ -142,7 +143,7 @@ async function fetchChatPreviews(ids: string[]): Promise<PreviewItem[]> {
           loading: false,
           name: chat.chat_name,
           owner: chat.owner,
-          updatedAt: chat.updated_at,
+          updatedAt: parseDate(chat.updated_at),
         };
       case 'no_access':
       case 'does_not_exist':
@@ -167,11 +168,18 @@ async function fetchProjectPreviews(
     return [];
   }
 
-  return result[1].previews.map((preview) => ({
-    type: 'project',
-    loading: false,
-    ...preview,
-  }));
+  return result[1].previews.map((preview) => {
+    const { updatedAt, ...rest } = preview as Extract<
+      typeof preview,
+      { updatedAt?: unknown }
+    >;
+    return {
+      type: 'project' as const,
+      loading: false as const,
+      ...rest,
+      updatedAt: parseDate(updatedAt as string | undefined),
+    };
+  });
 }
 
 async function fetchEmailPreviews(threadIds: string[]): Promise<PreviewItem[]> {
@@ -208,7 +216,7 @@ async function fetchEmailPreviews(threadIds: string[]): Promise<PreviewItem[]> {
         loading: false as const,
         name: subject,
         owner: sender as string | undefined,
-        updatedAt: data.thread.updated_at,
+        updatedAt: parseDate(data.thread.updated_at),
       };
     })
   );

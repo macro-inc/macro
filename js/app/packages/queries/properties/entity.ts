@@ -118,7 +118,7 @@ function apiValuesToSoupPropertyValue(
         : null;
     case 'DATE':
       return apiValues.value != null
-        ? { type: 'Date', value: apiValues.value }
+        ? { type: 'Date', value: apiValues.value.toISOString() }
         : null;
     case 'SELECT_STRING':
     case 'SELECT_NUMBER':

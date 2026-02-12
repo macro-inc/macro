@@ -2,7 +2,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { useChannelMarkdownArea } from '@block-channel/component/MarkdownArea';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
-import { formatDate } from '@core/util/date';
+import { formatDate, parseDate } from '@core/util/date';
 import {
   type Component,
   createEffect,
@@ -128,7 +128,7 @@ function NotificationItem(props: {
             />
           </Show>
           <div class="text-xs text-ink-muted font-mono mt-2">
-            {formatDate(props.notification.createdAt)}
+            {formatDate(props.notification.createdAt ?? undefined)}
           </div>
         </div>
       </div>
@@ -352,7 +352,7 @@ function NotificationDetail(props: {
               ] || props.notification.notificationEventType}
             </h2>
             <p class="text-sm text-ink-muted">
-              {formatDate(props.notification.createdAt)}
+              {formatDate(props.notification.createdAt ?? undefined)}
             </p>
           </div>
           <DeprecatedTextButton
@@ -408,7 +408,7 @@ function NotificationDetail(props: {
               }
             </div>
             <div class="grow" />
-            <div>{formatDate(props.notification.createdAt)}</div>
+            <div>{formatDate(props.notification.createdAt ?? undefined)}</div>
           </div>
           <div class="ml-5">
             <NotificationRenderer

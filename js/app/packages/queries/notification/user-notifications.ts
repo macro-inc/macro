@@ -1,7 +1,9 @@
 import type { Maybe } from '@core/types';
+import { parseDate } from '@core/util/date';
 import { type MaybeResult, throwOnErr } from '@core/util/maybeResult';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { notificationServiceClient } from '@service-notification/client';
+import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
 import type { GetAllUserNotificationsResponse } from '@service-notification/generated/schemas/getAllUserNotificationsResponse';
 import {
   type InfiniteData,
@@ -11,6 +13,24 @@ import {
 } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { notificationKeys } from './keys';
+
+function convertNotification(n: ApiUserNotification): Omit<
+  ApiUserNotification,
+  'createdAt' | 'updatedAt' | 'deletedAt' | 'viewedAt'
+> & {
+  createdAt?: Date | null;
+  updatedAt?: Date | null;
+  deletedAt?: Date | null;
+  viewedAt?: Date | null;
+} {
+  return {
+    ...n,
+    createdAt: parseDate(n.createdAt),
+    updatedAt: parseDate(n.updatedAt),
+    deletedAt: parseDate(n.deletedAt),
+    viewedAt: parseDate(n.viewedAt),
+  };
+}
 
 export { notificationKeys } from './keys';
 
@@ -61,7 +81,7 @@ export function useUserNotificationsQuery(args?: { limit?: number }) {
         GetAllUserNotificationsResponse,
         UserNotificationsPageParam
       >
-    ) => data.pages.flatMap(({ items }) => items),
+    ) => data.pages.flatMap(({ items }) => items.map(convertNotification)),
   }));
 }
 
@@ -113,7 +133,7 @@ export function useEntityNotificationsQuery(args: {
         GetAllUserNotificationsResponse,
         EntityNotificationsPageParam
       >
-    ) => data.pages.flatMap(({ items }) => items),
+    ) => data.pages.flatMap(({ items }) => items.map(convertNotification)),
   }));
 }
 
@@ -167,7 +187,7 @@ export function useEntitiesNotificationsQuery(args: {
         GetAllUserNotificationsResponse,
         EntitiesNotificationsPageParam
       >
-    ) => data.pages.flatMap(({ items }) => items),
+    ) => data.pages.flatMap(({ items }) => items.map(convertNotification)),
     enabled: args.eventItemIds().length > 0,
   }));
 }
@@ -313,7 +333,7 @@ const mapNotificationsAsSeen = (
         ...page,
         items: page.items.map((n) =>
           params.notificationIds.includes(n.id)
-            ? { ...n, viewedAt: new Date() }
+            ? { ...n, viewedAt: new Date().toISOString() }
             : n
         ),
       })),
@@ -367,14 +387,15 @@ type NotificationItem = GetAllUserNotificationsResponse['items'][number];
  */
 export async function getNotificationById(
   notificationId: string
-): Promise<NotificationItem | undefined> {
+): Promise<ReturnType<typeof convertNotification> | undefined> {
   const res = await throwOnErr(async () => {
     return await notificationServiceClient.getUserNotificationById(
       notificationId
     );
   });
 
-  return res as NotificationItem;
+  if (!res) return undefined;
+  return convertNotification(res as NotificationItem);
 }
 
 export function optimisticInsertNotification(

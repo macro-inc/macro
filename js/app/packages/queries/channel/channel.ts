@@ -7,10 +7,9 @@ import {
 } from '@core/util/maybeResult';
 import { commsServiceClient } from '@service-comms/client';
 import type { getChannelResponseError } from '@service-comms/generated/client';
-import type {
-  ApiChannelWithLatest,
-  GetChannelResponse,
-} from '@service-comms/generated/models';
+import type { ApiChannelWithLatest } from '@service-comms/generated/models';
+import type { GetChannelResponse } from './types';
+import { convertGetChannelResponse } from './types';
 import {
   type QueryClient,
   type UseBaseQueryOptions,
@@ -36,7 +35,7 @@ export function channelQueryOptions(channelId: string): ChannelQueryOptions {
           })
       );
 
-      return result;
+      return convertGetChannelResponse(result);
     },
     staleTime: Infinity,
   };

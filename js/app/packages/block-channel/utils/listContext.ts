@@ -1,4 +1,4 @@
-import type { Message } from '@service-comms/generated/models/message';
+import type { Message } from '@queries/channel/types';
 
 export type MinimalMessage = {
   id: string;

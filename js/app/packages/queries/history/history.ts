@@ -14,6 +14,7 @@ import { createEffect, type Accessor, type Setter } from 'solid-js';
 import { queryClient } from '../client';
 import { historyKeys } from './keys';
 import {
+  transformHistoryItem,
   transformHistoryResponse,
   updateViewedAtAndMoveItemToFront,
 } from './transforms';
@@ -285,7 +286,9 @@ export async function insertProjectIntoHistory(projectId: string) {
           return acc;
         }, [])
       );
-      newData.push(...projectContent[1].data.map(({ item }) => item));
+      newData.push(
+        ...projectContent[1].data.map(({ item }) => transformHistoryItem(item))
+      );
     }
   }
 

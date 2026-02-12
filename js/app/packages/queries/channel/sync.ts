@@ -1,9 +1,10 @@
 import type {
-  Attachment,
+  Attachment as ApiAttachment,
   CountedReaction,
-  GetChannelResponse,
-  Message,
+  Message as ApiMessage,
 } from '@service-comms/generated/models';
+import type { GetChannelResponse } from './types';
+import { convertAttachment, convertMessage } from './types';
 import { queryClient } from '../client';
 import { softInvalidateChannelWithID } from './channel';
 import { channelKeys, ChannelNonceKeys } from './keys';
@@ -12,7 +13,7 @@ import { consumeNonce } from '../nonce';
 /**
  * Websocket payload types
  */
-type CommsMessagePayload = Message & { channel_id: string; nonce: string };
+type CommsMessagePayload = ApiMessage & { channel_id: string; nonce: string };
 
 type CommsReactionPayload = {
   channel_id: string;
@@ -24,7 +25,7 @@ type CommsReactionPayload = {
 type CommsAttachmentPayload = {
   channel_id: string;
   message_id: string;
-  attachments: Attachment[];
+  attachments: ApiAttachment[];
   nonce: string;
 };
 
@@ -58,7 +59,7 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
 
         return {
           ...prev,
-          messages: [...prev.messages, payload],
+          messages: [...prev.messages, convertMessage(payload)],
         };
       });
     } catch (error) {
@@ -121,9 +122,9 @@ export function handleCommsAttachment(payload: CommsAttachmentPayload): void {
         if (!prev) return prev;
 
         const existingIds = new Set(prev.attachments.map((a) => a.id));
-        const newAttachments = payload.attachments.filter(
-          (a) => !existingIds.has(a.id)
-        );
+        const newAttachments = payload.attachments
+          .filter((a) => !existingIds.has(a.id))
+          .map(convertAttachment);
 
         return {
           ...prev,

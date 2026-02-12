@@ -113,6 +113,19 @@ export const compareDateAsc = (
 
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z?$/;
 
+export function parseDate(value: string): Date;
+export function parseDate(value: string | null): Date | null;
+export function parseDate(value: string | undefined): Date | undefined;
+export function parseDate(
+  value: string | null | undefined
+): Date | null | undefined;
+export function parseDate(
+  value: string | null | undefined
+): Date | null | undefined {
+  if (value == null) return value as null | undefined;
+  return new Date(value);
+}
+
 export const convertIsoString = (isoString: string): Date | undefined => {
   if (ISO_DATE_REGEX.test(isoString)) {
     return new Date(isoString);

@@ -8,6 +8,7 @@ import {
 import { isRoot, type Reply, type Root } from '@core/comments/commentType';
 import { MARK_SELECTED_COMMENT_COMMAND } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
 import { useUserId } from '@core/context/user';
+import { parseDate } from '@core/util/date';
 import { makePersisted } from '@solid-primitives/storage';
 import type { NodeKey } from 'lexical';
 import { createSignal, untrack } from 'solid-js';
@@ -184,7 +185,7 @@ const getHighlightThread = (
     replies.push({
       ...commentBase,
       id: comment.commentId,
-      createdAt: comment.createdAt,
+      createdAt: parseDate(comment.createdAt),
       owner: comment.owner,
       author: comment.sender || comment.owner,
       text: comment.text,
@@ -194,7 +195,7 @@ const getHighlightThread = (
   const root: Root = {
     ...commentBase,
     id: rootComment.commentId,
-    createdAt: rootComment.createdAt,
+    createdAt: parseDate(rootComment.createdAt),
     owner: rootComment.owner,
     author: rootComment.sender || rootComment.owner,
     text: rootComment.text,

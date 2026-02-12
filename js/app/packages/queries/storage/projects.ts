@@ -1,6 +1,6 @@
 import { ENABLE_PROJECT_SHARING } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
-import { compareDateDesc } from '@core/util/date';
+import { compareDateDesc, parseDate } from '@core/util/date';
 import { isOk } from '@core/util/maybeResult';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { storageServiceClient } from '@service-storage/client';
@@ -45,7 +45,7 @@ function projectsQueryOptions() {
 
 function sortProjects(projects: Project[]): Project[] {
   return [...projects].sort((a, b) =>
-    compareDateDesc(a.createdAt, b.createdAt)
+    compareDateDesc(parseDate(a.createdAt), parseDate(b.createdAt))
   );
 }
 
@@ -164,13 +164,13 @@ export function useCreateProjectMutation(
 
           const tempProjectId = uuidv4();
           const tempProject: Project = {
-            createdAt: new Date(),
+            createdAt: new Date().toISOString(),
             id: tempProjectId,
             name: params.name,
             parentId: params.parentId,
             type: 'project',
             userId: '',
-            updatedAt: new Date(),
+            updatedAt: new Date().toISOString(),
             deletedAt: null,
           };
 

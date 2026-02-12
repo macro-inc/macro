@@ -20,6 +20,7 @@ import {
 } from '../util/emailUser';
 import { useEmailContext } from './EmailContext';
 import { type EmailMessageAction, MessageActions } from './MessageActions';
+import { parseDate } from '@core/util/date';
 
 interface EmailMessageTopBarProps {
   message: MessageWithBodyReplyless;
@@ -134,7 +135,9 @@ function ExpandedHeader(props: {
       <RecipientRow label="Bcc" recipients={props.message.bcc} bold />
       <div class="flex flex-row items-center gap-2 text-ink-extra-muted">
         <Show when={props.message.internal_date_ts}>
-          <span>{formatFullDate(props.message.internal_date_ts!)}</span>
+          <span>
+            {formatFullDate(parseDate(props.message.internal_date_ts!))}
+          </span>
         </Show>
         <DeprecatedIconButton
           theme="clear"
@@ -196,7 +199,7 @@ function CollapsedHeader(props: {
         />
         <Show when={props.message.internal_date_ts}>
           <div class="text-xs touch:mobile-width:text-sm text-ink">
-            {formatShortDate(props.message.internal_date_ts!)}
+            {formatShortDate(parseDate(props.message.internal_date_ts!))}
           </div>
         </Show>
       </div>

@@ -1,14 +1,15 @@
 import { itemToSafeName } from '@core/constant/allBlocks';
+import { parseDate } from '@core/util/date';
+import type { Item } from '@service-storage/generated/schemas/item';
 import type { HistoryItem, HistoryQueryResponse } from './types';
 
-export function transformHistoryItem(item: HistoryItem): HistoryItem {
+export function transformHistoryItem(item: Item): HistoryItem {
   const base = {
     id: item.id,
     name: itemToSafeName(item),
-    createdAt: item.createdAt,
-    updatedAt: item.updatedAt,
-    deletedAt: item.deletedAt,
-    viewedAt: item.viewedAt,
+    createdAt: parseDate(item.createdAt),
+    updatedAt: parseDate(item.updatedAt),
+    deletedAt: parseDate(item.deletedAt),
     rawName: item.name,
   };
 

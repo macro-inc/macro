@@ -28,7 +28,7 @@ export function useSaveDraftMutation(
         async () =>
           await emailClient.createDraft({
             draft: vars.draft,
-            send_time: vars.sendTime,
+            send_time: vars.sendTime?.toISOString() ?? null,
           })
       );
     },

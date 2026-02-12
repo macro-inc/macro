@@ -2,12 +2,8 @@
  * @vitest-environment jsdom
  */
 
-import type {
-  Attachment,
-  CountedReaction,
-  GetChannelResponse,
-  Message,
-} from '@service-comms/generated/models';
+import type { CountedReaction } from '@service-comms/generated/models';
+import type { Attachment, GetChannelResponse, Message } from '../types';
 import { QueryClient } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -97,8 +93,8 @@ function createMockChannelResponse(
       id: 'channel-1',
       name: 'Test Channel',
       owner_id: 'user-1',
-      created_at: '2024-01-01T00:00:00.000Z',
-      updated_at: '2024-01-01T00:00:00.000Z',
+      created_at: new Date('2024-01-01T00:00:00.000Z'),
+      updated_at: new Date('2024-01-01T00:00:00.000Z'),
       channel_type: 'direct_message',
     },
     messages: [],
@@ -748,7 +744,7 @@ describe('optimisticUpdateChannelName', () => {
   });
 
   it('should update channel name and timestamp', () => {
-    const originalUpdatedAt = '2024-01-01T00:00:00.000Z';
+    const originalUpdatedAt = new Date('2024-01-01T00:00:00.000Z');
     seedQueryCache('channel-1', createMockChannelResponse());
 
     const context = optimisticUpdateChannelName({
@@ -758,13 +754,12 @@ describe('optimisticUpdateChannelName', () => {
 
     const cached = getChannelFromCache('channel-1');
     expect(cached?.channel.name).toBe('New Channel Name');
-    expect(cached?.channel.updated_at).not.toBe(originalUpdatedAt);
+    expect(cached?.channel.updated_at).not.toEqual(originalUpdatedAt);
     // Context should contain previous name for rollback
     expect(context?.previousName).toBe('Test Channel');
   });
 
   it('should rollback correctly using returned context', () => {
-    const originalUpdatedAt = '2024-01-01T00:00:00.000Z';
     seedQueryCache('channel-1', createMockChannelResponse());
 
     const context = optimisticUpdateChannelName({
@@ -785,6 +780,8 @@ describe('optimisticUpdateChannelName', () => {
     // Verify rollback restored original state
     const cached = getChannelFromCache('channel-1');
     expect(cached?.channel.name).toBe('Test Channel');
-    expect(cached?.channel.updated_at).toBe(originalUpdatedAt);
+    expect(cached?.channel.updated_at).toEqual(
+      new Date('2024-01-01T00:00:00.000Z')
+    );
   });
 });

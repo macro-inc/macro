@@ -1,9 +1,9 @@
 import type { Item } from '@service-storage/generated/schemas/item';
 
-type BaseHistoryItem = Pick<
-  Item,
-  'id' | 'name' | 'createdAt' | 'updatedAt' | 'deletedAt'
-> & {
+type BaseHistoryItem = Pick<Item, 'id' | 'name'> & {
+  createdAt?: Date | null;
+  updatedAt?: Date | null;
+  deletedAt?: Date | null;
   // NOTE: the history endpoint does not return this field so this
   // is a placeholder for now
   viewedAt?: Date;
@@ -27,5 +27,5 @@ export type HistoryItem =
   | ProjectHistoryItem;
 
 export type HistoryQueryResponse = {
-  data: HistoryItem[];
+  data: Item[];
 };

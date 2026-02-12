@@ -15,6 +15,7 @@ import type {
 import type { IPlaceable, IThreadPlaceable } from '@block-pdf/type/placeables';
 import { createBlockMemo } from '@core/block';
 import { useUserId } from '@core/context/user';
+import { parseDate } from '@core/util/date';
 import {
   anchorsResource,
   commentThreadsResource,
@@ -56,7 +57,7 @@ const getFreeCommentThread = (
     replies.push({
       ...commentBase,
       id: comment.commentId,
-      createdAt: comment.createdAt,
+      createdAt: parseDate(comment.createdAt),
       owner: comment.owner,
       author: comment.sender || comment.owner,
       text: comment.text,
@@ -66,7 +67,7 @@ const getFreeCommentThread = (
   const root: PdfRoot = {
     ...commentBase,
     id: rootComment.commentId,
-    createdAt: rootComment.createdAt,
+    createdAt: parseDate(rootComment.createdAt),
     owner: rootComment.owner,
     author: rootComment.sender || rootComment.owner,
     text: rootComment.text,

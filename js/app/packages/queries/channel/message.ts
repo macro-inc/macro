@@ -9,13 +9,11 @@ import {
   type MessageResponse,
 } from '@service-comms/client';
 import type {
-  Attachment,
   ChannelMessage,
   CountedReaction,
-  GetChannelResponse,
-  Message,
   PostMessageRequest,
 } from '@service-comms/generated/models';
+import type { Attachment, GetChannelResponse, Message } from './types';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { channelKeys, ChannelNonceKeys } from './keys';

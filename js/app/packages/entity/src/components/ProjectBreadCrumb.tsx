@@ -5,6 +5,7 @@ import { useProjectPreviewQuery } from '@queries/storage/project-preview';
 import { truncatedPath } from '../utils/path';
 import FolderIcon from '@icon/regular/folder-simple.svg';
 import { cn } from '@ui/utils/classname';
+import { parseDate } from '@core/util/date';
 
 const MAX_PATH_LENGTH = 30;
 
@@ -39,7 +40,7 @@ export function ProjectBreadCrumb(props: {
       id: data.id,
       name: data.name,
       ownerId: data.owner,
-      updatedAt: data.updatedAt,
+      updatedAt: parseDate(data.updatedAt),
     };
 
     props.onClick?.(projectEntity, e);

@@ -1,6 +1,7 @@
 import type { PreviewViewStandardLabel } from '@service-email/generated/schemas';
 import type { PreviewsInboxCursorParams } from '@service-email/generated/schemas/previewsInboxCursorParams';
 import { emailClient } from '@service-email/client';
+import { parseDate } from '@core/util/date';
 import { useInfiniteQuery } from '@tanstack/solid-query';
 import { isErr } from 'core/util/maybeResult';
 import { type Accessor, createMemo } from 'solid-js';
@@ -88,8 +89,10 @@ export function createEmailsInfiniteQuery(
               ...email,
               type: 'email',
               name: email.name || 'No Subject',
+              createdAt: parseDate(email.createdAt),
+              updatedAt: parseDate(email.updatedAt),
               frecencyScore: email.frecencyScore ?? undefined,
-              viewedAt: email.viewedAt,
+              viewedAt: parseDate(email.viewedAt),
               snippet: email.snippet ?? undefined,
               isImportant: email.isImportant ?? false,
               done: !email.inboxVisible,

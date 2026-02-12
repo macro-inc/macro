@@ -2,6 +2,7 @@ import { useChannelsContext } from '@core/context/channels';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { activeScope } from '@core/hotkey/state';
 import { mapFromListsByKey } from '@core/util/compareUtils';
+import { parseDate } from '@core/util/date';
 import { useHistoryQuery } from '@queries/history/history';
 import type { Channel } from '@service-comms/generated/models/channel';
 import type { ChannelType } from '@service-comms/generated/models/channelType';
@@ -9,7 +10,7 @@ import { ChannelTypeEnum } from '@service-comms/client';
 import { createMemo } from 'solid-js';
 import type { CommandItemCard } from './KonsoleItem';
 
-type ChannelWithViewedAt = Channel & { viewed_at?: Date };
+type ChannelWithViewedAt = Channel & { viewed_at?: string };
 
 const FILTER_PERSISTENT_CHATS = false;
 
@@ -98,8 +99,8 @@ export function useCommandItems() {
             ? (channel as any).participants
             : undefined,
       },
-      updatedAt: channel.updated_at,
-      viewedAt: (channel as ChannelWithViewedAt).viewed_at,
+      updatedAt: parseDate(channel.updated_at),
+      viewedAt: parseDate((channel as ChannelWithViewedAt).viewed_at),
     }));
 
     return mapFromListsByKey<CommandItemCard>(

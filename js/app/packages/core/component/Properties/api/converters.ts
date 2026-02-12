@@ -1,4 +1,5 @@
 import type { PropertyValue } from '@service-properties/generated/schemas/propertyValue';
+import { parseDate } from '@core/util/date';
 import { NUMBER_DECIMAL_PLACES } from '../constants';
 import type {
   EntityPropertyWithDefinition,
@@ -59,8 +60,8 @@ export function entityPropertyFromApi(
     options: apiProperty.options ?? undefined,
     owner: apiProperty.definition.owner,
     specificEntityType: apiProperty.definition.specific_entity_type,
-    createdAt: apiProperty.property.created_at,
-    updatedAt: apiProperty.property.updated_at,
+    createdAt: parseDate(apiProperty.property.created_at),
+    updatedAt: parseDate(apiProperty.property.updated_at),
   };
 
   const propertyValue = apiProperty.value;
@@ -209,7 +210,7 @@ export function propertyValueToApi(
       }
       return {
         type: 'date',
-        value: apiValues.value,
+        value: apiValues.value.toISOString(),
       };
 
     case 'BOOLEAN':

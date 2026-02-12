@@ -20,7 +20,7 @@ import { InlineItemPreview } from './ItemPreview';
 import { StaticMarkdown } from './LexicalMarkdown/component/core/StaticMarkdown';
 import { UserIcon } from './UserIcon';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
-import { compareDateDesc } from '@core/util/date';
+import { compareDateDesc, parseDate } from '@core/util/date';
 
 export type ReferenceProps = {
   documentId: string;
@@ -31,7 +31,7 @@ function isChannelReference(ref: EntityReference): ref is EntityReference & {
   channel_id: string;
   message_id: string;
   sender_id: string;
-  attachment_created_at: Date;
+  attachment_created_at: string;
   message_content?: string;
 } {
   return (
@@ -146,7 +146,10 @@ export function References(props: ReferenceProps) {
   const sortedReferences = createMemo(() => {
     const refs = references() ?? [];
     return refs.sort((a, b) =>
-      compareDateDesc(getReferenceCreatedAt(a), getReferenceCreatedAt(b))
+      compareDateDesc(
+        parseDate(getReferenceCreatedAt(a)),
+        parseDate(getReferenceCreatedAt(b))
+      )
     );
   });
 
@@ -201,7 +204,9 @@ export function References(props: ReferenceProps) {
                     <div class="bg-ink-extra-muted size-2" />
                     <div>{hasMessageContent ? 'REFERENCE' : 'ATTACHMENT'}</div>
                     <div class="grow" />
-                    <div>{formatTimestamp(ref.attachment_created_at)}</div>
+                    <div>
+                      {formatTimestamp(parseDate(ref.attachment_created_at))}
+                    </div>
                   </div>
 
                   <span class="inline-flex items-center gap-2 pl-4 text-sm">
@@ -242,7 +247,7 @@ export function References(props: ReferenceProps) {
                     <div class="bg-ink-extra-muted size-2" />
                     <div>MENTION</div>
                     <div class="grow" />
-                    <div>{formatTimestamp(ref.created_at)}</div>
+                    <div>{formatTimestamp(parseDate(ref.created_at))}</div>
                   </div>
 
                   <span class="inline-flex items-center gap-1 text-sm pl-4">

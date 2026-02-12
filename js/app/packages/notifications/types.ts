@@ -1,7 +1,15 @@
 import type { Entity, EntityType } from '@core/types';
 import type { ApiUserNotification } from '@service-notification/generated/schemas';
 
-export type UnifiedNotification = Omit<ApiUserNotification, 'ownerId'>;
+export type UnifiedNotification = Omit<
+  ApiUserNotification,
+  'ownerId' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'viewedAt'
+> & {
+  createdAt?: Date | null;
+  updatedAt?: Date | null;
+  deletedAt?: Date | null;
+  viewedAt?: Date | null;
+};
 
 export type CompositeEntity = `${EntityType}@${string}`;
 

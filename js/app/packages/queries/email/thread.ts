@@ -311,7 +311,7 @@ export function useScheduleMessageMutation(
         async () =>
           await emailClient.scheduleMessage({
             draftID: vars.draftID,
-            send_time: vars.sendTime,
+            send_time: vars.sendTime.toISOString(),
           })
       ),
     ...withCallbacks<UpsertScheduledResponse, Error, ScheduleMessageParams>(

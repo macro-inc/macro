@@ -135,7 +135,7 @@ export function createNotificationSource(
 
     subscriptions.forEach((subscribe) => subscribe(parsedNotification));
 
-    optimisticInsertNotification(parsedNotification);
+    optimisticInsertNotification(parsedNotification as any);
   });
 
   const bulkMarkAsDone = async (notifications: UnifiedNotification[]) => {

@@ -17,7 +17,7 @@ type NotificationRendererProps = {
 };
 
 export function NotificationRenderer(props: NotificationRendererProps) {
-  const time = () => formatDate(props.notification.createdAt);
+  const time = () => formatDate(props.notification.createdAt ?? new Date(0));
   const actorId = () => props.notification.senderId ?? '';
   const macroId = () => tryMacroId(actorId());
   const [actorName] = useDisplayName(macroId());

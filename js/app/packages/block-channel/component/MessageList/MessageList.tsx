@@ -21,10 +21,13 @@ import type { InputAttachment } from '@core/store/cacheChannelInput';
 import SunIcon from '@icon/duotone/sun-horizon-duotone.svg';
 import ArrowDownIcon from '@icon/regular/arrow-down.svg';
 import XIcon from '@icon/regular/x.svg';
-import type { Activity as ChannelActivity } from '@service-comms/generated/models/activity';
-import type { Attachment } from '@service-comms/generated/models/attachment';
-import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
-import type { Message } from '@service-comms/generated/models/message';
+import { parseDate } from '@core/util/date';
+import type { ApiActivity as ChannelActivity } from '@service-comms/generated/models';
+import type {
+  Attachment,
+  ChannelParticipant,
+  Message,
+} from '@queries/channel/types';
 import { useUserId } from '@core/context/user';
 import { debounce } from '@solid-primitives/scheduled';
 import {
@@ -449,7 +452,7 @@ function MessageListImpl(props: MessageListProps) {
   // lastViewed reactively, causing the "New" indicator to disappear.
   const lastViewed = createMemo<Date | null | undefined>((prev) => {
     if (prev !== undefined) return prev;
-    return props?.latestActivity?.viewed_at;
+    return parseDate(props?.latestActivity?.viewed_at);
   });
 
   const [newMessagesDismissed, setNewMessagesDismissed] = createSignal(false);
