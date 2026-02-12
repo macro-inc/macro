@@ -6,7 +6,7 @@ import {
 import { toast } from '@core/component/Toast/Toast';
 import { useMutation } from '@tanstack/solid-query';
 import type { EntityData } from '@entity';
-import { queryClient } from './client';
+import { queryClient } from '@queries/client';
 import { soupKeys } from '@queries/soup/keys';
 import {
   removeSoupEntities,
