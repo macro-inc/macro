@@ -516,18 +516,25 @@ const SearchBar = () => {
   onCleanup(searchHotkey.dispose);
 
   return (
-    <div class="flex items-center grow min-w-0 max-w-75 touch:mobile-width:-order-2">
+    <div
+      class="flex items-center min-w-0 touch:mobile-width:-order-2"
+      classList={{
+        'grow max-w-75': searchFocused(),
+        'shrink-0': !searchFocused(),
+      }}
+    >
       <Tooltip
-        class="grow"
+        class={searchFocused() ? 'grow' : ''}
         placement="bottom-start"
         tooltip={<LabelAndHotKey label="Filter" shortcut="⌘F" />}
       >
         <div
-          class="relative flex items-center gap-1.5 grow h-[22px] touch:mobile-width:h-9 px-2.5 rounded-full touch:mobile-width:min-w-35"
+          class="relative flex items-center gap-1.5 h-[22px] touch:mobile-width:h-9 px-2.5 rounded-full touch:mobile-width:min-w-35"
           classList={{
             'bg-accent text-panel': !!searchText() && !searchFocused(),
             'text-ink-muted hover:text-accent hover:bg-accent/20':
-              !searchText() || searchFocused(),
+              !searchText() && !searchFocused(),
+            'grow bg-accent/15 text-ink': searchFocused(),
           }}
           onClick={() => ref()?.focus()}
         >
@@ -557,9 +564,17 @@ const SearchBar = () => {
                 e.currentTarget.blur();
               }
             }}
-            class="p-0 grow bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 cursor-default"
+            class="p-0 bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 cursor-default"
+            classList={{
+              grow: searchFocused(),
+            }}
             style={{
-              width: !searchText() && !searchFocused() ? '0' : undefined,
+              width:
+                !searchText() && !searchFocused()
+                  ? '0'
+                  : searchFocused()
+                    ? undefined
+                    : `${Math.max(5, searchText().length + 1)}ch`,
             }}
           />
         </div>
