@@ -16,4 +16,5 @@ export {
   removeSoupEntities,
   removeSearchEntities,
   refetchSoupEntity,
+  optimisticUpdateSoupItemViewedAt,
 } from './operations';

@@ -871,6 +871,13 @@
             },
             "description": "Email CC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by CC."
           },
+          "email_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads."
+          },
           "importance": {
             "type": ["boolean", "null"],
             "description": "Filter by email importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing."

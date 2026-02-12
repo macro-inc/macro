@@ -195,3 +195,59 @@ fn it_expands_other_association() {
 
     assert_eq!(json.trim(), include_str!("tests/other.json").trim());
 }
+
+#[test]
+fn it_expands_email_thread_ids() {
+    let thread_id = Uuid::new_v4();
+    let f = EntityFilters {
+        email_filters: crate::EmailFilters {
+            email_thread_ids: vec![thread_id.to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let ast = Arc::into_inner(
+        EntityFilterAst::new_from_filters(f)
+            .unwrap()
+            .unwrap()
+            .email_filter
+            .unwrap(),
+    )
+    .unwrap();
+
+    let json = serde_json::to_value(ast).unwrap();
+    let exp = json!({
+        "l": {
+            "ThreadId": thread_id
+        }
+    });
+
+    assert_eq!(json, exp);
+}
+
+#[test]
+fn it_expands_email_thread_ids_with_sender() {
+    let thread_id = Uuid::new_v4();
+    let f = EntityFilters {
+        email_filters: crate::EmailFilters {
+            senders: vec!["test@example.com".to_string()],
+            email_thread_ids: vec![thread_id.to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let ast = Arc::into_inner(
+        EntityFilterAst::new_from_filters(f)
+            .unwrap()
+            .unwrap()
+            .email_filter
+            .unwrap(),
+    )
+    .unwrap();
+
+    let json = serde_json::to_value(ast).unwrap();
+    // Should be AND of sender and thread_id
+    assert!(json.get("&").is_some());
+}

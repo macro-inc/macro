@@ -1,6 +1,7 @@
 use filter_ast::{ExpandFrame, Expr, FoldTree, TryExpandNode};
 use macro_user_id::{cowlike::CowLike, email::EmailStr};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use crate::{EmailFilters, ast::ExpandErr};
 
@@ -24,6 +25,8 @@ pub enum EmailLiteral {
     Bcc(Email),
     /// The recipient field of the email
     Recipient(Email),
+    /// This value filters by email thread ID
+    ThreadId(Uuid),
     /// This node value filters by email importance. false short-circuits to match nothing.
     Importance(bool),
 }
@@ -36,6 +39,7 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             cc,
             bcc,
             recipients,
+            email_thread_ids,
             importance,
         } = input;
 
@@ -63,6 +67,11 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             .map(map_email)
             .expand(EmailLiteral::Recipient, Expr::or);
 
+        let thread_id_nodes = email_thread_ids
+            .iter()
+            .map(|s| Uuid::parse_str(s))
+            .try_expand(|r| r.map(EmailLiteral::ThreadId), Expr::or)?;
+
         let importance_node = importance.map(|imp| Expr::Literal(EmailLiteral::Importance(imp)));
 
         Ok([
@@ -70,6 +79,7 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             cc_nodes,
             bcc_nodes,
             recipient_nodes,
+            thread_id_nodes,
             importance_node,
         ]
         .into_iter()

@@ -4,12 +4,12 @@ import { emailClient } from '@service-email/client';
 import { useInfiniteQuery } from '@tanstack/solid-query';
 import { isErr } from 'core/util/maybeResult';
 import { type Accessor, createMemo } from 'solid-js';
-import type { EmailEntity } from '../types/entity';
+import type { EmailEntity } from '@entity';
 import { createApiTokenQuery, withApiTokenRetry } from './auth';
 import { queryKeys } from './key';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 
-export type FetchPaginatedEmailsParams = PreviewsInboxCursorParams & {
+type FetchPaginatedEmailsParams = PreviewsInboxCursorParams & {
   // path parameter
   view: PreviewViewStandardLabel;
 };

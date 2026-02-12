@@ -1,4 +1,3 @@
-import { authServiceClient } from '@service-auth/client';
 import type { MacroApiTokenResponse } from '@service-auth/generated/schemas/macroApiTokenResponse';
 import {
   queryOptions,
@@ -8,13 +7,11 @@ import {
 import { SERVER_HOSTS } from 'core/constant/servers';
 import { fetchWithToken } from 'core/util/fetchWithToken';
 import { isOk } from 'core/util/maybeResult';
-import type { SafeFetchInit } from '@core/util/safeFetch';
-import { createMemo } from 'solid-js';
 import { queryKeys } from './key';
 
 const authHost = SERVER_HOSTS['auth-service'];
 
-export class FetchDocumentsError extends Error {
+class FetchDocumentsError extends Error {
   constructor(
     message: string,
     public readonly response: Response,
@@ -77,71 +74,4 @@ export function createApiTokenQueryOptions(): ApiTokenQueryOptions {
 
 export function createApiTokenQuery() {
   return useQuery(() => createApiTokenQueryOptions());
-}
-
-export function useUserId() {
-  const authQuery = createApiTokenQuery();
-  return createMemo<string | undefined>(() => {
-    if (!authQuery.isSuccess) return;
-
-    const token = authQuery.data;
-    if (!token) return;
-
-    const parts = token.split('.');
-    if (parts.length !== 3) return;
-    try {
-      const payload = parts[1];
-      if (!payload) return;
-
-      const parsedPayload = JSON.parse(
-        atob(payload.replace(/-/g, '+').replace(/_/g, '/'))
-      );
-
-      return parsedPayload.macro_user_id;
-    } catch {
-      return;
-    }
-  });
-}
-
-const fetchProfilePictures = async ({
-  user_id_list,
-  apiToken,
-}: {
-  user_id_list: Array<string>;
-  apiToken: string;
-}) => {
-  const init: SafeFetchInit = {
-    headers: { Authorization: `Bearer ${apiToken}` },
-  };
-
-  const result = await authServiceClient.postProfilePictures(
-    { user_id_list },
-    init
-  );
-
-  if (!isOk(result)) {
-    throw new Error('Failed to fetch profile picture');
-  }
-
-  const { pictures } = result[1];
-  if (pictures.length === 0)
-    throw new Error(`No profile picture found for ${user_id_list}`);
-
-  return pictures;
-};
-
-export function createProfilePictureQuery(id: string) {
-  const authQuery = createApiTokenQuery();
-  return useQuery(() => ({
-    queryKey: queryKeys.auth.profilePicture({ id }),
-    queryFn: () =>
-      withApiTokenRetry(authQuery, (apiToken) =>
-        fetchProfilePictures({ user_id_list: [id], apiToken })
-      ),
-    select: (pictures) => pictures.at(0),
-    enabled: authQuery.isSuccess,
-    retry: 1,
-    retryOnMount: false,
-  }));
 }

@@ -14,13 +14,31 @@ use uuid::Uuid;
 #[cfg(test)]
 mod tests;
 
-/// Builds SQL WHERE conditions for email filters based on the AST.
-/// Returns a string to be appended to the WHERE clause.
-fn build_email_filter(ast: &Expr<EmailLiteral>) -> String {
+fn has_thread_literals(ast: &Expr<EmailLiteral>) -> bool {
+    ast.collapse_frames(|frame| match frame {
+        filter_ast::ExprFrame::And(a, b) | filter_ast::ExprFrame::Or(a, b) => a || b,
+        filter_ast::ExprFrame::Not(a) => a,
+        filter_ast::ExprFrame::Literal(EmailLiteral::ThreadId(_)) => true,
+        filter_ast::ExprFrame::Literal(_) => false,
+    })
+}
+
+fn has_message_literals(ast: &Expr<EmailLiteral>) -> bool {
+    ast.collapse_frames(|frame| match frame {
+        filter_ast::ExprFrame::And(a, b) | filter_ast::ExprFrame::Or(a, b) => a || b,
+        filter_ast::ExprFrame::Not(a) => a,
+        filter_ast::ExprFrame::Literal(EmailLiteral::ThreadId(_)) => false,
+        filter_ast::ExprFrame::Literal(_) => true,
+    })
+}
+
+fn build_message_email_filter(ast: &Expr<EmailLiteral>) -> String {
     let formatting = ast.collapse_frames(|frame| match frame {
         filter_ast::ExprFrame::And(a, b) => format!("({a} AND {b})"),
         filter_ast::ExprFrame::Or(a, b) => format!("({a} OR {b})"),
         filter_ast::ExprFrame::Not(a) => format!("(NOT {a})"),
+
+        filter_ast::ExprFrame::Literal(EmailLiteral::ThreadId(_)) => "TRUE".to_string(),
 
         filter_ast::ExprFrame::Literal(EmailLiteral::Sender(email)) => match email {
             Email::Complete(e) => format!(
@@ -145,6 +163,33 @@ fn build_email_filter(ast: &Expr<EmailLiteral>) -> String {
             )"#
                 .to_string()
         }
+    });
+
+    if formatting.is_empty() {
+        String::new()
+    } else {
+        format!(" AND {}", formatting)
+    }
+}
+
+/// Builds thread-level SQL WHERE conditions. Message-level literals map to TRUE.
+fn build_thread_email_filter(ast: &Expr<EmailLiteral>) -> String {
+    let formatting = ast.collapse_frames(|frame| match frame {
+        filter_ast::ExprFrame::And(a, b) => format!("({a} AND {b})"),
+        filter_ast::ExprFrame::Or(a, b) => format!("({a} OR {b})"),
+        filter_ast::ExprFrame::Not(a) => format!("(NOT {a})"),
+
+        filter_ast::ExprFrame::Literal(EmailLiteral::ThreadId(id)) => {
+            format!("t.id = '{id}'::uuid")
+        }
+
+        filter_ast::ExprFrame::Literal(
+            EmailLiteral::Sender(_)
+            | EmailLiteral::Cc(_)
+            | EmailLiteral::Bcc(_)
+            | EmailLiteral::Recipient(_)
+            | EmailLiteral::Importance(_),
+        ) => "TRUE".to_string(),
     });
 
     if formatting.is_empty() {
@@ -341,6 +386,10 @@ fn build_query<'a>(
         builder.push(view_thread_filter);
     }
 
+    if has_thread_literals(email_filter) {
+        builder.push(build_thread_email_filter(email_filter));
+    }
+
     builder.push(
         r#"
               -- Cursor logic
@@ -381,10 +430,8 @@ fn build_query<'a>(
         builder.push(view_message_filter);
     }
 
-    // Add dynamic email filters
-    let filter_sql = build_email_filter(email_filter);
-    if !filter_sql.is_empty() {
-        builder.push(filter_sql);
+    if has_message_literals(email_filter) {
+        builder.push(build_message_email_filter(email_filter));
     }
 
     builder.push(

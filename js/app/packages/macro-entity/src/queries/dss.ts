@@ -5,8 +5,8 @@ import {
 } from '@core/component/FileList/itemOperations';
 import { toast } from '@core/component/Toast/Toast';
 import { useMutation } from '@tanstack/solid-query';
-import type { EntityData } from '../types/entity';
-import { queryClient } from './client';
+import type { EntityData } from '@entity';
+import { queryClient } from '@queries/client';
 import { soupKeys } from '@queries/soup/keys';
 import {
   removeSoupEntities,
@@ -14,29 +14,7 @@ import {
   getSoupEntityById,
   optimisticUpdateSoupEntity,
   invalidateSoupEntity,
-  refetchSoupEntity,
 } from '@queries/soup/cache';
-
-export function createDeleteDssItemMutation() {
-  return useMutation(() => ({
-    mutationFn: async ({ id, type }: EntityData) => {
-      const success = await deleteItem({ id, itemType: type });
-      return { success };
-    },
-    onMutate: async ({ id }: EntityData) => {
-      return removeSoupEntities(new Set([id]));
-    },
-    onSettled: (data, error, entity, context) => {
-      if (data?.success === false || error) {
-        context?.rollback();
-        console.error(`Failed to delete dss item ${entity}`, data, error);
-        toast.failure('Failed to delete item');
-      }
-
-      invalidateSoupEntity(entity.id);
-    },
-  }));
-}
 
 export function createBulkDeleteDssItemsMutation() {
   const isUnsupportedEntity = (entity: EntityData) => {
@@ -132,45 +110,6 @@ export function createMoveToProjectDssEntityMutation() {
       }
 
       invalidateAfterMove([id], type === 'project', failed);
-    },
-  }));
-}
-
-export function createCopyDssEntityMutation() {
-  return useMutation(() => ({
-    mutationFn: async ({
-      entity: { id, type, name },
-    }: {
-      entity: EntityData & { type: 'document' | 'chat' };
-    }) => {
-      const newId = await copyItem({
-        itemType: type,
-        id,
-        name,
-      });
-
-      if (!newId) {
-        throw new Error(`Failed to copy ${type} with id ${id}`);
-      }
-
-      return newId;
-    },
-    onMutate: async () => {
-      queryClient.cancelQueries({
-        queryKey: soupKeys.items._def,
-      });
-      // For copy operations, we don't need optimistic updates since we're creating a new item
-      // The new item will be added when the mutation completes and queries are invalidated
-    },
-    onSettled: (data, error, { entity: { id, type } }) => {
-      if (error) {
-        console.error(`Failed to copy dss item ${id}`, data, error);
-        toast.failure('Failed to copy item');
-      }
-      if (data) {
-        refetchSoupEntity(data, type as 'document' | 'chat');
-      }
-      queryClient.invalidateQueries({ queryKey: ['entity'] });
     },
   }));
 }
@@ -303,29 +242,4 @@ export function createBulkMoveToProjectDssEntityMutation() {
       );
     },
   }));
-}
-
-/**
- * Optimistically update the viewedAt timestamp for a DSS item.
- * Updates the item across all DSS queries if it exists.
- */
-export function optimisticUpdateDssItemViewedAt(itemId: string) {
-  const current = getSoupEntityById(itemId);
-  if (!current) return;
-
-  const now = new Date();
-
-  if (current.tag === 'channel') {
-    optimisticUpdateSoupEntity({
-      tag: 'channel',
-      data: { channel: { id: itemId }, viewed_at: now },
-      frecency_score: current.frecency_score,
-    });
-  } else {
-    optimisticUpdateSoupEntity({
-      tag: current.tag,
-      data: { id: itemId, viewedAt: now },
-      frecency_score: current.frecency_score,
-    });
-  }
 }

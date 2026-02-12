@@ -14,11 +14,9 @@ import { usePropertyEntityDisplay } from '@core/component/Properties/hooks/usePr
 import { useAugmentUserWithDmActivity, useContacts } from '@core/user';
 import { useEmail } from '@core/context/user';
 import { createFreshSearch } from '@core/util/freshSort';
-import {
-  createEmailsInfiniteQuery,
-  createUnifiedSearchInfiniteQuery,
-  type EmailEntity,
-} from '@macro-entity';
+import { createEmailsInfiniteQuery } from '@macro-entity';
+import type { EmailEntity } from '@entity';
+import { useSearchSoupQuery } from '@queries/soup/search';
 import XIcon from '@phosphor-icons/core/assets/regular/x.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { useHistoryQuery } from '@queries/history/history';
@@ -103,19 +101,19 @@ export const FilterValueEntity: Component<FilterValueEntityProps> = (props) => {
   const emails = () => emailsQuery.data ?? [];
 
   // Server-side email search
-  const emailSearchQuery = createUnifiedSearchInfiniteQuery(
+  const emailSearchQuery = useSearchSoupQuery(
     () => ({
-      params: { page: 0, page_size: 20 },
-      request: {
+      params: { page_size: 20 },
+      body: {
         query: searchTerm(),
         match_type: 'partial' as const,
         include: ['emails' as const],
         search_on: 'name' as const,
       },
     }),
-    {
-      disabled: () => !needsEmailSearch(),
-    }
+    () => ({
+      enabled: needsEmailSearch(),
+    })
   );
 
   // Server search results mapped to our format
