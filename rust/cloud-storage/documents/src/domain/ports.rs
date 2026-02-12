@@ -4,8 +4,8 @@
 
 use std::future::Future;
 
-use model::document::{DocumentBasic, DocumentMetadata};
 use model::document::response::{GetDocumentResponseData, LocationResponseV3};
+use model::document::{DocumentBasic, DocumentMetadata};
 use models_permissions::share_permission::access_level::AccessLevel;
 
 use super::models::{DocumentError, LocationQueryParams};

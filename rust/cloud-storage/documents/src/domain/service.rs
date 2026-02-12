@@ -8,12 +8,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::anyhow;
 use cloudfront_sign::{SignedOptions, get_signed_url};
+use model::document::response::{
+    GetDocumentResponseData, LocationResponseData, LocationResponseV3,
+};
 use model::document::{
     CONVERTED_DOCUMENT_FILE_NAME, DocumentBasic, FileType, FileTypeExt,
     build_cloud_storage_bucket_document_key,
-};
-use model::document::response::{
-    GetDocumentResponseData, LocationResponseData, LocationResponseV3,
 };
 use model::response::PresignedUrl;
 use models_permissions::share_permission::access_level::AccessLevel;
@@ -64,8 +64,7 @@ impl<R: DocumentRepo> DocumentServiceImpl<R> {
     }
 
     fn make_presigned_url(&self, key: &str) -> anyhow::Result<String> {
-        let constructed_url =
-            format!("{}/{}", self.cloudfront_config.distribution_url, key);
+        let constructed_url = format!("{}/{}", self.cloudfront_config.distribution_url, key);
         let options = self.get_signed_options();
         let signed_url = get_signed_url(&constructed_url, &options)?;
         Ok(signed_url)
@@ -252,21 +251,20 @@ impl<R: DocumentRepo> DocumentService for DocumentServiceImpl<R> {
         document_id: &str,
         access_level: AccessLevel,
     ) -> Result<GetDocumentResponseData, DocumentError> {
-        let document_metadata = self
-            .repo
-            .get_document_metadata(document_id)
-            .await
-            .map_err(|e| {
-                let err: anyhow::Error = e.into();
-                if err
-                    .to_string()
-                    .contains("no rows returned by a query that expected to return at least one row")
-                {
-                    DocumentError::NotFound(document_id.to_string())
-                } else {
-                    DocumentError::Internal(err)
-                }
-            })?;
+        let document_metadata =
+            self.repo
+                .get_document_metadata(document_id)
+                .await
+                .map_err(|e| {
+                    let err: anyhow::Error = e.into();
+                    if err.to_string().contains(
+                        "no rows returned by a query that expected to return at least one row",
+                    ) {
+                        DocumentError::NotFound(document_id.to_string())
+                    } else {
+                        DocumentError::Internal(err)
+                    }
+                })?;
 
         let view_location = self
             .repo

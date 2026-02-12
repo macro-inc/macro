@@ -22,15 +22,34 @@ use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use model::document::DocumentBasic;
 use model::document::response::GetDocumentResponse;
-use model::response::{GenericResponse, GenericSuccessResponse};
+use model::response::GenericSuccessResponse;
 use model::user::UserContext;
+use model_error_response::ErrorResponse;
 use models_permissions::share_permission::access_level::{OwnerAccessLevel, ViewAccessLevel};
 use serde::Deserialize;
 use sqlx::PgPool;
 
-use crate::domain::models::LocationQueryParams;
+use crate::domain::models::{DocumentError, LocationQueryParams};
 use crate::domain::ports::DocumentService;
 use crate::outbound::pg_document_repo::PgDocumentRepo;
+
+impl IntoResponse for DocumentError {
+    fn into_response(self) -> axum::response::Response {
+        let status_code = match &self {
+            DocumentError::NotFound(_) => StatusCode::NOT_FOUND,
+            DocumentError::Unauthorized => StatusCode::UNAUTHORIZED,
+            DocumentError::Gone => StatusCode::GONE,
+            DocumentError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+
+        if status_code.is_server_error() {
+            tracing::error!(error=?self, "internal server error");
+        }
+
+        let message = self.to_string();
+        (status_code, Json(ErrorResponse { message: &message })).into_response()
+    }
+}
 
 /// Router state containing the document service, entity access service, and DB pool.
 pub struct DocumentRouterState<T, Svc> {
@@ -75,12 +94,12 @@ where
 
     Router::new()
         .route(
-            "/{document_id}",
+            "/:document_id",
             axum::routing::get(get_document_handler::<T, Svc>)
                 .delete(delete_document_handler::<T, Svc>),
         )
         .route(
-            "/{document_id}/location_v3",
+            "/:document_id/location_v3",
             axum::routing::get(get_location_v3_handler::<T, Svc>),
         )
         .layer(middleware::from_fn_with_state(
@@ -90,41 +109,31 @@ where
         .with_state(state)
 }
 
+/// Path parameters for document endpoints.
+pub struct DocumentIdPathParams {
+    /// The document ID.
+    pub document_id: String,
+}
+
 /// Middleware that loads [`DocumentBasic`] into request extensions.
 ///
 /// Extracts `document_id` from the path and queries the database.
 /// Returns 404 if the document does not exist.
 async fn ensure_document_exists(
     State(pool): State<PgPool>,
+    Path(Params { document_id }): Path<Params>,
     request: Request<Body>,
     next: Next,
 ) -> impl IntoResponse {
-    // Extract document_id from the URI path
-    let document_id = request
-        .uri()
-        .path()
-        .split('/')
-        .find(|s| !s.is_empty())
-        .map(|s| s.to_string());
-
-    let document_id = match document_id {
-        Some(id) => id,
-        None => return StatusCode::BAD_REQUEST.into_response(),
-    };
-
     let repo = PgDocumentRepo::new(pool);
-    let document_basic = match crate::domain::ports::DocumentRepo::get_basic_document(
-        &repo,
-        &document_id,
-    )
-    .await
-    {
-        Ok(doc) => doc,
-        Err(e) => {
-            tracing::error!(error=?e, document_id=?document_id, "document not found");
-            return StatusCode::NOT_FOUND.into_response();
-        }
-    };
+    let document_basic =
+        match crate::domain::ports::DocumentRepo::get_basic_document(&repo, &document_id).await {
+            Ok(doc) => doc,
+            Err(e) => {
+                tracing::error!(error=?e, document_id=?document_id, "document not found");
+                return StatusCode::NOT_FOUND.into_response();
+            }
+        };
 
     let mut request = request;
     request.extensions_mut().insert(document_basic);
@@ -134,24 +143,31 @@ async fn ensure_document_exists(
 /// Handler for `GET /documents/:document_id`.
 ///
 /// Returns document metadata, user access level, and view location.
+#[utoipa::path(
+    tag = "document",
+    get,
+    path = "/documents/{document_id}",
+    operation_id = "get_document",
+    params(
+        ("document_id" = String, Path, description = "Document ID")
+    ),
+    responses(
+        (status = 200, body = GetDocumentResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
 async fn get_document_handler<T: DocumentService, Svc: EntityAccessService>(
     State(state): State<DocumentRouterState<T, Svc>>,
     access: DocumentAccessExtractor<ViewAccessLevel, Svc>,
     user_context: Extension<UserContext>,
     Path(Params { document_id }): Path<Params>,
-) -> Result<Json<GetDocumentResponse>, StatusCode> {
+) -> Result<Json<GetDocumentResponse>, DocumentError> {
     let response_data = state
         .service
         .get_document(&user_context.user_id, &document_id, access.access_level)
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "unable to get document");
-            match e {
-                crate::domain::models::DocumentError::NotFound(_) => StatusCode::NOT_FOUND,
-                crate::domain::models::DocumentError::Unauthorized => StatusCode::UNAUTHORIZED,
-                _ => StatusCode::INTERNAL_SERVER_ERROR,
-            }
-        })?;
+        .await?;
 
     Ok(Json(GetDocumentResponse {
         error: false,
@@ -162,74 +178,80 @@ async fn get_document_handler<T: DocumentService, Svc: EntityAccessService>(
 /// Handler for `GET /documents/:document_id/location_v3`.
 ///
 /// Returns a presigned URL or sync service content for accessing the document.
+#[utoipa::path(
+    tag = "document",
+    get,
+    path = "/documents/{document_id}/location_v3",
+    operation_id = "get_document_location_v3",
+    params(
+        ("document_id" = String, Path, description = "Document ID"),
+        ("document_version_id" = Option<i64>, Query, description = "A specific document version id to get the location for."),
+        ("get_converted_docx_url" = Option<bool>, Query, description = "If true, this will return the converted docx url.")
+    ),
+    responses(
+        (status = 200),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 410, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
 async fn get_location_v3_handler<T: DocumentService, Svc: EntityAccessService>(
     _access: DocumentAccessExtractor<ViewAccessLevel, Svc>,
     State(state): State<DocumentRouterState<T, Svc>>,
     Extension(document_context): Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
     Query(params): Query<LocationQueryParams>,
-) -> impl IntoResponse {
-    match state
+) -> Result<Response<Body>, DocumentError> {
+    let response_data = state
         .service
         .get_document_location(&document_context, &document_id, params)
-        .await
-    {
-        Ok(response_data) => {
-            let json_bytes = serde_json::to_vec(&response_data).unwrap();
-            Response::builder()
-                .status(StatusCode::OK)
-                .header("content-type", "application/json")
-                .header("Cache-Control", "max-age=300")
-                .body(Body::from(json_bytes))
-                .unwrap()
-        }
-        Err(e) => {
-            tracing::error!(error=?e, "unable to get document location");
-            let status_code = match e {
-                crate::domain::models::DocumentError::Gone => StatusCode::GONE,
-                crate::domain::models::DocumentError::NotFound(_) => StatusCode::NOT_FOUND,
-                crate::domain::models::DocumentError::Unauthorized => StatusCode::UNAUTHORIZED,
-                _ => StatusCode::INTERNAL_SERVER_ERROR,
-            };
-            GenericResponse::builder()
-                .message("unable to get document location")
-                .is_error(true)
-                .send(status_code)
-        }
-    }
+        .await?;
+
+    let json_bytes = serde_json::to_vec(&response_data).unwrap();
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header("content-type", "application/json")
+        .header("Cache-Control", "max-age=300")
+        .body(Body::from(json_bytes))
+        .unwrap())
 }
 
 /// Handler for `DELETE /documents/:document_id`.
 ///
 /// Soft-deletes a document (only owners can delete).
+#[utoipa::path(
+    tag = "document",
+    delete,
+    path = "/documents/{document_id}",
+    operation_id = "delete_document",
+    params(
+        ("document_id" = String, Path, description = "Document ID")
+    ),
+    responses(
+        (status = 200, body = GenericSuccessResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
 async fn delete_document_handler<T: DocumentService, Svc: EntityAccessService>(
     _access: DocumentAccessExtractor<OwnerAccessLevel, Svc>,
     State(state): State<DocumentRouterState<T, Svc>>,
     user_context: Extension<UserContext>,
     doc: Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
-) -> impl IntoResponse {
+) -> Result<Json<GenericSuccessResponse>, DocumentError> {
     tracing::info!("delete document");
 
-    if let Err(e) = state
+    state
         .service
         .delete_document(
             &document_id,
             doc.project_id.clone(),
             user_context.user_id.clone(),
         )
-        .await
-    {
-        tracing::error!(error=?e, "unable to delete document");
-        return GenericResponse::builder()
-            .message("unable to delete document")
-            .is_error(true)
-            .send(StatusCode::INTERNAL_SERVER_ERROR);
-    }
+        .await?;
 
-    let response_data = GenericSuccessResponse { success: true };
-
-    GenericResponse::builder()
-        .data(&response_data)
-        .send(StatusCode::OK)
+    Ok(Json(GenericSuccessResponse { success: true }))
 }

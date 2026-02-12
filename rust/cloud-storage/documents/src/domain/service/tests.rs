@@ -74,10 +74,7 @@ async fn test_get_document_not_found() {
 
     let result = repo.get_document_metadata("nonexistent").await;
     assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("no rows returned"));
+    assert!(result.unwrap_err().to_string().contains("no rows returned"));
 }
 
 #[tokio::test]

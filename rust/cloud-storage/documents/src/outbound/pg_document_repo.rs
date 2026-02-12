@@ -164,10 +164,7 @@ impl DocumentRepo for PgDocumentRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn get_basic_document(
-        &self,
-        document_id: &str,
-    ) -> Result<DocumentBasic, Self::Err> {
+    async fn get_basic_document(&self, document_id: &str) -> Result<DocumentBasic, Self::Err> {
         sqlx::query!(
             r#"
             SELECT
@@ -273,10 +270,7 @@ impl DocumentRepo for PgDocumentRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn get_document_version_id(
-        &self,
-        document_id: &str,
-    ) -> Result<(i64, bool), Self::Err> {
+    async fn get_document_version_id(&self, document_id: &str) -> Result<(i64, bool), Self::Err> {
         sqlx::query!(
             r#"
             SELECT
@@ -318,10 +312,7 @@ impl DocumentRepo for PgDocumentRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn get_document_shas(
-        &self,
-        document_version_id: i64,
-    ) -> Result<Vec<String>, Self::Err> {
+    async fn get_document_shas(&self, document_version_id: i64) -> Result<Vec<String>, Self::Err> {
         sqlx::query!(
             r#"
             SELECT bp.sha

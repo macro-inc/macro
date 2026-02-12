@@ -83,10 +83,7 @@ async fn test_get_latest_document_version_id(pool: Pool<Postgres>) {
 async fn test_get_document_version_id(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool);
 
-    let (version_id, _uploaded) = repo
-        .get_document_version_id("document-one")
-        .await
-        .unwrap();
+    let (version_id, _uploaded) = repo.get_document_version_id("document-one").await.unwrap();
     assert_eq!(version_id, 1);
 }
 
