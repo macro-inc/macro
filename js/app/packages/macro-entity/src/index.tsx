@@ -12,7 +12,6 @@ export {
   optimisticUpdateDssItemViewedAt,
 } from './queries/dss';
 export { createEmailsInfiniteQuery } from './queries/email';
-export type { EntityInfiniteQuery, EntityQuery } from './queries/entity';
 export { queryKeys } from './queries/key';
 export { enhanceWithNotifications } from './queries/notification';
 export { createEmailSource, type EmailSource, useEmails } from './source/email';
