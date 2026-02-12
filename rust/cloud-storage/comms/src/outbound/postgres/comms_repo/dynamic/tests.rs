@@ -262,11 +262,7 @@ async fn test_get_user_channels_dynamic_filter_by_channel_type(pool: Pool<sqlx::
     let channels = get_user_channels_dynamic(&pool, &params).await.unwrap();
 
     // Channels A and B are organization type
-    assert_eq!(
-        channels.len(),
-        2,
-        "Should return 2 organization channels"
-    );
+    assert_eq!(channels.len(), 2, "Should return 2 organization channels");
 }
 
 #[sqlx::test(
