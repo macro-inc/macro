@@ -499,8 +499,17 @@ const SearchBar = () => {
   const panel = useSplitPanelOrThrow();
 
   const [ref, setRef] = createSignal<HTMLInputElement | undefined>();
+  let measureSpan: HTMLSpanElement | undefined;
 
   const [searchFocused, setSearchFocused] = createSignal(false);
+  const [measuredWidth, setMeasuredWidth] = createSignal(0);
+
+  createEffect(() => {
+    if (measureSpan) {
+      measureSpan.textContent = searchText() || '';
+      setMeasuredWidth(measureSpan.scrollWidth);
+    }
+  });
 
   const searchHotkey = registerHotkey({
     hotkey: ['cmd+f'],
@@ -517,14 +526,13 @@ const SearchBar = () => {
 
   return (
     <div
-      class="flex items-center min-w-0 touch:mobile-width:-order-2"
+      class="flex items-center grow min-w-0 touch:mobile-width:-order-2"
       classList={{
-        'grow max-w-75': searchFocused(),
-        'shrink-0': !searchFocused(),
+        'max-w-75': searchFocused(),
       }}
     >
       <Tooltip
-        class={searchFocused() ? 'grow' : ''}
+        class={searchFocused() ? 'grow' : 'w-fit'}
         placement="bottom-start"
         tooltip={<LabelAndHotKey label="Filter" shortcut="⌘F" />}
       >
@@ -536,9 +544,19 @@ const SearchBar = () => {
               !searchText() && !searchFocused(),
             'grow bg-accent/15 text-ink': searchFocused(),
           }}
-          onClick={() => ref()?.focus()}
+          onMouseDown={(e) => {
+            if (e.target !== ref()) {
+              e.preventDefault();
+              ref()?.focus();
+            }
+          }}
         >
           <SearchIcon class="size-4.5 shrink-0" />
+          <span
+            ref={(el) => (measureSpan = el)}
+            class="invisible absolute whitespace-pre"
+            aria-hidden="true"
+          />
           <Show when={!searchText() && !searchFocused()}>
             <span class="leading-none pointer-events-none">
               <span class="underline underline-offset-2 decoration-current/60">
@@ -574,7 +592,7 @@ const SearchBar = () => {
                   ? '0'
                   : searchFocused()
                     ? undefined
-                    : `${Math.max(5, searchText().length + 1)}ch`,
+                    : `${measuredWidth()}px`,
             }}
           />
         </div>
