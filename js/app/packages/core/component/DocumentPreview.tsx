@@ -296,10 +296,19 @@ export function PopupPreview(props: {
   const blockName = useMaybeBlockName();
   const blockId = useMaybeBlockId();
 
-  const { item, ItemEntityIcon } = useItemPreviewData(() => ({
-    id: props.documentInfo.id,
-    type: blockNameToItemType(props.documentInfo.type),
-  }));
+  const itemPreviewEntity = () => {
+    const type = blockNameToItemType(props.documentInfo.type);
+    let messageId: string | undefined;
+    if (
+      type === 'channel' &&
+      URL_PARAMS_CHANNEL.message in props.documentInfo.params
+    ) {
+      messageId = props.documentInfo.params[URL_PARAMS_CHANNEL.message];
+    }
+    return { id: props.documentInfo.id, type, messageId };
+  };
+
+  const { item, ItemEntityIcon } = useItemPreviewData(itemPreviewEntity);
 
   // Derived state
   const canOpenInChat = createCallback(() => {
