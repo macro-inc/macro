@@ -72,7 +72,7 @@ import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { usePropertyEditorHotkeys } from '@app/component/property-edit-modal/hooks/usePropertyEditorHotkeys';
-import { SoupItemsQueryFilters } from '@queries/soup/items';
+import type { SoupItemsQueryFilters } from '@queries/soup/items';
 
 const DEFAULT_ENTITY_HEIGHT = 40;
 
