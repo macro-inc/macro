@@ -6,6 +6,7 @@ type EmailStore = Record<string, EmailEntity>;
 
 const singletonEmailStore = createStore<EmailStore>({});
 
+/** @deprecated this is empty until we migrate to the new email query */
 export function useEmails() {
   const [store] = singletonEmailStore;
   return createMemo(() => Object.values(store));
