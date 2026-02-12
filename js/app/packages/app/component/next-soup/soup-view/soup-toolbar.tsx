@@ -524,15 +524,17 @@ const SearchBar = () => {
 
   onCleanup(searchHotkey.dispose);
 
+  const MIN_INPUT_WIDTH = 48;
+
+  const inputWidth = () => {
+    if (!searchText() && !searchFocused()) return 0;
+    return Math.max(MIN_INPUT_WIDTH, measuredWidth());
+  };
+
   return (
-    <div
-      class="flex items-center grow min-w-0 touch:mobile-width:-order-2"
-      classList={{
-        'max-w-75': searchFocused(),
-      }}
-    >
+    <div class="flex items-center grow min-w-0 touch:mobile-width:-order-2">
       <Tooltip
-        class={searchFocused() ? 'grow' : 'w-fit'}
+        class="w-fit"
         placement="bottom-start"
         tooltip={<LabelAndHotKey label="Filter" shortcut="⌘F" />}
       >
@@ -542,7 +544,7 @@ const SearchBar = () => {
             'bg-accent text-panel': !!searchText() && !searchFocused(),
             'text-ink-muted hover:text-accent hover:bg-accent/20':
               !searchText() && !searchFocused(),
-            'grow bg-accent/15 text-ink': searchFocused(),
+            'bg-accent/15 text-ink': searchFocused(),
           }}
           onMouseDown={(e) => {
             if (e.target !== ref()) {
@@ -583,17 +585,7 @@ const SearchBar = () => {
               }
             }}
             class="p-0 bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 cursor-default"
-            classList={{
-              grow: searchFocused(),
-            }}
-            style={{
-              width:
-                !searchText() && !searchFocused()
-                  ? '0'
-                  : searchFocused()
-                    ? undefined
-                    : `${measuredWidth()}px`,
-            }}
+            style={{ width: `${inputWidth()}px` }}
           />
         </div>
       </Tooltip>
