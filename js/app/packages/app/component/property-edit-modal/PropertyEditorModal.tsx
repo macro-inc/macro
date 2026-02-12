@@ -31,7 +31,6 @@ import { useAllProperties } from './hooks/useAllProperties';
 import { usePropertySelection } from '@core/component/Properties/hooks';
 import { cn } from '@ui/utils/classname';
 import type { EntityData } from '@macro-entity';
-import { InlineEntity } from '../../../macro-entity/src/components/InlineEntity';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import type {
   Property,
@@ -65,6 +64,7 @@ import type { PropertyApiValues } from '@core/component/Properties/types';
 import { toast } from '@core/component/Toast/Toast';
 import { useSavePropertyForMultiEntitites } from './hooks/useSaveProperties';
 import { useEntityPropertiesQuery } from '@queries/properties/entity';
+import { InlineEntity } from '@entity';
 
 /* Styled wrapper for list items in each menu. */
 function ListItem(props: {
