@@ -17,7 +17,6 @@ export { createEmailsInfiniteQuery } from './queries/email';
 export type { EntityInfiniteQuery, EntityQuery } from './queries/entity';
 export { queryKeys } from './queries/key';
 export { enhanceWithNotifications } from './queries/notification';
-export * from './queries/search';
 export { createEmailSource, type EmailSource, useEmails } from './source/email';
 export type * from './types/drag';
 export * from './types/entity';
