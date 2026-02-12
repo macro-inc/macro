@@ -370,7 +370,9 @@ export const commsServiceClient = {
       (result) => result
     );
   },
-  async getChannelMessages(args: WithChannelId & { limit: number; cursor: string | null }) {
+  async getChannelMessages(
+    args: WithChannelId & { limit: number; cursor: string | null }
+  ) {
     const { channel_id, limit, cursor } = args;
     const params = new URLSearchParams();
     params.append('limit', limit.toString());
@@ -383,7 +385,9 @@ export const commsServiceClient = {
       (result) => result
     );
   },
-  async getChannelAttachments(args: WithChannelId & { limit: number; cursor: string | null }) {
+  async getChannelAttachments(
+    args: WithChannelId & { limit: number; cursor: string | null }
+  ) {
     const { channel_id, limit, cursor } = args;
     const params = new URLSearchParams();
     params.append('limit', limit.toString());
