@@ -196,12 +196,14 @@ export const [QuickAccessProvider, useQuickAccess] =
       const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
 
       const allItemsSorted = createLazyMemo<QuickAccessItem[]>(() => {
+        const startAllItems = performance.now();
         const items: QuickAccessItem[] = [];
 
         // Process history items
         // Sort by: viewedAt ?? updatedAt (when you last interacted with it)
         const historyData = historyQuery.data ?? [];
         for (const item of historyData) {
+          // no deleted items
           if (item.deletedAt) continue;
 
           const bucket = getBucketForHistoryItem(item);
@@ -295,6 +297,9 @@ export const [QuickAccessProvider, useQuickAccess] =
         // Sort once by sortTimestamp descending (most recent first)
         items.sort((a, b) => b.sortTimestamp - a.sortTimestamp);
 
+        console.log(
+          `All items sorted in ${performance.now() - startAllItems}ms`
+        );
         return items;
       });
 
