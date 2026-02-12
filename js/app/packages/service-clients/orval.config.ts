@@ -7,7 +7,7 @@ export default defineConfig({
       target: './service-auth/generated/client.ts',
       schemas: './service-auth/generated/schemas',
       override: {
-        useDates: true,
+        useDates: false,
       },
     },
     input: {
@@ -20,7 +20,7 @@ export default defineConfig({
       target: './service-cognition/generated/client.ts',
       schemas: './service-cognition/generated/schemas',
       override: {
-        useDates: true,
+        useDates: false,
       },
     },
     input: {
@@ -33,7 +33,7 @@ export default defineConfig({
       target: './service-comms/generated/client.ts',
       schemas: './service-comms/generated/models',
       override: {
-        useDates: true,
+        useDates: false,
       },
     },
     input: {
@@ -46,7 +46,7 @@ export default defineConfig({
       target: './service-connection/generated/client.ts',
       schemas: './service-connection/generated/schemas',
       override: {
-        useDates: true,
+        useDates: false,
       },
     },
     input: {
@@ -59,7 +59,7 @@ export default defineConfig({
       target: './service-contacts/generated/client.ts',
       schemas: './service-contacts/generated/schemas',
       override: {
-        useDates: true,
+        useDates: false,
       },
     },
     input: {
@@ -72,7 +72,7 @@ export default defineConfig({
       target: './service-email/generated/client.ts',
       schemas: './service-email/generated/schemas',
       override: {
-        useDates: true,
+        useDates: false,
       },
     },
     input: {
@@ -86,7 +86,7 @@ export default defineConfig({
       target: './service-notification/generated/client.ts',
       schemas: './service-notification/generated/schemas',
       override: {
-        useDates: true,
+        useDates: false,
       },
     },
     input: {
@@ -101,7 +101,7 @@ export default defineConfig({
       schemas: './service-organization/generated/schemas',
       biome: true,
       override: {
-        useDates: true,
+        useDates: false,
       },
     },
     input: {
@@ -117,7 +117,7 @@ export default defineConfig({
       indexFiles: false,
       biome: true,
       override: {
-        useDates: true,
+        useDates: false,
       },
     },
     input: {
@@ -130,7 +130,7 @@ export default defineConfig({
       target: './service-search/generated/client.ts',
       schemas: './service-search/generated/models',
       override: {
-        useDates: true,
+        useDates: false,
       },
     },
     input: {
@@ -143,7 +143,7 @@ export default defineConfig({
       target: './service-static-files/generated/client.ts',
       schemas: './service-static-files/generated/schemas',
       override: {
-        useDates: true,
+        useDates: false,
       },
     },
     input: {
@@ -158,7 +158,7 @@ export default defineConfig({
       schemas: './service-storage/generated/schemas',
       biome: true,
       override: {
-        useDates: true,
+        useDates: false,
       },
     },
     input: {
@@ -171,7 +171,7 @@ export default defineConfig({
       target: './service-unfurl/generated/client.ts',
       schemas: './service-unfurl/generated/schemas',
       override: {
-        useDates: true,
+        useDates: false,
       },
     },
     input: {

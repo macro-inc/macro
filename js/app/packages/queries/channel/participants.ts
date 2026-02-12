@@ -5,10 +5,7 @@ import {
   commsServiceClient,
   type MessageResponse,
 } from '@service-comms/client';
-import type {
-  ChannelParticipant,
-  GetChannelResponse,
-} from '@service-comms/generated/models';
+import type { ChannelParticipant, GetChannelResponse } from './types';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { softInvalidateChannelWithID } from './channel';
@@ -55,7 +52,7 @@ export function optimisticAddParticipants(
           user_id: userId,
           role: 'member',
           left_at: null,
-          joined_at: new Date(),
+          joined_at: new Date().toISOString(),
           channel_id: vars.channelId,
         })
       );

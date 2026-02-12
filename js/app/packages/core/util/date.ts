@@ -5,7 +5,11 @@ import {
   differenceInWeeks,
   isToday,
   isYesterday,
+  toDate,
 } from 'date-fns';
+
+/** Represents a Date or an Api RFC3339 string response that can be parsed into a Date object. */
+export type DateValue = Date | string;
 
 const EPOCH_ZERO = new Date(0);
 
@@ -24,15 +28,16 @@ export interface FormatDateOptions {
  *     single day offsets, 'Thursday' for a day within the week and '01/23/2025' for dates outside the week.
  */
 export const formatDate = (
-  date: Date | null | undefined,
+  date: DateValue | null | undefined,
   options?: FormatDateOptions
 ) => {
   if (!date) return '';
+  const d = date instanceof Date ? date : toDate(date);
   const { timeZone, showTime } = options ?? {};
   const timeZoneOpts = timeZone ? { in: tz(timeZone) } : {};
   const now = new Date();
 
-  const time = date.toLocaleTimeString('en-US', {
+  const time = d.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
@@ -48,14 +53,14 @@ export const formatDate = (
   }
 
   if (differenceInWeeks(now, date) < 1) {
-    const weekday = date.toLocaleDateString(undefined, {
+    const weekday = d.toLocaleDateString(undefined, {
       weekday: 'long',
       timeZone,
     });
     return showTime ? `${weekday} at ${time}` : weekday;
   }
 
-  const displayDate = date.toLocaleDateString(undefined, {
+  const displayDate = d.toLocaleDateString(undefined, {
     month: '2-digit',
     day: '2-digit',
     year: '2-digit',
@@ -69,12 +74,13 @@ export const formatDate = (
  * @param date - Date object or Unix timestamp in seconds
  * @returns Formatted date string
  */
-export const formatEmailDate = (date: Date) => {
-  const weekday = date.toLocaleDateString('en-US', { weekday: 'short' });
-  const month = date.toLocaleDateString('en-US', { month: 'short' });
-  const day = date.getDate();
-  const year = date.getFullYear();
-  const time = date.toLocaleTimeString('en-US', {
+export const formatEmailDate = (date: DateValue) => {
+  const d = toDate(date);
+  const weekday = d.toLocaleDateString('en-US', { weekday: 'short' });
+  const month = d.toLocaleDateString('en-US', { month: 'short' });
+  const day = d.getDate();
+  const year = d.getFullYear();
+  const time = d.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
@@ -89,8 +95,8 @@ export const formatEmailDate = (date: Date) => {
  * @returns Positive if a > b, negative if a < b, zero if equal
  */
 export const compareDateDesc = (
-  a: Date | null | undefined,
-  b: Date | null | undefined
+  a: DateValue | null | undefined,
+  b: DateValue | null | undefined
 ): number => {
   const dateA = a ?? EPOCH_ZERO;
   const dateB = b ?? EPOCH_ZERO;
@@ -103,8 +109,8 @@ export const compareDateDesc = (
  * @returns Positive if a > b, negative if a < b, zero if equal
  */
 export const compareDateAsc = (
-  a: Date | null | undefined,
-  b: Date | null | undefined
+  a: DateValue | null | undefined,
+  b: DateValue | null | undefined
 ): number => {
   const dateA = a ?? EPOCH_ZERO;
   const dateB = b ?? EPOCH_ZERO;
@@ -119,52 +125,3 @@ export const convertIsoString = (isoString: string): Date | undefined => {
   }
   return undefined;
 };
-
-/**
- * Recursively converts ISO date strings to Date objects in an object, array, or primitive value.
- * - If a string matches ISO date format and is valid, it's converted to a Date object
- * - If a string matches ISO date format but is invalid, returns a Date with getTime() NaN
- * - null values remain null
- * - Recursively processes arrays and objects
- *
- * @template T - The type of the value being converted
- * @param obj - The value to convert (can be object, array, string, or any primitive)
- * @returns The value with date strings converted to Date objects
- *
- * @example
- * const data = { createdAt: '2025-02-11T10:30:00Z', items: [{ date: '2025-02-10T08:00:00Z' }] };
- * const converted = convertDates(data);
- * // converted.createdAt is now a Date object
- * // converted.items[0].date is now a Date object
- */
-export function convertDates<T>(obj: T): T {
-  if (obj === null) {
-    return null as T;
-  }
-
-  if (obj === undefined) {
-    return undefined as T;
-  }
-
-  if (typeof obj === 'string') {
-    const date = convertIsoString(obj);
-    if (date) {
-      return date as unknown as T;
-    }
-    return obj;
-  }
-
-  if (Array.isArray(obj)) {
-    return obj.map((item) => convertDates(item)) as unknown as T;
-  }
-
-  if (typeof obj === 'object') {
-    const converted: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(obj)) {
-      converted[key] = convertDates(value);
-    }
-    return converted as T;
-  }
-
-  return obj;
-}

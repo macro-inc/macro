@@ -12,9 +12,9 @@ import type { ProjectMetadataViewedAt } from './projectMetadataViewedAt';
  * Metadata for a project fetched from the database
  */
 export interface ProjectMetadata {
-  created_at: Date;
+  created_at: string;
   deleted_at?: ProjectMetadataDeletedAt;
   parent_project_id?: ProjectMetadataParentProjectId;
-  updated_at: Date;
+  updated_at: string;
   viewed_at?: ProjectMetadataViewedAt;
 }

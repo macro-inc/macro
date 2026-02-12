@@ -9,7 +9,7 @@ import type { BackfillJobStatus } from './backfillJobStatus';
 import type { BackfillJobThreadsRequestedLimit } from './backfillJobThreadsRequestedLimit';
 
 export interface BackfillJob {
-  created_at: Date;
+  created_at: string;
   fusionauth_user_id: string;
   id: string;
   link_id?: BackfillJobLinkId;
@@ -17,5 +17,5 @@ export interface BackfillJob {
   threads_requested_limit?: BackfillJobThreadsRequestedLimit;
   threads_retrieved_count: number;
   total_threads: number;
-  updated_at: Date;
+  updated_at: string;
 }

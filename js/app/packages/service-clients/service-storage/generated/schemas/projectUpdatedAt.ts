@@ -8,4 +8,4 @@
 /**
  * The time the project was updated
  */
-export type ProjectUpdatedAt = Date | null;
+export type ProjectUpdatedAt = string | null;

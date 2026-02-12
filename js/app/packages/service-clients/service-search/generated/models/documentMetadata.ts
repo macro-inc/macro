@@ -12,9 +12,9 @@ import type { DocumentMetadataViewedAt } from './documentMetadataViewedAt';
  * Metadata for a document fetched from the database
  */
 export interface DocumentMetadata {
-  created_at: Date;
+  created_at: string;
   deleted_at?: DocumentMetadataDeletedAt;
   project_id?: DocumentMetadataProjectId;
-  updated_at: Date;
+  updated_at: string;
   viewed_at?: DocumentMetadataViewedAt;
 }

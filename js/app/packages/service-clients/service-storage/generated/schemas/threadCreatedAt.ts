@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ThreadCreatedAt = Date | null;
+export type ThreadCreatedAt = string | null;

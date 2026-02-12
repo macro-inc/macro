@@ -3,6 +3,7 @@
  */
 
 import { err, ok } from '@core/util/maybeResult';
+import type { UnifiedNotification } from '@notifications/types';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
 import type { GetAllUserNotificationsResponse } from '@service-notification/generated/schemas/getAllUserNotificationsResponse';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
@@ -47,19 +48,18 @@ vi.mock('../../client', () => ({
 type UserNotificationsPageParam = { limit: number; cursor?: string };
 
 function createMockNotification(
-  overrides: Partial<ApiUserNotification> = {}
-): ApiUserNotification {
+  overrides: Partial<UnifiedNotification> = {}
+): UnifiedNotification {
   return {
     id: `notification-${Math.random().toString(36).slice(2)}`,
     entity_id: 'entity-1',
     entity_type: 'document',
-    createdAt: new Date(),
+    createdAt: new Date().toISOString(),
     updatedAt: null,
     viewedAt: null,
     deletedAt: null,
     done: false,
     sent: true,
-    ownerId: 'owner-1',
     notificationEventType: 'item_shared_user',
     notificationMetadata: {
       tag: 'item_shared_user',
@@ -69,15 +69,15 @@ function createMockNotification(
       },
     },
     ...overrides,
-  } as ApiUserNotification;
+  } as UnifiedNotification;
 }
 
 function createMockNotificationPage(
-  notifications: ApiUserNotification[],
+  notifications: UnifiedNotification[],
   nextCursor?: string
 ): GetAllUserNotificationsResponse {
   return {
-    items: notifications,
+    items: notifications as unknown as ApiUserNotification[],
     next_cursor: nextCursor,
   };
 }
@@ -167,7 +167,7 @@ describe('notification mutations', () => {
       await mutatePromise;
 
       const notifications = getNotificationsFromCache();
-      expect(notifications[0].viewedAt).toBeInstanceOf(Date);
+      expect(typeof notifications[0].viewedAt).toBe('string');
       expect(notifications[1].viewedAt).toBe(null);
 
       cleanup();
@@ -227,7 +227,7 @@ describe('notification mutations', () => {
 
       const notifications = getNotificationsFromCache();
       expect(notifications[0].viewedAt).toBe(null); // n1 unchanged
-      expect(notifications[1].viewedAt).toBeInstanceOf(Date); // n2 updated
+      expect(typeof notifications[1].viewedAt).toBe('string'); // n2 updated
 
       cleanup();
     });

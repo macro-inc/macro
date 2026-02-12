@@ -8,4 +8,4 @@
 /**
  * The time the chat was deleted
  */
-export type ChatDeletedAt = Date | null;
+export type ChatDeletedAt = string | null;

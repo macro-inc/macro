@@ -9,12 +9,12 @@ import type { ChannelMessageThreadId } from './channelMessageThreadId';
 
 export interface ChannelMessage {
   content: string;
-  created_at: Date;
+  created_at: string;
   deleted_at?: ChannelMessageDeletedAt;
   /** message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}` */
   mentions: string[];
   message_id: string;
   sender_id: string;
   thread_id?: ChannelMessageThreadId;
-  updated_at: Date;
+  updated_at: string;
 }

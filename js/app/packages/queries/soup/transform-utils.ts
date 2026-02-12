@@ -386,6 +386,8 @@ export const mapSoupPageToEntityList: (
         if (item.tag === 'chat') {
           return {
             ...item.data,
+            createdAt: item.data.createdAt,
+            updatedAt: item.data.updatedAt,
             type: item.tag,
             name: item.data.name || 'New Chat',
             frecencyScore: item.frecency_score,
@@ -416,6 +418,8 @@ export const mapSoupPageToEntityList: (
 
           return {
             ...item.data,
+            createdAt: item.data.createdAt,
+            updatedAt: item.data.updatedAt,
             senderEmail: item.data.senderEmail ?? undefined,
             senderName: item.data.senderName ?? undefined,
             snippet: item.data.snippet ?? undefined,
@@ -453,6 +457,8 @@ export const mapSoupPageToEntityList: (
 
         return {
           ...item.data,
+          createdAt: item.data.createdAt,
+          updatedAt: item.data.updatedAt,
           type: item.tag,
           frecencyScore: item.frecency_score,
           viewedAt: item.data.viewedAt,

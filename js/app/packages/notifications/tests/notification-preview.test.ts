@@ -9,7 +9,7 @@ function createEmailNotification(
     id: 'notif-1',
     entity_id: 'thread-1',
     entity_type: 'email',
-    createdAt: new Date(),
+    createdAt: new Date().toISOString(),
     updatedAt: null,
     viewedAt: null,
     deletedAt: null,

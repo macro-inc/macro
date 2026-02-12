@@ -1,3 +1,4 @@
+import type { DateValue } from '@core/util/date';
 import {
   catchToResult,
   isErr,
@@ -7,10 +8,8 @@ import {
 } from '@core/util/maybeResult';
 import { commsServiceClient } from '@service-comms/client';
 import type { getChannelResponseError } from '@service-comms/generated/client';
-import type {
-  ApiChannelWithLatest,
-  GetChannelResponse,
-} from '@service-comms/generated/models';
+import type { ApiChannelWithLatest } from '@service-comms/generated/models';
+import type { GetChannelResponse } from './types';
 import {
   type QueryClient,
   type UseBaseQueryOptions,
@@ -75,14 +74,14 @@ type WithChannelId<T> = T & { channelId: string };
 
 export type UpdateChannelNameContext = {
   previousName: string | null | undefined;
-  previousUpdatedAt: Date;
+  previousUpdatedAt: DateValue;
 };
 
 /** Helper to update channel name in both single channel and list queries. */
 function updateChannelNameInQueries(
   channelId: string,
   name: string | null | undefined,
-  updatedAt: Date
+  updatedAt: DateValue
 ): void {
   const queryKey = channelKeys.withID(channelId).queryKey;
   const listQueryKey = channelKeys.listChannels.queryKey;
@@ -141,7 +140,7 @@ export function optimisticUpdateChannelName(
     };
   }
 
-  const now = new Date();
+  const now = new Date().toISOString();
   updateChannelNameInQueries(vars.channelId, vars.name, now);
 
   return context;

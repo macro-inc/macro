@@ -209,7 +209,7 @@ export function propertyValueToApi(
       }
       return {
         type: 'date',
-        value: apiValues.value,
+        value: apiValues.value.toISOString(),
       };
 
     case 'BOOLEAN':

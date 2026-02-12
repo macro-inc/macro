@@ -8,4 +8,4 @@
 /**
  * The time the document was last updated
  */
-export type DocumentPreviewDataUpdatedAt = Date | null;
+export type DocumentPreviewDataUpdatedAt = string | null;

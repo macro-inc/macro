@@ -1,4 +1,3 @@
-import type { ChannelParticipant } from '@service-comms/generated/models';
 import { useDisplayName } from './displayName';
 import {
   emailToMacroId,
@@ -33,7 +32,9 @@ export function idToDisplayName(id: string): string {
   return displayName();
 }
 
-export function channelParticipantInfo(participant: ChannelParticipant): IUser {
+export function channelParticipantInfo(participant: {
+  user_id: string;
+}): IUser {
   const id = participant.user_id;
   return {
     id,

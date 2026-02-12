@@ -10,7 +10,7 @@ export async function saveEmailDraft(
 ): Promise<MessageToSendDbId | false> {
   const createRes = await emailClient.createDraft({
     draft,
-    send_time: sendTime,
+    send_time: sendTime?.toISOString() ?? null,
   });
   if (isErr(createRes)) {
     logger.error(new Error('Failed to save draft', { cause: createRes[0] }));

@@ -1,3 +1,4 @@
+import type { DateValue } from '@core/util/date';
 import type { ContentHitData } from '../types/search';
 import { formatRelativeTimestamp } from '../utils/timestamp';
 
@@ -8,7 +9,7 @@ interface SearchTimestampProps {
 /**
  * Gets timestamp from content hit if available
  */
-function getTimestamp(hit: ContentHitData): Date | undefined {
+function getTimestamp(hit: ContentHitData): DateValue | undefined {
   switch (hit.type) {
     case 'email':
     case 'channel':

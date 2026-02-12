@@ -20,7 +20,7 @@ import { InlineItemPreview } from './ItemPreview';
 import { StaticMarkdown } from './LexicalMarkdown/component/core/StaticMarkdown';
 import { UserIcon } from './UserIcon';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
-import { compareDateDesc } from '@core/util/date';
+import { compareDateDesc, type DateValue } from '@core/util/date';
 
 export type ReferenceProps = {
   documentId: string;
@@ -31,7 +31,7 @@ function isChannelReference(ref: EntityReference): ref is EntityReference & {
   channel_id: string;
   message_id: string;
   sender_id: string;
-  attachment_created_at: Date;
+  attachment_created_at: string;
   message_content?: string;
 } {
   return (
@@ -150,7 +150,8 @@ export function References(props: ReferenceProps) {
     );
   });
 
-  const formatTimestamp = (timestamp: Date) => {
+  const formatTimestamp = (input: DateValue) => {
+    const timestamp = input instanceof Date ? input : new Date(input);
     const datePart = timestamp
       .toLocaleDateString('en-US', {
         month: 'numeric',

@@ -11,7 +11,7 @@ import type { GenericReferenceUserId } from './genericReferenceUserId';
  */
 export interface GenericReference {
   /** When this reference was created */
-  created_at: Date;
+  created_at: string;
   /** ID of the referenced entity */
   entity_id: string;
   /** Type of the referenced entity */

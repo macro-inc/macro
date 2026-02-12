@@ -20,6 +20,7 @@ import {
 } from '../util/emailUser';
 import { useEmailContext } from './EmailContext';
 import { type EmailMessageAction, MessageActions } from './MessageActions';
+import type { DateValue } from '@core/util/date';
 
 interface EmailMessageTopBarProps {
   message: MessageWithBodyReplyless;
@@ -39,8 +40,8 @@ interface Recipient {
   email?: string | null;
 }
 
-function formatFullDate(date: Date): string {
-  return date
+function formatFullDate(date: DateValue): string {
+  return new Date(date)
     .toLocaleString('en-US', {
       weekday: 'long',
       year: 'numeric',
@@ -53,15 +54,16 @@ function formatFullDate(date: Date): string {
     .replace(',', '');
 }
 
-export function formatShortDate(date: Date): string {
-  if (date.getFullYear() !== new Date().getFullYear()) {
-    return date.toLocaleDateString('en-US', {
+export function formatShortDate(date: DateValue): string {
+  const d = new Date(date);
+  if (d.getFullYear() !== new Date().getFullYear()) {
+    return d.toLocaleDateString('en-US', {
       month: 'numeric',
       day: 'numeric',
       year: '2-digit',
     });
   }
-  return date.toLocaleDateString('en-US', {
+  return d.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
   });

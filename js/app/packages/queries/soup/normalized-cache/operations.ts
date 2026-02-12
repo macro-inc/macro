@@ -279,13 +279,13 @@ export function optimisticUpdateSoupItemViewedAt(itemId: string) {
   if (current.tag === 'channel') {
     optimisticUpdateSoupEntity({
       tag: 'channel',
-      data: { channel: { id: itemId }, viewed_at: now },
+      data: { channel: { id: itemId }, viewed_at: now.toISOString() },
       frecency_score: current.frecency_score,
     });
   } else {
     optimisticUpdateSoupEntity({
       tag: current.tag,
-      data: { id: itemId, viewedAt: now },
+      data: { id: itemId, viewedAt: now.toISOString() },
       frecency_score: current.frecency_score,
     });
   }

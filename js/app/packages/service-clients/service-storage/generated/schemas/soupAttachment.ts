@@ -12,7 +12,7 @@ import type { SoupAttachmentSizeBytes } from './soupAttachmentSizeBytes';
 
 export interface SoupAttachment {
   contentId?: SoupAttachmentContentId;
-  createdAt: Date;
+  createdAt: string;
   filename?: SoupAttachmentFilename;
   id: string;
   messageId: string;

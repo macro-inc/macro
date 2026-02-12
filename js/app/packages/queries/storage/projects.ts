@@ -164,13 +164,13 @@ export function useCreateProjectMutation(
 
           const tempProjectId = uuidv4();
           const tempProject: Project = {
-            createdAt: new Date(),
+            createdAt: new Date().toISOString(),
             id: tempProjectId,
             name: params.name,
             parentId: params.parentId,
             type: 'project',
             userId: '',
-            updatedAt: new Date(),
+            updatedAt: new Date().toISOString(),
             deletedAt: null,
           };
 

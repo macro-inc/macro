@@ -6,7 +6,7 @@
  */
 
 export interface Reaction {
-  created_at: Date;
+  created_at: string;
   emoji: string;
   message_id: string;
   user_id: string;

@@ -8,4 +8,4 @@
 /**
  * The time the document was created
  */
-export type GetDocumentListResultCreatedAt = Date | null;
+export type GetDocumentListResultCreatedAt = string | null;

@@ -1,6 +1,6 @@
 import { observedSize } from '@core/directive/observedSize';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { formatDate } from '@core/util/date';
+import { type DateValue, formatDate } from '@core/util/date';
 import IconPlus from '@icon/regular/plus.svg';
 import {
   type Accessor,
@@ -36,7 +36,7 @@ export type MessageRootProps = {
   isFirstMessage: boolean;
   isLastMessage: boolean;
   isConsecutive?: boolean;
-  timestamp?: Date;
+  timestamp?: DateValue;
   hoverActions?: () => JSX.Element;
   shouldHover?: boolean;
   threadDepth?: number;
@@ -80,7 +80,7 @@ export function useMessageContext(): MessageContextValue {
 
 export type MessageTopBarSimpleProps = {
   name: string;
-  timestamp?: Date | null;
+  timestamp?: DateValue | null;
   tagLabel?: string;
   tagIcon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>> | undefined;
 };

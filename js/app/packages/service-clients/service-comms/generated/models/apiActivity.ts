@@ -9,12 +9,12 @@ import type { ApiActivityViewedAt } from './apiActivityViewedAt';
 
 export interface ApiActivity {
   channel_id: string;
-  created_at: Date;
+  created_at: string;
   id: string;
   /** the last time the user intereacted with the channel
 eg. reacting, replying, sending a message */
   interacted_at?: ApiActivityInteractedAt;
-  updated_at: Date;
+  updated_at: string;
   user_id: string;
   /** the last time the user viewed the channel */
   viewed_at?: ApiActivityViewedAt;

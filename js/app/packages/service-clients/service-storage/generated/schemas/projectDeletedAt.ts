@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ProjectDeletedAt = Date | null;
+export type ProjectDeletedAt = string | null;

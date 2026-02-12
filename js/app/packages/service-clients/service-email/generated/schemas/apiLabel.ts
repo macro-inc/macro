@@ -9,7 +9,7 @@ import type { ApiLabelType } from './apiLabelType';
 import type { ApiMessageListVisibility } from './apiMessageListVisibility';
 
 export interface ApiLabel {
-  createdAt: Date;
+  createdAt: string;
   id: string;
   labelListVisibility: ApiLabelListVisibility;
   linkId: string;

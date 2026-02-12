@@ -2,6 +2,7 @@ import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
 import type { BlockAlias, BlockName } from '@core/block';
+import type { DateValue } from '@core/util/date';
 import { BozzyBracket } from '@core/component/BozzyBracket';
 import { Hotkey } from '@core/component/Hotkey';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -207,8 +208,8 @@ export type SearchSnippet = {
 type CommandItemBase = {
   snippet?: SearchSnippet;
   height?: number;
-  updatedAt?: Date | null;
-  viewedAt?: Date | null;
+  updatedAt?: DateValue | null;
+  viewedAt?: DateValue | null;
 };
 
 type SimpleText = {
@@ -228,7 +229,7 @@ export type EmailPreview = {
   id: string;
   name: string; // subject
   sender: string;
-  timestamp: Date;
+  timestamp: DateValue;
   is_read: boolean;
   attachments: Attachment[];
 };

@@ -9,7 +9,7 @@ import type { ParticipantRole } from './participantRole';
 
 export interface ChannelParticipant {
   channel_id: string;
-  joined_at: Date;
+  joined_at: string;
   left_at?: ChannelParticipantLeftAt;
   role: ParticipantRole;
   user_id: string;

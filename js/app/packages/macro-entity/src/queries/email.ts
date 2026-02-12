@@ -88,6 +88,8 @@ export function createEmailsInfiniteQuery(
               ...email,
               type: 'email',
               name: email.name || 'No Subject',
+              createdAt: email.createdAt,
+              updatedAt: email.updatedAt,
               frecencyScore: email.frecencyScore ?? undefined,
               viewedAt: email.viewedAt,
               snippet: email.snippet ?? undefined,

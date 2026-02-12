@@ -12,7 +12,7 @@ import type { ApiAttachmentSizeBytes } from './apiAttachmentSizeBytes';
 
 export interface ApiAttachment {
   contentId?: ApiAttachmentContentId;
-  createdAt: Date;
+  createdAt: string;
   filename?: ApiAttachmentFilename;
   id: string;
   messageId: string;

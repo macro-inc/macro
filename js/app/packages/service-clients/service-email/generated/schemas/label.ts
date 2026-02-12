@@ -11,7 +11,7 @@ import type { LabelName } from './labelName';
 import type { LabelTypeProperty } from './labelTypeProperty';
 
 export interface Label {
-  created_at: Date;
+  created_at: string;
   id?: LabelId;
   label_list_visibility?: LabelLabelListVisibility;
   link_id: string;

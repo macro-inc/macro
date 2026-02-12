@@ -11,11 +11,11 @@ import type { MessageThreadId } from './messageThreadId';
 export interface Message {
   channel_id: string;
   content: string;
-  created_at: Date;
+  created_at: string;
   deleted_at?: MessageDeletedAt;
   edited_at?: MessageEditedAt;
   id: string;
   sender_id: string;
   thread_id?: MessageThreadId;
-  updated_at: Date;
+  updated_at: string;
 }

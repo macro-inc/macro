@@ -14,6 +14,7 @@
  * - Legacy compatibility during migration
  */
 import type { BlockName } from '@core/block';
+import type { DateValue } from '@core/util/date';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { PropertyOption } from '@service-properties/generated/schemas/propertyOption';
@@ -52,8 +53,8 @@ export type Property = {
   options?: PropertyOption[];
   owner: PropertyOwner;
   specificEntityType?: EntityType | null;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: DateValue;
+  updatedAt: DateValue;
 } & ( // Single-value types
   | { valueType: 'STRING'; value: string | null }
   | { valueType: 'NUMBER'; value: number | null }
@@ -115,8 +116,8 @@ export type PropertyDefinitionDomain = {
   owner: PropertyOwner;
   specificEntityType?: EntityType | null;
   options?: PropertyOption[];
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: DateValue;
+  updatedAt: DateValue;
 };
 
 export type PropertiesPanelProps = {

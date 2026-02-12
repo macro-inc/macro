@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type PdfHighlightAnchorCreatedAt = Date | null;
+export type PdfHighlightAnchorCreatedAt = string | null;

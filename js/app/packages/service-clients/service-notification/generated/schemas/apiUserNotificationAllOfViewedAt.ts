@@ -8,4 +8,4 @@
 /**
  * When the notification was viewed/seen.
  */
-export type ApiUserNotificationAllOfViewedAt = Date | null;
+export type ApiUserNotificationAllOfViewedAt = string | null;

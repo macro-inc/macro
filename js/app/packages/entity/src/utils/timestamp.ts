@@ -1,3 +1,4 @@
+import type { DateValue } from '@core/util/date';
 import {
   format,
   isToday,
@@ -13,7 +14,7 @@ import {
  * - Same year: Shows month and day (e.g., "Jan 27")
  * - Older: Shows full date (e.g., "1/27/24")
  */
-export function formatTimestamp(date: Date): string {
+export function formatTimestamp(date: DateValue): string {
   if (isToday(date)) {
     return format(date, 'h:mm a');
   }
@@ -32,7 +33,7 @@ export function formatTimestamp(date: Date): string {
  * - Yesterday: "3:45pm yesterday"
  * - Older: Shows date (e.g., "Jan 27" or "1/27/24")
  */
-export function formatRelativeTimestamp(date: Date): string {
+export function formatRelativeTimestamp(date: DateValue): string {
   const now = new Date();
 
   const minutesAgo = differenceInMinutes(now, date);

@@ -8,4 +8,4 @@
 /**
  * the last time the user viewed the channel
  */
-export type ApiActivityViewedAt = Date | null;
+export type ApiActivityViewedAt = string | null;

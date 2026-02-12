@@ -7,11 +7,11 @@
 import type { TeamRole } from './teamRole';
 
 export interface TeamInvite {
-  created_at: Date;
+  created_at: string;
   email: string;
   id: string;
   invited_by: string;
-  last_sent_at: Date;
+  last_sent_at: string;
   team_id: string;
   team_role: TeamRole;
 }
