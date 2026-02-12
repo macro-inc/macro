@@ -7,7 +7,7 @@ import type { EmailEntity } from '@entity';
 import { waitBulkUploadStatus } from '@service-connection/bulkUpload';
 import type { DocumentMentionMetadata } from '@service-notification/client';
 import type { BasicDocument } from '@service-storage/generated/schemas/basicDocument';
-import type { Item } from '@service-storage/generated/schemas/item';
+import type { HistoryItem as Item } from '@queries/history/history';
 import type { Project } from '@service-storage/generated/schemas/project';
 import type { UploadSuccess } from '@service-storage/util/upload';
 import type { LexicalEditor } from 'lexical';
