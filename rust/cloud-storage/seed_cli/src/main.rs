@@ -46,8 +46,8 @@ pub async fn main() -> anyhow::Result<()> {
         env_vars.fusionauth_api_key_secret_key.to_string(),
         env_vars.fusionauth_client_id.to_string(),
         env_vars.fusionauth_client_secret_key.to_string(),
-        env_vars.fusionauth_base_url.to_string(),
-        env_vars.fusionauth_oauth_redirect_uri.to_string(),
+        transform_docker_url(&env_vars.fusionauth_base_url.to_string()),
+        "".to_string(), // NOTE: Not needed. Oauth redirect uri
         "".to_string(), // NOTE: Not needed. Google Client id
         "".to_string(), // NOTE: Not needed. Google client secret
     );
@@ -60,4 +60,14 @@ pub async fn main() -> anyhow::Result<()> {
 
     let cli = Cli::parse();
     cli.command.execute(context).await
+}
+
+/// Transforms the docker-network url to be localhost
+fn transform_docker_url(url: &str) -> String {
+    if let Some(rest) = url.strip_prefix("http://") {
+        if let Some(colon_pos) = rest.find(':') {
+            return format!("http://localhost{}", &rest[colon_pos..]);
+        }
+    }
+    url.to_string()
 }
