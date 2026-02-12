@@ -1,6 +1,6 @@
 import { createMemo } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import type { EmailEntity } from '../types/entity';
+import type { EmailEntity } from '@entity';
 
 type EmailStore = Record<string, EmailEntity>;
 

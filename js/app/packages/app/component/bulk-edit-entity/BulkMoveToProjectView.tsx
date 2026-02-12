@@ -5,7 +5,7 @@ import type { Project } from '@service-storage/generated/schemas';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
 import { createBulkMoveToProjectDssEntityMutation } from '../../../macro-entity/src/queries/dss';
-import type { EntityData } from '../../../macro-entity/src/types/entity';
+import type { EntityData } from '@entity';
 import {
   BulkEditEntityModalActionFooter,
   BulkEditEntityModalTitle,

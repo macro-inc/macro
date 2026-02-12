@@ -1,5 +1,5 @@
 import type { DragEvent } from '@thisbeyond/solid-dnd';
-import type { EntityData } from './entity';
+import type { EntityData } from '@entity';
 import type { Accessor } from 'solid-js';
 
 export type EntityDragOperation = 'move' | 'copy';

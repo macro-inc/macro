@@ -7,7 +7,7 @@ import {
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import type { ItemType } from '@service-storage/client';
 import { ChannelTypeEnum } from '@service-comms/client';
-import type { EntityData } from '../types/entity';
+import type { EntityData } from '@entity';
 import { useMutation } from '@tanstack/solid-query';
 import { toast } from '@core/component/Toast/Toast';
 import { setPreviewName } from '@queries/preview';

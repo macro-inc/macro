@@ -5,7 +5,7 @@ import {
 } from '@core/component/FileList/itemOperations';
 import { toast } from '@core/component/Toast/Toast';
 import { useMutation } from '@tanstack/solid-query';
-import type { EntityData } from '../types/entity';
+import type { EntityData } from '@entity';
 import { queryClient } from './client';
 import { soupKeys } from '@queries/soup/keys';
 import {
