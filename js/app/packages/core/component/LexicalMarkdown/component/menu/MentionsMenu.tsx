@@ -24,6 +24,7 @@ import {
   FreshSearchPresets,
   type TimestampedItem,
 } from '@core/util/freshSort';
+import { parseDate } from '@core/util/date';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import ClockIcon from '@icon/regular/clock.svg';
 import EmailIcon from '@icon/regular/envelope.svg';
@@ -122,7 +123,7 @@ const getItemTimestamp = (item: CombinedEntity): TimestampedItem => {
       };
     case 'channel':
       return {
-        updatedAt: item.data.updated_at,
+        updatedAt: parseDate(item.data.updated_at),
       };
     case 'email':
       return {

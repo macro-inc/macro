@@ -3,6 +3,7 @@
  */
 
 import { err, ok } from '@core/util/maybeResult';
+import type { UnifiedNotification } from '@notifications/types';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
 import type { GetAllUserNotificationsResponse } from '@service-notification/generated/schemas/getAllUserNotificationsResponse';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
@@ -47,8 +48,8 @@ vi.mock('../../client', () => ({
 type UserNotificationsPageParam = { limit: number; cursor?: string };
 
 function createMockNotification(
-  overrides: Partial<ApiUserNotification> = {}
-): ApiUserNotification {
+  overrides: Partial<UnifiedNotification> = {}
+): UnifiedNotification {
   return {
     id: `notification-${Math.random().toString(36).slice(2)}`,
     entity_id: 'entity-1',
@@ -59,7 +60,6 @@ function createMockNotification(
     deletedAt: null,
     done: false,
     sent: true,
-    ownerId: 'owner-1',
     notificationEventType: 'item_shared_user',
     notificationMetadata: {
       tag: 'item_shared_user',
@@ -69,15 +69,15 @@ function createMockNotification(
       },
     },
     ...overrides,
-  } as ApiUserNotification;
+  } as UnifiedNotification;
 }
 
 function createMockNotificationPage(
-  notifications: ApiUserNotification[],
+  notifications: UnifiedNotification[],
   nextCursor?: string
 ): GetAllUserNotificationsResponse {
   return {
-    items: notifications,
+    items: notifications as unknown as ApiUserNotification[],
     next_cursor: nextCursor,
   };
 }
