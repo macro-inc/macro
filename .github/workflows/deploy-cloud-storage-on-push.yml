@@ -63,8 +63,6 @@ jobs:
         uses: ./.github/actions/migrate-cloud-storage-db
         with:
           environment: dev
-          aws-access-key: ${{ secrets.AWS_ACCESS_KEY }}
-          aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
   deploy-services:
     name: Deploy ${{ matrix.service }}
