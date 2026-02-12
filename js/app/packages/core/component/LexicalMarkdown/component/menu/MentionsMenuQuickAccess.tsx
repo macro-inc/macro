@@ -1,40 +1,37 @@
-import {
-  type BlockName,
-  useMaybeBlockId,
-  useMaybeBlockName,
-} from '@core/block';
+import type { BlockAlias, BlockName } from '@core/block';
+import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
+import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { SUPPORTED_CHAT_ATTACHMENT_BLOCKS } from '@core/component/AI/constant/fileType';
 import { BozzyBracketInnerSibling } from '@core/component/BozzyBracket';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import { UserIcon } from '@core/component/UserIcon';
 import { ENABLE_CHAT_CHANNEL_ATTACHMENT } from '@core/constant/featureFlags';
-import { useChannelsContext } from '@core/context/channels';
 import { useEmail } from '@core/context/user';
+import {
+  useQuickAccess,
+  type EntityItem,
+  type UserItem,
+  isEntityItem,
+  isUserItem,
+} from '@core/context/quickAccess';
 import clickOutside from '@core/directive/clickOutside';
+import type { ChannelWithParticipants, IUser } from '@core/user';
 import {
-  type ChannelWithParticipants,
-  type IUser,
-  useAugmentUserWithDmActivity,
-  useContacts,
-} from '@core/user';
-import { getDateSuggestions } from '@core/util/dateParser';
-import {
-  createFreshSearch,
-  FreshSearchPresets,
-  type TimestampedItem,
-} from '@core/util/freshSort';
+  useDateSearch,
+  type DateOption,
+} from '@core/util/dateSearch/useDateSearch';
+import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
+import { trackMention } from '@core/signal/mention';
 import ClockIcon from '@icon/regular/clock.svg';
 import EmailIcon from '@icon/regular/envelope.svg';
 import UsersIcon from '@icon/regular/users.svg';
-import type { EntityData, WithSearch } from '@macro-entity';
+import type { ChannelEntity, EntityData, WithSearch } from '@macro-entity';
 import {
   createUnifiedSearchInfiniteQuery,
   type EmailEntity,
-  useEmails,
 } from '@macro-entity';
-import { useHistoryQuery } from '@queries/history/history';
 import type { SearchArgs } from '@service-search/client';
 import { debounce } from '@solid-primitives/scheduled';
 import { globalSplitManager } from 'app/signal/splitLayout';
@@ -61,36 +58,126 @@ import {
   CLOSE_INLINE_SEARCH_COMMAND,
   REMOVE_INLINE_SEARCH_COMMAND,
 } from '../../plugins';
+import {
+  INSERT_DATE_MENTION_COMMAND,
+  INSERT_DOCUMENT_MENTION_COMMAND,
+  INSERT_GROUP_MENTION_COMMAND,
+} from '../../plugins/mentions';
 import type { MenuOperations } from '../../shared/inlineMenu';
 import {
-  type CombinedEntity,
-  createGroupAlias,
-  type Entity,
-  type EntityMap,
-  entityMapper,
-  getCombinedEntityBlockName,
-  getItemName,
+  type DateMentionItem,
+  type GroupMentionItem,
   type HandlerDependencies,
-  handleBasicMention,
-  handleChannelMention,
-  handleDateMention,
-  handleEmailMention,
-  handleGroupMention,
   handleUserMention,
+  type MentionItem,
   type UserMentionRecord,
 } from '../../utils/mentionsUtils';
 import type { HistoryItem as Item } from '@queries/history/history';
-import type { QuickAccessItem } from '@core/context/quickAccess';
+import { match } from 'ts-pattern';
+import { ClippedPanel } from '@core/component/ClippedPanel';
 
-false && clickOutside;
-false && floatWithSelection;
-false && floatWithElement;
-
-/** The total number of max items in the menu. */
 const MAX_ITEMS = 8;
 
+function getBlockNameFromEntity(item: EntityItem): BlockName | BlockAlias {
+  return match(item.bucket)
+    .with('channel', () => 'channel' as const)
+    .with('dm', () => 'channel' as const)
+    .with('email', () => 'email' as const)
+    .with('chat', () => 'chat' as const)
+    .with('project', () => 'project' as const)
+    .with('task', () => 'task' as const)
+    .with('note', () => 'md' as const)
+    .otherwise(() => {
+      const entity = item.data;
+      if ('fileType' in entity && typeof entity.fileType === 'string') {
+        return fileTypeToBlockName(entity.fileType);
+      }
+      return 'unknown';
+    });
+}
+
+async function handleEntityMention(
+  item: EntityItem,
+  dependencies: HandlerDependencies
+) {
+  const {
+    editor,
+    blockName,
+    blockId,
+    onDocumentMention,
+    disableMentionTracking,
+    onEmailMention,
+  } = dependencies;
+
+  const entity = item.data;
+
+  let mentionId: string | undefined;
+  if (
+    blockId &&
+    blockName !== 'channel' &&
+    blockName !== 'chat' &&
+    !disableMentionTracking
+  ) {
+    const trackType =
+      item.bucket === 'channel' || item.bucket === 'dm'
+        ? 'channel'
+        : 'document';
+    mentionId = await trackMention(blockId, trackType, entity.id);
+  }
+
+  const blockNameForMention = getBlockNameFromEntity(item);
+  const itemName = entity.name ?? (item.bucket === 'email' ? 'No Subject' : '');
+
+  if (item.bucket === 'email') {
+    onEmailMention?.(entity as unknown as EmailEntity);
+  } else {
+    onDocumentMention?.(entity as unknown as Item | ChannelWithParticipants);
+  }
+
+  editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
+    documentId: entity.id,
+    documentName: itemName,
+    blockName: blockNameForMention,
+    mentionUuid: mentionId,
+    channelType:
+      item.bucket === 'channel' || item.bucket === 'dm'
+        ? (entity as ChannelEntity).channelType
+        : undefined,
+  });
+}
+
+/**
+ * Handle date mention from DateOption.
+ */
+async function handleDateMentionFromOption(
+  dateOption: DateOption,
+  dependencies: HandlerDependencies
+) {
+  const { editor } = dependencies;
+  editor.dispatchCommand(INSERT_DATE_MENTION_COMMAND, {
+    date: dateOption.date.toISOString(),
+    displayFormat: dateOption.displayText,
+  });
+}
+
+/**
+ * Handle group mention (e.g., @here).
+ */
+async function handleGroupMentionItem(
+  group: { id: string; groupAlias: string },
+  dependencies: HandlerDependencies
+) {
+  const { editor } = dependencies;
+  editor.dispatchCommand(INSERT_GROUP_MENTION_COMMAND, {
+    groupAlias: group.groupAlias,
+  });
+}
+
+/**
+ * Creates a handler for MentionItem selection.
+ */
 function createItemHandler(dependencies: HandlerDependencies) {
-  return async (item: QuickAccessItem) => {
+  return async (item: MentionItem) => {
     if (!item) return;
     dependencies.editor.dispatchCommand(
       REMOVE_INLINE_SEARCH_COMMAND,
@@ -100,15 +187,14 @@ function createItemHandler(dependencies: HandlerDependencies) {
       case 'user':
         return await handleUserMention(item.data, dependencies);
       case 'date':
-        return await handleDateMention(item.data, dependencies);
-      case 'item':
-        return await handleBasicMention(item.data, dependencies);
-      case 'channel':
-        return await handleChannelMention(item.data, dependencies);
-      case 'email':
-        return await handleEmailMention(item.data, dependencies);
+        return await handleDateMentionFromOption(item.data, dependencies);
       case 'group':
-        return await handleGroupMention(item.data, dependencies);
+        return await handleGroupMentionItem(item.data, dependencies);
+      case 'entity':
+        return await handleEntityMention(item, dependencies);
+      case 'command':
+        // Commands are not mentionable
+        return;
     }
   };
 }
@@ -257,15 +343,36 @@ type ViewAllMode = MentionBins | null;
 type SelectedCategory = MentionBins | null;
 
 /**
+ * Get display name for a MentionItem.
+ */
+function getMentionItemName(item: MentionItem): string {
+  switch (item.kind) {
+    case 'user': {
+      const { email, name } = item.data;
+      if (name === email) return email;
+      return `${name} | ${email}`;
+    }
+    case 'group':
+      return `@${item.data.groupAlias}`;
+    case 'date':
+      return item.data.displayText;
+    case 'entity':
+      return item.data.name ?? (item.bucket === 'email' ? 'No Subject' : '');
+    case 'command':
+      return item.searchText ?? '';
+  }
+}
+
+/**
  * Styled component for a single item.
  * @param props
  * @returns
  */
 export function MentionsMenuItem(props: {
-  item: CombinedEntity;
+  item: MentionItem;
   index: number;
   selected: boolean;
-  itemAction: (item: CombinedEntity) => void;
+  itemAction: (item: MentionItem) => void;
   setIndex: (index: number) => void;
   setOpen: (open: boolean) => void;
 }) {
@@ -277,7 +384,7 @@ export function MentionsMenuItem(props: {
     }
   });
 
-  const name = () => getItemName(props.item);
+  const name = () => getMentionItemName(props.item);
 
   const icon = () => {
     switch (props.item.kind) {
@@ -290,23 +397,29 @@ export function MentionsMenuItem(props: {
       case 'date':
         return <ClockIcon class="size-4 text-ink-muted" />;
 
-      case 'channel':
+      case 'entity':
+        if (props.item.bucket === 'email') {
+          return <EmailIcon class="size-4 text-ink-muted" />;
+        }
+        if (props.item.bucket === 'channel' || props.item.bucket === 'dm') {
+          const entity = props.item.data as ChannelEntity;
+          return (
+            <EntityIcon
+              size="xs"
+              targetType={entity.channelType || 'channel'}
+            />
+          );
+        }
         return (
           <EntityIcon
+            targetType={getBlockNameFromEntity(props.item)}
             size="xs"
-            targetType={props.item.data.channel_type || 'channel'}
           />
         );
 
-      case 'item':
-        return (
-          <EntityIcon
-            targetType={getCombinedEntityBlockName(props.item, true)}
-            size="xs"
-          />
-        );
-      case 'email':
-        return <EmailIcon class="size-4 text-ink-muted" />;
+      case 'command':
+        // Commands shouldn't appear in mentions menu, but handle gracefully
+        return null;
     }
   };
 
@@ -375,58 +488,32 @@ function MentionsMenuInner(props: {
   const [searchTerm, setSearchTerm] = createSignal<string>(
     props.menu.searchTerm()
   );
-  const historyQuery = useHistoryQuery();
-  // TODO: support viewed at in history
-  const history = createMemo(() => {
-    if (props.history) {
-      return props.history().map(entityMapper('item'));
-    }
-    return historyQuery.data?.map(entityMapper('item')) ?? [];
-  });
 
-  let emails: Accessor<Entity<'email'>[]>;
-  if (props.emails) {
-    emails = createMemo(
-      () =>
-        props.emails?.().map(entityMapper('email')).filter(allItemFilter) ?? []
-    );
-  } else {
-    const emailsFromSource = useEmails();
-    emails = createMemo(
-      () =>
-        emailsFromSource().map(entityMapper('email')).filter(allItemFilter) ??
-        []
-    );
-  }
+  // Get QuickAccess data
+  const quickAccess = useQuickAccess();
 
-  const contacts = useContacts();
-  const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
+  // Documents & channels from quickAccess (replaces useHistoryQuery + useChannelsContext)
+  const itemsAndChannels = quickAccess.useList(
+    'document',
+    'note',
+    'task',
+    'chat',
+    'project',
+    'channel',
+    'dm'
+  );
 
-  const users = createMemo((): Entity<'user'>[] => {
-    const list = props.users?.() ?? contacts();
+  // Users from quickAccess (replaces useContacts)
+  const usersFromQuickAccess = quickAccess.useList('person');
 
-    return list
-      .map((user) => entityMapper('user')(augmentUserWithDmActivity(user)))
-      .filter(allItemFilter);
-  });
+  // Emails from quickAccess for local data
+  const emailsFromQuickAccess = quickAccess.useList('email');
 
-  let channels: Accessor<Entity<'channel'>[]>;
-  if (props.channels) {
-    channels = createMemo(
-      () =>
-        props.channels?.().map(entityMapper('channel')).filter(allItemFilter) ??
-        []
-    );
-  } else {
-    const { channels: userChannels } = useChannelsContext();
-    channels = createMemo(() => {
-      if (!ENABLE_CHAT_CHANNEL_ATTACHMENT && props.block === 'chat') {
-        return [];
-      }
-      return userChannels().map(entityMapper('channel')).filter(allItemFilter);
-    });
-  }
+  // Dates from useDateSearch (replaces getDateSuggestions)
+  const dateOptionsAccessor = () => searchTerm();
+  const dateOptions = useDateSearch({ query: dateOptionsAccessor });
 
+  // Keep email unified search for paginated search results
   const args = createMemo((): SearchArgs => {
     return {
       params: {
@@ -445,7 +532,7 @@ function MentionsMenuInner(props: {
   const emailUnifiedSearchInfiniteQuery =
     createUnifiedSearchInfiniteQuery(args);
 
-  const foundEmails = createMemo((): Entity<'email'>[] => {
+  const foundEmailsFromSearch = createMemo((): EntityItem[] => {
     if (emailUnifiedSearchInfiniteQuery.status === 'success') {
       function isEmail(
         e: WithSearch<EntityData>
@@ -453,19 +540,20 @@ function MentionsMenuInner(props: {
         return e.type === 'email';
       }
 
-      function entityDataToMentionEntity<T extends EmailEntity>(
-        e: T
-      ): Entity<'email'> {
-        return {
-          data: e,
+      return emailUnifiedSearchInfiniteQuery.data.filter(isEmail).map(
+        (e): EntityItem => ({
+          kind: 'entity',
           id: e.id,
-          kind: 'email',
-        };
-      }
-
-      return emailUnifiedSearchInfiniteQuery.data
-        .filter(isEmail)
-        .map(entityDataToMentionEntity);
+          bucket: 'email',
+          searchText: e.name ?? 'No Subject',
+          sortTimestamp: e.updatedAt ?? 0,
+          timestamps: {
+            updatedAt: e.updatedAt ? new Date(e.updatedAt) : undefined,
+            createdAt: e.createdAt ? new Date(e.createdAt) : undefined,
+          },
+          data: e,
+        })
+      );
     } else {
       return [];
     }
@@ -477,12 +565,10 @@ function MentionsMenuInner(props: {
     if (!splitManager) return [];
 
     const splits = splitManager.splits();
-    const historyItems = history();
-    const channelList = channels();
-    const emailList = emails();
+    const allItems = itemsAndChannels();
+    const allEmails = emailsFromQuickAccess();
 
-    const tabItems: CombinedEntity<'item' | 'channel' | 'email'>[] = [];
-
+    const tabItems: EntityItem[] = [];
     const seenKeys = new Set<string>();
 
     for (const split of splits) {
@@ -499,52 +585,47 @@ function MentionsMenuInner(props: {
       seenKeys.add(key);
 
       if (split.content.type === 'channel') {
-        // Find the channel in our channels list
-        const channel = channelList.find((ch) => ch.id === split.content.id);
-        if (ENABLE_CHAT_CHANNEL_ATTACHMENT && channel) {
+        const channel = allItems.find(
+          (item) =>
+            item.id === split.content.id &&
+            (item.bucket === 'channel' || item.bucket === 'dm')
+        );
+        if (
+          ENABLE_CHAT_CHANNEL_ATTACHMENT &&
+          channel &&
+          isEntityItem(channel)
+        ) {
           tabItems.push(channel);
         }
       } else if (split.content.type === 'email') {
-        const e = emailList.find((e) => e.id === split.content.id);
-        if (e) tabItems.push(e);
+        const email = allEmails.find((item) => item.id === split.content.id);
+        if (email && isEntityItem(email)) {
+          tabItems.push(email);
+        }
       } else {
-        // Find the document in history
-        const historyItem = historyItems.find(
+        const historyItem = allItems.find(
           (item) => item.id === split.content.id
         );
-        if (historyItem) {
+        if (historyItem && isEntityItem(historyItem)) {
           tabItems.push(historyItem);
         }
       }
     }
 
-    return tabItems.filter(allItemFilter);
+    return tabItems;
   });
 
   const historyAndChannels = createMemo(() => {
-    const historyItems = history().filter(allItemFilter);
-    const channelItems = channels();
+    const items = itemsAndChannels().filter(isEntityItem);
     const currentBlockId = useMaybeBlockId();
 
-    // Create a map to deduplicate by ID
-    const itemMap = new Map<string, CombinedEntity<'item' | 'channel'>>();
-
-    // Add history items first (excluding current document)
-    for (const item of historyItems) {
+    // Deduplicate by ID and exclude current document
+    const itemMap = new Map<string, EntityItem>();
+    for (const item of items) {
       if (!currentBlockId || item.id !== currentBlockId) {
         itemMap.set(item.id, item);
       }
     }
-
-    // Add channel items (excluding current channel)
-    for (const item of channelItems) {
-      if (!currentBlockId || item.id !== currentBlockId) {
-        itemMap.set(item.id, item);
-      }
-    }
-
-    // Open tabs are already included in history/channels, so we don't need to add them separately
-    // The prioritization happens in filteredItems instead
 
     return Array.from(itemMap.values());
   });
@@ -570,23 +651,32 @@ function MentionsMenuInner(props: {
 
   createEffect(() => debouncedSetSearchTerm(props.menu.searchTerm()));
 
-  const itemSearch = createFreshSearch<CombinedEntity<'item' | 'channel'>>(
-    {},
-    getItemSearchText,
-    (item) => item.kind === 'channel',
-    getItemTimestamp
+  // Helper function to get search text from EntityItem
+  const getEntitySearchText = (item: EntityItem): string => item.searchText;
+
+  // Helper function to get timestamps from EntityItem (returns TimestampedItem)
+  const getEntityTimestamps = (item: EntityItem) => ({
+    updatedAt: item.timestamps.updatedAt,
+    viewedAt: item.timestamps.viewedAt,
+  });
+
+  const itemSearch = createFreshSearch<EntityItem>(
+    { useViewedAt: true },
+    getEntitySearchText,
+    () => false,
+    // (item) => item.bucket === 'channel' || item.bucket === 'dm',
+    getEntityTimestamps
   );
-  const filteredItems = createMemo(() => {
+
+  const filteredItems = createMemo((): EntityItem[] => {
     const allResults = itemSearch(historyAndChannels(), searchTerm()).map(
-      (result) => {
-        return result.item;
-      }
+      (result) => result.item
     );
 
     // Separate open tabs from other items
     const openTabsSet = new Set(openTabs().map((item) => item.id));
-    const tabResults: CombinedEntity<'item' | 'channel' | 'email'>[] = [];
-    const otherResults: CombinedEntity<'item' | 'channel' | 'email'>[] = [];
+    const tabResults: EntityItem[] = [];
+    const otherResults: EntityItem[] = [];
 
     for (const item of allResults) {
       if (openTabsSet.has(item.id)) {
@@ -606,18 +696,26 @@ function MentionsMenuInner(props: {
     return email ? email.split('@')[1] : undefined;
   });
 
-  const userSearch = createFreshSearch<Entity<'user'>>(
-    FreshSearchPresets.baseUserSearch<Entity<'user'>>(
+  // Helper function to get search text from UserItem
+  const getUserSearchText = (item: UserItem): string => item.searchText;
+
+  // Helper function to get timestamps from UserItem (returns TimestampedItem)
+  const getUserTimestamps = (item: UserItem) => ({
+    lastInteraction: item.timestamps.lastInteraction,
+  });
+
+  const userSearch = createFreshSearch<UserItem>(
+    FreshSearchPresets.baseUserSearch<UserItem>(
       currentUserDomain,
       (item) => item.data.email
     ),
-    getItemSearchText,
+    getUserSearchText,
     (_item) => false,
-    getItemTimestamp
+    getUserTimestamps
   );
 
   // Group aliases available in channel context
-  const specialGroups = createMemo((): Entity<'group'>[] => {
+  const specialGroups = createMemo((): GroupMentionItem[] => {
     if (props.block !== 'channel') return [];
     if (!useMaybeBlockId()) return [];
 
@@ -629,52 +727,61 @@ function MentionsMenuInner(props: {
 
     return availableGroups
       .filter((g) => g.match(term))
-      .map((g) => createGroupAlias(g.alias));
+      .map(
+        (g): GroupMentionItem => ({
+          kind: 'group',
+          id: g.alias,
+          data: { id: g.alias, groupAlias: g.alias },
+        })
+      );
   });
 
-  const filteredUsers = createMemo(() => {
-    const searchedUsers = userSearch(users(), searchTerm()).map((result) => {
-      return result.item;
-    });
-    return [...specialGroups(), ...searchedUsers] as CombinedEntity<
-      'user' | 'group'
-    >[];
+  const filteredUsers = createMemo((): MentionItem[] => {
+    const userItems = usersFromQuickAccess().filter(isUserItem);
+    const searchedUsers = userSearch(userItems, searchTerm()).map(
+      (result) => result.item
+    );
+    return [...specialGroups(), ...searchedUsers];
   });
 
-  const emailSearch = createFreshSearch<Entity<'email'>>(
+  // Helper function to get search text from email EntityItem
+  const getEmailSearchText = (item: EntityItem): string => item.searchText;
+
+  // Helper function to get timestamps from email EntityItem (returns TimestampedItem)
+  const getEmailTimestamps = (item: EntityItem) => ({
+    updatedAt: item.timestamps.updatedAt,
+    viewedAt: item.timestamps.viewedAt,
+  });
+
+  const emailSearch = createFreshSearch<EntityItem>(
     { timeWeight: 0, brevityWeight: 0.3 },
-    getItemSearchText,
+    getEmailSearchText,
     (_item) => false,
-    getItemTimestamp
+    getEmailTimestamps
   );
 
-  const filteredEmails = createMemo(() => {
-    const mail = emailSearch(emails(), searchTerm()).map(
+  const filteredEmails = createMemo((): EntityItem[] => {
+    const localEmails = emailsFromQuickAccess().filter(isEntityItem);
+    const mail = emailSearch(localEmails, searchTerm()).map(
       (result) => result.item
     );
 
-    const otherMail = foundEmails();
+    const otherMail = foundEmailsFromSearch();
 
     // dedup / preserve order
-    function merge<T extends keyof EntityMap>(
-      local: Entity<T>[],
-      unifiedSearch: Entity<T>[]
-    ): Entity<T>[] {
-      const ids = new Set(local.map((e) => e.id));
-      return [...local, ...unifiedSearch.filter((e) => !ids.has(e.id))];
-    }
-
-    return merge(mail, otherMail);
+    const ids = new Set(mail.map((e) => e.id));
+    return [...mail, ...otherMail.filter((e) => !ids.has(e.id))];
   });
 
-  const dateSuggestions = createMemo(() => {
-    const suggestions = getDateSuggestions(searchTerm());
-    return suggestions
-      .map((suggestion) => ({
-        ...suggestion,
-        id: `date-${suggestion.date.toISOString()}`,
-      }))
-      .map(entityMapper('date'));
+  // Convert DateOptions to DateMentionItems
+  const dateSuggestions = createMemo((): DateMentionItem[] => {
+    return dateOptions().map(
+      (option): DateMentionItem => ({
+        kind: 'date',
+        id: `date-${option.id}`,
+        data: option,
+      })
+    );
   });
 
   // The raw bins store the counts for all matching items
@@ -688,7 +795,7 @@ function MentionsMenuInner(props: {
   // The bins is the limited and rounded count for each bucket
   const bins = createMemo(() => computeBins(rawBins(), MAX_ITEMS));
 
-  const combinedItems = createMemo<CombinedEntity[]>(() => {
+  const combinedItems = createMemo<MentionItem[]>(() => {
     const currentViewAllMode = viewAllMode();
 
     if (currentViewAllMode) {
@@ -1038,11 +1145,7 @@ function MentionsMenuInner(props: {
     const dates = dateSuggestions().slice(0, bins().dates);
     const emailList = filteredEmails().slice(0, bins().emails);
     const totalLength = () =>
-      users.length +
-      docs.length +
-      contacts.length +
-      dates.length +
-      emailList.length;
+      users.length + docs.length + dates.length + emailList.length;
 
     const RenderOptions = () => {
       const options = [];
@@ -1208,15 +1311,18 @@ function MentionsMenuInner(props: {
       <ScopedPortal scope={props.portalScope}>
         <div
           class="w-96 cursor-default select-none z-modal-content"
-          use:floatWithElement={floatWithElementProps()}
-          use:floatWithSelection={floatWithSelectionProps()}
-          use:clickOutside={clickOutsideHandler}
-          ref={menuRef}
+          ref={(el) => {
+            menuRef = el;
+            floatWithElement(el, floatWithElementProps);
+            floatWithSelection(el, floatWithSelectionProps);
+            clickOutside(el, () => clickOutsideHandler);
+          }}
         >
-          <div class="relative overflow-hidden ring-1 ring-edge bg-menu shadow-xl py-2">
+          <ClippedPanel active tl>
             {inner()}
-          </div>
-          <BozzyBracketInnerSibling animOnOpen={true} />
+          </ClippedPanel>
+          {/*<div class="relative overflow-hidden ring-1 ring-edge bg-menu shadow-xl py-2"></div>*/}
+          {/*<BozzyBracketInnerSibling animOnOpen={true} />*/}
         </div>
       </ScopedPortal>
     </Show>
