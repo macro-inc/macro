@@ -3702,6 +3702,12 @@ export const postItemsSoupBody = zod
           .describe(
             "Email CC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by CC."
           ),
+        email_thread_ids: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            "Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads."
+          ),
         importance: zod
           .boolean()
           .nullish()
