@@ -243,7 +243,7 @@ export const SoupViewContextProvider: FlowComponent<
         limit: 100,
         sort_method: soup.sort.active()[0]?.id ?? 'updated_at',
       },
-      body: queryFilters(),
+      body: { ...queryFilters(), emailView: 'all' },
     }),
     () => ({
       enabled: isSearchDisabled(),
