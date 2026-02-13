@@ -1438,7 +1438,8 @@ export const getBatchPreviewHandlerResponse = zod.object({
 });
 
 /**
- * @summary Gets a particular document by its id
+ * Returns document metadata, user access level, and view location.
+ * @summary Handler for `GET /documents/:document_id`.
  */
 export const getDocumentParams = zod.object({
   document_id: zod.string().describe('Document ID'),
@@ -1663,18 +1664,15 @@ export const saveDocumentHandlerResponse = zod.object({
 });
 
 /**
- * @summary Deletes a specific document.
-The document will be soft deleted and appear in the user's trash for 30 days.
+ * Soft-deletes a document (only owners can delete).
+ * @summary Handler for `DELETE /documents/:document_id`.
  */
-export const deleteDocumentHandlerParams = zod.object({
+export const deleteDocumentParams = zod.object({
   document_id: zod.string().describe('Document ID'),
 });
 
-export const deleteDocumentHandlerResponse = zod.object({
-  data: zod.object({
-    success: zod.boolean().describe('Indicates if the request was successful'),
-  }),
-  error: zod.boolean().describe('Indicates if an error occurred'),
+export const deleteDocumentResponse = zod.object({
+  success: zod.boolean().describe('Indicates if the request was successful'),
 });
 
 /**
@@ -1862,6 +1860,25 @@ export const getLocationHandlerResponse = zod.union([
     })
     .describe('The presigned urls of the docx bom parts if it is a docx'),
 ]);
+
+/**
+ * Returns a presigned URL or sync service content for accessing the document.
+ * @summary Handler for `GET /documents/:document_id/location_v3`.
+ */
+export const getDocumentLocationV3Params = zod.object({
+  document_id: zod.string().describe('Document ID'),
+});
+
+export const getDocumentLocationV3QueryParams = zod.object({
+  document_version_id: zod
+    .number()
+    .optional()
+    .describe('A specific document version id to get the location for.'),
+  get_converted_docx_url: zod
+    .boolean()
+    .optional()
+    .describe('If true, this will return the converted docx url.'),
+});
 
 /**
  * @summary Permanently deletes a document.

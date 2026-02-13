@@ -347,11 +347,11 @@ export const StorageService = new Svc('Document++ Storage Service API')
     throws: withFetchErrors(),
   })
   .fn('deleteDocument', {
-    description: schemas.deleteDocumentHandlerResponse.description!,
+    description: schemas.deleteDocumentResponse.description!,
     args: {
-      documentId: schemas.deleteDocumentHandlerParams.shape.document_id,
+      documentId: schemas.deleteDocumentParams.shape.document_id,
     },
-    result: schemas.deleteDocumentHandlerResponse.shape.data.shape,
+    result: schemas.deleteDocumentResponse.shape,
     modifies: true,
     access: { exclude: ['ai'] },
     throws: withFetchErrors(),

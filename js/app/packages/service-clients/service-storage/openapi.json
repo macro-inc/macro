@@ -1204,7 +1204,8 @@
     "/documents/{document_id}": {
       "get": {
         "tags": ["document"],
-        "summary": "Gets a particular document by its id",
+        "summary": "Handler for `GET /documents/:document_id`.",
+        "description": "Returns document metadata, user access level, and view location.",
         "operationId": "get_document",
         "parameters": [
           {
@@ -1233,7 +1234,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1243,7 +1244,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1253,7 +1254,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1340,8 +1341,9 @@
       },
       "delete": {
         "tags": ["document"],
-        "summary": "Deletes a specific document.\nThe document will be soft deleted and appear in the user's trash for 30 days.",
-        "operationId": "delete_document_handler",
+        "summary": "Handler for `DELETE /documents/:document_id`.",
+        "description": "Soft-deletes a document (only owners can delete).",
+        "operationId": "delete_document",
         "parameters": [
           {
             "name": "document_id",
@@ -1359,7 +1361,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse"
+                  "$ref": "#/components/schemas/GenericSuccessResponse"
                 }
               }
             }
@@ -1369,7 +1371,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1379,7 +1381,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1389,7 +1391,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1649,6 +1651,89 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/location_v3": {
+      "get": {
+        "tags": ["document"],
+        "summary": "Handler for `GET /documents/:document_id/location_v3`.",
+        "description": "Returns a presigned URL or sync service content for accessing the document.",
+        "operationId": "get_document_location_v3",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "document_version_id",
+            "in": "query",
+            "description": "A specific document version id to get the location for.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "get_converted_docx_url",
+            "in": "query",
+            "description": "If true, this will return the converted docx url.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
