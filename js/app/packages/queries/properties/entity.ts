@@ -18,7 +18,7 @@ import {
   type PropertiesEntityType,
   propertiesServiceClient,
 } from '../../service-clients/service-properties/client';
-import type { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
+import { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
 import type { SoupPropertyValue } from '../../service-clients/service-storage/generated/schemas/soupPropertyValue';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
@@ -28,7 +28,10 @@ import {
   optimisticUpdateSoupEntity,
   invalidateSoupEntity,
   type SoupTransaction,
+  refetchSoupEntity,
+  type SoupEntityTag,
 } from '../soup/cache';
+import { match, P } from 'ts-pattern';
 
 export function useEntityPropertiesQuery(
   entityType: Accessor<EntityType>,
@@ -318,6 +321,33 @@ function updateStatusPropertyToCompleted<
   });
 }
 
+function propertyEntityTypeToSoupTag(
+  entityType: EntityType
+): SoupEntityTag | null {
+  return match(entityType)
+    .with(EntityType.CHANNEL, () => 'channel' as const)
+    .with(EntityType.THREAD, () => 'emailThread' as const)
+    .with(EntityType.CHAT, () => 'chat' as const)
+    .with(P.union(EntityType.COMPANY, EntityType.USER), () => null)
+    .with(
+      P.union(EntityType.DOCUMENT, EntityType.TASK),
+      () => 'document' as const
+    )
+    .with(EntityType.PROJECT, () => 'project' as const)
+
+    .exhaustive();
+}
+
+function withValidSoupTag(
+  entityType: EntityType,
+  callback: (tag: SoupEntityTag) => void
+) {
+  const tag = propertyEntityTypeToSoupTag(entityType);
+  if (tag) {
+    callback(tag);
+  }
+}
+
 /** Sets the status property to complete for an entity (mark as done) */
 export function useSetPropertyStatusCompleteMutation(
   callbacks?: MutationCallbacks<
@@ -374,7 +404,6 @@ export function useSetPropertyStatusCompleteMutation(
 
       let soupTxn: SoupTransaction | undefined;
       if (current && current.tag !== 'channel' && current.data.properties) {
-        console.log('optimistically updating property');
         soupTxn = optimisticUpdateSoupEntity({
           tag: current.tag,
           data: {
@@ -408,7 +437,9 @@ export function useSetPropertyStatusCompleteMutation(
     },
     onSettled: (_data, _error, variables) => {
       invalidatePropertiesForEntity(variables.entityType, variables.entityId);
-      invalidateSoupEntity(variables.entityId);
+      withValidSoupTag(variables.entityType, (tag) =>
+        refetchSoupEntity(variables.entityId, tag)
+      );
     },
     ...(callbacks
       ? withCallbacks<
@@ -482,7 +513,9 @@ export function useBulkSaveEntityPropertiesMutation(
           entityGroups.forEach((entityIds, entityType) => {
             entityIds.forEach((entityId) => {
               invalidatePropertiesForEntity(entityType, entityId);
-              invalidateSoupEntity(entityId);
+              withValidSoupTag(entityType, (tag) =>
+                refetchSoupEntity(entityId, tag)
+              );
             });
           });
         },
