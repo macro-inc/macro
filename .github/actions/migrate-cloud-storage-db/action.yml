@@ -49,4 +49,8 @@ runs:
         DATABASE_URL: ${{ steps.get-db-url.outputs.database_url }}
       run: |
         echo "Running migrations for ${{ inputs.environment }} environment..."
-        cargo sqlx migrate run
+        if [ "${{ inputs.environment }}" = "dev" ]; then
+          cargo sqlx migrate run --ignore-missing
+        else
+          cargo sqlx migrate run
+        fi
