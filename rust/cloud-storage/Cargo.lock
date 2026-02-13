@@ -1693,6 +1693,7 @@ dependencies = [
  "axum",
  "chrono",
  "http-body-util",
+ "macro_db_migrator",
  "mockall",
  "model-error-response",
  "model_user",

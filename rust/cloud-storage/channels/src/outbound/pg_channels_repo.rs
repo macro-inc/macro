@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 use crate::domain::{
     models::{
         ChannelAttachment, ChannelParticipant, CountedReaction, MessageAttachment, ParticipantRole,
@@ -23,7 +26,7 @@ impl PgChannelMessagesRepo {
 }
 
 /// Intermediate row for the top-level messages query.
-#[derive(Debug, sqlx::FromRow)]
+#[derive(Debug)]
 struct TopLevelRow {
     id: Uuid,
     channel_id: Uuid,
@@ -36,7 +39,7 @@ struct TopLevelRow {
 }
 
 /// Intermediate row for the merged thread data query (stats + preview replies).
-#[derive(Debug, sqlx::FromRow)]
+#[derive(Debug)]
 struct ThreadDataRow {
     id: Uuid,
     thread_id: Uuid,
@@ -50,7 +53,7 @@ struct ThreadDataRow {
 }
 
 /// Intermediate row for reactions.
-#[derive(Debug, sqlx::FromRow)]
+#[derive(Debug)]
 struct ReactionRow {
     message_id: Uuid,
     emoji: String,
@@ -58,7 +61,7 @@ struct ReactionRow {
 }
 
 /// Intermediate row for attachments.
-#[derive(Debug, sqlx::FromRow)]
+#[derive(Debug)]
 struct AttachmentRow {
     id: Uuid,
     message_id: Uuid,
@@ -68,7 +71,7 @@ struct AttachmentRow {
 }
 
 /// Intermediate row for channel-level attachments.
-#[derive(Debug, sqlx::FromRow)]
+#[derive(Debug)]
 struct ChannelAttachmentRow {
     id: Uuid,
     channel_id: Uuid,
@@ -81,7 +84,7 @@ struct ChannelAttachmentRow {
 }
 
 /// Intermediate row for channel participants.
-#[derive(Debug, sqlx::FromRow)]
+#[derive(Debug)]
 struct ParticipantRow {
     channel_id: Uuid,
     user_id: String,
@@ -105,7 +108,8 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
             _ => (None, None),
         };
 
-        let rows = sqlx::query_as::<_, TopLevelRow>(
+        let rows = sqlx::query_as!(
+            TopLevelRow,
             r#"
             SELECT
                 m.id,
@@ -114,8 +118,8 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                 m.content,
                 m.created_at,
                 m.updated_at,
-                m.edited_at::timestamptz AS edited_at,
-                m.deleted_at::timestamptz AS deleted_at
+                m.edited_at::timestamptz AS "edited_at?",
+                m.deleted_at::timestamptz AS "deleted_at?"
             FROM comms_messages m
             WHERE m.channel_id = $1
               AND m.thread_id IS NULL
@@ -127,11 +131,11 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
             ORDER BY m.created_at DESC, m.id DESC
             LIMIT $4
             "#,
+            channel_id,
+            cursor_created_at,
+            cursor_id,
+            i64::from(limit) as i64,
         )
-        .bind(channel_id)
-        .bind(cursor_created_at)
-        .bind(cursor_id)
-        .bind(i64::from(limit))
         .fetch_all(&self.pool)
         .await?;
 
@@ -160,12 +164,14 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
             return Ok(HashMap::new());
         }
 
-        let rows = sqlx::query_as::<_, ThreadDataRow>(
+        let rows = sqlx::query_as!(
+            ThreadDataRow,
             r#"
             SELECT
-                id, thread_id, sender_id, content, created_at, updated_at,
-                edited_at::timestamptz AS edited_at,
-                reply_count, latest_reply_at
+                id AS "id!", thread_id AS "thread_id!", sender_id AS "sender_id!",
+                content AS "content!", created_at AS "created_at!", updated_at AS "updated_at!",
+                edited_at::timestamptz AS "edited_at?",
+                reply_count AS "reply_count!", latest_reply_at AS "latest_reply_at?"
             FROM (
                 SELECT
                     r.id,
@@ -184,9 +190,9 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
             WHERE rn <= $2
             ORDER BY thread_id, created_at ASC
             "#,
+            parent_ids,
+            i64::from(preview_count) as i64,
         )
-        .bind(parent_ids)
-        .bind(i64::from(preview_count))
         .fetch_all(&self.pool)
         .await?;
 
@@ -220,15 +226,16 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
             return Ok(HashMap::new());
         }
 
-        let rows = sqlx::query_as::<_, ReactionRow>(
+        let rows = sqlx::query_as!(
+            ReactionRow,
             r#"
             SELECT message_id, emoji, user_id
             FROM comms_reactions
             WHERE message_id = ANY($1)
             ORDER BY created_at ASC
             "#,
+            message_ids,
         )
-        .bind(message_ids)
         .fetch_all(&self.pool)
         .await?;
 
@@ -263,15 +270,16 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
             return Ok(HashMap::new());
         }
 
-        let rows = sqlx::query_as::<_, AttachmentRow>(
+        let rows = sqlx::query_as!(
+            AttachmentRow,
             r#"
             SELECT id, message_id, entity_type, entity_id, created_at
             FROM comms_attachments
             WHERE message_id = ANY($1)
             ORDER BY created_at ASC
             "#,
+            message_ids,
         )
-        .bind(message_ids)
         .fetch_all(&self.pool)
         .await?;
 
@@ -302,20 +310,22 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
             _ => (None, None),
         };
 
-        let rows = sqlx::query_as::<_, ChannelAttachmentRow>(
+        let rows = sqlx::query_as!(
+            ChannelAttachmentRow,
             r#"
-            SELECT id, channel_id, message_id, entity_type, entity_id, width, height, created_at
+            SELECT id, channel_id, message_id, entity_type, entity_id,
+                width AS "width?", height AS "height?", created_at
             FROM comms_attachments
             WHERE channel_id = $1
               AND ($2::timestamptz IS NULL OR (created_at, id) < ($2, $3))
             ORDER BY created_at DESC, id DESC
             LIMIT $4
             "#,
+            channel_id,
+            cursor_created_at,
+            cursor_id,
+            i64::from(limit) as i64,
         )
-        .bind(channel_id)
-        .bind(cursor_created_at)
-        .bind(cursor_id)
-        .bind(i64::from(limit))
         .fetch_all(&self.pool)
         .await?;
 
@@ -339,15 +349,17 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
         &self,
         channel_id: Uuid,
     ) -> Result<Vec<ChannelParticipant>, Self::Err> {
-        let rows = sqlx::query_as::<_, ParticipantRow>(
+        let rows = sqlx::query_as!(
+            ParticipantRow,
             r#"
-            SELECT channel_id, user_id, role::text AS role, joined_at, left_at
+            SELECT channel_id, user_id, role::text AS "role!", joined_at,
+                left_at AS "left_at?"
             FROM comms_channel_participants
             WHERE channel_id = $1 AND left_at IS NULL
             ORDER BY joined_at ASC
             "#,
+            channel_id,
         )
-        .bind(channel_id)
         .fetch_all(&self.pool)
         .await?;
 

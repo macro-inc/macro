@@ -33,6 +33,7 @@ uuid = { workspace = true }
 
 [dev-dependencies]
 http-body-util = { workspace = true }
+macro_db_migrator = { path = "../macro_db_migrator" }
 mockall = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
