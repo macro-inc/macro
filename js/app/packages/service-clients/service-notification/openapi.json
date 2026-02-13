@@ -12,7 +12,9 @@
   "paths": {
     "/device/register": {
       "post": {
-        "tags": ["device::register"],
+        "tags": [
+          "device::register"
+        ],
         "summary": "Register a user device for push notifications.",
         "operationId": "register_device",
         "requestBody": {
@@ -71,7 +73,9 @@
     },
     "/device/unregister": {
       "delete": {
-        "tags": ["device::unregister"],
+        "tags": [
+          "device::unregister"
+        ],
         "summary": "Unregister a device from receiving push notifications.",
         "operationId": "unregister_device",
         "requestBody": {
@@ -130,7 +134,9 @@
     },
     "/health": {
       "get": {
-        "tags": ["health"],
+        "tags": [
+          "health"
+        ],
         "summary": "Health check",
         "operationId": "health_handler",
         "responses": {
@@ -149,7 +155,9 @@
     },
     "/unsubscribe": {
       "get": {
-        "tags": ["unsubscribe::get_unsubscribes"],
+        "tags": [
+          "unsubscribe::get_unsubscribes"
+        ],
         "summary": "Gets the users unsubscribe items.",
         "operationId": "get_unsubscribes",
         "responses": {
@@ -191,7 +199,9 @@
     },
     "/unsubscribe/email": {
       "post": {
-        "tags": ["unsubscribe::unsubscribe_email"],
+        "tags": [
+          "unsubscribe::unsubscribe_email"
+        ],
         "summary": "Unsubscribes a user from receiving emails",
         "operationId": "unsubscribe_email",
         "responses": {
@@ -230,7 +240,9 @@
     },
     "/unsubscribe/item/:item_type/:item_id": {
       "post": {
-        "tags": ["unsubscribe::unsubscribe_item"],
+        "tags": [
+          "unsubscribe::unsubscribe_item"
+        ],
         "summary": "Unsubscribes a user from a given item for notifications.",
         "operationId": "unsubscribe_item",
         "responses": {
@@ -267,7 +279,9 @@
         }
       },
       "delete": {
-        "tags": ["unsubscribe::remove_unsubscribe_item"],
+        "tags": [
+          "unsubscribe::remove_unsubscribe_item"
+        ],
         "summary": "Removes a unsubscribe item for a user.",
         "operationId": "remove_unsubscribe_item",
         "responses": {
@@ -306,7 +320,9 @@
     },
     "/unsubscribe/mute": {
       "post": {
-        "tags": ["unsubscribe::unsubscribe_all"],
+        "tags": [
+          "unsubscribe::unsubscribe_all"
+        ],
         "summary": "Unsubscribes user from all notifications.",
         "operationId": "unsubscribe_all",
         "responses": {
@@ -343,7 +359,9 @@
         }
       },
       "delete": {
-        "tags": ["unsubscribe::remove_unsubscribe_all"],
+        "tags": [
+          "unsubscribe::remove_unsubscribe_all"
+        ],
         "summary": "Unmutes all notifications.\nExisting notifications that were muted manually will remain muted.",
         "operationId": "remove_unsubscribe_all",
         "responses": {
@@ -382,7 +400,9 @@
     },
     "/v1/user_notifications": {
       "get": {
-        "tags": ["user_notification"],
+        "tags": [
+          "user_notification"
+        ],
         "summary": "Wrapper handler that calls the inner generic list handler with `serde_json::Value`,\nthen converts each row to [`UserNotificationRow<NotifEvent>`].",
         "description": "Rows that fail to deserialize are dropped with a warning log.",
         "operationId": "list_typed_notifications",
@@ -454,7 +474,9 @@
     },
     "/v1/user_notifications/item/bulk": {
       "post": {
-        "tags": ["user_notification"],
+        "tags": [
+          "user_notification"
+        ],
         "summary": "Wrapper handler that calls the inner generic bulk-get handler with `serde_json::Value`,\nthen converts each row to [`UserNotificationRow<NotifEvent>`].",
         "description": "Rows that fail to deserialize are dropped with a warning log.",
         "operationId": "bulk_get_typed_notifications_by_event_item_ids",
@@ -536,7 +558,9 @@
     },
     "/v1/user_notifications/item/{event_item_id}": {
       "get": {
-        "tags": ["user_notification"],
+        "tags": [
+          "user_notification"
+        ],
         "summary": "Typed wrapper for getting notifications by a single event item ID.",
         "operationId": "get_typed_notifications_by_event_item_id",
         "parameters": [
@@ -617,7 +641,9 @@
     },
     "/v1/user_notifications/{notification_id}": {
       "get": {
-        "tags": ["user_notification"],
+        "tags": [
+          "user_notification"
+        ],
         "summary": "Typed wrapper for getting a single notification by ID.",
         "operationId": "get_typed_notification_by_id",
         "parameters": [
@@ -688,7 +714,9 @@
     },
     "/v2/user_notifications/bulk": {
       "delete": {
-        "tags": ["notification_crate::inbound::http"],
+        "tags": [
+          "notification_crate::inbound::http"
+        ],
         "summary": "Soft-delete multiple user notifications.",
         "operationId": "bulk_delete_user_notifications_v2",
         "requestBody": {
@@ -740,7 +768,9 @@
     },
     "/v2/user_notifications/bulk/done": {
       "patch": {
-        "tags": ["notification_crate::inbound::http"],
+        "tags": [
+          "notification_crate::inbound::http"
+        ],
         "summary": "Mark notifications as done.",
         "operationId": "bulk_mark_notifications_done",
         "requestBody": {
@@ -792,7 +822,9 @@
     },
     "/v2/user_notifications/bulk/seen": {
       "patch": {
-        "tags": ["notification_crate::inbound::http"],
+        "tags": [
+          "notification_crate::inbound::http"
+        ],
         "summary": "Mark notifications as seen.",
         "operationId": "bulk_mark_notifications_seen",
         "requestBody": {
@@ -844,7 +876,9 @@
     },
     "/v2/user_notifications/bulk/undone": {
       "patch": {
-        "tags": ["notification_crate::inbound::http"],
+        "tags": [
+          "notification_crate::inbound::http"
+        ],
         "summary": "Mark notifications as not done.",
         "operationId": "bulk_mark_notifications_undone",
         "requestBody": {
@@ -896,7 +930,9 @@
     },
     "/v2/user_notifications/{notification_id}": {
       "delete": {
-        "tags": ["notification_crate::inbound::http"],
+        "tags": [
+          "notification_crate::inbound::http"
+        ],
         "summary": "Soft-delete a single user notification.",
         "operationId": "delete_user_notification_v2",
         "parameters": [
@@ -960,21 +996,27 @@
           {
             "type": "object",
             "required": [
-              "ownerId",
+              "owner_id",
               "id",
-              "notificationEventType",
+              "notification_event_type",
               "sent",
               "done",
-              "notificationMetadata"
+              "notification_metadata"
             ],
             "properties": {
-              "createdAt": {
-                "type": ["string", "null"],
+              "created_at": {
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "format": "date-time",
                 "description": "When the notification was created."
               },
-              "deletedAt": {
-                "type": ["string", "null"],
+              "deleted_at": {
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "format": "date-time",
                 "description": "When the notification was deleted."
               },
@@ -987,33 +1029,42 @@
                 "format": "uuid",
                 "description": "The notification ID."
               },
-              "notificationEventType": {
+              "notification_event_type": {
                 "type": "string",
                 "description": "The notification event type string (e.g. \"channel_mention\").\nTODO make this a new type"
               },
-              "notificationMetadata": {
+              "notification_metadata": {
                 "$ref": "#/components/schemas/NotifEvent",
                 "description": "Deserialized notification metadata."
               },
-              "ownerId": {
+              "owner_id": {
                 "type": "string",
                 "description": "The user who owns this notification."
               },
-              "senderId": {
-                "type": ["string", "null"],
+              "sender_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "The user who triggered the notification."
               },
               "sent": {
                 "type": "boolean",
                 "description": "Whether the notification has been sent."
               },
-              "updatedAt": {
-                "type": ["string", "null"],
+              "updated_at": {
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "format": "date-time",
                 "description": "When the notification was last updated."
               },
-              "viewedAt": {
-                "type": ["string", "null"],
+              "viewed_at": {
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "format": "date-time",
                 "description": "When the notification was viewed/seen."
               }
@@ -1024,7 +1075,9 @@
       "BulkGetByEventItemIdsRequest": {
         "type": "object",
         "description": "Request body for bulk-fetching notifications by event item IDs.",
-        "required": ["eventItemIds"],
+        "required": [
+          "eventItemIds"
+        ],
         "properties": {
           "eventItemIds": {
             "type": "array",
@@ -1043,7 +1096,9 @@
           },
           {
             "type": "object",
-            "required": ["invitedBy"],
+            "required": [
+              "invitedBy"
+            ],
             "properties": {
               "invitedBy": {
                 "type": "string"
@@ -1060,7 +1115,10 @@
           },
           {
             "type": "object",
-            "required": ["messageId", "messageContent"],
+            "required": [
+              "messageId",
+              "messageContent"
+            ],
             "properties": {
               "messageContent": {
                 "type": "string",
@@ -1071,7 +1129,10 @@
                 "description": "The message you were mentioned in"
               },
               "threadId": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "the id of the thread"
               }
             }
@@ -1085,7 +1146,10 @@
           },
           {
             "type": "object",
-            "required": ["sender", "messageId"],
+            "required": [
+              "sender",
+              "messageId"
+            ],
             "properties": {
               "messageContent": {
                 "type": "string",
@@ -1110,7 +1174,12 @@
           },
           {
             "type": "object",
-            "required": ["threadId", "messageId", "userId", "messageContent"],
+            "required": [
+              "threadId",
+              "messageId",
+              "userId",
+              "messageContent"
+            ],
             "properties": {
               "messageContent": {
                 "type": "string",
@@ -1125,7 +1194,10 @@
                 "description": "The id of the thread that has the reply"
               },
               "threadParentSenderId": {
-                "type": ["string", "null"],
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "The user who sent the root message of the thread"
               },
               "userId": {
@@ -1138,12 +1210,19 @@
       },
       "ChannelType": {
         "type": "string",
-        "enum": ["public", "organization", "private", "directMessage"]
+        "enum": [
+          "public",
+          "organization",
+          "private",
+          "directMessage"
+        ]
       },
       "CommonChannelMetadata": {
         "type": "object",
         "description": "Common metadata for notifications on channels",
-        "required": ["channelType"],
+        "required": [
+          "channelType"
+        ],
         "properties": {
           "channelName": {
             "type": "string"
@@ -1161,7 +1240,10 @@
           },
           {
             "type": "object",
-            "required": ["notification_event_type", "service_sender"],
+            "required": [
+              "notification_event_type",
+              "service_sender"
+            ],
             "properties": {
               "metadata": {
                 "description": "Custom metadata that may be needed for the notification"
@@ -1180,7 +1262,10 @@
       },
       "DeviceRequest": {
         "type": "object",
-        "required": ["deviceType", "token"],
+        "required": [
+          "deviceType",
+          "token"
+        ],
         "properties": {
           "deviceType": {
             "$ref": "#/components/schemas/DeviceType"
@@ -1192,19 +1277,28 @@
       },
       "DeviceType": {
         "type": "string",
-        "enum": ["ios", "android"]
+        "enum": [
+          "ios",
+          "android"
+        ]
       },
       "DocumentMentionMetadata": {
         "type": "object",
         "description": "Someone mentioned a document in a channel",
-        "required": ["documentName", "owner"],
+        "required": [
+          "documentName",
+          "owner"
+        ],
         "properties": {
           "documentName": {
             "type": "string",
             "description": "The name of the document"
           },
           "fileType": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The file type of the document"
           },
           "owner": {
@@ -1220,7 +1314,10 @@
       "Entity": {
         "type": "object",
         "description": "The Entity describes the minimum amount of information required to describe a unique thing in Macro\nThis contains the type of the entity [EntityType] and the string id of that entity",
-        "required": ["entity_type", "entity_id"],
+        "required": [
+          "entity_type",
+          "entity_id"
+        ],
         "properties": {
           "entity_id": {
             "type": "string",
@@ -1249,7 +1346,9 @@
       "ErrorResponse": {
         "type": "object",
         "description": "A plain old json error response for use with axum.\nyup, thats it.",
-        "required": ["message"],
+        "required": [
+          "message"
+        ],
         "properties": {
           "message": {
             "type": "string",
@@ -1260,7 +1359,9 @@
       "GetAllUserNotificationsResponse": {
         "type": "object",
         "description": "The strongly typed response for listing user notifications.",
-        "required": ["items"],
+        "required": [
+          "items"
+        ],
         "properties": {
           "items": {
             "type": "array",
@@ -1270,21 +1371,31 @@
             "description": "The list of items returned."
           },
           "next_cursor": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The next page cursor if it exists."
           }
         }
       },
       "InviteToTeamMetadata": {
         "type": "object",
-        "required": ["teamName", "teamId", "invitedBy"],
+        "required": [
+          "teamName",
+          "teamId",
+          "invitedBy"
+        ],
         "properties": {
           "invitedBy": {
             "type": "string",
             "description": "The user who sent the invitation"
           },
           "role": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Role/permission level in the team"
           },
           "teamId": {
@@ -1300,14 +1411,22 @@
       "ItemSharedMetadata": {
         "type": "object",
         "description": "Metadata for when a item is shared with a user",
-        "required": ["userIds", "itemType", "itemId", "sharedBy"],
+        "required": [
+          "userIds",
+          "itemType",
+          "itemId",
+          "sharedBy"
+        ],
         "properties": {
           "itemId": {
             "type": "string",
             "description": "The name/title of the shared item (optional)"
           },
           "itemName": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The name/title of the shared item"
           },
           "itemType": {
@@ -1315,7 +1434,10 @@
             "description": "The type of item being shared"
           },
           "permissionLevel": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Permission level granted (read, write, admin, etc.)"
           },
           "sharedBy": {
@@ -1352,7 +1474,10 @@
             "description": "The name of the document."
           },
           "fileType": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The file type of the document."
           },
           "mentionId": {
@@ -1376,10 +1501,18 @@
       },
       "NewEmailMetadata": {
         "type": "object",
-        "required": ["toEmail", "threadId", "subject", "snippet"],
+        "required": [
+          "toEmail",
+          "threadId",
+          "subject",
+          "snippet"
+        ],
         "properties": {
           "sender": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "snippet": {
             "type": "string"
@@ -1400,7 +1533,10 @@
           {
             "type": "object",
             "description": "Someone mentioned you in a channel.",
-            "required": ["content", "tag"],
+            "required": [
+              "content",
+              "tag"
+            ],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/ChannelMentionMetadata",
@@ -1408,14 +1544,19 @@
               },
               "tag": {
                 "type": "string",
-                "enum": ["channel_mention"]
+                "enum": [
+                  "channel_mention"
+                ]
               }
             }
           },
           {
             "type": "object",
             "description": "Someone mentioned a document in a channel.",
-            "required": ["content", "tag"],
+            "required": [
+              "content",
+              "tag"
+            ],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/DocumentMentionMetadata",
@@ -1423,14 +1564,19 @@
               },
               "tag": {
                 "type": "string",
-                "enum": ["document_mention"]
+                "enum": [
+                  "document_mention"
+                ]
               }
             }
           },
           {
             "type": "object",
             "description": "User was mentioned in a comment in a document",
-            "required": ["content", "tag"],
+            "required": [
+              "content",
+              "tag"
+            ],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/MentionedInDocumentCommentMetadata",
@@ -1438,14 +1584,19 @@
               },
               "tag": {
                 "type": "string",
-                "enum": ["mentioned_in_document_comment"]
+                "enum": [
+                  "mentioned_in_document_comment"
+                ]
               }
             }
           },
           {
             "type": "object",
             "description": "The user was invited to a channel.",
-            "required": ["content", "tag"],
+            "required": [
+              "content",
+              "tag"
+            ],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/ChannelInviteMetadata",
@@ -1453,14 +1604,19 @@
               },
               "tag": {
                 "type": "string",
-                "enum": ["channel_invite"]
+                "enum": [
+                  "channel_invite"
+                ]
               }
             }
           },
           {
             "type": "object",
             "description": "A user sent a message in a channel.",
-            "required": ["content", "tag"],
+            "required": [
+              "content",
+              "tag"
+            ],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/ChannelMessageSendMetadata",
@@ -1468,14 +1624,19 @@
               },
               "tag": {
                 "type": "string",
-                "enum": ["channel_message_send"]
+                "enum": [
+                  "channel_message_send"
+                ]
               }
             }
           },
           {
             "type": "object",
             "description": "Someone replied to a thread in a channel that the user is part of.",
-            "required": ["content", "tag"],
+            "required": [
+              "content",
+              "tag"
+            ],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/ChannelReplyMetadata",
@@ -1483,14 +1644,19 @@
               },
               "tag": {
                 "type": "string",
-                "enum": ["channel_message_reply"]
+                "enum": [
+                  "channel_message_reply"
+                ]
               }
             }
           },
           {
             "type": "object",
             "description": "A new email has been sent to the user.",
-            "required": ["content", "tag"],
+            "required": [
+              "content",
+              "tag"
+            ],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/NewEmailMetadata",
@@ -1498,14 +1664,19 @@
               },
               "tag": {
                 "type": "string",
-                "enum": ["new_email"]
+                "enum": [
+                  "new_email"
+                ]
               }
             }
           },
           {
             "type": "object",
             "description": "A user was invited to a team.",
-            "required": ["content", "tag"],
+            "required": [
+              "content",
+              "tag"
+            ],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/InviteToTeamMetadata",
@@ -1513,14 +1684,19 @@
               },
               "tag": {
                 "type": "string",
-                "enum": ["invite_to_team"]
+                "enum": [
+                  "invite_to_team"
+                ]
               }
             }
           },
           {
             "type": "object",
             "description": "A user was assigned to a task.",
-            "required": ["content", "tag"],
+            "required": [
+              "content",
+              "tag"
+            ],
             "properties": {
               "content": {
                 "$ref": "#/components/schemas/TaskAssignedMetadata",
@@ -1528,7 +1704,9 @@
               },
               "tag": {
                 "type": "string",
-                "enum": ["task_assigned"]
+                "enum": [
+                  "task_assigned"
+                ]
               }
             }
           }
@@ -1538,7 +1716,9 @@
       "NotificationBulkRequest": {
         "type": "object",
         "description": "the notification ids that we are bulk updating",
-        "required": ["notificationIds"],
+        "required": [
+          "notificationIds"
+        ],
         "properties": {
           "notificationIds": {
             "type": "array",
@@ -1552,11 +1732,15 @@
       },
       "NotificationServiceApiVersion": {
         "type": "string",
-        "enum": ["v1"]
+        "enum": [
+          "v1"
+        ]
       },
       "PushNotificationData": {
         "type": "object",
-        "required": ["notificationId"],
+        "required": [
+          "notificationId"
+        ],
         "properties": {
           "notificationId": {
             "type": "string",
@@ -1568,7 +1752,10 @@
       "TaskAssignedMetadata": {
         "type": "object",
         "description": "Metadata for when a user is assigned to a task",
-        "required": ["taskId", "assignedBy"],
+        "required": [
+          "taskId",
+          "assignedBy"
+        ],
         "properties": {
           "assignedBy": {
             "type": "string",
@@ -1579,14 +1766,20 @@
             "description": "The unique identifier of the task"
           },
           "taskName": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The name of the task (optional)"
           }
         }
       },
       "UnsubscribeItemPathParams": {
         "type": "object",
-        "required": ["item_type", "item_id"],
+        "required": [
+          "item_type",
+          "item_id"
+        ],
         "properties": {
           "item_id": {
             "type": "string"
@@ -1598,7 +1791,10 @@
       },
       "UserUnsubscribe": {
         "type": "object",
-        "required": ["item_id", "item_type"],
+        "required": [
+          "item_id",
+          "item_type"
+        ],
         "properties": {
           "item_id": {
             "type": "string",
