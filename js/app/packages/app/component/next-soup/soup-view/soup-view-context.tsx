@@ -101,15 +101,19 @@ export const SoupViewContextProvider: FlowComponent<
   const [internalQueryFilters, setQueryFilters] =
     createSignal<SoupItemsQueryFilters>({});
 
+  const trimmedSearchText = createMemo(() => searchText().trim());
+
   const debouncedSearchForLocal = debouncedDependent(
-    searchText,
+    trimmedSearchText,
     LOCAL_FUZZY_SEARCH_DEBOUNCE_MS
   );
 
   const debouncedSearchForService = debouncedDependent(
-    searchText,
+    trimmedSearchText,
     SEARCH_SERVICE_DEBOUNCE_MS
   );
+
+  const isSearching = createMemo(() => trimmedSearchText().length > 0);
 
   const unifiedSearchIncludeArray = createMemo<UnifiedSearchIndex[]>(
     () => {
@@ -325,14 +329,14 @@ export const SoupViewContextProvider: FlowComponent<
 
       if (!itemsData && !searchData) return [];
 
-      const isSearching = searchText().length > 0;
+      const searching = isSearching();
 
       const items = itemsData ?? [];
-      const searchItems = isSearching ? (searchData ?? []) : [];
+      const searchItems = searching ? (searchData ?? []) : [];
 
       let transformed: SoupEntity[] = [...searchItems];
 
-      if (isSearching) {
+      if (searching) {
         transformed.push(...nameFuzzySearchFilter(items));
       } else {
         transformed.push(...items);
@@ -370,8 +374,7 @@ export const SoupViewContextProvider: FlowComponent<
 
     transformed = deduplicateEntities(next);
 
-    const isSearching = searchText().length > 0;
-    if (isSearching) {
+    if (isSearching()) {
       transformed.sort(sortEntitiesForSearch);
     }
 
