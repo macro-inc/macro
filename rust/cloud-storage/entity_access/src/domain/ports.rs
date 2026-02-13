@@ -20,7 +20,7 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
     fn get_document_access(
         &self,
         document_id: &str,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
 
     /// Get the highest access level a user has for a chat.
@@ -30,7 +30,7 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
     fn get_chat_access(
         &self,
         chat_id: &str,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
 
     /// Get the highest access level a user has for a project.
@@ -40,7 +40,7 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
     fn get_project_access(
         &self,
         project_id: &str,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
 
     /// Get the highest access level a user has for an email thread.
@@ -50,7 +50,7 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
     fn get_thread_access(
         &self,
         thread_id: &str,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
 
     /// Check if a user is a member of the specified channels.
@@ -58,7 +58,7 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
     /// Returns the subset of channel_ids that the user is a participant of.
     fn check_user_channel_membership(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
         channel_ids: &[Uuid],
     ) -> impl Future<Output = Result<Vec<Uuid>, AccessError>> + Send;
 
@@ -71,7 +71,7 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
     fn get_channel_role(
         &self,
         channel_id: &Uuid,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
         user_org_id: Option<i64>,
     ) -> impl Future<Output = Result<ChannelRoleResult, AccessError>> + Send;
 }
@@ -85,7 +85,7 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
     /// Returns `None` if the user has no access to the entity.
     fn get_access_level(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
         entity_id: &str,
         entity_type: EntityType,
     ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
@@ -96,7 +96,18 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
     /// Returns an error if the user does not have sufficient access.
     fn check_access(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        entity_id: &str,
+        entity_type: EntityType,
+        required_level: AccessLevel,
+    ) -> impl Future<Output = Result<AccessLevel, AccessError>> + Send;
+
+    /// Check if the public access level is at least the required access level for an entity.
+    ///
+    /// Returns the actual access level if access is granted.
+    /// Returns an error if there is not sufficient access.
+    fn check_public_access(
+        &self,
         entity_id: &str,
         entity_type: EntityType,
         required_level: AccessLevel,
@@ -110,7 +121,7 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
     /// Returns `AccessError::Unauthorized` if the user has no access.
     fn get_entity_permission(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
         entity_id: &str,
         entity_type: EntityType,
         user_org_id: Option<i64>,

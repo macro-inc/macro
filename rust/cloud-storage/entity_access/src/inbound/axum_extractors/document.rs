@@ -11,11 +11,13 @@ use axum::{
 
 use super::{ExtractorError, RequiredAccessLevel};
 use crate::domain::{
-    models::{AccessLevel, EntityType},
+    models::{
+        AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
+    },
     ports::EntityAccessService,
 };
 use model::document::DocumentBasic;
-use model_user::axum_extractor::MacroUserExtractor;
+use model_user::axum_extractor::OptionalMacroUserExtractor;
 
 /// Validates that the user has at least the required access level to a document.
 ///
@@ -28,8 +30,8 @@ use model_user::axum_extractor::MacroUserExtractor;
 /// - Document context must be loaded (DocumentBasic in extensions)
 #[derive(Debug)]
 pub struct DocumentAccessExtractor<T, Svc> {
-    /// The actual access level the user has.
-    pub access_level: AccessLevel,
+    /// The entity access receipt
+    pub entity_access_receipt: EntityAccessReceipt,
     _marker: PhantomData<(T, Svc)>,
 }
 
@@ -47,20 +49,32 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let MacroUserExtractor { macro_user_id, .. } = parts
+        let OptionalMacroUserExtractor { macro_user_id, .. } = parts
             .extract()
             .await
-            .map_err(|_| ExtractorError::Unauthorized)?;
+            .map_err(|_| ExtractorError::Internal)?;
 
         let document_context: Extension<DocumentBasic> = parts
             .extract()
             .await
             .map_err(|_| ExtractorError::Internal)?;
 
-        // Owner always has full access
-        if document_context.owner == macro_user_id {
+        // Check ownership only if authenticated
+        if let Some(ref user_id) = macro_user_id
+            && document_context.owner == *user_id
+        {
             return Ok(Self {
-                access_level: AccessLevel::Owner,
+                entity_access_receipt: EntityAccessReceipt {
+                    entity: Entity {
+                        entity_id: document_context.document_id.clone(),
+                        entity_type: EntityType::Document,
+                    },
+                    auth: EntityAccessAuth::Authenticated(user_id.clone().0),
+                    entity_permission: EntityPermission::AccessLevel {
+                        access_level: AccessLevel::Owner,
+                    },
+                },
+                // access_level: AccessLevel::Owner,
                 _marker: PhantomData,
             });
         }
@@ -72,20 +86,42 @@ where
             ));
         }
 
-        // Check access via service
         let required_level = T::required_level();
-        let access_level = service
-            .check_access(
-                &macro_user_id,
-                &document_context.document_id,
-                EntityType::Document,
-                required_level,
-            )
-            .await
-            .map_err(ExtractorError::from)?;
+        // Check access based on auth state
+        let access_level: AccessLevel = match macro_user_id.as_ref() {
+            Some(macro_user_id) => service
+                .check_access(
+                    Some(macro_user_id),
+                    &document_context.document_id,
+                    EntityType::Document,
+                    required_level,
+                )
+                .await
+                .map_err(ExtractorError::from)?,
+            None => {
+                // Unauthenticated user: check public access only
+                service
+                    .check_public_access(
+                        &document_context.document_id,
+                        EntityType::Document,
+                        required_level,
+                    )
+                    .await
+                    .map_err(ExtractorError::from)?
+            }
+        };
 
         Ok(Self {
-            access_level,
+            entity_access_receipt: EntityAccessReceipt {
+                entity: Entity {
+                    entity_id: document_context.document_id.clone(),
+                    entity_type: EntityType::Document,
+                },
+                auth: macro_user_id
+                    .map(|m| EntityAccessAuth::Authenticated(m.0))
+                    .unwrap_or(EntityAccessAuth::Unauthenticated),
+                entity_permission: EntityPermission::AccessLevel { access_level },
+            },
             _marker: PhantomData,
         })
     }
