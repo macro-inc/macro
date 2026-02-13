@@ -23,7 +23,6 @@ import type { SoupPropertyValue } from '../../service-clients/service-storage/ge
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { propertiesKeys } from './keys';
-import type { BulkEntityPropertiesData } from './bulk';
 import {
   getSoupEntityById,
   optimisticUpdateSoupEntity,
@@ -63,28 +62,12 @@ export function useEntityPropertiesQuery(
   );
 }
 
-function bulkIncludesEntityPredicate(queryKey: QueryKey, entityId: string) {
-  return (
-    queryKey.includes('properties') &&
-    queryKey.includes('bulk') &&
-    queryKey.some(
-      (subKey) => Array.isArray(subKey) && subKey.includes(entityId)
-    )
-  );
-}
-
 export function invalidatePropertiesForEntity(
   entityType: EntityType,
   entityId: string
 ) {
   queryClient.invalidateQueries({
     queryKey: propertiesKeys.entity({ entityType, entityId }).queryKey,
-  });
-
-  // This invalidates any bulk query including this entity
-  queryClient.invalidateQueries({
-    predicate: ({ queryKey }) =>
-      bulkIncludesEntityPredicate(queryKey, entityId),
   });
 }
 
@@ -296,7 +279,6 @@ export type SetPropertyStatusCompleteParams = {
 
 type SetPropertyStatusCompleteContext = {
   previousEntityProperties: [QueryKey, Property[] | undefined][];
-  previousBulkProperties: [QueryKey, BulkEntityPropertiesData | undefined][];
   soupTxn?: SoupTransaction;
 };
 
@@ -366,10 +348,6 @@ export function useSetPropertyStatusCompleteMutation(
             entityId: vars.entityId,
           }).queryKey,
         }),
-        queryClient.cancelQueries({
-          predicate: ({ queryKey }) =>
-            bulkIncludesEntityPredicate(queryKey, vars.entityId),
-        }),
       ]);
 
       // Snapshot previous property data for rollback
@@ -379,12 +357,6 @@ export function useSetPropertyStatusCompleteMutation(
           entityId: vars.entityId,
         }).queryKey,
       });
-
-      const previousBulkProperties =
-        queryClient.getQueriesData<BulkEntityPropertiesData>({
-          predicate: ({ queryKey }) =>
-            bulkIncludesEntityPredicate(queryKey, vars.entityId),
-        });
 
       // Optimistically update entity properties query
       queryClient.setQueriesData<Property[]>(
@@ -397,28 +369,12 @@ export function useSetPropertyStatusCompleteMutation(
         (old) => (old ? updateStatusPropertyToCompleted(old) : old)
       );
 
-      // Optimistically update bulk properties queries
-      queryClient.setQueriesData<BulkEntityPropertiesData>(
-        {
-          predicate: ({ queryKey }) =>
-            bulkIncludesEntityPredicate(queryKey, vars.entityId),
-        },
-        (old) => {
-          if (!old || !old[vars.entityId]) return old;
-          return {
-            ...old,
-            [vars.entityId]: updateStatusPropertyToCompleted(
-              old[vars.entityId]
-            ),
-          };
-        }
-      );
-
       // Optimistically update soup queries (embedded properties on entities)
       const current = getSoupEntityById(vars.entityId);
 
       let soupTxn: SoupTransaction | undefined;
       if (current && current.tag !== 'channel' && current.data.properties) {
+        console.log('optimistically updating property');
         soupTxn = optimisticUpdateSoupEntity({
           tag: current.tag,
           data: {
@@ -433,7 +389,6 @@ export function useSetPropertyStatusCompleteMutation(
 
       return {
         previousEntityProperties,
-        previousBulkProperties,
         soupTxn,
       };
     },
@@ -447,9 +402,6 @@ export function useSetPropertyStatusCompleteMutation(
       if (context) {
         context.soupTxn?.rollback();
         for (const [key, data] of context.previousEntityProperties) {
-          queryClient.setQueryData(key, data);
-        }
-        for (const [key, data] of context.previousBulkProperties) {
           queryClient.setQueryData(key, data);
         }
       }
