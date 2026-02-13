@@ -4,19 +4,21 @@ import { useTabAttachments } from '@core/component/AI/signal/tabAttachments';
 import type {
   Attachment,
   Attachments,
+  ChatMessageStream,
   ChatMessageWithAttachments,
-  MessageStream,
   Model,
   UploadQueue,
 } from '@core/component/AI/types';
 import { useUploadAttachment } from '@core/component/AI/util/uploadToChat';
 import { ENABLE_AI_AUTO_TAB_ATTACHMENTS } from '@core/constant/featureFlags';
+import { getEntityStreams } from '@service-connection/stream';
 import type { Accessor, ParentProps, Setter } from 'solid-js';
 import {
   createContext,
   createEffect,
   createSignal,
   on,
+  untrack,
   useContext,
 } from 'solid-js';
 
@@ -130,7 +132,6 @@ export function ChatProvider(
   if (props.external) {
     [messages, setMessages] = props.external.messages;
     [stream, setStream] = props.external.stream;
-  } else {
     const [_messages, _setMessages] = createSignal<
       ChatMessageWithAttachments[]
     >(props.messages ?? []);

@@ -1,17 +1,12 @@
 import type {
   Attachment,
-  CreateAndSend,
-  MessageStream,
+  ChatMessageStream,
   Model,
-  Send,
 } from '@core/component/AI/types';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { isErr } from '@core/util/maybeResult';
-import { getMacroApiToken } from '@service-auth/fetch';
-import {
-  cognitionApiServiceClient,
-  cognitionWebsocketServiceClient,
-} from '@service-cognition/client';
+import { cognitionApiServiceClient } from '@service-cognition/client';
+import { subscribe } from '@service-connection/stream';
 import type { Accessor, JSXElement } from 'solid-js';
 import { createEffect, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -139,35 +134,30 @@ type SimpleRequest = {
   model: Model;
 };
 
-async function request(simple: SimpleRequest): Promise<CreateAndSend> {
-  const token = await getMacroApiToken();
-  return {
-    type: 'createAndSend',
-    request: {},
+type SendResult = { type: 'ok'; stream: ChatMessageStream } | { type: 'error' };
+
+async function sendRequest(simple: SimpleRequest): Promise<SendResult> {
+  const response = await cognitionApiServiceClient.sendStreamChatMessage({
     content: simple.userRequest,
-    attachments: simple.attachments,
     model: simple.model,
-    call: async () => {
-      const createResponse = await cognitionApiServiceClient.createChat({});
-      if (isErr(createResponse)) {
-        return { type: 'error' };
-      }
-      const [, { id: chatId }] = createResponse;
-      const request: Send['request'] = {
-        chat_id: chatId,
-        content: simple.userRequest,
-        model: simple.model,
-        token: token,
-        attachments: simple.attachments,
-      };
-      const send: Send = {
-        type: 'send',
-        chat_id: chatId,
-        request: request,
-        call: (): MessageStream =>
-          cognitionWebsocketServiceClient.sendStreamChatMessage(request),
-      };
-      return send;
+    attachments: simple.attachments.length > 0 ? simple.attachments : undefined,
+  });
+  if (isErr(response)) {
+    return { type: 'error' };
+  }
+  const [, { stream_id, chat_id }] = response;
+  const connectionStream = subscribe('chat', chat_id, stream_id);
+  if (!connectionStream) {
+    return { type: 'error' };
+  }
+  return {
+    type: 'ok',
+    stream: {
+      data: connectionStream.data,
+      isDone: connectionStream.isDone,
+      model: simple.model,
+      attachments: simple.attachments,
+      streamId: stream_id,
     },
   };
 }
@@ -176,14 +166,10 @@ function useDebugChatRequest(args: { request: SimpleRequest; label: string }): {
   sendRequest: () => void;
   Debugger: () => JSXElement;
 } {
-  const r = () => {
-    return request(args.request);
-  };
   const [send, setSend] = createSignal(0);
   const component = () => (
     <RequestDebugger
       label={args.label}
-      request={r}
       simpleRequest={args.request}
       go={send}
     />
@@ -196,26 +182,23 @@ function useDebugChatRequest(args: { request: SimpleRequest; label: string }): {
 
 function RequestDebugger(props: {
   label: string;
-  request: () => Promise<CreateAndSend>;
   simpleRequest: SimpleRequest;
   go: Accessor<number>;
 }) {
   const [chatCreated, setCreated] = createSignal(false);
-  const [stream, setStream] = createSignal<MessageStream>();
+  const [stream, setStream] = createSignal<ChatMessageStream>();
 
   const makeRequest = async () => {
     setCreated(false);
     setStream();
 
-    const request = await props.request();
-    const sendRequest = await request.call();
-    if ('type' in sendRequest && sendRequest.type === 'error') {
+    const result = await sendRequest(props.simpleRequest);
+    if (result.type === 'error') {
       return;
     }
 
-    const stream = sendRequest.call();
     setCreated(true);
-    setStream(stream);
+    setStream(result.stream);
   };
 
   createEffect(() => {

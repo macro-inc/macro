@@ -1,4 +1,5 @@
 import { createBlockEffect, inBlock } from '@core/block';
+import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchToken, unsetTokenPromise } from '@core/util/fetchWithToken';
@@ -15,16 +16,12 @@ import { createWebsocketStateSignal } from '@websocket/solid/state-signal';
 import type { Accessor } from 'solid-js';
 import { createRoot, createSignal } from 'solid-js';
 import type { StreamError } from './generated/schemas';
-import type { FromWebSocketMessage } from './generated/schemas/fromWebSocketMessage';
+import type { ChatStream } from './generated/schemas/chatStream';
 import type { ToWebSocketMessage } from './generated/schemas/toWebSocketMessage';
-import { toast } from '@core/component/Toast/Toast';
 
-export type CognitionWebsocket = Websocket<
-  ToWebSocketMessage,
-  FromWebSocketMessage
->;
+export type CognitionWebsocket = Websocket<ToWebSocketMessage, ChatStream>;
 
-export type { StreamError, FromWebSocketMessage, ToWebSocketMessage };
+export type { StreamError, ChatStream, ToWebSocketMessage };
 
 /**
  * Current state of the websocket connection
@@ -55,9 +52,7 @@ async function resolveWsUrl() {
 }
 
 export const ws: CognitionWebsocket = new WebsocketBuilder(resolveWsUrl)
-  .withSerializer(
-    new JsonSerializer<ToWebSocketMessage, FromWebSocketMessage>()
-  )
+  .withSerializer(new JsonSerializer<ToWebSocketMessage, ChatStream>())
   .withBackoff(new ConstantBackoff(2_000))
   .withMaxRetries(20)
   .withHeartbeat({
@@ -72,17 +67,12 @@ export const ws: CognitionWebsocket = new WebsocketBuilder(resolveWsUrl)
 export const state = createWebsocketStateSignal(ws);
 
 export function createCognitionWebsocketBlockEffect<
-  T extends FromWebSocketMessage['type'],
->(
-  type: T,
-  callback: (data: Extract<FromWebSocketMessage, { type: T }>) => void
-) {
+  T extends ChatStream['type'],
+>(type: T, callback: (data: Extract<ChatStream, { type: T }>) => void) {
   createBlockEffect(() => {
-    const wrappedCallback = createCallback((data: FromWebSocketMessage) => {
+    const wrappedCallback = createCallback((data: ChatStream) => {
       if (data.type === type) {
-        return inBlock(callback)(
-          data as Extract<FromWebSocketMessage, { type: T }>
-        );
+        return inBlock(callback)(data as Extract<ChatStream, { type: T }>);
       }
     });
     createSocketEffect(ws, wrappedCallback);
@@ -92,13 +82,11 @@ export function createCognitionWebsocketBlockEffect<
 /** Creates a typed DCS websocket effect scoped to any owner context.
  *  Returns a dispose function that should be used to remove the effect.
  */
-export function createCognitionWebsocketEffect<
-  T extends FromWebSocketMessage['type'],
->(
+export function createCognitionWebsocketEffect<T extends ChatStream['type']>(
   type: T,
-  callback: (data: Extract<FromWebSocketMessage, { type: T }>) => void
+  callback: (data: Extract<ChatStream, { type: T }>) => void
 ) {
-  const wrappedCallback = createCallback((data: FromWebSocketMessage) => {
+  const wrappedCallback = createCallback((data: ChatStream) => {
     if (data.type === type) {
       return callback(data as any);
     }
@@ -110,9 +98,9 @@ export function createCognitionWebsocketEffect<
 type WithStreamId<T> = T extends { stream_id?: string } ? T : never;
 
 type Send = WithStreamId<ToWebSocketMessage>;
-export type StreamItem = FromWebSocketMessage;
+export type StreamItem = ChatStream;
 
-export type WebsocketError = Extract<FromWebSocketMessage, { type: 'error' }>;
+export type WebsocketError = Extract<ChatStream, { type: 'error' }>;
 
 // export type MessageStream = AsyncGenerator<Receive | WebsocketError>;
 // export type MessageStream = Accessor<StreamType>;
@@ -135,7 +123,7 @@ export function createMessageStream(send: Send): MessageStream {
 
   let cleanup = () => {};
 
-  const handleMessage = (data: FromWebSocketMessage) => {
+  const handleMessage = (data: ChatStream) => {
     if (isDone()) return;
     // not a stream message
     if (typeof data !== 'object') return;

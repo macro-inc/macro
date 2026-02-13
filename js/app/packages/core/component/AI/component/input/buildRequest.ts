@@ -2,96 +2,71 @@ import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import { useAdditionalInstructions } from '@core/component/AI/constant/prompts';
 import type {
   Attachment,
-  CreateAndSend,
-  MessageStream,
+  ChatMessageStream,
   Model,
-  Send,
   ToolSet,
 } from '@core/component/AI/types';
 import { isPaymentError } from '@core/util/handlePaymentError';
 import { isErr } from '@core/util/maybeResult';
-import { getMacroApiToken } from '@service-auth/fetch';
-import {
-  cognitionApiServiceClient,
-  cognitionWebsocketServiceClient,
-} from '@service-cognition/client';
-import type { Source } from './ToolsetSelector';
+import { cognitionApiServiceClient } from '@service-cognition/client';
+import { subscribe } from '@service-connection/stream';
 
-export function useBuildChatSendRequest() {
+export type ChatSendInput = {
+  content: string;
+  model: Model;
+  attachments: Attachment[];
+  toolset: ToolSet;
+};
+
+export type SendChatMessageResult =
+  | { stream: ChatMessageStream; chat_id: string }
+  | { error: true; paymentError?: boolean };
+
+export function useSendChatMessage() {
   const additionalInstructions = useAdditionalInstructions();
-  return async function buildChatSendRequest({
-    userRequest,
-    chatId,
-    isPersistent,
+
+  return async function sendChatMessage({
+    content,
     model,
+    chatId,
     attachments,
     toolset,
-  }: {
-    userRequest: string;
-    chatId: string | undefined;
-    isPersistent?: boolean;
-    model?: Model;
-    attachments?: Attachment[];
-    toolset?: ToolSet;
-    source?: Source;
-  }): Promise<CreateAndSend | Send> {
-    const token = await getMacroApiToken();
+  }: ChatSendInput & { chatId?: string }): Promise<SendChatMessageResult> {
     const modelInstructions = model ? `\nYou are ${model}` : '';
     const additional = `${additionalInstructions()}${modelInstructions}`;
 
-    const request = (id: string): Send['request'] => ({
-      chat_id: id,
-      content: userRequest,
+    const response = await cognitionApiServiceClient.sendStreamChatMessage({
+      content,
       model: model ?? DEFAULT_MODEL,
-      attachments: attachments ?? [],
-      token,
-      additional_instructions: additional,
+      chat_id: chatId,
+      attachments: attachments.length > 0 ? attachments : undefined,
       toolset,
+      additional_instructions: additional,
     });
 
-    if (chatId !== undefined) {
-      const send: Send = {
-        type: 'send',
-        chat_id: chatId,
-        request: request(chatId),
-        call: () => {
-          return cognitionWebsocketServiceClient.sendStreamChatMessage(
-            request(chatId)
-          );
-        },
-      };
-      return send;
-    } else {
-      const createAndSend: CreateAndSend = {
-        type: 'createAndSend',
-        request: {},
-        content: userRequest,
-        attachments: attachments ?? [],
-        model: model ?? DEFAULT_MODEL,
-        call: async () => {
-          const response = await cognitionApiServiceClient.createChat({
-            isPersistent: isPersistent ?? false,
-          });
-          if (isPaymentError(response)) {
-            return { type: 'error', paymentError: true };
-          }
-          if (isErr(response)) {
-            return { type: 'error' };
-          }
-          const [, { id: chatId }] = response;
-          return {
-            type: 'send',
-            chat_id: chatId,
-            request: request(chatId),
-            call: (): MessageStream => {
-              return cognitionWebsocketServiceClient.sendStreamChatMessage(
-                request(chatId)
-              );
-            },
-          };
-        },
-      };
-      return createAndSend;
+    if (isPaymentError(response)) {
+      return { error: true, paymentError: true };
     }
+    if (isErr(response)) {
+      return { error: true };
+    }
+
+    const [, { stream_id, chat_id }] = response;
+
+    const connectionStream = subscribe('chat', chat_id, stream_id);
+    if (!connectionStream) {
+      return { error: true };
+    }
+
+    return {
+      chat_id,
+      stream: {
+        data: connectionStream.data,
+        isDone: connectionStream.isDone,
+        model: model ?? DEFAULT_MODEL,
+        attachments: attachments ?? [],
+        streamId: stream_id,
+      },
+    };
   };
 }

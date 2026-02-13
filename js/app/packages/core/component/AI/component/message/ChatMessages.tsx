@@ -1,15 +1,20 @@
+import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
+import { DEFAULT_MODEL } from '@core/component/AI/constant';
+import { useAdditionalInstructions } from '@core/component/AI/constant/prompts';
 import { useChatContext } from '@core/component/AI/context';
 import type {
+  ChatMessageStream,
   ChatMessageWithAttachments,
-  MessageStream,
 } from '@core/component/AI/types';
 import { asChatMessage } from '@core/component/AI/util/message';
+import { getMacroApiToken } from '@service-auth/fetch';
+import { cognitionWebsocketServiceClient } from '@service-cognition/client';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { aiChatTheme } from '@core/component/LexicalMarkdown/theme';
-import { toast } from '@core/component/Toast/Toast';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import type { Accessor, JSXElement, Setter } from 'solid-js';
 import {
+  on,
   createEffect,
   createMemo,
   createSelector,
@@ -21,7 +26,6 @@ import {
   Switch,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { handleError } from '../../util/handleError';
 import { idStream, timeStream } from '../../util/stream/extendedStream';
 import { AssistantMessage } from './AssistantMessage';
 import { LoadingMessage } from './LoadingMessage';
@@ -58,10 +62,56 @@ export function ChatMessages(props: ChatMessagesProps) {
   const chat = useChatContext();
   const [messages, setMessages] = [chat.messages, chat.setMessages];
   const streamTuple: [
-    Accessor<MessageStream | undefined>,
-    Setter<MessageStream | undefined>,
+    Accessor<ChatMessageStream | undefined>,
+    Setter<ChatMessageStream | undefined>,
   ] = [chat.stream, chat.setStream];
   const chatId = chat.chatId;
+  const additionalInstructions = useAdditionalInstructions();
+
+  const makeEdit = async (data: ChatSendInput) => {
+    const setStream = streamTuple?.[1];
+    if (!setStream) return;
+
+    setMessages((p) => {
+      const last = p.at(-1);
+      if (!last) return p;
+      if (last.role === 'user') {
+        return p.slice(0, -1);
+      } else {
+        return p.slice(0, -2);
+      }
+    });
+    setMessages((p) => [
+      ...p,
+      {
+        attachments: data.attachments ?? [],
+        content: data.content,
+        role: 'user',
+        model: data.model,
+        id: 'todo',
+      },
+    ]);
+
+    const token = await getMacroApiToken();
+    const modelInstructions = data.model ? `\nYou are ${data.model}` : '';
+    const additional = `${additionalInstructions()}${modelInstructions}`;
+    const editStream = cognitionWebsocketServiceClient.streamEditMessage({
+      chat_id: chatId()!,
+      content: data.content,
+      model: data.model ?? DEFAULT_MODEL,
+      attachments: data.attachments ?? [],
+      token,
+      additional_instructions: additional,
+      toolset: data.toolset,
+    });
+
+    setStream({
+      data: editStream.data,
+      isDone: editStream.isDone,
+      model: data.model ?? DEFAULT_MODEL,
+      attachments: data.attachments ?? [],
+    });
+  };
 
   const extendedStream = createMemo(() => {
     const s = streamTuple?.[0]?.();
@@ -122,9 +172,36 @@ export function ChatMessages(props: ChatMessagesProps) {
     const streamable = streamTuple?.[0];
     if (!streamable) return [];
     const stream = streamable();
-    if (!stream || !('attachments' in stream.request)) return [];
-    return stream.request.attachments ?? [];
+    if (!stream) return [];
+    return stream.attachments ?? [];
   };
+
+  const streamData = () => {
+    const stream = streamTuple?.[0]?.();
+    if (!stream) return [];
+    return stream.data();
+  };
+  // when a user message arrives via stream, append if not already present
+  createEffect(
+    on(streamData, (data) => {
+      const latest = data.at(-1);
+      if (!latest) return;
+      if (latest.type !== 'chat_user_message') return;
+      setMessages((p) => {
+        if (p.at(-1)?.role === 'user' && p.at(-1)?.content === latest.content)
+          return p;
+        return [
+          ...p,
+          {
+            id: latest.message_id,
+            content: latest.content,
+            role: 'user' as const,
+            attachments: latest.attachments,
+          },
+        ];
+      });
+    })
+  );
 
   // when messages finish streaming, append and scroll
   createEffect(() => {
@@ -134,17 +211,12 @@ export function ChatMessages(props: ChatMessagesProps) {
     if (s.isDone()) {
       const message = asChatMessage(s.data());
       if (message) {
-        message.model = 'model' in s.request ? s.request.model : undefined;
+        message.model = s.model;
         setMessages((p) => {
           if (p.find((m) => m.id === message.id)) return p;
           return [...p, message];
         });
       }
-    } else if (s.isErr()) {
-      console.log(s);
-      const err = s.err();
-      if (err) handleError(err);
-      else toast.failure('Failed to respond to message');
     }
   });
 
@@ -302,33 +374,7 @@ export function ChatMessages(props: ChatMessagesProps) {
                                 ? undefined
                                 : {
                                     chatId: chatId()!,
-                                    makeEdit: (send) => {
-                                      const setStream = streamTuple?.[1];
-                                      if (setStream) {
-                                        setMessages((p) => {
-                                          const last = p.at(-1);
-                                          if (!last) return p;
-                                          if (last.role === 'user') {
-                                            return p.slice(0, -1);
-                                          } else {
-                                            return p.slice(0, -2);
-                                          }
-                                        });
-                                        setMessages((p) => [
-                                          ...p,
-                                          {
-                                            attachments:
-                                              send.request.attachments ?? [],
-                                            content: send.request.content,
-                                            role: 'user',
-                                            model: send.request.model,
-                                            // TODO update message id from server response
-                                            id: 'todo',
-                                          },
-                                        ]);
-                                        setStream(send.call());
-                                      }
-                                    },
+                                    makeEdit,
                                   }
                             }
                           />
