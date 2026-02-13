@@ -2,7 +2,7 @@ import {
   ChatInputProvider,
   useChatInputContext,
 } from '@core/component/AI/context';
-import { ChatInput } from '@core/component/AI/component/input/useChatInput';
+import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { useChatMarkdownArea } from '@core/component/AI/component/input/useChatMarkdownArea';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { isErr } from '@core/util/maybeResult';
@@ -10,6 +10,7 @@ import { cognitionApiServiceClient } from '@service-cognition/client';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import { useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import { onMount, Show } from 'solid-js';
+import { useSoup } from '@app/component/next-soup/soup-context';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
 function SoupChatInputInner() {

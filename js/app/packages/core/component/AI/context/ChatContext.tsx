@@ -102,8 +102,8 @@ export type ChatState = {
   messages: Accessor<ChatMessageWithAttachments[]>;
   setMessages: Setter<ChatMessageWithAttachments[]>;
   addMessage: (msg: ChatMessageWithAttachments) => void;
-  stream: Accessor<MessageStream | undefined>;
-  setStream: Setter<MessageStream | undefined>;
+  stream: Accessor<ChatMessageStream | undefined>;
+  setStream: Setter<ChatMessageStream | undefined>;
 };
 
 const ChatCtx = createContext<ChatState>();
@@ -118,24 +118,25 @@ export function ChatProvider(
         Setter<ChatMessageWithAttachments[]>,
       ];
       stream: [
-        Accessor<MessageStream | undefined>,
-        Setter<MessageStream | undefined>,
+        Accessor<ChatMessageStream | undefined>,
+        Setter<ChatMessageStream | undefined>,
       ];
     };
   }
 ) {
   let messages: Accessor<ChatMessageWithAttachments[]>;
   let setMessages: Setter<ChatMessageWithAttachments[]>;
-  let stream: Accessor<MessageStream | undefined>;
-  let setStream: Setter<MessageStream | undefined>;
+  let stream: Accessor<ChatMessageStream | undefined>;
+  let setStream: Setter<ChatMessageStream | undefined>;
 
   if (props.external) {
     [messages, setMessages] = props.external.messages;
     [stream, setStream] = props.external.stream;
+  } else {
     const [_messages, _setMessages] = createSignal<
       ChatMessageWithAttachments[]
     >(props.messages ?? []);
-    const [_stream, _setStream] = createSignal<MessageStream>();
+    const [_stream, _setStream] = createSignal<ChatMessageStream>();
     messages = _messages;
     setMessages = _setMessages;
     stream = _stream;
