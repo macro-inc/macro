@@ -101,6 +101,7 @@ impl<'a, T: Notification + Clone> ConnGatewayNotification<'a, T> {
 
 #[cfg(test)]
 impl<'a, T: Notification> ConnGatewayNotification<'a, T> {
+    /// function which is used for testing do not use in runtime code
     pub fn testing_to_value(self) -> ConnGatewayNotification<'a, serde_json::Value> {
         let ConnGatewayNotification {
             notif:

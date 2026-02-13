@@ -63,7 +63,10 @@ describe('notification utils', () => {
           id: '2',
           notification_event_type: 'document_mention',
         } as Notification,
-        { id: '3', notification_event_type: 'item_shared_user' } as Notification,
+        {
+          id: '3',
+          notification_event_type: 'item_shared_user',
+        } as Notification,
         { id: '4', notification_event_type: 'new_email' } as Notification,
       ];
 

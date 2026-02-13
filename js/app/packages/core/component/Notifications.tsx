@@ -73,7 +73,9 @@ export function Notifications(props: NotificationsProps) {
                     }
                   </div>
                   <div class="grow" />
-                  <div>{formatDate(notification.created_at ?? new Date(0))}</div>
+                  <div>
+                    {formatDate(notification.created_at ?? new Date(0))}
+                  </div>
                 </div>
 
                 <div class="flex flex-col gap-2 ml-4">
