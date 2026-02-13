@@ -175,8 +175,9 @@ impl StreamRepo for RedisStreamRepo {
                                 last_id = entry.id.clone();
 
                                 for (key, value) in entry.map {
-                                    if key == KEY {
-                                        if let Value::BulkString(bytes) = value {
+                                    if key == KEY
+                                        && let Value::BulkString(bytes) = value
+                                    {
                                             match String::from_utf8(bytes) {
                                                 Ok(json_str) => {
                                                     match serde_json::from_str::<StoredStreamItem>(&json_str) {
@@ -198,7 +199,6 @@ impl StreamRepo for RedisStreamRepo {
                                                     tracing::error!(error=?e, "invalid UTF-8 in stream item");
                                                 }
                                             }
-                                        }
                                     }
                                 }
                             }

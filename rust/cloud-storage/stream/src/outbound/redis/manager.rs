@@ -45,13 +45,10 @@ impl StreamManager for RedisStreamManager {
                 tokio::select! {
                     _ = &mut cancel_rx => break,
                     item = merged.next(), if !merged.is_empty() => {
-                        match item {
-                            Some(item) => {
-                                yield item
-                            },
-
-                            None => {} // all current streams exhausted, keep listening
+                        if let Some(item) = item {
+                            yield item
                         }
+                        // else: all current streams exhausted, keep listening
                     }
                     notification = notify_rx.recv() => {
                         match notification {
