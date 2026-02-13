@@ -8,6 +8,7 @@ use std::time::Duration;
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
+#[ignore = "Redis doesn't exist in CI"]
 async fn test_no_streams() {
     let (service, _stream_id, _guard) = StreamGuard::new("manager_no_streams").await;
     let manager = RedisStreamManager::new(service);
@@ -24,6 +25,7 @@ async fn test_no_streams() {
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
+#[ignore = "Redis doesn't exist in CI"]
 async fn test_sub_then_start_related() {
     let entity_id = "manager_sub_then_start";
     let (service, stream_id, _guard) = StreamGuard::new(entity_id).await;
@@ -52,6 +54,7 @@ async fn test_sub_then_start_related() {
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
+#[ignore = "Redis doesn't exist in CI"]
 async fn test_sub_then_start_unrelated() {
     let (service, stream_id, _guard) = StreamGuard::new("manager_unrelated_entity").await;
     let manager = RedisStreamManager::new(service.clone());
@@ -80,6 +83,7 @@ async fn test_sub_then_start_unrelated() {
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
+#[ignore = "Redis doesn't exist in CI"]
 async fn test_start_then_sub() {
     let entity_id = "manager_start_then_sub";
     let (service, stream_id, _guard) = StreamGuard::new(entity_id).await;
@@ -125,6 +129,7 @@ async fn test_start_then_sub() {
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
+#[ignore = "Redis doesn't exist in CI"]
 async fn test_late_join_multiple_streams_same_entity() {
     let entity_id = "late_join_multi_streams";
     let (service, stream_id_1, guard) = StreamGuard::new(entity_id).await;
@@ -189,6 +194,7 @@ async fn test_late_join_multiple_streams_same_entity() {
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
+#[ignore = "Redis doesn't exist in CI"]
 async fn test_late_join_during_active_streaming() {
     let entity_id = "late_join_active";
     let (service, stream_id, _guard) = StreamGuard::new(entity_id).await;
@@ -276,6 +282,7 @@ async fn test_late_join_during_active_streaming() {
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
+#[ignore = "Redis doesn't exist in CI"]
 async fn test_unsub_during_stream() {
     let entity_id = "manager_unsub_during";
     let sender_id = "sender_unsub";
@@ -323,6 +330,7 @@ async fn test_unsub_during_stream() {
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
+#[ignore = "Redis doesn't exist in CI"]
 async fn test_unsub_no_items_after() {
     let entity_id = "manager_unsub_no_items_after";
     let sender_id = "sender_unsub_no_items";
@@ -380,6 +388,7 @@ async fn test_unsub_no_items_after() {
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
+#[ignore = "Redis doesn't exist in CI"]
 async fn test_connection_closed() {
     // Unsubscribing and re-subscribing should work fine
 
@@ -422,6 +431,7 @@ async fn test_connection_closed() {
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
+#[ignore = "Redis doesn't exist in CI"]
 async fn test_stream_ends_close() {
     // Stream emits items then closes — all items should be received
 
@@ -494,6 +504,7 @@ async fn util_test_stream_exhausted(
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
+#[ignore = "Redis doesn't exist in CI"]
 async fn test_stream_exhausted_single() {
     let entity_id = "state_stream_exhausted_single";
     let (service, stream_id, _guard) = StreamGuard::new(entity_id).await;
@@ -502,6 +513,7 @@ async fn test_stream_exhausted_single() {
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
+#[ignore = "Redis doesn't exist in CI"]
 async fn test_stream_exhausted_load() {
     let (service, _, guard) = StreamGuard::new("load_test_init").await;
 

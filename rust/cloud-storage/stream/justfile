@@ -16,4 +16,4 @@ test:
 
 # Run integration tests (requires Redis)
 test_integration *args: start_redis
-    cargo test -p stream --features redis-test {{args}}
+    cargo test -p stream --features redis-test -- --ignored {{args}}

@@ -8,6 +8,7 @@ use std::time::Duration;
 /// Run with: REDIS_URL=redis://localhost:6379 cargo test -p stream -- --ignored
 #[tokio::test]
 #[serial]
+#[ignore = "Redis doesn't exist in CI"]
 async fn test_redis_stream_service_append_and_read() {
     let (service, stream_id, _guard) = StreamGuard::new("append_and_read").await;
 
@@ -59,6 +60,7 @@ async fn test_redis_stream_service_append_and_read() {
 
 #[tokio::test]
 #[serial]
+#[ignore = "Redis doesn't exist in CI"]
 async fn test_from_async_stream() {
     // Use StreamGuard for cleanup, but get the concrete service for extension trait
     let (service, stream_id, _guard) = StreamGuard::new("from_async_stream").await;
@@ -94,6 +96,7 @@ async fn test_from_async_stream() {
 
 #[tokio::test]
 #[serial]
+#[ignore = "Redis doesn't exist in CI"]
 async fn test_notify_on_multiple_new_streams() {
     let (_, stream_id1, _guard1) = StreamGuard::new("notify_multi_1").await;
     let (service, stream_id2, _guard2) = StreamGuard::new("notify_multi_2").await;
@@ -128,6 +131,7 @@ async fn test_notify_on_multiple_new_streams() {
 
 #[tokio::test]
 #[serial]
+#[ignore = "Redis doesn't exist in CI"]
 async fn test_notify_only_on_new_stream() {
     let (service, stream_id, _guard) = StreamGuard::new("notify_test").await;
 
@@ -164,6 +168,7 @@ async fn test_notify_only_on_new_stream() {
 
 #[tokio::test]
 #[serial]
+#[ignore = "Redis doesn't exist in CI"]
 async fn test_active_streams() {
     let entity_id = "active_streams_test_entity";
 
@@ -211,6 +216,7 @@ async fn test_active_streams() {
 
 #[tokio::test]
 #[serial]
+#[ignore = "Redis doesn't exist in CI"]
 async fn test_active_streams_empty() {
     let (service, _, _guard) = StreamGuard::new("active_streams_empty").await;
 
