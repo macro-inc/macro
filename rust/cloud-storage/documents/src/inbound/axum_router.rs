@@ -14,14 +14,14 @@ use axum::{
     Extension, Json, Router,
     body::Body,
     extract::{FromRef, Path, Query, State},
-    http::{Request, Response, StatusCode},
+    http::{HeaderMap, Request, Response, StatusCode},
     middleware::{self, Next},
     response::IntoResponse,
 };
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
-use model::document::DocumentBasic;
 use model::document::response::GetDocumentResponse;
+use model::document::{DocumentBasic, response::LocationResponseV3};
 use model::response::GenericSuccessResponse;
 use model::user::UserContext;
 use model_error_response::ErrorResponse;
@@ -228,19 +228,17 @@ pub async fn get_location_v3_handler<T: DocumentService, Svc: EntityAccessServic
     Extension(document_context): Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
     Query(params): Query<LocationQueryParams>,
-) -> Result<Response<Body>, DocumentError> {
+) -> Result<(HeaderMap, Json<LocationResponseV3>), DocumentError> {
     let response_data = state
         .service
         .get_document_location(&document_context, access.entity_access_receipt, params)
         .await?;
 
-    let json_bytes = serde_json::to_vec(&response_data).unwrap();
-    Ok(Response::builder()
-        .status(StatusCode::OK)
-        .header("content-type", "application/json")
-        .header("Cache-Control", "max-age=300")
-        .body(Body::from(json_bytes))
-        .unwrap())
+    let mut header_map = HeaderMap::new();
+    header_map.append("content-type", "application/json".parse().unwrap());
+    header_map.append("Cache-Control", "max-age-300".parse().unwrap());
+
+    Ok((header_map, Json(response_data)))
 }
 
 /// Handler for `DELETE /documents/:document_id`.
