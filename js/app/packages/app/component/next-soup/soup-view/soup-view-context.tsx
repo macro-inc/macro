@@ -37,6 +37,29 @@ import { match } from 'ts-pattern';
 const SEARCH_SERVICE_DEBOUNCE_MS = 300;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
 
+const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+
+const CHANNEL_PRELOAD_FILTERS: SoupItemsQueryFilters = {
+  chat_filters: { chat_ids: [NIL_UUID] },
+  document_filters: { document_ids: [NIL_UUID] },
+  email_filters: { recipients: [NIL_UUID] },
+  project_filters: { project_ids: [NIL_UUID] },
+  channel_filters: {
+    channel_types: [],
+  },
+};
+
+function mergeEntityPools(
+  items: EntityData[],
+  extra: EntityData[]
+): EntityData[] {
+  if (extra.length === 0) return items;
+  const existingIds = new Set(items.map((e) => e.id));
+  const newItems = extra.filter((e) => !existingIds.has(e.id));
+  if (newItems.length === 0) return items;
+  return [...items, ...newItems];
+}
+
 type Row<T> = {
   original: T;
   id: string;
@@ -270,6 +293,20 @@ export const SoupViewContextProvider: FlowComponent<
     })
   );
 
+  const channelItemsQuery = useSoupItemsQuery(() => ({
+    params: { limit: 100, sort_method: 'updated_at' },
+    body: CHANNEL_PRELOAD_FILTERS,
+  }));
+
+  createRenderEffect(() => {
+    if (
+      channelItemsQuery.hasNextPage &&
+      !channelItemsQuery.isFetchingNextPage
+    ) {
+      channelItemsQuery.fetchNextPage();
+    }
+  });
+
   const nameFuzzySearchFilter = (items: EntityData[]) => {
     const query = debouncedSearchForLocal();
     if (!query || query.length === 0) return items;
@@ -323,7 +360,7 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
-  const items = createMemo(
+  const items = createMemo<SoupEntity[]>(
     (prev) => {
       const itemsData = itemsQuery.data;
       const searchData = searchQuery.data;
@@ -336,10 +373,14 @@ export const SoupViewContextProvider: FlowComponent<
       const useSearchData = searching && !isSearchDisabled();
       const searchItems = useSearchData ? (searchData ?? []) : [];
 
+      const fuzzyPool = searching
+        ? mergeEntityPools(items, channelItemsQuery.data ?? [])
+        : items;
+
       let transformed: SoupEntity[] = [...searchItems];
 
       if (searching) {
-        const fuzzyMatched = nameFuzzySearchFilter(items);
+        const fuzzyMatched = nameFuzzySearchFilter(fuzzyPool);
         transformed.push(...fuzzyMatched);
 
         if (!useSearchData || !searchData) {
