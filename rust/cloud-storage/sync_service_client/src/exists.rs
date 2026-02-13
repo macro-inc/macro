@@ -3,6 +3,7 @@ use anyhow::Result;
 use reqwest::StatusCode;
 
 impl SyncServiceClient {
+    #[tracing::instrument(skip(self), err)]
     pub async fn exists(&self, document_id: &str) -> Result<bool> {
         let full_url = format!("{}/document/{}/exists", self.url, document_id);
         let res = self.client.head(&full_url).send().await?;
