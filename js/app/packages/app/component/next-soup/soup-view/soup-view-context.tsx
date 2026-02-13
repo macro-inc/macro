@@ -9,6 +9,7 @@ import { deduplicateEntities } from '@app/component/next-soup/utils';
 import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
 import { fuzzyMatch } from '@core/util/fuzzy';
+import { mergeAdjacentMacroEmTags } from '@core/util/searchHighlight';
 import type { EntityData, WithNotification, WithSearch } from '@entity';
 import { useNotificationsForEntity } from '@notifications';
 import {
@@ -279,7 +280,7 @@ export const SoupViewContextProvider: FlowComponent<
       return {
         ...result.item,
         search: {
-          nameHighlight: result.nameHighlight,
+          nameHighlight: mergeAdjacentMacroEmTags(result.nameHighlight),
           contentHitData: null,
           source: 'local',
         },
