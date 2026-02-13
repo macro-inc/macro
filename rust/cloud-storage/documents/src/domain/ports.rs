@@ -4,9 +4,9 @@
 
 use std::future::Future;
 
+use entity_access::domain::models::EntityAccessReceipt;
 use model::document::response::{GetDocumentResponseData, LocationResponseV3};
 use model::document::{DocumentBasic, DocumentMetadata};
-use models_permissions::share_permission::access_level::AccessLevel;
 
 use super::models::{DocumentError, LocationQueryParams};
 
@@ -84,24 +84,21 @@ pub trait DocumentService: Send + Sync + 'static {
     /// Get a document with metadata, access level, and view location.
     fn get_document(
         &self,
-        user_id: &str,
-        document_id: &str,
-        access_level: AccessLevel,
+        entity_access_receipt: EntityAccessReceipt,
     ) -> impl Future<Output = Result<GetDocumentResponseData, DocumentError>> + Send;
 
     /// Get the location (presigned URL or sync service content) for a document.
     fn get_document_location(
         &self,
         document_context: &DocumentBasic,
-        document_id: &str,
+        entity_access_receipt: EntityAccessReceipt,
         params: LocationQueryParams,
     ) -> impl Future<Output = Result<LocationResponseV3, DocumentError>> + Send;
 
     /// Soft-delete a document and update project modified timestamp.
     fn delete_document(
         &self,
-        document_id: &str,
+        entity_access_receipt: EntityAccessReceipt,
         project_id: Option<String>,
-        user_id: String,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 }

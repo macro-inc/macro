@@ -10,11 +10,15 @@ use axum::{
 };
 
 use super::{ExtractorError, RequiredAccessLevel};
-use crate::domain::{
-    models::{
-        AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
+use crate::{
+    domain::{
+        models::{
+            AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
+            EntityType,
+        },
+        ports::EntityAccessService,
     },
-    ports::EntityAccessService,
+    inbound::axum_extractors::InternalUser,
 };
 use model::document::DocumentBasic;
 use model_user::axum_extractor::OptionalMacroUserExtractor;
@@ -58,6 +62,32 @@ where
             .extract()
             .await
             .map_err(|_| ExtractorError::Internal)?;
+
+        let internal_user: Option<Extension<InternalUser>> = if macro_user_id.is_none() {
+            parts
+                .extract()
+                .await
+                .map_err(|_| ExtractorError::Internal)?
+        } else {
+            None
+        };
+
+        if internal_user.is_some() {
+            return Ok(Self {
+                entity_access_receipt: EntityAccessReceipt {
+                    entity: Entity {
+                        entity_id: document_context.document_id.clone(),
+                        entity_type: EntityType::Document,
+                    },
+                    auth: EntityAccessAuth::Internal,
+                    entity_permission: EntityPermission::AccessLevel {
+                        access_level: AccessLevel::Owner,
+                    },
+                },
+                // access_level: AccessLevel::Owner,
+                _marker: PhantomData,
+            });
+        }
 
         // Check ownership only if authenticated
         if let Some(ref user_id) = macro_user_id

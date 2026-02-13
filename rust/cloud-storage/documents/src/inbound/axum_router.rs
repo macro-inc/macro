@@ -25,9 +25,7 @@ use model::document::response::GetDocumentResponse;
 use model::response::GenericSuccessResponse;
 use model::user::UserContext;
 use model_error_response::ErrorResponse;
-use models_permissions::share_permission::access_level::{
-    AccessLevel, OwnerAccessLevel, ViewAccessLevel,
-};
+use models_permissions::share_permission::access_level::{OwnerAccessLevel, ViewAccessLevel};
 use serde::Deserialize;
 use sqlx::PgPool;
 
@@ -190,7 +188,7 @@ pub async fn get_document_handler<T: DocumentService, Svc: EntityAccessService>(
 ) -> Result<Json<GetDocumentResponse>, DocumentError> {
     let response_data = state
         .service
-        .get_document(&user_context.user_id, &document_id, access.access_level)
+        .get_document(access.entity_access_receipt)
         .await?;
 
     Ok(Json(GetDocumentResponse {
@@ -223,9 +221,9 @@ pub async fn get_document_handler<T: DocumentService, Svc: EntityAccessService>(
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, _access, document_context), err)]
+#[tracing::instrument(skip(state, access, document_context), err)]
 pub async fn get_location_v3_handler<T: DocumentService, Svc: EntityAccessService>(
-    _access: DocumentAccessExtractor<ViewAccessLevel, Svc>,
+    access: DocumentAccessExtractor<ViewAccessLevel, Svc>,
     State(state): State<DocumentRouterState<T, Svc>>,
     Extension(document_context): Extension<DocumentBasic>,
     Path(Params { document_id }): Path<Params>,
@@ -233,7 +231,7 @@ pub async fn get_location_v3_handler<T: DocumentService, Svc: EntityAccessServic
 ) -> Result<Response<Body>, DocumentError> {
     let response_data = state
         .service
-        .get_document_location(&document_context, &document_id, params)
+        .get_document_location(&document_context, access.entity_access_receipt, params)
         .await?;
 
     let json_bytes = serde_json::to_vec(&response_data).unwrap();
@@ -263,9 +261,9 @@ pub async fn get_location_v3_handler<T: DocumentService, Svc: EntityAccessServic
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, _access, doc), err)]
+#[tracing::instrument(skip(state, access, doc), err)]
 pub async fn delete_document_handler<T: DocumentService, Svc: EntityAccessService>(
-    _access: DocumentAccessExtractor<OwnerAccessLevel, Svc>,
+    access: DocumentAccessExtractor<OwnerAccessLevel, Svc>,
     State(state): State<DocumentRouterState<T, Svc>>,
     user_context: Extension<UserContext>,
     doc: Extension<DocumentBasic>,
@@ -275,77 +273,8 @@ pub async fn delete_document_handler<T: DocumentService, Svc: EntityAccessServic
 
     state
         .service
-        .delete_document(
-            &document_id,
-            doc.project_id.clone(),
-            user_context.user_id.clone(),
-        )
+        .delete_document(access.entity_access_receipt, doc.project_id.clone())
         .await?;
 
     Ok(Json(GenericSuccessResponse { success: true }))
-}
-
-/// Marker struct for internal service-to-service requests.
-///
-/// Middleware inserts this into request extensions for authenticated internal callers.
-#[derive(Debug, Clone)]
-pub struct InternalUser {
-    /// The access level granted to the internal user.
-    pub access_level: AccessLevel,
-}
-
-/// Handler for `GET /documents/:document_id` (internal route).
-///
-/// Accepts either a regular access extractor or an internal user extension.
-#[tracing::instrument(skip(state, user_context, access), fields(user_id=?user_context.user_id))]
-pub async fn internal_get_document_handler<T: DocumentService, Svc: EntityAccessService>(
-    State(state): State<DocumentRouterState<T, Svc>>,
-    access: axum_extra::either::Either<
-        DocumentAccessExtractor<ViewAccessLevel, Svc>,
-        Option<Extension<InternalUser>>,
-    >,
-    user_context: Extension<UserContext>,
-    Path(Params { document_id }): Path<Params>,
-) -> Result<Json<GetDocumentResponse>, DocumentError> {
-    let access_level = match access {
-        axum_extra::either::Either::E1(extractor) => extractor.access_level,
-        axum_extra::either::Either::E2(Some(Extension(InternalUser { access_level }))) => {
-            access_level
-        }
-        axum_extra::either::Either::E2(None) => return Err(DocumentError::Unauthorized),
-    };
-
-    let response_data = state
-        .service
-        .get_document(&user_context.user_id, &document_id, access_level)
-        .await?;
-
-    Ok(Json(GetDocumentResponse {
-        error: false,
-        data: response_data,
-    }))
-}
-
-/// Handler for `GET /documents/:document_id/location_v3` (internal route).
-///
-/// Delegates to the document service without access checking.
-#[tracing::instrument(skip(state, document_context))]
-pub async fn internal_get_location_v3_handler<T: DocumentService, Svc: EntityAccessService>(
-    State(state): State<DocumentRouterState<T, Svc>>,
-    Extension(document_context): Extension<DocumentBasic>,
-    Path(Params { document_id }): Path<Params>,
-    Query(params): Query<LocationQueryParams>,
-) -> Result<Response<Body>, DocumentError> {
-    let response_data = state
-        .service
-        .get_document_location(&document_context, &document_id, params)
-        .await?;
-
-    let json_bytes = serde_json::to_vec(&response_data).unwrap();
-    Ok(Response::builder()
-        .status(StatusCode::OK)
-        .header("content-type", "application/json")
-        .header("Cache-Control", "max-age=300")
-        .body(Body::from(json_bytes))
-        .unwrap())
 }

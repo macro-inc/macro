@@ -8,6 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::anyhow;
 use cloudfront_sign::{SignedOptions, get_signed_url};
+use entity_access::domain::models::{EntityAccessAuth, EntityAccessReceipt};
 use model::document::response::{
     GetDocumentResponseData, LocationResponseData, LocationResponseV3,
 };
@@ -16,7 +17,6 @@ use model::document::{
     build_cloud_storage_bucket_document_key,
 };
 use model::response::PresignedUrl;
-use models_permissions::share_permission::access_level::AccessLevel;
 use sqlx::PgPool;
 use tracing;
 
@@ -247,33 +247,42 @@ impl<R: DocumentRepo> DocumentService for DocumentServiceImpl<R> {
     #[tracing::instrument(err, skip(self))]
     async fn get_document(
         &self,
-        user_id: &str,
-        document_id: &str,
-        access_level: AccessLevel,
+        entity_access_receipt: EntityAccessReceipt,
     ) -> Result<GetDocumentResponseData, DocumentError> {
+        let document_id = entity_access_receipt.entity.entity_id;
         // get access level
         // check if >= view
         // do work
-        let document_metadata =
-            self.repo
-                .get_document_metadata(document_id)
-                .await
-                .map_err(|e| {
-                    let err: anyhow::Error = e.into();
-                    if err.to_string().contains(
-                        "no rows returned by a query that expected to return at least one row",
-                    ) {
-                        DocumentError::NotFound(document_id.to_string())
-                    } else {
-                        DocumentError::Internal(err)
-                    }
-                })?;
-
-        let view_location = self
+        let document_metadata = self
             .repo
-            .get_user_view_location(user_id, document_id)
+            .get_document_metadata(&document_id)
             .await
-            .map_err(|e| DocumentError::Internal(e.into()))?;
+            .map_err(|e| {
+                let err: anyhow::Error = e.into();
+                if err.to_string().contains(
+                    "no rows returned by a query that expected to return at least one row",
+                ) {
+                    DocumentError::NotFound(document_id.clone())
+                } else {
+                    DocumentError::Internal(err)
+                }
+            })?;
+
+        let view_location = match entity_access_receipt.auth {
+            EntityAccessAuth::Authenticated(user_id) => self
+                .repo
+                .get_user_view_location(user_id.as_ref(), &document_id)
+                .await
+                .map_err(|e| DocumentError::Internal(e.into()))?,
+            EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => None,
+        };
+
+        let access_level = match entity_access_receipt.entity_permission {
+            entity_access::domain::models::EntityPermission::AccessLevel { access_level } => {
+                access_level
+            }
+            _ => unreachable!(),
+        };
 
         Ok(GetDocumentResponseData {
             document_metadata,
@@ -286,7 +295,7 @@ impl<R: DocumentRepo> DocumentService for DocumentServiceImpl<R> {
     async fn get_document_location(
         &self,
         document_context: &DocumentBasic,
-        document_id: &str,
+        entity_access_receipt: EntityAccessReceipt,
         params: LocationQueryParams,
     ) -> Result<LocationResponseV3, DocumentError> {
         let file_type = document_context
@@ -294,9 +303,11 @@ impl<R: DocumentRepo> DocumentService for DocumentServiceImpl<R> {
             .as_deref()
             .and_then(|f| FileType::from_str(f).ok());
 
+        let document_id = entity_access_receipt.entity.entity_id;
+
         // For markdown files, check sync service first
         if matches!(file_type, Some(FileType::Md)) {
-            match self.try_get_from_sync_service(document_id).await {
+            match self.try_get_from_sync_service(&document_id).await {
                 Ok(Some(sync_service_metadata)) => {
                     return Ok(LocationResponseV3::SyncServiceContent {
                         metadata: document_context.clone(),
@@ -317,7 +328,7 @@ impl<R: DocumentRepo> DocumentService for DocumentServiceImpl<R> {
         let response_data = self
             .get_presigned_url_by_type(
                 owner,
-                document_id,
+                &document_id,
                 file_type,
                 params.document_version_id,
                 params.get_converted_docx_url.unwrap_or(false),
@@ -347,24 +358,28 @@ impl<R: DocumentRepo> DocumentService for DocumentServiceImpl<R> {
     #[tracing::instrument(err, skip(self))]
     async fn delete_document(
         &self,
-        document_id: &str,
+        entity_access_receipt: EntityAccessReceipt,
         project_id: Option<String>,
-        user_id: String,
     ) -> Result<(), DocumentError> {
         self.repo
-            .soft_delete_document(document_id)
+            .soft_delete_document(&entity_access_receipt.entity.entity_id)
             .await
             .map_err(|e| DocumentError::Internal(e.into()))?;
 
-        macro_project_utils::update_project_modified(
-            &self.db,
-            macro_project_utils::ProjectModifiedArgs {
-                project_id,
-                old_project_id: None::<String>,
-                user_id,
-            },
-        )
-        .await;
+        match entity_access_receipt.auth {
+            EntityAccessAuth::Authenticated(macro_user_id) => {
+                macro_project_utils::update_project_modified(
+                    &self.db,
+                    macro_project_utils::ProjectModifiedArgs {
+                        project_id,
+                        old_project_id: None::<String>,
+                        user_id: macro_user_id.as_ref().to_string(),
+                    },
+                )
+                .await;
+            }
+            EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => (),
+        }
 
         Ok(())
     }

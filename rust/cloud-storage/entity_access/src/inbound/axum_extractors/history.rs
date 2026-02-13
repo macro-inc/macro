@@ -4,12 +4,12 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use axum::{
-    RequestPartsExt, async_trait,
+    Extension, RequestPartsExt, async_trait,
     extract::{FromRef, FromRequestParts, Path},
     http::request::Parts,
 };
 
-use super::{ExtractorError, RequiredAccessLevel};
+use super::{ExtractorError, InternalUser, RequiredAccessLevel};
 use crate::domain::{
     models::{
         AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
@@ -65,6 +65,31 @@ where
         let entity_type: EntityType = item_type
             .parse()
             .map_err(|_| ExtractorError::BadRequest("Invalid item_type"))?;
+
+        let internal_user: Option<Extension<InternalUser>> = if macro_user_id.is_none() {
+            parts
+                .extract()
+                .await
+                .map_err(|_| ExtractorError::Internal)?
+        } else {
+            None
+        };
+
+        if internal_user.is_some() {
+            return Ok(Self {
+                entity_access_receipt: EntityAccessReceipt {
+                    entity: Entity {
+                        entity_id: item_id,
+                        entity_type,
+                    },
+                    auth: EntityAccessAuth::Internal,
+                    entity_permission: EntityPermission::AccessLevel {
+                        access_level: AccessLevel::Owner,
+                    },
+                },
+                _marker: PhantomData,
+            });
+        }
 
         let required_level = T::required_level();
         // Check access based on auth state

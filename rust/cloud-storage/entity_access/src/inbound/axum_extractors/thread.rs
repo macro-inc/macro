@@ -9,7 +9,7 @@ use axum::{
     http::request::Parts,
 };
 
-use super::{ExtractorError, RequiredAccessLevel};
+use super::{ExtractorError, InternalUser, RequiredAccessLevel};
 use crate::domain::{
     models::{
         AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
@@ -57,6 +57,31 @@ where
             .extract()
             .await
             .map_err(|_| ExtractorError::Internal)?;
+
+        let internal_user: Option<Extension<InternalUser>> = if macro_user_id.is_none() {
+            parts
+                .extract()
+                .await
+                .map_err(|_| ExtractorError::Internal)?
+        } else {
+            None
+        };
+
+        if internal_user.is_some() {
+            return Ok(Self {
+                entity_access_receipt: EntityAccessReceipt {
+                    entity: Entity {
+                        entity_id: thread_context.thread_id.clone(),
+                        entity_type: EntityType::EmailThread,
+                    },
+                    auth: EntityAccessAuth::Internal,
+                    entity_permission: EntityPermission::AccessLevel {
+                        access_level: AccessLevel::Owner,
+                    },
+                },
+                _marker: PhantomData,
+            });
+        }
 
         let required_level = T::required_level();
         // Check access based on auth state

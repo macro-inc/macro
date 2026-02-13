@@ -8,7 +8,7 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
-pub(crate) use documents_hex::inbound::axum_router::InternalUser;
+pub(crate) use entity_access::inbound::axum_extractors::InternalUser;
 use model::user::UserContext;
 use models_permissions::share_permission::access_level::AccessLevel;
 use reqwest::header::ToStrError;

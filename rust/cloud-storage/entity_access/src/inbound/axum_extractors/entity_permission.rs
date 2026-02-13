@@ -4,14 +4,16 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use axum::{
-    RequestPartsExt, async_trait,
+    Extension, RequestPartsExt, async_trait,
     extract::{FromRef, FromRequestParts, Path},
     http::request::Parts,
 };
 
-use super::ExtractorError;
+use super::{ExtractorError, InternalUser};
 use crate::domain::{
-    models::{Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType},
+    models::{
+        AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
+    },
     ports::EntityAccessService,
 };
 use model_user::axum_extractor::OptionalMacroUserExtractor;
@@ -64,6 +66,32 @@ where
             .map_err(|_| ExtractorError::BadRequest("Missing entity_type or entity_id in path"))?;
 
         let parsed_type = parse_entity_type(&entity_type)?;
+
+        let internal_user: Option<Extension<InternalUser>> = if macro_user_id.is_none() {
+            parts
+                .extract()
+                .await
+                .map_err(|_| ExtractorError::Internal)?
+        } else {
+            None
+        };
+
+        if internal_user.is_some() {
+            return Ok(Self {
+                entity_access_receipt: EntityAccessReceipt {
+                    entity: Entity {
+                        entity_id,
+                        entity_type: parsed_type,
+                    },
+                    auth: EntityAccessAuth::Internal,
+                    entity_permission: EntityPermission::AccessLevel {
+                        access_level: AccessLevel::Owner,
+                    },
+                },
+                _marker: PhantomData,
+            });
+        }
+
         let user_org_id = user_context.organization_id.map(|id| id as i64);
 
         let permission = match macro_user_id.as_ref() {

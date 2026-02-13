@@ -70,6 +70,8 @@ pub enum EntityAccessAuth {
     Authenticated(MacroUserId<Lowercase<'static>>),
     /// The user is unauthenticated
     Unauthenticated,
+    /// Internally authenticated
+    Internal,
 }
 
 /// Represents that a given user has a given permission for the provided id.
