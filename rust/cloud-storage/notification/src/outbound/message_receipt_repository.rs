@@ -6,7 +6,7 @@
 #[cfg(test)]
 mod test;
 
-use crate::domain::models::email_notification_digest::ports::MessageReceiptRepo;
+use crate::domain::models::email_notification_digest::ports::{MessageId, MessageReceiptRepo};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
@@ -32,7 +32,7 @@ impl DbMessageReceiptRepository {
 impl MessageReceiptRepo for DbMessageReceiptRepository {
     async fn record_message_id(
         &self,
-        message_id: String,
+        message_id: MessageId,
         user_id: MacroUserIdStr<'_>,
         notification_id: Uuid,
     ) -> Result<(), Report> {
@@ -44,7 +44,7 @@ impl MessageReceiptRepo for DbMessageReceiptRepository {
             VALUES ($1, $2, $3)
             ON CONFLICT (message_id) DO NOTHING
             "#,
-            message_id,
+            message_id.0.as_str(),
             user_id_str,
             notification_id
         )
@@ -56,7 +56,7 @@ impl MessageReceiptRepo for DbMessageReceiptRepository {
 
     async fn mark_message_failed(
         &self,
-        message_id: String,
+        message_id: MessageId,
     ) -> Result<(MacroUserIdStr<'static>, Uuid), Report> {
         let row = sqlx::query!(
             r#"
@@ -65,7 +65,7 @@ impl MessageReceiptRepo for DbMessageReceiptRepository {
             WHERE message_id = $1
             RETURNING user_id, notification_id
             "#,
-            message_id
+            message_id.0.as_str()
         )
         .fetch_one(&self.db)
         .await?;

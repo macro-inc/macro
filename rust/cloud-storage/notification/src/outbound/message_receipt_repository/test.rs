@@ -17,7 +17,7 @@ async fn test_record_message_id(pool: Pool<Postgres>) {
     let notification_id = uuid::Uuid::parse_str("0193b1ea-c742-7589-893b-2b4a509c1e77").unwrap();
 
     let result = repo
-        .record_message_id("new-msg-1".into(), user, notification_id)
+        .record_message_id(MessageId("new-msg-1".to_string()), user, notification_id)
         .await;
 
     assert!(result.is_ok());
@@ -43,13 +43,21 @@ async fn test_record_message_id_idempotent(pool: Pool<Postgres>) {
     let notification_id = uuid::Uuid::parse_str("0193b1ea-c742-7589-893b-2b4a509c1e77").unwrap();
 
     // First insert
-    repo.record_message_id("idempotent-msg".into(), user.copied(), notification_id)
-        .await
-        .unwrap();
+    repo.record_message_id(
+        MessageId("idempotent-msg".to_string()),
+        user.copied(),
+        notification_id,
+    )
+    .await
+    .unwrap();
 
     // Second insert with same message_id should not error
     let result = repo
-        .record_message_id("idempotent-msg".into(), user, notification_id)
+        .record_message_id(
+            MessageId("idempotent-msg".to_string()),
+            user,
+            notification_id,
+        )
         .await;
 
     assert!(result.is_ok());
@@ -63,7 +71,10 @@ async fn test_mark_message_failed(pool: Pool<Postgres>) {
     let repo = DbMessageReceiptRepository::new(pool.clone());
 
     // msg-1 is inserted by fixture and not failed
-    let (user_id, notification_id) = repo.mark_message_failed("msg-1".into()).await.unwrap();
+    let (user_id, notification_id) = repo
+        .mark_message_failed(MessageId("msg-1".to_string()))
+        .await
+        .unwrap();
 
     assert_eq!(user_id.email_part().as_ref(), "receipt_user@test.com");
     assert_eq!(
@@ -110,7 +121,9 @@ async fn test_did_all_messages_fail_returns_true_when_all_failed(pool: Pool<Post
     let notification_id = uuid::Uuid::parse_str("0193b1ea-c742-7589-893b-2b4a509c1e77").unwrap();
 
     // Mark msg-1 as failed too (msg-2 is already failed in fixture)
-    repo.mark_message_failed("msg-1".into()).await.unwrap();
+    repo.mark_message_failed(MessageId("msg-1".to_string()))
+        .await
+        .unwrap();
 
     let result = repo
         .did_all_messages_fail(user, notification_id)

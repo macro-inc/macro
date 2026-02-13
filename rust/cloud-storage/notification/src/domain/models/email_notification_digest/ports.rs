@@ -82,13 +82,16 @@ pub trait LastOnlineChecker: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Duration, Report>> + Send;
 }
 
+/// The id of a message that was send as a push notification to SNS
+pub struct MessageId(pub String);
+
 /// trait for storage a message_id associated with a user_notification PK
 /// the user notification PK is (notification uuid, userid)
 pub trait MessageReceiptRepo {
     /// create a record in the database which associates the PK message_id with the FK to user_notifications (user_id, notification_id)
     fn record_message_id(
         &self,
-        message_id: String,
+        message_id: MessageId,
         user_id: MacroUserIdStr<'_>,
         notification_id: Uuid,
     ) -> impl Future<Output = Result<(), Report>> + Send;
@@ -96,7 +99,7 @@ pub trait MessageReceiptRepo {
     /// given a message_id mark the row in the database as failed and then return the associated FK for the failed record
     fn mark_message_failed(
         &self,
-        message_id: String,
+        message_id: MessageId,
     ) -> impl Future<Output = Result<(MacroUserIdStr<'static>, Uuid), Report>> + Send;
 
     /// given the user_notification FK, check if all messages for this notification have failed
@@ -105,4 +108,18 @@ pub trait MessageReceiptRepo {
         user_id: MacroUserIdStr<'_>,
         notification_id: Uuid,
     ) -> impl Future<Output = Result<bool, Report>> + Send;
+}
+
+/// trait which abstracts away the sending of a notification
+pub trait NotificationSendChecker {
+    /// the type returned when the notification was sent successfully
+    type Ok;
+    /// the error type of the request
+    type Err;
+
+    /// try to send the notification
+    fn send_notification(self) -> impl Future<Output = Result<Self::Ok, Self::Err>> + Send;
+
+    /// extract the message Id from the return value
+    fn extract_message_id(res: &Self::Ok) -> MessageId;
 }

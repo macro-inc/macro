@@ -7,11 +7,15 @@
 //! 3. If no account: decide between single send (for invites) or batch send
 //! 4. If account exists: check push notification settings
 
-use crate::domain::models::{
-    Notification, TaggedContent, UserNotificationRow,
-    email_notification_digest::ports::{
-        DigestBatcher, LastOnlineChecker, PushNotificationChecker, UserExistenceChecker,
+use crate::domain::{
+    models::{
+        Notification, TaggedContent, UserNotificationRow,
+        email_notification_digest::ports::{
+            DigestBatcher, LastOnlineChecker, MessageReceiptRepo, NotificationSendChecker,
+            PushNotificationChecker, UserExistenceChecker,
+        },
     },
+    ports::NotificationSender,
 };
 use either::Either;
 use macro_user_id::cowlike::CowLike;
@@ -223,7 +227,7 @@ pub struct PushNotificationsEnabled {
     /// to be retrieved during the SNS event handling.
     /// The deserialization cannot handle some specific T it needs to handle the general case
     /// of some json value
-    inner: UserNotificationRow<serde_json::Value>,
+    inner: UserNotificationRow<TaggedContent<serde_json::Value>>,
 }
 
 impl PushNotificationsEnabled {
@@ -235,7 +239,7 @@ impl PushNotificationsEnabled {
 
     /// assert that the push notification failed to deliver and therefore
     /// we should queue a bulk email notification
-    fn assert_failed(self) -> BatchSend<UserNotificationRow<serde_json::Value>> {
+    fn assert_failed(self) -> BatchSend<UserNotificationRow<TaggedContent<serde_json::Value>>> {
         BatchSend(self.inner)
     }
 }
@@ -261,7 +265,11 @@ impl<T: Notification> AccountExists<T> {
             .await
         {
             Ok(true) => Ok(Either::Left(PushNotificationsEnabled {
-                inner: self.prev.inner.into_json().expect("serde json cannot fail"),
+                inner: self
+                    .prev
+                    .inner
+                    .map(TaggedContent::new)
+                    .map(TaggedContent::serialize),
             })),
             Ok(false) => Ok(Either::Right(PushNotificationsDisabled { prev: self })),
             Err(e) => Err(e),
@@ -289,7 +297,9 @@ impl<T: Notification> PushNotificationsDisabled<T> {
 }
 
 /// a struct which is able to drive the state machine to a decision on a given notification
-pub struct StateMachineDriver<U, N, O, B> {
+/// This state machine does not model the entire decision tree because it runs at a place in the program
+/// where not all actions have been taken yet.
+pub struct StateMachineDriverA<U, N, O, B> {
     /// adapter which implements [UserExistenceChecker]
     pub user_checker: U,
     /// adapter which implements [PushNotificationChecker]
@@ -312,7 +322,7 @@ pub struct StateMachineDriver<U, N, O, B> {
 }
 
 /// the initial decision created during notification ingress
-pub enum StateMachineInitialDecision<T> {
+pub enum StateMachineDecisionA<T> {
     /// we will not send a batch email
     DontSend(DontSend),
     /// we already queued a batch email to send
@@ -328,7 +338,7 @@ pub enum StateMachineInitialDecision<T> {
     SendImmediate(SingleSend<UserNotificationRow<T>>),
 }
 
-impl<U, N, O, B> StateMachineDriver<U, N, O, B>
+impl<U, N, O, B> StateMachineDriverA<U, N, O, B>
 where
     U: UserExistenceChecker,
     N: PushNotificationChecker,
@@ -341,11 +351,11 @@ where
     pub async fn ingest<T: Notification>(
         &self,
         notif: UserNotificationRow<T>,
-    ) -> Result<StateMachineInitialDecision<T>, Report> {
+    ) -> Result<StateMachineDecisionA<T>, Report> {
         let allowed = match self.block_list.notification_is_allowed(notif) {
             Either::Left(l) => l,
             Either::Right(r) => {
-                return Ok(StateMachineInitialDecision::DontSend(r));
+                return Ok(StateMachineDecisionA::DontSend(r));
             }
         };
         let push_notification_state = match allowed
@@ -358,17 +368,17 @@ where
                     .await?
             }
             Either::Right(Either::Left(rl)) => {
-                return Ok(StateMachineInitialDecision::SendImmediate(rl));
+                return Ok(StateMachineDecisionA::SendImmediate(rl));
             }
             Either::Right(Either::Right(rr)) => {
-                return Ok(StateMachineInitialDecision::BatchWasQueued(
+                return Ok(StateMachineDecisionA::BatchWasQueued(
                     self.inner_store_batch(rr).await?,
                 ));
             }
         };
         let last_online = match push_notification_state {
             Either::Left(l) => {
-                return Ok(StateMachineInitialDecision::Indeterminate(BatchSend(l)));
+                return Ok(StateMachineDecisionA::Indeterminate(BatchSend(l)));
             }
             Either::Right(r) => {
                 r.check_last_online_time(&self.online_checker, self.online_duration_threshold)
@@ -377,9 +387,9 @@ where
         };
         Ok(match last_online {
             Either::Left(l) => {
-                StateMachineInitialDecision::BatchWasQueued(self.inner_store_batch(l).await?)
+                StateMachineDecisionA::BatchWasQueued(self.inner_store_batch(l).await?)
             }
-            Either::Right(r) => StateMachineInitialDecision::DontSend(r),
+            Either::Right(r) => StateMachineDecisionA::DontSend(r),
         })
     }
 
@@ -393,5 +403,59 @@ where
             .add_to_digest(&notif, self.digest_window)
             .await?;
         Ok(BatchSend(()))
+    }
+}
+
+/// This state machine driver is able to pick up at a different place in the program
+/// Once we know what the delivery state of a push Notification to a users device is
+pub struct StateMachineDriverB<B, R> {
+    /// some R that implements [MessageReceiptRepo]
+    pub message_receipt_repo: R,
+    /// Some B that implements [DigestBatcher]
+    pub digest_batcher: B,
+    /// the window of time in which the digest emails are collected for before sending
+    pub digest_window: Duration,
+}
+
+/// the request used to call [StateMachineDriverB::continue_machine]
+pub struct ResumeMachineBRequest<N> {
+    /// the notification enabled value as received from [StateMachineDecisionA::Indeterminate]
+    pub notification_enabled: PushNotificationsEnabled,
+    /// a value which abstracts away the sending of the notification
+    /// implements [NotificationSendChecker]
+    pub send_notif: N,
+}
+
+impl<B, R> StateMachineDriverB<B, R>
+where
+    B: DigestBatcher,
+    R: MessageReceiptRepo,
+{
+    /// this picks up where we left off if we received a [StateMachineDecisionA::Indeterminate]
+    /// We call this when its time to send the notification, on the egress side of the queue
+    pub async fn continue_machine<N: NotificationSendChecker>(
+        &self,
+        req: ResumeMachineBRequest<N>,
+    ) -> Result<(N::Ok, DontSend), (N::Err, Result<BatchSend<()>, Report>)> {
+        let ResumeMachineBRequest {
+            notification_enabled,
+            send_notif,
+        } = req;
+        let res = send_notif.send_notification().await;
+
+        match res {
+            // the notification succeeded (probably) so we dont send a bulk email
+            Ok(r) => Ok((r, DontSend(()))),
+            // the notification failed to send, queue the batch
+            Err(e) => {
+                let next = notification_enabled.assert_failed();
+                let res = self
+                    .digest_batcher
+                    .add_to_digest(&next.0, self.digest_window)
+                    .await
+                    .map(BatchSend);
+                Err((e, res))
+            }
+        }
     }
 }
