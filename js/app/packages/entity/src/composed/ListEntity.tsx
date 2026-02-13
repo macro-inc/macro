@@ -33,6 +33,9 @@ import {
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { mergeRefs } from '@solid-primitives/refs';
 
+const hasSearchContentHits = (entity: EntityData) =>
+  isSearchEntity(entity) && !!entity.search.contentHitData?.length;
+
 interface ListEntityProps {
   entity: WithNotification<EntityData>;
   onClick?: (event: MouseEvent) => void;
@@ -136,7 +139,7 @@ function NarrowLayout(props: LayoutProps) {
         when={
           (isEmailEntity(props.entity) || isChannelEntity(props.entity)) &&
           !props.hasNotifications &&
-          !isSearchEntity(props.entity)
+          !hasSearchContentHits(props.entity)
         }
       >
         <Entity.Slot placement="body" class="flex flex-col gap-1 pb-3 -mt-1">
@@ -226,7 +229,7 @@ function WideLayout(props: LayoutProps) {
             {(entity) => (
               <>
                 <Show
-                  when={!isSearchEntity(entity())}
+                  when={!hasSearchContentHits(entity())}
                   fallback={
                     <>
                       <span class="truncate">
@@ -381,7 +384,7 @@ export function ListEntity(props: ListEntityProps) {
             <Show
               when={
                 isWithNotification(props.entity) &&
-                !isSearchEntity(props.entity)
+                !hasSearchContentHits(props.entity)
               }
             >
               <Entity.Notification.Stacks
@@ -393,7 +396,7 @@ export function ListEntity(props: ListEntityProps) {
         </div>
       </Show>
 
-      <Show when={isSearchEntity(props.entity)}>
+      <Show when={hasSearchContentHits(props.entity)}>
         <div class="flex gap-2 w-full h-full items-center text-sm px-2 pb-1 -mt-2 min-w-0 overflow-hidden">
           <div class={cn('min-w-0 flex-1 truncate ml-4 @lg/entity:ml-6')}>
             <Entity.Search.ContentHits
