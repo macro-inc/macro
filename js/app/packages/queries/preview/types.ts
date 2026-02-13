@@ -1,4 +1,5 @@
 import type { SubType } from '@entity';
+import type { DateValue } from '@core/util/date';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import type { Message } from '@service-comms/generated/models';
 import type { ItemType } from '@service-storage/client';
@@ -17,7 +18,7 @@ type BasePreviewItem<T extends ItemType = ItemType> = {
   id: string;
   type: T;
   owner?: string;
-  updatedAt?: number;
+  updatedAt?: DateValue | null;
 };
 
 /** this is a catch-all type for access items that do not have a more specific type */

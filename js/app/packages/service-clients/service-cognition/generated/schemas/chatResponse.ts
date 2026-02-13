@@ -6,9 +6,11 @@
  */
 import type { ChatAttachmentWithName } from './chatAttachmentWithName';
 import type { ChatMessageWithAttachments } from './chatMessageWithAttachments';
+import type { ChatResponseCreatedAt } from './chatResponseCreatedAt';
 import type { ChatResponseModel } from './chatResponseModel';
 import type { ChatResponseProjectId } from './chatResponseProjectId';
 import type { ChatResponseTokenCount } from './chatResponseTokenCount';
+import type { ChatResponseUpdatedAt } from './chatResponseUpdatedAt';
 import type { ChatResponseWebCitationsItemItem1Item } from './chatResponseWebCitationsItemItem1Item';
 import type { Model } from './model';
 
@@ -21,7 +23,7 @@ export interface ChatResponse {
   /** Available models for the chat */
   availableModels: Model[];
   /** The time the chat was created */
-  createdAt: number;
+  createdAt?: ChatResponseCreatedAt;
   /** The chat uuid */
   id: string;
   /** whether the chat is persistent or not */
@@ -36,7 +38,7 @@ export interface ChatResponse {
   /** Current number of tokens in the chat */
   tokenCount?: ChatResponseTokenCount;
   /** The time the chat was last updated */
-  updatedAt: number;
+  updatedAt?: ChatResponseUpdatedAt;
   /** Who the chat belongs to */
   userId: string;
   /** message_id - web citation list */

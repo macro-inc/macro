@@ -53,8 +53,6 @@ export const useSearchSoupQuery = (
   const enabled = createMemo(() => {
     if (options?.().enabled === false) return false;
 
-    if (!terms().length) return true;
-
     return ENABLE_SEARCH_SERVICE && validSearchTerms();
   });
 

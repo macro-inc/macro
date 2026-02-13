@@ -19,6 +19,7 @@
         "@corvu/dialog": "^0.2.4",
         "@corvu/resizable": "^0.2.5",
         "@corvu/tooltip": "^0.2.2",
+        "@date-fns/tz": "^1.4.1",
         "@floating-ui/dom": "^1.7.4",
         "@fontsource-variable/inter": "^5.2.8",
         "@inkibra/tauri-plugins": "git+https://github.com/seanaye/tauri-plugins.git#0c932ffd3202145b40645246d87a38deb72ba09c",
@@ -595,6 +596,8 @@
     "@datadog/browser-rum-core": ["@datadog/browser-rum-core@6.22.0", "", { "dependencies": { "@datadog/browser-core": "6.22.0" } }, "sha512-Du6poAHIHNFk5Cz3YBxNTnaCGrRJVTzCrOIpcfwPajbUYYGw1VT0KKyq5OBUIaxNFpPTv+UuIoI5689a0Tyb2g=="],
 
     "@datadog/datadog-ci": ["@datadog/datadog-ci@3.7.0", "", { "dependencies": { "@aws-sdk/client-cloudwatch-logs": "^3.709.0", "@aws-sdk/client-iam": "^3.709.0", "@aws-sdk/client-lambda": "^3.709.0", "@aws-sdk/client-sfn": "^3.709.0", "@aws-sdk/core": "^3.709.0", "@aws-sdk/credential-provider-ini": "^3.709.0", "@aws-sdk/credential-providers": "^3.709.0", "@google-cloud/logging": "^11.1.0", "@google-cloud/run": "^1.4.0", "@smithy/property-provider": "^2.0.12", "@smithy/util-retry": "^2.0.4", "@types/datadog-metrics": "0.6.1", "ajv": "^8.12.0", "ajv-formats": "^2.1.1", "async-retry": "1.3.1", "axios": "^1.8.4", "chalk": "3.0.0", "clipanion": "^3.2.1", "datadog-metrics": "0.9.3", "deep-extend": "0.6.0", "deep-object-diff": "^1.1.9", "fast-levenshtein": "^3.0.0", "fast-xml-parser": "^4.4.1", "form-data": "4.0.0", "fuzzy": "^0.1.3", "glob": "^10.4.5", "google-auth-library": "^9.12.0", "inquirer": "^8.2.5", "inquirer-checkbox-plus-prompt": "^1.4.2", "js-yaml": "3.13.1", "jszip": "^3.10.1", "ora": "5.4.1", "packageurl-js": "^2.0.1", "proxy-agent": "^6.4.0", "semver": "^7.5.3", "simple-git": "3.16.0", "ssh2": "^1.15.0", "ssh2-streams": "0.4.10", "sshpk": "1.16.1", "terminal-link": "2.1.1", "tiny-async-pool": "^2.1.0", "typanion": "^3.14.0", "upath": "^2.0.1", "uuid": "^9.0.0", "ws": "^7.5.10", "xml2js": "0.5.0", "yamux-js": "0.1.2" }, "bin": "dist/cli.js" }, "sha512-bEWQvb3on8S0I+C77TWX+vuCXxlH7QDwFQftRuexCeJbe2UHr8uDy9Yq+jRlUdtKi/TJXb9w8PDvzAeyVpSIRA=="],
+
+    "@date-fns/tz": ["@date-fns/tz@1.4.1", "", {}, "sha512-P5LUNhtbj6YfI3iJjw5EL9eUAG6OitD0W3fWQcpQjDRc/QIsL0tRNuO1PcDvPccWL1fSTXXdE1ds+l95DV/OFA=="],
 
     "@dimforge/rapier3d-compat": ["@dimforge/rapier3d-compat@0.12.0", "", {}, "sha512-uekIGetywIgopfD97oDL5PfeezkFpNhwlzlaEYNOA0N6ghdsOvh/HYjSMek5Q2O1PYvRSDFcqFVJl4r4ZBwOow=="],
 

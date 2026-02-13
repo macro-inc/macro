@@ -16,7 +16,6 @@ export const queryClient = new QueryClient({
 });
 
 const buster = import.meta.env.__APP_VERSION__ ?? 'dev';
-const SEVEN_DAYS_MS = 1000 * 60 * 60 * 24 * 7;
 
 // Clean up orphaned v0 databases from the old whole-cache persistence format
 try {
@@ -31,7 +30,7 @@ setupQueryPersistence({
       store: createPerQueryIDBStore({
         dbName: createPersistenceKey('channels', 1),
       }),
-      maxAgeMs: SEVEN_DAYS_MS,
+      maxAge: { value: 7, unit: 'd' },
       buster,
       shouldPersist: (key) => partialMatchKey(key, ['channel']),
     },
@@ -39,7 +38,7 @@ setupQueryPersistence({
       store: createPerQueryIDBStore({
         dbName: createPersistenceKey('email-threads', 1),
       }),
-      maxAgeMs: SEVEN_DAYS_MS,
+      maxAge: { value: 7, unit: 'd' },
       buster,
       shouldPersist: (key) => partialMatchKey(key, ['email', 'threadMessages']),
     },

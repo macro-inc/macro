@@ -322,7 +322,7 @@ function RightbarChatArea(props: { isBig?: boolean }) {
             class="size-full overflow-y-auto overflow-x-hidden scroll-smooth flex justify-center scrollbar-hidden"
             ref={setMessagesContainerRef}
           >
-            <div class="w-full macro-message-width">
+            <div class="w-full macro-message-width macro-message-padding">
               <ChatMessages messageActions={undefined} />
             </div>
           </div>
@@ -454,7 +454,7 @@ export function Rightbar(props: {
           {props.children}
 
           <div class="w-full">
-            <div class="flex-shrink-0 pt-2 macro-message-width mx-auto">
+            <div class="flex-shrink-0 pt-2 macro-message-width macro-message-padding mx-auto">
               <ChatInput
                 markdown={chatMarkdownArea}
                 chatId={props.chatId}

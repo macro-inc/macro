@@ -1,6 +1,6 @@
 import type { PortalScope } from '@core/component/ScopedPortal';
 import type { EditorType } from '@lexical-core';
-import type { Item } from '@service-storage/generated/schemas/item';
+import type { HistoryItem } from '@queries/history/types';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import {
   COMMAND_PRIORITY_CRITICAL,
@@ -85,7 +85,7 @@ export interface MarkdownTextareaProps {
   onRemoveMention?: (mention: ItemMention) => void;
   portalScope?: PortalScope;
   useBlockBoundary?: boolean;
-  onDocumentMention?: (mention: Item) => void;
+  onDocumentMention?: (mention: HistoryItem) => void;
   onEscape?: (e: KeyboardEvent) => boolean;
   onTab?: (e: KeyboardEvent) => boolean;
   captureEditor?: (editor: LexicalEditor) => void;

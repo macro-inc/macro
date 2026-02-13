@@ -26,19 +26,6 @@ class FetchDocumentsError extends Error {
   }
 }
 
-export async function handleFetchResponse(
-  response: Response,
-  errorMessage: string
-): Promise<void> {
-  if (!response.ok) {
-    const errorData =
-      response.status === 401
-        ? await response.json().catch(() => undefined)
-        : undefined;
-    throw new FetchDocumentsError(errorMessage, response, errorData);
-  }
-}
-
 export async function withApiTokenRetry<T>(
   authQuery: ReturnType<typeof createApiTokenQuery>,
   fetchFn: (apiToken: string) => Promise<T>

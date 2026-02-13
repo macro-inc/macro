@@ -39,7 +39,6 @@ export function NotificationRenderer(props: NotificationRendererProps) {
     if (meta.tag !== 'new_email') return null;
     return { subject: meta.content.subject, snippet: meta.content.snippet };
   };
-
   return (
     <Show when={props.notification.notificationMetadata}>
       {(_metadata) => {

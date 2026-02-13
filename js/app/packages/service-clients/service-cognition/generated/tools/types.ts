@@ -199,11 +199,11 @@ export interface SearchToolResponse {
          * Metadata from the database. None if the document doesn't exist in the database.
          */
         metadata?: {
-          created_at: number;
-          deleted_at?: number | null;
+          created_at: string;
+          deleted_at?: string | null;
           project_id?: string | null;
-          updated_at: number;
-          viewed_at?: number | null;
+          updated_at: string;
+          viewed_at?: string | null;
         } | null;
         name: string;
         owner_id: string;
@@ -281,11 +281,11 @@ export interface SearchToolResponse {
          * Metadata from the database. None if the chat doesn't exist in the database.
          */
         metadata?: {
-          created_at: number;
-          deleted_at?: number | null;
+          created_at: string;
+          deleted_at?: string | null;
           project_id?: string | null;
-          updated_at: number;
-          viewed_at?: number | null;
+          updated_at: string;
+          viewed_at?: string | null;
         } | null;
         name: string;
         owner_id: string;
@@ -296,7 +296,7 @@ export interface SearchToolResponse {
         user_id: string;
       }
     | {
-        created_at: number;
+        created_at: string;
         /**
          * The search results for the document
          * This may be empty if the search result match was on the email subject only
@@ -375,7 +375,7 @@ export interface SearchToolResponse {
            * When the email message was sent
            * This is only present if the search result is on the message content
            */
-          sent_at?: number | null;
+          sent_at?: string | null;
         }[];
         /**
          * Standardized fields that all item types will share.
@@ -399,12 +399,12 @@ export interface SearchToolResponse {
          */
         thread_id: string;
         type: 'email';
-        updated_at: number;
+        updated_at: string;
         /**
          * The id of the owner of the email thread
          */
         user_id: string;
-        viewed_at?: number | null;
+        viewed_at?: string | null;
       }
     | {
         /**
@@ -420,7 +420,7 @@ export interface SearchToolResponse {
            * When the channel message was created
            * This is only prsent if the search result is on the message content
            */
-          created_at?: number | null;
+          created_at?: string | null;
           /**
            * The highlights for the channel message
            */
@@ -476,7 +476,7 @@ export interface SearchToolResponse {
            * When the channel message was last updated
            * This is only prsent if the search result is on the message content
            */
-          updated_at?: number | null;
+          updated_at?: string | null;
         }[];
         /**
          * The type of channel
@@ -492,10 +492,10 @@ export interface SearchToolResponse {
          * Metadata from the database. None if the channel doesn't exist in the database.
          */
         metadata?: {
-          created_at: number;
-          interacted_at?: number | null;
-          updated_at: number;
-          viewed_at?: number | null;
+          created_at: string;
+          interacted_at?: string | null;
+          updated_at: string;
+          viewed_at?: string | null;
         } | null;
         /**
          * we don't store this for channels atm but keeping it here for consistency
@@ -504,7 +504,7 @@ export interface SearchToolResponse {
         type: 'channel';
       }
     | {
-        created_at: number;
+        created_at: string;
         /**
          * Standardized fields that all item types will share.
          * These field names are being aligned across all item types
@@ -515,11 +515,11 @@ export interface SearchToolResponse {
          * Metadata from the database. None if the project doesn't exist in the database.
          */
         metadata?: {
-          created_at: number;
-          deleted_at?: number | null;
+          created_at: string;
+          deleted_at?: string | null;
           parent_project_id?: string | null;
-          updated_at: number;
-          viewed_at?: number | null;
+          updated_at: string;
+          viewed_at?: string | null;
         } | null;
         name: string;
         owner_id: string;
@@ -560,7 +560,7 @@ export interface SearchToolResponse {
           score?: number | null;
         }[];
         type: 'project';
-        updated_at: number;
+        updated_at: string;
       }
   )[];
 }

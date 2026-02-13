@@ -1,6 +1,7 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
+import { compareDateDesc } from '@core/util/date';
 import Bell from '@icon/regular/bell.svg';
 import {
   type NotificationSource,
@@ -28,7 +29,9 @@ export function GlobalNotificationBell(props: GlobalNotificationBellProps) {
   const unreadCount = () => unreadNotifications().length;
 
   const mostRecent = () =>
-    unreadNotifications().sort((a, b) => b.createdAt - a.createdAt)[0];
+    unreadNotifications().sort((a, b) =>
+      compareDateDesc(a.createdAt, b.createdAt)
+    )[0];
 
   const handleNotificationClick = async () => {
     const notification = mostRecent();

@@ -19,6 +19,7 @@ import { AnimatedFileMdIcon } from '@macro-icons/wide/animating/fileMd';
 import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
 import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
 import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
+import { ChannelTypeEnum } from '@service-comms/client';
 
 export const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
@@ -333,7 +334,7 @@ export const QUERY_FILTERS = {
     document_filters: { document_ids: EXCLUDE },
     email_filters: { recipients: EXCLUDE },
     project_filters: { project_ids: EXCLUDE },
-    channel_filters: {},
+    channel_filters: { channel_types: [ChannelTypeEnum.DirectMessage] },
   },
 
   /** Teams filter - group channels (non-DM) */
@@ -342,7 +343,13 @@ export const QUERY_FILTERS = {
     document_filters: { document_ids: EXCLUDE },
     email_filters: { recipients: EXCLUDE },
     project_filters: { project_ids: EXCLUDE },
-    channel_filters: {},
+    channel_filters: {
+      channel_types: [
+        ChannelTypeEnum.Private,
+        ChannelTypeEnum.Organization,
+        ChannelTypeEnum.Public,
+      ],
+    },
   },
 
   /** Agents filter - chats */

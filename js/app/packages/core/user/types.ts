@@ -1,3 +1,4 @@
+import type { DateValue } from '@core/util/date';
 import type { Accessor } from 'solid-js';
 
 export type { ChannelWithParticipants } from '@service-comms/generated/models';
@@ -9,15 +10,11 @@ export interface IOrganizationUser {
   is_it_admin: boolean;
 }
 
-/** Timestamp of last interaction with the user (in milliseconds to match server timestamps) */
-export type LastInteractionTimestamp = number;
-
 export type IUser = {
   id: string;
   email: string;
   name: string;
-  /** timestamp of last interaction with the user (in milliseconds to match server timestamps) */
-  lastInteraction?: LastInteractionTimestamp;
+  lastInteraction?: DateValue;
 };
 
 type BaseUserName = {

@@ -9,4 +9,4 @@
  * When the channel message was last updated
 This is only prsent if the search result is on the message content
  */
-export type ChannelSearchResultUpdatedAt = number | null;
+export type ChannelSearchResultUpdatedAt = string | null;

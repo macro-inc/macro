@@ -1,3 +1,4 @@
+import type { DateValue } from '@core/util/date';
 import { Entity } from '../entity';
 import {
   isChannelEntity,
@@ -35,7 +36,7 @@ import { mergeRefs } from '@solid-primitives/refs';
 interface ListEntityProps {
   entity: WithNotification<EntityData>;
   onClick?: (event: MouseEvent) => void;
-  timestamp?: number;
+  timestamp?: DateValue | null;
   ref?: Ref<HTMLDivElement>;
   checked?: boolean;
   highlighted?: boolean;

@@ -4,16 +4,18 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
+import type { ChatCreatedAt } from './chatCreatedAt';
 import type { ChatDeletedAt } from './chatDeletedAt';
 import type { ChatModel } from './chatModel';
 import type { ChatProjectId } from './chatProjectId';
 import type { ChatTokenCount } from './chatTokenCount';
+import type { ChatUpdatedAt } from './chatUpdatedAt';
 
 export interface Chat {
   /** The time the chat was created */
-  createdAt: number;
+  createdAt?: ChatCreatedAt;
   /** The time the chat was deleted */
-  deletedAt: ChatDeletedAt;
+  deletedAt?: ChatDeletedAt;
   /** The chat uuid */
   id: string;
   isPersistent: boolean;
@@ -25,7 +27,7 @@ export interface Chat {
   projectId?: ChatProjectId;
   tokenCount?: ChatTokenCount;
   /** The time the chat was last updated */
-  updatedAt: number;
+  updatedAt?: ChatUpdatedAt;
   /** Who the chat belongs to */
   userId: string;
 }

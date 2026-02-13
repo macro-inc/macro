@@ -1,7 +1,7 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
 import type { Entity } from '@core/types';
-import { formatDate } from '@core/util/date';
+import { compareDateDesc, formatDate } from '@core/util/date';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import {
   NOTIFICATION_LABEL_BY_TYPE,
@@ -23,7 +23,7 @@ export function Notifications(props: NotificationsProps) {
         `${props.entity.type}@${props.entity.id}`
       ] ?? [];
     return entityNotifications.sort((a, b) => {
-      return b.createdAt - a.createdAt;
+      return compareDateDesc(a.createdAt, b.createdAt);
     });
   });
 
@@ -73,7 +73,7 @@ export function Notifications(props: NotificationsProps) {
                     }
                   </div>
                   <div class="grow" />
-                  <div>{formatDate(notification.createdAt)}</div>
+                  <div>{formatDate(notification.createdAt ?? new Date(0))}</div>
                 </div>
 
                 <div class="flex flex-col gap-2 ml-4">

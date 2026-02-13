@@ -1,8 +1,9 @@
-import type { Message } from '@service-comms/generated/models/message';
+import type { DateValue } from '@core/util/date';
+import type { Message } from '@queries/channel/types';
 
 export type MinimalMessage = {
   id: string;
-  created_at: string;
+  created_at: DateValue;
   sender_id: string;
   thread_id?: string | null;
 };

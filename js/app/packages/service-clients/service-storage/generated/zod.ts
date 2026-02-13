@@ -44,11 +44,14 @@ export const getRecentActivityHandlerResponse = zod.object({
                       'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
                     ),
                   createdAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the document was created'),
                   deletedAt: zod
-                    .number()
-                    .nullable()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the document was deleted'),
                   documentFamilyId: zod
                     .number()
@@ -101,7 +104,9 @@ export const getRecentActivityHandlerResponse = zod.object({
                     ])
                     .optional(),
                   updatedAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe(
                       'The time the document instance / document BOM was updated'
                     ),
@@ -111,11 +116,14 @@ export const getRecentActivityHandlerResponse = zod.object({
               zod.object({
                 Chat: zod.object({
                   createdAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the chat was created'),
                   deletedAt: zod
-                    .number()
-                    .nullable()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the chat was deleted'),
                   id: zod.string().describe('The chat uuid'),
                   isPersistent: zod.boolean(),
@@ -130,7 +138,9 @@ export const getRecentActivityHandlerResponse = zod.object({
                     .describe('The project id of the chat'),
                   tokenCount: zod.number().nullish(),
                   updatedAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the chat was last updated'),
                   userId: zod.string().describe('Who the chat belongs to'),
                   type: zod.enum(['chat']),
@@ -246,8 +256,8 @@ export const editAnchorResponse = zod
       .object({
         alpha: zod.number(),
         blue: zod.number(),
-        createdAt: zod.number(),
-        deletedAt: zod.number().nullable(),
+        createdAt: zod.string().datetime({}).nullish(),
+        deletedAt: zod.string().datetime({}).nullish(),
         documentId: zod.string(),
         green: zod.number(),
         highlightRects: zod.array(
@@ -271,7 +281,7 @@ export const editAnchorResponse = zod
         red: zod.number(),
         text: zod.string(),
         threadId: zod.number().nullish(),
-        updatedAt: zod.number(),
+        updatedAt: zod.string().datetime({}).nullish(),
         uuid: zod.string().uuid(),
       })
       .and(
@@ -356,8 +366,8 @@ export const createAnchorResponse = zod
       .object({
         alpha: zod.number(),
         blue: zod.number(),
-        createdAt: zod.number(),
-        deletedAt: zod.number().nullable(),
+        createdAt: zod.string().datetime({}).nullish(),
+        deletedAt: zod.string().datetime({}).nullish(),
         documentId: zod.string(),
         green: zod.number(),
         highlightRects: zod.array(
@@ -381,7 +391,7 @@ export const createAnchorResponse = zod
         red: zod.number(),
         text: zod.string(),
         threadId: zod.number().nullish(),
-        updatedAt: zod.number(),
+        updatedAt: zod.string().datetime({}).nullish(),
         uuid: zod.string().uuid(),
       })
       .and(
@@ -434,8 +444,8 @@ export const getDocumentAnchorsResponse = zod.object({
         .object({
           alpha: zod.number(),
           blue: zod.number(),
-          createdAt: zod.number(),
-          deletedAt: zod.number().nullable(),
+          createdAt: zod.string().datetime({}).nullish(),
+          deletedAt: zod.string().datetime({}).nullish(),
           documentId: zod.string(),
           green: zod.number(),
           highlightRects: zod.array(
@@ -459,7 +469,7 @@ export const getDocumentAnchorsResponse = zod.object({
           red: zod.number(),
           text: zod.string(),
           threadId: zod.number().nullish(),
-          updatedAt: zod.number(),
+          updatedAt: zod.string().datetime({}).nullish(),
           uuid: zod.string().uuid(),
         })
         .and(
@@ -544,15 +554,15 @@ export const editCommentBody = zod.object({
 export const editCommentResponse = zod
   .object({
     commentId: zod.number(),
-    createdAt: zod.number(),
-    deletedAt: zod.number().nullable(),
+    createdAt: zod.string().datetime({}).nullish(),
+    deletedAt: zod.string().datetime({}).nullish(),
     metadata: zod.any().optional(),
     order: zod.number().nullish(),
     owner: zod.string(),
     sender: zod.string().nullish(),
     text: zod.string(),
     threadId: zod.number(),
-    updatedAt: zod.number(),
+    updatedAt: zod.string().datetime({}).nullish(),
   })
   .and(
     zod.object({
@@ -666,26 +676,26 @@ export const createCommentResponse = zod
     comments: zod.array(
       zod.object({
         commentId: zod.number(),
-        createdAt: zod.number(),
-        deletedAt: zod.number().nullable(),
+        createdAt: zod.string().datetime({}).nullish(),
+        deletedAt: zod.string().datetime({}).nullish(),
         metadata: zod.any().optional(),
         order: zod.number().nullish(),
         owner: zod.string(),
         sender: zod.string().nullish(),
         text: zod.string(),
         threadId: zod.number(),
-        updatedAt: zod.number(),
+        updatedAt: zod.string().datetime({}).nullish(),
       })
     ),
     thread: zod.object({
-      createdAt: zod.number(),
-      deletedAt: zod.number().nullable(),
+      createdAt: zod.string().datetime({}).nullish(),
+      deletedAt: zod.string().datetime({}).nullish(),
       documentId: zod.string(),
       metadata: zod.any().optional(),
       owner: zod.string(),
       resolved: zod.boolean(),
       threadId: zod.number(),
-      updatedAt: zod.number(),
+      updatedAt: zod.string().datetime({}).nullish(),
     }),
   })
   .and(
@@ -722,8 +732,8 @@ export const createCommentResponse = zod
               .object({
                 alpha: zod.number(),
                 blue: zod.number(),
-                createdAt: zod.number(),
-                deletedAt: zod.number().nullable(),
+                createdAt: zod.string().datetime({}).nullish(),
+                deletedAt: zod.string().datetime({}).nullish(),
                 documentId: zod.string(),
                 green: zod.number(),
                 highlightRects: zod.array(
@@ -747,7 +757,7 @@ export const createCommentResponse = zod
                 red: zod.number(),
                 text: zod.string(),
                 threadId: zod.number().nullish(),
-                updatedAt: zod.number(),
+                updatedAt: zod.string().datetime({}).nullish(),
                 uuid: zod.string().uuid(),
               })
               .and(
@@ -775,26 +785,26 @@ export const getDocumentCommentsResponse = zod.object({
       comments: zod.array(
         zod.object({
           commentId: zod.number(),
-          createdAt: zod.number(),
-          deletedAt: zod.number().nullable(),
+          createdAt: zod.string().datetime({}).nullish(),
+          deletedAt: zod.string().datetime({}).nullish(),
           metadata: zod.any().optional(),
           order: zod.number().nullish(),
           owner: zod.string(),
           sender: zod.string().nullish(),
           text: zod.string(),
           threadId: zod.number(),
-          updatedAt: zod.number(),
+          updatedAt: zod.string().datetime({}).nullish(),
         })
       ),
       thread: zod.object({
-        createdAt: zod.number(),
-        deletedAt: zod.number().nullable(),
+        createdAt: zod.string().datetime({}).nullish(),
+        deletedAt: zod.string().datetime({}).nullish(),
         documentId: zod.string(),
         metadata: zod.any().optional(),
         owner: zod.string(),
         resolved: zod.boolean(),
         threadId: zod.number(),
-        updatedAt: zod.number(),
+        updatedAt: zod.string().datetime({}).nullish(),
       }),
     })
   ),
@@ -831,11 +841,14 @@ export const getUserDocumentsHandlerResponse = zod.object({
                 'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
               ),
             createdAt: zod
-              .number()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the document was created'),
             deletedAt: zod
-              .number()
-              .nullable()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the document was deleted'),
             documentBom: zod
               .array(
@@ -906,7 +919,9 @@ export const getUserDocumentsHandlerResponse = zod.object({
               ])
               .optional(),
             updatedAt: zod
-              .number()
+              .string()
+              .datetime({})
+              .nullish()
               .describe(
                 'The time the document instance / document BOM was updated'
               ),
@@ -1006,7 +1021,11 @@ export const createDocumentHandlerResponse = zod.object({
           .describe(
             'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
           ),
-        createdAt: zod.number().describe('The time the document was created'),
+        createdAt: zod
+          .string()
+          .datetime({})
+          .nullish()
+          .describe('The time the document was created'),
         documentBom: zod
           .array(
             zod.object({
@@ -1064,7 +1083,9 @@ export const createDocumentHandlerResponse = zod.object({
           ])
           .optional(),
         updatedAt: zod
-          .number()
+          .string()
+          .datetime({})
+          .nullish()
           .describe(
             'The time the document instance / document BOM was updated'
           ),
@@ -1270,7 +1291,11 @@ export const getDocumentListHandlerResponse = zod.object({
           .describe(
             'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
           ),
-        createdAt: zod.number().describe('The time the document was created'),
+        createdAt: zod
+          .string()
+          .datetime({})
+          .nullish()
+          .describe('The time the document was created'),
         documentFamilyId: zod
           .number()
           .nullish()
@@ -1285,7 +1310,9 @@ export const getDocumentListHandlerResponse = zod.object({
           .nullish()
           .describe('The file type of the document'),
         updatedAt: zod
-          .number()
+          .string()
+          .datetime({})
+          .nullish()
           .describe(
             'The time the document instance / document BOM was updated'
           ),
@@ -1407,7 +1434,9 @@ export const getBatchPreviewHandlerResponse = zod.object({
             ])
             .optional(),
           updated_at: zod
-            .number()
+            .string()
+            .datetime({})
+            .nullish()
             .describe('The time the document was last updated'),
         })
         .and(
@@ -1458,10 +1487,15 @@ export const getDocumentResponse = zod.object({
         .describe(
           'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
         ),
-      createdAt: zod.number().describe('The time the document was created'),
+      createdAt: zod
+        .string()
+        .datetime({})
+        .nullish()
+        .describe('The time the document was created'),
       deletedAt: zod
-        .number()
-        .nullable()
+        .string()
+        .datetime({})
+        .nullish()
         .describe('The time the document was deleted'),
       documentBom: zod
         .array(
@@ -1528,7 +1562,9 @@ export const getDocumentResponse = zod.object({
         ])
         .optional(),
       updatedAt: zod
-        .number()
+        .string()
+        .datetime({})
+        .nullish()
         .describe('The time the document instance / document BOM was updated'),
     }),
     userAccessLevel: zod
@@ -1592,7 +1628,11 @@ export const saveDocumentHandlerResponse = zod.object({
         .describe(
           'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
         ),
-      createdAt: zod.number().describe('The time the document was created'),
+      createdAt: zod
+        .string()
+        .datetime({})
+        .nullish()
+        .describe('The time the document was created'),
       documentBom: zod
         .array(
           zod.object({
@@ -1650,7 +1690,9 @@ export const saveDocumentHandlerResponse = zod.object({
         ])
         .optional(),
       updatedAt: zod
-        .number()
+        .string()
+        .datetime({})
+        .nullish()
         .describe('The time the document instance / document BOM was updated'),
     }),
     presignedUrl: zod
@@ -1723,10 +1765,15 @@ export const copyDocumentHandlerResponse = zod.object({
         .describe(
           'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
         ),
-      createdAt: zod.number().describe('The time the document was created'),
+      createdAt: zod
+        .string()
+        .datetime({})
+        .nullish()
+        .describe('The time the document was created'),
       deletedAt: zod
-        .number()
-        .nullable()
+        .string()
+        .datetime({})
+        .nullish()
         .describe('The time the document was deleted'),
       documentBom: zod
         .array(
@@ -1793,7 +1840,9 @@ export const copyDocumentHandlerResponse = zod.object({
         ])
         .optional(),
       updatedAt: zod
-        .number()
+        .string()
+        .datetime({})
+        .nullish()
         .describe('The time the document instance / document BOM was updated'),
     }),
     userAccessLevel: zod
@@ -1971,7 +2020,11 @@ export const simpleSaveResponse = zod.object({
         .describe(
           'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
         ),
-      createdAt: zod.number().describe('The time the document was created'),
+      createdAt: zod
+        .string()
+        .datetime({})
+        .nullish()
+        .describe('The time the document was created'),
       documentBom: zod
         .array(
           zod.object({
@@ -2029,7 +2082,9 @@ export const simpleSaveResponse = zod.object({
         ])
         .optional(),
       updatedAt: zod
-        .number()
+        .string()
+        .datetime({})
+        .nullish()
         .describe('The time the document instance / document BOM was updated'),
     }),
     presignedUrl: zod
@@ -2077,10 +2132,15 @@ export const getDocumentVersionResponse = zod.object({
         .describe(
           'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
         ),
-      createdAt: zod.number().describe('The time the document was created'),
+      createdAt: zod
+        .string()
+        .datetime({})
+        .nullish()
+        .describe('The time the document was created'),
       deletedAt: zod
-        .number()
-        .nullable()
+        .string()
+        .datetime({})
+        .nullish()
         .describe('The time the document was deleted'),
       documentBom: zod
         .array(
@@ -2147,7 +2207,9 @@ export const getDocumentVersionResponse = zod.object({
         ])
         .optional(),
       updatedAt: zod
-        .number()
+        .string()
+        .datetime({})
+        .nullish()
         .describe('The time the document instance / document BOM was updated'),
     }),
     userAccessLevel: zod
@@ -2226,10 +2288,15 @@ export const getHistoryHandlerResponse = zod.object({
             .describe(
               'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
             ),
-          createdAt: zod.number().describe('The time the document was created'),
+          createdAt: zod
+            .string()
+            .datetime({})
+            .nullish()
+            .describe('The time the document was created'),
           deletedAt: zod
-            .number()
-            .nullable()
+            .string()
+            .datetime({})
+            .nullish()
             .describe('The time the document was deleted'),
           documentFamilyId: zod
             .number()
@@ -2276,17 +2343,24 @@ export const getHistoryHandlerResponse = zod.object({
             ])
             .optional(),
           updatedAt: zod
-            .number()
+            .string()
+            .datetime({})
+            .nullish()
             .describe(
               'The time the document instance / document BOM was updated'
             ),
           type: zod.enum(['document']),
         }),
         zod.object({
-          createdAt: zod.number().describe('The time the chat was created'),
+          createdAt: zod
+            .string()
+            .datetime({})
+            .nullish()
+            .describe('The time the chat was created'),
           deletedAt: zod
-            .number()
-            .nullable()
+            .string()
+            .datetime({})
+            .nullish()
             .describe('The time the chat was deleted'),
           id: zod.string().describe('The chat uuid'),
           isPersistent: zod.boolean(),
@@ -2301,18 +2375,28 @@ export const getHistoryHandlerResponse = zod.object({
             .describe('The project id of the chat'),
           tokenCount: zod.number().nullish(),
           updatedAt: zod
-            .number()
+            .string()
+            .datetime({})
+            .nullish()
             .describe('The time the chat was last updated'),
           userId: zod.string().describe('Who the chat belongs to'),
           type: zod.enum(['chat']),
         }),
         zod.object({
-          createdAt: zod.number().describe('The time the project was created'),
-          deletedAt: zod.number().nullable(),
+          createdAt: zod
+            .string()
+            .datetime({})
+            .nullish()
+            .describe('The time the project was created'),
+          deletedAt: zod.string().datetime({}).nullish(),
           id: zod.string().describe('The id of the project'),
           name: zod.string().describe('The name of the project'),
           parentId: zod.string().nullish().describe('The parent project id'),
-          updatedAt: zod.number().describe('The time the project was updated'),
+          updatedAt: zod
+            .string()
+            .datetime({})
+            .nullish()
+            .describe('The time the project was updated'),
           userId: zod
             .string()
             .describe('The user id of who created the project'),
@@ -2418,11 +2502,13 @@ export const getItemsSoupResponse = zod.object({
                 'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on the file type'
               ),
             createdAt: zod
-              .number()
+              .string()
+              .datetime({})
               .describe('The time the document was created'),
             deletedAt: zod
-              .number()
-              .nullable()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the document was deleted'),
             documentFamilyId: zod
               .number()
@@ -2693,23 +2779,29 @@ export const getItemsSoupResponse = zod.object({
               ])
               .optional(),
             updatedAt: zod
-              .number()
+              .string()
+              .datetime({})
               .describe(
                 'The time the document instance / document BOM was updated'
               ),
             viewedAt: zod
-              .number()
-              .nullable()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the document was last viewed'),
           }),
           tag: zod.enum(['document']),
         }),
         zod.object({
           data: zod.object({
-            createdAt: zod.number().describe('The time the chat was created'),
+            createdAt: zod
+              .string()
+              .datetime({})
+              .describe('The time the chat was created'),
             deletedAt: zod
-              .number()
-              .nullable()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the chat was deleted'),
             id: zod.string().uuid().describe('The chat uuid'),
             isPersistent: zod
@@ -2944,11 +3036,13 @@ export const getItemsSoupResponse = zod.object({
               )
               .describe('Properties'),
             updatedAt: zod
-              .number()
+              .string()
+              .datetime({})
               .describe('The time the chat was last updated'),
             viewedAt: zod
-              .number()
-              .nullable()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the chat was last viewed'),
           }),
           tag: zod.enum(['chat']),
@@ -2956,11 +3050,13 @@ export const getItemsSoupResponse = zod.object({
         zod.object({
           data: zod.object({
             createdAt: zod
-              .number()
+              .string()
+              .datetime({})
               .describe('The time the project was created'),
             deletedAt: zod
-              .number()
-              .nullable()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the project was deleted'),
             id: zod.string().uuid().describe('The id of the project'),
             name: zod.string().describe('The name of the project'),
@@ -3194,11 +3290,13 @@ export const getItemsSoupResponse = zod.object({
               )
               .describe('Properties'),
             updatedAt: zod
-              .number()
+              .string()
+              .datetime({})
               .describe('The time the project was updated'),
             viewedAt: zod
-              .number()
-              .nullable()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the document was last viewed'),
           }),
           tag: zod.enum(['project']),
@@ -3206,7 +3304,7 @@ export const getItemsSoupResponse = zod.object({
         zod.object({
           data: zod
             .object({
-              createdAt: zod.number(),
+              createdAt: zod.string().datetime({}),
               id: zod.string().uuid(),
               inboxVisible: zod.boolean(),
               isDraft: zod.boolean(),
@@ -3219,16 +3317,16 @@ export const getItemsSoupResponse = zod.object({
               senderName: zod.string().nullish(),
               senderPhotoUrl: zod.string().nullish(),
               snippet: zod.string().nullish(),
-              sortTs: zod.number(),
-              updatedAt: zod.number(),
-              viewedAt: zod.number().nullable(),
+              sortTs: zod.string().datetime({}),
+              updatedAt: zod.string().datetime({}),
+              viewedAt: zod.string().datetime({}).nullish(),
             })
             .and(
               zod.object({
                 attachments: zod.array(
                   zod.object({
                     contentId: zod.string().nullish(),
-                    createdAt: zod.number(),
+                    createdAt: zod.string().datetime({}),
                     filename: zod.string().nullish(),
                     id: zod.string().uuid(),
                     messageId: zod.string().uuid(),
@@ -3596,6 +3694,12 @@ export const postItemsSoupBody = zod
           .describe(
             "Channel IDs to search within. Examples: ['general']. Empty to search all accessible channels."
           ),
+        channel_types: zod
+          .array(zod.string())
+          .optional()
+          .describe(
+            "Channel types to filter by. Examples: ['public'], ['direct_message', 'private']. Empty to search all channel types."
+          ),
         importance: zod
           .boolean()
           .nullish()
@@ -3831,11 +3935,13 @@ export const postItemsSoupResponse = zod.object({
                 'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on the file type'
               ),
             createdAt: zod
-              .number()
+              .string()
+              .datetime({})
               .describe('The time the document was created'),
             deletedAt: zod
-              .number()
-              .nullable()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the document was deleted'),
             documentFamilyId: zod
               .number()
@@ -4106,23 +4212,29 @@ export const postItemsSoupResponse = zod.object({
               ])
               .optional(),
             updatedAt: zod
-              .number()
+              .string()
+              .datetime({})
               .describe(
                 'The time the document instance / document BOM was updated'
               ),
             viewedAt: zod
-              .number()
-              .nullable()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the document was last viewed'),
           }),
           tag: zod.enum(['document']),
         }),
         zod.object({
           data: zod.object({
-            createdAt: zod.number().describe('The time the chat was created'),
+            createdAt: zod
+              .string()
+              .datetime({})
+              .describe('The time the chat was created'),
             deletedAt: zod
-              .number()
-              .nullable()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the chat was deleted'),
             id: zod.string().uuid().describe('The chat uuid'),
             isPersistent: zod
@@ -4357,11 +4469,13 @@ export const postItemsSoupResponse = zod.object({
               )
               .describe('Properties'),
             updatedAt: zod
-              .number()
+              .string()
+              .datetime({})
               .describe('The time the chat was last updated'),
             viewedAt: zod
-              .number()
-              .nullable()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the chat was last viewed'),
           }),
           tag: zod.enum(['chat']),
@@ -4369,11 +4483,13 @@ export const postItemsSoupResponse = zod.object({
         zod.object({
           data: zod.object({
             createdAt: zod
-              .number()
+              .string()
+              .datetime({})
               .describe('The time the project was created'),
             deletedAt: zod
-              .number()
-              .nullable()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the project was deleted'),
             id: zod.string().uuid().describe('The id of the project'),
             name: zod.string().describe('The name of the project'),
@@ -4607,11 +4723,13 @@ export const postItemsSoupResponse = zod.object({
               )
               .describe('Properties'),
             updatedAt: zod
-              .number()
+              .string()
+              .datetime({})
               .describe('The time the project was updated'),
             viewedAt: zod
-              .number()
-              .nullable()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the document was last viewed'),
           }),
           tag: zod.enum(['project']),
@@ -4619,7 +4737,7 @@ export const postItemsSoupResponse = zod.object({
         zod.object({
           data: zod
             .object({
-              createdAt: zod.number(),
+              createdAt: zod.string().datetime({}),
               id: zod.string().uuid(),
               inboxVisible: zod.boolean(),
               isDraft: zod.boolean(),
@@ -4632,16 +4750,16 @@ export const postItemsSoupResponse = zod.object({
               senderName: zod.string().nullish(),
               senderPhotoUrl: zod.string().nullish(),
               snippet: zod.string().nullish(),
-              sortTs: zod.number(),
-              updatedAt: zod.number(),
-              viewedAt: zod.number().nullable(),
+              sortTs: zod.string().datetime({}),
+              updatedAt: zod.string().datetime({}),
+              viewedAt: zod.string().datetime({}).nullish(),
             })
             .and(
               zod.object({
                 attachments: zod.array(
                   zod.object({
                     contentId: zod.string().nullish(),
-                    createdAt: zod.number(),
+                    createdAt: zod.string().datetime({}),
                     filename: zod.string().nullish(),
                     id: zod.string().uuid(),
                     messageId: zod.string().uuid(),
@@ -5016,11 +5134,14 @@ export const getPinsHandlerResponse = zod.object({
                       'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
                     ),
                   createdAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the document was created'),
                   deletedAt: zod
-                    .number()
-                    .nullable()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the document was deleted'),
                   documentFamilyId: zod
                     .number()
@@ -5073,7 +5194,9 @@ export const getPinsHandlerResponse = zod.object({
                     ])
                     .optional(),
                   updatedAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe(
                       'The time the document instance / document BOM was updated'
                     ),
@@ -5081,11 +5204,14 @@ export const getPinsHandlerResponse = zod.object({
                 }),
                 zod.object({
                   createdAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the chat was created'),
                   deletedAt: zod
-                    .number()
-                    .nullable()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the chat was deleted'),
                   id: zod.string().describe('The chat uuid'),
                   isPersistent: zod.boolean(),
@@ -5100,16 +5226,20 @@ export const getPinsHandlerResponse = zod.object({
                     .describe('The project id of the chat'),
                   tokenCount: zod.number().nullish(),
                   updatedAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the chat was last updated'),
                   userId: zod.string().describe('Who the chat belongs to'),
                   type: zod.enum(['chat']),
                 }),
                 zod.object({
                   createdAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the project was created'),
-                  deletedAt: zod.number().nullable(),
+                  deletedAt: zod.string().datetime({}).nullish(),
                   id: zod.string().describe('The id of the project'),
                   name: zod.string().describe('The name of the project'),
                   parentId: zod
@@ -5117,7 +5247,9 @@ export const getPinsHandlerResponse = zod.object({
                     .nullish()
                     .describe('The parent project id'),
                   updatedAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the project was updated'),
                   userId: zod
                     .string()
@@ -5140,11 +5272,14 @@ export const getPinsHandlerResponse = zod.object({
                       'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
                     ),
                   createdAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the document was created'),
                   deletedAt: zod
-                    .number()
-                    .nullable()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the document was deleted'),
                   documentFamilyId: zod
                     .number()
@@ -5197,7 +5332,9 @@ export const getPinsHandlerResponse = zod.object({
                     ])
                     .optional(),
                   updatedAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe(
                       'The time the document instance / document BOM was updated'
                     ),
@@ -5205,11 +5342,14 @@ export const getPinsHandlerResponse = zod.object({
                 }),
                 zod.object({
                   createdAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the chat was created'),
                   deletedAt: zod
-                    .number()
-                    .nullable()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the chat was deleted'),
                   id: zod.string().describe('The chat uuid'),
                   isPersistent: zod.boolean(),
@@ -5224,16 +5364,20 @@ export const getPinsHandlerResponse = zod.object({
                     .describe('The project id of the chat'),
                   tokenCount: zod.number().nullish(),
                   updatedAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the chat was last updated'),
                   userId: zod.string().describe('Who the chat belongs to'),
                   type: zod.enum(['chat']),
                 }),
                 zod.object({
                   createdAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the project was created'),
-                  deletedAt: zod.number().nullable(),
+                  deletedAt: zod.string().datetime({}).nullish(),
                   id: zod.string().describe('The id of the project'),
                   name: zod.string().describe('The name of the project'),
                   parentId: zod
@@ -5241,7 +5385,9 @@ export const getPinsHandlerResponse = zod.object({
                     .nullish()
                     .describe('The parent project id'),
                   updatedAt: zod
-                    .number()
+                    .string()
+                    .datetime({})
+                    .nullish()
                     .describe('The time the project was updated'),
                   userId: zod
                     .string()
@@ -5320,12 +5466,20 @@ export const getProjectsHandlerResponse = zod.object({
   data: zod
     .array(
       zod.object({
-        createdAt: zod.number().describe('The time the project was created'),
-        deletedAt: zod.number().nullable(),
+        createdAt: zod
+          .string()
+          .datetime({})
+          .nullish()
+          .describe('The time the project was created'),
+        deletedAt: zod.string().datetime({}).nullish(),
         id: zod.string().describe('The id of the project'),
         name: zod.string().describe('The name of the project'),
         parentId: zod.string().nullish().describe('The parent project id'),
-        updatedAt: zod.number().describe('The time the project was updated'),
+        updatedAt: zod
+          .string()
+          .datetime({})
+          .nullish()
+          .describe('The time the project was updated'),
         userId: zod.string().describe('The user id of who created the project'),
         type: zod.enum(['project']),
       })
@@ -5348,12 +5502,20 @@ export const createProjectHandlerBody = zod.object({
 
 export const createProjectHandlerResponse = zod.object({
   data: zod.object({
-    createdAt: zod.number().describe('The time the project was created'),
-    deletedAt: zod.number().nullable(),
+    createdAt: zod
+      .string()
+      .datetime({})
+      .nullish()
+      .describe('The time the project was created'),
+    deletedAt: zod.string().datetime({}).nullish(),
     id: zod.string().describe('The id of the project'),
     name: zod.string().describe('The name of the project'),
     parentId: zod.string().nullish().describe('The parent project id'),
-    updatedAt: zod.number().describe('The time the project was updated'),
+    updatedAt: zod
+      .string()
+      .datetime({})
+      .nullish()
+      .describe('The time the project was updated'),
     userId: zod.string().describe('The user id of who created the project'),
     type: zod.enum(['project']),
   }),
@@ -5368,12 +5530,20 @@ export const getPendingProjectsHandlerResponse = zod.object({
     .array(
       zod
         .object({
-          createdAt: zod.number().describe('The time the project was created'),
-          deletedAt: zod.number().nullable(),
+          createdAt: zod
+            .string()
+            .datetime({})
+            .nullish()
+            .describe('The time the project was created'),
+          deletedAt: zod.string().datetime({}).nullish(),
           id: zod.string().describe('The id of the project'),
           name: zod.string().describe('The name of the project'),
           parentId: zod.string().nullish().describe('The parent project id'),
-          updatedAt: zod.number().describe('The time the project was updated'),
+          updatedAt: zod
+            .string()
+            .datetime({})
+            .nullish()
+            .describe('The time the project was updated'),
           userId: zod
             .string()
             .describe('The user id of who created the project'),
@@ -5409,7 +5579,7 @@ export const getBatchProjectPreviewResponse = zod.object({
           name: zod.string(),
           owner: zod.string(),
           path: zod.array(zod.string()),
-          updatedAt: zod.number(),
+          updatedAt: zod.string().datetime({}).nullish(),
         })
         .and(
           zod.object({
@@ -5486,6 +5656,17 @@ export const uploadFolderHandlerBody = zod.object({
                 'tgz',
                 'gz',
                 'mp4',
+                'mkv',
+                'webm',
+                'avi',
+                'mov',
+                'wmv',
+                'mpg',
+                'mpeg',
+                'm4v',
+                'flv',
+                'f4v',
+                'threegp',
                 'xls',
                 'ppt',
                 'pptx',
@@ -5597,6 +5778,17 @@ export const uploadFolderHandlerResponse = zod.object({
                     'tgz',
                     'gz',
                     'mp4',
+                    'mkv',
+                    'webm',
+                    'avi',
+                    'mov',
+                    'wmv',
+                    'mpg',
+                    'mpeg',
+                    'm4v',
+                    'flv',
+                    'f4v',
+                    'threegp',
                     'xls',
                     'ppt',
                     'pptx',
@@ -5661,12 +5853,20 @@ export const getProjectHandlerParams = zod.object({
 export const getProjectHandlerResponse = zod.object({
   data: zod.object({
     projectMetadata: zod.object({
-      createdAt: zod.number().describe('The time the project was created'),
-      deletedAt: zod.number().nullable(),
+      createdAt: zod
+        .string()
+        .datetime({})
+        .nullish()
+        .describe('The time the project was created'),
+      deletedAt: zod.string().datetime({}).nullish(),
       id: zod.string().describe('The id of the project'),
       name: zod.string().describe('The name of the project'),
       parentId: zod.string().nullish().describe('The parent project id'),
-      updatedAt: zod.number().describe('The time the project was updated'),
+      updatedAt: zod
+        .string()
+        .datetime({})
+        .nullish()
+        .describe('The time the project was updated'),
       userId: zod.string().describe('The user id of who created the project'),
       type: zod.enum(['project']),
     }),
@@ -5738,11 +5938,14 @@ export const getProjectContentHandlerResponse = zod.object({
                 'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
               ),
             createdAt: zod
-              .number()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the document was created'),
             deletedAt: zod
-              .number()
-              .nullable()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the document was deleted'),
             documentFamilyId: zod
               .number()
@@ -5791,17 +5994,24 @@ export const getProjectContentHandlerResponse = zod.object({
               ])
               .optional(),
             updatedAt: zod
-              .number()
+              .string()
+              .datetime({})
+              .nullish()
               .describe(
                 'The time the document instance / document BOM was updated'
               ),
             type: zod.enum(['document']),
           }),
           zod.object({
-            createdAt: zod.number().describe('The time the chat was created'),
+            createdAt: zod
+              .string()
+              .datetime({})
+              .nullish()
+              .describe('The time the chat was created'),
             deletedAt: zod
-              .number()
-              .nullable()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the chat was deleted'),
             id: zod.string().describe('The chat uuid'),
             isPersistent: zod.boolean(),
@@ -5816,21 +6026,27 @@ export const getProjectContentHandlerResponse = zod.object({
               .describe('The project id of the chat'),
             tokenCount: zod.number().nullish(),
             updatedAt: zod
-              .number()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the chat was last updated'),
             userId: zod.string().describe('Who the chat belongs to'),
             type: zod.enum(['chat']),
           }),
           zod.object({
             createdAt: zod
-              .number()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the project was created'),
-            deletedAt: zod.number().nullable(),
+            deletedAt: zod.string().datetime({}).nullish(),
             id: zod.string().describe('The id of the project'),
             name: zod.string().describe('The name of the project'),
             parentId: zod.string().nullish().describe('The parent project id'),
             updatedAt: zod
-              .number()
+              .string()
+              .datetime({})
+              .nullish()
               .describe('The time the project was updated'),
             userId: zod
               .string()
@@ -5933,11 +6149,14 @@ export const recentlyDeletedResponse = zod.object({
                   'The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'
                 ),
               createdAt: zod
-                .number()
+                .string()
+                .datetime({})
+                .nullish()
                 .describe('The time the document was created'),
               deletedAt: zod
-                .number()
-                .nullable()
+                .string()
+                .datetime({})
+                .nullish()
                 .describe('The time the document was deleted'),
               documentFamilyId: zod
                 .number()
@@ -5988,17 +6207,24 @@ export const recentlyDeletedResponse = zod.object({
                 ])
                 .optional(),
               updatedAt: zod
-                .number()
+                .string()
+                .datetime({})
+                .nullish()
                 .describe(
                   'The time the document instance / document BOM was updated'
                 ),
               type: zod.enum(['document']),
             }),
             zod.object({
-              createdAt: zod.number().describe('The time the chat was created'),
+              createdAt: zod
+                .string()
+                .datetime({})
+                .nullish()
+                .describe('The time the chat was created'),
               deletedAt: zod
-                .number()
-                .nullable()
+                .string()
+                .datetime({})
+                .nullish()
                 .describe('The time the chat was deleted'),
               id: zod.string().describe('The chat uuid'),
               isPersistent: zod.boolean(),
@@ -6013,16 +6239,20 @@ export const recentlyDeletedResponse = zod.object({
                 .describe('The project id of the chat'),
               tokenCount: zod.number().nullish(),
               updatedAt: zod
-                .number()
+                .string()
+                .datetime({})
+                .nullish()
                 .describe('The time the chat was last updated'),
               userId: zod.string().describe('Who the chat belongs to'),
               type: zod.enum(['chat']),
             }),
             zod.object({
               createdAt: zod
-                .number()
+                .string()
+                .datetime({})
+                .nullish()
                 .describe('The time the project was created'),
-              deletedAt: zod.number().nullable(),
+              deletedAt: zod.string().datetime({}).nullish(),
               id: zod.string().describe('The id of the project'),
               name: zod.string().describe('The name of the project'),
               parentId: zod
@@ -6030,7 +6260,9 @@ export const recentlyDeletedResponse = zod.object({
                 .nullish()
                 .describe('The parent project id'),
               updatedAt: zod
-                .number()
+                .string()
+                .datetime({})
+                .nullish()
                 .describe('The time the project was updated'),
               userId: zod
                 .string()

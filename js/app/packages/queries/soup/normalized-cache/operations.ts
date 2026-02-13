@@ -243,27 +243,27 @@ export function buildSingleEntityFilter(
     chat_filters: { chat_ids: [NIL_ID] },
     channel_filters: { channel_ids: [NIL_ID] },
     project_filters: { project_ids: [NIL_ID] },
-    email_filters: { importance: false },
+    email_filters: { email_thread_ids: [NIL_ID] },
   };
-  return (
-    match(entityType)
-      .with('document', () => ({
-        ...base,
-        document_filters: { document_ids: [entityId] },
-      }))
-      .with('chat', () => ({ ...base, chat_filters: { chat_ids: [entityId] } }))
-      .with('channel', () => ({
-        ...base,
-        channel_filters: { channel_ids: [entityId] },
-      }))
-      .with('project', () => ({
-        ...base,
-        project_filters: { project_ids: [entityId] },
-      }))
-      //TODO: need to add backend support for email threads
-      .with('emailThread', () => null)
-      .exhaustive()
-  );
+  return match(entityType)
+    .with('document', () => ({
+      ...base,
+      document_filters: { document_ids: [entityId] },
+    }))
+    .with('chat', () => ({ ...base, chat_filters: { chat_ids: [entityId] } }))
+    .with('channel', () => ({
+      ...base,
+      channel_filters: { channel_ids: [entityId] },
+    }))
+    .with('project', () => ({
+      ...base,
+      project_filters: { project_ids: [entityId] },
+    }))
+    .with('emailThread', () => ({
+      ...base,
+      email_filters: { email_thread_ids: [entityId] },
+    }))
+    .exhaustive();
 }
 
 /**
@@ -285,7 +285,7 @@ export function optimisticUpdateSoupItemViewedAt(itemId: string) {
   } else {
     optimisticUpdateSoupEntity({
       tag: current.tag,
-      data: { id: itemId, viewedAt: now.getTime() },
+      data: { id: itemId, viewedAt: now.toISOString() },
       frecency_score: current.frecency_score,
     });
   }

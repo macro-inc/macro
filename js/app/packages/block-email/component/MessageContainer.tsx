@@ -206,7 +206,7 @@ export function MessageContainer(props: MessageContainerProps) {
     >
       {/* Expanded message view */}
       <div class="shrink-0 flex justify-center w-full">
-        <div class="macro-message-width w-full">
+        <div class="macro-message-width macro-message-padding w-full">
           <Message
             id={props.message.db_id ?? undefined}
             focused={props.isFocused}

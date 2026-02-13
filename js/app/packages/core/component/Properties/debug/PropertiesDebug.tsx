@@ -104,7 +104,7 @@ const PropertiesDebug: Component = () => {
   };
 
   // Build properties list (copied from ComposeTask)
-  const properties = () => {
+  const properties = (): Property[] => {
     return filterMap(DEBUG_SYSTEM_PROPERTIES, (id) => {
       const definition = definitions().get(id);
       if (!definition) return;
@@ -115,8 +115,8 @@ const PropertiesDebug: Component = () => {
         isMultiSelect: definition.is_multi_select,
         owner: definition.owner,
         specificEntityType: definition.specific_entity_type ?? null,
-        updatedAt: '',
-        createdAt: '',
+        updatedAt: new Date(),
+        createdAt: new Date(),
         valueType: definition.data_type,
         value: extractPropertyValue(definition, propertyValues, options()),
         options: options().get(definition.id),
@@ -134,8 +134,8 @@ const PropertiesDebug: Component = () => {
         isMultiSelect: false,
         owner: { scope: 'system' },
         specificEntityType: null,
-        updatedAt: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
+        updatedAt: new Date(),
+        createdAt: new Date(),
         valueType: 'STRING',
         value: (propertyValues['spoof-string-input'] as any)?.value || null,
         options: [],
@@ -148,8 +148,8 @@ const PropertiesDebug: Component = () => {
         isMultiSelect: false,
         owner: { scope: 'system' },
         specificEntityType: null,
-        updatedAt: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
+        updatedAt: new Date(),
+        createdAt: new Date(),
         valueType: 'BOOLEAN',
         value:
           (propertyValues['spoof-boolean-checkbox'] as any)?.value || false,
@@ -163,8 +163,8 @@ const PropertiesDebug: Component = () => {
         isMultiSelect: false,
         owner: { scope: 'system' },
         specificEntityType: null,
-        updatedAt: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
+        updatedAt: new Date(),
+        createdAt: new Date(),
         valueType: 'LINK',
         value: (propertyValues['spoof-link-url'] as any)?.value || null,
         options: [],
@@ -193,7 +193,7 @@ const PropertiesDebug: Component = () => {
 
       setPropertyValues(property.propertyDefinitionId, {
         valueType: 'DATE',
-        value: date.toISOString(),
+        value: date,
       });
     },
   };

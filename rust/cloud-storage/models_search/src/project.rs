@@ -1,4 +1,5 @@
 use crate::{MatchType, SearchHighlight, SearchOn, SearchResponse, SearchResponseItem};
+use chrono::{DateTime, Utc};
 use item_filters::ProjectFilters;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -17,8 +18,8 @@ pub struct ProjectSearchResult {
 pub struct ProjectSearchMetadata {
     pub project_id: uuid::Uuid,
     pub owner_id: String,
-    pub updated_at: i64,
-    pub created_at: i64,
+    pub updated_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
     pub project_name: String,
 }
 
@@ -32,19 +33,19 @@ pub struct ProjectSearchResponseItem {
     pub name: String,
     pub owner_id: String,
 
-    pub updated_at: i64,
-    pub created_at: i64,
+    pub updated_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
     pub project_search_results: Vec<ProjectSearchResult>,
 }
 
 /// Metadata for a project fetched from the database
 #[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct ProjectMetadata {
-    pub created_at: i64,
-    pub updated_at: i64,
-    pub viewed_at: Option<i64>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub viewed_at: Option<DateTime<Utc>>,
     pub parent_project_id: Option<String>,
-    pub deleted_at: Option<i64>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 /// ProjectSearchResponseItem object with project metadata we fetch from macrodb. we don't store these
@@ -117,7 +118,7 @@ pub struct SimpleProjectSearchResponseBaseItem<T> {
 }
 
 pub type SimpleProjectSearchResponseItem =
-    SimpleProjectSearchResponseBaseItem<crate::TimestampSeconds>;
+    SimpleProjectSearchResponseBaseItem<crate::HumanReadableTimestamp>;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SimpleProjectSearchResponse {

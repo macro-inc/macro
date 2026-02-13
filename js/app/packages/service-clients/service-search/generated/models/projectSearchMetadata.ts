@@ -9,9 +9,9 @@
  * Metadata associated with Project Search, to be used with SearchResponseItem
  */
 export interface ProjectSearchMetadata {
-  created_at: number;
+  created_at: string;
   owner_id: string;
   project_id: string;
   project_name: string;
-  updated_at: number;
+  updated_at: string;
 }

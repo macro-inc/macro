@@ -222,7 +222,7 @@ export function EmailCompose(props: EmailComposeProps) {
 
     // If there's an existing draft, we should send the sendTime so that the send time
     // stays up to date and is not removed
-    const sendTime = existingDraft ? form.sendTime()?.toISOString() : undefined;
+    const sendTime = existingDraft ? form.sendTime() : undefined;
 
     const draftResponse = await saveDraftMutation.mutateAsync({
       draft: {
@@ -525,7 +525,7 @@ export function EmailCompose(props: EmailComposeProps) {
       return;
     }
 
-    const sendTime = form.sendTime()?.toISOString();
+    const sendTime = form.sendTime();
 
     if (sendTime) {
       // Just in case, always get a fresh save of the draft so we don't miss any information
@@ -694,7 +694,7 @@ export function EmailCompose(props: EmailComposeProps) {
         </Switch>
 
         <div
-          class="macro-message-width mx-auto w-full max-h-full my-12 overflow-hidden px-4"
+          class="macro-message-width macro-message-padding mx-auto w-full max-h-full my-12 overflow-hidden"
           classList={{
             'pointer-events-none opacity-50': hasLinkError(),
           }}

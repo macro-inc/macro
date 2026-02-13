@@ -291,7 +291,9 @@ pub(crate) async fn search_emails(
                         bcc: a.bcc,
                         cc: a.cc,
                         labels: a.labels,
-                        sent_at: a.sent_at_seconds,
+                        sent_at: a
+                            .sent_at_seconds
+                            .and_then(|ts| chrono::DateTime::from_timestamp(ts, 0)),
                         sender: a.sender,
                         recipients: a.recipients,
                     })),

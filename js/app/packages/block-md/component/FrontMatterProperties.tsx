@@ -162,7 +162,7 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
         property,
         apiValues: {
           valueType: 'DATE',
-          value: date.toISOString(),
+          value: date,
         },
       }),
   };

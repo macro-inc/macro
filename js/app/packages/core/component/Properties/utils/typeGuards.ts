@@ -302,10 +302,10 @@ export function toPropertyApiValue(
     )
     .with('DATE', () => {
       if (typeof value === 'string') {
-        return { valueType: 'DATE' as const, value };
+        return { valueType: 'DATE' as const, value: new Date(value) };
       }
       if (value instanceof Date) {
-        return { valueType: 'DATE' as const, value: value.toISOString() };
+        return { valueType: 'DATE' as const, value };
       }
       return null;
     })

@@ -8,4 +8,4 @@
 /**
  * The time the project was deleted
  */
-export type SoupProjectDeletedAt = number | null;
+export type SoupProjectDeletedAt = string | null;

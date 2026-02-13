@@ -12,9 +12,6 @@ import type { BasicDocumentFileType } from '@service-storage/generated/schemas/b
 import { createEffect, createMemo, createSignal, on } from 'solid-js';
 import type { CommandItemCard } from './KonsoleItem';
 
-const convertSecondsToMillis = (timestamp?: number) =>
-  timestamp ? timestamp * 1000 : undefined;
-
 function createDocumentItems(
   doc: UnifiedSearchResponseItem
 ): CommandItemCard[] {
@@ -56,7 +53,7 @@ function createDocumentItems(
               highlightTerms: extractSearchTerms(content),
             }),
           },
-          updatedAt: convertSecondsToMillis(doc.metadata?.updated_at),
+          updatedAt: doc.metadata?.updated_at,
         });
       }
     });
@@ -83,9 +80,7 @@ function createEmailItems(email: UnifiedSearchResponseItem): CommandItemCard[] {
           id: email.thread_id,
           name: email.name ?? '',
           sender: result.sender!,
-          timestamp: new Date(
-            convertSecondsToMillis(result.sent_at ?? email.updated_at)!
-          ).toISOString(),
+          timestamp: result.sent_at ?? email.updated_at,
           is_read: !result.labels.includes('UNREAD'),
           // TODO: This should be the attachments from the email, need to update the search service to return them
           attachments: [],
@@ -134,7 +129,7 @@ function createChatItems(chat: UnifiedSearchResponseItem): CommandItemCard[] {
           matchIndex: index,
           senderId: chat.user_id,
         },
-        updatedAt: convertSecondsToMillis(chat.metadata?.updated_at),
+        updatedAt: chat.metadata?.updated_at,
       });
     });
   }
@@ -170,7 +165,7 @@ function createChannelItems(
           matchIndex: index,
           senderId: result.sender_id!,
         },
-        updatedAt: convertSecondsToMillis(channel.metadata?.updated_at),
+        updatedAt: channel.metadata?.updated_at,
       });
     });
   }
