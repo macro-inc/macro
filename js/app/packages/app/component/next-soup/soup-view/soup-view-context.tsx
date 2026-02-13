@@ -370,7 +370,7 @@ export const SoupViewContextProvider: FlowComponent<
 
   const freshSearchResults = createMemo<EntityData[]>(() => {
     if (isSearchDisabled()) return [];
-    if (searchQuery.isFetching) return [];
+    if (searchQuery.isFetching && !searchQuery.isFetchingNextPage) return [];
     return searchQuery.data ?? [];
   });
 
