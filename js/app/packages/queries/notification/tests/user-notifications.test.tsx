@@ -54,14 +54,14 @@ function createMockNotification(
     id: `notification-${Math.random().toString(36).slice(2)}`,
     entity_id: 'entity-1',
     entity_type: 'document',
-    createdAt: new Date().toISOString(),
-    updatedAt: null,
-    viewedAt: null,
-    deletedAt: null,
+    created_at: new Date().toISOString(),
+    updated_at: null,
+    viewed_at: null,
+    deleted_at: null,
     done: false,
     sent: true,
-    notificationEventType: 'item_shared_user',
-    notificationMetadata: {
+    notification_event_type: 'item_shared_user',
+    notification_metadata: {
       tag: 'item_shared_user',
       content: {
         sharedBy: 'user-1',
@@ -147,9 +147,9 @@ describe('notification mutations', () => {
   });
 
   describe('useMarkNotificationsAsSeenMutation', () => {
-    it('should optimistically update viewedAt when marking as seen', async () => {
-      const n1 = createMockNotification({ id: 'n1', viewedAt: null });
-      const n2 = createMockNotification({ id: 'n2', viewedAt: null });
+    it('should optimistically update viewed_at when marking as seen', async () => {
+      const n1 = createMockNotification({ id: 'n1', viewed_at: null });
+      const n2 = createMockNotification({ id: 'n2', viewed_at: null });
       seedQueryCache([createMockNotificationPage([n1, n2])]);
 
       mockBulkMarkNotificationAsSeen.mockResolvedValue(ok({ success: true }));
@@ -167,14 +167,14 @@ describe('notification mutations', () => {
       await mutatePromise;
 
       const notifications = getNotificationsFromCache();
-      expect(typeof notifications[0].viewedAt).toBe('string');
-      expect(notifications[1].viewedAt).toBe(null);
+      expect(typeof notifications[0].viewed_at).toBe('string');
+      expect(notifications[1].viewed_at).toBe(null);
 
       cleanup();
     });
 
     it('should rollback optimistic update on error', async () => {
-      const n1 = createMockNotification({ id: 'n1', viewedAt: null });
+      const n1 = createMockNotification({ id: 'n1', viewed_at: null });
       seedQueryCache([createMockNotificationPage([n1])]);
 
       mockBulkMarkNotificationAsSeen.mockResolvedValue(
@@ -198,14 +198,14 @@ describe('notification mutations', () => {
       await new Promise((r) => setTimeout(r, 10));
 
       const notifications = getNotificationsFromCache();
-      expect(notifications[0].viewedAt).toBe(null);
+      expect(notifications[0].viewed_at).toBe(null);
 
       cleanup();
     });
 
     it('should handle marking notifications across multiple pages', async () => {
-      const n1 = createMockNotification({ id: 'n1', viewedAt: null });
-      const n2 = createMockNotification({ id: 'n2', viewedAt: null });
+      const n1 = createMockNotification({ id: 'n1', viewed_at: null });
+      const n2 = createMockNotification({ id: 'n2', viewed_at: null });
       seedQueryCache([
         createMockNotificationPage([n1]),
         createMockNotificationPage([n2]),
@@ -226,8 +226,8 @@ describe('notification mutations', () => {
       await mutatePromise;
 
       const notifications = getNotificationsFromCache();
-      expect(notifications[0].viewedAt).toBe(null); // n1 unchanged
-      expect(typeof notifications[1].viewedAt).toBe('string'); // n2 updated
+      expect(notifications[0].viewed_at).toBe(null); // n1 unchanged
+      expect(typeof notifications[1].viewed_at).toBe('string'); // n2 updated
 
       cleanup();
     });

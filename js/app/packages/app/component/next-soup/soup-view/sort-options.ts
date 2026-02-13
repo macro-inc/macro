@@ -22,7 +22,7 @@ export function sortByNotifiedAt<T extends WithNotification<EntityData>>(
   const bNotification = b.notifications?.()[0];
 
   if (aNotification && bNotification) {
-    return compareDateDesc(aNotification.createdAt, bNotification.createdAt);
+    return compareDateDesc(aNotification.created_at, bNotification.created_at);
   } else if (aNotification) {
     return -1;
   } else if (bNotification) {

@@ -11,7 +11,6 @@ use utoipa::ToSchema;
 mod test;
 
 #[derive(Debug, Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
 pub struct ApiUserNotification {
     /// The user who owns this notification.
     #[schema(value_type = String)]

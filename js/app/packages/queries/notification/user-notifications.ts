@@ -15,7 +15,7 @@ import { notificationKeys } from './keys';
 import type { UnifiedNotification } from '@notifications/types';
 
 function stripOwnerId({
-  ownerId: _,
+  owner_id: _,
   ...rest
 }: ApiUserNotification): UnifiedNotification {
   return rest;
@@ -322,7 +322,7 @@ const mapNotificationsAsSeen = (
         ...page,
         items: page.items.map((n) =>
           params.notificationIds.includes(n.id)
-            ? { ...n, viewedAt: new Date().toISOString() }
+            ? { ...n, viewed_at: new Date().toISOString() }
             : n
         ),
       })),

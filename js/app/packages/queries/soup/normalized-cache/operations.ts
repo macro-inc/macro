@@ -37,7 +37,7 @@ export function optimisticUpdateSoupEntity<T extends SoupEntityTag>(
     : [];
 
   const previous = dependentKeys.map(
-    (key) =>
+    (key: QueryKey) =>
       [
         key,
         queryClient.getQueryData<InfiniteData<SoupPage, unknown>>(key),

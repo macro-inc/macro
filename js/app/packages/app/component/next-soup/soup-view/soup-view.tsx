@@ -105,7 +105,7 @@ const useSoupNotificationInvalidators = () => {
     notificationSource,
     'document',
     (notification) => {
-      if (notification.notificationEventType === 'task_assigned') {
+      if (notification.notification_event_type === 'task_assigned') {
         entityQueryClient.invalidateQueries({
           queryKey: soupKeys._def,
         });

@@ -13,26 +13,26 @@ import type { NotifEvent } from './notifEvent';
 
 export type ApiUserNotificationAllOf = {
   /** When the notification was created. */
-  createdAt?: ApiUserNotificationAllOfCreatedAt;
+  created_at?: ApiUserNotificationAllOfCreatedAt;
   /** When the notification was deleted. */
-  deletedAt?: ApiUserNotificationAllOfDeletedAt;
+  deleted_at?: ApiUserNotificationAllOfDeletedAt;
   /** Whether the notification is marked as done. */
   done: boolean;
   /** The notification ID. */
   id: string;
   /** The notification event type string (e.g. "channel_mention").
 TODO make this a new type */
-  notificationEventType: string;
+  notification_event_type: string;
   /** Deserialized notification metadata. */
-  notificationMetadata: NotifEvent;
+  notification_metadata: NotifEvent;
   /** The user who owns this notification. */
-  ownerId: string;
+  owner_id: string;
   /** The user who triggered the notification. */
-  senderId?: ApiUserNotificationAllOfSenderId;
+  sender_id?: ApiUserNotificationAllOfSenderId;
   /** Whether the notification has been sent. */
   sent: boolean;
   /** When the notification was last updated. */
-  updatedAt?: ApiUserNotificationAllOfUpdatedAt;
+  updated_at?: ApiUserNotificationAllOfUpdatedAt;
   /** When the notification was viewed/seen. */
-  viewedAt?: ApiUserNotificationAllOfViewedAt;
+  viewed_at?: ApiUserNotificationAllOfViewedAt;
 };

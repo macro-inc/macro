@@ -36,11 +36,14 @@ export const useBlockDocumentName = (defaultName?: string) => {
 
 export const useBlockDocumentDownloadName = (defaultName?: string) => {
   const documentName = useBlockDocumentName(defaultName);
+  const [metadata] = blockMetadataSignal;
 
   return () => {
     let current = documentName();
     if (!current) current = 'download';
-    const fileType = blockMetadataSignal()?.fileType;
-    return formatDocumentName(current, fileType);
+    const fileType = metadata()?.fileType;
+    return formatDocumentName(current, fileType, {
+      caseInsensitiveSuffix: true,
+    });
   };
 };

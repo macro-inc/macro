@@ -23,7 +23,7 @@ export function Notifications(props: NotificationsProps) {
         `${props.entity.type}@${props.entity.id}`
       ] ?? [];
     return entityNotifications.sort((a, b) => {
-      return compareDateDesc(a.createdAt, b.createdAt);
+      return compareDateDesc(a.created_at, b.created_at);
     });
   });
 
@@ -47,7 +47,7 @@ export function Notifications(props: NotificationsProps) {
       >
         <For each={notifications()}>
           {(notification) => {
-            const isUnread = !notification.viewedAt;
+            const isUnread = !notification.viewed_at;
             const navHandlers = useSplitNavigationHandler(() =>
               handleNotificationClick(notification)
             );
@@ -68,12 +68,14 @@ export function Notifications(props: NotificationsProps) {
                   <div>
                     {
                       NOTIFICATION_LABEL_BY_TYPE[
-                        notification.notificationMetadata.tag
+                        notification.notification_metadata.tag
                       ]
                     }
                   </div>
                   <div class="grow" />
-                  <div>{formatDate(notification.createdAt ?? new Date(0))}</div>
+                  <div>
+                    {formatDate(notification.created_at ?? new Date(0))}
+                  </div>
                 </div>
 
                 <div class="flex flex-col gap-2 ml-4">

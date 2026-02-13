@@ -1686,6 +1686,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
+name = "channels"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "chrono",
+ "http-body-util",
+ "macro_db_migrator",
+ "mockall",
+ "model-error-response",
+ "model_user",
+ "models_pagination",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.17",
+ "tokio",
+ "tower 0.5.2",
+ "tracing",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
 name = "charset"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2731,6 +2755,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "bzip2",
+ "channels",
  "chrono",
  "clap",
  "cloudfront_sign",

@@ -48,7 +48,7 @@ export function notificationIsOfEntityType(
  * @returns boolean
  */
 export function notificationIsRead(notification: UnifiedNotification): boolean {
-  return !!notification.viewedAt || notification.done;
+  return !!notification.viewed_at || notification.done;
 }
 
 /**

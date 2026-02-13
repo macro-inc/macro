@@ -51,15 +51,15 @@ async function openChannelNotification(
   let messageId: string | undefined;
   let threadId: string | undefined;
 
-  const tag = notification.notificationMetadata.tag;
+  const tag = notification.notification_metadata.tag;
   if (tag === 'channel_mention') {
-    messageId = notification.notificationMetadata.content.messageId;
-    threadId = notification.notificationMetadata.content.threadId ?? undefined;
+    messageId = notification.notification_metadata.content.messageId;
+    threadId = notification.notification_metadata.content.threadId ?? undefined;
   } else if (tag === 'channel_message_send') {
-    messageId = notification.notificationMetadata.content.messageId;
+    messageId = notification.notification_metadata.content.messageId;
   } else if (tag === 'channel_message_reply') {
-    messageId = notification.notificationMetadata.content.messageId;
-    threadId = notification.notificationMetadata.content.threadId;
+    messageId = notification.notification_metadata.content.messageId;
+    threadId = notification.notification_metadata.content.threadId;
   }
 
   openSplitIfNotOpen(layoutManager, 'channel', channelId, newSplit);
@@ -92,7 +92,7 @@ export type OpenNotificationFromIdError = NotSupportedError | NotFoundError;
 function getSupportedHandler(
   notification: UnifiedNotification
 ): ((layoutManager: SplitManager, newSplit?: boolean) => Promise<void>) | null {
-  const tag = notification.notificationMetadata.tag;
+  const tag = notification.notification_metadata.tag;
 
   return match(tag)
     .with(
@@ -102,7 +102,7 @@ function getSupportedHandler(
           openChannelNotification(notification, lm, newSplit)
     )
     .with('new_email', () => {
-      const meta = notification.notificationMetadata;
+      const meta = notification.notification_metadata;
       if (meta.tag !== 'new_email') return null;
       return async (lm: SplitManager, newSplit: boolean = false) => {
         openSplitIfNotOpen(lm, 'email', meta.content.threadId, newSplit);
@@ -115,7 +115,7 @@ function getSupportedHandler(
           openSplitIfNotOpen(lm, 'channel', notification.entity_id, newSplit)
     )
     .with('document_mention', () => {
-      const meta = notification.notificationMetadata;
+      const meta = notification.notification_metadata;
       if (meta.tag !== 'document_mention') return null;
       return async (lm: SplitManager, newSplit: boolean = false) =>
         openSplitIfNotOpen(
@@ -127,14 +127,14 @@ function getSupportedHandler(
     })
     .with('invite_to_team', () => null)
     .with('task_assigned', () => {
-      const meta = notification.notificationMetadata;
+      const meta = notification.notification_metadata;
       if (meta.tag !== 'task_assigned') return null;
       return async (lm: SplitManager, newSplit: boolean = false) => {
         openSplitIfNotOpen(lm, 'task', meta.content.taskId, newSplit);
       };
     })
     .with('mentioned_in_document_comment', () => {
-      const meta = notification.notificationMetadata;
+      const meta = notification.notification_metadata;
       if (meta.tag !== 'mentioned_in_document_comment') return null;
       return async (lm: SplitManager, newSplit: boolean = false) =>
         openSplitIfNotOpen(
@@ -160,7 +160,7 @@ export function openNotification(
   if (!handler) {
     return errAsync({
       tag: 'NotSupportedError',
-      notificationType: notification.notificationMetadata.tag,
+      notificationType: notification.notification_metadata.tag,
     });
   }
   return ResultAsync.fromSafePromise(handler(layoutManager, newSplit));

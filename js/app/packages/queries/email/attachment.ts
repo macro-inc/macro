@@ -132,3 +132,63 @@ export const useRemoveDraftAttachmentMutation = (
     ),
   }));
 };
+
+type AddForwardedAttachmentsParams = {
+  draftID: string;
+  attachments: { attachmentID: string }[];
+};
+
+export const useAddForwardedAttachmentsMutation = (
+  callbacks?: MutationCallbacks<void, Error, AddForwardedAttachmentsParams>
+) => {
+  return useMutation(() => ({
+    mutationFn: async (params: AddForwardedAttachmentsParams) => {
+      for (const att of params.attachments) {
+        await throwOnErr(
+          async () =>
+            await emailClient.addForwardedAttachment({
+              draftID: params.draftID,
+              attachmentID: att.attachmentID,
+            })
+        );
+      }
+    },
+    ...withCallbacks<void, Error, AddForwardedAttachmentsParams>(
+      {
+        onError() {
+          toast.failure('Failed to add forwarded attachments');
+        },
+      },
+      callbacks
+    ),
+  }));
+};
+
+type RemoveForwardedAttachmentParams = {
+  draftID: string;
+  attachmentID: string;
+};
+
+export const useRemoveForwardedAttachmentMutation = (
+  callbacks?: MutationCallbacks<void, Error, RemoveForwardedAttachmentParams>
+) => {
+  return useMutation(() => ({
+    mutationFn: async (params: RemoveForwardedAttachmentParams) => {
+      await throwOnErr(
+        async () =>
+          await emailClient.removeForwardedAttachment({
+            draftID: params.draftID,
+            attachmentID: params.attachmentID,
+          })
+      );
+    },
+    ...withCallbacks<void, Error, RemoveForwardedAttachmentParams>(
+      {
+        onError() {
+          toast.failure('Failed to remove forwarded attachment');
+        },
+      },
+      callbacks
+    ),
+  }));
+};

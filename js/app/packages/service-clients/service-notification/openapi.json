@@ -960,20 +960,20 @@
           {
             "type": "object",
             "required": [
-              "ownerId",
+              "owner_id",
               "id",
-              "notificationEventType",
+              "notification_event_type",
               "sent",
               "done",
-              "notificationMetadata"
+              "notification_metadata"
             ],
             "properties": {
-              "createdAt": {
+              "created_at": {
                 "type": ["string", "null"],
                 "format": "date-time",
                 "description": "When the notification was created."
               },
-              "deletedAt": {
+              "deleted_at": {
                 "type": ["string", "null"],
                 "format": "date-time",
                 "description": "When the notification was deleted."
@@ -987,19 +987,19 @@
                 "format": "uuid",
                 "description": "The notification ID."
               },
-              "notificationEventType": {
+              "notification_event_type": {
                 "type": "string",
                 "description": "The notification event type string (e.g. \"channel_mention\").\nTODO make this a new type"
               },
-              "notificationMetadata": {
+              "notification_metadata": {
                 "$ref": "#/components/schemas/NotifEvent",
                 "description": "Deserialized notification metadata."
               },
-              "ownerId": {
+              "owner_id": {
                 "type": "string",
                 "description": "The user who owns this notification."
               },
-              "senderId": {
+              "sender_id": {
                 "type": ["string", "null"],
                 "description": "The user who triggered the notification."
               },
@@ -1007,12 +1007,12 @@
                 "type": "boolean",
                 "description": "Whether the notification has been sent."
               },
-              "updatedAt": {
+              "updated_at": {
                 "type": ["string", "null"],
                 "format": "date-time",
                 "description": "When the notification was last updated."
               },
-              "viewedAt": {
+              "viewed_at": {
                 "type": ["string", "null"],
                 "format": "date-time",
                 "description": "When the notification was viewed/seen."

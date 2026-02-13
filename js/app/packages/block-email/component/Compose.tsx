@@ -61,6 +61,7 @@ import {
 } from '@queries/email/draft';
 import {
   useRemoveDraftAttachmentMutation,
+  useRemoveForwardedAttachmentMutation,
   useUploadDraftAttachmentsMutation,
 } from '@queries/email/attachment';
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
@@ -278,10 +279,14 @@ export function EmailCompose(props: EmailComposeProps) {
   };
 
   const removeAttachmentMutation = useRemoveDraftAttachmentMutation();
+  const removeForwardedAttachmentMutation =
+    useRemoveForwardedAttachmentMutation();
 
   const handleRemoveAttachment = (attachment: DraftFormAttachment) => {
     if (attachment.type === 'local') {
       form.attachments.removeByFile(attachment.file);
+    } else if (attachment.type === 'forwarded') {
+      form.attachments.removeForwarded(attachment.attachmentID);
     } else {
       form.attachments.removeByID(attachment.attachmentID);
     }
@@ -290,10 +295,17 @@ export function EmailCompose(props: EmailComposeProps) {
 
     if (!savedDraftID || !attachment.attachmentID) return;
 
-    removeAttachmentMutation.mutate({
-      draftID: savedDraftID,
-      attachmentID: attachment.attachmentID,
-    });
+    if (attachment.type === 'forwarded') {
+      removeForwardedAttachmentMutation.mutate({
+        draftID: savedDraftID,
+        attachmentID: attachment.attachmentID,
+      });
+    } else {
+      removeAttachmentMutation.mutate({
+        draftID: savedDraftID,
+        attachmentID: attachment.attachmentID,
+      });
+    }
   };
 
   // We are consuming the first change, because it is the initial value

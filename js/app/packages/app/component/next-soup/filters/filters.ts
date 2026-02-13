@@ -48,7 +48,7 @@ export function unreadFilter(entity: EnhancedEntity): boolean {
   if (entity.type === 'email') {
     return !entity.isRead;
   }
-  return entity.notifications?.()?.some((n) => !n.viewedAt) ?? false;
+  return entity.notifications?.()?.some((n) => !n.viewed_at) ?? false;
 }
 
 /**

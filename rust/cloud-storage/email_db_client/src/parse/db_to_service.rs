@@ -87,10 +87,16 @@ pub fn map_db_message_attachments_to_service(
     mut service_message: message::Message,
     attachments_res: Vec<db::attachment::Attachment>,
     draft_attachments_res: Vec<db::attachment::AttachmentDraft>,
+    forwarded_attachments_res: Vec<db::attachment::AttachmentForwarded>,
 ) -> anyhow::Result<message::Message> {
     service_message.attachments = map_db_attachments_to_service(attachments_res);
 
     service_message.attachments_draft = draft_attachments_res
+        .into_iter()
+        .map(|a| a.into())
+        .collect();
+
+    service_message.attachments_forwarded = forwarded_attachments_res
         .into_iter()
         .map(|a| a.into())
         .collect();
@@ -183,6 +189,7 @@ pub fn map_attachmentless_db_message_to_service(
         body_macro: db_message.body_macro,
         attachments: Vec::new(),
         attachments_draft: Vec::new(),
+        attachments_forwarded: Vec::new(),
         headers_json: db_message.headers_jsonb,
         created_at: db_message.created_at,
         updated_at: db_message.updated_at,
