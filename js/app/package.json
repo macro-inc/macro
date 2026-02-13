@@ -35,6 +35,7 @@
 		"@corvu/dialog": "^0.2.4",
 		"@corvu/resizable": "^0.2.5",
 		"@corvu/tooltip": "^0.2.2",
+		"@date-fns/tz": "^1.4.1",
 		"@floating-ui/dom": "^1.7.4",
 		"@fontsource-variable/inter": "^5.2.8",
 		"@inkibra/tauri-plugins": "git+https://github.com/seanaye/tauri-plugins.git#0c932ffd3202145b40645246d87a38deb72ba09c",

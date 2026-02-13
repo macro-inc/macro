@@ -722,3 +722,62 @@ async fn test_dynamic_query_with_importance_filter(pool: Pool<Postgres>) -> anyh
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn test_dynamic_query_with_single_thread_id(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let limit = 50;
+
+    let thread_id = Uuid::parse_str("20000001-0000-0000-0000-000000000001")?;
+    let filter = Arc::new(Expr::Literal(EmailLiteral::ThreadId(thread_id)));
+    let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
+
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].id, thread_id);
+    assert_eq!(results[0].name.as_deref(), Some("Meeting Tomorrow"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn test_dynamic_query_thread_id_with_sender_filter(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let limit = 50;
+
+    // Thread 1 is from john, thread 3 is from bob.
+    // AND(OR(thread1, thread3), sender=john) should only return thread 1.
+    let id1 = Uuid::parse_str("20000001-0000-0000-0000-000000000001")?;
+    let id3 = Uuid::parse_str("20000003-0000-0000-0000-000000000003")?;
+    let filter = Arc::new(Expr::and(
+        Expr::or(
+            Expr::Literal(EmailLiteral::ThreadId(id1)),
+            Expr::Literal(EmailLiteral::ThreadId(id3)),
+        ),
+        Expr::Literal(EmailLiteral::Sender(Email::Complete(
+            EmailStr::parse_from_str("john@example.com")?.into_owned(),
+        ))),
+    ));
+    let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
+
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].id, id1);
+    assert_eq!(results[0].sender_email.as_deref(), Some("john@example.com"));
+
+    Ok(())
+}

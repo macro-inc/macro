@@ -1,13 +1,7 @@
-#![allow(unused)]
-
-mod api;
-mod constants;
-
+use properties_service::api::swagger::ApiDoc;
 use utoipa::OpenApi;
 
 fn main() {
-    println!(
-        "{}",
-        api::swagger::ApiDoc::openapi().to_pretty_json().unwrap()
-    );
+    let doc = ApiDoc::openapi();
+    println!("{}", serde_json::to_string_pretty(&doc).unwrap());
 }

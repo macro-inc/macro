@@ -3,12 +3,10 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { trackMention } from '@core/signal/mention';
 import type { ChannelWithParticipants, IUser } from '@core/user';
 import type { ParsedDate } from '@core/util/dateParser';
-import type { EmailEntity } from '@macro-entity';
+import type { EmailEntity } from '@entity';
 import { waitBulkUploadStatus } from '@service-connection/bulkUpload';
 import type { DocumentMentionMetadata } from '@service-notification/client';
-import type { BasicDocument } from '@service-storage/generated/schemas/basicDocument';
-import type { Item } from '@service-storage/generated/schemas/item';
-import type { Project } from '@service-storage/generated/schemas/project';
+import type { HistoryItem as Item } from '@queries/history/history';
 import type { UploadSuccess } from '@service-storage/util/upload';
 import type { LexicalEditor } from 'lexical';
 import { v7 } from 'uuid';
@@ -243,20 +241,20 @@ export async function handleEmailMention(
  * Converts a UploadSuccess to an Item. Folder UploadSuccesses contain a promise for the projectId, so we need to wait for that to resolve.
  */
 export async function documentUploadToItem(upload: UploadSuccess) {
-  const now = Date.now();
+  const now = new Date();
 
   if (upload.type === 'document') {
     return {
       id: upload.documentId,
       name: upload.name,
-      type: 'document',
+      type: 'document' as const,
       fileType: upload.fileType,
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
       documentVersionId: 0,
       owner: '',
-    } satisfies BasicDocument;
+    };
   }
 
   const projectId = await waitBulkUploadStatus(upload.requestId);
@@ -265,12 +263,12 @@ export async function documentUploadToItem(upload: UploadSuccess) {
   return {
     id: projectId,
     name: upload.name,
-    type: 'project',
+    type: 'project' as const,
     createdAt: now,
     updatedAt: now,
     deletedAt: null,
     userId: '',
-  } satisfies Project;
+  };
 }
 
 /**

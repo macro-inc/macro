@@ -21,11 +21,14 @@ import type { InputAttachment } from '@core/store/cacheChannelInput';
 import SunIcon from '@icon/duotone/sun-horizon-duotone.svg';
 import ArrowDownIcon from '@icon/regular/arrow-down.svg';
 import XIcon from '@icon/regular/x.svg';
-import type { Activity as ChannelActivity } from '@service-comms/generated/models/activity';
-import type { Attachment } from '@service-comms/generated/models/attachment';
-import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
-import type { Message } from '@service-comms/generated/models/message';
+import type { ApiActivity as ChannelActivity } from '@service-comms/generated/models';
+import type {
+  Attachment,
+  ChannelParticipant,
+  Message,
+} from '@queries/channel/types';
 import { useUserId } from '@core/context/user';
+import type { DateValue } from '@core/util/date';
 import { debounce } from '@solid-primitives/scheduled';
 import {
   type Accessor,
@@ -447,7 +450,7 @@ function MessageListImpl(props: MessageListProps) {
   // Snapshot the lastViewed time so it reflects the pre-session value.
   // Without this, the activity mutation on channel open would update
   // lastViewed reactively, causing the "New" indicator to disappear.
-  const lastViewed = createMemo<string | null | undefined>((prev) => {
+  const lastViewed = createMemo<DateValue | null | undefined>((prev) => {
     if (prev !== undefined) return prev;
     return props?.latestActivity?.viewed_at;
   });

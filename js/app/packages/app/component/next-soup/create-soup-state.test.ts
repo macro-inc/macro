@@ -44,7 +44,7 @@ const createTestEntity = (id: string, name?: string): EntityData => ({
   type: 'document',
   name: name ?? `Entity ${id}`,
   ownerId: 'test-owner',
-  updatedAt: Date.now(),
+  updatedAt: new Date(),
 });
 
 describe('createSoupState', () => {

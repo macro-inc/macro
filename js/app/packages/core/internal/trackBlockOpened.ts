@@ -1,8 +1,8 @@
 import type { BlockName } from '../block';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
-import { optimisticUpdateDssItemViewedAt } from '@macro-entity';
 import {
   hasSoupEntity,
+  optimisticUpdateSoupItemViewedAt,
   refetchSoupEntity,
   type SoupEntityTag,
 } from '@queries/soup/cache';
@@ -30,7 +30,7 @@ export function track({
 
   const inSoup = hasSoupEntity(itemId);
   if (inSoup) {
-    optimisticUpdateDssItemViewedAt(itemId);
+    optimisticUpdateSoupItemViewedAt(itemId);
   } else if (itemType) {
     refetchSoupEntity(itemId, itemType as SoupEntityTag);
   }

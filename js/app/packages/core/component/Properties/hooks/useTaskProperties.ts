@@ -1,4 +1,4 @@
-import type { SubType } from '@macro-entity';
+import type { SubType } from '@entity';
 import { useBulkEntityPropertiesQuery } from '@queries/properties/bulk';
 import { createMemo } from 'solid-js';
 import { SYSTEM_PROPERTY_IDS } from '../constants';

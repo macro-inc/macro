@@ -1,4 +1,5 @@
 import { isEntityType } from '@core/types/utils';
+import type { DateValue } from '@core/util/date';
 import type { ApiLabel } from '@service-email/generated/schemas';
 import type {
   SoupLabel,
@@ -11,20 +12,20 @@ export type EntityBase = {
   name: string;
   ownerId: string;
   frecencyScore?: number;
-  createdAt?: number;
-  updatedAt?: number;
-  viewedAt?: number;
+  createdAt?: DateValue | null;
+  updatedAt?: DateValue | null;
+  viewedAt?: DateValue | null;
 };
 
 export type ChannelEntity = EntityBase & {
   type: 'channel';
   channelType: 'direct_message' | 'private' | 'organization' | 'public';
-  interactedAt?: number;
+  interactedAt?: DateValue | null;
   participantIds?: string[];
   latestMessage?: {
     content: string;
     senderId: string;
-    createdAt: number;
+    createdAt: DateValue;
   };
 };
 

@@ -1,8 +1,8 @@
+use chrono::{DateTime, Utc};
 pub mod create;
 pub mod delete;
 pub mod edit;
 
-use chrono::{DateTime, Utc, serde::ts_seconds_option};
 use create::{CreateCommentResponse, CreateUnthreadedAnchorResponse};
 use delete::{DeleteCommentResponse, DeleteUnthreadedAnchorResponse};
 use edit::{EditAnchorResponse, EditCommentResponse};
@@ -23,14 +23,8 @@ pub struct Comment {
     pub sender: Option<String>,
     pub text: String,
     pub metadata: Option<Value>,
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub created_at: Option<DateTime<Utc>>,
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub updated_at: Option<DateTime<Utc>>,
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=true)]
     pub deleted_at: Option<DateTime<Utc>>,
 }
 
@@ -41,14 +35,8 @@ pub struct Thread {
     pub owner: String,
     pub resolved: bool,
     pub document_id: String,
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub created_at: Option<DateTime<Utc>>,
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub updated_at: Option<DateTime<Utc>>,
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=true)]
     pub deleted_at: Option<DateTime<Utc>>,
     pub metadata: Option<Value>,
 }
@@ -126,14 +114,8 @@ pub struct PdfHighlightAnchor {
     pub text: String,
     pub page_viewport_width: f64,
     pub page_viewport_height: f64,
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub created_at: Option<DateTime<Utc>>,
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub updated_at: Option<DateTime<Utc>>,
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=true)]
     pub deleted_at: Option<DateTime<Utc>>,
     pub highlight_rects: Vec<PdfHighlightRect>,
 }

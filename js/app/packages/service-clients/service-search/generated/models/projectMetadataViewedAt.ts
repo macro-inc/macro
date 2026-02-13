@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ProjectMetadataViewedAt = number | null;
+export type ProjectMetadataViewedAt = string | null;

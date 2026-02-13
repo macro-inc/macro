@@ -137,9 +137,9 @@ pub fn construct_search_result(
             if let Some(info) = thread_histories.get(&entity_id) {
                 let info = info.clone();
                 Some(EmailSearchResponseItemWithMetadata {
-                    created_at: info.created_at.timestamp(),
-                    updated_at: info.updated_at.timestamp(),
-                    viewed_at: info.viewed_at.map(|a| a.timestamp()),
+                    created_at: info.created_at,
+                    updated_at: info.updated_at,
+                    viewed_at: info.viewed_at,
                     snippet: info.snippet,
                     extra: EmailSearchResponseItem {
                         id: entity_id,

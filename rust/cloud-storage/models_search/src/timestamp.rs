@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use utoipa::ToSchema;
 
 /// DateTime<Utc> ts_seconds deserialization + RFC3339 serialization
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, ToSchema)]
 pub struct HumanReadableTimestamp(
     #[serde(deserialize_with = "ts_seconds::deserialize")] pub DateTime<Utc>,
 );

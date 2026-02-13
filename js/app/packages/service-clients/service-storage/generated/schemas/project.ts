@@ -4,14 +4,16 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ProjectCreatedAt } from './projectCreatedAt';
 import type { ProjectDeletedAt } from './projectDeletedAt';
 import type { ProjectParentId } from './projectParentId';
 import type { ProjectType } from './projectType';
+import type { ProjectUpdatedAt } from './projectUpdatedAt';
 
 export interface Project {
   /** The time the project was created */
-  createdAt: number;
-  deletedAt: ProjectDeletedAt;
+  createdAt?: ProjectCreatedAt;
+  deletedAt?: ProjectDeletedAt;
   /** The id of the project */
   id: string;
   /** The name of the project */
@@ -19,7 +21,7 @@ export interface Project {
   /** The parent project id */
   parentId?: ProjectParentId;
   /** The time the project was updated */
-  updatedAt: number;
+  updatedAt?: ProjectUpdatedAt;
   /** The user id of who created the project */
   userId: string;
   type: ProjectType;

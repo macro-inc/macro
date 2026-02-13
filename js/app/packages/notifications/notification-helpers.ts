@@ -1,8 +1,7 @@
 import type { Entity, EntityType } from '@core/types';
-import type { UnifiedNotification } from '@service-notification/client';
 import { type Accessor, createEffect, createMemo, onCleanup } from 'solid-js';
 import type { NotificationSource } from './notification-source';
-import { compositeEntity } from './types';
+import { type UnifiedNotification, compositeEntity } from './types';
 
 /**
  * Returns a reactive accessor to all notifications for a given entity

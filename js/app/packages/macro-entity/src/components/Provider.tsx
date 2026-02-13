@@ -3,7 +3,7 @@ import { SolidQueryDevtools } from '@tanstack/solid-query-devtools';
 import { LOCAL_ONLY } from '@core/constant/featureFlags';
 import { Show, type ParentProps } from 'solid-js';
 import { fetchApiToken } from '../queries/auth';
-import { queryClient } from '../queries/client';
+import { queryClient } from '@queries/client';
 import { queryKeys } from '../queries/key';
 import { RemoveInstructionsMdFromHistorySideEffect } from '@queries/history/history';
 

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT et.id::text as \"thread_id!\"\n        FROM document_email de\n        JOIN email_attachments ea ON de.email_attachment_id = ea.id\n        JOIN email_messages em ON ea.message_id = em.id\n        JOIN email_threads et ON em.thread_id = et.id\n        WHERE de.document_id = $1\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "4eece2777920eb0f5c4d2746221fb5b8070dbb37abe0dda364ed27e46eae230e"
+}

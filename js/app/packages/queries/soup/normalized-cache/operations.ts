@@ -243,27 +243,52 @@ export function buildSingleEntityFilter(
     chat_filters: { chat_ids: [NIL_ID] },
     channel_filters: { channel_ids: [NIL_ID] },
     project_filters: { project_ids: [NIL_ID] },
-    email_filters: { importance: false },
+    email_filters: { email_thread_ids: [NIL_ID] },
   };
-  return (
-    match(entityType)
-      .with('document', () => ({
-        ...base,
-        document_filters: { document_ids: [entityId] },
-      }))
-      .with('chat', () => ({ ...base, chat_filters: { chat_ids: [entityId] } }))
-      .with('channel', () => ({
-        ...base,
-        channel_filters: { channel_ids: [entityId] },
-      }))
-      .with('project', () => ({
-        ...base,
-        project_filters: { project_ids: [entityId] },
-      }))
-      //TODO: need to add backend support for email threads
-      .with('emailThread', () => null)
-      .exhaustive()
-  );
+  return match(entityType)
+    .with('document', () => ({
+      ...base,
+      document_filters: { document_ids: [entityId] },
+    }))
+    .with('chat', () => ({ ...base, chat_filters: { chat_ids: [entityId] } }))
+    .with('channel', () => ({
+      ...base,
+      channel_filters: { channel_ids: [entityId] },
+    }))
+    .with('project', () => ({
+      ...base,
+      project_filters: { project_ids: [entityId] },
+    }))
+    .with('emailThread', () => ({
+      ...base,
+      email_filters: { email_thread_ids: [entityId] },
+    }))
+    .exhaustive();
+}
+
+/**
+ * Optimistically update the viewedAt timestamp for a soup item.
+ * Updates the item across all soup queries if it exists.
+ */
+export function optimisticUpdateSoupItemViewedAt(itemId: string) {
+  const current = getSoupEntityById(itemId);
+  if (!current) return;
+
+  const now = new Date();
+
+  if (current.tag === 'channel') {
+    optimisticUpdateSoupEntity({
+      tag: 'channel',
+      data: { channel: { id: itemId }, viewed_at: now.toISOString() },
+      frecency_score: current.frecency_score,
+    });
+  } else {
+    optimisticUpdateSoupEntity({
+      tag: current.tag,
+      data: { id: itemId, viewedAt: now.toISOString() },
+      frecency_score: current.frecency_score,
+    });
+  }
 }
 
 /** @private */

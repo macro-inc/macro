@@ -66,9 +66,6 @@ fn test_document_basic_serde_with_deleted_at() {
     assert_eq!(original.document_name, deserialized.document_name);
     assert_eq!(original.owner, deserialized.owner);
     assert_eq!(original.file_type, deserialized.file_type);
-    // deleted_at uses ts_seconds so subsecond precision is lost
-    assert_eq!(
-        original.deleted_at.map(|dt| dt.timestamp()),
-        deserialized.deleted_at.map(|dt| dt.timestamp())
-    );
+    // DateTime serializes to ISO 8601 string, preserving microsecond precision
+    assert_eq!(original.deleted_at, deserialized.deleted_at);
 }

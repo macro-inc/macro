@@ -1292,24 +1292,16 @@
       },
       "Chat": {
         "type": "object",
-        "required": [
-          "id",
-          "name",
-          "userId",
-          "createdAt",
-          "updatedAt",
-          "isPersistent",
-          "deletedAt"
-        ],
+        "required": ["id", "name", "userId", "isPersistent"],
         "properties": {
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the chat was created"
           },
           "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the chat was deleted"
           },
           "id": {
@@ -1336,8 +1328,8 @@
             "format": "int64"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the chat was last updated"
           },
           "userId": {
@@ -1546,7 +1538,7 @@
       },
       "ChatPreviewData": {
         "type": "object",
-        "required": ["chat_id", "chat_name", "owner", "updated_at"],
+        "required": ["chat_id", "chat_name", "owner"],
         "properties": {
           "chat_id": {
             "type": "string"
@@ -1558,8 +1550,8 @@
             "type": "string"
           },
           "updated_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         }
       },
@@ -1570,8 +1562,6 @@
           "userId",
           "name",
           "messages",
-          "createdAt",
-          "updatedAt",
           "attachments",
           "availableModels",
           "webCitations",
@@ -1594,8 +1584,8 @@
             "description": "Available models for the chat"
           },
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the chat was created"
           },
           "id": {
@@ -1638,8 +1628,8 @@
             "description": "Current number of tokens in the chat"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the chat was last updated"
           },
           "userId": {

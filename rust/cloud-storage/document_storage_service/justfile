@@ -10,8 +10,5 @@ mod ci '../ci.just'
 deploy-dev:
     just ci::deploy-dev document-storage-service
 
-run: ensure::ensure_dynamodb
-    cargo run -F local
-
 check:
     SQLX_OFFLINE=true cargo check

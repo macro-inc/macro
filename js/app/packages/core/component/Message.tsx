@@ -1,6 +1,6 @@
 import { observedSize } from '@core/directive/observedSize';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { formatDate } from '@core/util/date';
+import { type DateValue, formatDate } from '@core/util/date';
 import IconPlus from '@icon/regular/plus.svg';
 import {
   type Accessor,
@@ -36,7 +36,7 @@ export type MessageRootProps = {
   isFirstMessage: boolean;
   isLastMessage: boolean;
   isConsecutive?: boolean;
-  timestamp?: string;
+  timestamp?: DateValue;
   hoverActions?: () => JSX.Element;
   shouldHover?: boolean;
   threadDepth?: number;
@@ -80,7 +80,7 @@ export function useMessageContext(): MessageContextValue {
 
 export type MessageTopBarSimpleProps = {
   name: string;
-  timestamp?: string;
+  timestamp?: DateValue | null;
   tagLabel?: string;
   tagIcon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>> | undefined;
 };
@@ -133,8 +133,7 @@ const TopBar: Component<MessageTopBarProps> = (props) => {
         {/* Date - hidden when hovering since it shows above hover actions */}
         <Show when={local.timestamp && !context.hover()}>
           <div class="text-xs touch:mobile-width:text-sm text-ink-muted">
-            {local.timestamp &&
-              formatDate(new Date(local.timestamp).getTime() / 1000)}
+            {local.timestamp && formatDate(local.timestamp)}
           </div>
         </Show>
       </div>
@@ -361,11 +360,13 @@ const Root: Component<MessageRootProps> = (props) => {
             data-message-id={props.id}
           >
             <Show when={props.timestamp}>
-              <div class="absolute top-0 translate-y-[-100%] bg-panel pl-2 pt-2 text-xs text-ink-muted font-mono mb-0.5 select-text cursor-default">
-                {formatDate(new Date(props.timestamp!).getTime() / 1000, {
-                  showTime: true,
-                })}
-              </div>
+              {(timestamp) => (
+                <div class="absolute top-0 translate-y-[-100%] bg-panel pl-2 pt-2 text-xs text-ink-muted font-mono mb-0.5 select-text cursor-default">
+                  {formatDate(timestamp(), {
+                    showTime: true,
+                  })}
+                </div>
+              )}
             </Show>
             <Show when={hover()}>
               <div class="border border-edge bg-panel">

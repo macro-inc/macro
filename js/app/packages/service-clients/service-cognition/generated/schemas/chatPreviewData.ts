@@ -4,10 +4,11 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
+import type { ChatPreviewDataUpdatedAt } from './chatPreviewDataUpdatedAt';
 
 export interface ChatPreviewData {
   chat_id: string;
   chat_name: string;
   owner: string;
-  updated_at: number;
+  updated_at?: ChatPreviewDataUpdatedAt;
 }

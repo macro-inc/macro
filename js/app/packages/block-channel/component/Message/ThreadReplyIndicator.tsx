@@ -2,6 +2,7 @@ import { Tooltip } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { onKeyDownClick, onKeyUpClick } from '@core/util/click';
+import type { DateValue } from '@core/util/date';
 import { formatRelativeDate } from '@core/util/time';
 import CaretRight from '@phosphor-icons/core/regular/caret-right.svg?component-solid';
 import { cn } from '@ui/utils/classname';
@@ -9,7 +10,7 @@ import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 
 export function ThreadReplyIndicator(props: {
   countCollapsedMessages: number;
-  timestamp: string;
+  timestamp?: DateValue;
   users: string[];
   onClick: () => void;
   justifyRight?: boolean;
@@ -88,10 +89,12 @@ export function ThreadReplyIndicator(props: {
                 {props.isThreadOpen ? 'Close thread' : 'Expand thread'}
               </p>
             </Match>
-            <Match when={!hover()}>
-              <p class="text-ink-muted">
-                Last reply {formatRelativeDate(props.timestamp)}
-              </p>
+            <Match when={!hover() && props.timestamp}>
+              {(timestamp) => (
+                <p class="text-ink-muted">
+                  Last reply {formatRelativeDate(timestamp())}
+                </p>
+              )}
             </Match>
           </Switch>
         </div>

@@ -11,6 +11,8 @@ import {
 } from '@core/component/Properties/constants';
 import { nanoid } from 'nanoid';
 
+const EPOCH_ZERO = new Date(0);
+
 /**
  * Sort order for key properties (status, priority, assignees)
  */
@@ -32,40 +34,41 @@ const SYSTEM_PROPERTY_OPTIONS: Record<string, PropertyOption[]> = {
       property_definition_id: SYSTEM_PROPERTY_IDS.STATUS,
       value: { type: 'string', value: 'Not Started' },
       display_order: 0,
-      created_at: '',
-      updated_at: '',
+      // TODO: need to properly handle dates. does not seem like these are even used/upserted anywhere?
+      created_at: EPOCH_ZERO.toISOString(),
+      updated_at: EPOCH_ZERO.toISOString(),
     },
     {
       id: PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS,
       property_definition_id: SYSTEM_PROPERTY_IDS.STATUS,
       value: { type: 'string', value: 'In Progress' },
       display_order: 1,
-      created_at: '',
-      updated_at: '',
+      created_at: EPOCH_ZERO.toISOString(),
+      updated_at: EPOCH_ZERO.toISOString(),
     },
     {
       id: PROPERTY_OPTION_IDS.STATUS.IN_REVIEW,
       property_definition_id: SYSTEM_PROPERTY_IDS.STATUS,
       value: { type: 'string', value: 'In Review' },
       display_order: 2,
-      created_at: '',
-      updated_at: '',
+      created_at: EPOCH_ZERO.toISOString(),
+      updated_at: EPOCH_ZERO.toISOString(),
     },
     {
       id: PROPERTY_OPTION_IDS.STATUS.COMPLETED,
       property_definition_id: SYSTEM_PROPERTY_IDS.STATUS,
       value: { type: 'string', value: 'Completed' },
       display_order: 3,
-      created_at: '',
-      updated_at: '',
+      created_at: EPOCH_ZERO.toISOString(),
+      updated_at: EPOCH_ZERO.toISOString(),
     },
     {
       id: PROPERTY_OPTION_IDS.STATUS.CANCELED,
       property_definition_id: SYSTEM_PROPERTY_IDS.STATUS,
       value: { type: 'string', value: 'Canceled' },
       display_order: 4,
-      created_at: '',
-      updated_at: '',
+      created_at: EPOCH_ZERO.toISOString(),
+      updated_at: EPOCH_ZERO.toISOString(),
     },
   ],
   [SYSTEM_PROPERTY_IDS.PRIORITY]: [
@@ -74,32 +77,32 @@ const SYSTEM_PROPERTY_OPTIONS: Record<string, PropertyOption[]> = {
       property_definition_id: SYSTEM_PROPERTY_IDS.PRIORITY,
       value: { type: 'string', value: 'Low' },
       display_order: 0,
-      created_at: '',
-      updated_at: '',
+      created_at: EPOCH_ZERO.toISOString(),
+      updated_at: EPOCH_ZERO.toISOString(),
     },
     {
       id: PROPERTY_OPTION_IDS.PRIORITY.MEDIUM,
       property_definition_id: SYSTEM_PROPERTY_IDS.PRIORITY,
       value: { type: 'string', value: 'Medium' },
       display_order: 1,
-      created_at: '',
-      updated_at: '',
+      created_at: EPOCH_ZERO.toISOString(),
+      updated_at: EPOCH_ZERO.toISOString(),
     },
     {
       id: PROPERTY_OPTION_IDS.PRIORITY.HIGH,
       property_definition_id: SYSTEM_PROPERTY_IDS.PRIORITY,
       value: { type: 'string', value: 'High' },
       display_order: 2,
-      created_at: '',
-      updated_at: '',
+      created_at: EPOCH_ZERO.toISOString(),
+      updated_at: EPOCH_ZERO.toISOString(),
     },
     {
       id: PROPERTY_OPTION_IDS.PRIORITY.URGENT,
       property_definition_id: SYSTEM_PROPERTY_IDS.PRIORITY,
       value: { type: 'string', value: 'Urgent' },
       display_order: 3,
-      created_at: '',
-      updated_at: '',
+      created_at: EPOCH_ZERO.toISOString(),
+      updated_at: EPOCH_ZERO.toISOString(),
     },
   ],
 };

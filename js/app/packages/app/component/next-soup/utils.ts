@@ -1,4 +1,5 @@
 import type { BlockOrchestrator } from '@core/orchestrator';
+import type { DateValue } from '@core/util/date';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
@@ -28,6 +29,7 @@ import {
   invalidateSoupEntity,
 } from '@queries/soup/cache';
 import { match } from 'ts-pattern';
+import { isAfter } from 'date-fns';
 
 const mergeSearchEntities = <T extends EntityData>(
   first: WithSearch<T>,
@@ -127,8 +129,8 @@ export const deduplicateEntities = <T extends EntityData>(
 /**
  * Gets the timestamp of an entity (updatedAt or createdAt)
  */
-const getEntityTimestamp = (entity: EntityData): number => {
-  return entity.updatedAt ?? entity.createdAt ?? 0;
+const getEntityTimestamp = (entity: EntityData): DateValue => {
+  return entity.updatedAt ?? entity.createdAt ?? new Date(0);
 };
 
 /**
@@ -138,7 +140,7 @@ export const isNewerEntity = (
   newEntity: EntityData,
   existing: EntityData
 ): boolean => {
-  return getEntityTimestamp(newEntity) >= getEntityTimestamp(existing);
+  return isAfter(getEntityTimestamp(newEntity), getEntityTimestamp(existing));
 };
 
 export const openEntityInNewTab = ({

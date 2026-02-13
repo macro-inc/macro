@@ -1,4 +1,5 @@
 use crate::{MatchType, SearchHighlight, SearchOn};
+use chrono::{DateTime, Utc};
 use item_filters::EmailFilters;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -27,7 +28,7 @@ pub struct EmailSearchResult {
     pub labels: Vec<String>,
     /// When the email message was sent
     /// This is only present if the search result is on the message content
-    pub sent_at: Option<i64>,
+    pub sent_at: Option<DateTime<Utc>>,
     /// The highlights for the email message
     pub highlight: SearchHighlight,
     /// The score of the result
@@ -64,9 +65,9 @@ pub struct EmailSearchResponseItem {
 /// every time the thread updates (specifically for updated_at and viewed_at)
 #[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct EmailSearchResponseItemWithMetadata {
-    pub created_at: i64,
-    pub updated_at: i64,
-    pub viewed_at: Option<i64>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub viewed_at: Option<DateTime<Utc>>,
     pub snippet: Option<String>,
     #[serde(flatten)]
     pub extra: EmailSearchResponseItem,
@@ -143,7 +144,8 @@ pub struct SimpleEmailSearchResponseBaseItem<T> {
     pub highlight: SearchHighlight,
 }
 
-pub type SimpleEmailSearchResponseItem = SimpleEmailSearchResponseBaseItem<crate::TimestampSeconds>;
+pub type SimpleEmailSearchResponseItem =
+    SimpleEmailSearchResponseBaseItem<crate::HumanReadableTimestamp>;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SimpleEmailSearchResponse {

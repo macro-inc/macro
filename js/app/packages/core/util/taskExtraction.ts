@@ -26,7 +26,7 @@ export type PotentialTask = {
   /** User IDs extracted from @mentions */
   assigneeUserIds: string[];
   /** ISO date string from date mention, or null */
-  dueDate: string | null;
+  dueDate: Date | null;
   /** Whether the checkbox is checked [x] or unchecked [ ] */
   isChecked: boolean;
 };

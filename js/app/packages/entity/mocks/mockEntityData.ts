@@ -1,4 +1,5 @@
 import type { Property } from '@core/component/Properties/types';
+import { applyDurationToDate } from '@core/util/dateSearch/dateParser';
 import type {
   ChannelEntity,
   ChatEntity,
@@ -26,13 +27,14 @@ export const MOCK_USERS = [
   { id: MOCK_USER_IDS.currentUser, firstName: 'Current', lastName: 'User' },
 ] as const;
 
+const now = new Date();
 export const MOCK_TIMESTAMPS = {
-  now: Date.now(),
-  today: Date.now() - 1000 * 60 * 30, // 30 minutes ago
-  yesterday: Date.now() - 1000 * 60 * 60 * 24, // 1 day ago
-  lastWeek: Date.now() - 1000 * 60 * 60 * 24 * 7, // 7 days ago
-  lastMonth: Date.now() - 1000 * 60 * 60 * 24 * 30, // 30 days ago
-  lastYear: Date.now() - 1000 * 60 * 60 * 24 * 365, // 365 days ago
+  now,
+  today: applyDurationToDate(now, { value: -30, unit: 'min' }),
+  yesterday: applyDurationToDate(now, { value: -1, unit: 'd' }),
+  lastWeek: applyDurationToDate(now, { value: -7, unit: 'd' }),
+  lastMonth: applyDurationToDate(now, { value: -30, unit: 'd' }),
+  lastYear: applyDurationToDate(now, { value: -365, unit: 'd' }),
 } as const;
 
 export const MOCK_PROPERTIES: Property[] = [
@@ -47,31 +49,31 @@ export const MOCK_PROPERTIES: Property[] = [
       {
         id: 'opt_high',
         value: { type: 'string', value: 'High' },
-        created_at: new Date(MOCK_TIMESTAMPS.lastMonth).toISOString(),
-        updated_at: new Date(MOCK_TIMESTAMPS.lastMonth).toISOString(),
+        created_at: MOCK_TIMESTAMPS.lastMonth.toISOString(),
+        updated_at: MOCK_TIMESTAMPS.lastMonth.toISOString(),
         property_definition_id: 'def_priority',
         display_order: 0,
       },
       {
         id: 'opt_medium',
         value: { type: 'string', value: 'Medium' },
-        created_at: new Date(MOCK_TIMESTAMPS.lastMonth).toISOString(),
-        updated_at: new Date(MOCK_TIMESTAMPS.lastMonth).toISOString(),
+        created_at: MOCK_TIMESTAMPS.lastMonth.toISOString(),
+        updated_at: MOCK_TIMESTAMPS.lastMonth.toISOString(),
         property_definition_id: 'def_priority',
         display_order: 1,
       },
       {
         id: 'opt_low',
         value: { type: 'string', value: 'Low' },
-        created_at: new Date(MOCK_TIMESTAMPS.lastMonth).toISOString(),
-        updated_at: new Date(MOCK_TIMESTAMPS.lastMonth).toISOString(),
+        created_at: MOCK_TIMESTAMPS.lastMonth.toISOString(),
+        updated_at: MOCK_TIMESTAMPS.lastMonth.toISOString(),
         property_definition_id: 'def_priority',
         display_order: 2,
       },
     ],
     owner: { scope: 'organization', organization_id: 1 },
-    createdAt: new Date(MOCK_TIMESTAMPS.lastMonth).toISOString(),
-    updatedAt: new Date(MOCK_TIMESTAMPS.today).toISOString(),
+    createdAt: MOCK_TIMESTAMPS.lastMonth,
+    updatedAt: MOCK_TIMESTAMPS.today,
   },
   {
     propertyId: 'prop_status_1',
@@ -84,31 +86,31 @@ export const MOCK_PROPERTIES: Property[] = [
       {
         id: 'opt_todo',
         value: { type: 'string', value: 'To Do' },
-        created_at: new Date(MOCK_TIMESTAMPS.lastMonth).toISOString(),
-        updated_at: new Date(MOCK_TIMESTAMPS.lastMonth).toISOString(),
+        created_at: MOCK_TIMESTAMPS.lastMonth.toISOString(),
+        updated_at: MOCK_TIMESTAMPS.lastMonth.toISOString(),
         property_definition_id: 'def_status',
         display_order: 0,
       },
       {
         id: 'opt_in_progress',
         value: { type: 'string', value: 'In Progress' },
-        created_at: new Date(MOCK_TIMESTAMPS.lastMonth).toISOString(),
-        updated_at: new Date(MOCK_TIMESTAMPS.lastMonth).toISOString(),
+        created_at: MOCK_TIMESTAMPS.lastMonth.toISOString(),
+        updated_at: MOCK_TIMESTAMPS.lastMonth.toISOString(),
         property_definition_id: 'def_status',
         display_order: 1,
       },
       {
         id: 'opt_done',
         value: { type: 'string', value: 'Done' },
-        created_at: new Date(MOCK_TIMESTAMPS.lastMonth).toISOString(),
-        updated_at: new Date(MOCK_TIMESTAMPS.lastMonth).toISOString(),
+        created_at: MOCK_TIMESTAMPS.lastMonth.toISOString(),
+        updated_at: MOCK_TIMESTAMPS.lastMonth.toISOString(),
         property_definition_id: 'def_status',
         display_order: 2,
       },
     ],
     owner: { scope: 'organization', organization_id: 1 },
-    createdAt: new Date(MOCK_TIMESTAMPS.lastMonth).toISOString(),
-    updatedAt: new Date(MOCK_TIMESTAMPS.today).toISOString(),
+    createdAt: MOCK_TIMESTAMPS.lastMonth,
+    updatedAt: MOCK_TIMESTAMPS.today,
   },
   {
     propertyId: 'prop_due_date_1',
@@ -116,10 +118,10 @@ export const MOCK_PROPERTIES: Property[] = [
     displayName: 'Due Date',
     isMultiSelect: false,
     valueType: 'DATE',
-    value: new Date(MOCK_TIMESTAMPS.now + 1000 * 60 * 60 * 24 * 7), // 7 days from now
+    value: applyDurationToDate(MOCK_TIMESTAMPS.now, { value: 7, unit: 'd' }), // 7 days from now
     owner: { scope: 'organization', organization_id: 1 },
-    createdAt: new Date(MOCK_TIMESTAMPS.lastMonth).toISOString(),
-    updatedAt: new Date(MOCK_TIMESTAMPS.today).toISOString(),
+    createdAt: MOCK_TIMESTAMPS.lastMonth,
+    updatedAt: MOCK_TIMESTAMPS.today,
   },
 ];
 
@@ -133,8 +135,8 @@ export const createMockNotification = (
   notificationEventType: 'document_mention',
   entity_id: 'doc_123',
   entity_type: 'document',
-  createdAt: MOCK_TIMESTAMPS.today,
-  updatedAt: MOCK_TIMESTAMPS.today,
+  createdAt: MOCK_TIMESTAMPS.today.toISOString(),
+  updatedAt: MOCK_TIMESTAMPS.today.toISOString(),
   deletedAt: null,
   viewedAt: null,
   notificationMetadata: {
@@ -149,19 +151,19 @@ export const MOCK_NOTIFICATIONS: Notification[] = [
     id: 'notif_mention_1',
     notificationEventType: 'document_mention',
     senderId: MOCK_USER_IDS.teamMember1,
-    createdAt: MOCK_TIMESTAMPS.today,
+    createdAt: MOCK_TIMESTAMPS.today.toISOString(),
   }),
   createMockNotification({
     id: 'notif_task_1',
     notificationEventType: 'task_assigned',
     senderId: MOCK_USER_IDS.teamMember2,
-    createdAt: MOCK_TIMESTAMPS.yesterday,
+    createdAt: MOCK_TIMESTAMPS.yesterday.toISOString(),
   }),
   createMockNotification({
     id: 'notif_channel_1',
     notificationEventType: 'channel_message_send',
     senderId: MOCK_USER_IDS.sharedUser,
-    createdAt: MOCK_TIMESTAMPS.lastWeek,
+    createdAt: MOCK_TIMESTAMPS.lastWeek.toISOString(),
     entity_type: 'channel',
   }),
 ];
@@ -659,8 +661,8 @@ export const MOCK_ENTITY_VERY_OLD: DocumentEntity = {
   name: 'Archive Document 2020',
   ownerId: MOCK_USER_IDS.owner,
   fileType: 'md',
-  createdAt: new Date('2020-01-01').getTime(),
-  updatedAt: new Date('2020-06-15').getTime(),
+  createdAt: new Date('2020-01-01').toISOString(),
+  updatedAt: new Date('2020-06-15').toISOString(),
   frecencyScore: 0.12,
 };
 

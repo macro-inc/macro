@@ -2,6 +2,7 @@ use models_opensearch::SearchEntityType;
 use opensearch_client::search::model::Highlight;
 
 use super::*;
+use chrono::DateTime;
 
 fn create_email_history(thread_id: &str) -> models_email::service::message::ThreadHistoryInfo {
     let now = chrono::Utc::now();
@@ -40,7 +41,7 @@ fn test_construct_search_result_single_thread() {
                 cc: vec![],
                 bcc: vec![],
                 labels: vec!["inbox".to_string()],
-                sent_at: Some(1234567800),
+                sent_at: Some(DateTime::from_timestamp(1234567800, 0).unwrap()),
             },
         )),
         score: None,
@@ -97,7 +98,7 @@ fn test_sort_stability() {
                     cc: vec![],
                     bcc: vec![],
                     labels: vec!["inbox".to_string()],
-                    sent_at: Some(1234567800),
+                    sent_at: Some(DateTime::from_timestamp(1234567800, 0).unwrap()),
                 },
             )),
             score: None,
@@ -119,7 +120,7 @@ fn test_sort_stability() {
                     cc: vec![],
                     bcc: vec![],
                     labels: vec!["inbox".to_string()],
-                    sent_at: Some(1234567800),
+                    sent_at: Some(DateTime::from_timestamp(1234567800, 0).unwrap()),
                 },
             )),
             score: None,
@@ -141,7 +142,7 @@ fn test_sort_stability() {
                     cc: vec![],
                     bcc: vec![],
                     labels: vec!["inbox".to_string()],
-                    sent_at: Some(1234567800),
+                    sent_at: Some(DateTime::from_timestamp(1234567800, 0).unwrap()),
                 },
             )),
             score: None,
@@ -163,7 +164,7 @@ fn test_sort_stability() {
                     cc: vec![],
                     bcc: vec![],
                     labels: vec!["inbox".to_string()],
-                    sent_at: Some(1234567800),
+                    sent_at: Some(DateTime::from_timestamp(1234567800, 0).unwrap()),
                 },
             )),
             score: None,
@@ -185,7 +186,7 @@ fn test_sort_stability() {
                     cc: vec![],
                     bcc: vec![],
                     labels: vec!["inbox".to_string()],
-                    sent_at: Some(1234567800),
+                    sent_at: Some(DateTime::from_timestamp(1234567800, 0).unwrap()),
                 },
             )),
             score: None,

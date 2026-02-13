@@ -4,7 +4,7 @@ import { URL_PARAMS } from '@block-channel/constants';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
 import { withAnalytics } from '@coparse/analytics';
 import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
-import type { EntityDragEvent } from '@macro-entity';
+import type { EntityDragEvent } from '@entity';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { useChannelActivity } from '@core/context/channels';
@@ -28,7 +28,7 @@ import {
   invalidateChannelsActivity,
   useUpdateChannelsActivityMutation,
 } from '@queries/channel/activity';
-import type { Message } from '@service-comms/generated/models';
+import type { Message } from '@queries/channel/types';
 import { connectionGatewayClient } from '@service-connection/client';
 import { useBeforeLeave, useSearchParams } from '@solidjs/router';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';

@@ -4,19 +4,21 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { CommentCreatedAt } from './commentCreatedAt';
 import type { CommentDeletedAt } from './commentDeletedAt';
 import type { CommentOrder } from './commentOrder';
 import type { CommentSender } from './commentSender';
+import type { CommentUpdatedAt } from './commentUpdatedAt';
 
 export interface Comment {
   commentId: number;
-  createdAt: number;
-  deletedAt: CommentDeletedAt;
+  createdAt?: CommentCreatedAt;
+  deletedAt?: CommentDeletedAt;
   metadata?: unknown;
   order?: CommentOrder;
   owner: string;
   sender?: CommentSender;
   text: string;
   threadId: number;
-  updatedAt: number;
+  updatedAt?: CommentUpdatedAt;
 }
