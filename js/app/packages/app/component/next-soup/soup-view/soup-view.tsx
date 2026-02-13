@@ -49,6 +49,7 @@ import {
   type Accessor,
   createEffect,
   createMemo,
+  createRenderEffect,
   createSignal,
   type JSX,
   Match,
@@ -58,6 +59,7 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { SoupToolbar } from './soup-toolbar';
@@ -703,6 +705,12 @@ const SoupList = (props: SoupListProps) => {
   const itemSize = createMemo(() => props.itemSize ?? DEFAULT_ITEM_SIZE);
   const overscan = createMemo(() => props.overscan ?? DEFAULT_OVERSCAN);
 
+  const [stableRows, setStableRows] = createStore<SoupRow[]>([]);
+
+  createRenderEffect(() => {
+    setStableRows(reconcile(props.rows, { key: 'id', merge: true }));
+  });
+
   const handleScroll = (offset: number) => {
     const handle = virtualizerHandle();
 
@@ -735,7 +743,7 @@ const SoupList = (props: SoupListProps) => {
         cache={props.cache}
         ref={registerVirtualizerHandler}
         class={props.virtualizerClass}
-        data={props.rows}
+        data={stableRows}
         itemSize={itemSize()}
         bufferSize={overscan() * itemSize()}
         onScroll={handleScroll}

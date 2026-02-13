@@ -30,7 +30,7 @@ import {
   Suspense,
   useContext,
 } from 'solid-js';
-import { reconcile } from 'solid-js/store';
+
 import { match } from 'ts-pattern';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 300;
@@ -342,15 +342,13 @@ export const SoupViewContextProvider: FlowComponent<
         transformed.push(...items);
       }
 
-      const next = reconcile(transformed)(prev);
-
-      for (let i = 0; i < next.length; i++) {
-        const entity = next[i];
+      for (let i = 0; i < transformed.length; i++) {
+        const entity = transformed[i];
         if (entity.notifications) continue;
-        next[i] = attachNotifications(entity);
+        transformed[i] = attachNotifications(entity);
       }
 
-      return next;
+      return transformed;
     },
     [],
     {
