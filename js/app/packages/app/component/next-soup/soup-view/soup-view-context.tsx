@@ -360,48 +360,46 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
+  const localFuzzyResults = createMemo(() => {
+    const pool = mergeEntityPools(
+      itemsQuery.data ?? [],
+      channelItemsQuery.data ?? []
+    );
+    return nameFuzzySearchFilter(pool);
+  });
+
+  const freshSearchResults = createMemo<EntityData[]>(() => {
+    if (isSearchDisabled()) return [];
+    if (searchQuery.isFetching) return [];
+    return searchQuery.data ?? [];
+  });
+
   const items = createMemo<SoupEntity[]>(
     (prev) => {
-      const itemsData = itemsQuery.data;
-      const searchData = searchQuery.data;
-
-      if (!itemsData && !searchData) return prev;
-
       const searching = isSearching();
 
-      const items = itemsData ?? [];
-      const useSearchData = searching && !isSearchDisabled();
-      const searchItems = useSearchData ? (searchData ?? []) : [];
-
-      const fuzzyPool = searching
-        ? mergeEntityPools(items, channelItemsQuery.data ?? [])
-        : items;
-
-      let transformed: SoupEntity[] = [...searchItems];
-
-      if (searching) {
-        const fuzzyMatched = nameFuzzySearchFilter(fuzzyPool);
-        transformed.push(...fuzzyMatched);
-
-        if (!useSearchData || !searchData) {
-          const matchedIds = new Set(fuzzyMatched.map((e) => e.id));
-          for (const item of items) {
-            if (!matchedIds.has(item.id)) {
-              transformed.push(item);
-            }
-          }
-        }
-      } else {
-        transformed.push(...items);
+      if (!searching) {
+        const data = itemsQuery.data;
+        if (!data) return prev;
+        return data.map((e) =>
+          'notifications' in e ? e : attachNotifications(e)
+        ) as SoupEntity[];
       }
 
-      for (let i = 0; i < transformed.length; i++) {
-        const entity = transformed[i];
+      const local = localFuzzyResults();
+      const service = freshSearchResults();
+
+      const merged: SoupEntity[] = [...service, ...local];
+
+      if (merged.length === 0) return prev;
+
+      for (let i = 0; i < merged.length; i++) {
+        const entity = merged[i];
         if (entity.notifications) continue;
-        transformed[i] = attachNotifications(entity);
+        merged[i] = attachNotifications(entity);
       }
 
-      return transformed;
+      return merged;
     },
     [],
     {
@@ -452,7 +450,11 @@ export const SoupViewContextProvider: FlowComponent<
     soup,
     source: {
       data: entities,
-      isLoading: () => searchQuery.isLoading || itemsQuery.isLoading,
+      isLoading: () => {
+        if (itemsQuery.isLoading) return true;
+        if (searchQuery.isLoading && !itemsQuery.data) return true;
+        return false;
+      },
       isFetching: () => searchQuery.isFetching || itemsQuery.isFetching,
       isFetchingNextPage: () =>
         searchQuery.isFetchingNextPage || itemsQuery.isFetchingNextPage,
