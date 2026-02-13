@@ -26,7 +26,14 @@ export const useSearchSoupQuery = (
 ) => {
   const pageSize = createMemo(() => args().params.page_size);
 
-  const request = createMemo(() => args().body);
+  const request = createMemo(() => {
+    const body = args().body;
+    return {
+      ...body,
+      query: body.query?.trim(),
+      terms: body.terms?.map((t) => t.trim()),
+    };
+  });
 
   const terms = createMemo(() => {
     const query = request().query;
@@ -59,7 +66,8 @@ export const useSearchSoupQuery = (
   const mapSearchResponseItem = useSearchResponseItemMapper();
 
   return useInfiniteQuery(() => ({
-    queryKey: soupKeys.search(args()).queryKey,
+    queryKey: soupKeys.search({ params: args().params, body: request() })
+      .queryKey,
     queryFn: async (ctx) => {
       return throwOnErr(
         async () =>
