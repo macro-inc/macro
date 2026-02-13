@@ -265,6 +265,37 @@ export const emailClient = {
       (result) => result
     );
   },
+  async addForwardedAttachment(args: {
+    draftID: string;
+    attachmentID: string;
+  }) {
+    return mapOk(
+      await emailFetch<{
+        attachment_id: string;
+        filename: string | null;
+        mime_type: string | null;
+        size_bytes: number | null;
+      }>(`/email/drafts/${args.draftID}/forwarded-attachments`, {
+        method: 'POST',
+        body: JSON.stringify({ attachment_id: args.attachmentID }),
+      }),
+      (result) => result
+    );
+  },
+  async removeForwardedAttachment(args: {
+    draftID: string;
+    attachmentID: string;
+  }) {
+    return mapOk(
+      await emailFetch<EmptyResponse>(
+        `/email/drafts/${args.draftID}/forwarded-attachments/${args.attachmentID}`,
+        {
+          method: 'DELETE',
+        }
+      ),
+      (result) => result
+    );
+  },
   async markThreadAsSeen(args: { thread_id: string }) {
     const { thread_id } = args;
     return mapOk(

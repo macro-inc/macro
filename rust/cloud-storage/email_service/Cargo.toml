@@ -153,6 +153,7 @@ urlencoding = { workspace = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 uuid = { workspace = true }
+aws-config = "1.8.12"
 
 [dev-dependencies]
 macro_auth = { path = "../macro_auth", features = ["testing"] }

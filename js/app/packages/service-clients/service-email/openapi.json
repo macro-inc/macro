@@ -870,6 +870,121 @@
         }
       }
     },
+    "/email/drafts/{id}/forwarded-attachments": {
+      "post": {
+        "tags": ["Drafts"],
+        "summary": "Add a forwarded attachment to a draft.",
+        "operationId": "add_forwarded_attachment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The ID of the draft to add the forwarded attachment to.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddForwardedAttachmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddForwardedAttachmentResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/drafts/{id}/forwarded-attachments/{attachment_id}": {
+      "delete": {
+        "tags": ["Drafts"],
+        "summary": "Remove a forwarded attachment from a draft.",
+        "operationId": "remove_forwarded_attachment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The ID of the draft to remove the forwarded attachment from.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "attachment_id",
+            "in": "path",
+            "description": "The ID of the forwarded attachment to remove.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/init": {
       "post": {
         "tags": ["Init"],
@@ -2078,6 +2193,41 @@
           }
         }
       },
+      "AddForwardedAttachmentRequest": {
+        "type": "object",
+        "required": ["attachment_id"],
+        "properties": {
+          "attachment_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The ID of the original attachment to forward."
+          }
+        }
+      },
+      "AddForwardedAttachmentResponse": {
+        "type": "object",
+        "required": ["attachment_id"],
+        "properties": {
+          "attachment_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The ID of the original attachment."
+          },
+          "filename": {
+            "type": ["string", "null"],
+            "description": "Original file name of the attachment."
+          },
+          "mime_type": {
+            "type": ["string", "null"],
+            "description": "MIME type of the attachment."
+          },
+          "size_bytes": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "File size in bytes."
+          }
+        }
+      },
       "ApiAttachment": {
         "type": "object",
         "required": ["id", "messageId", "createdAt"],
@@ -2397,6 +2547,44 @@
           "size": {
             "type": "integer",
             "format": "int32",
+            "description": "File size in bytes."
+          }
+        }
+      },
+      "AttachmentForwarded": {
+        "type": "object",
+        "description": "A forwarded attachment linking a draft to an original message's attachment.\nData is fetched from Gmail at send time rather than stored in S3.",
+        "required": ["attachment_id", "draft_id", "message_provider_id"],
+        "properties": {
+          "attachment_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The UUID of the original attachment in email_attachments."
+          },
+          "draft_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The ID of the draft message this forwarded attachment belongs to."
+          },
+          "filename": {
+            "type": ["string", "null"],
+            "description": "Original file name of the attachment."
+          },
+          "message_provider_id": {
+            "type": "string",
+            "description": "The Gmail message ID of the original message containing the attachment."
+          },
+          "mime_type": {
+            "type": ["string", "null"],
+            "description": "MIME type of the attachment."
+          },
+          "provider_attachment_id": {
+            "type": ["string", "null"],
+            "description": "The Gmail attachment ID for fetching data from Gmail API."
+          },
+          "size_bytes": {
+            "type": ["integer", "null"],
+            "format": "int64",
             "description": "File size in bytes."
           }
         }
@@ -2908,6 +3096,7 @@
           "labels",
           "attachments",
           "attachments_draft",
+          "attachments_forwarded",
           "created_at",
           "updated_at"
         ],
@@ -2924,6 +3113,13 @@
               "$ref": "#/components/schemas/AttachmentDraft"
             },
             "description": "Uploaded file attachments for the message, if it is a draft"
+          },
+          "attachments_forwarded": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AttachmentForwarded"
+            },
+            "description": "Forwarded attachments from original messages, if it is a draft"
           },
           "bcc": {
             "type": "array",
