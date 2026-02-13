@@ -8,6 +8,7 @@
 import type { ChatMessageContent } from './chatMessageContent';
 import type { Model } from './model';
 import type { NewChatMessageAttachments } from './newChatMessageAttachments';
+import type { NewChatMessageId } from './newChatMessageId';
 import type { Role } from './role';
 
 export interface NewChatMessage {
@@ -16,6 +17,8 @@ export interface NewChatMessage {
   /** Content of the message */
   content: ChatMessageContent;
   createdAt: string;
+  /** Optional pre-generated ID. If None, the database generates one. */
+  id?: NewChatMessageId;
   /** The model used to generate the chat */
   model: Model;
   /** Whether the chat is from the user or system */
