@@ -2,11 +2,11 @@ use crate::domain::*;
 use async_stream::stream;
 use async_trait::async_trait;
 use futures::StreamExt;
-use redis::{streams::StreamReadReply, AsyncCommands, Client, RedisResult, Value};
+use redis::{AsyncCommands, Client, RedisResult, Value, streams::StreamReadReply};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::sync::broadcast::{self, Receiver};
 use tokio::sync::OnceCell;
+use tokio::sync::broadcast::{self, Receiver};
 use tokio::task::JoinHandle;
 
 const NOTIFY_CHANNEL: &str = "stream:notifications";

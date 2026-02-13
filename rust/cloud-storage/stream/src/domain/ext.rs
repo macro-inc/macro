@@ -1,7 +1,7 @@
 //! Extension traits for StreamRepo.
 
-use super::traits::*;
 use super::StreamId;
+use super::traits::*;
 use futures::StreamExt;
 use std::sync::Arc;
 use std::time::Duration;
