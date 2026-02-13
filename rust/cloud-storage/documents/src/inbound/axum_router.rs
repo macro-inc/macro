@@ -122,6 +122,7 @@ pub struct DocumentIdPathParams {
 ///
 /// Extracts `document_id` from the path and queries the database.
 /// Returns 404 if the document does not exist.
+#[tracing::instrument(skip(pool, request, next))]
 async fn ensure_document_exists(
     State(pool): State<PgPool>,
     Path(Params { document_id }): Path<Params>,
@@ -129,14 +130,35 @@ async fn ensure_document_exists(
     next: Next,
 ) -> impl IntoResponse {
     let repo = PgDocumentRepo::new(pool);
-    let document_basic =
-        match crate::domain::ports::DocumentRepo::get_basic_document(&repo, &document_id).await {
-            Ok(doc) => doc,
-            Err(e) => {
-                tracing::error!(error=?e, document_id=?document_id, "document not found");
-                return StatusCode::NOT_FOUND.into_response();
+    let document_basic = match crate::domain::ports::DocumentRepo::get_basic_document(
+        &repo,
+        &document_id,
+    )
+    .await
+    {
+        Ok(doc) => doc,
+        Err(e) => {
+            if e.to_string()
+                .contains("no rows returned by a query that expected to return at least one row")
+            {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(ErrorResponse {
+                        message: &format!("document with id \"{}\" was not found", document_id),
+                    }),
+                )
+                    .into_response();
             }
-        };
+            tracing::error!(error=?e, document_id=?document_id, "unable to check if document exists");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "unknown error occurred",
+                }),
+            )
+                .into_response();
+        }
+    };
 
     let mut request = request;
     request.extensions_mut().insert(document_basic);
@@ -161,6 +183,7 @@ async fn ensure_document_exists(
         (status = 500, body = ErrorResponse),
     )
 )]
+#[tracing::instrument(skip(state, access), err)]
 pub async fn get_document_handler<T: DocumentService, Svc: EntityAccessService>(
     State(state): State<DocumentRouterState<T, Svc>>,
     access: DocumentAccessExtractor<ViewAccessLevel, Svc>,
@@ -199,6 +222,7 @@ pub async fn get_document_handler<T: DocumentService, Svc: EntityAccessService>(
         (status = 500, body = ErrorResponse),
     )
 )]
+#[tracing::instrument(skip(state, _access, document_context), err)]
 pub async fn get_location_v3_handler<T: DocumentService, Svc: EntityAccessService>(
     _access: DocumentAccessExtractor<ViewAccessLevel, Svc>,
     State(state): State<DocumentRouterState<T, Svc>>,
@@ -238,6 +262,7 @@ pub async fn get_location_v3_handler<T: DocumentService, Svc: EntityAccessServic
         (status = 500, body = ErrorResponse),
     )
 )]
+#[tracing::instrument(skip(state, _access, doc), err)]
 pub async fn delete_document_handler<T: DocumentService, Svc: EntityAccessService>(
     _access: DocumentAccessExtractor<OwnerAccessLevel, Svc>,
     State(state): State<DocumentRouterState<T, Svc>>,
