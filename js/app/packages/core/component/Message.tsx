@@ -345,9 +345,9 @@ const Root: Component<MessageRootProps> = (props) => {
             </div>
           </div>
         </BozzyBracket>
-        <Show when={props.hoverActions && !isTouchDevice()}>
+        <Show when={props.hoverActions && !isTouchDevice() && hover()}>
           <div
-            class="absolute right-0 -top-2 flex flex-col items-end z-tool-tip"
+            class="absolute right-0 -top-4 flex flex-col items-end z-tool-tip"
             classList={{
               block: props.focused || !!props.shouldHover,
               hidden: !(props.focused || !!props.shouldHover),
@@ -365,11 +365,9 @@ const Root: Component<MessageRootProps> = (props) => {
                 </div>
               )}
             </Show>
-            <Show when={hover()}>
-              <div class="border border-edge bg-panel">
-                {props.hoverActions?.()}
-              </div>
-            </Show>
+            <div class="border border-edge bg-panel">
+              {props.hoverActions?.()}
+            </div>
           </div>
         </Show>
         <Show when={props.isLastInThread}>
