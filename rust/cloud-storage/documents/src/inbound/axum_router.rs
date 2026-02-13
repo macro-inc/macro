@@ -33,7 +33,6 @@ use sqlx::PgPool;
 
 use crate::domain::models::{DocumentError, LocationQueryParams};
 use crate::domain::ports::DocumentService;
-use crate::outbound::pg_document_repo::PgDocumentRepo;
 
 impl IntoResponse for DocumentError {
     fn into_response(self) -> axum::response::Response {
@@ -93,8 +92,6 @@ where
     Svc: EntityAccessService,
     S: Send + Sync + 'static,
 {
-    let pool_for_middleware = state.pool.clone();
-
     Router::new()
         .route(
             "/:document_id",
@@ -106,7 +103,7 @@ where
             axum::routing::get(get_location_v3_handler::<T, Svc>),
         )
         .layer(middleware::from_fn_with_state(
-            pool_for_middleware,
+            state.clone(),
             ensure_document_exists,
         ))
         .with_state(state)
@@ -122,41 +119,42 @@ pub struct DocumentIdPathParams {
 ///
 /// Extracts `document_id` from the path and queries the database.
 /// Returns 404 if the document does not exist.
-#[tracing::instrument(skip(pool, request, next))]
-async fn ensure_document_exists(
-    State(pool): State<PgPool>,
+#[tracing::instrument(skip(state, request, next))]
+async fn ensure_document_exists<T: DocumentService, Svc: EntityAccessService>(
+    State(state): State<DocumentRouterState<T, Svc>>,
     Path(Params { document_id }): Path<Params>,
     request: Request<Body>,
     next: Next,
 ) -> impl IntoResponse {
-    let repo = PgDocumentRepo::new(pool);
-    let document_basic = match crate::domain::ports::DocumentRepo::get_basic_document(
-        &repo,
-        &document_id,
-    )
-    .await
+    let document_basic = match state
+        .service
+        .internal_get_basic_document(&document_id)
+        .await
     {
         Ok(doc) => doc,
         Err(e) => {
-            if e.to_string()
-                .contains("no rows returned by a query that expected to return at least one row")
-            {
-                return (
-                    StatusCode::NOT_FOUND,
-                    Json(ErrorResponse {
-                        message: &format!("document with id \"{}\" was not found", document_id),
-                    }),
-                )
-                    .into_response();
+            match e {
+                DocumentError::NotFound(_) => {
+                    return (
+                        StatusCode::NOT_FOUND,
+                        Json(ErrorResponse {
+                            message: &format!("document with id \"{}\" was not found", document_id),
+                        }),
+                    )
+                        .into_response();
+                }
+                _ => {
+                    // Only other type that we return here is DocumentError::Internal
+                    tracing::error!(error=?e, document_id=?document_id, "unable to check if document exists");
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorResponse {
+                            message: "unknown error occurred",
+                        }),
+                    )
+                        .into_response();
+                }
             }
-            tracing::error!(error=?e, document_id=?document_id, "unable to check if document exists");
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: "unknown error occurred",
-                }),
-            )
-                .into_response();
         }
     };
 
@@ -200,6 +198,9 @@ pub async fn get_document_handler<T: DocumentService, Svc: EntityAccessService>(
         data: response_data,
     }))
 }
+
+// entity access
+// do work
 
 /// Handler for `GET /documents/:document_id/location_v3`.
 ///

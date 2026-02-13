@@ -251,6 +251,9 @@ impl<R: DocumentRepo> DocumentService for DocumentServiceImpl<R> {
         document_id: &str,
         access_level: AccessLevel,
     ) -> Result<GetDocumentResponseData, DocumentError> {
+        // get access level
+        // check if >= view
+        // do work
         let document_metadata =
             self.repo
                 .get_document_metadata(document_id)
@@ -364,5 +367,24 @@ impl<R: DocumentRepo> DocumentService for DocumentServiceImpl<R> {
         .await;
 
         Ok(())
+    }
+
+    async fn internal_get_basic_document(
+        &self,
+        document_id: &str,
+    ) -> Result<DocumentBasic, DocumentError> {
+        self.repo
+            .get_basic_document(document_id)
+            .await
+            .map_err(|e| {
+                let err: anyhow::Error = e.into();
+                if err.to_string().contains(
+                    "no rows returned by a query that expected to return at least one row",
+                ) {
+                    DocumentError::NotFound(document_id.to_string())
+                } else {
+                    DocumentError::Internal(err)
+                }
+            })
     }
 }

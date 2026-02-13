@@ -8,6 +8,10 @@ use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use std::str::FromStr;
 use uuid::Uuid;
 
+// Entity {entity_id, entity_type}
+// User {macro_user_id}
+// AccessLevel
+
 /// Implementation of the [`EntityAccessService`].
 ///
 /// This service orchestrates access checks by:

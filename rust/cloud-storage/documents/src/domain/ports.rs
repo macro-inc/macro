@@ -75,6 +75,12 @@ pub trait DocumentRepo: Send + Sync + 'static {
 ///
 /// Orchestrates business logic using the repository and external services.
 pub trait DocumentService: Send + Sync + 'static {
+    /// Gets the basic document ignoring access checks
+    fn internal_get_basic_document(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<DocumentBasic, DocumentError>> + Send;
+
     /// Get a document with metadata, access level, and view location.
     fn get_document(
         &self,
