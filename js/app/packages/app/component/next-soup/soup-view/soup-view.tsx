@@ -708,7 +708,7 @@ const SoupList = (props: SoupListProps) => {
   const [stableRows, setStableRows] = createStore<SoupRow[]>([]);
 
   createRenderEffect(() => {
-    setStableRows(reconcile(props.rows, { key: 'id', merge: true }));
+    setStableRows(reconcile(props.rows, { key: 'id' }));
   });
 
   const handleScroll = (offset: number) => {

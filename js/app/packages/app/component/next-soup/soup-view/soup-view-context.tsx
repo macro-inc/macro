@@ -332,7 +332,8 @@ export const SoupViewContextProvider: FlowComponent<
       const searching = isSearching();
 
       const items = itemsData ?? [];
-      const searchItems = searching ? (searchData ?? []) : [];
+      const useSearchData = searching && !isSearchDisabled();
+      const searchItems = useSearchData ? (searchData ?? []) : [];
 
       let transformed: SoupEntity[] = [...searchItems];
 
@@ -340,7 +341,7 @@ export const SoupViewContextProvider: FlowComponent<
         const fuzzyMatched = nameFuzzySearchFilter(items);
         transformed.push(...fuzzyMatched);
 
-        if (!searchData) {
+        if (!useSearchData || !searchData) {
           const matchedIds = new Set(fuzzyMatched.map((e) => e.id));
           for (const item of items) {
             if (!matchedIds.has(item.id)) {
