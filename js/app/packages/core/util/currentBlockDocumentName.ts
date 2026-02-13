@@ -42,6 +42,8 @@ export const useBlockDocumentDownloadName = (defaultName?: string) => {
     let current = documentName();
     if (!current) current = 'download';
     const fileType = metadata()?.fileType;
-    return formatDocumentName(current, fileType);
+    return formatDocumentName(current, fileType, {
+      caseInsensitiveSuffix: true,
+    });
   };
 };
