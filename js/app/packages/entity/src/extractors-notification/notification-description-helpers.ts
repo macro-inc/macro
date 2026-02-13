@@ -9,8 +9,8 @@ import type { NotificationType } from '@core/types';
 export function getUniqueSenderIds(notifications: Notification[]): string[] {
   const senderIds = new Set<string>();
   for (const notification of notifications) {
-    if (notification.senderId) {
-      senderIds.add(notification.senderId);
+    if (notification.sender_id) {
+      senderIds.add(notification.sender_id);
     }
   }
   return Array.from(senderIds);

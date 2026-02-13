@@ -12,7 +12,7 @@ export function filterValidNotifications(
   if (!notifications) return [];
 
   return notifications.filter((n) => {
-    return n.notificationEventType !== undefined;
+    return n.notification_event_type !== undefined;
   });
 }
 
@@ -33,8 +33,8 @@ export function extractNotificationSenderIds(
   for (const notification of notifications) {
     if (senderIds.size >= maxCount) break;
 
-    if (notification.senderId) {
-      senderIds.add(notification.senderId);
+    if (notification.sender_id) {
+      senderIds.add(notification.sender_id);
     }
   }
 
@@ -48,7 +48,7 @@ export function extractNotificationSenderIds(
  * Returns a short verb phrase like "mentioned", "replied", "shared", etc.
  */
 export function getNotificationActionText(n: Notification): string {
-  const tag = n.notificationMetadata.tag;
+  const tag = n.notification_metadata.tag;
 
   return match(tag)
     .with('channel_mention', () => 'mentioned')
@@ -65,7 +65,7 @@ export function getNotificationActionText(n: Notification): string {
 
 export function extractMessageContent(notification: Notification): string {
   const n = notification as UnifiedNotification;
-  const meta = n.notificationMetadata;
+  const meta = n.notification_metadata;
 
   return match(meta)
     .with({ tag: 'channel_mention' }, (m) => m.content.messageContent || '')
@@ -97,10 +97,10 @@ export function isNotificationUnread(
   if ('notifications' in item && Array.isArray(item.notifications)) {
     const stack = item as NotificationStack;
     return stack.notifications.some(
-      (notification) => !notification.viewedAt && !notification.done
+      (notification) => !notification.viewed_at && !notification.done
     );
   }
 
   const notification = item as Notification;
-  return !notification.viewedAt && !notification.done;
+  return !notification.viewed_at && !notification.done;
 }

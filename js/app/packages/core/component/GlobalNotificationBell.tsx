@@ -30,7 +30,7 @@ export function GlobalNotificationBell(props: GlobalNotificationBellProps) {
 
   const mostRecent = () =>
     unreadNotifications().sort((a, b) =>
-      compareDateDesc(a.createdAt, b.createdAt)
+      compareDateDesc(a.created_at, b.created_at)
     )[0];
 
   const handleNotificationClick = async () => {

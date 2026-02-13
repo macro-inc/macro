@@ -37,7 +37,7 @@ function groupNotificationsByType(
 ): NotificationsByType {
   const groups = new Map<string, UnifiedNotification[]>();
   for (const notification of notifications) {
-    const type = notification.notificationEventType;
+    const type = notification.notification_event_type;
     if (!groups.has(type)) {
       groups.set(type, []);
     }
@@ -47,7 +47,7 @@ function groupNotificationsByType(
 }
 
 function hasNotificationMetadata(notification: UnifiedNotification): boolean {
-  return notification.notificationMetadata != null;
+  return notification.notification_metadata != null;
 }
 
 function TypeButton(props: {
@@ -103,7 +103,7 @@ function NotificationItem(props: {
   onSelect: () => void;
 }) {
   const hasData = () => hasNotificationMetadata(props.notification);
-  const isUnread = () => !props.notification.viewedAt;
+  const isUnread = () => !props.notification.viewed_at;
 
   return (
     <button
@@ -128,7 +128,7 @@ function NotificationItem(props: {
             />
           </Show>
           <div class="text-xs text-ink-muted font-mono mt-2">
-            {formatDate(props.notification.createdAt)}
+            {formatDate(props.notification.created_at)}
           </div>
         </div>
       </div>
@@ -348,11 +348,11 @@ function NotificationDetail(props: {
             <h2 class="text-3xl font-semibold text-ink mb-2">
               {NOTIFICATION_LABEL_BY_TYPE[
                 props.notification
-                  .notificationEventType as keyof typeof NOTIFICATION_LABEL_BY_TYPE
-              ] || props.notification.notificationEventType}
+                  .notification_event_type as keyof typeof NOTIFICATION_LABEL_BY_TYPE
+              ] || props.notification.notification_event_type}
             </h2>
             <p class="text-sm text-ink-muted">
-              {formatDate(props.notification.createdAt)}
+              {formatDate(props.notification.created_at)}
             </p>
           </div>
           <DeprecatedTextButton
@@ -369,7 +369,7 @@ function NotificationDetail(props: {
           <div class="flex items-start gap-3">
             <div
               class={`size-2 mt-1 shrink-0  ${
-                !props.notification.viewedAt
+                !props.notification.viewed_at
                   ? 'bg-accent'
                   : 'bg-ink-extra-muted'
               }`}
@@ -388,13 +388,13 @@ function NotificationDetail(props: {
         <h3 class="text-lg font-semibold text-ink mb-4">Full Mode</h3>
         <div
           class={`p-6 rounded-xl border border-edge-muted ${
-            !props.notification.viewedAt ? 'bg-menu-hover' : 'bg-menu'
+            !props.notification.viewed_at ? 'bg-menu-hover' : 'bg-menu'
           }`}
         >
           <div class="flex justify-start items-center gap-3 mb-4 font-mono text-ink-muted text-xs uppercase">
             <div
               class={`size-2 ${
-                !props.notification.viewedAt
+                !props.notification.viewed_at
                   ? 'bg-accent'
                   : 'bg-ink-extra-muted'
               }`}
@@ -403,12 +403,12 @@ function NotificationDetail(props: {
               {
                 NOTIFICATION_LABEL_BY_TYPE[
                   props.notification
-                    .notificationEventType as keyof typeof NOTIFICATION_LABEL_BY_TYPE
+                    .notification_event_type as keyof typeof NOTIFICATION_LABEL_BY_TYPE
                 ]
               }
             </div>
             <div class="grow" />
-            <div>{formatDate(props.notification.createdAt)}</div>
+            <div>{formatDate(props.notification.created_at)}</div>
           </div>
           <div class="ml-5">
             <NotificationRenderer
@@ -481,19 +481,19 @@ function PlaygroundContent() {
     /** @ts-ignore */
     return {
       id: `custom-${Date.now()}`,
-      createdAt: new Date().toISOString(),
+      created_at: new Date().toISOString(),
       eventItemId: 'channel-custom',
       eventItemType: 'channel',
-      senderId: 'user-custom',
-      notificationEventType: 'channel_message_send',
-      notificationMetadata: {
+      sender_id: 'user-custom',
+      notification_event_type: 'channel_message_send',
+      notification_metadata: {
         sender: 'user-custom',
         messageContent: markdownArea.state(),
         messageId: 'msg-custom',
         channelType: 'direct_message',
         channelName: 'test-channel',
       },
-      viewedAt: null,
+      viewed_at: null,
       done: false,
     } as UnifiedNotification;
   });

@@ -10,9 +10,9 @@ describe('notification-description helpers', () => {
   describe('getUniqueSenderIds', () => {
     it('extracts unique sender IDs from notifications', () => {
       const notifications: Notification[] = [
-        { senderId: 'user1' } as Notification,
-        { senderId: 'user2' } as Notification,
-        { senderId: 'user3' } as Notification,
+        { sender_id: 'user1' } as Notification,
+        { sender_id: 'user2' } as Notification,
+        { sender_id: 'user3' } as Notification,
       ];
 
       const result = getUniqueSenderIds(notifications);
@@ -21,11 +21,11 @@ describe('notification-description helpers', () => {
 
     it('deduplicates sender IDs', () => {
       const notifications: Notification[] = [
-        { senderId: 'user1' } as Notification,
-        { senderId: 'user2' } as Notification,
-        { senderId: 'user1' } as Notification,
-        { senderId: 'user3' } as Notification,
-        { senderId: 'user2' } as Notification,
+        { sender_id: 'user1' } as Notification,
+        { sender_id: 'user2' } as Notification,
+        { sender_id: 'user1' } as Notification,
+        { sender_id: 'user3' } as Notification,
+        { sender_id: 'user2' } as Notification,
       ];
 
       const result = getUniqueSenderIds(notifications);
@@ -34,10 +34,10 @@ describe('notification-description helpers', () => {
 
     it('skips notifications without senderId', () => {
       const notifications: Notification[] = [
-        { senderId: 'user1' } as Notification,
+        { sender_id: 'user1' } as Notification,
         {} as Notification,
-        { senderId: 'user2' } as Notification,
-        { senderId: undefined } as any,
+        { sender_id: 'user2' } as Notification,
+        { sender_id: undefined } as any,
       ];
 
       const result = getUniqueSenderIds(notifications);
@@ -61,10 +61,10 @@ describe('notification-description helpers', () => {
 
     it('maintains insertion order of unique sender IDs', () => {
       const notifications: Notification[] = [
-        { senderId: 'user3' } as Notification,
-        { senderId: 'user1' } as Notification,
-        { senderId: 'user2' } as Notification,
-        { senderId: 'user3' } as Notification,
+        { sender_id: 'user3' } as Notification,
+        { sender_id: 'user1' } as Notification,
+        { sender_id: 'user2' } as Notification,
+        { sender_id: 'user3' } as Notification,
       ];
 
       const result = getUniqueSenderIds(notifications);

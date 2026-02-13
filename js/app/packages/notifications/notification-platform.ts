@@ -42,7 +42,7 @@ export async function toPlatformNotificationData(
   resolveUserName: UserNameResolver,
   resolveDocumentName: DocumentNameResolver
 ): Promise<PlatformNotificationData | null> {
-  const actorId = notification.senderId;
+  const actorId = notification.sender_id;
   const actor =
     (actorId ? await resolveUserName(actorId) : undefined) ??
     USER_NAME_FALLBACK;

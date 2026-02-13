@@ -9,15 +9,15 @@ function createEmailNotification(
     id: 'notif-1',
     entity_id: 'thread-1',
     entity_type: 'email',
-    createdAt: new Date().toISOString(),
-    updatedAt: null,
-    viewedAt: null,
-    deletedAt: null,
+    created_at: new Date().toISOString(),
+    updated_at: null,
+    viewed_at: null,
+    deleted_at: null,
     done: false,
     sent: true,
-    senderId,
-    notificationEventType: 'new_email',
-    notificationMetadata: {
+    sender_id: senderId,
+    notification_event_type: 'new_email',
+    notification_metadata: {
       tag: 'new_email',
       content: {
         sender: metadataSender,
@@ -37,17 +37,17 @@ describe('new_email notification', () => {
       'fallback@example.com'
     );
 
-    // senderId is directly available on the notification
-    expect(notification.senderId).toBe('macro|preferred@example.com');
+    // sender_id is directly available on the notification
+    expect(notification.sender_id).toBe('macro|preferred@example.com');
   });
 
   it('falls back to metadata sender when senderId is null', () => {
     const notification = createEmailNotification(null, 'fallback@example.com');
 
-    // When senderId is null, the metadata sender can be used
-    expect(notification.senderId).toBeNull();
+    // When sender_id is null, the metadata sender can be used
+    expect(notification.sender_id).toBeNull();
     // Access the sender field after type assertion since we know this is a new_email notification
-    const content = notification.notificationMetadata.content as {
+    const content = notification.notification_metadata.content as {
       sender?: string | null;
     };
     expect(content.sender).toBe('fallback@example.com');

@@ -17,8 +17,8 @@ type NotificationRendererProps = {
 };
 
 export function NotificationRenderer(props: NotificationRendererProps) {
-  const time = () => formatDate(props.notification.createdAt);
-  const actorId = () => props.notification.senderId ?? '';
+  const time = () => formatDate(props.notification.created_at);
+  const actorId = () => props.notification.sender_id ?? '';
   const macroId = () => tryMacroId(actorId());
   const [actorName] = useDisplayName(macroId());
   const emailFallback = () => {
@@ -35,12 +35,12 @@ export function NotificationRenderer(props: NotificationRendererProps) {
   const entityId = () => props.notification.entity_id;
 
   const emailMeta = () => {
-    const meta = props.notification.notificationMetadata;
+    const meta = props.notification.notification_metadata;
     if (meta.tag !== 'new_email') return null;
     return { subject: meta.content.subject, snippet: meta.content.snippet };
   };
   return (
-    <Show when={props.notification.notificationMetadata}>
+    <Show when={props.notification.notification_metadata}>
       {(_metadata) => {
         if (props.mode === 'preview') {
           return (

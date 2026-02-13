@@ -14,8 +14,8 @@ interface NotificationSenderProps {
 function getUniqueSenderIds(notifications: Notification[]): string[] {
   const senderIds = new Set<string>();
   for (const notification of notifications) {
-    if (notification.senderId) {
-      senderIds.add(notification.senderId);
+    if (notification.sender_id) {
+      senderIds.add(notification.sender_id);
     }
   }
   return Array.from(senderIds);
@@ -29,8 +29,8 @@ function getUniqueSenderIds(notifications: Notification[]): string[] {
  */
 export function NotificationSender(props: NotificationSenderProps) {
   const senderId = () => {
-    if (props.notification?.senderId) {
-      return props.notification.senderId;
+    if (props.notification?.sender_id) {
+      return props.notification.sender_id;
     }
     if (props.stack) {
       const senderIds = getUniqueSenderIds(props.stack.notifications);
