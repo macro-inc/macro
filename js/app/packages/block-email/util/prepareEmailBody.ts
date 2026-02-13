@@ -51,17 +51,15 @@ function buildHeaderDescriptor(
   replyingTo: MessageWithBodyReplyless,
   replyType: ReplyType | undefined
 ): HeaderDescriptor {
+  const replyingToDate = replyingTo.internal_date_ts ?? replyingTo.created_at;
+  const formattedDate = formatEmailDate(replyingToDate);
+
   if (replyType === 'forward') {
     const lines: string[] = [];
     lines.push('---------- Forwarded message ----------');
     const fromName = replyingTo.from?.name ?? replyingTo.from?.email ?? '';
     const fromEmail = replyingTo.from?.email ?? '';
     lines.push(`From: ${fromName} <${fromEmail}>`);
-    const epochSeconds =
-      new Date(
-        (replyingTo.internal_date_ts ?? replyingTo.created_at) as any
-      ).getTime() / 1000;
-    const formattedDate = formatEmailDate(epochSeconds);
     lines.push(`Date: ${formattedDate}`);
     lines.push(`Subject: ${replyingTo.subject ?? ''}`);
 
@@ -94,13 +92,9 @@ function buildHeaderDescriptor(
     return { kind: 'forward', lines };
   }
 
-  const epochSeconds =
-    new Date(
-      (replyingTo.internal_date_ts ?? replyingTo.created_at) as any
-    ).getTime() / 1000;
   const headerText =
     'On ' +
-    formatEmailDate(epochSeconds) +
+    formattedDate +
     ' ' +
     (replyingTo.from?.name ?? replyingTo.from?.email) +
     ' <' +

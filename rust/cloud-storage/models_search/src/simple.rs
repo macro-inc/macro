@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
 use utoipa::ToSchema;
 
@@ -38,7 +39,7 @@ pub struct SearchGotoEmail {
     pub bcc: Vec<String>,
     pub cc: Vec<String>,
     pub labels: Vec<String>,
-    pub sent_at: Option<i64>,
+    pub sent_at: Option<DateTime<Utc>>,
     pub sender: String,
     pub recipients: Vec<String>,
 }

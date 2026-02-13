@@ -1,10 +1,8 @@
 import { useMessageListContext } from '@block-channel/component/MessageList/MessageList';
 import { COLLAPSED_THREAD_INDEX_CUTOFF } from '@block-channel/constants';
 import { useReactToMessage } from '@block-channel/hooks/reactions';
-import type {
-  Attachment,
-  GetChannelResponseReactions,
-} from '@service-comms/generated/models';
+import type { GetChannelResponseReactions } from '@service-comms/generated/models';
+import type { Attachment } from '@queries/channel/types';
 import type { MessageListContext } from '@block-channel/utils/listContext';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
@@ -24,11 +22,12 @@ import {
   STATIC_VIDEO,
 } from '@core/store/cacheChannelInput';
 import { tryMacroId, useDisplayName } from '@core/user';
+import type { DateValue } from '@core/util/date';
 import { isEmojiOnly } from '@core/util/string';
 import { formatRelativeDate, isSameDay } from '@core/util/time';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { usePatchMessageMutation } from '@queries/channel/message';
-import type { Message as MessageType } from '@service-comms/generated/models/message';
+import type { Message as MessageType } from '@queries/channel/types';
 import { useUserId } from '@core/context/user';
 import { activeElement } from 'app/signal/focus';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
@@ -97,7 +96,7 @@ function NewMessageIndicator(props: { onClick?: () => void }) {
 
 type MessageProps = {
   message: MessageType;
-  lastViewed: Accessor<string | null | undefined>;
+  lastViewed: Accessor<DateValue | null | undefined>;
   isFocused: boolean;
   index: Accessor<number>;
   orderedMessages: Accessor<MessageType[]>;
@@ -269,9 +268,9 @@ export function MessageContainer(props: MessageProps) {
   });
   const lastReplyTimestamp = createMemo(() => {
     if (collapsedThreadMessages()) {
-      return collapsedThreadMessages()?.at(-1)?.created_at ?? '';
+      return collapsedThreadMessages()?.at(-1)?.created_at;
     }
-    return '';
+    return;
   });
   const threadReplyUsers = createMemo(() => {
     if (collapsedThreadMessages()) {

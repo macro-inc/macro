@@ -180,7 +180,7 @@ export const freeComments = createBlockMemo(() => {
         text: '',
         owner: userId,
         author: userId,
-        createdAt: Date.now(),
+        createdAt: new Date(),
         isNew: true,
         children: [],
         threadId: -1,

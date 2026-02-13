@@ -8,4 +8,4 @@
 /**
  * The time the document was deleted
  */
-export type BasicDocumentDeletedAt = number | null;
+export type BasicDocumentDeletedAt = string | null;

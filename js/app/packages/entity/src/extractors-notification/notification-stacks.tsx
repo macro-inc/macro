@@ -52,7 +52,7 @@ function NotificationStackRow(props: {
     if (!splitManager) return;
 
     e.stopPropagation();
-    await openNotification(mostRecent, splitManager);
+    await openNotification(mostRecent, splitManager, e.shiftKey);
     await notificationSource.markAsRead(mostRecent);
     props.onClick?.(e);
   };

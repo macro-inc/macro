@@ -1,6 +1,6 @@
 import { ENABLE_SEARCH_SERVICE } from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/maybeResult';
-import type { WithSearch, EntityData } from '@macro-entity';
+import type { WithSearch, EntityData } from '@entity';
 import { soupKeys } from '@queries/soup/keys';
 import { useSearchResponseItemMapper } from '@queries/soup/transform-utils';
 import { searchClient } from '@service-search/client';
@@ -52,8 +52,6 @@ export const useSearchSoupQuery = (
 
   const enabled = createMemo(() => {
     if (options?.().enabled === false) return false;
-
-    if (!terms().length) return true;
 
     return ENABLE_SEARCH_SERVICE && validSearchTerms();
   });

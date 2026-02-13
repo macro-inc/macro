@@ -22,9 +22,9 @@ export interface SoupDocument {
 This could be either DocumentInstance or DocumentBom id depending on the file type */
   branchedFromVersionId?: SoupDocumentBranchedFromVersionId;
   /** The time the document was created */
-  createdAt: number;
+  createdAt: string;
   /** The time the document was deleted */
-  deletedAt: SoupDocumentDeletedAt;
+  deletedAt?: SoupDocumentDeletedAt;
   /** The id of the document family this document belongs to */
   documentFamilyId?: SoupDocumentDocumentFamilyId;
   /** The version of the document
@@ -47,7 +47,7 @@ If the document is a DOCX, this will not be present */
   sha?: SoupDocumentSha;
   subType?: SoupDocumentSubTypeProperty;
   /** The time the document instance / document BOM was updated */
-  updatedAt: number;
+  updatedAt: string;
   /** The time the document was last viewed */
-  viewedAt: SoupDocumentViewedAt;
+  viewedAt?: SoupDocumentViewedAt;
 }

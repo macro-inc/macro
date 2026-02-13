@@ -37,8 +37,7 @@ import { buildSimpleEntityUrl } from '@core/util/url';
 import LinkIcon from '@icon/regular/link-simple.svg';
 import TrashIcon from '@icon/regular/trash.svg';
 import XIcon from '@icon/regular/x.svg';
-import { useQueryClient } from '@queries/client';
-import { soupKeys } from '@queries/soup/keys';
+import { refetchSoupEntity } from '@queries/soup/cache';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
 import { useUserId } from '@core/context/user';
 import { propertiesServiceClient } from '@service-properties/client';
@@ -108,11 +107,8 @@ async function createTaskWithProperties(
     }
   );
 
-  // Invalidate queries to refresh soup items and add to history
-  const queryClient = useQueryClient();
-  queryClient.invalidateQueries({
-    queryKey: soupKeys.items._def,
-  });
+  // refetchSoupEntity is already called inside createTask — just upsert to history
+  refetchSoupEntity(documentId, 'document');
 
   // Upsert the new task to history
   upsertToHistory({
@@ -343,7 +339,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     );
   };
 
-  const properties = () => {
+  const properties = (): Property[] => {
     return filterMap(COMPOSER_PROPERTIES, (id) => {
       const definition = definitions().get(id);
       if (!definition) return;
@@ -354,8 +350,8 @@ export function ComposeTask(props: ComposeTaskProps) {
         isMultiSelect: definition.is_multi_select,
         owner: definition.owner,
         specificEntityType: definition.specific_entity_type ?? null,
-        updatedAt: '',
-        createdAt: '',
+        updatedAt: new Date(0),
+        createdAt: new Date(0),
         valueType: definition.data_type,
         value: extractPropertyValue(definition, propertyValues, options()),
         options: options().get(definition.id),
@@ -370,7 +366,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     saveDate: async (property: Property, date: Date) => {
       setPropertyValues(property.propertyDefinitionId, {
         valueType: 'DATE',
-        value: date.toISOString(),
+        value: date,
       });
     },
   };

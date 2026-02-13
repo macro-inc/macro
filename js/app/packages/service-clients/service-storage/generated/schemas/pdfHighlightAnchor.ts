@@ -6,15 +6,17 @@
  */
 
 import type { HighlightType } from './highlightType';
+import type { PdfHighlightAnchorCreatedAt } from './pdfHighlightAnchorCreatedAt';
 import type { PdfHighlightAnchorDeletedAt } from './pdfHighlightAnchorDeletedAt';
 import type { PdfHighlightAnchorThreadId } from './pdfHighlightAnchorThreadId';
+import type { PdfHighlightAnchorUpdatedAt } from './pdfHighlightAnchorUpdatedAt';
 import type { PdfHighlightRect } from './pdfHighlightRect';
 
 export interface PdfHighlightAnchor {
   alpha: number;
   blue: number;
-  createdAt: number;
-  deletedAt: PdfHighlightAnchorDeletedAt;
+  createdAt?: PdfHighlightAnchorCreatedAt;
+  deletedAt?: PdfHighlightAnchorDeletedAt;
   documentId: string;
   green: number;
   highlightRects: PdfHighlightRect[];
@@ -26,6 +28,6 @@ export interface PdfHighlightAnchor {
   red: number;
   text: string;
   threadId?: PdfHighlightAnchorThreadId;
-  updatedAt: number;
+  updatedAt?: PdfHighlightAnchorUpdatedAt;
   uuid: string;
 }

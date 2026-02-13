@@ -335,7 +335,7 @@ pub async fn get_attachments_by_thread_ids(
 
 /// Get document_id for email attachment if record exists
 #[tracing::instrument(skip(db), err)]
-pub async fn get_document_id_by_attachment_id(
+pub async fn get_document_id_by_att_id_and_link(
     db: &Pool<Postgres>,
     link_id: Uuid,
     email_attachment_id: Uuid,
@@ -356,4 +356,50 @@ pub async fn get_document_id_by_attachment_id(
     .await?;
 
     Ok(result.map(|record| record.document_id))
+}
+
+/// Get document_id for email attachment if record exists
+#[tracing::instrument(skip(db), err)]
+pub async fn get_document_id_by_att_id(
+    db: &Pool<Postgres>,
+    email_attachment_id: Uuid,
+) -> anyhow::Result<Option<String>> {
+    let result = sqlx::query!(
+        r#"
+        SELECT document_id
+        FROM document_email de
+        INNER JOIN "Document" d on de.document_id = d.id
+        INNER JOIN email_attachments ea on de.email_attachment_id = ea.id
+        INNER JOIN email_messages em on ea.message_id = em.id
+        WHERE email_attachment_id = $1 AND d."deletedAt" IS NULL
+        "#,
+        email_attachment_id,
+    )
+    .fetch_optional(db)
+    .await?;
+
+    Ok(result.map(|record| record.document_id))
+}
+
+/// Get thread_id and link_id for an email attachment
+#[tracing::instrument(skip(db), err)]
+pub async fn get_thread_id_for_attachment(
+    db: &Pool<Postgres>,
+    attachment_id: Uuid,
+) -> anyhow::Result<Option<(Uuid, Uuid)>> {
+    let result = sqlx::query!(
+        r#"
+        SELECT et.id as thread_id, et.link_id
+        FROM email_attachments ea
+        INNER JOIN email_messages em ON ea.message_id = em.id
+        INNER JOIN email_threads et ON em.thread_id = et.id
+        WHERE ea.id = $1
+        "#,
+        attachment_id,
+    )
+    .fetch_optional(db)
+    .await
+    .with_context(|| format!("Failed to fetch thread_id for attachment {}", attachment_id))?;
+
+    Ok(result.map(|record| (record.thread_id, record.link_id)))
 }

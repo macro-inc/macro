@@ -1,4 +1,3 @@
-use chrono::serde::ts_seconds_option;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_bulk_upload::ProjectDocumentStatus;
 use serde::{Deserialize, Serialize};
@@ -20,16 +19,10 @@ pub struct Project {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent_id: Option<String>,
     /// The time the project was created
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     /// The time the project was updated
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=true)]
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
@@ -73,8 +66,6 @@ pub struct ProjectPreviewData {
     pub name: String,
     pub owner: String,
     pub path: Vec<String>,
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 

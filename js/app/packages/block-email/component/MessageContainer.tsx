@@ -13,8 +13,7 @@ import { VideoPreview } from '@core/component/VideoPreview';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
-import { useQueryClient } from '@queries/client';
-import { soupKeys } from '@queries/soup/keys';
+import { refetchSoupEntity } from '@queries/soup/cache';
 import { logger } from '@observability';
 import { emailClient } from '@service-email/client';
 import type {
@@ -136,7 +135,6 @@ export function MessageContainer(props: MessageContainerProps) {
   });
 
   const { openWithSplit } = useSplitLayout();
-  const queryClient = useQueryClient();
   const draftAttachments = createMemo(() => {
     return props.message.attachments_draft ?? [];
   });
@@ -178,9 +176,7 @@ export function MessageContainer(props: MessageContainerProps) {
       );
     }
 
-    queryClient.invalidateQueries({
-      queryKey: soupKeys.items._def,
-    });
+    refetchSoupEntity(document_id, 'document');
 
     const blockName = fileType ? fileTypeToBlockName(fileType) : 'unknown';
     openWithSplit(

@@ -178,7 +178,7 @@ pub struct SearchGotoEmail {
     /// The labels of the email
     pub labels: Vec<String>,
     /// The sent_at timestamp of the email
-    pub sent_at: Option<i64>,
+    pub sent_at: Option<chrono::DateTime<chrono::Utc>>,
     /// The sender of the email
     pub sender: String,
     /// The recipients of the email
@@ -191,8 +191,8 @@ pub struct SearchGotoChannel {
     pub channel_message_id: uuid::Uuid,
     pub thread_id: Option<uuid::Uuid>,
     pub sender_id: String,
-    pub created_at: i64,
-    pub updated_at: i64,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 
 /// Enum containing structs for all data needed to handle search "goto" in the frontend

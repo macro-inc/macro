@@ -7,6 +7,7 @@
 
 export * from './apiUserNotification';
 export * from './apiUserNotificationAllOf';
+export * from './apiUserNotificationAllOfCreatedAt';
 export * from './apiUserNotificationAllOfDeletedAt';
 export * from './apiUserNotificationAllOfSenderId';
 export * from './apiUserNotificationAllOfUpdatedAt';

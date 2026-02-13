@@ -1,0 +1,8 @@
+# Decrypts the root .env-local.enc into a .env file here
+get_environment:
+  @echo "Getting base .env file"
+  just ../../../get_environment
+  @echo "Adding in Fusionauth values"
+  just ../../../infra/stacks/fusionauth-instance/insert_local_fusionauth_variables
+  @echo "Copying env file"
+  cp ../../../.env ./

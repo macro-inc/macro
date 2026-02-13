@@ -62,7 +62,7 @@ const ENTITY_TYPE_SHORTCUTS: Record<
 };
 
 export const SoupToolbar = () => {
-  const { soup, setQueryFilters } = useSoupView();
+  const { soup, setSearchText, setQueryFilters } = useSoupView();
 
   const [scrollContainerRef, setScrollContainerRef] = createSignal<
     HTMLDivElement | undefined
@@ -71,6 +71,7 @@ export const SoupToolbar = () => {
   const handleClear = () => {
     batch(() => {
       soup.filters.clear();
+      setSearchText('');
       setQueryFilters(QUERY_FILTERS.default);
     });
   };
@@ -78,12 +79,12 @@ export const SoupToolbar = () => {
   return (
     <>
       <SplitHeaderLeft>
-        <div class="relative h-full">
+        <div class="relative h-full w-full">
           <ScrollIndicators scrollRef={scrollContainerRef()} />
 
           <div
             ref={setScrollContainerRef}
-            class="flex items-center h-full overflow-x-auto scrollbar-hidden overscroll-none text-xs touch:mobile-width:text-sm"
+            class="flex items-center h-full w-full overflow-x-auto scrollbar-hidden overscroll-none text-xs touch:mobile-width:text-sm"
           >
             <SoupFilters />
             <SearchBar />
@@ -499,8 +500,17 @@ const SearchBar = () => {
   const panel = useSplitPanelOrThrow();
 
   const [ref, setRef] = createSignal<HTMLInputElement | undefined>();
+  let measureSpan: HTMLSpanElement | undefined;
 
   const [searchFocused, setSearchFocused] = createSignal(false);
+  const [measuredWidth, setMeasuredWidth] = createSignal(0);
+
+  createEffect(() => {
+    if (measureSpan) {
+      measureSpan.textContent = searchText() || '';
+      setMeasuredWidth(measureSpan.scrollWidth);
+    }
+  });
 
   const searchHotkey = registerHotkey({
     hotkey: ['cmd+f'],
@@ -508,26 +518,49 @@ const SearchBar = () => {
     description: 'Search',
     keyDownHandler: () => {
       ref()?.focus();
-      if (ref()?.value) ref()?.select();
       return true;
     },
   });
 
   onCleanup(searchHotkey.dispose);
 
+  const MIN_INPUT_WIDTH = 48;
+
+  const inputWidth = () => {
+    if (!searchText() && !searchFocused()) return 0;
+    return Math.max(MIN_INPUT_WIDTH, measuredWidth());
+  };
+
   return (
-    <div class="flex items-center shrink-0 touch:mobile-width:-order-2">
-      <Tooltip tooltip={<LabelAndHotKey label="Filter" shortcut="⌘F" />}>
+    <div class="flex items-center grow min-w-0 touch:mobile-width:-order-2">
+      <Tooltip
+        class="w-fit"
+        placement="bottom-start"
+        tooltip={<LabelAndHotKey label="Filter" shortcut="⌘F" />}
+      >
         <div
           class="relative flex items-center gap-1.5 h-[22px] touch:mobile-width:h-9 px-2.5 rounded-full touch:mobile-width:min-w-35"
           classList={{
             'bg-accent text-panel': !!searchText() && !searchFocused(),
             'text-ink-muted hover:text-accent hover:bg-accent/20':
-              !searchText() || searchFocused(),
+              !searchText() && !searchFocused(),
+            'bg-accent/15 text-ink': searchFocused(),
           }}
-          onClick={() => ref()?.focus()}
+          onMouseDown={(e) => {
+            if (e.target !== ref()) {
+              e.preventDefault();
+              ref()?.focus();
+            }
+          }}
         >
           <SearchIcon class="size-4.5 shrink-0" />
+          <span
+            ref={(el) => {
+              measureSpan = el;
+            }}
+            class="invisible absolute whitespace-pre"
+            aria-hidden="true"
+          />
           <Show when={!searchText() && !searchFocused()}>
             <span class="leading-none pointer-events-none">
               <span class="underline underline-offset-2 decoration-current/60">
@@ -554,12 +587,7 @@ const SearchBar = () => {
               }
             }}
             class="p-0 bg-transparent border-none outline-none ring-0 focus:outline-none focus:ring-0 cursor-default"
-            style={{
-              width:
-                !searchText() && !searchFocused()
-                  ? '0'
-                  : `${Math.max(5, searchText().length + 1)}ch`,
-            }}
+            style={{ width: `${inputWidth()}px` }}
           />
         </div>
       </Tooltip>

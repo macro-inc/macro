@@ -1,6 +1,5 @@
 import type { PreviewViewStandardLabel } from '@service-email/generated/schemas';
 import type { SearchArgs } from '@service-search/client';
-import { hashKey } from '@tanstack/solid-query';
 
 const BASE_AUTH = ['auth'];
 
@@ -59,21 +58,3 @@ export const queryKeys = {
   ],
   search: (args: SearchKeyOptions) => [...BASE_ENTITY.search, { ...args }],
 };
-
-export type DssQueryKey = [
-  (typeof BASE_ENTITY.dss)[0],
-  (typeof BASE_ENTITY.dss)[1],
-  { type: 'chat' | 'document' } & InfiniteKeyOptions,
-  ...string[],
-];
-export function dssQueryKeyHashFn(queryKey: DssQueryKey): string {
-  try {
-    const [, , { type: _, ...options }, ...additional] = queryKey;
-    const hashedKey = hashKey([options, ...additional]);
-
-    return `dss-entity|${hashedKey}`;
-  } catch (error) {
-    console.error('Error hashing DSS query key', error);
-    return hashKey(queryKey);
-  }
-}

@@ -1,12 +1,13 @@
+import type { DateValue } from '@core/util/date';
 import type { Item } from '@service-storage/generated/schemas/item';
 
-type BaseHistoryItem = Pick<
-  Item,
-  'id' | 'name' | 'createdAt' | 'updatedAt' | 'deletedAt'
-> & {
+type BaseHistoryItem = Pick<Item, 'id' | 'name'> & {
+  createdAt?: DateValue | null;
+  updatedAt?: DateValue | null;
+  deletedAt?: DateValue | null;
   // NOTE: the history endpoint does not return this field so this
   // is a placeholder for now
-  viewedAt?: number;
+  viewedAt?: DateValue;
   // TODO: item name without safe name transform
   rawName?: string;
 };
@@ -27,5 +28,5 @@ export type HistoryItem =
   | ProjectHistoryItem;
 
 export type HistoryQueryResponse = {
-  data: HistoryItem[];
+  data: Item[];
 };

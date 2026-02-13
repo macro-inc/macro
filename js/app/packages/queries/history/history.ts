@@ -14,6 +14,7 @@ import { createEffect, type Accessor, type Setter } from 'solid-js';
 import { queryClient } from '../client';
 import { historyKeys } from './keys';
 import {
+  transformHistoryItem,
   transformHistoryResponse,
   updateViewedAtAndMoveItemToFront,
 } from './transforms';
@@ -115,7 +116,7 @@ export function refetchHistory() {
 // @ts-ignore
 // biome-ignore lint/correctness/noUnusedVariables: we may use this eventually
 function optimisticUpdateViewedAt(itemId: string) {
-  const now = Date.now();
+  const now = new Date();
 
   setHistoryData((old) => {
     return updateViewedAtAndMoveItemToFront(old, itemId, now);
@@ -285,7 +286,9 @@ export async function insertProjectIntoHistory(projectId: string) {
           return acc;
         }, [])
       );
-      newData.push(...projectContent[1].data.map(({ item }) => item));
+      newData.push(
+        ...projectContent[1].data.map(({ item }) => transformHistoryItem(item))
+      );
     }
   }
 

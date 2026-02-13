@@ -6,6 +6,7 @@ import {
   type EntityData,
   type WithNotification,
 } from '@entity';
+import { compareDateDesc } from '@core/util/date';
 
 export type SystemSortOption =
   | 'updated_at'
@@ -21,7 +22,7 @@ export function sortByNotifiedAt<T extends WithNotification<EntityData>>(
   const bNotification = b.notifications?.()[0];
 
   if (aNotification && bNotification) {
-    return bNotification.createdAt - aNotification.createdAt;
+    return compareDateDesc(aNotification.createdAt, bNotification.createdAt);
   } else if (aNotification) {
     return -1;
   } else if (bNotification) {
@@ -32,15 +33,15 @@ export function sortByNotifiedAt<T extends WithNotification<EntityData>>(
 }
 
 export function sortByCreatedAt<T extends EntityData>(a: T, b: T): number {
-  return (b.createdAt ?? 0) - (a.createdAt ?? 0);
+  return compareDateDesc(a.createdAt, b.createdAt);
 }
 
 export function sortByUpdatedAt<T extends EntityData>(a: T, b: T) {
-  return (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
+  return compareDateDesc(a.updatedAt, b.updatedAt);
 }
 
 export function sortByViewedAt<T extends EntityData>(a: T, b: T) {
-  return (b.viewedAt ?? 0) - (a.viewedAt ?? 0);
+  return compareDateDesc(a.viewedAt, b.viewedAt);
 }
 
 export function sortByFrecencyScore<T extends EntityData>(a: T, b: T): number {
@@ -85,13 +86,9 @@ export const sortEntitiesForSearch = <T extends EntityData>(
   };
 
   // NOTE: backend returns items in descending order of updatedAt so we match that here
-  const updatedAtFirst = (a: WithSearch<T>, b: WithSearch<T>) => {
-    if (a.updatedAt && b.updatedAt) return b.updatedAt - a.updatedAt;
-    if (a.updatedAt) return -1;
-    if (b.updatedAt) return 1;
-    return 0;
-  };
+  const updatedAtDesc = (a: WithSearch<T>, b: WithSearch<T>) =>
+    compareDateDesc(a.updatedAt, b.updatedAt);
 
   // TODO: we may want to sort exact name matches first for other items too
-  return channelsWithNameMatchesFirst(a, b) || updatedAtFirst(a, b);
+  return channelsWithNameMatchesFirst(a, b) || updatedAtDesc(a, b);
 };

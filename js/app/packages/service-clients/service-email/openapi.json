@@ -2086,8 +2086,8 @@
             "type": ["string", "null"]
           },
           "createdAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "filename": {
             "type": ["string", "null"]
@@ -2255,13 +2255,12 @@
           "isImportant",
           "sortTs",
           "createdAt",
-          "updatedAt",
-          "viewedAt"
+          "updatedAt"
         ],
         "properties": {
           "createdAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "id": {
             "type": "string",
@@ -2301,16 +2300,16 @@
             "type": ["string", "null"]
           },
           "sortTs": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "viewedAt": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         }
       },
@@ -3386,8 +3385,7 @@
           "participants",
           "sortTs",
           "createdAt",
-          "updatedAt",
-          "viewedAt"
+          "updatedAt"
         ],
         "properties": {
           "attachments": {
@@ -3397,8 +3395,8 @@
             }
           },
           "createdAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "id": {
             "type": "string",
@@ -3444,16 +3442,16 @@
             "type": ["string", "null"]
           },
           "sortTs": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "viewedAt": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         }
       },

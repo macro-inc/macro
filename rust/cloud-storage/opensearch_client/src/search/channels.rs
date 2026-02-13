@@ -241,8 +241,10 @@ pub(crate) async fn search_channel_messages(
                         channel_message_id: a.message_id,
                         thread_id: a.thread_id,
                         sender_id: a.sender_id,
-                        created_at: a.created_at_seconds,
-                        updated_at: a.updated_at_seconds,
+                        created_at: chrono::DateTime::from_timestamp(a.created_at_seconds, 0)
+                            .unwrap_or_default(),
+                        updated_at: chrono::DateTime::from_timestamp(a.updated_at_seconds, 0)
+                            .unwrap_or_default(),
                     })),
                     updated_at: chrono::DateTime::from_timestamp(a.updated_at_seconds, 0),
                 },

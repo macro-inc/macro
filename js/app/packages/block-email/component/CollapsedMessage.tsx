@@ -109,7 +109,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
                   'calc(var(--left-of-connector) - var(--user-icon-width) / 2)',
               }}
             >
-              <span class="text-ink w-16 shrink-0 truncate text-sm">
+              <span class="text-ink font-semibold w-16 shrink-0 truncate text-sm">
                 {senderDisplay()}
               </span>
               <span class="text-ink truncate">{snippet()}</span>

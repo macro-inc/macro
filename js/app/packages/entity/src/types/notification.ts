@@ -1,4 +1,3 @@
-// Temporarily use the generated types for now
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
 import type { Accessor } from 'solid-js';
 

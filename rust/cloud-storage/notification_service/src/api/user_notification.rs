@@ -1,5 +1,5 @@
 use ::notification::domain::models::UserNotificationRow;
-use chrono::{DateTime, Utc, serde::ts_seconds_option};
+use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use model_error_response::ErrorResponse;
@@ -30,20 +30,12 @@ pub struct ApiUserNotification {
     /// Whether the notification is marked as done.
     pub done: bool,
     /// When the notification was created.
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable = false)]
     pub created_at: Option<DateTime<Utc>>,
     /// When the notification was viewed/seen.
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable = true)]
     pub viewed_at: Option<DateTime<Utc>>,
     /// When the notification was last updated.
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable = true)]
     pub updated_at: Option<DateTime<Utc>>,
     /// When the notification was deleted.
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable = true)]
     pub deleted_at: Option<DateTime<Utc>>,
     /// Deserialized notification metadata.
     pub notification_metadata: NotifEvent,

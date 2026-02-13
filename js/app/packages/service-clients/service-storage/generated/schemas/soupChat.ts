@@ -11,9 +11,9 @@ import type { SoupProperty } from './soupProperty';
 
 export interface SoupChat {
   /** The time the chat was created */
-  createdAt: number;
+  createdAt: string;
   /** The time the chat was deleted */
-  deletedAt: SoupChatDeletedAt;
+  deletedAt?: SoupChatDeletedAt;
   /** The chat uuid */
   id: string;
   /** Whether the chat is persistent or not */
@@ -27,7 +27,7 @@ export interface SoupChat {
   /** Properties */
   properties: SoupProperty[];
   /** The time the chat was last updated */
-  updatedAt: number;
+  updatedAt: string;
   /** The time the chat was last viewed */
-  viewedAt: SoupChatViewedAt;
+  viewedAt?: SoupChatViewedAt;
 }

@@ -1,3 +1,4 @@
+import type { DateValue } from '@core/util/date';
 import type { EntityData } from './entity';
 
 type MarkdownHighlightLocation = {
@@ -35,7 +36,7 @@ export type ChannelContentHitData = {
   id: string;
   content: string;
   senderId: string;
-  sentAt: number;
+  sentAt: DateValue;
   location: ChannelMessageHighlightLocation;
 };
 
@@ -62,7 +63,7 @@ export type EmailContentHitData = {
   content: string;
   sender: string;
   senderId: string;
-  sentAt: number;
+  sentAt: DateValue;
   location: EmailMessageHighlightLocation;
 };
 

@@ -1,5 +1,5 @@
 import { throwOnErr } from '@core/util/maybeResult';
-import type { EntityData } from '@macro-entity';
+import type { EntityData } from '@entity';
 import { soupKeys } from '@queries/soup/keys';
 import { mapSoupPageToEntityList } from '@queries/soup/transform-utils';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';

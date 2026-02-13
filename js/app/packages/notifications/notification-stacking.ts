@@ -1,3 +1,4 @@
+import { compareDateDesc } from '@core/util/date';
 import type { UnifiedNotification } from './types';
 import type { NotificationType } from '@core/types';
 
@@ -97,12 +98,15 @@ export function stackNotifications(
     if ((a.type === 'channel_mention') !== (b.type === 'channel_mention')) {
       return a.type === 'channel_mention' ? -1 : 1;
     }
-    return b.notifications[0].createdAt - a.notifications[0].createdAt;
+    return compareDateDesc(
+      a.notifications[0].createdAt,
+      b.notifications[0].createdAt
+    );
   });
 }
 
-function sortByRecency<T extends { createdAt: number }>(items: T[]): T[] {
-  return [...items].sort((a, b) => b.createdAt - a.createdAt);
+function sortByRecency(items: UnifiedNotification[]): UnifiedNotification[] {
+  return [...items].sort((a, b) => compareDateDesc(a.createdAt, b.createdAt));
 }
 
 const groupBy: <T, K>(items: T[], keyFn: (item: T) => K) => Map<K, T[]> =

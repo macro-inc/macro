@@ -15,8 +15,7 @@ import {
   type UploadInput,
   uploadFiles,
 } from '@core/util/upload';
-import { useQueryClient } from '@queries/client';
-import { soupKeys } from '@queries/soup/keys';
+import { refetchSoupEntity } from '@queries/soup/cache';
 import { refetchResources } from '@service-storage/util/refetchResources';
 import { toast } from 'core/component/Toast/Toast';
 import { type Component, createSignal, Show } from 'solid-js';
@@ -40,7 +39,6 @@ const Block: Component = () => {
   const [isDragging, setIsDragging] = createSignal(false);
   const projectId = useBlockId();
   const isSpecialProject = getIsSpecialProject(projectId);
-  const queryClient = useQueryClient();
 
   const handleFileUpload = async (files: UploadInput[]) => {
     if (files.length === 0) return;
@@ -58,12 +56,14 @@ const Block: Component = () => {
 
       const uploads = results.filter((result) => !result.failed);
 
-      // show documents that were immediately uploaded
+      // refetch successfully uploaded documents into soup
       const successfulUploads = uploads.filter((result) => !result.pending);
+      for (const upload of successfulUploads) {
+        if (upload.type === 'document') {
+          refetchSoupEntity(upload.documentId, 'document');
+        }
+      }
       if (successfulUploads.length > 0) {
-        queryClient.invalidateQueries({
-          queryKey: soupKeys.items._def,
-        });
         refetchResources();
       }
 
@@ -73,10 +73,12 @@ const Block: Component = () => {
         .filter((result) => result.type === 'folder')
         .map((result) => result.projectId);
       if (pendingFolderUploads.length > 0) {
-        await Promise.all(pendingFolderUploads);
-        queryClient.invalidateQueries({
-          queryKey: soupKeys.items._def,
-        });
+        const resolved = await Promise.all(pendingFolderUploads);
+        for (const projectId of resolved) {
+          if (projectId) {
+            refetchSoupEntity(projectId, 'project');
+          }
+        }
         refetchResources();
       }
     } catch (error) {

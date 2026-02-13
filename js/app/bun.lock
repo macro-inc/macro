@@ -19,6 +19,7 @@
         "@corvu/dialog": "^0.2.4",
         "@corvu/resizable": "^0.2.5",
         "@corvu/tooltip": "^0.2.2",
+        "@date-fns/tz": "^1.4.1",
         "@floating-ui/dom": "^1.7.4",
         "@fontsource-variable/inter": "^5.2.8",
         "@inkibra/tauri-plugins": "git+https://github.com/seanaye/tauri-plugins.git#0c932ffd3202145b40645246d87a38deb72ba09c",
@@ -36,6 +37,7 @@
         "@lexical/table": "^0.32.1",
         "@lexical/utils": "^0.32.1",
         "@lukemorales/query-key-factory": "^1.3.4",
+        "@normy/query-core": "^0.21.0",
         "@panzoom/panzoom": "^4.6.0",
         "@phosphor-icons/core": "^2.1.1",
         "@solid-primitives/audio": "^1.4.2",
@@ -595,6 +597,8 @@
 
     "@datadog/datadog-ci": ["@datadog/datadog-ci@3.7.0", "", { "dependencies": { "@aws-sdk/client-cloudwatch-logs": "^3.709.0", "@aws-sdk/client-iam": "^3.709.0", "@aws-sdk/client-lambda": "^3.709.0", "@aws-sdk/client-sfn": "^3.709.0", "@aws-sdk/core": "^3.709.0", "@aws-sdk/credential-provider-ini": "^3.709.0", "@aws-sdk/credential-providers": "^3.709.0", "@google-cloud/logging": "^11.1.0", "@google-cloud/run": "^1.4.0", "@smithy/property-provider": "^2.0.12", "@smithy/util-retry": "^2.0.4", "@types/datadog-metrics": "0.6.1", "ajv": "^8.12.0", "ajv-formats": "^2.1.1", "async-retry": "1.3.1", "axios": "^1.8.4", "chalk": "3.0.0", "clipanion": "^3.2.1", "datadog-metrics": "0.9.3", "deep-extend": "0.6.0", "deep-object-diff": "^1.1.9", "fast-levenshtein": "^3.0.0", "fast-xml-parser": "^4.4.1", "form-data": "4.0.0", "fuzzy": "^0.1.3", "glob": "^10.4.5", "google-auth-library": "^9.12.0", "inquirer": "^8.2.5", "inquirer-checkbox-plus-prompt": "^1.4.2", "js-yaml": "3.13.1", "jszip": "^3.10.1", "ora": "5.4.1", "packageurl-js": "^2.0.1", "proxy-agent": "^6.4.0", "semver": "^7.5.3", "simple-git": "3.16.0", "ssh2": "^1.15.0", "ssh2-streams": "0.4.10", "sshpk": "1.16.1", "terminal-link": "2.1.1", "tiny-async-pool": "^2.1.0", "typanion": "^3.14.0", "upath": "^2.0.1", "uuid": "^9.0.0", "ws": "^7.5.10", "xml2js": "0.5.0", "yamux-js": "0.1.2" }, "bin": "dist/cli.js" }, "sha512-bEWQvb3on8S0I+C77TWX+vuCXxlH7QDwFQftRuexCeJbe2UHr8uDy9Yq+jRlUdtKi/TJXb9w8PDvzAeyVpSIRA=="],
 
+    "@date-fns/tz": ["@date-fns/tz@1.4.1", "", {}, "sha512-P5LUNhtbj6YfI3iJjw5EL9eUAG6OitD0W3fWQcpQjDRc/QIsL0tRNuO1PcDvPccWL1fSTXXdE1ds+l95DV/OFA=="],
+
     "@dimforge/rapier3d-compat": ["@dimforge/rapier3d-compat@0.12.0", "", {}, "sha512-uekIGetywIgopfD97oDL5PfeezkFpNhwlzlaEYNOA0N6ghdsOvh/HYjSMek5Q2O1PYvRSDFcqFVJl4r4ZBwOow=="],
 
     "@dinero.js/calculator-number": ["@dinero.js/calculator-number@2.0.0-alpha.8", "", { "dependencies": { "@dinero.js/core": "2.0.0-alpha.8" } }, "sha512-/L+N7g5DjcS6wlMb2hcOXWBKW2TGiG+vZDZr9ow0nsHUTdwtMarL1bmBH9fGldHhH2XsxcrjN9H+036yeNzh3Q=="],
@@ -844,6 +848,10 @@
     "@nodelib/fs.stat": ["@nodelib/fs.stat@2.0.5", "", {}, "sha512-RkhPPp2zrqDAQA/2jNhnztcPAlv64XdhIp7a7454A5ovI7Bukxgt7MX7udwAu3zg1DcpPU0rz3VV1SeaqvY4+A=="],
 
     "@nodelib/fs.walk": ["@nodelib/fs.walk@1.2.8", "", { "dependencies": { "@nodelib/fs.scandir": "2.1.5", "fastq": "^1.6.0" } }, "sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg=="],
+
+    "@normy/core": ["@normy/core@0.14.0", "", { "dependencies": { "@babel/runtime": "^7.23.5", "deepmerge": "4.3.1" } }, "sha512-3I0S62BNEIlvSL10TutHsLvTxguRoXEjs6b/udSUnxlKFVgrAIdW4F4tJDiZsJQrWRi6A6V3Eo5Dzji3zyn40Q=="],
+
+    "@normy/query-core": ["@normy/query-core@0.21.0", "", { "dependencies": { "@normy/core": "0.14.0" }, "peerDependencies": { "@tanstack/query-core": ">=5.4.3" } }, "sha512-O1GM0wqXIHHiWremrbvGG3ZuDxPsg+k9DDin+7sjkK/jHT2ER2MVodoMG40sB3I+zCKCdGVDi+/nZlb36m/mmA=="],
 
     "@nothing-but/utils": ["@nothing-but/utils@0.17.0", "", {}, "sha512-TuCHcHLOqDL0SnaAxACfuRHBNRgNJcNn9X0GiH5H3YSDBVquCr3qEIG3FOQAuMyZCbu9w8nk2CHhOsn7IvhIwQ=="],
 

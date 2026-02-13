@@ -28,14 +28,11 @@ import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import ClockIcon from '@icon/regular/clock.svg';
 import EmailIcon from '@icon/regular/envelope.svg';
 import UsersIcon from '@icon/regular/users.svg';
-import type { EntityData, WithSearch } from '@macro-entity';
-import {
-  createUnifiedSearchInfiniteQuery,
-  type EmailEntity,
-  useEmails,
-} from '@macro-entity';
 import { useHistoryQuery } from '@queries/history/history';
-import type { SearchArgs } from '@service-search/client';
+import {
+  useSearchSoupQuery,
+  type SearchSoupQueryArgs,
+} from '@queries/soup/search';
 import { debounce } from '@solid-primitives/scheduled';
 import { globalSplitManager } from 'app/signal/splitLayout';
 import type { LexicalEditor } from 'lexical';
@@ -80,6 +77,7 @@ import {
   type UserMentionRecord,
 } from '../../utils/mentionsUtils';
 import type { HistoryItem as Item } from '@queries/history/history';
+import type { EntityData, WithSearch, EmailEntity } from '@entity';
 
 false && clickOutside;
 false && floatWithSelection;
@@ -473,7 +471,8 @@ function MentionsMenuInner(props: {
         props.emails?.().map(entityMapper('email')).filter(allItemFilter) ?? []
     );
   } else {
-    const emailsFromSource = useEmails();
+    // TODO: hook into email query because useEmails was deprecated
+    const emailsFromSource: Accessor<EmailEntity[]> = () => [];
     emails = createMemo(
       () =>
         emailsFromSource().map(entityMapper('email')).filter(allItemFilter) ??
@@ -509,13 +508,13 @@ function MentionsMenuInner(props: {
     });
   }
 
-  const args = createMemo((): SearchArgs => {
+  const args = createMemo((): SearchSoupQueryArgs => {
     return {
       params: {
         cursor: null,
         page_size: 10,
       },
-      request: {
+      body: {
         match_type: 'partial',
         search_on: 'name',
         include: ['emails'],
@@ -524,8 +523,7 @@ function MentionsMenuInner(props: {
     };
   });
 
-  const emailUnifiedSearchInfiniteQuery =
-    createUnifiedSearchInfiniteQuery(args);
+  const emailUnifiedSearchInfiniteQuery = useSearchSoupQuery(args);
 
   const foundEmails = createMemo((): Entity<'email'>[] => {
     if (emailUnifiedSearchInfiniteQuery.status === 'success') {

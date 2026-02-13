@@ -481,7 +481,7 @@ function PlaygroundContent() {
     /** @ts-ignore */
     return {
       id: `custom-${Date.now()}`,
-      createdAt: Math.floor(Date.now() / 1000),
+      createdAt: new Date().toISOString(),
       eventItemId: 'channel-custom',
       eventItemType: 'channel',
       senderId: 'user-custom',

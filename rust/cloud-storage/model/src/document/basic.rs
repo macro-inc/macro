@@ -2,7 +2,6 @@ use std::str::FromStr;
 
 use super::file_type::FileType;
 use crate::document::FileTypeExt;
-use chrono::serde::ts_seconds_option;
 use macro_user_id::user_id::MacroUserIdStr;
 use utoipa::ToSchema;
 
@@ -32,10 +31,8 @@ pub struct Document {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub project_id: Option<String>,
     /// The time the document was created
-    #[serde(with = "ts_seconds_option")]
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     /// The time the document was last updated
-    #[serde(with = "ts_seconds_option")]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
@@ -53,9 +50,7 @@ pub struct ID {
 #[serde(rename_all = "snake_case")]
 pub struct IDWithTimeStamps {
     pub id: String,
-    #[serde(with = "ts_seconds_option")]
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
-    #[serde(with = "ts_seconds_option")]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
@@ -71,9 +66,7 @@ pub struct VersionID {
 pub struct VersionIDWithTimeStampsOptionalSha {
     pub id: i64,
     pub sha: Option<String>,
-    #[serde(with = "ts_seconds_option")]
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
-    #[serde(with = "ts_seconds_option")]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
@@ -82,9 +75,7 @@ pub struct VersionIDWithTimeStampsOptionalSha {
 #[serde(rename_all = "snake_case")]
 pub struct VersionIDWithTimeStampsNoSha {
     pub id: i64,
-    #[serde(with = "ts_seconds_option")]
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
-    #[serde(with = "ts_seconds_option")]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
@@ -94,9 +85,7 @@ pub struct VersionIDWithTimeStampsNoSha {
 pub struct VersionIDWithTimeStamps {
     pub id: i64,
     pub sha: String,
-    #[serde(with = "ts_seconds_option")]
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
-    #[serde(with = "ts_seconds_option")]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
@@ -118,8 +107,6 @@ pub struct DocumentBasic {
     pub document_family_id: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub project_id: Option<String>,
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=true)]
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 

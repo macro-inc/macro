@@ -244,8 +244,10 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     channel_message_id: a.message_id,
                     thread_id: a.thread_id,
                     sender_id: a.sender_id,
-                    created_at: a.created_at_seconds,
-                    updated_at: a.updated_at_seconds,
+                    created_at: DateTime::from_timestamp(a.created_at_seconds, 0)
+                        .unwrap_or_default(),
+                    updated_at: DateTime::from_timestamp(a.updated_at_seconds, 0)
+                        .unwrap_or_default(),
                 })),
                 updated_at: DateTime::from_timestamp(a.updated_at_seconds, 0),
             },
@@ -294,7 +296,9 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     bcc: a.bcc,
                     cc: a.cc,
                     labels: a.labels,
-                    sent_at: a.sent_at_seconds,
+                    sent_at: a
+                        .sent_at_seconds
+                        .and_then(|ts| DateTime::from_timestamp(ts, 0)),
                     sender: a.sender,
                     recipients: a.recipients,
                 })),

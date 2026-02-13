@@ -6,11 +6,13 @@
  */
 import type { DocumentResponseMetadataBranchedFromId } from './documentResponseMetadataBranchedFromId';
 import type { DocumentResponseMetadataBranchedFromVersionId } from './documentResponseMetadataBranchedFromVersionId';
+import type { DocumentResponseMetadataCreatedAt } from './documentResponseMetadataCreatedAt';
 import type { DocumentResponseMetadataDocumentBom } from './documentResponseMetadataDocumentBom';
 import type { DocumentResponseMetadataDocumentFamilyId } from './documentResponseMetadataDocumentFamilyId';
 import type { DocumentResponseMetadataFileType } from './documentResponseMetadataFileType';
 import type { DocumentResponseMetadataSha } from './documentResponseMetadataSha';
 import type { DocumentResponseMetadataSubType } from './documentResponseMetadataSubType';
+import type { DocumentResponseMetadataUpdatedAt } from './documentResponseMetadataUpdatedAt';
 
 export interface DocumentResponseMetadata {
   /** The id of the document this document branched from */
@@ -20,7 +22,7 @@ This could be either DocumentInstance or DocumentBom id depending on
 the file type */
   branchedFromVersionId?: DocumentResponseMetadataBranchedFromVersionId;
   /** The time the document was created */
-  createdAt: number;
+  createdAt?: DocumentResponseMetadataCreatedAt;
   /** If the document is a DOCX document, the document_bom will be present */
   documentBom?: DocumentResponseMetadataDocumentBom;
   /** The id of the document family this document belongs to */
@@ -45,5 +47,5 @@ If the document is a DOCX, this will not be present */
   sha?: DocumentResponseMetadataSha;
   subType?: DocumentResponseMetadataSubType;
   /** The time the document instance / document BOM was updated */
-  updatedAt: number;
+  updatedAt?: DocumentResponseMetadataUpdatedAt;
 }

@@ -7,7 +7,7 @@ import { fetchDocumentAsMarkdown } from '@queries/sync/markdownText';
 import { propertiesServiceClient } from '@service-properties/client';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { storageServiceClient } from '@service-storage/client';
-import type { Item } from '@service-storage/generated/schemas/item';
+import type { HistoryItem as Item } from '@queries/history/history';
 import { INSERT_SNAPSHOT_NODE_COMMAND } from '../plugins/mentions';
 import {
   entityMapper,

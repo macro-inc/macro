@@ -15,7 +15,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import HashIcon from '@icon/regular/hash.svg';
 import LinkIcon from '@icon/regular/link.svg';
-import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
+import type { ChannelParticipant } from '@queries/channel/types';
 import type { ChannelType } from '@service-comms/generated/models/channelType';
 import { ChannelTypeEnum } from '@service-comms/client';
 import { useUserId } from '@core/context/user';
