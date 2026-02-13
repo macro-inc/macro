@@ -525,13 +525,13 @@ export const SoupViewList = (props: SoupViewListProps) => {
       >
         <StaticMarkdownContext>
           <Switch>
-            <Match when={source.isLoading()}>
+            <Match when={source.isLoading() && !rows().length}>
               <LoadingBlock />
             </Match>
-            <Match when={!rows().length}>
+            <Match when={!source.isLoading() && !rows().length}>
               <EmptyState search={!!searchText()} />
             </Match>
-            <Match when={!source.isLoading() && rows().length}>
+            <Match when={rows().length}>
               <EntityRowProvider
                 container={localEntityListRef}
                 canSwipeLeft={(entityId) => {

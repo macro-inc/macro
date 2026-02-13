@@ -327,7 +327,7 @@ export const SoupViewContextProvider: FlowComponent<
       const itemsData = itemsQuery.data;
       const searchData = searchQuery.data;
 
-      if (!itemsData && !searchData) return [];
+      if (!itemsData && !searchData) return prev;
 
       const searching = isSearching();
 
@@ -337,7 +337,17 @@ export const SoupViewContextProvider: FlowComponent<
       let transformed: SoupEntity[] = [...searchItems];
 
       if (searching) {
-        transformed.push(...nameFuzzySearchFilter(items));
+        const fuzzyMatched = nameFuzzySearchFilter(items);
+        transformed.push(...fuzzyMatched);
+
+        if (!searchData) {
+          const matchedIds = new Set(fuzzyMatched.map((e) => e.id));
+          for (const item of items) {
+            if (!matchedIds.has(item.id)) {
+              transformed.push(item);
+            }
+          }
+        }
       } else {
         transformed.push(...items);
       }
