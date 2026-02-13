@@ -1,17 +1,26 @@
 use crate::{
     constants::DEFAULT_TIMEOUT_THRESHOLD,
-    model::{connection::ConnectionContext, message::Message},
+    model::{
+        connection::ConnectionContext,
+        message::{Message, OutgoingMessage},
+    },
 };
 use anyhow::Result;
 use frecency::domain::{models::EventRecord, ports::EventIngestorService};
+use futures::StreamExt;
 use futures::TryFutureExt;
 use itertools::Itertools;
 use model_entity::{Entity, EntityType, TrackAction, TrackingData};
+use tokio::sync::mpsc::Sender;
 use tracing::Level;
 
 use super::sender::send_message_to_entity;
 
-pub async fn track_entity(ctx: ConnectionContext<'_>, data: TrackingData<'_>) -> Result<()> {
+pub async fn track_entity(
+    sender: &Sender<OutgoingMessage>,
+    ctx: ConnectionContext<'_>,
+    data: TrackingData<'_>,
+) -> Result<()> {
     let fut = ctx
         .api_context
         .frecency_ingestor_service
@@ -24,6 +33,26 @@ pub async fn track_entity(ctx: ConnectionContext<'_>, data: TrackingData<'_>) ->
                 .add_connection_entity(data.entity.clone())
                 .await
                 .ok();
+            let mut item_stream = ctx
+                .api_context
+                .stream_manager
+                .subscribe(
+                    ctx.connection_id.to_owned(),
+                    data.entity.extra.extra.entity_id.to_string(),
+                )
+                .await?;
+            let sender = sender.to_owned();
+            tokio::spawn(async move {
+                while let Some(item) = item_stream.next().await {
+                    let Ok(msg) = OutgoingMessage::try_from(item) else {
+                        tracing::warn!("stream item conversion failed, skipping");
+                        continue;
+                    };
+                    if sender.send(msg).await.is_err() {
+                        break;
+                    }
+                }
+            });
         }
         TrackAction::Close => {
             ctx.api_context
@@ -31,6 +60,11 @@ pub async fn track_entity(ctx: ConnectionContext<'_>, data: TrackingData<'_>) ->
                 .remove_connection_entity(&data.entity.extra)
                 .await
                 .ok();
+
+            ctx.api_context
+                .stream_manager
+                .unsubscribe(ctx.connection_id.to_owned())
+                .await?;
         }
         TrackAction::Ping => {
             ctx.api_context

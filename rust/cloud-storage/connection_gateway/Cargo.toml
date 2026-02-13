@@ -62,6 +62,7 @@ serde_json = { workspace = true }
 sqlx = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 strum_macros = { workspace = true }
+stream = { path = "../stream" }
 tokio = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }
