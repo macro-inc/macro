@@ -53,12 +53,10 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         // Document routes
         .route(
             "/documents/:document_id",
-            get(
-                documents_hex::inbound::axum_router::get_document_handler::<
-                    DocumentServiceImpl<PgDocumentRepo>,
-                    EntityAccessService,
-                >,
-            )
+            get(documents_hex::inbound::axum_router::get_document_handler::<
+                DocumentServiceImpl<PgDocumentRepo>,
+                EntityAccessService,
+            >)
             .layer(ensure_document_exists_middleware.clone()),
         )
         .route(

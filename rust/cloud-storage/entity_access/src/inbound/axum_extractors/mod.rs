@@ -31,7 +31,6 @@ pub struct InternalUser {
     pub access_level: AccessLevel,
 }
 
-
 /// Trait to convert a unit struct marker into an [`AccessLevel`].
 ///
 /// This allows extractors to be parameterized by required access level.

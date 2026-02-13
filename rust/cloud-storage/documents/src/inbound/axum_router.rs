@@ -14,7 +14,7 @@ use axum::{
     Extension, Json, Router,
     body::Body,
     extract::{FromRef, Path, Query, State},
-    http::{HeaderMap, Request, Response, StatusCode},
+    http::{HeaderMap, Request, StatusCode},
     middleware::{self, Next},
     response::IntoResponse,
 };

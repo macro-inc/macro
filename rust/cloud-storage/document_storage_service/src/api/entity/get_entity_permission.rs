@@ -38,7 +38,7 @@ pub async fn handler(
         Ok(ext) => (
             StatusCode::OK,
             Json(EntityPermissionResponse::Access {
-                permission: ext.entity_access_receipt.entity_permission,
+                permission: *ext.entity_access_receipt.entity_permission(),
             }),
         )
             .into_response(),

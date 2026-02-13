@@ -321,11 +321,6 @@ async fn main() -> anyhow::Result<()> {
             access_service: entity_access_service,
             pool: db.clone(),
         },
-        entity_access_service: Arc::new(
-            entity_access::domain::service::EntityAccessServiceImpl::new(
-                entity_access::outbound::PgAccessRepository::new(db.clone()),
-            ),
-        ),
         channels_state: ChannelsRouterState::new(ChannelMessagesServiceImpl::new(
             PgChannelMessagesRepo::new(db.clone()),
         )),

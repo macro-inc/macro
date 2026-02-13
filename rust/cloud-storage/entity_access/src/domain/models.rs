@@ -78,11 +78,28 @@ pub enum EntityAccessAuth {
 #[derive(Debug)]
 pub struct EntityAccessReceipt {
     /// The entity access authentication method
-    pub auth: EntityAccessAuth,
+    pub(crate) auth: EntityAccessAuth,
     /// The entity that was requested access
-    pub entity: Entity,
+    pub(crate) entity: Entity,
     /// The permission for the user on the entity
-    pub entity_permission: EntityPermission,
+    pub(crate) entity_permission: EntityPermission,
+}
+
+impl EntityAccessReceipt {
+    /// Getter for auth
+    pub fn auth(&self) -> &EntityAccessAuth {
+        &self.auth
+    }
+
+    /// Getter for entity
+    pub fn entity(&self) -> &Entity {
+        &self.entity
+    }
+
+    /// Getter for entity permission
+    pub fn entity_permission(&self) -> &EntityPermission {
+        &self.entity_permission
+    }
 }
 
 /// Errors that can occur during access checking.

@@ -249,7 +249,7 @@ impl<R: DocumentRepo> DocumentService for DocumentServiceImpl<R> {
         &self,
         entity_access_receipt: EntityAccessReceipt,
     ) -> Result<GetDocumentResponseData, DocumentError> {
-        let document_id = entity_access_receipt.entity.entity_id;
+        let document_id = entity_access_receipt.entity().entity_id.clone();
         // get access level
         // check if >= view
         // do work
@@ -268,7 +268,7 @@ impl<R: DocumentRepo> DocumentService for DocumentServiceImpl<R> {
                 }
             })?;
 
-        let view_location = match entity_access_receipt.auth {
+        let view_location = match entity_access_receipt.auth() {
             EntityAccessAuth::Authenticated(user_id) => self
                 .repo
                 .get_user_view_location(user_id.as_ref(), &document_id)
@@ -277,7 +277,7 @@ impl<R: DocumentRepo> DocumentService for DocumentServiceImpl<R> {
             EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => None,
         };
 
-        let access_level = match entity_access_receipt.entity_permission {
+        let access_level = match entity_access_receipt.entity_permission() {
             entity_access::domain::models::EntityPermission::AccessLevel { access_level } => {
                 access_level
             }
@@ -286,7 +286,7 @@ impl<R: DocumentRepo> DocumentService for DocumentServiceImpl<R> {
 
         Ok(GetDocumentResponseData {
             document_metadata,
-            user_access_level: access_level,
+            user_access_level: *access_level,
             view_location,
         })
     }
@@ -303,7 +303,7 @@ impl<R: DocumentRepo> DocumentService for DocumentServiceImpl<R> {
             .as_deref()
             .and_then(|f| FileType::from_str(f).ok());
 
-        let document_id = entity_access_receipt.entity.entity_id;
+        let document_id = entity_access_receipt.entity().entity_id.clone();
 
         // For markdown files, check sync service first
         if matches!(file_type, Some(FileType::Md)) {
@@ -362,11 +362,11 @@ impl<R: DocumentRepo> DocumentService for DocumentServiceImpl<R> {
         project_id: Option<String>,
     ) -> Result<(), DocumentError> {
         self.repo
-            .soft_delete_document(&entity_access_receipt.entity.entity_id)
+            .soft_delete_document(&entity_access_receipt.entity().entity_id)
             .await
             .map_err(|e| DocumentError::Internal(e.into()))?;
 
-        match entity_access_receipt.auth {
+        match entity_access_receipt.auth() {
             EntityAccessAuth::Authenticated(macro_user_id) => {
                 macro_project_utils::update_project_modified(
                     &self.db,
