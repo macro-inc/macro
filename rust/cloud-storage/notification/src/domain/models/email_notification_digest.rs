@@ -223,7 +223,21 @@ pub struct PushNotificationsEnabled {
     /// to be retrieved during the SNS event handling.
     /// The deserialization cannot handle some specific T it needs to handle the general case
     /// of some json value
-    inner: UserNotificationRow<TaggedContent<serde_json::Value>>,
+    inner: UserNotificationRow<serde_json::Value>,
+}
+
+impl PushNotificationsEnabled {
+    /// assert that the push notification was delivered
+    /// We do not send the bulk email digest
+    fn assert_delivered(self) -> DontSend {
+        DontSend(())
+    }
+
+    /// assert that the push notification failed to deliver and therefore
+    /// we should queue a bulk email notification
+    fn assert_failed(self) -> BatchSend<UserNotificationRow<serde_json::Value>> {
+        BatchSend(self.inner)
+    }
 }
 
 /// State indicating the user has push notifications disabled.
@@ -247,11 +261,7 @@ impl<T: Notification> AccountExists<T> {
             .await
         {
             Ok(true) => Ok(Either::Left(PushNotificationsEnabled {
-                inner: self
-                    .prev
-                    .inner
-                    .map(TaggedContent::new)
-                    .map(TaggedContent::serialize),
+                inner: self.prev.inner.into_json().expect("serde json cannot fail"),
             })),
             Ok(false) => Ok(Either::Right(PushNotificationsDisabled { prev: self })),
             Err(e) => Err(e),

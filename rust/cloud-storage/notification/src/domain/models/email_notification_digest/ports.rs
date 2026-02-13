@@ -4,6 +4,7 @@ use crate::domain::models::{
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use std::time::Duration;
+use uuid::Uuid;
 
 /// trait for checking whether or not a user exists
 pub trait UserExistenceChecker: Send + Sync + 'static {
@@ -79,4 +80,29 @@ pub trait LastOnlineChecker: Send + Sync + 'static {
         &self,
         user: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<Duration, Report>> + Send;
+}
+
+/// trait for storage a message_id associated with a user_notification PK
+/// the user notification PK is (notification uuid, userid)
+pub trait MessageReceiptRepo {
+    /// create a record in the database which associates the PK message_id with the FK to user_notifications (user_id, notification_id)
+    fn record_message_id(
+        &self,
+        message_id: String,
+        user_id: MacroUserIdStr<'_>,
+        notification_id: Uuid,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// given a message_id mark the row in the database as failed and then return the associated FK for the failed record
+    fn mark_message_failed(
+        &self,
+        message_id: String,
+    ) -> impl Future<Output = Result<(MacroUserIdStr<'static>, Uuid), Report>> + Send;
+
+    /// given the user_notification FK, check if all messages for this notification have failed
+    fn did_all_messages_fail(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_id: Uuid,
+    ) -> impl Future<Output = Result<bool, Report>> + Send;
 }
