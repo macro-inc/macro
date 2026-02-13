@@ -3187,7 +3187,6 @@ dependencies = [
  "ammonia",
  "anyhow",
  "authentication_service_client",
- "aws-config",
  "aws-sdk-s3",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
