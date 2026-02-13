@@ -46,8 +46,9 @@ impl StreamManager for RedisStreamManager {
                     _ = &mut cancel_rx => break,
                     item = merged.next(), if !merged.is_empty() => {
                         if let Some(item) = item {
-                            yield item;
+                            yield item
                         }
+                        // else: all current streams exhausted, keep listening
                     }
                     notification = notify_rx.recv() => {
                         match notification {

@@ -176,7 +176,8 @@ impl StreamRepo for RedisStreamRepo {
 
                                 for (key, value) in entry.map {
                                     if key == KEY
-                                        && let Value::BulkString(bytes) = value {
+                                        && let Value::BulkString(bytes) = value
+                                    {
                                             match String::from_utf8(bytes) {
                                                 Ok(json_str) => {
                                                     match serde_json::from_str::<StoredStreamItem>(&json_str) {

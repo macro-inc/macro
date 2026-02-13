@@ -148,6 +148,30 @@ export function ChatProvider(
     _setMessages((p) => [...p, msg]);
   };
 
+  // --- Reconnect active streams on page refresh ---
+  // Reactive to props.chatId (ChatProvider may not remount on chat switch).
+  // Uses untrack for stream/messages to only fire on new WS streams or chatId change.
+  createEffect(() => {
+    const activeStreams = getEntityStreams('chat', props.chatId)();
+
+    for (const s of activeStreams) {
+      const sid = s.id()?.stream_id;
+      if (!sid || s.isDone()) continue;
+
+      const isInMessages = untrack(() => messages().some((m) => m.id === sid));
+      if (isInMessages) continue;
+
+      setStream({
+        data: s.data,
+        isDone: s.isDone,
+        model: DEFAULT_MODEL,
+        attachments: [],
+        streamId: sid,
+      });
+      break;
+    }
+  });
+
   return (
     <ChatCtx.Provider
       value={{
