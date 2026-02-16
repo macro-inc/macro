@@ -21,8 +21,10 @@ import {
   useSoupItemsQuery,
 } from '@queries/soup/items';
 import { useSearchSoupQuery } from '@queries/soup/search';
-import type { SearchArgs } from '@service-search/client';
-import type { UnifiedSearchIndex } from '@service-search/generated/models';
+import type {
+  UnifiedSearchIndex,
+  UnifiedSearchRequest,
+} from '@service-search/generated/models';
 import {
   type Accessor,
   createContext,
@@ -253,25 +255,21 @@ export const SoupViewContextProvider: FlowComponent<
     };
   });
 
-  const searchUnifiedNameContentQueryParams = createMemo((): SearchArgs => {
-    const terms = debouncedSearchForService();
-    const include = unifiedSearchIncludeArray();
-    const filters = searchFilters();
+  const searchUnifiedNameContentRequest = createMemo(
+    (): UnifiedSearchRequest => {
+      const terms = debouncedSearchForService();
+      const include = unifiedSearchIncludeArray();
+      const filters = searchFilters();
 
-    return {
-      params: {
-        cursor: null,
-        page_size: 100,
-      },
-      request: {
+      return {
         search_on: 'name_content',
         match_type: 'partial',
         terms: terms.length > 0 ? [terms] : undefined,
         include,
         filters,
-      },
-    };
-  });
+      };
+    }
+  );
 
   const itemsQuery = useSoupItemsQuery(
     () => ({
@@ -292,7 +290,7 @@ export const SoupViewContextProvider: FlowComponent<
         page_size: 100,
       },
       body: {
-        ...searchUnifiedNameContentQueryParams().request,
+        ...searchUnifiedNameContentRequest(),
       },
     }),
     () => ({
