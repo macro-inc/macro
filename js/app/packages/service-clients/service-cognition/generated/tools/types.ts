@@ -383,11 +383,22 @@ export interface SearchToolResponse {
          * for consistency in our data model.
          */
         id: string;
+        inbox_visible: boolean;
+        is_draft: boolean;
+        is_important: boolean;
+        is_read: boolean;
         /**
          * Subject of the email thread
          */
         name?: string | null;
         owner_id: string;
+        /**
+         * The participants (senders) in this email thread
+         */
+        participants: {
+          email: string;
+          name?: string | null;
+        }[];
         snippet?: string | null;
         /**
          * The subject of the email

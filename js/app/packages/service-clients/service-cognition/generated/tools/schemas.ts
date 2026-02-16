@@ -196,8 +196,18 @@ export const SearchToolResponse = z.object({
             })
           ),
           id: z.string().uuid(),
+          inbox_visible: z.boolean(),
+          is_draft: z.boolean(),
+          is_important: z.boolean(),
+          is_read: z.boolean(),
           name: z.union([z.string(), z.null()]).optional(),
           owner_id: z.string(),
+          participants: z.array(
+            z.object({
+              email: z.string(),
+              name: z.union([z.string(), z.null()]).optional(),
+            })
+          ),
           snippet: z.union([z.string(), z.null()]).optional(),
           subject: z.union([z.string(), z.null()]).optional(),
           thread_id: z.string().uuid(),
