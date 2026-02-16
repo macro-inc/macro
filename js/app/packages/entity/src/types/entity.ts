@@ -70,6 +70,8 @@ export const getEntityProjectId = (e: EntityData): string | false => {
   return 'projectId' in e ? (e.projectId ?? false) : false;
 };
 
+export type EmailThreadParticipants = Array<{ email: string; name?: string }>;
+
 // We spread ApiThreadPreviewCursor into the email entity, should we explcitly include all those fields here, or only add them as needed?
 export type EmailEntity = EntityBase & {
   type: 'email';
@@ -78,7 +80,7 @@ export type EmailEntity = EntityBase & {
   snippet?: string;
   isImportant: boolean;
   done: boolean;
-  participants?: Array<{ email: string; name?: string }>;
+  participants?: EmailThreadParticipants;
   senderEmail?: string;
   senderName?: string;
   labels?: SoupLabel[] | ApiLabel[];

@@ -1,6 +1,6 @@
 import { useEmail } from '@core/context/user';
 import { emailToMacroId, useDisplayName } from '@core/user';
-import type { EmailEntity } from '../types/entity';
+import type { EmailEntity, EmailThreadParticipants } from '../types/entity';
 
 /** Checks if a value is likely an email address */
 export function isLikelyEmail(value?: string): boolean {
@@ -17,7 +17,7 @@ export function getEmailLocalPart(email: string): string {
  * Priority: macroDisplayName > participant.name > email local part
  */
 export function resolveParticipantName(
-  participant: { email: string; name: string },
+  participant: EmailThreadParticipants[number],
   macroDisplayName?: string
 ): string {
   if (macroDisplayName && !isLikelyEmail(macroDisplayName)) {
@@ -35,7 +35,7 @@ export function resolveParticipantName(
  * Returns an array of display names (possibly ["me"] if single participant is userEmail)
  */
 export function combineParticipantNames(
-  participants: Array<{ email: string; name: string }> | undefined,
+  participants: EmailThreadParticipants | undefined,
   userEmail: string | undefined,
   getMacroDisplayName: (email: string) => string | undefined
 ): string[] {
