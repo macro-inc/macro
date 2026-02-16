@@ -289,7 +289,7 @@ export const SoupViewContextProvider: FlowComponent<
         page_size: 100,
       },
       body: {
-        ...searchFilters(),
+        filters: searchFilters(),
         ...searchUnifiedNameContentQueryParams().request,
       },
     }),
