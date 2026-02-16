@@ -181,15 +181,23 @@ export function ChatMessages(props: ChatMessagesProps) {
     if (!stream) return [];
     return stream.data();
   };
-  // when a user message arrives via stream, append if not already present
+  // when a user message arrives via stream, update optimistic ID or append
   createEffect(
     on(streamData, (data) => {
       const latest = data.at(-1);
       if (!latest) return;
       if (latest.type !== 'chat_user_message') return;
       setMessages((p) => {
-        if (p.at(-1)?.role === 'user' && p.at(-1)?.content === latest.content)
+        const last = p.at(-1);
+        if (last?.role === 'user' && last?.content === latest.content) {
+          // Patch the optimistic message with the real server ID
+          if (last.id !== latest.message_id) {
+            const updated = p.slice();
+            updated[updated.length - 1] = { ...last, id: latest.message_id };
+            return updated;
+          }
           return p;
+        }
         return [
           ...p,
           {
@@ -347,7 +355,7 @@ export function ChatMessages(props: ChatMessagesProps) {
           )}
         </For>
 
-        <Show when={isStream() || lastPair()}>
+        <Show when={isStream() || chat.waitingForStream() || lastPair()}>
           <div
             class="shrink-0"
             style={{
@@ -401,7 +409,11 @@ export function ChatMessages(props: ChatMessagesProps) {
               }}
             </Show>
             {/* this works for most cases */}
-            <Show when={!generatingMessage() && isStream()}>
+            <Show
+              when={
+                !generatingMessage() && (isStream() || chat.waitingForStream())
+              }
+            >
               <OnMount
                 onShow={() =>
                   scrollToBottom(isNearBottom() ? 'instant' : 'smooth')

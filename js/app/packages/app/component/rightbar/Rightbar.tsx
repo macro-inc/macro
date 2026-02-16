@@ -490,6 +490,7 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
   const [model, setModel] = createSignal<Model | undefined>();
   const [attachments, setAttachments] = createSignal<Attachment[]>([]);
   const [stream, setStream] = createSignal<ChatMessageStream>();
+  const [waitingForStream, setWaitingForStream] = createSignal(false);
   const [initialChatState, setInitialChatState] = createSignal<
     | {
         model: Model | undefined;
@@ -550,10 +551,23 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
   const sendChatMessage = useSendChatMessage();
 
   const onSend = async (request: ChatSendInput) => {
+    setMessages((p) => [
+      ...p,
+      {
+        id: crypto.randomUUID(),
+        content: request.content,
+        role: 'user' as const,
+        attachments: request.attachments ?? [],
+      },
+    ]);
+    setWaitingForStream(true);
+
     const result = await sendChatMessage({
       ...request,
       chatId: chatId(),
     });
+
+    setWaitingForStream(false);
 
     if ('error' in result) {
       if (result.paymentError) {
@@ -752,6 +766,10 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
                         external={{
                           messages: [messages, setMessages],
                           stream: [stream, setStream],
+                          waitingForStream: [
+                            waitingForStream,
+                            setWaitingForStream,
+                          ],
                         }}
                       >
                         <RightbarChatArea isBig={bigChatOpen()} />

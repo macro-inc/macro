@@ -4,6 +4,7 @@
 //! that publish to a durable stream. The connection_gateway handles delivery to clients.
 
 pub mod chat_message;
+pub mod simple_completion;
 
 use axum::{Router, routing::post};
 use tower::ServiceBuilder;
@@ -14,6 +15,10 @@ use crate::api::context::ApiContext;
 pub fn router(state: ApiContext) -> Router<ApiContext> {
     Router::new()
         .route("/chat/message", post(chat_message::send_chat_message))
+        .route(
+            "/completion/simple",
+            post(simple_completion::simple_completion),
+        )
         .layer(
             ServiceBuilder::new()
                 .layer(axum::middleware::from_fn(

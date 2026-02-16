@@ -23,6 +23,7 @@ use crate::{
         stream::chat_message::{
             self, ChatMessageError, HttpSendChatMessageRequest, SendChatMessageResponse,
         },
+        stream::simple_completion::{self, SimpleCompletionError, SimpleCompletionResponse},
         ws::{self},
     },
     model::{
@@ -99,6 +100,7 @@ use utoipa::OpenApi;
             chat_history::get_chat_history_handler,
             chat_history_batch_messages::get_chat_history_batch_messages_handler,
             chat_message::send_chat_message,
+            simple_completion::simple_completion,
         ),
         components(
             schemas(
@@ -187,6 +189,8 @@ use utoipa::OpenApi;
                 HttpSendChatMessageRequest,
                 SendChatMessageResponse,
                 ChatMessageError,
+                SimpleCompletionResponse,
+                SimpleCompletionError,
                 GetSimpleCompletionStreamPayload,
                 StreamError,
                 ToolSet,

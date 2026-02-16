@@ -109,10 +109,20 @@ function ChatInner(props: {
   const sendChatMessage = useSendChatMessage();
 
   const onSend = createCallback(async (request: ChatSendInput) => {
+    chat.addMessage({
+      id: crypto.randomUUID(),
+      content: request.content,
+      role: 'user',
+      attachments: request.attachments ?? [],
+    });
+    chat.setWaitingForStream(true);
+
     const result = await sendChatMessage({
       ...request,
       chatId: chat.chatId(),
     });
+
+    chat.setWaitingForStream(false);
 
     if ('error' in result) {
       if (result.paymentError) showPaywall();

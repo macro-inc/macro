@@ -104,6 +104,8 @@ export type ChatState = {
   addMessage: (msg: ChatMessageWithAttachments) => void;
   stream: Accessor<ChatMessageStream | undefined>;
   setStream: Setter<ChatMessageStream | undefined>;
+  waitingForStream: Accessor<boolean>;
+  setWaitingForStream: Setter<boolean>;
 };
 
 const ChatCtx = createContext<ChatState>();
@@ -121,6 +123,7 @@ export function ChatProvider(
         Accessor<ChatMessageStream | undefined>,
         Setter<ChatMessageStream | undefined>,
       ];
+      waitingForStream?: [Accessor<boolean>, Setter<boolean>];
     };
   }
 ) {
@@ -128,10 +131,17 @@ export function ChatProvider(
   let setMessages: Setter<ChatMessageWithAttachments[]>;
   let stream: Accessor<ChatMessageStream | undefined>;
   let setStream: Setter<ChatMessageStream | undefined>;
+  let waitingForStream: Accessor<boolean>;
+  let setWaitingForStream: Setter<boolean>;
 
   if (props.external) {
     [messages, setMessages] = props.external.messages;
     [stream, setStream] = props.external.stream;
+    if (props.external.waitingForStream) {
+      [waitingForStream, setWaitingForStream] = props.external.waitingForStream;
+    } else {
+      [waitingForStream, setWaitingForStream] = createSignal(false);
+    }
   } else {
     const [_messages, _setMessages] = createSignal<
       ChatMessageWithAttachments[]
@@ -141,6 +151,7 @@ export function ChatProvider(
     setMessages = _setMessages;
     stream = _stream;
     setStream = _setStream;
+    [waitingForStream, setWaitingForStream] = createSignal(false);
   }
 
   const _setMessages = setMessages;
@@ -181,6 +192,8 @@ export function ChatProvider(
         addMessage,
         stream,
         setStream,
+        waitingForStream,
+        setWaitingForStream,
       }}
     >
       {props.children}
