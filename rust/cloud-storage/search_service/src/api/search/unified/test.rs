@@ -71,6 +71,10 @@ fn test_sort_unified_search_results() {
             updated_at: DateTime::from_timestamp(1500, 0).unwrap(),
             viewed_at: None,
             snippet: None,
+            is_read: false,
+            inbox_visible: true,
+            is_draft: false,
+            is_important: false,
             extra: EmailSearchResponseItem {
                 id: email_id,
                 name: Some("Middle Email".to_string()),
@@ -79,6 +83,7 @@ fn test_sort_unified_search_results() {
                 thread_id: email_id,
                 user_id: "user1".to_string(),
                 email_message_search_results: vec![],
+                participants: vec![],
             },
         }),
         // Project with updated_at = 2000 (second newest)
