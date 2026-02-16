@@ -6,9 +6,9 @@
  */
 import type { SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOf } from './simpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOf';
 import type { SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfFour } from './simpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfFour';
-import type { SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnethree } from './simpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnethree';
-import type { SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnezero } from './simpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnezero';
 import type { SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfSeven } from './simpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfSeven';
+import type { SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnezero } from './simpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnezero';
+import type { SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnethree } from './simpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOfOnethree';
 
 export type SimpleUnifiedSearchResponseBaseItemHumanReadableTimestamp =
   | SimpleUnifiedSearchResponseBaseItemHumanReadableTimestampOneOf

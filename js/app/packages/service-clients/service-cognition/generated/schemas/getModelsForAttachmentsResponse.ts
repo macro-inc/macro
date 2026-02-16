@@ -4,9 +4,8 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-
-import type { GetModelsForAttachmentsResponseNewModel } from './getModelsForAttachmentsResponseNewModel';
 import type { Model } from './model';
+import type { GetModelsForAttachmentsResponseNewModel } from './getModelsForAttachmentsResponseNewModel';
 
 export interface GetModelsForAttachmentsResponse {
   available_models: Model[];

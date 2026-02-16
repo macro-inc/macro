@@ -5,6 +5,11 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './aPIThread';
+export * from './aPIThreadLatestInboundMessageTs';
+export * from './aPIThreadLatestNonSpamMessageTs';
+export * from './aPIThreadLatestOutboundMessageTs';
+export * from './aPIThreadProviderId';
 export * from './accessLevel';
 export * from './addDraftAttachmentRequest';
 export * from './addDraftAttachmentResponse';
@@ -13,11 +18,6 @@ export * from './addForwardedAttachmentResponse';
 export * from './addForwardedAttachmentResponseFilename';
 export * from './addForwardedAttachmentResponseMimeType';
 export * from './addForwardedAttachmentResponseSizeBytes';
-export * from './aPIThread';
-export * from './aPIThreadLatestInboundMessageTs';
-export * from './aPIThreadLatestNonSpamMessageTs';
-export * from './aPIThreadLatestOutboundMessageTs';
-export * from './aPIThreadProviderId';
 export * from './apiAttachment';
 export * from './apiAttachmentContentId';
 export * from './apiAttachmentFilename';
@@ -159,9 +159,9 @@ export * from './parsedMessageInternalDateTs';
 export * from './parsedMessageSubject';
 export * from './patchSettingsRequest';
 export * from './patchSettingsResponse';
-export * from './previewsInboxCursorParams';
 export * from './previewView';
 export * from './previewViewStandardLabel';
+export * from './previewsInboxCursorParams';
 export * from './sendMessageRequest';
 export * from './sendMessageResponse';
 export * from './settings';

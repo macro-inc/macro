@@ -257,7 +257,7 @@ function FullChatInner() {
     addAttachment: (a) => input.attachments.addAttachment(a),
   });
   const [_isGen, setIsGen] = createSignal(false);
-  const [debugStream, setDebugStream] = createSignal<MessageStream>();
+  const [debugStream, _setDebugStream] = createSignal<MessageStream>();
 
   const onSend = async (input: ChatSendInput) => {
     chat.addMessage({

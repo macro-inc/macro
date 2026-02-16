@@ -1041,6 +1041,95 @@
         }
       }
     },
+    "/stream/chat/message": {
+      "post": {
+        "tags": ["chat_message"],
+        "summary": "Send a new chat message and stream the AI response.",
+        "description": "This endpoint initiates a chat message and streams the response via the stream service.\nThe client should subscribe to the returned stream_id via connection_gateway to receive chunks.",
+        "operationId": "send_chat_message",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HttpSendChatMessageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Stream initiated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendChatMessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatMessageError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/stream/completion/simple": {
+      "post": {
+        "tags": ["simple_completion"],
+        "summary": "Start a simple completion stream.",
+        "description": "This endpoint initiates a completion and streams the response via the stream service.\nThe client should subscribe to the completion_id stream via connection_gateway to receive chunks.",
+        "operationId": "simple_completion",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetSimpleCompletionStreamPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Stream initiated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleCompletionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleCompletionError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
     "/v2/chats/{chat_id}/permissions": {
       "get": {
         "tags": ["get_chat_permissions"],
@@ -1452,6 +1541,19 @@
           }
         ]
       },
+      "ChatMessageError": {
+        "type": "object",
+        "description": "Error response for chat message endpoints",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "stream_id": {
+            "type": ["string", "null"]
+          }
+        }
+      },
       "ChatMessageWithAttachments": {
         "type": "object",
         "required": ["id", "content", "role", "attachments"],
@@ -1674,6 +1776,314 @@
             "description": "message_id - web citation list"
           }
         }
+      },
+      "ChatStream": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WebSocketError",
+                "description": "Misc error"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["error"]
+                  }
+                }
+              }
+            ],
+            "description": "Misc error"
+          },
+          {
+            "type": "object",
+            "description": "Acknowledges that a message has been received for processing",
+            "required": ["message_id", "chat_id", "type"],
+            "properties": {
+              "chat_id": {
+                "type": "string"
+              },
+              "message_id": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["chat_message_ack"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The user message that initiated this stream, sent as the first item\nso other clients can add it to their local chat state.",
+            "required": [
+              "stream_id",
+              "chat_id",
+              "message_id",
+              "content",
+              "attachments",
+              "type"
+            ],
+            "properties": {
+              "attachments": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ChatAttachmentWithName"
+                }
+              },
+              "chat_id": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "message_id": {
+                "type": "string"
+              },
+              "stream_id": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["chat_user_message"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Indicates a response from the chat completion API for a given message",
+            "required": [
+              "stream_id",
+              "message_id",
+              "chat_id",
+              "content",
+              "type"
+            ],
+            "properties": {
+              "chat_id": {
+                "type": "string"
+              },
+              "content": {
+                "$ref": "#/components/schemas/AssistantMessagePart"
+              },
+              "message_id": {
+                "type": "string"
+              },
+              "stream_id": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["chat_message_response"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Indicates that a message has been finished",
+            "required": ["message_id", "chat_id", "user_message_id", "type"],
+            "properties": {
+              "chat_id": {
+                "type": "string"
+              },
+              "message_id": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["chat_message_finished"]
+              },
+              "user_message_id": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Indicates that a chat has been renamed",
+            "required": ["stream_id", "chat_id", "name", "type"],
+            "properties": {
+              "chat_id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "stream_id": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["chat_renamed"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Notifies the client that the available models have changed",
+            "required": ["chat_id", "available_models", "type"],
+            "properties": {
+              "available_models": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Model"
+                }
+              },
+              "chat_id": {
+                "type": "string"
+              },
+              "new_model": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/Model"
+                  }
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": ["model_selection_changed"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["chat_id", "token_count", "type"],
+            "properties": {
+              "chat_id": {
+                "type": "string"
+              },
+              "token_count": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["token_count_changed"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Status update",
+            "required": ["chat_id", "message_id", "message", "type"],
+            "properties": {
+              "chat_id": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "message_id": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["chat_message_status_update"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Acknowledges the request to get extraction status\nif the `status` field is 'incomplete', we need to await the extraction status updates\nif the `status` field is 'empty', extraction is complete but text content is empty\nif the `status` field is 'complete', the extraction is already complete",
+            "required": ["attachment_id", "status", "type"],
+            "properties": {
+              "attachment_id": {
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/components/schemas/ExtractionStatusEnum"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["extraction_status_ack"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Status update for the extraction status",
+            "required": ["attachment_id", "status", "type"],
+            "properties": {
+              "attachment_id": {
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/components/schemas/ExtractionStatusEnum"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["extraction_status_update"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["pong"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "pdf completion",
+            "required": ["completion_id", "content", "done", "type"],
+            "properties": {
+              "completion_id": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "done": {
+                "type": "boolean"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["completion_response"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["completion_id", "content", "done", "type"],
+            "properties": {
+              "completion_id": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "done": {
+                "type": "boolean"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["completion_stream_chunk"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["stream_id", "type"],
+            "properties": {
+              "stream_id": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["stream_end"]
+              }
+            }
+          }
+        ]
       },
       "ChatsResponse": {
         "type": "object",
@@ -1915,278 +2325,6 @@
           "xlsx"
         ]
       },
-      "FromWebSocketMessage": {
-        "oneOf": [
-          {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/WebSocketError",
-                "description": "Misc error"
-              },
-              {
-                "type": "object",
-                "required": ["type"],
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "enum": ["error"]
-                  }
-                }
-              }
-            ],
-            "description": "Misc error"
-          },
-          {
-            "type": "object",
-            "description": "Acknowledges that a message has been received for processing",
-            "required": ["message_id", "chat_id", "type"],
-            "properties": {
-              "chat_id": {
-                "type": "string"
-              },
-              "message_id": {
-                "type": "string"
-              },
-              "type": {
-                "type": "string",
-                "enum": ["chat_message_ack"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "Indicates a response from the chat completion API for a given message",
-            "required": [
-              "stream_id",
-              "message_id",
-              "chat_id",
-              "content",
-              "type"
-            ],
-            "properties": {
-              "chat_id": {
-                "type": "string"
-              },
-              "content": {
-                "$ref": "#/components/schemas/AssistantMessagePart"
-              },
-              "message_id": {
-                "type": "string"
-              },
-              "stream_id": {
-                "type": "string"
-              },
-              "type": {
-                "type": "string",
-                "enum": ["chat_message_response"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "Indicates that a message has been finished",
-            "required": ["message_id", "chat_id", "user_message_id", "type"],
-            "properties": {
-              "chat_id": {
-                "type": "string"
-              },
-              "message_id": {
-                "type": "string"
-              },
-              "type": {
-                "type": "string",
-                "enum": ["chat_message_finished"]
-              },
-              "user_message_id": {
-                "type": "string"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "Indicates that a chat has been renamed",
-            "required": ["stream_id", "chat_id", "name", "type"],
-            "properties": {
-              "chat_id": {
-                "type": "string"
-              },
-              "name": {
-                "type": "string"
-              },
-              "stream_id": {
-                "type": "string"
-              },
-              "type": {
-                "type": "string",
-                "enum": ["chat_renamed"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "Notifies the client that the available models have changed",
-            "required": ["chat_id", "available_models", "type"],
-            "properties": {
-              "available_models": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/Model"
-                }
-              },
-              "chat_id": {
-                "type": "string"
-              },
-              "new_model": {
-                "oneOf": [
-                  {
-                    "type": "null"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Model"
-                  }
-                ]
-              },
-              "type": {
-                "type": "string",
-                "enum": ["model_selection_changed"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": ["chat_id", "token_count", "type"],
-            "properties": {
-              "chat_id": {
-                "type": "string"
-              },
-              "token_count": {
-                "type": "integer",
-                "format": "int64"
-              },
-              "type": {
-                "type": "string",
-                "enum": ["token_count_changed"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "Status update",
-            "required": ["chat_id", "message_id", "message", "type"],
-            "properties": {
-              "chat_id": {
-                "type": "string"
-              },
-              "message": {
-                "type": "string"
-              },
-              "message_id": {
-                "type": "string"
-              },
-              "type": {
-                "type": "string",
-                "enum": ["chat_message_status_update"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "Acknowledges the request to get extraction status\nif the `status` field is 'incomplete', we need to await the extraction status updates\nif the `status` field is 'empty', extraction is complete but text content is empty\nif the `status` field is 'complete', the extraction is already complete",
-            "required": ["attachment_id", "status", "type"],
-            "properties": {
-              "attachment_id": {
-                "type": "string"
-              },
-              "status": {
-                "$ref": "#/components/schemas/ExtractionStatusEnum"
-              },
-              "type": {
-                "type": "string",
-                "enum": ["extraction_status_ack"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "Status update for the extraction status",
-            "required": ["attachment_id", "status", "type"],
-            "properties": {
-              "attachment_id": {
-                "type": "string"
-              },
-              "status": {
-                "$ref": "#/components/schemas/ExtractionStatusEnum"
-              },
-              "type": {
-                "type": "string",
-                "enum": ["extraction_status_update"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": ["type"],
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": ["pong"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "pdf completion",
-            "required": ["completion_id", "content", "done", "type"],
-            "properties": {
-              "completion_id": {
-                "type": "string"
-              },
-              "content": {
-                "type": "string"
-              },
-              "done": {
-                "type": "boolean"
-              },
-              "type": {
-                "type": "string",
-                "enum": ["completion_response"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": ["completion_id", "content", "done", "type"],
-            "properties": {
-              "completion_id": {
-                "type": "string"
-              },
-              "content": {
-                "type": "string"
-              },
-              "done": {
-                "type": "boolean"
-              },
-              "type": {
-                "type": "string",
-                "enum": ["completion_stream_chunk"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": ["stream_id", "type"],
-            "properties": {
-              "stream_id": {
-                "type": "string"
-              },
-              "type": {
-                "type": "string",
-                "enum": ["stream_end"]
-              }
-            }
-          }
-        ]
-      },
       "GenericErrorResponse": {
         "type": "object",
         "required": ["error", "message"],
@@ -2414,6 +2552,40 @@
           }
         }
       },
+      "HttpSendChatMessageRequest": {
+        "type": "object",
+        "description": "HTTP request payload for sending a chat message.\nUnlike the WebSocket payload, this does not include stream_id as it's generated server-side.",
+        "required": ["content", "model"],
+        "properties": {
+          "additional_instructions": {
+            "type": ["string", "null"],
+            "description": "Additional system instructions appended to the base system prompt"
+          },
+          "attachments": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/ChatAttachmentWithName"
+            },
+            "description": "Attachments for the message"
+          },
+          "chat_id": {
+            "type": ["string", "null"],
+            "description": "Id of the chat the message belongs to (optional - if not provided, a new chat is created)"
+          },
+          "content": {
+            "type": "string",
+            "description": "The content of the message"
+          },
+          "model": {
+            "$ref": "#/components/schemas/Model",
+            "description": "The model to respond with"
+          },
+          "toolset": {
+            "$ref": "#/components/schemas/ToolSet",
+            "description": "Which toolset to use. Defaults to `all`"
+          }
+        }
+      },
       "JwtPayload": {
         "type": "object",
         "required": ["token"],
@@ -2505,6 +2677,10 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "id": {
+            "type": ["string", "null"],
+            "description": "Optional pre-generated ID. If None, the database generates one."
           },
           "model": {
             "$ref": "#/components/schemas/Model",
@@ -2627,7 +2803,7 @@
               },
               "stream_id": {
                 "type": "string",
-                "description": "you give me id, i give you id"
+                "description": "Stream ID for tracking the response"
               },
               "toolset": {
                 "$ref": "#/components/schemas/ToolSet",
@@ -2636,6 +2812,25 @@
             }
           }
         ]
+      },
+      "SendChatMessageResponse": {
+        "type": "object",
+        "description": "Response for initiating a chat message stream",
+        "required": ["stream_id", "message_id", "chat_id"],
+        "properties": {
+          "chat_id": {
+            "type": "string",
+            "description": "The chat ID (may differ from request if a new chat was created)"
+          },
+          "message_id": {
+            "type": "string",
+            "description": "The message ID for the AI response"
+          },
+          "stream_id": {
+            "type": "string",
+            "description": "The stream ID that will receive the response chunks (same as message_id)"
+          }
+        }
       },
       "SendCompletionPayload": {
         "type": "object",
@@ -2692,6 +2887,30 @@
                 "description": "The level of public access"
               }
             ]
+          }
+        }
+      },
+      "SimpleCompletionError": {
+        "type": "object",
+        "description": "Error response for simple completion endpoint",
+        "required": ["error"],
+        "properties": {
+          "completion_id": {
+            "type": ["string", "null"]
+          },
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "SimpleCompletionResponse": {
+        "type": "object",
+        "description": "Response for initiating a simple completion stream",
+        "required": ["completion_id"],
+        "properties": {
+          "completion_id": {
+            "type": "string",
+            "description": "The completion ID that will receive the response chunks"
           }
         }
       },

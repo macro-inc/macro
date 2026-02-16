@@ -4,8 +4,7 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-
-import type { DocumentReferenceOneOfAllOf } from './documentReferenceOneOfAllOf';
 import type { UserPdfRect } from './userPdfRect';
+import type { DocumentReferenceOneOfAllOf } from './documentReferenceOneOfAllOf';
 
 export type DocumentReferenceOneOf = UserPdfRect & DocumentReferenceOneOfAllOf;

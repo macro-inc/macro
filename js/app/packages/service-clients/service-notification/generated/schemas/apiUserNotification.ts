@@ -4,8 +4,7 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { ApiUserNotificationAllOf } from './apiUserNotificationAllOf';
 import type { Entity } from './entity';
+import type { ApiUserNotificationAllOf } from './apiUserNotificationAllOf';
 
 export type ApiUserNotification = Entity & ApiUserNotificationAllOf;

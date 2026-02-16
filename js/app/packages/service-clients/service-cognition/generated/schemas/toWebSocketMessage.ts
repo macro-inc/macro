@@ -6,11 +6,11 @@
  */
 import type { ToWebSocketMessageOneOf } from './toWebSocketMessageOneOf';
 import type { ToWebSocketMessageOneOfFour } from './toWebSocketMessageOneOfFour';
-import type { ToWebSocketMessageOneOfOnenine } from './toWebSocketMessageOneOfOnenine';
-import type { ToWebSocketMessageOneOfOnesix } from './toWebSocketMessageOneOfOnesix';
-import type { ToWebSocketMessageOneOfOnethree } from './toWebSocketMessageOneOfOnethree';
-import type { ToWebSocketMessageOneOfOnezero } from './toWebSocketMessageOneOfOnezero';
 import type { ToWebSocketMessageOneOfSeven } from './toWebSocketMessageOneOfSeven';
+import type { ToWebSocketMessageOneOfOnezero } from './toWebSocketMessageOneOfOnezero';
+import type { ToWebSocketMessageOneOfOnethree } from './toWebSocketMessageOneOfOnethree';
+import type { ToWebSocketMessageOneOfOnesix } from './toWebSocketMessageOneOfOnesix';
+import type { ToWebSocketMessageOneOfOnenine } from './toWebSocketMessageOneOfOnenine';
 
 export type ToWebSocketMessage =
   | ToWebSocketMessageOneOf

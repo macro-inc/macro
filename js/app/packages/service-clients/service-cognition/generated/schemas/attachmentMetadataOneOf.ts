@@ -4,9 +4,8 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-
-import type { AttachmentMetadataOneOfType } from './attachmentMetadataOneOfType';
 import type { FileType } from './fileType';
+import type { AttachmentMetadataOneOfType } from './attachmentMetadataOneOfType';
 
 export type AttachmentMetadataOneOf = {
   /** Name of the document */

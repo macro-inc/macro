@@ -4,12 +4,11 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { MatchType } from './matchType';
 import type { ProjectSearchRequestAllOfTwoCollapse } from './projectSearchRequestAllOfTwoCollapse';
+import type { MatchType } from './matchType';
 import type { ProjectSearchRequestAllOfTwoQuery } from './projectSearchRequestAllOfTwoQuery';
-import type { ProjectSearchRequestAllOfTwoTerms } from './projectSearchRequestAllOfTwoTerms';
 import type { SearchOn } from './searchOn';
+import type { ProjectSearchRequestAllOfTwoTerms } from './projectSearchRequestAllOfTwoTerms';
 
 export type ProjectSearchRequestAllOfTwo = {
   /** If true, returns only 1 result per entity. False by default. */
