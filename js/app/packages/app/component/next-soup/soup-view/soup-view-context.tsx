@@ -152,13 +152,13 @@ export const SoupViewContextProvider: FlowComponent<
       const includeArray: UnifiedSearchIndex[] = [];
       for (const type of types) {
         match(type)
-          .with('document', () => {
+          .with('document', 'file', 'task', () => {
             includeArray.push('documents');
           })
           .with('agent', () => {
             includeArray.push('chats');
           })
-          .with('people', 'teams', () => {
+          .with('people', 'teams', 'channels', () => {
             includeArray.push('channels');
           })
           .with('email', () => {
