@@ -107,10 +107,9 @@ const connectionGatewayStack = new pulumi.StackReference(
   }
 );
 
-const connectionGatewayRedisUrl: pulumi.Output<string> =
-  connectionGatewayStack
-    .getOutput('connectionGatewayRedisUrl')
-    .apply((url) => url as string);
+const connectionGatewayRedisUrl: pulumi.Output<string> = connectionGatewayStack
+  .getOutput('connectionGatewayRedisUrl')
+  .apply((url) => url as string);
 
 const cloudStorageStack = new pulumi.StackReference('cloud-storage-stack', {
   name: `macro-inc/document-storage/${stack}`,
