@@ -125,6 +125,7 @@ const stateCache = new Map<
       filters: string[];
       queryFilters: SoupItemsQueryFilters;
       sort: SystemSortOption[];
+      searchText: string;
     };
     virtualCache?: CacheSnapshot;
     scrollOffset?: number;
@@ -169,8 +170,15 @@ interface SoupViewListProps {
 
 export const SoupViewList = (props: SoupViewListProps) => {
   const panel = useSplitPanelOrThrow();
-  const { soup, source, rows, searchText, setQueryFilters, queryFilters } =
-    useSoupView();
+  const {
+    soup,
+    source,
+    rows,
+    searchText,
+    setSearchText,
+    setQueryFilters,
+    queryFilters,
+  } = useSoupView();
   const { getSplitCount } = useSplitLayout();
 
   const { isKeypressActive } = useIsKeyPressActive();
@@ -461,6 +469,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
         filters: soup.filters.activeIds(),
         queryFilters: queryFilters(),
         sort: soup.sort.active().map((s) => s.id),
+        searchText: searchText(),
       },
       virtualCache: virtualHandle?.cache,
       scrollOffset: virtualHandle?.scrollOffset,
@@ -486,6 +495,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     }
 
     setQueryFilters(cached.soup.queryFilters);
+    setSearchText(cached.soup.searchText);
 
     soup.sort.setAll(cached.soup.sort);
 
