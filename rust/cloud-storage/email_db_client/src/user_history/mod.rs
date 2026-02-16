@@ -74,7 +74,14 @@ pub async fn get_thread_summary_info(
                 latest_msg.sender as sender,
                 latest_msg.pretty_sender as "pretty_sender!",
                 latest_msg.trash_label as trash_label,
-                latest_msg.is_draft as "is_draft!",
+                (
+                    SELECT m_latest.is_draft
+                    FROM email_messages m_latest
+                    WHERE m_latest.thread_id = t.id
+                      AND m_latest.link_id = $1
+                    ORDER BY m_latest.internal_date_ts DESC NULLS LAST
+                    LIMIT 1
+                ) AS "is_draft!",
                 t.is_read,
                 t.inbox_visible,
                 (
@@ -98,7 +105,6 @@ pub async fn get_thread_summary_info(
                     m2.snippet,
                     m2.sent_at,
                     m2.updated_at,
-                    m2.is_draft,
                     c.email_address as sender,
                     COALESCE(c.name, c.email_address) as pretty_sender,
                     EXISTS(
