@@ -36,7 +36,6 @@ import type {
   SoupPage,
 } from '@service-storage/generated/schemas';
 import type { UseQueryResult } from '@tanstack/solid-query';
-import { max } from 'date-fns';
 
 const SEARCH_MATCH_LENGTH = 60;
 
@@ -226,13 +225,6 @@ export const useSearchResponseItemMapper = () => {
 
         const name = result.name ?? blockNameToDefaultFile('email');
 
-        // TODO: we probably want to get the actual latest message info on the full thread
-        const messagesSentAt = messageHits
-          .map((m) => m.sent_at)
-          .filter((m) => m != null);
-        const latestMessageSentAt =
-          messagesSentAt.length > 0 ? max(messagesSentAt) : null;
-
         const participants = result.participants?.map((p) => ({
           email: p.email,
           name: p.name ?? undefined,
@@ -243,8 +235,8 @@ export const useSearchResponseItemMapper = () => {
           id: result.thread_id,
           name,
           ownerId: result.owner_id,
-          createdAt: latestMessageSentAt ?? result.created_at,
-          updatedAt: latestMessageSentAt ?? result.updated_at,
+          createdAt: result.created_at,
+          updatedAt: result.updated_at,
           viewedAt: result.viewed_at,
           isRead: singleMessage
             ? !messageHits[0].labels.includes('UNREAD')
