@@ -4,8 +4,9 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
-import type { MessageToSend } from './messageToSend';
+
 import type { CreateDraftRequestSendTime } from './createDraftRequestSendTime';
+import type { MessageToSend } from './messageToSend';
 
 /**
  * The request passed to send a message

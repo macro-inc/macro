@@ -4,8 +4,9 @@
  * comms_service
  * OpenAPI spec version: 0.1.0
  */
-import type { GenericReference } from './genericReference';
+
 import type { EntityReferenceOneOfFourAllOf } from './entityReferenceOneOfFourAllOf';
+import type { GenericReference } from './genericReference';
 
 /**
  * An entity was referenced from anything but a channel

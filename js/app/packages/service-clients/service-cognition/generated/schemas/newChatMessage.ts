@@ -4,10 +4,11 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-import type { NewChatMessageAttachments } from './newChatMessageAttachments';
+
 import type { ChatMessageContent } from './chatMessageContent';
-import type { NewChatMessageId } from './newChatMessageId';
 import type { Model } from './model';
+import type { NewChatMessageAttachments } from './newChatMessageAttachments';
+import type { NewChatMessageId } from './newChatMessageId';
 import type { Role } from './role';
 
 export interface NewChatMessage {

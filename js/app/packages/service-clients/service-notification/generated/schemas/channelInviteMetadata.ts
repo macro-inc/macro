@@ -4,8 +4,9 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { CommonChannelMetadata } from './commonChannelMetadata';
+
 import type { ChannelInviteMetadataAllOf } from './channelInviteMetadataAllOf';
+import type { CommonChannelMetadata } from './commonChannelMetadata';
 
 /**
  * Metadata for when a user is invited to a channel

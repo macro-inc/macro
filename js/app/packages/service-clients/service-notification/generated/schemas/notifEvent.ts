@@ -5,14 +5,14 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { NotifEventOneOf } from './notifEventOneOf';
-import type { NotifEventOneOfThree } from './notifEventOneOfThree';
 import type { NotifEventOneOfFive } from './notifEventOneOfFive';
-import type { NotifEventOneOfSeven } from './notifEventOneOfSeven';
 import type { NotifEventOneOfNine } from './notifEventOneOfNine';
-import type { NotifEventOneOfOneone } from './notifEventOneOfOneone';
-import type { NotifEventOneOfOnethree } from './notifEventOneOfOnethree';
 import type { NotifEventOneOfOnefive } from './notifEventOneOfOnefive';
+import type { NotifEventOneOfOneone } from './notifEventOneOfOneone';
 import type { NotifEventOneOfOneseven } from './notifEventOneOfOneseven';
+import type { NotifEventOneOfOnethree } from './notifEventOneOfOnethree';
+import type { NotifEventOneOfSeven } from './notifEventOneOfSeven';
+import type { NotifEventOneOfThree } from './notifEventOneOfThree';
 
 /**
  * Mirrors [`model_notifications::NotificationEvent`] but uses `tag` / `content`

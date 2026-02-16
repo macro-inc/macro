@@ -5,10 +5,10 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { AttachmentMetadataOneOf } from './attachmentMetadataOneOf';
-import type { AttachmentMetadataOneOfThree } from './attachmentMetadataOneOfThree';
 import type { AttachmentMetadataOneOfFive } from './attachmentMetadataOneOfFive';
-import type { AttachmentMetadataOneOfSeven } from './attachmentMetadataOneOfSeven';
 import type { AttachmentMetadataOneOfNine } from './attachmentMetadataOneOfNine';
+import type { AttachmentMetadataOneOfSeven } from './attachmentMetadataOneOfSeven';
+import type { AttachmentMetadataOneOfThree } from './attachmentMetadataOneOfThree';
 
 export type AttachmentMetadata =
   | AttachmentMetadataOneOf

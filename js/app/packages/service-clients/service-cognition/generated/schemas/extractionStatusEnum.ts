@@ -5,9 +5,9 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { ExtractionStatusEnumOneOf } from './extractionStatusEnumOneOf';
-import type { ExtractionStatusEnumOneOfThree } from './extractionStatusEnumOneOfThree';
 import type { ExtractionStatusEnumOneOfFive } from './extractionStatusEnumOneOfFive';
 import type { ExtractionStatusEnumOneOfSeven } from './extractionStatusEnumOneOfSeven';
+import type { ExtractionStatusEnumOneOfThree } from './extractionStatusEnumOneOfThree';
 
 export type ExtractionStatusEnum =
   | ExtractionStatusEnumOneOf

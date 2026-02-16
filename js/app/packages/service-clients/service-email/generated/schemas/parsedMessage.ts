@@ -5,10 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ContactInfo } from './contactInfo';
+import type { LabelInfo } from './labelInfo';
 import type { ParsedMessageBodyParsed } from './parsedMessageBodyParsed';
 import type { ParsedMessageFrom } from './parsedMessageFrom';
 import type { ParsedMessageInternalDateTs } from './parsedMessageInternalDateTs';
-import type { LabelInfo } from './labelInfo';
 import type { ParsedMessageSubject } from './parsedMessageSubject';
 
 export interface ParsedMessage {

@@ -6,8 +6,8 @@
  */
 import type { ApiAttachment } from './apiAttachment';
 import type { ApiContact } from './apiContact';
-import type { ApiThreadPreviewCursorAllOfFrecencyScore } from './apiThreadPreviewCursorAllOfFrecencyScore';
 import type { ApiLabel } from './apiLabel';
+import type { ApiThreadPreviewCursorAllOfFrecencyScore } from './apiThreadPreviewCursorAllOfFrecencyScore';
 
 export type ApiThreadPreviewCursorAllOf = {
   attachments: ApiAttachment[];
