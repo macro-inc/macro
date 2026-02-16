@@ -14,6 +14,7 @@ import type { EntityData, WithNotification, WithSearch } from '@entity';
 import { useNotificationsForEntity } from '@notifications';
 import {
   type SoupItemsQueryFilters,
+  type SoupItemsQueryArgs,
   useSoupItemsQuery,
 } from '@queries/soup/items';
 import { useSearchSoupQuery } from '@queries/soup/search';
@@ -39,13 +40,16 @@ const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
-const CHANNEL_PRELOAD_FILTERS: SoupItemsQueryFilters = {
-  chat_filters: { chat_ids: [NIL_UUID] },
-  document_filters: { document_ids: [NIL_UUID] },
-  email_filters: { recipients: [NIL_UUID] },
-  project_filters: { project_ids: [NIL_UUID] },
-  channel_filters: {
-    channel_types: [],
+const CHANNEL_PRELOAD_ARGS: SoupItemsQueryArgs = {
+  params: { limit: 500, sort_method: 'updated_at' },
+  body: {
+    chat_filters: { chat_ids: [NIL_UUID] },
+    document_filters: { document_ids: [NIL_UUID] },
+    email_filters: { recipients: [NIL_UUID] },
+    project_filters: { project_ids: [NIL_UUID] },
+    channel_filters: {
+      channel_types: [],
+    },
   },
 };
 
@@ -293,11 +297,8 @@ export const SoupViewContextProvider: FlowComponent<
     })
   );
 
-  const channelItemsQuery = useSoupItemsQuery(() => ({
-    params: { limit: 100, sort_method: 'updated_at' },
-    body: CHANNEL_PRELOAD_FILTERS,
-  }));
-
+  // load all channels into memory for local search
+  const channelItemsQuery = useSoupItemsQuery(() => CHANNEL_PRELOAD_ARGS);
   createRenderEffect(() => {
     if (
       channelItemsQuery.hasNextPage &&
