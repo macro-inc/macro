@@ -216,10 +216,6 @@ export const useSearchResponseItemMapper = () => {
         const messageHits = result.email_message_search_results.filter(
           (m) => m.message_id
         );
-        // NOTE: guaranteed to be empty or singleton array
-        const threadHits = result.email_message_search_results.filter(
-          (m) => !m.message_id
-        );
 
         const singleMessage = messageHits.length === 1;
 
@@ -230,17 +226,17 @@ export const useSearchResponseItemMapper = () => {
 
         const name = result.name ?? blockNameToDefaultFile('email');
 
-        // TODO: display sender for each message in the content hit list
-        const combinedSenders =
-          [...new Set(messageHits.map((m) => m.pretty_sender))].join(', ') ||
-          threadHits.at(0)?.pretty_sender;
-
         // TODO: we probably want to get the actual latest message info on the full thread
         const messagesSentAt = messageHits
           .map((m) => m.sent_at)
           .filter((m) => m != null);
         const latestMessageSentAt =
           messagesSentAt.length > 0 ? max(messagesSentAt) : null;
+
+        const participants = result.participants?.map((p) => ({
+          email: p.email,
+          name: p.name ?? undefined,
+        }));
 
         return {
           type: 'email',
@@ -262,7 +258,7 @@ export const useSearchResponseItemMapper = () => {
           done: singleMessage
             ? !messageHits[0].labels.includes('INBOX')
             : false,
-          senderName: combinedSenders,
+          participants,
           search,
         };
       }

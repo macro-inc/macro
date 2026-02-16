@@ -11,6 +11,8 @@ use sqlx::PgPool;
 use sqlx::types::Uuid;
 use std::collections::{HashMap, HashSet};
 
+pub type ThreadContactsMap = HashMap<Uuid, Vec<(String, Option<String>)>>;
+
 /// fetch message sender from db
 #[tracing::instrument(skip(pool), err)]
 pub async fn get_sender_by_message_id(
@@ -367,6 +369,55 @@ where
     }
 
     Ok(senders_map)
+}
+
+/// Fetches all unique sender contacts for given thread IDs, ordered by message creation time.
+/// Returns a map of thread_id -> Vec<(email, name)>.
+#[tracing::instrument(skip(pool), err)]
+pub async fn fetch_contacts_by_thread_ids(
+    pool: &PgPool,
+    thread_ids: &[Uuid],
+) -> anyhow::Result<ThreadContactsMap> {
+    if thread_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    struct Row {
+        thread_id: Uuid,
+        email_address: String,
+        name: Option<String>,
+    }
+
+    let rows = sqlx::query_as!(
+        Row,
+        r#"
+        SELECT
+            m.thread_id,
+            c.email_address as "email_address!",
+            COALESCE(m.from_name, c.name) as "name"
+        FROM email_messages m
+        JOIN email_contacts c ON m.from_contact_id = c.id
+        WHERE m.thread_id = ANY($1) AND m.from_contact_id IS NOT NULL
+        ORDER BY m.created_at ASC
+        "#,
+        thread_ids
+    )
+    .fetch_all(pool)
+    .await
+    .context("Failed to fetch contacts by thread IDs")?;
+
+    let mut result: ThreadContactsMap = HashMap::new();
+    for row in rows {
+        let contacts = result.entry(row.thread_id).or_default();
+        if !contacts
+            .iter()
+            .any(|(e, n)| *e == row.email_address && *n == row.name)
+        {
+            contacts.push((row.email_address, row.name));
+        }
+    }
+
+    Ok(result)
 }
 
 /// returns all email addresses and names the passed link has sent emails to.

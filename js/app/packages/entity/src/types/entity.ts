@@ -78,7 +78,7 @@ export type EmailEntity = EntityBase & {
   snippet?: string;
   isImportant: boolean;
   done: boolean;
-  participants?: Array<{ email: string; name: string }>;
+  participants?: Array<{ email: string; name?: string }>;
   senderEmail?: string;
   senderName?: string;
   labels?: SoupLabel[] | ApiLabel[];

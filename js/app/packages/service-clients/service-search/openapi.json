@@ -905,6 +905,19 @@
           }
         }
       },
+      "EmailSearchParticipant": {
+        "type": "object",
+        "description": "A participant (sender) in an email thread",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "name": {
+            "type": ["string", "null"]
+          }
+        }
+      },
       "EmailSearchRequest": {
         "allOf": [
           {
@@ -975,7 +988,8 @@
           "owner_id",
           "thread_id",
           "user_id",
-          "email_message_search_results"
+          "email_message_search_results",
+          "participants"
         ],
         "properties": {
           "email_message_search_results": {
@@ -996,6 +1010,13 @@
           },
           "owner_id": {
             "type": "string"
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmailSearchParticipant"
+            },
+            "description": "The participants (senders) in this email thread"
           },
           "subject": {
             "type": ["string", "null"],

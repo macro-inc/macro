@@ -77,6 +77,8 @@ export * from './documentSearchResultScore';
 export * from './documentSubType';
 export * from './emailFilters';
 export * from './emailFiltersImportance';
+export * from './emailSearchParticipant';
+export * from './emailSearchParticipantName';
 export * from './emailSearchRequest';
 export * from './emailSearchRequestAllOf';
 export * from './emailSearchRequestAllOfTwo';
