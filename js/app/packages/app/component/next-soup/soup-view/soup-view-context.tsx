@@ -32,6 +32,7 @@ import {
   Suspense,
   useContext,
 } from 'solid-js';
+import { isWithNotification } from '@entity';
 
 import { match } from 'ts-pattern';
 
@@ -383,7 +384,7 @@ export const SoupViewContextProvider: FlowComponent<
         const data = itemsQuery.data;
         if (!data) return prev;
         return data.map((e) =>
-          'notifications' in e ? e : attachNotifications(e)
+          isWithNotification(e) ? e : attachNotifications(e)
         ) as SoupEntity[];
       }
 
