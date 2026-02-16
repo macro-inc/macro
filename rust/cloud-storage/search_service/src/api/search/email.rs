@@ -160,6 +160,10 @@ pub fn construct_search_result(
                     updated_at: info.updated_at,
                     viewed_at: info.viewed_at,
                     snippet: info.snippet,
+                    is_read: info.is_read,
+                    inbox_visible: info.inbox_visible,
+                    is_draft: info.is_draft,
+                    is_important: info.is_important,
                     extra: EmailSearchResponseItem {
                         id: entity_id,
                         thread_id: entity_id,

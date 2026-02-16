@@ -329,6 +329,10 @@ pub struct ThreadHistoryInfo {
     /// The pretty sender of the latest email in the thread.
     /// This could be the sender's email if there is no contact name for the sender.
     pub pretty_sender: String,
+    pub is_read: bool,
+    pub inbox_visible: bool,
+    pub is_draft: bool,
+    pub is_important: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

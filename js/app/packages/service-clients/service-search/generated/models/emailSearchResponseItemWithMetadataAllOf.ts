@@ -9,6 +9,10 @@ import type { EmailSearchResponseItemWithMetadataAllOfViewedAt } from './emailSe
 
 export type EmailSearchResponseItemWithMetadataAllOf = {
   created_at: string;
+  inbox_visible: boolean;
+  is_draft: boolean;
+  is_important: boolean;
+  is_read: boolean;
   snippet?: EmailSearchResponseItemWithMetadataAllOfSnippet;
   updated_at: string;
   viewed_at?: EmailSearchResponseItemWithMetadataAllOfViewedAt;

@@ -78,6 +78,10 @@ pub struct EmailSearchResponseItemWithMetadata {
     pub updated_at: DateTime<Utc>,
     pub viewed_at: Option<DateTime<Utc>>,
     pub snippet: Option<String>,
+    pub is_read: bool,
+    pub inbox_visible: bool,
+    pub is_draft: bool,
+    pub is_important: bool,
     #[serde(flatten)]
     pub extra: EmailSearchResponseItem,
 }

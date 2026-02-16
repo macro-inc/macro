@@ -1040,11 +1040,30 @@
           },
           {
             "type": "object",
-            "required": ["created_at", "updated_at"],
+            "required": [
+              "created_at",
+              "updated_at",
+              "is_read",
+              "inbox_visible",
+              "is_draft",
+              "is_important"
+            ],
             "properties": {
               "created_at": {
                 "type": "string",
                 "format": "date-time"
+              },
+              "inbox_visible": {
+                "type": "boolean"
+              },
+              "is_draft": {
+                "type": "boolean"
+              },
+              "is_important": {
+                "type": "boolean"
+              },
+              "is_read": {
+                "type": "boolean"
               },
               "snippet": {
                 "type": ["string", "null"]

@@ -212,12 +212,6 @@ export const useSearchResponseItemMapper = () => {
         };
       }
       case 'email': {
-        const messageHits = result.email_message_search_results.filter(
-          (m) => m.message_id
-        );
-
-        const singleMessage = messageHits.length === 1;
-
         const search = getSearchData({
           results: result.email_message_search_results,
           type: 'email',
@@ -238,18 +232,10 @@ export const useSearchResponseItemMapper = () => {
           createdAt: result.created_at,
           updatedAt: result.updated_at,
           viewedAt: result.viewed_at,
-          isRead: singleMessage
-            ? !messageHits[0].labels.includes('UNREAD')
-            : false,
-          isImportant: singleMessage
-            ? messageHits[0].labels.includes('IMPORTANT')
-            : false,
-          isDraft: singleMessage
-            ? messageHits[0].labels.includes('DRAFT')
-            : false,
-          done: singleMessage
-            ? !messageHits[0].labels.includes('INBOX')
-            : false,
+          isRead: result.is_read,
+          isImportant: result.is_important,
+          isDraft: result.is_draft,
+          done: !result.inbox_visible,
           participants,
           search,
         };
