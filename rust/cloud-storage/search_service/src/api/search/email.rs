@@ -1,5 +1,6 @@
 use crate::api::context::SearchHandlerState;
 use crate::api::search::simple::SearchError;
+use email_db_client::contacts::get::ThreadContactsMap;
 use indexmap::IndexMap;
 use models_email::service::message::{MessageSenderInfo, ThreadHistoryInfo};
 use models_search::email::{
@@ -7,7 +8,6 @@ use models_search::email::{
     EmailSearchResult,
 };
 use opensearch_client::search::model::SearchGotoContent;
-use email_db_client::contacts::get::ThreadContactsMap;
 use sqlx::types::Uuid;
 use std::collections::HashMap;
 
