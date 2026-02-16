@@ -3,7 +3,10 @@ import {
   createSoupState,
   type SoupState,
 } from '@app/component/next-soup/create-soup-state';
-import { getFolderFileTypes } from '@app/component/next-soup/filters/filters';
+import {
+  type FilterID,
+  getFolderFileTypes,
+} from '@app/component/next-soup/filters/filters';
 import { sortEntitiesForSearch } from '@app/component/next-soup/soup-view/sort-options';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
 import { arrayEquals } from '@core/util/compareUtils';
@@ -146,9 +149,8 @@ export const SoupViewContextProvider: FlowComponent<
 
   const unifiedSearchIncludeArray = createMemo<UnifiedSearchIndex[]>(
     () => {
-      let types = soup.filters.activeIds();
+      const types = soup.filters.activeIds() as FilterID[];
       // NOTE: empty array means search all
-      if (types.length === 0) types = [];
       const includeArray: UnifiedSearchIndex[] = [];
       for (const type of types) {
         match(type)
@@ -164,9 +166,17 @@ export const SoupViewContextProvider: FlowComponent<
           .with('email', () => {
             includeArray.push('emails');
           })
-          .with('project', () => {
-            includeArray.push('projects');
-          });
+          .with(
+            'signal',
+            'noise',
+            'explicit-noise',
+            'unread',
+            'not-done',
+            () => {
+              // Focus/notification filters don't map to search entity types
+            }
+          )
+          .exhaustive();
       }
       return Array.from(new Set(includeArray));
     },
