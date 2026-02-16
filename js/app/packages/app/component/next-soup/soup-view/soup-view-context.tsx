@@ -172,9 +172,7 @@ export const SoupViewContextProvider: FlowComponent<
             'explicit-noise',
             'unread',
             'not-done',
-            () => {
-              // Focus/notification filters don't map to search entity types
-            }
+            () => {}
           )
           .exhaustive();
       }
@@ -188,31 +186,6 @@ export const SoupViewContextProvider: FlowComponent<
     () => debouncedSearchForService().length >= 3
   );
   const isSearchDisabled = createMemo(() => !validSearchTerms());
-
-  const searchUnifiedNameContentQueryParams = createMemo(
-    (prev: SearchArgs | undefined): SearchArgs => {
-      if (prev && prev.request.terms?.[0] === debouncedSearchForService()) {
-        return prev;
-      }
-
-      return {
-        params: {
-          cursor: null,
-          page_size: 100,
-        },
-        request: {
-          search_on: 'name_content',
-          match_type: 'partial',
-          terms:
-            debouncedSearchForService().length > 0
-              ? [debouncedSearchForService()]
-              : undefined,
-          // filters: unifiedSearchFilters(),
-          include: unifiedSearchIncludeArray(),
-        },
-      };
-    }
-  );
 
   const queryFilters = createMemo(() => {
     const base = internalQueryFilters();
@@ -280,6 +253,26 @@ export const SoupViewContextProvider: FlowComponent<
     };
   });
 
+  const searchUnifiedNameContentQueryParams = createMemo((): SearchArgs => {
+    const terms = debouncedSearchForService();
+    const include = unifiedSearchIncludeArray();
+    const filters = searchFilters();
+
+    return {
+      params: {
+        cursor: null,
+        page_size: 100,
+      },
+      request: {
+        search_on: 'name_content',
+        match_type: 'partial',
+        terms: terms.length > 0 ? [terms] : undefined,
+        include,
+        filters,
+      },
+    };
+  });
+
   const itemsQuery = useSoupItemsQuery(
     () => ({
       params: {
@@ -299,7 +292,6 @@ export const SoupViewContextProvider: FlowComponent<
         page_size: 100,
       },
       body: {
-        filters: searchFilters(),
         ...searchUnifiedNameContentQueryParams().request,
       },
     }),
