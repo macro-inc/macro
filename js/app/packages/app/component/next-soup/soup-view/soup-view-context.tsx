@@ -49,8 +49,6 @@ import {
   getTaskStatusOptionId,
   getTaskAssigneeIds,
 } from '@app/component/next-soup/utils';
-import { useUserId } from '@core/context/user';
-
 import { match } from 'ts-pattern';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 300;
@@ -154,8 +152,6 @@ export const SoupViewContextProvider: FlowComponent<
   const [assigneeFilter, setAssigneeFilter] = createSignal<
     string | undefined
   >();
-
-  const userId = useUserId();
 
   // Clear sub-filters when task filter is deactivated
   createEffect(() => {
@@ -447,8 +443,6 @@ export const SoupViewContextProvider: FlowComponent<
 
     const currentStatusFilter = statusFilter();
     const currentAssigneeFilter = assigneeFilter();
-    const resolvedAssigneeId =
-      currentAssigneeFilter === 'me' ? userId() : currentAssigneeFilter;
 
     for (const entity of transformed) {
       if (!filters.every((f) => f.predicate(entity))) {
@@ -468,8 +462,8 @@ export const SoupViewContextProvider: FlowComponent<
           continue;
         }
         if (
-          resolvedAssigneeId &&
-          !getTaskAssigneeIds(taskEntity).includes(resolvedAssigneeId)
+          currentAssigneeFilter &&
+          !getTaskAssigneeIds(taskEntity).includes(currentAssigneeFilter)
         ) {
           continue;
         }

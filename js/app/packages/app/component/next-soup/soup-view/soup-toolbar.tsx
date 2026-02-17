@@ -136,6 +136,8 @@ const SoupFilters = () => {
   const emailActive = useEmailLinksStatus();
 
   const [sortDropdownOpen, setSortDropdownOpen] = createSignal(false);
+  const [statusDropdownOpen, setStatusDropdownOpen] = createSignal(false);
+  const [assigneeDropdownOpen, setAssigneeDropdownOpen] = createSignal(false);
 
   const toggleFocus = (id: 'signal' | 'noise') => {
     if (soup.filters.isActive(id)) {
@@ -302,6 +304,34 @@ const SoupFilters = () => {
     hotkeyDisposers.forEach((d) => d.dispose());
   });
 
+  // Task sub-filter hotkeys — only active when task filter is on
+  createEffect(() => {
+    if (!soup.filters.isActive('task')) return;
+
+    const disposers = [
+      registerHotkey({
+        hotkey: ['shift+s'],
+        scopeId: panel.splitHotkeyScope,
+        description: 'Open status filter',
+        keyDownHandler: () => {
+          setStatusDropdownOpen((prev) => !prev);
+          return true;
+        },
+      }),
+      registerHotkey({
+        hotkey: ['shift+a'],
+        scopeId: panel.splitHotkeyScope,
+        description: 'Open assignee filter',
+        keyDownHandler: () => {
+          setAssigneeDropdownOpen((prev) => !prev);
+          return true;
+        },
+      }),
+    ];
+
+    onCleanup(() => disposers.forEach((d) => d.dispose()));
+  });
+
   return (
     <>
       {/* Inbox toggle */}
@@ -374,11 +404,18 @@ const SoupFilters = () => {
           }}
         </For>
       </div>
-      {/* Task sub-filters */}
       <Show when={soup.filters.isActive('task')}>
         <FilterDivider />
-        <TaskStatusDropdown />
-        <TaskAssigneeDropdown />
+        <div class="flex items-center gap-1 shrink-0">
+          <TaskStatusDropdown
+            open={statusDropdownOpen}
+            onOpenChange={setStatusDropdownOpen}
+          />
+          <TaskAssigneeDropdown
+            open={assigneeDropdownOpen}
+            onOpenChange={setAssigneeDropdownOpen}
+          />
+        </div>
       </Show>
       <div class="mx-0.5 w-px h-5 bg-edge-muted/50 shrink-0" />
       {/* Preview toggle */}
