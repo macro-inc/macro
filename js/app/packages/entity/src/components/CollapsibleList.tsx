@@ -76,6 +76,8 @@ export function CollapsibleList<T>(props: CollapsibleListProps<T>) {
           <button
             type="button"
             class="flex items-center gap-1 text-xs bracket-never hover:text-accent"
+            data-collapsible-toggle
+            data-collapsible-state={showAll() ? 'expanded' : 'collapsed'}
             onClick={(e) => {
               e.stopPropagation();
               setShowAll((prev) => !prev);
