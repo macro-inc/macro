@@ -126,8 +126,7 @@ type EntityTypeFilterId =
   | 'file';
 
 const SoupFilters = () => {
-  const { soup, setSearchText, isSearchDisabled, setQueryFilters } =
-    useSoupView();
+  const { soup, setSearchText, setQueryFilters } = useSoupView();
   const panel = useSplitPanelOrThrow();
   const emailActive = useEmailLinksStatus();
 
@@ -161,7 +160,7 @@ const SoupFilters = () => {
     batch(() => {
       soup.filters.toggle('email');
       if (willBeActive) {
-        const shouldIncludeEmails = emailActive() && isSearchDisabled();
+        const shouldIncludeEmails = emailActive();
         setQueryFilters({
           ...QUERY_FILTERS.email,
           email_filters: {
