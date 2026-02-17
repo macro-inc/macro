@@ -291,6 +291,33 @@ export function optimisticUpdateSoupItemViewedAt(itemId: string) {
   }
 }
 
+/**
+ * Optimistically update the updatedAt/updated_at timestamp for a soup item.
+ * Updates the item across all soup queries if it exists and matches the expected tag.
+ */
+export function optimisticUpdateSoupItemUpdatedAt(
+  itemId: string,
+  tag: SoupEntityTag,
+  updatedAt: string
+) {
+  const current = getSoupEntityById(itemId);
+  if (!current || current.tag !== tag) return;
+
+  if (current.tag === 'channel') {
+    optimisticUpdateSoupEntity({
+      tag: 'channel',
+      data: { channel: { id: itemId, updated_at: updatedAt } },
+      frecency_score: current.frecency_score,
+    });
+  } else {
+    optimisticUpdateSoupEntity({
+      tag: current.tag,
+      data: { id: itemId, updatedAt },
+      frecency_score: current.frecency_score,
+    });
+  }
+}
+
 /** @private */
 function getSearchResultId(result: UnifiedSearchResponseItem): string {
   return match(result)

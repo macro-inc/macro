@@ -45,6 +45,7 @@ import {
   insertSoupEntity,
   removeSoupEntities,
   removeSearchEntities,
+  optimisticUpdateSoupItemUpdatedAt,
   optimisticUpdateSoupEntity,
 } from './operations';
 import { soupKeys } from '../keys';
@@ -338,5 +339,58 @@ describe('optimisticUpdateSoupEntity', () => {
         dependentKey
       );
     expect(restored).toEqual(originalData);
+  });
+});
+
+describe('optimisticUpdateSoupItemUpdatedAt', () => {
+  it('updates updatedAt for non-channel entities', () => {
+    mockNormalizer.getObjectById.mockReturnValueOnce(mockDocumentItem('doc-1'));
+
+    optimisticUpdateSoupItemUpdatedAt(
+      'doc-1',
+      'document',
+      '2024-01-01T00:00:00.000Z'
+    );
+
+    expect(mockNormalizer.setNormalizedData).toHaveBeenCalledWith({
+      tag: 'document',
+      data: { id: 'doc-1', updatedAt: '2024-01-01T00:00:00.000Z' },
+      frecency_score: 1,
+    });
+  });
+
+  it('updates updated_at for channel entities', () => {
+    mockNormalizer.getObjectById.mockReturnValueOnce(mockChannelItem('ch-1'));
+
+    optimisticUpdateSoupItemUpdatedAt(
+      'ch-1',
+      'channel',
+      '2024-01-01T00:00:00.000Z'
+    );
+
+    expect(mockNormalizer.setNormalizedData).toHaveBeenCalledWith({
+      tag: 'channel',
+      data: {
+        channel: { id: 'ch-1', updated_at: '2024-01-01T00:00:00.000Z' },
+      },
+      frecency_score: 1,
+    });
+  });
+
+  it('does nothing when cache entity is missing or tag mismatches', () => {
+    optimisticUpdateSoupItemUpdatedAt(
+      'doc-1',
+      'document',
+      '2024-01-01T00:00:00.000Z'
+    );
+
+    mockNormalizer.getObjectById.mockReturnValueOnce(mockDocumentItem('doc-1'));
+    optimisticUpdateSoupItemUpdatedAt(
+      'doc-1',
+      'chat',
+      '2024-01-01T00:00:00.000Z'
+    );
+
+    expect(mockNormalizer.setNormalizedData).not.toHaveBeenCalled();
   });
 });
