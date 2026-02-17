@@ -23,7 +23,7 @@ use soup::outbound::pg_soup_repo::PgSoupRepo;
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
-use stream::outbound::redis::RedisStreamRepo;
+use stream::outbound::redis_pg::RedisPostgresStreamRepo;
 use sync_service_client::SyncServiceClient;
 
 mod api;
@@ -187,11 +187,7 @@ async fn main() -> anyhow::Result<()> {
             })
             .context("failed to connect to redis")?,
     );
-
-    let stream_repo = RedisStreamRepo::new((*redis_client).clone())
-        .await
-        .context("failed to create stream repo")?
-        .obj();
+    let stream_repo = RedisPostgresStreamRepo::new((*redis_client).clone(), db.clone()).obj();
 
     tracing::info!("initialized stream repo");
 

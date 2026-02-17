@@ -11,6 +11,8 @@ use tokio::task::JoinHandle;
 
 const NOTIFY_CHANNEL: &str = "stream:notifications";
 const NOTIFY_CHANNEL_BUFFER: usize = 1024;
+/// TTL for a closed stream in Redis (60 seconds for consumers to finish reading)
+const CLOSED_STREAM_TTL_SECS: i64 = 60;
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", content = "value")]
@@ -83,10 +85,12 @@ impl Drop for StreamNotifier {
     }
 }
 
-/// Redis-backed stream service using Redis Streams for storage and Pub/Sub for notifications.
+/// Redis + PostgreSQL backed stream service using Redis Streams for storage,
+/// Pub/Sub for notifications, and PostgreSQL for active stream tracking.
 #[derive(Clone)]
-pub struct RedisStreamRepo {
-    client: Arc<Client>,
+pub struct RedisPostgresStreamRepo {
+    redis_client: Arc<Client>,
+    pg_pool: sqlx::PgPool,
     notifier: Arc<OnceCell<StreamNotifier>>,
 }
 
@@ -94,27 +98,38 @@ pub struct RedisStreamRepo {
 const MAX_BLOCK_MS: usize = 1000 * 60 * 5;
 const KEY: &str = "item";
 
-impl RedisStreamRepo {
-    /// Create a new Redis stream service.
-    pub async fn new(client: Client) -> Result<Self> {
-        Ok(Self {
-            client: Arc::new(client),
+impl RedisPostgresStreamRepo {
+    /// Create a new Redis + PostgreSQL stream service.
+    /// The `active_streams` table must already exist (created via macro_db_client migration).
+    pub fn new(redis_client: Client, pg_pool: sqlx::PgPool) -> Self {
+        Self {
+            redis_client: Arc::new(redis_client),
+            pg_pool,
             notifier: Arc::new(OnceCell::new()),
-        })
+        }
     }
 
+    /// Wrap self in an `Arc<dyn StreamRepo>`.
     pub fn obj(self) -> Arc<dyn StreamRepo> {
         Arc::new(self)
     }
 
-    /// Delete stream data from redis
-    /// Internal / testing only. Streams are cleaned using TTL for prod
+    /// Delete stream data from redis and postgres.
+    /// Internal / testing only. Streams are cleaned using TTL for prod.
     #[allow(unused)]
     pub async fn cleanup_stream(&self, id: &StreamId) -> Result<()> {
-        let mut conn = self.client.get_multiplexed_async_connection().await?;
-        conn.del(id.to_string())
+        let mut conn = self.redis_client.get_multiplexed_async_connection().await?;
+        let _: () = conn
+            .del(id.to_string())
             .await
-            .map_err(|e| StreamServiceError::StorageError(e.to_string()))
+            .map_err(|e| StreamServiceError::StorageError(e.to_string()))?;
+
+        // Also clean up PostgreSQL entry
+        let _ = super::queries::delete_active_stream(&self.pg_pool, &id.entity_id, &id.to_string())
+            .await
+            .inspect_err(|e| tracing::error!(error=?e, "failed to clean stream from postgres"));
+
+        Ok(())
     }
 
     async fn publish_item(
@@ -130,10 +145,10 @@ impl RedisStreamRepo {
 }
 
 #[async_trait]
-impl StreamRepo for RedisStreamRepo {
-    /// create and append to stream or append to stream
+impl StreamRepo for RedisPostgresStreamRepo {
+    /// Create and append to stream or append to an existing stream.
     async fn append(&self, id: &StreamId, payload: serde_json::Value) -> Result<ItemId> {
-        let mut conn = self.client.get_multiplexed_async_connection().await?;
+        let mut conn = self.redis_client.get_multiplexed_async_connection().await?;
 
         let is_new: bool = !conn
             .exists(id.to_string())
@@ -142,6 +157,12 @@ impl StreamRepo for RedisStreamRepo {
 
         let item_id = Self::publish_item(&mut conn, id, &StoredStreamItem::Value(payload)).await?;
 
+        // Refresh TTL on every append so stream stays alive while being written to
+        let _: RedisResult<()> = conn
+            .expire(id.to_string(), DEFAULT_STREAM_TIMEOUT.as_secs() as i64)
+            .await
+            .inspect_err(|e| tracing::error!(error=?e, "failed to set stream TTL"));
+
         if is_new {
             tracing::debug!(stream_id=?id, "New stream detected publishing notification");
             let notification = serde_json::to_string(id).expect("json");
@@ -149,13 +170,21 @@ impl StreamRepo for RedisStreamRepo {
                 .publish(NOTIFY_CHANNEL, notification)
                 .await
                 .inspect_err(|e| tracing::error!(error=?e, "failed to publish new channel"));
+
+            // Track in PostgreSQL
+            let _ =
+                super::queries::insert_active_stream(&self.pg_pool, &id.entity_id, &id.to_string())
+                    .await
+                    .inspect_err(
+                        |e| tracing::error!(error=?e, "failed to track stream in postgres"),
+                    );
         }
 
         Ok(item_id)
     }
 
     async fn stream_from_beginning(&self, id: &StreamId) -> Result<ItemStream> {
-        let mut connection = self.client.get_multiplexed_async_connection().await?;
+        let mut connection = self.redis_client.get_multiplexed_async_connection().await?;
         let stream_key = id.to_string();
         let stream_id_for_item = id.clone();
 
@@ -215,28 +244,57 @@ impl StreamRepo for RedisStreamRepo {
     }
 
     async fn close(&self, id: &StreamId) -> Result<()> {
-        let mut conn = self.client.get_multiplexed_async_connection().await?;
+        let mut conn = self.redis_client.get_multiplexed_async_connection().await?;
         Self::publish_item(&mut conn, id, &StoredStreamItem::End).await?;
+
+        let _: RedisResult<()> = conn
+            .expire(id.to_string(), CLOSED_STREAM_TTL_SECS)
+            .await
+            .inspect_err(|e| tracing::error!(error=?e, "failed to set closed stream TTL"));
+
+        // Remove from PostgreSQL tracking
+        let _ = super::queries::delete_active_stream(&self.pg_pool, &id.entity_id, &id.to_string())
+            .await
+            .inspect_err(|e| tracing::error!(error=?e, "failed to remove stream from postgres"));
+
         Ok(())
     }
 
-    //TODO: this does a scan. this should be replaced with a dynamo or something
     async fn active_streams(&self, entity_id: &str) -> Result<Vec<StreamId>> {
-        let mut conn = self.client.get_multiplexed_async_connection().await?;
-        let pattern = format!("*:{}:*", entity_id);
-        let iter = conn.scan_match::<&str, String>(&pattern).await?;
-        let keys = iter.collect::<Vec<_>>().await;
-        Ok(keys
-            .into_iter()
-            .filter_map(|s| s.ok())
-            .filter_map(|s| StreamId::try_from(s).ok())
-            .filter(|stream_id| stream_id.entity_id == entity_id)
-            .collect())
+        // Query PostgreSQL for all streams with this entity_id
+        let stream_keys = super::queries::get_active_stream_keys(&self.pg_pool, entity_id)
+            .await
+            .map_err(|e| StreamServiceError::StorageError(e.to_string()))?;
+
+        // Validate each stream is still active in Redis
+        let mut conn = self.redis_client.get_multiplexed_async_connection().await?;
+        let mut active = Vec::new();
+
+        for stream_key in stream_keys {
+            let exists: bool = conn
+                .exists(stream_key.clone())
+                .await
+                .map_err(|e| StreamServiceError::StorageError(e.to_string()))?;
+
+            if exists {
+                let stream_id = StreamId::try_from(stream_key)?;
+                active.push(stream_id);
+            } else {
+                // Stream expired in Redis — clean up PostgreSQL entry
+                let _ = super::queries::delete_active_stream(&self.pg_pool, entity_id, &stream_key)
+                    .await
+                    .inspect_err(
+                        |e| tracing::error!(error=?e, "failed to clean stale stream from postgres"),
+                    );
+            }
+        }
+
+        Ok(active)
     }
 
     async fn notify(&self) -> Receiver<StreamId> {
         self.notifier
-            .get_or_init(|| StreamNotifier::new(&self.client))
+            .get_or_init(|| StreamNotifier::new(&self.redis_client))
             .await
             .subscribe()
     }

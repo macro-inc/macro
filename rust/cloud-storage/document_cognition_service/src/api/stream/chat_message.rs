@@ -33,7 +33,7 @@ use models_permissions::share_permission::access_level::AccessLevel;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::sync::Arc;
-use stream::domain::{PayloadStream, StreamId, StreamManagerExt};
+use stream::domain::{PayloadStream, StreamId, StreamRepoExt};
 use tokio::sync::oneshot;
 use utoipa::ToSchema;
 
@@ -279,7 +279,7 @@ pub async fn send_chat_message(
     let stream_handle =
         ctx.stream_repo
             .clone()
-            .from_async_stream(durable_stream_id, payload_stream, None);
+            .from_async_stream(durable_stream_id, payload_stream, None, None);
 
     // Spawn post-processing task
     let ctx_clone = ctx.clone();

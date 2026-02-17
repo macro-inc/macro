@@ -1,5 +1,5 @@
 use super::util::StreamGuard;
-use crate::domain::StreamManagerExt;
+use crate::domain::StreamRepoExt;
 use futures::StreamExt;
 use serial_test::serial;
 use std::time::Duration;
@@ -72,7 +72,7 @@ async fn test_from_async_stream() {
     let input_stream = futures::stream::iter(items.clone());
     service
         .clone()
-        .from_async_stream(stream_id.clone(), Box::pin(input_stream), None);
+        .from_async_stream(stream_id.clone(), Box::pin(input_stream), None, None);
 
     let mut output_stream = service
         .stream_from_beginning(&stream_id)

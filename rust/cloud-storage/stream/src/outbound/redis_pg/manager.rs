@@ -6,13 +6,13 @@ use futures::stream::{SelectAll, StreamExt};
 use std::sync::Arc;
 use tokio::sync::oneshot;
 
-/// Manages stream subscriptions backed by Redis.
-pub struct RedisStreamManager {
+/// Manages stream subscriptions backed by Redis and PostgreSQL.
+pub struct RedisPostgresStreamManager {
     repo: Arc<dyn StreamRepo>,
     subscriptions: DashMap<String, oneshot::Sender<()>>,
 }
 
-impl RedisStreamManager {
+impl RedisPostgresStreamManager {
     /// Create a new manager wrapping the given repo.
     pub fn new(repo: Arc<dyn StreamRepo>) -> Arc<Self> {
         Arc::new(Self {
@@ -23,7 +23,7 @@ impl RedisStreamManager {
 }
 
 #[async_trait]
-impl StreamManager for RedisStreamManager {
+impl StreamManager for RedisPostgresStreamManager {
     #[tracing::instrument(err, skip(self))]
     async fn subscribe(&self, sender_id: String, entity_id: String) -> Result<ItemStream> {
         let repo = self.repo.clone();

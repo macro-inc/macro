@@ -1,5 +1,6 @@
 mod ext;
 mod manager;
+mod queries;
 mod repo;
 
 #[cfg(test)]

@@ -8917,9 +8917,9 @@ dependencies = [
  "serde",
  "serde_json",
  "serial_test",
+ "sqlx",
  "thiserror 2.0.17",
  "tokio",
- "tokio-stream",
  "tokio-test",
  "tracing",
 ]
@@ -9364,7 +9364,6 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
- "tokio-util",
 ]
 
 [[package]]

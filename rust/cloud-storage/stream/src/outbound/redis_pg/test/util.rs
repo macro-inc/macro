@@ -1,11 +1,11 @@
 use crate::domain::{StreamId, StreamRepo};
-use crate::outbound::redis::*;
+use crate::outbound::redis_pg::*;
 use redis::Client;
 use std::cell::RefCell;
 use std::sync::Arc;
 
 pub struct StreamGuard {
-    pub service: RedisStreamRepo,
+    pub service: RedisPostgresStreamRepo,
     stream_ids: RefCell<Vec<StreamId>>,
 }
 
@@ -59,13 +59,14 @@ impl Drop for StreamGuard {
     }
 }
 
-pub async fn connect_from_env() -> RedisStreamRepo {
+pub async fn connect_from_env() -> RedisPostgresStreamRepo {
     let redis_url = std::env::var("REDIS_URL").expect("redis url");
     let client = Client::open(redis_url).expect("Failed to create Redis client");
-    let service = RedisStreamRepo::new(client)
+    let database_url = std::env::var("DATABASE_URL").expect("database url");
+    let pool = sqlx::PgPool::connect(&database_url)
         .await
-        .expect("Failed to create service");
-    service
+        .expect("Failed to connect to postgres");
+    RedisPostgresStreamRepo::new(client, pool)
 }
 
 pub fn test_stream_id(entity_id: &str, stream_id: &str) -> StreamId {

@@ -16,12 +16,6 @@ pub type ItemStream = Pin<Box<dyn Stream<Item = StreamItem> + Send>>;
 pub type PayloadStream = Pin<Box<dyn Stream<Item = serde_json::Value> + Send>>;
 pub type ItemId = String;
 
-#[derive(Debug, Clone)]
-pub enum Offset {
-    Beginning,
-    Location(String),
-}
-
 /// A stream service provides durable stream storage
 /// This is the base trait of this crate and should be
 /// used by consumers through the StreamManager
