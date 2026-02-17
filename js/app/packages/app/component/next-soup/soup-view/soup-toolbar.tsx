@@ -42,6 +42,10 @@ import { IS_MAC } from '@core/constant/isMac';
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { Dynamic } from 'solid-js/web';
 import { SortDropdown } from '@app/component/next-soup/soup-view/sort-dropdown';
+import {
+  TaskStatusDropdown,
+  TaskAssigneeDropdown,
+} from '@app/component/next-soup/soup-view/task-sub-filters';
 
 /**
  * Keyboard shortcuts for entity type filters.
@@ -370,6 +374,12 @@ const SoupFilters = () => {
           }}
         </For>
       </div>
+      {/* Task sub-filters */}
+      <Show when={soup.filters.isActive('task')}>
+        <FilterDivider />
+        <TaskStatusDropdown />
+        <TaskAssigneeDropdown />
+      </Show>
       <div class="mx-0.5 w-px h-5 bg-edge-muted/50 shrink-0" />
       {/* Preview toggle */}
       <Tooltip
