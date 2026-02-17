@@ -27,7 +27,7 @@ pub async fn structured_output_completion(
 
     let request = CreateChatCompletionRequestArgs::default()
         .max_tokens(DEFAULT_MAX_TOKENS)
-        .model(Model::Gemini20FlashLite.to_string())
+        .model(Model::Claude45Haiku.to_string())
         .messages([
             ChatCompletionRequestSystemMessage::from(system_prompt).into(),
             ChatCompletionRequestUserMessage::from(user_request).into(),
