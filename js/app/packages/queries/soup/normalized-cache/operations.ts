@@ -304,18 +304,40 @@ export function optimisticUpdateSoupItemUpdatedAt(
   if (!current || current.tag !== tag) return;
 
   if (current.tag === 'channel') {
+    if (!shouldUpdateOptimisticTimestamp(current.data.channel.updated_at, updatedAt))
+      return;
+
     optimisticUpdateSoupEntity({
       tag: 'channel',
       data: { channel: { id: itemId, updated_at: updatedAt } },
       frecency_score: current.frecency_score,
     });
   } else {
+    if (!shouldUpdateOptimisticTimestamp(current.data.updatedAt, updatedAt))
+      return;
+
     optimisticUpdateSoupEntity({
       tag: current.tag,
       data: { id: itemId, updatedAt },
       frecency_score: current.frecency_score,
     });
   }
+}
+
+/** @private */
+function shouldUpdateOptimisticTimestamp(
+  currentUpdatedAt: string | undefined,
+  incomingUpdatedAt: string
+): boolean {
+  const incomingMs = Date.parse(incomingUpdatedAt);
+  if (Number.isNaN(incomingMs)) return false;
+
+  if (!currentUpdatedAt) return true;
+
+  const currentMs = Date.parse(currentUpdatedAt);
+  if (Number.isNaN(currentMs)) return true;
+
+  return incomingMs > currentMs;
 }
 
 /** @private */
