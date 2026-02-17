@@ -1,4 +1,4 @@
-import { type Component, createMemo, For, Show } from 'solid-js';
+import { type Component, createEffect, createMemo, For, Show } from 'solid-js';
 import { Popover } from '@kobalte/core/popover';
 import { Hotkey } from '@core/component/Hotkey';
 import { TASK_STATUS_OPTIONS } from '@entity';
@@ -8,6 +8,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import { useDropdownSearch } from '@core/util/useDropdownSearch';
 import { useUserId } from '@core/context/user';
+import { getVisibleAssigneeOptions } from './task-sub-filter-options';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import UserCircleIcon from '@icon/regular/user-circle.svg';
 import CaretDownIcon from '@icon/regular/caret-down.svg';
@@ -19,12 +20,25 @@ type DropdownProps = {
   onOpenChange: (isOpen: boolean) => void;
 };
 
+const scrollSelectedItemIntoView = (
+  listRef: HTMLDivElement | undefined,
+  selectedIndex: number
+) => {
+  queueMicrotask(() => {
+    const selectedItem = listRef?.querySelector<HTMLElement>(
+      `[data-dropdown-index="${selectedIndex}"]`
+    );
+    selectedItem?.scrollIntoView({ block: 'nearest' });
+  });
+};
+
 export const TaskStatusDropdown: Component<DropdownProps> = (props) => {
   const { statusFilter, setStatusFilter } = useSoupView();
   const open = () => props.open();
   const setOpen = (v: boolean) => props.onOpenChange(v);
 
   let searchInputRef!: HTMLInputElement;
+  let optionsListRef: HTMLDivElement | undefined;
 
   const activeLabel = () => {
     if (!statusFilter()) return 'Status';
@@ -55,6 +69,12 @@ export const TaskStatusDropdown: Component<DropdownProps> = (props) => {
     return TASK_STATUS_OPTIONS.filter((o) =>
       o.label.toLowerCase().includes(query)
     );
+  });
+
+  createEffect(() => {
+    if (!open()) return;
+    filteredOptions().length;
+    scrollSelectedItemIntoView(optionsListRef, dropdown.selectedIndex());
   });
 
   return (
@@ -104,7 +124,7 @@ export const TaskStatusDropdown: Component<DropdownProps> = (props) => {
         </Show>
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content class="z-50 bg-panel border border-edge-muted shadow-lg min-w-[180px]">
+        <Popover.Content class="z-50 bg-panel border border-edge-muted shadow-lg w-[300px]">
           <div>
             <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
               <SearchIcon class="h-4 w-4 text-ink-muted" />
@@ -119,7 +139,12 @@ export const TaskStatusDropdown: Component<DropdownProps> = (props) => {
               />
             </div>
             <div class="p-1">
-              <div class="max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden">
+              <div
+                ref={(el) => {
+                  optionsListRef = el;
+                }}
+                class="max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden"
+              >
                 <Show
                   when={filteredOptions().length > 0}
                   fallback={
@@ -131,6 +156,7 @@ export const TaskStatusDropdown: Component<DropdownProps> = (props) => {
                   <For each={filteredOptions()}>
                     {(option, index) => (
                       <div
+                        data-dropdown-index={index()}
                         class={`flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 ${
                           index() === dropdown.selectedIndex() ? 'bg-hover' : ''
                         }`}
@@ -141,8 +167,10 @@ export const TaskStatusDropdown: Component<DropdownProps> = (props) => {
                         }}
                       >
                         <PropertyValueIcon optionId={option.value} />
-                        <div class="flex-1 text-left">
-                          <p class="text-sm font-medium">{option.label}</p>
+                        <div class="flex-1 min-w-0 text-left">
+                          <p class="text-sm font-medium truncate">
+                            {option.label}
+                          </p>
                         </div>
                         <div class="flex items-center gap-2 flex-shrink-0">
                           <Show
@@ -177,6 +205,7 @@ export const TaskAssigneeDropdown: Component<DropdownProps> = (props) => {
   const userId = useUserId();
 
   let searchInputRef!: HTMLInputElement;
+  let contactsListRef: HTMLDivElement | undefined;
 
   const sortedContacts = createMemo(() => {
     const list = contacts();
@@ -206,14 +235,17 @@ export const TaskAssigneeDropdown: Component<DropdownProps> = (props) => {
   });
 
   const filteredContacts = createMemo(() => {
-    const query = dropdown.searchQuery().toLowerCase().trim();
-    const list = sortedContacts();
-    if (!query) return list;
-    return list.filter(
-      (c) =>
-        c.name?.toLowerCase().includes(query) ||
-        c.id.toLowerCase().includes(query)
-    );
+    return getVisibleAssigneeOptions({
+      contacts: sortedContacts(),
+      query: dropdown.searchQuery(),
+      selectedAssigneeId: assigneeFilter(),
+    });
+  });
+
+  createEffect(() => {
+    if (!open()) return;
+    filteredContacts().length;
+    scrollSelectedItemIntoView(contactsListRef, dropdown.selectedIndex());
   });
 
   const activeAssigneeLabel = () => {
@@ -276,7 +308,7 @@ export const TaskAssigneeDropdown: Component<DropdownProps> = (props) => {
         </Show>
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content class="z-50 bg-panel border border-edge-muted shadow-lg min-w-[200px]">
+        <Popover.Content class="z-50 bg-panel border border-edge-muted shadow-lg w-[300px]">
           <div>
             <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
               <SearchIcon class="h-4 w-4 text-ink-muted" />
@@ -291,7 +323,12 @@ export const TaskAssigneeDropdown: Component<DropdownProps> = (props) => {
               />
             </div>
             <div class="p-1">
-              <div class="max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden">
+              <div
+                ref={(el) => {
+                  contactsListRef = el;
+                }}
+                class="max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden"
+              >
                 <Show
                   when={filteredContacts().length > 0}
                   fallback={
@@ -303,6 +340,7 @@ export const TaskAssigneeDropdown: Component<DropdownProps> = (props) => {
                   <For each={filteredContacts()}>
                     {(contact, index) => (
                       <div
+                        data-dropdown-index={index()}
                         class={`flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 ${
                           index() === dropdown.selectedIndex() ? 'bg-hover' : ''
                         }`}
@@ -318,8 +356,8 @@ export const TaskAssigneeDropdown: Component<DropdownProps> = (props) => {
                           suppressClick
                           showTooltip={false}
                         />
-                        <div class="flex-1 text-left">
-                          <p class="text-sm font-medium">
+                        <div class="flex-1 min-w-0 text-left">
+                          <p class="text-sm font-medium truncate">
                             {contact.name || contact.id}
                             <Show when={contact.id === userId()}>
                               <span class="text-ink-muted ml-1">(me)</span>
