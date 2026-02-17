@@ -1,6 +1,6 @@
 import CheckIcon from '@icon/regular/check.svg';
-import Spinner from '@icon/regular/spinner.svg';
 import ExclamationIcon from '@icon/regular/exclamation-mark.svg';
+import Spinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
 import { Toast, toaster } from '@kobalte/core/toast';
 import type { Component } from 'solid-js';
@@ -225,7 +225,7 @@ function ToastContent(props: {
         </div>
 
         {/* Content area */}
-        <div class="flex-1 p-3 pr-10">
+        <div class="flex-1 pt-2 px-3 pb-3 pr-10">
           <Toast.Title class={`font-semibold text-ink`}>
             {props.message}
           </Toast.Title>
@@ -254,7 +254,7 @@ function ToastContent(props: {
 
         {/* Close button */}
         <Toast.CloseButton class="absolute top-2 right-2 p-1 rounded hover:bg-black/10">
-          <XIcon class={`size-4 ${styles().titleText}`} />
+          <XIcon class={`size-4 text-ink-extra-muted`} />
         </Toast.CloseButton>
       </div>
     </Toast>
