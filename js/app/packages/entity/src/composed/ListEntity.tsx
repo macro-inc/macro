@@ -65,7 +65,7 @@ interface LayoutProps {
   unread: boolean;
   isShared: boolean;
   hasNotifications: boolean;
-  hideContentHits?: boolean;
+  showContentHits: boolean;
   onProjectClick?: (
     entity: ProjectEntity,
     e: PointerEvent | MouseEvent
@@ -141,7 +141,7 @@ function NarrowLayout(props: LayoutProps) {
         when={
           (isEmailEntity(props.entity) || isChannelEntity(props.entity)) &&
           !props.hasNotifications &&
-          (!hasSearchContentHits(props.entity) || props.hideContentHits)
+          !props.showContentHits
         }
       >
         <Entity.Slot placement="body" class="flex flex-col gap-1 pb-3 -mt-1">
@@ -231,9 +231,7 @@ function WideLayout(props: LayoutProps) {
             {(entity) => (
               <>
                 <Show
-                  when={
-                    !hasSearchContentHits(entity()) || props.hideContentHits
-                  }
+                  when={!props.showContentHits}
                   fallback={
                     <>
                       <span class="truncate">
@@ -337,6 +335,9 @@ export function ListEntity(props: ListEntityProps) {
     );
   };
 
+  const showContentHits = () =>
+    !props.hideContentHits && hasSearchContentHits(props.entity);
+
   const layoutProps = (): LayoutProps => ({
     entity: props.entity,
     checked: props.checked,
@@ -344,7 +345,7 @@ export function ListEntity(props: ListEntityProps) {
     unread: unread(),
     isShared: isShared(),
     hasNotifications: hasNotifications(),
-    hideContentHits: props.hideContentHits,
+    showContentHits: showContentHits(),
     onProjectClick: props.onProjectClick,
   });
 
@@ -386,12 +387,7 @@ export function ListEntity(props: ListEntityProps) {
       <Show when={hasNotifications()}>
         <div class="flex gap-2 w-full h-full items-center text-sm px-2 pb-1 -mt-2 min-w-0 overflow-hidden">
           <div class={cn('min-w-0 flex-1 truncate ml-2 @lg/entity:ml-6')}>
-            <Show
-              when={
-                isWithNotification(props.entity) &&
-                (!hasSearchContentHits(props.entity) || props.hideContentHits)
-              }
-            >
+            <Show when={isWithNotification(props.entity) && !showContentHits()}>
               <Entity.Notification.Stacks
                 entity={props.entity}
                 visibleCount={3}
@@ -401,7 +397,7 @@ export function ListEntity(props: ListEntityProps) {
         </div>
       </Show>
 
-      <Show when={!props.hideContentHits && hasSearchContentHits(props.entity)}>
+      <Show when={showContentHits()}>
         <div class="flex gap-2 w-full h-full items-center text-sm px-2 pb-1 -mt-2 min-w-0 overflow-hidden">
           <div class={cn('min-w-0 flex-1 truncate ml-4 @lg/entity:ml-6')}>
             <Entity.Search.ContentHits
