@@ -216,7 +216,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
     createEffect(
       on(
-        () => [soup.filters.activeIds(), searchText()] as const,
+        () =>
+          [soup.filters.activeIds(), searchText(), featuredCount()] as const,
         () => {
           focusFirstEntity();
         },
