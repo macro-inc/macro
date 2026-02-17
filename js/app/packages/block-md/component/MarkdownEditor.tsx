@@ -25,7 +25,7 @@ import { EmojiMenu } from '@core/component/LexicalMarkdown/component/menu/EmojiM
 import { FloatingEquationMenu } from '@core/component/LexicalMarkdown/component/menu/FloatingEquationMenu';
 import { FloatingLinkMenu } from '@core/component/LexicalMarkdown/component/menu/FloatingLinkMenu';
 import { GenerateMenu } from '@core/component/LexicalMarkdown/component/menu/GenerateMenu';
-import { MentionsMenu } from '@core/component/LexicalMarkdown/component/menu/MentionsMenuQuickAccess';
+import { MentionsMenu } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu';
 import TableActionMenu, {
   anchorElemRefSignal,
   menuButtonRefSignal,

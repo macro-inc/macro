@@ -22,6 +22,7 @@ import {
 } from '../../plugins';
 import type { MenuOperations } from '../../shared/inlineMenu';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
+import { useMenuKeyboardNavigation } from './useMenuKeyboardNavigation';
 
 false && clickOutside;
 false && floatWithSelection;
@@ -136,99 +137,49 @@ export function EmojiMenu(props: EmojiMenuProps) {
     );
   });
 
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (!props.menu.isOpen()) return;
-    const items = emojiOptions();
-    const selectedItem = items[selectedIndex()];
-
-    switch (e.key) {
-      case 'Escape':
-        e.preventDefault();
-        e.stopPropagation();
-        props.menu.setIsOpen(false);
-        props.editor.dispatchCommand(CLOSE_EMOJI_SEARCH_COMMAND, undefined);
-        break;
-
-      case 'ArrowDown': {
-        e.preventDefault();
-        e.stopPropagation();
-        setSelectedIndex((prev) => (prev + 1) % items.length);
-        const handle = virtualHandle();
-        if (!handle) break;
-
-        virtualHandle()?.scrollToIndex(selectedIndex() + 1, {
-          align: 'nearest',
-        });
-        break;
-      }
-
-      case 'ArrowUp': {
-        e.preventDefault();
-        e.stopPropagation();
-        setSelectedIndex((prev) => (prev - 1 + items.length) % items.length);
-        const handle = virtualHandle();
-        if (!handle) break;
-
-        virtualHandle()?.scrollToIndex(selectedIndex() - 1, {
-          align: 'nearest',
-        });
-        break;
-      }
-
-      case 'ArrowLeft':
-      case 'ArrowRight':
-        e.preventDefault();
-        break;
-
-      case 'Tab':
-        e.preventDefault();
-        e.stopPropagation();
-        if (e.shiftKey) {
-          const handle = virtualHandle();
-          if (!handle) break;
-          setSelectedIndex((prev) => (prev - 1 + items.length) % items.length);
-          const startIndex = handle.findItemIndex(handle.scrollOffset);
-          if (startIndex && startIndex === selectedIndex()) {
-            virtualHandle()?.scrollToIndex(selectedIndex() - 1, {
-              align: 'center',
-            });
-          }
-        } else {
-          setSelectedIndex((prev) => (prev + 1) % items.length);
-          const handle = virtualHandle();
-          if (!handle) break;
-          const endIndex = handle.findItemIndex(
-            handle.scrollOffset + handle.viewportSize
-          );
-          if (endIndex && endIndex === selectedIndex()) {
-            virtualHandle()?.scrollToIndex(selectedIndex() + 1, {
-              align: 'center',
-            });
-          }
-        }
-        break;
-
-      case 'Enter':
-        e.preventDefault();
-        e.stopPropagation();
-        if (selectedItem) {
-          insertEmoji(selectedItem.emoji);
-        } else {
-          props.editor.dispatchCommand(CLOSE_EMOJI_SEARCH_COMMAND, undefined);
-        }
-        break;
-    }
-  };
-
-  onMount(() => {
-    document.addEventListener('keydown', handleKeyDown, { capture: true });
-    onCleanup(() => {
-      document.removeEventListener('keydown', handleKeyDown, { capture: true });
-    });
-  });
-  const focusOut = () => {
+  const closeMenu = () => {
     props.editor.dispatchCommand(CLOSE_EMOJI_SEARCH_COMMAND, undefined);
     props.menu.setIsOpen(false);
+  };
+
+  const scrollToIndex = (index: number) => {
+    virtualHandle()?.scrollToIndex(index, { align: 'nearest' });
+  };
+
+  useMenuKeyboardNavigation({
+    isActive: () => props.menu.isOpen(),
+    onUp: () => {
+      const items = emojiOptions();
+      const newIndex = (selectedIndex() - 1 + items.length) % items.length;
+      setSelectedIndex(newIndex);
+      scrollToIndex(newIndex);
+    },
+    onDown: () => {
+      const items = emojiOptions();
+      const newIndex = (selectedIndex() + 1) % items.length;
+      setSelectedIndex(newIndex);
+      scrollToIndex(newIndex);
+    },
+    onLeft: () => {
+      // block horizontal arrows
+    },
+    onRight: () => {
+      // block horizontal arrows
+    },
+    onSelect: () => {
+      const items = emojiOptions();
+      const selectedItem = items[selectedIndex()];
+      if (selectedItem) {
+        insertEmoji(selectedItem.emoji);
+      } else {
+        closeMenu();
+      }
+    },
+    onClose: closeMenu,
+  });
+
+  const focusOut = () => {
+    closeMenu();
   };
   onMount(() => {
     document.addEventListener('focusout', focusOut);
@@ -259,8 +210,7 @@ export function EmojiMenu(props: EmojiMenuProps) {
             useBlockBoundary: props.useBlockBoundary,
           }}
           use:clickOutside={() => {
-            props.editor.dispatchCommand(CLOSE_EMOJI_SEARCH_COMMAND, undefined);
-            props.menu.setIsOpen(false);
+            closeMenu();
           }}
           ref={menuRef}
         >
