@@ -2693,6 +2693,7 @@ dependencies = [
  "macro_db_migrator",
  "macro_entrypoint",
  "macro_env",
+ "macro_env_var",
  "macro_middleware",
  "macro_project_utils",
  "macro_share_permissions",

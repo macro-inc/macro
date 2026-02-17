@@ -4,7 +4,7 @@ use comms::domain::service::ChannelServiceImpl;
 use comms::outbound::http::user_repo::UserRepoImpl;
 use comms::outbound::postgres::comms_repo::PgCommsRepo;
 use comms_service_client::CommsServiceClient;
-use config::{Config, Environment};
+use config::{Config, EnvVars, Environment};
 use document_cognition_service_client::DocumentCognitionServiceClient;
 use document_storage_service_client::DocumentStorageServiceClient;
 use email::domain::service::EmailServiceImpl;
@@ -38,7 +38,8 @@ async fn main() -> anyhow::Result<()> {
     MacroEntrypoint::default().init();
 
     // Parse our configuration from the environment.
-    let config = Config::from_env().context("failed to parse config from environment")?;
+    let config = Config::from_env(EnvVars::unwrap_new())
+        .context("failed to parse config from environment")?;
 
     tracing::info!("initialized config");
 
@@ -173,11 +174,23 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("initialized soup service");
 
     // Initialize Redis client for stream service
-    let redis_client =
-        redis::Client::open(config.redis_url.as_str()).context("failed to create redis client")?;
-    let stream_repo = RedisStreamRepo::new(redis_client)
+    let redis_client = Arc::new(
+        redis::Client::open(config.redis_host.as_ref())
+            .inspect(|client| {
+                client
+                    .get_connection()
+                    .map(|_| tracing::trace!("initialized redis connection"))
+                    .inspect_err(|e| {
+                        tracing::error!(error=?e, "failed to connect to redis");
+                    })
+                    .expect("redis connetion required");
+            })
+            .context("failed to connect to redis")?,
+    );
+
+    let stream_repo = RedisStreamRepo::new((*redis_client).clone())
         .await
-        .map_err(|e| anyhow::anyhow!("failed to create stream repo: {}", e))?
+        .context("failed to create stream repo")?
         .obj();
 
     tracing::info!("initialized stream repo");
