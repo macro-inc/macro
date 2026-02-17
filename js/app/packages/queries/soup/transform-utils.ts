@@ -238,6 +238,7 @@ export const useSearchResponseItemMapper = () => {
           done: !result.inbox_visible,
           participants,
           search,
+          snippet: result.snippet ?? undefined,
         };
       }
       case 'chat': {
