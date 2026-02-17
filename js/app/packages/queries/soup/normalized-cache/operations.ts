@@ -304,7 +304,12 @@ export function optimisticUpdateSoupItemUpdatedAt(
   if (!current || current.tag !== tag) return;
 
   if (current.tag === 'channel') {
-    if (!shouldUpdateOptimisticTimestamp(current.data.channel.updated_at, updatedAt))
+    if (
+      !shouldUpdateOptimisticTimestamp(
+        current.data.channel.updated_at,
+        updatedAt
+      )
+    )
       return;
 
     optimisticUpdateSoupEntity({

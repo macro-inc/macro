@@ -60,7 +60,10 @@ function mockDocumentItem(id: string): SoupApiItem {
   } as unknown as SoupApiItem;
 }
 
-function mockDocumentItemWithUpdatedAt(id: string, updatedAt: string): SoupApiItem {
+function mockDocumentItemWithUpdatedAt(
+  id: string,
+  updatedAt: string
+): SoupApiItem {
   return {
     tag: 'document',
     data: { id, title: 'doc', updatedAt },
@@ -76,7 +79,10 @@ function mockChannelItem(id: string): SoupApiItem {
   } as unknown as SoupApiItem;
 }
 
-function mockChannelItemWithUpdatedAt(id: string, updatedAt: string): SoupApiItem {
+function mockChannelItemWithUpdatedAt(
+  id: string,
+  updatedAt: string
+): SoupApiItem {
   return {
     tag: 'channel',
     data: { channel: { id, name: 'ch', updated_at: updatedAt } },
