@@ -258,7 +258,7 @@ export const createSearchState = ({
   const freshSearch = createFreshSearch<EntityData>(
     {
       useViewedAt: true,
-      channelBoost: 1.5,
+      channelBoost: 3,
       fuzzyWeight: 0.7,
       timeWeight: 0.3,
       minFuzzyThreshold: 0.1,
