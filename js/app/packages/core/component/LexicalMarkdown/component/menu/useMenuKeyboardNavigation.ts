@@ -1,34 +1,22 @@
 import { onCleanup, onMount } from 'solid-js';
 
 export type MenuKeyboardHandlers = {
-  /**
-   * Called when the user navigates up (ArrowUp, Ctrl+K, Ctrl+P, Shift+Tab)
-   */
+  /** Called when the user navigates up (ArrowUp, Ctrl+K, Ctrl+P, Shift+Tab) */
   onUp?: (e: KeyboardEvent) => void;
 
-  /**
-   * Called when the user navigates down (ArrowDown, Ctrl+J, Ctrl+N, Tab)
-   */
+  /** Called when the user navigates down (ArrowDown, Ctrl+J, Ctrl+N, Tab) */
   onDown?: (e: KeyboardEvent) => void;
 
-  /**
-   * Called when the user navigates left (ArrowLeft)
-   */
+  /** Called when the user navigates left (ArrowLeft) */
   onLeft?: (e: KeyboardEvent) => void;
 
-  /**
-   * Called when the user navigates right (ArrowRight)
-   */
+  /** Called when the user navigates right (ArrowRight) */
   onRight?: (e: KeyboardEvent) => void;
 
-  /**
-   * Called when the user confirms selection (Enter)
-   */
+  /** Called when the user confirms selection (Enter) */
   onSelect?: (e: KeyboardEvent) => void;
 
-  /**
-   * Called when the user cancels/closes (Escape)
-   */
+  /** Called when the user cancels/closes (Escape) */
   onClose?: (e: KeyboardEvent) => void;
 
   /**
@@ -37,15 +25,11 @@ export type MenuKeyboardHandlers = {
    */
   onSpace?: (e: KeyboardEvent) => boolean;
 
-  /**
-   * Called for any key that doesn't match a navigation handler.
-   * Useful for resetting state like escape-space tracking.
-   */
+  /** Called for any key that doesn't match a navigation handler. */
   onOtherKey?: (e: KeyboardEvent) => void;
 
   /**
    * Guard function - if returns false, no handlers are called.
-   * Useful for checking if menu is open.
    */
   isActive?: () => boolean;
 
@@ -188,21 +172,6 @@ export function createMenuKeyboardNavigation(handlers: MenuKeyboardHandlers): {
   return { handleKeyDown };
 }
 
-/**
- * Creates and automatically registers a keyboard navigation handler.
- * Cleans up the event listener when the component unmounts.
- *
- * @example
- * ```ts
- * useMenuKeyboardNavigation({
- *   isActive: () => menuOpen(),
- *   onUp: () => setSelectedIndex(i => Math.max(0, i - 1)),
- *   onDown: () => setSelectedIndex(i => Math.min(items.length - 1, i + 1)),
- *   onSelect: () => selectCurrentItem(),
- *   onClose: () => setMenuOpen(false),
- * });
- * ```
- */
 export function useMenuKeyboardNavigation(handlers: MenuKeyboardHandlers): {
   handleKeyDown: (e: KeyboardEvent) => void;
 } {

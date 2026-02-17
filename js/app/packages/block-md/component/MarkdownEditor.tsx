@@ -975,6 +975,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
           editor={editor}
           menu={mentionsMenuOperations}
           useBlockBoundary={true}
+          showOpenTabs
         />
 
         <ActionMenu editor={editor} menu={actionsMenuOperations} />

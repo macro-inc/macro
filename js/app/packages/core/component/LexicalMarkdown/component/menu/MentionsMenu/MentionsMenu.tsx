@@ -1,6 +1,7 @@
 import type { BlockName } from '@core/block';
 import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
 import { SUPPORTED_CHAT_ATTACHMENT_BLOCKS } from '@core/component/AI/constant/fileType';
+
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import { useQuickAccess, type EntityItem } from '@core/context/quickAccess';
 import clickOutside from '@core/directive/clickOutside';
@@ -10,13 +11,11 @@ import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import type { EmailEntity } from '@entity';
 import { globalSplitManager } from 'app/signal/splitLayout';
 import type { LexicalEditor } from 'lexical';
-import type { List } from 'lodash';
 import {
   type Accessor,
   createEffect,
   createSignal,
   For,
-  type JSXElement,
   onCleanup,
   onMount,
   Show,
@@ -24,7 +23,7 @@ import {
   untrack,
 } from 'solid-js';
 import { createLazyMemo } from '@solid-primitives/memo';
-import { Dynamic } from 'solid-js/web';
+
 import { floatWithElement } from '../../../directive/floatWithElement';
 import { floatWithSelection } from '../../../directive/floatWithSelection';
 import { CLOSE_INLINE_SEARCH_COMMAND } from '../../../plugins';
@@ -64,6 +63,8 @@ export type MentionsMenuProps = {
   onEmailMention?: (item: EmailEntity) => void;
   disableMentionTracking?: boolean;
   useSnapshotForDocuments?: boolean;
+  /** whether to show open tabs as a bucket in the menu */
+  showOpenTabs?: boolean;
 };
 
 export function MentionsMenu(props: MentionsMenuProps) {
@@ -116,8 +117,8 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     );
   });
 
-  // Get open tabs from split manager (used for potential future bucket)
-  const _openTabs = createLazyMemo(() => {
+  // Get open tabs from split manager
+  const openTabs = createLazyMemo(() => {
     const splitManager = globalSplitManager();
     if (!splitManager) return [];
 
@@ -159,7 +160,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
 
   const bucketConfigs = createLazyMemo((): BucketConfig[] => {
-    return [
+    const buckets: BucketConfig[] = [
       {
         id: 'users',
         label: 'People & Groups',
@@ -190,7 +191,18 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         getData: () => dates() ?? [],
         getFullCount: () => dates()?.length ?? 0,
       },
-    ].filter((bucket) => bucket.getFullCount() > 0);
+    ];
+
+    if (props.showOpenTabs) {
+      buckets.unshift({
+        id: 'openTabs',
+        label: 'Open Tabs',
+        getData: () => openTabs() ?? [],
+        getFullCount: () => openTabs()?.length ?? 0,
+      });
+    }
+
+    return buckets.filter((bucket) => bucket.getFullCount() > 0);
   });
 
   const controller = useMentionsMenuController(bucketConfigs, {
@@ -336,137 +348,36 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
   const hasOnlyOneCategory = controller.hasOnlyOneCategory;
 
-  const inner = createLazyMemo(() => {
-    const currentViewAllMode = controller.viewAllMode();
+  const viewAllCategoryLabel = () => {
+    const mode = controller.viewAllMode();
+    if (!mode) return 'Items';
+    const bucket = bucketConfigs().find((b) => b.id === mode);
+    return bucket?.label || 'Items';
+  };
 
-    if (currentViewAllMode) {
-      const allItems = controller.combinedItems();
-      const totalLength = () => allItems.length;
-
-      const renderViewAllOptions = createLazyMemo(() => {
-        const bucket = bucketConfigs().find((b) => b.id === currentViewAllMode);
-        const categoryLabel = bucket?.label || 'Items';
-
-        return (
-          <>
-            <div class="px-2 pb-2">
-              <div class="flex items-center justify-between">
-                <span class="text-xs font-medium text-ink-muted">
-                  {categoryLabel}
-                </span>
-                <button
-                  type="button"
-                  class="text-xs font-medium text-ink-muted hover:text-ink hover:underline"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                  }}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleBackToAll();
-                  }}
-                >
-                  ←{' '}
-                  {hasOnlyOneCategory()
-                    ? 'Back to summary'
-                    : 'Back to everything'}
-                </button>
-              </div>
-            </div>
-            <div class="max-h-64 overflow-y-auto scrollbar-hidden">
-              <For each={allItems}>
-                {(item, i) => (
-                  <MentionsMenuItem
-                    item={item}
-                    index={i()}
-                    selected={i() === controller.selectedIndex()}
-                    itemAction={itemAction}
-                    setIndex={setSelectedIndexFromMouse}
-                    setOpen={setMenuOpen}
-                  />
-                )}
-              </For>
-            </div>
-          </>
-        );
-      });
-
-      return (
-        <Show
-          when={totalLength() > 0}
-          fallback={<div class="px-2 text-ink-extra-muted">No results</div>}
-        >
-          {renderViewAllOptions()}
-        </Show>
-      );
-    }
-
-    // ------ NORMAL MODE ------------------------------------------------------
+  const visibleBuckets = () => {
     const currentBins = controller.bins();
-    const totalLength = () => controller.combinedItems().length;
+    const seenIds = new Set<string>();
+    let cumulativeIndex = 0;
 
-    const RenderOptions = () => {
-      const options: JSXElement[] = [];
-      let cumulativeIndex = 0;
-
-      bucketConfigs().forEach((config) => {
+    return bucketConfigs()
+      .filter((config) => (currentBins[config.id] || 0) > 0)
+      .map((config) => {
         const bucketLimit = currentBins[config.id] || 0;
-        if (bucketLimit === 0) return;
+        const bucketItems: ReturnType<typeof config.getData> = [];
 
-        const bucketItems = config.getData().slice(0, bucketLimit);
+        for (const item of config.getData()) {
+          if (bucketItems.length >= bucketLimit) break;
+          if (seenIds.has(item.id)) continue;
+          seenIds.add(item.id);
+          bucketItems.push(item);
+        }
+
         const startIndex = cumulativeIndex;
-
-        options.push(
-          <ItemBin
-            label={config.label}
-            binType={config.id}
-            totalCount={config.getFullCount()}
-            showingCount={bucketItems.length}
-            onViewAll={handleViewAll}
-            isSelected={controller.selectedCategory() === config.id}
-          >
-            <For each={bucketItems}>
-              {(item, i) => (
-                <MentionsMenuItem
-                  item={item}
-                  index={startIndex + i()}
-                  selected={startIndex + i() === controller.selectedIndex()}
-                  itemAction={itemAction}
-                  setIndex={setSelectedIndexFromMouse}
-                  setOpen={setMenuOpen}
-                />
-              )}
-            </For>
-          </ItemBin>
-        );
-
         cumulativeIndex += bucketItems.length;
+        return { config, bucketItems, startIndex };
       });
-
-      return options.map(
-        (option: JSXElement, index: number, array: List<JSXElement>) => (
-          <>
-            {option}
-            <Show when={index < array.length - 1}>
-              <div class="w-full mt-4 border-b-1 border-edge mb-2" />
-            </Show>
-          </>
-        )
-      );
-    };
-
-    return (
-      <Show
-        when={totalLength() > 0}
-        fallback={<div class="px-2 text-ink-extra-muted">No results</div>}
-      >
-        <div>
-          <Dynamic component={RenderOptions} />
-        </div>
-      </Show>
-    );
-  });
+  };
 
   const clickOutsideHandler = (e: MouseEvent) => {
     e.stopPropagation();
@@ -503,7 +414,93 @@ function MentionsMenuInner(props: MentionsMenuProps) {
           }}
         >
           <ClippedPanel active tl class="py-2">
-            {inner()}
+            <Show
+              when={controller.combinedItems().length > 0}
+              fallback={<div class="px-2 text-ink-extra-muted">No results</div>}
+            >
+              <Show
+                when={controller.viewAllMode()}
+                fallback={
+                  <div>
+                    <For each={visibleBuckets()}>
+                      {(bucket, idx) => (
+                        <>
+                          <Show when={idx() > 0}>
+                            <div class="w-full mt-4 border-b-1 border-edge-muted mb-2" />
+                          </Show>
+                          <ItemBin
+                            label={bucket.config.label}
+                            binType={bucket.config.id}
+                            totalCount={bucket.config.getFullCount()}
+                            showingCount={bucket.bucketItems.length}
+                            onViewAll={handleViewAll}
+                            isSelected={
+                              controller.selectedCategory() === bucket.config.id
+                            }
+                          >
+                            <For each={bucket.bucketItems}>
+                              {(item, i) => (
+                                <MentionsMenuItem
+                                  item={item}
+                                  index={bucket.startIndex + i()}
+                                  selected={
+                                    bucket.startIndex + i() ===
+                                    controller.selectedIndex()
+                                  }
+                                  itemAction={itemAction}
+                                  setIndex={setSelectedIndexFromMouse}
+                                  setOpen={setMenuOpen}
+                                />
+                              )}
+                            </For>
+                          </ItemBin>
+                        </>
+                      )}
+                    </For>
+                  </div>
+                }
+              >
+                <div class="px-2 pb-2">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-medium text-ink-muted">
+                      {viewAllCategoryLabel()}
+                    </span>
+                    <button
+                      type="button"
+                      class="text-xs font-medium text-ink-muted hover:text-ink hover:underline"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleBackToAll();
+                      }}
+                    >
+                      ←{' '}
+                      {hasOnlyOneCategory()
+                        ? 'Back to summary'
+                        : 'Back to everything'}
+                    </button>
+                  </div>
+                </div>
+                <div class="max-h-64 overflow-y-auto scrollbar-hidden">
+                  <For each={controller.combinedItems()}>
+                    {(item, i) => (
+                      <MentionsMenuItem
+                        item={item}
+                        index={i()}
+                        selected={i() === controller.selectedIndex()}
+                        itemAction={itemAction}
+                        setIndex={setSelectedIndexFromMouse}
+                        setOpen={setMenuOpen}
+                      />
+                    )}
+                  </For>
+                </div>
+              </Show>
+            </Show>
           </ClippedPanel>
         </div>
       </ScopedPortal>

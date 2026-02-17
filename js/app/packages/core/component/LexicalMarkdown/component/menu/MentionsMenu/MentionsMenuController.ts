@@ -63,10 +63,22 @@ export class MentionsMenuController {
   rawBins = createLazyMemo((): MentionBins => {
     const buckets = this.buckets();
     if (!buckets) return {};
+
     const bins: MentionBins = {};
+    const seenIds = new Set<string>();
+
+    // Count items per bucket, excluding items already seen in earlier buckets
     buckets.forEach((config) => {
-      bins[config.id] = config.getFullCount();
+      let count = 0;
+      for (const item of config.getData()) {
+        if (!seenIds.has(item.id)) {
+          seenIds.add(item.id);
+          count++;
+        }
+      }
+      bins[config.id] = count;
     });
+
     return bins;
   });
 
@@ -79,17 +91,44 @@ export class MentionsMenuController {
     if (!buckets) return [];
 
     const currentViewAllMode = this.viewAllMode();
+    const seenIds = new Set<string>();
 
     if (currentViewAllMode) {
       const bucket = buckets.find((b) => b.id === currentViewAllMode);
-      return bucket ? bucket.getData() : [];
+      if (!bucket) return [];
+
+      // In view-all mode, still dedupe against items from earlier buckets
+      const bucketIndex = buckets.indexOf(bucket);
+      for (let i = 0; i < bucketIndex; i++) {
+        for (const item of buckets[i].getData()) {
+          seenIds.add(item.id);
+        }
+      }
+
+      return bucket.getData().filter((item) => {
+        if (seenIds.has(item.id)) return false;
+        seenIds.add(item.id);
+        return true;
+      });
     }
 
     const result: MentionItem[] = [];
+    const currentBins = this.bins();
+
     buckets.forEach((config) => {
-      const limit = this.bins()[config.id] || 0;
-      result.push(...config.getData().slice(0, limit));
+      const limit = currentBins[config.id] || 0;
+      if (limit === 0) return;
+
+      let added = 0;
+      for (const item of config.getData()) {
+        if (added >= limit) break;
+        if (seenIds.has(item.id)) continue;
+        seenIds.add(item.id);
+        result.push(item);
+        added++;
+      }
     });
+
     return result;
   });
 
