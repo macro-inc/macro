@@ -7,8 +7,9 @@ import { createSearchState } from '@app/component/next-soup/soup-view/create-sea
 import { sortEntitiesForSearch } from '@app/component/next-soup/soup-view/sort-options';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
 import { ENABLE_FEATURED_SEARCH_RESULTS } from '@core/constant/featureFlags';
+import { createFreshSearch } from '@core/util/freshSort';
 import type { EntityData, WithNotification, WithSearch } from '@entity';
-import { isWithNotification } from '@entity';
+import { isChannelEntity, isEmailEntity, isWithNotification } from '@entity';
 import { useNotificationsForEntity } from '@notifications';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import {
@@ -223,6 +224,20 @@ export const SoupViewContextProvider: FlowComponent<
     return transformed;
   };
 
+  const freshSearch = createFreshSearch<SoupEntity>(
+    {
+      useViewedAt: true,
+      channelBoost: 1.5,
+      fuzzyWeight: 0.7,
+      timeWeight: 0.3,
+      minFuzzyThreshold: 0.1,
+      commaSeparatedChannelMatch: true,
+    },
+    (item) => item.name,
+    (item) => isChannelEntity(item),
+    (item) => item
+  );
+
   const frozenFeaturedIds = (() => {
     const [frozen, setFrozen] = createSignal<string[]>([]);
     createRenderEffect(
@@ -233,15 +248,9 @@ export const SoupViewContextProvider: FlowComponent<
             setFrozen([]);
             return;
           }
-          const localIds = new Set(search.localFuzzyResults().map((e) => e.id));
-          const ids: string[] = [];
-          for (const e of baseEntities()) {
-            if (localIds.has(e.id)) {
-              ids.push(e.id);
-              if (ids.length >= FEATURED_COUNT) break;
-            }
-          }
-          setFrozen(ids);
+          const pool = baseEntities().filter((e) => !isEmailEntity(e));
+          const results = freshSearch(pool, query);
+          setFrozen(results.slice(0, FEATURED_COUNT).map((r) => r.item.id));
         }
       )
     );
@@ -252,18 +261,17 @@ export const SoupViewContextProvider: FlowComponent<
     const base = baseEntities();
     if (!ENABLE_FEATURED_SEARCH_RESULTS || !search.isSearching()) return base;
 
-    const featuredIdSet = new Set(frozenFeaturedIds());
-    if (featuredIdSet.size === 0) return base;
+    const featuredIds = frozenFeaturedIds();
+    if (featuredIds.length === 0) return base;
 
+    const entityMap = new Map(base.map((e) => [e.id, e]));
+    const featuredIdSet = new Set(featuredIds);
     const featured: SoupEntity[] = [];
-    const rest: SoupEntity[] = [];
-    for (const e of base) {
-      if (featuredIdSet.has(e.id)) {
-        featured.push(e);
-      } else {
-        rest.push(e);
-      }
+    for (const id of featuredIds) {
+      const e = entityMap.get(id);
+      if (e) featured.push(e);
     }
+    const rest = base.filter((e) => !featuredIdSet.has(e.id));
     return [...featured, ...rest];
   };
 
