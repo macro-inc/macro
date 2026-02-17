@@ -90,7 +90,7 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
         user_org_id: Option<i64>,
         entity_id: &str,
         entity_type: EntityType,
-    ) -> impl Future<Output = Result<EntityAccessReceipt, AccessError>>;
+    ) -> impl Future<Output = Result<EntityAccessReceipt, AccessError>> + Send;
 
     /// Get the access level a user has for an entity.
     ///

@@ -2895,12 +2895,15 @@ dependencies = [
 name = "documents"
 version = "0.1.0"
 dependencies = [
+ "ai",
  "anyhow",
+ "async-trait",
  "axum",
  "axum-extra",
  "chrono",
  "cloudfront_sign",
  "document_sub_type",
+ "dotenvy",
  "entity_access",
  "futures",
  "http-body-util",
@@ -2912,6 +2915,7 @@ dependencies = [
  "model-error-response",
  "model_user",
  "models_permissions",
+ "schemars",
  "serde",
  "serde_json",
  "sqlx",
