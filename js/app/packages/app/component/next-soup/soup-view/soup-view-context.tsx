@@ -294,7 +294,9 @@ export const SoupViewContextProvider: FlowComponent<
       },
     }),
     () => ({
-      enabled: !isSearchDisabled(),
+      enabled:
+        !isSearchDisabled() &&
+        trimmedSearchText() === debouncedSearchForService(),
     })
   );
 
@@ -372,6 +374,7 @@ export const SoupViewContextProvider: FlowComponent<
 
   const freshSearchResults = createMemo<EntityData[]>(() => {
     if (isSearchDisabled()) return [];
+    if (trimmedSearchText() !== debouncedSearchForService()) return [];
     if (searchQuery.isFetching && !searchQuery.isFetchingNextPage) return [];
     return searchQuery.data ?? [];
   });
@@ -392,8 +395,6 @@ export const SoupViewContextProvider: FlowComponent<
       const service = freshSearchResults();
 
       const merged: SoupEntity[] = [...service, ...local];
-
-      if (merged.length === 0) return prev;
 
       for (let i = 0; i < merged.length; i++) {
         const entity = merged[i];
