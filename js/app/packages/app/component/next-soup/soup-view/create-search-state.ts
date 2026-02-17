@@ -28,6 +28,7 @@ import { match } from 'ts-pattern';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 300;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
+const FEATURED_COUNT = 6;
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
@@ -243,6 +244,11 @@ export const createSearchState = ({
     return searchQuery.data ?? [];
   });
 
+  const featuredResults = createMemo(() => {
+    if (!isSearching()) return [];
+    return localFuzzyResults().slice(0, FEATURED_COUNT);
+  });
+
   return {
     searchText,
     setSearchText,
@@ -250,6 +256,7 @@ export const createSearchState = ({
     isSearchDisabled,
     localFuzzyResults,
     freshSearchResults,
+    featuredResults,
     itemsQuery,
     searchQuery,
   };

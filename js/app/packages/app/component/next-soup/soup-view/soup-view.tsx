@@ -178,6 +178,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     setSearchText,
     setQueryFilters,
     queryFilters,
+    featuredCount,
   } = useSoupView();
   const { getSplitCount } = useSplitLayout();
 
@@ -581,72 +582,86 @@ export const SoupViewList = (props: SoupViewListProps) => {
                     };
 
                     return (
-                      <EntityRow
-                        entityId={row.original.id}
-                        swipeLeftColor="bg-success"
-                        swipeLeftRevealedComponent={
-                          <CheckIcon class="size-8 text-panel" />
-                        }
-                      >
-                        <SoupEntityContextMenu
-                          entity={row.original}
-                          entityTimestamp={timestamp()}
+                      <>
+                        <Show when={i() === 0 && featuredCount() > 0}>
+                          <div class="px-3 py-1.5 text-xs text-text-muted font-medium">
+                            Top Matches
+                          </div>
+                        </Show>
+                        <Show
+                          when={i() === featuredCount() && featuredCount() > 0}
                         >
-                          <ListEntity
+                          <div class="px-3 py-1.5 text-xs text-text-muted font-medium border-t border-edge-muted mt-1">
+                            More Results
+                          </div>
+                        </Show>
+                        <EntityRow
+                          entityId={row.original.id}
+                          swipeLeftColor="bg-success"
+                          swipeLeftRevealedComponent={
+                            <CheckIcon class="size-8 text-panel" />
+                          }
+                        >
+                          <SoupEntityContextMenu
                             entity={row.original}
-                            timestamp={timestamp()}
-                            highlighted={
-                              panel.isPanelActive() && row.isFocused()
-                            }
-                            onMouseMove={() => {
-                              if (isKeypressActive()) return;
-                              if (soup.previewEntity()) return;
-                              soup.focus.set(row.original.id);
-                            }}
-                            showUnrollNotifications={
-                              soup.filters.isActive('signal') &&
-                              !soup.filters.isActive('noise')
-                            }
-                            checked={row.isSelected()}
-                            onChecked={(next: boolean, shiftKey: boolean) =>
-                              handleMultiSelectChecked({
-                                entity: row.original,
-                                entityIndex: i(),
-                                next,
-                                shiftKey: shiftKey ?? false,
-                              })
-                            }
-                            onClick={(event: MouseEvent) => {
-                              onEntityClick({
-                                type: 'entity',
-                                entity: row.original,
-                                event,
-                                location: undefined,
-                              });
-                            }}
-                            onProjectClick={(projectEntity, event) => {
-                              onEntityClick({
-                                type: 'project',
-                                projectEntity,
-                                entity: row.original,
-                                event,
-                                location: undefined,
-                              });
-                            }}
-                            onContentHitClick={(
-                              e: PointerEvent | MouseEvent,
-                              location?: SearchLocation
-                            ) => {
-                              onEntityClick({
-                                type: 'entity',
-                                entity: row.original,
-                                event: e,
-                                location,
-                              });
-                            }}
-                          />
-                        </SoupEntityContextMenu>
-                      </EntityRow>
+                            entityTimestamp={timestamp()}
+                          >
+                            <ListEntity
+                              entity={row.original}
+                              timestamp={timestamp()}
+                              highlighted={
+                                panel.isPanelActive() && row.isFocused()
+                              }
+                              onMouseMove={() => {
+                                if (isKeypressActive()) return;
+                                if (soup.previewEntity()) return;
+                                soup.focus.set(row.original.id);
+                              }}
+                              showUnrollNotifications={
+                                soup.filters.isActive('signal') &&
+                                !soup.filters.isActive('noise')
+                              }
+                              checked={row.isSelected()}
+                              onChecked={(next: boolean, shiftKey: boolean) =>
+                                handleMultiSelectChecked({
+                                  entity: row.original,
+                                  entityIndex: i(),
+                                  next,
+                                  shiftKey: shiftKey ?? false,
+                                })
+                              }
+                              onClick={(event: MouseEvent) => {
+                                onEntityClick({
+                                  type: 'entity',
+                                  entity: row.original,
+                                  event,
+                                  location: undefined,
+                                });
+                              }}
+                              onProjectClick={(projectEntity, event) => {
+                                onEntityClick({
+                                  type: 'project',
+                                  projectEntity,
+                                  entity: row.original,
+                                  event,
+                                  location: undefined,
+                                });
+                              }}
+                              onContentHitClick={(
+                                e: PointerEvent | MouseEvent,
+                                location?: SearchLocation
+                              ) => {
+                                onEntityClick({
+                                  type: 'entity',
+                                  entity: row.original,
+                                  event: e,
+                                  location,
+                                });
+                              }}
+                            />
+                          </SoupEntityContextMenu>
+                        </EntityRow>
+                      </>
                     );
                   }}
                 </SoupList>

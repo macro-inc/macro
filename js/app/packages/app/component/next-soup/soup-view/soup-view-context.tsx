@@ -6,6 +6,7 @@ import {
 import { createSearchState } from '@app/component/next-soup/soup-view/create-search-state';
 import { sortEntitiesForSearch } from '@app/component/next-soup/soup-view/sort-options';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
+import { ENABLE_FEATURED_SEARCH_RESULTS } from '@core/constant/featureFlags';
 import type { EntityData, WithNotification, WithSearch } from '@entity';
 import { isWithNotification } from '@entity';
 import { useNotificationsForEntity } from '@notifications';
@@ -53,6 +54,7 @@ interface SoupViewContextValues {
   searchText: Accessor<string>;
   setSearchText: (value: string) => void;
   isSearchDisabled: Accessor<boolean>;
+  featuredCount: Accessor<number>;
   rows: Accessor<SoupRow[]>;
   queryFilters: Accessor<SoupItemsQueryFilters>;
   setQueryFilters: Setter<SoupItemsQueryFilters>;
@@ -216,8 +218,27 @@ export const SoupViewContextProvider: FlowComponent<
       });
     }
 
+    if (ENABLE_FEATURED_SEARCH_RESULTS && search.isSearching()) {
+      const featuredIds = new Set(search.featuredResults().map((e) => e.id));
+      const featured = transformed.filter((e) => featuredIds.has(e.id));
+      const rest = transformed.filter((e) => !featuredIds.has(e.id));
+      transformed = [...featured, ...rest];
+    }
+
     return transformed;
   };
+
+  const featuredCount = createMemo(() => {
+    if (!ENABLE_FEATURED_SEARCH_RESULTS) return 0;
+    if (!search.isSearching()) return 0;
+    const featuredIds = new Set(search.featuredResults().map((e) => e.id));
+    let count = 0;
+    for (const e of entities()) {
+      if (!featuredIds.has(e.id)) break;
+      count++;
+    }
+    return count;
+  });
 
   const rows = createMemo(() => {
     return entities().map((e) => attachMethods(e));
@@ -257,6 +278,7 @@ export const SoupViewContextProvider: FlowComponent<
     searchText: search.searchText,
     setSearchText: search.setSearchText,
     isSearchDisabled: search.isSearchDisabled,
+    featuredCount,
     queryFilters,
     setQueryFilters,
   };
