@@ -13,6 +13,9 @@ ai_tools = [
     "dep:ai",
     "dep:async-trait",
     "dep:schemars",
+    "dep:lexical_client",
+    "dep:model_file_type",
+    "dep:reqwest",
     "ports",
     "outbound"
 ]
@@ -64,6 +67,9 @@ urlencoding = { workspace = true }
 ai = { path = "../ai", optional = true }
 async-trait = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
+lexical_client = { path = "../lexical_client", optional = true }
+model_file_type = { path = "../model_file_type", optional = true }
+reqwest = { workspace = true, optional = true }
 
 [dev-dependencies]
 http-body-util = { workspace = true }

@@ -25,6 +25,7 @@ use documents::inbound::toolset::{DocumentToolContext, document_toolset};
 use documents::outbound::pg_document_repo::PgDocumentRepo;
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
+use lexical_client::LexicalClient;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use std::sync::Arc;
@@ -42,6 +43,8 @@ async fn main() {
     let user_id: MacroUserIdStr<'static> = usr.try_into().expect("valid user id macro|<email>");
 
     let sync_service_url = std::env::var("SYNC_SERVICE_URL").expect("SYNC_SERVICE_URL must be set");
+    let lexical_service_url =
+        std::env::var("LEXICAL_SERVICE_URL").expect("LEXICAL_SERVICE_URL must be set");
     let sync_service_auth_key =
         std::env::var("SYNC_SERVICE_AUTH_KEY").expect("SYNC_SERVICE_AUTH_KEY must be set");
 
@@ -77,11 +80,14 @@ async fn main() {
             presigned_url_expiry_seconds: 840,
             browser_cache_expiry_seconds: 900,
         },
-        SyncServiceClient::new(sync_service_auth_key, sync_service_url),
+        SyncServiceClient::new(sync_service_auth_key.clone(), sync_service_url),
         pool,
     );
 
-    let document_tool_context = DocumentToolContext::new(documents_service, entity_access_service);
+    let lexical_client = LexicalClient::new(sync_service_auth_key, lexical_service_url);
+
+    let document_tool_context =
+        DocumentToolContext::new(documents_service, entity_access_service, lexical_client);
 
     let toolset = document_toolset();
 

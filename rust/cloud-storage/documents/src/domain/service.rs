@@ -402,4 +402,14 @@ impl<R: DocumentRepo> DocumentService for DocumentServiceImpl<R> {
                 }
             })
     }
+
+    async fn get_document_text(
+        &self,
+        entity_access_receipt: EntityAccessReceipt,
+    ) -> Result<String, DocumentError> {
+        self.repo
+            .get_document_text(&entity_access_receipt.entity().entity_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))
+    }
 }
