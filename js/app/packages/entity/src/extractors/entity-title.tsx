@@ -8,7 +8,13 @@ import { isSearchEntity } from '../types/search';
 
 function extractRawTitle(entity: EntityData): string {
   return match(entity)
-    .with({ type: 'document' }, (e) => formatDocumentName(e.name))
+    .with({ type: 'document', subType: { type: 'task' } }, (e) =>
+      formatDocumentName(e.name)
+    )
+    .with({ type: 'document', fileType: 'md' }, (e) =>
+      formatDocumentName(e.name)
+    )
+    .with({ type: 'document' }, (e) => formatDocumentName(e.name, e.fileType))
     .with({ type: 'project' }, (e) => e.name)
     .with({ type: 'channel' }, (e) => e.name)
     .with({ type: 'email' }, (e) => e.name || '(No Subject)')
