@@ -23,6 +23,7 @@ import {
   createMemo,
   createRenderEffect,
   createSignal,
+  on,
 } from 'solid-js';
 import { match } from 'ts-pattern';
 
@@ -244,18 +245,30 @@ export const createSearchState = ({
     return searchQuery.data ?? [];
   });
 
-  const featuredResults = createMemo(() => {
-    if (!isSearching()) return [];
-    const seen = new Set<string>();
-    const results: EntityData[] = [];
-    for (const item of localFuzzyResults()) {
-      if (seen.has(item.id)) continue;
-      seen.add(item.id);
-      results.push(item);
-      if (results.length >= FEATURED_COUNT) break;
-    }
-    return results;
-  });
+  const featuredResults = (() => {
+    const [frozen, setFrozen] = createSignal<EntityData[]>([]);
+    createRenderEffect(
+      on(
+        () => [isSearching(), debouncedSearchForLocal()] as const,
+        ([searching, query]) => {
+          if (!searching || !query) {
+            setFrozen([]);
+            return;
+          }
+          const seen = new Set<string>();
+          const results: EntityData[] = [];
+          for (const item of localFuzzyResults()) {
+            if (seen.has(item.id)) continue;
+            seen.add(item.id);
+            results.push(item);
+            if (results.length >= FEATURED_COUNT) break;
+          }
+          setFrozen(results);
+        }
+      )
+    );
+    return frozen;
+  })();
 
   return {
     searchText,
