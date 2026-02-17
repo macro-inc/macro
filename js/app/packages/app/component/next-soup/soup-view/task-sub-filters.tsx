@@ -1,9 +1,4 @@
-import {
-  type Component,
-  createMemo,
-  For,
-  Show,
-} from 'solid-js';
+import { type Component, createMemo, For, Show } from 'solid-js';
 import { Popover } from '@kobalte/core/popover';
 import { Hotkey } from '@core/component/Hotkey';
 import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
@@ -146,7 +141,8 @@ export const TaskStatusDropdown: Component<DropdownProps> = (props) => {
                         }`}
                         onClick={() => selectOption(option.value)}
                         onMouseEnter={() => {
-                          if (!dropdown.keyboardMode()) dropdown.setSelectedIndex(index());
+                          if (!dropdown.keyboardMode())
+                            dropdown.setSelectedIndex(index());
                         }}
                       >
                         <PropertyValueIcon optionId={option.value} />
@@ -154,7 +150,9 @@ export const TaskStatusDropdown: Component<DropdownProps> = (props) => {
                           <p class="text-sm font-medium">{option.label}</p>
                         </div>
                         <div class="flex items-center gap-2 flex-shrink-0">
-                          <Show when={dropdown.shouldShowHotkeys() && index() < 9}>
+                          <Show
+                            when={dropdown.shouldShowHotkeys() && index() < 9}
+                          >
                             <div class="text-[0.625rem] px-1.5 py-0.5 border border-edge-muted text-ink-muted font-mono rounded-xs">
                               <Hotkey shortcut={`${index() + 1}`} />
                             </div>
@@ -226,7 +224,8 @@ export const TaskAssigneeDropdown: Component<DropdownProps> = (props) => {
   const activeAssigneeLabel = () => {
     if (!assigneeFilter()) return 'Assignee';
     const contact = contacts().find((c) => c.id === assigneeFilter());
-    if (contact && contact.id === userId()) return contact.name ? `${contact.name} (me)` : 'Me';
+    if (contact && contact.id === userId())
+      return contact.name ? `${contact.name} (me)` : 'Me';
     return contact?.name || assigneeFilter()!;
   };
 
@@ -314,7 +313,8 @@ export const TaskAssigneeDropdown: Component<DropdownProps> = (props) => {
                         }`}
                         onClick={() => selectContact(contact.id)}
                         onMouseEnter={() => {
-                          if (!dropdown.keyboardMode()) dropdown.setSelectedIndex(index());
+                          if (!dropdown.keyboardMode())
+                            dropdown.setSelectedIndex(index());
                         }}
                       >
                         <UserIcon
@@ -332,7 +332,9 @@ export const TaskAssigneeDropdown: Component<DropdownProps> = (props) => {
                           </p>
                         </div>
                         <div class="flex items-center gap-2 flex-shrink-0">
-                          <Show when={dropdown.shouldShowHotkeys() && index() < 9}>
+                          <Show
+                            when={dropdown.shouldShowHotkeys() && index() < 9}
+                          >
                             <div class="text-[0.625rem] px-1.5 py-0.5 border border-edge-muted text-ink-muted font-mono rounded-xs">
                               <Hotkey shortcut={`${index() + 1}`} />
                             </div>

@@ -1,8 +1,4 @@
-import {
-  type Accessor,
-  createEffect,
-  createSignal,
-} from 'solid-js';
+import { type Accessor, createEffect, createSignal } from 'solid-js';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 
 type UseDropdownSearchOptions = {

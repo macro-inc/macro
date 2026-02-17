@@ -228,15 +228,6 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                 }
                 value={dropdown.searchQuery()}
                 onInput={(e) => dropdown.setSearchQuery(e.currentTarget.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (props.onClose) {
-                      props.onClose();
-                    }
-                  }
-                }}
                 placeholder={`${props.property.isMultiSelect ? 'Add' : 'Change'} ${props.property.displayName.toLowerCase()}...`}
               />
             </div>
@@ -256,7 +247,9 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                 >
                   <div class="p-1">
                     <AddOptionButton
-                      isSelected={dropdown.selectedIndex() === filteredOptions().length}
+                      isSelected={
+                        dropdown.selectedIndex() === filteredOptions().length
+                      }
                     />
                   </div>
                 </Show>
@@ -280,7 +273,9 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                         fallback={
                           <div
                             class={`flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 ${
-                              index() === dropdown.selectedIndex() ? 'bg-hover' : ''
+                              index() === dropdown.selectedIndex()
+                                ? 'bg-hover'
+                                : ''
                             }`}
                             onClick={() => {
                               if (item.option) {
@@ -307,7 +302,11 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                               </p>
                             </div>
                             <div class="flex items-center gap-2 flex-shrink-0">
-                              <Show when={dropdown.shouldShowHotkeys() && index() < 9}>
+                              <Show
+                                when={
+                                  dropdown.shouldShowHotkeys() && index() < 9
+                                }
+                              >
                                 <div class="text-[0.625rem] px-1.5 py-0.5 border border-edge-muted text-ink-muted font-mono rounded-xs">
                                   <Hotkey shortcut={`${index() + 1}`} />
                                 </div>
