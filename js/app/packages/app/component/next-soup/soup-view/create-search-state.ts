@@ -175,13 +175,21 @@ export const createSearchState = ({
     }
   );
 
+  const emailExcludedQueryFilters = createMemo((): SoupItemsQueryFilters => {
+    return {
+      ...queryFilters(),
+      email_filters: {
+        recipients: [NIL_UUID],
+      },
+    };
+  });
   const itemsQuery = useSoupItemsQuery(
     () => ({
       params: {
         limit: 100,
         sort_method: soup.sort.active()[0]?.id ?? 'updated_at',
       },
-      body: { ...queryFilters(), emailView: 'all' },
+      body: { ...emailExcludedQueryFilters() },
     }),
     () => ({
       enabled: isSearchDisabled(),
@@ -271,8 +279,7 @@ export const createSearchState = ({
             setFrozen([]);
             return;
           }
-          const nonEmail = pool().filter((e) => !isEmailEntity(e));
-          const results = freshSearch(nonEmail, query);
+          const results = freshSearch(pool(), query);
           setFrozen(results.slice(0, FEATURED_COUNT).map((r) => r.item.id));
         }
       )
