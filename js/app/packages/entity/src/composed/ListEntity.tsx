@@ -403,7 +403,7 @@ export function ListEntity(props: ListEntityProps) {
             <Entity.Search.ContentHits
               entity={props.entity}
               onClick={props.onContentHitClick}
-              visibleCount={1}
+              visibleCount={0}
             />
           </div>
         </div>
