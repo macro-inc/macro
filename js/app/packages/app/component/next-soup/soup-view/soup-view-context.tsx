@@ -294,9 +294,7 @@ export const SoupViewContextProvider: FlowComponent<
       },
     }),
     () => ({
-      enabled:
-        !isSearchDisabled() &&
-        trimmedSearchText() === debouncedSearchForService(),
+      enabled: !isSearchDisabled(),
     })
   );
 
@@ -374,7 +372,6 @@ export const SoupViewContextProvider: FlowComponent<
 
   const freshSearchResults = createMemo<EntityData[]>(() => {
     if (isSearchDisabled()) return [];
-    if (trimmedSearchText() !== debouncedSearchForService()) return [];
     if (searchQuery.isFetching && !searchQuery.isFetchingNextPage) return [];
     return searchQuery.data ?? [];
   });
