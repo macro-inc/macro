@@ -25,10 +25,7 @@ export const matchesTaskSubFilters = (
     return true;
   }
 
-  if (
-    statusFilter &&
-    getTaskStatusOptionId(taskEntity) !== statusFilter
-  ) {
+  if (statusFilter && getTaskStatusOptionId(taskEntity) !== statusFilter) {
     return false;
   }
 
