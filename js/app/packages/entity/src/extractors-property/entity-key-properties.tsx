@@ -17,7 +17,10 @@ import {
   type EntityWithProperties,
   isTaskEntity,
 } from '../types/entity';
-import { getSortedKeyProperties, soupPropertyToProperty } from './property-helpers';
+import {
+  getSortedKeyProperties,
+  soupPropertyToProperty,
+} from './property-helpers';
 
 function getEntityType(entity: EntityData): EntityType {
   return match(entity)

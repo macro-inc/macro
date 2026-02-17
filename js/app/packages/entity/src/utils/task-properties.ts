@@ -22,7 +22,9 @@ const getTaskPropertyByDefinitionId = (
 };
 
 const isStringArray = (value: unknown): value is string[] => {
-  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+  return (
+    Array.isArray(value) && value.every((item) => typeof item === 'string')
+  );
 };
 
 const isEntityReferenceArray = (
@@ -59,7 +61,10 @@ export const getTaskAssigneeIds = (
   }
 
   const value = assigneesProperty.value;
-  if (value.type !== 'EntityReference' || !isEntityReferenceArray(value.value)) {
+  if (
+    value.type !== 'EntityReference' ||
+    !isEntityReferenceArray(value.value)
+  ) {
     return [];
   }
 
