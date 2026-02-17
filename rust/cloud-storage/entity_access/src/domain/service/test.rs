@@ -1,7 +1,7 @@
 //! Unit tests for the EntityAccessService.
 
 use super::*;
-use crate::domain::models::ParticipantRole;
+use crate::domain::models::{EntityAccessAuth, ParticipantRole};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -484,4 +484,101 @@ async fn test_check_access_with_none_user_id_and_no_access() {
         .await;
 
     assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+// --- generate_entity_access_receipt tests ---
+
+#[tokio::test]
+async fn test_generate_receipt_document_with_access() {
+    let repo = MockRepo::new().with_document_access(AccessLevel::Edit);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let receipt = service
+        .generate_entity_access_receipt(&user_id, None, "doc-1", EntityType::Document)
+        .await
+        .unwrap();
+
+    assert!(matches!(receipt.auth(), EntityAccessAuth::Authenticated(_)));
+    assert_eq!(receipt.entity().entity_id, "doc-1");
+    assert!(matches!(receipt.entity().entity_type, EntityType::Document));
+    assert!(matches!(
+        receipt.entity_permission(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Edit
+        }
+    ));
+}
+
+#[tokio::test]
+async fn test_generate_receipt_document_no_access_returns_unauthorized() {
+    let repo = MockRepo::new();
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .generate_entity_access_receipt(&user_id, None, "doc-1", EntityType::Document)
+        .await;
+
+    assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn test_generate_receipt_channel_with_role() {
+    let repo = MockRepo::new().with_channel_role(ChannelRoleResult::Role(ParticipantRole::Admin));
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let receipt = service
+        .generate_entity_access_receipt(
+            &user_id,
+            None,
+            "11111111-1111-1111-1111-111111111111",
+            EntityType::Channel,
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(receipt.auth(), EntityAccessAuth::Authenticated(_)));
+    assert_eq!(
+        receipt.entity().entity_id,
+        "11111111-1111-1111-1111-111111111111"
+    );
+    assert!(matches!(
+        receipt.entity_permission(),
+        EntityPermission::ChannelRole {
+            role: ParticipantRole::Admin
+        }
+    ));
+}
+
+#[tokio::test]
+async fn test_generate_receipt_channel_not_found_returns_not_found() {
+    let repo = MockRepo::new().with_channel_role(ChannelRoleResult::NotFound);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .generate_entity_access_receipt(
+            &user_id,
+            None,
+            "11111111-1111-1111-1111-111111111111",
+            EntityType::Channel,
+        )
+        .await;
+
+    assert!(matches!(result, Err(AccessError::NotFound(_))));
+}
+
+#[tokio::test]
+async fn test_generate_receipt_unsupported_type_returns_bad_request() {
+    let repo = MockRepo::new();
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .generate_entity_access_receipt(&user_id, None, "email-1", EntityType::Email)
+        .await;
+
+    assert!(matches!(result, Err(AccessError::BadRequest(_))));
 }
