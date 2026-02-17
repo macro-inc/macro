@@ -4,7 +4,6 @@ import PlusIcon from '@icon/regular/plus.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import type * as schemas from '@service-properties/generated/zod';
 import {
-  createEffect,
   createMemo,
   createSignal,
   For,
@@ -18,7 +17,7 @@ import { formatOptionValue, useSearchInputFocus } from '../../../utils';
 import { ERROR_MESSAGES } from '../../../utils/errorHandling';
 import { PropertyValueIcon } from '../../propertyValue';
 import { OptionCheckBox } from './OptionCheckBox';
-import { useKeyPressed } from '@core/util/useKeyPressed';
+import { useDropdownSearch } from '@core/util/useDropdownSearch';
 
 type PropertyOption = z.infer<typeof schemas.getPropertyOptionsResponseItem>;
 
@@ -34,19 +33,53 @@ type SelectOptionsProps = {
 };
 
 export const PropertyOptionSelector = (props: SelectOptionsProps) => {
-  const [searchQuery, setSearchQuery] = createSignal('');
   const [isAddingOption, setIsAddingOption] = createSignal(false);
-  const [selectedIndex, setSelectedIndex] = createSignal(0);
-
-  const keyboardMode = useKeyPressed(100);
 
   let searchInputRef!: HTMLInputElement;
 
   const isOptionSelected = (value: string) =>
     props.selectedOptions().has(value);
 
+  const handleAddOption = async () => {
+    if (!props.onAddOption || !isValidNewOption()) return;
+
+    setIsAddingOption(true);
+    try {
+      await props.onAddOption(dropdown.searchQuery().trim());
+      dropdown.setSearchQuery('');
+    } catch (error) {
+      console.error(
+        'PropertyOptionsList.handleAddOption:',
+        error,
+        ERROR_MESSAGES.OPTION_ADD
+      );
+    } finally {
+      setIsAddingOption(false);
+    }
+  };
+
+  const handleSelectableItem = (idx: number) => {
+    const item = selectableItems()[idx];
+    if (item?.type === 'add') {
+      handleAddOption();
+    } else if (item?.type === 'option' && item.option) {
+      props.onToggleOption(item.option.id);
+      if (!props.property.isMultiSelect && props.onClose) {
+        props.onClose();
+      }
+    }
+  };
+
+  const dropdown = useDropdownSearch({
+    itemCount: () => selectableItems().length,
+    onSelect: handleSelectableItem,
+    onClose: () => {
+      if (props.onClose) props.onClose();
+    },
+  });
+
   const hasExactMatch = createMemo(() => {
-    const query = searchQuery().trim();
+    const query = dropdown.searchQuery().trim();
     if (!query) return false;
 
     return props.options.some((option) => {
@@ -56,7 +89,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
   });
 
   const isValidNewOption = createMemo(() => {
-    const query = searchQuery().trim();
+    const query = dropdown.searchQuery().trim();
 
     if (!query) return false;
 
@@ -74,27 +107,9 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
     return false;
   });
 
-  const handleAddOption = async () => {
-    if (!props.onAddOption || !isValidNewOption()) return;
-
-    setIsAddingOption(true);
-    try {
-      await props.onAddOption(searchQuery().trim());
-      setSearchQuery('');
-    } catch (error) {
-      console.error(
-        'PropertyOptionsList.handleAddOption:',
-        error,
-        ERROR_MESSAGES.OPTION_ADD
-      );
-    } finally {
-      setIsAddingOption(false);
-    }
-  };
-
   // Filter options based on search query and sort selected first, then alphabetically
   const filteredOptions = createMemo(() => {
-    const query = searchQuery().toLowerCase().trim();
+    const query = dropdown.searchQuery().toLowerCase().trim();
     const selectedIds = props.selectedOptions();
 
     const availableOptions = !query
@@ -145,73 +160,12 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
     return items;
   });
 
-  // Reset selected index when filteredOptions change
-  createEffect(() => {
-    const items = selectableItems();
-    if (items.length === 0) {
-      setSelectedIndex(0);
-    } else {
-      setSelectedIndex(Math.min(selectedIndex(), items.length - 1));
-    }
-  });
-
-  const shouldShowHotkeys = createMemo(() => {
-    return !searchQuery().trim() && selectableItems().length <= 9;
-  });
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    const items = selectableItems();
-    if (items.length === 0) return;
-
-    // Handle number keys (1-9) when no search term and 9 or fewer options
-    if (shouldShowHotkeys() && /^[1-9]$/.test(e.key)) {
-      e.preventDefault();
-      const index = parseInt(e.key) - 1;
-      if (index < items.length) {
-        const selectedItem = items[index];
-        if (selectedItem?.type === 'add') {
-          handleAddOption();
-        } else if (selectedItem?.type === 'option' && selectedItem.option) {
-          props.onToggleOption(selectedItem.option.id);
-
-          // If not multi-select, close the modal after selection
-          if (!props.property.isMultiSelect && props.onClose) {
-            props.onClose();
-          }
-        }
-      }
-      return;
-    }
-
-    if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'j')) {
-      e.preventDefault();
-      setSelectedIndex((prev) => (prev + 1) % items.length);
-    } else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'k')) {
-      e.preventDefault();
-      setSelectedIndex((prev) => (prev - 1 + items.length) % items.length);
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      const selectedItem = items[selectedIndex()];
-
-      if (selectedItem?.type === 'add') {
-        handleAddOption();
-      } else if (selectedItem?.type === 'option' && selectedItem.option) {
-        props.onToggleOption(selectedItem.option.id);
-
-        // If not multi-select, close the modal after selection
-        if (!props.property.isMultiSelect && props.onClose) {
-          props.onClose();
-        }
-      }
-    }
-  };
-
   onMount(() => {
-    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keydown', dropdown.handleKeyDown);
   });
 
   onCleanup(() => {
-    document.removeEventListener('keydown', handleKeyDown);
+    document.removeEventListener('keydown', dropdown.handleKeyDown);
   });
 
   useSearchInputFocus(
@@ -242,7 +196,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
             <PlusIcon class="size-3" />
           </Show>
         </div>
-        <p class="text-sm font-medium">Add "{searchQuery().trim()}"</p>
+        <p class="text-sm font-medium">Add "{dropdown.searchQuery().trim()}"</p>
       </div>
     </div>
   );
@@ -272,8 +226,8 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                     ? 'number'
                     : 'text'
                 }
-                value={searchQuery()}
-                onInput={(e) => setSearchQuery(e.currentTarget.value)}
+                value={dropdown.searchQuery()}
+                onInput={(e) => dropdown.setSearchQuery(e.currentTarget.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Escape') {
                     e.preventDefault();
@@ -302,7 +256,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                 >
                   <div class="p-1">
                     <AddOptionButton
-                      isSelected={selectedIndex() === filteredOptions().length}
+                      isSelected={dropdown.selectedIndex() === filteredOptions().length}
                     />
                   </div>
                 </Show>
@@ -326,7 +280,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                         fallback={
                           <div
                             class={`flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 ${
-                              index() === selectedIndex() ? 'bg-hover' : ''
+                              index() === dropdown.selectedIndex() ? 'bg-hover' : ''
                             }`}
                             onClick={() => {
                               if (item.option) {
@@ -341,8 +295,8 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                               }
                             }}
                             onMouseEnter={() => {
-                              if (!keyboardMode()) {
-                                setSelectedIndex(index());
+                              if (!dropdown.keyboardMode()) {
+                                dropdown.setSelectedIndex(index());
                               }
                             }}
                           >
@@ -353,7 +307,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                               </p>
                             </div>
                             <div class="flex items-center gap-2 flex-shrink-0">
-                              <Show when={shouldShowHotkeys() && index() < 9}>
+                              <Show when={dropdown.shouldShowHotkeys() && index() < 9}>
                                 <div class="text-[0.625rem] px-1.5 py-0.5 border border-edge-muted text-ink-muted font-mono rounded-xs">
                                   <Hotkey shortcut={`${index() + 1}`} />
                                 </div>
@@ -370,13 +324,13 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                       >
                         <div
                           onMouseEnter={() => {
-                            if (!keyboardMode()) {
-                              setSelectedIndex(index());
+                            if (!dropdown.keyboardMode()) {
+                              dropdown.setSelectedIndex(index());
                             }
                           }}
                         >
                           <AddOptionButton
-                            isSelected={index() === selectedIndex()}
+                            isSelected={index() === dropdown.selectedIndex()}
                           />
                         </div>
                       </Show>

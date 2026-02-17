@@ -1,8 +1,6 @@
 import {
   type Component,
-  createEffect,
   createMemo,
-  createSignal,
   For,
   Show,
 } from 'solid-js';
@@ -13,7 +11,7 @@ import { PropertyValueIcon } from '@core/component/Properties/component/property
 import { useContacts } from '@queries/contacts/contacts';
 import { UserIcon } from '@core/component/UserIcon';
 import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
-import { useKeyPressed } from '@core/util/useKeyPressed';
+import { useDropdownSearch } from '@core/util/useDropdownSearch';
 import { useUserId } from '@core/context/user';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import UserCircleIcon from '@icon/regular/user-circle.svg';
@@ -38,9 +36,6 @@ export const TaskStatusDropdown: Component<DropdownProps> = (props) => {
   const { statusFilter, setStatusFilter } = useSoupView();
   const open = () => props.open();
   const setOpen = (v: boolean) => props.onOpenChange(v);
-  const [searchQuery, setSearchQuery] = createSignal('');
-  const [selectedIndex, setSelectedIndex] = createSignal(0);
-  const keyboardMode = useKeyPressed(100);
 
   let searchInputRef!: HTMLInputElement;
 
@@ -51,57 +46,26 @@ export const TaskStatusDropdown: Component<DropdownProps> = (props) => {
     );
   };
 
-  const filteredOptions = createMemo(() => {
-    const query = searchQuery().toLowerCase().trim();
-    if (!query) return [...STATUS_OPTIONS];
-    return STATUS_OPTIONS.filter((o) => o.label.toLowerCase().includes(query));
-  });
-
-  createEffect(() => {
-    const opts = filteredOptions();
-    if (opts.length === 0) {
-      setSelectedIndex(0);
-    } else {
-      setSelectedIndex(Math.min(selectedIndex(), opts.length - 1));
-    }
-  });
-
-  const shouldShowHotkeys = () =>
-    !searchQuery().trim() && filteredOptions().length <= 9;
-
   const selectOption = (value: string | undefined) => {
     setStatusFilter(statusFilter() === value ? undefined : value);
     setOpen(false);
-    setSearchQuery('');
+    dropdown.reset();
   };
 
-  const handleKeyDown = (e: KeyboardEvent) => {
-    const opts = filteredOptions();
-    if (opts.length === 0) return;
-
-    if (shouldShowHotkeys() && /^[1-9]$/.test(e.key)) {
-      e.preventDefault();
-      const idx = parseInt(e.key) - 1;
-      if (idx < opts.length) selectOption(opts[idx].value);
-      return;
-    }
-
-    if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'j')) {
-      e.preventDefault();
-      setSelectedIndex((prev) => (prev + 1) % opts.length);
-    } else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'k')) {
-      e.preventDefault();
-      setSelectedIndex((prev) => (prev - 1 + opts.length) % opts.length);
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      selectOption(opts[selectedIndex()].value);
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      e.stopPropagation();
+  const dropdown = useDropdownSearch({
+    itemCount: () => filteredOptions().length,
+    onSelect: (idx) => selectOption(filteredOptions()[idx].value),
+    onClose: () => {
       setOpen(false);
-      setSearchQuery('');
-    }
-  };
+      dropdown.reset();
+    },
+  });
+
+  const filteredOptions = createMemo(() => {
+    const query = dropdown.searchQuery().toLowerCase().trim();
+    if (!query) return [...STATUS_OPTIONS];
+    return STATUS_OPTIONS.filter((o) => o.label.toLowerCase().includes(query));
+  });
 
   return (
     <Popover
@@ -109,8 +73,7 @@ export const TaskStatusDropdown: Component<DropdownProps> = (props) => {
       onOpenChange={(isOpen) => {
         setOpen(isOpen);
         if (isOpen) {
-          setSelectedIndex(0);
-          setSearchQuery('');
+          dropdown.reset();
           setTimeout(() => searchInputRef?.focus(), 0);
         }
       }}
@@ -159,9 +122,9 @@ export const TaskStatusDropdown: Component<DropdownProps> = (props) => {
                 class="w-full caret-accent"
                 ref={searchInputRef}
                 type="text"
-                value={searchQuery()}
-                onInput={(e) => setSearchQuery(e.currentTarget.value)}
-                onKeyDown={handleKeyDown}
+                value={dropdown.searchQuery()}
+                onInput={(e) => dropdown.setSearchQuery(e.currentTarget.value)}
+                onKeyDown={dropdown.handleKeyDown}
                 placeholder="Filter status..."
               />
             </div>
@@ -179,11 +142,11 @@ export const TaskStatusDropdown: Component<DropdownProps> = (props) => {
                     {(option, index) => (
                       <div
                         class={`flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 ${
-                          index() === selectedIndex() ? 'bg-hover' : ''
+                          index() === dropdown.selectedIndex() ? 'bg-hover' : ''
                         }`}
                         onClick={() => selectOption(option.value)}
                         onMouseEnter={() => {
-                          if (!keyboardMode()) setSelectedIndex(index());
+                          if (!dropdown.keyboardMode()) dropdown.setSelectedIndex(index());
                         }}
                       >
                         <PropertyValueIcon optionId={option.value} />
@@ -191,7 +154,7 @@ export const TaskStatusDropdown: Component<DropdownProps> = (props) => {
                           <p class="text-sm font-medium">{option.label}</p>
                         </div>
                         <div class="flex items-center gap-2 flex-shrink-0">
-                          <Show when={shouldShowHotkeys() && index() < 9}>
+                          <Show when={dropdown.shouldShowHotkeys() && index() < 9}>
                             <div class="text-[0.625rem] px-1.5 py-0.5 border border-edge-muted text-ink-muted font-mono rounded-xs">
                               <Hotkey shortcut={`${index() + 1}`} />
                             </div>
@@ -217,9 +180,6 @@ export const TaskAssigneeDropdown: Component<DropdownProps> = (props) => {
   const { assigneeFilter, setAssigneeFilter } = useSoupView();
   const open = () => props.open();
   const setOpen = (v: boolean) => props.onOpenChange(v);
-  const [searchQuery, setSearchQuery] = createSignal('');
-  const [selectedIndex, setSelectedIndex] = createSignal(0);
-  const keyboardMode = useKeyPressed(100);
   const contacts = useContacts();
   const userId = useUserId();
 
@@ -237,8 +197,23 @@ export const TaskAssigneeDropdown: Component<DropdownProps> = (props) => {
     return sorted;
   });
 
+  const selectContact = (id: string) => {
+    setAssigneeFilter(assigneeFilter() === id ? undefined : id);
+    setOpen(false);
+    dropdown.reset();
+  };
+
+  const dropdown = useDropdownSearch({
+    itemCount: () => filteredContacts().length,
+    onSelect: (idx) => selectContact(filteredContacts()[idx].id),
+    onClose: () => {
+      setOpen(false);
+      dropdown.reset();
+    },
+  });
+
   const filteredContacts = createMemo(() => {
-    const query = searchQuery().toLowerCase().trim();
+    const query = dropdown.searchQuery().toLowerCase().trim();
     const list = sortedContacts();
     if (!query) return list;
     return list.filter(
@@ -248,56 +223,10 @@ export const TaskAssigneeDropdown: Component<DropdownProps> = (props) => {
     );
   });
 
-  createEffect(() => {
-    const list = filteredContacts();
-    if (list.length === 0) {
-      setSelectedIndex(0);
-    } else {
-      setSelectedIndex(Math.min(selectedIndex(), list.length - 1));
-    }
-  });
-
-  const shouldShowHotkeys = () =>
-    !searchQuery().trim() && filteredContacts().length <= 9;
-
-  const selectContact = (id: string) => {
-    setAssigneeFilter(assigneeFilter() === id ? undefined : id);
-    setOpen(false);
-    setSearchQuery('');
-  };
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    const list = filteredContacts();
-    if (list.length === 0) return;
-
-    if (shouldShowHotkeys() && /^[1-9]$/.test(e.key)) {
-      e.preventDefault();
-      const idx = parseInt(e.key) - 1;
-      if (idx < list.length) selectContact(list[idx].id);
-      return;
-    }
-
-    if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'j')) {
-      e.preventDefault();
-      setSelectedIndex((prev) => (prev + 1) % list.length);
-    } else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'k')) {
-      e.preventDefault();
-      setSelectedIndex((prev) => (prev - 1 + list.length) % list.length);
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      selectContact(list[selectedIndex()].id);
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      e.stopPropagation();
-      setOpen(false);
-      setSearchQuery('');
-    }
-  };
-
   const activeAssigneeLabel = () => {
     if (!assigneeFilter()) return 'Assignee';
     const contact = contacts().find((c) => c.id === assigneeFilter());
-    if (contact?.id === userId()) return contact.name ? `${contact.name} (me)` : 'Me';
+    if (contact && contact.id === userId()) return contact.name ? `${contact.name} (me)` : 'Me';
     return contact?.name || assigneeFilter()!;
   };
 
@@ -307,8 +236,7 @@ export const TaskAssigneeDropdown: Component<DropdownProps> = (props) => {
       onOpenChange={(isOpen) => {
         setOpen(isOpen);
         if (isOpen) {
-          setSelectedIndex(0);
-          setSearchQuery('');
+          dropdown.reset();
           setTimeout(() => searchInputRef?.focus(), 0);
         }
       }}
@@ -362,9 +290,9 @@ export const TaskAssigneeDropdown: Component<DropdownProps> = (props) => {
                 class="w-full caret-accent"
                 ref={searchInputRef}
                 type="text"
-                value={searchQuery()}
-                onInput={(e) => setSearchQuery(e.currentTarget.value)}
-                onKeyDown={handleKeyDown}
+                value={dropdown.searchQuery()}
+                onInput={(e) => dropdown.setSearchQuery(e.currentTarget.value)}
+                onKeyDown={dropdown.handleKeyDown}
                 placeholder="Filter assignee..."
               />
             </div>
@@ -382,11 +310,11 @@ export const TaskAssigneeDropdown: Component<DropdownProps> = (props) => {
                     {(contact, index) => (
                       <div
                         class={`flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 ${
-                          index() === selectedIndex() ? 'bg-hover' : ''
+                          index() === dropdown.selectedIndex() ? 'bg-hover' : ''
                         }`}
                         onClick={() => selectContact(contact.id)}
                         onMouseEnter={() => {
-                          if (!keyboardMode()) setSelectedIndex(index());
+                          if (!dropdown.keyboardMode()) dropdown.setSelectedIndex(index());
                         }}
                       >
                         <UserIcon
@@ -404,7 +332,7 @@ export const TaskAssigneeDropdown: Component<DropdownProps> = (props) => {
                           </p>
                         </div>
                         <div class="flex items-center gap-2 flex-shrink-0">
-                          <Show when={shouldShowHotkeys() && index() < 9}>
+                          <Show when={dropdown.shouldShowHotkeys() && index() < 9}>
                             <div class="text-[0.625rem] px-1.5 py-0.5 border border-edge-muted text-ink-muted font-mono rounded-xs">
                               <Hotkey shortcut={`${index() + 1}`} />
                             </div>

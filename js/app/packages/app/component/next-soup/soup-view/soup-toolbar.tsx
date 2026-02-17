@@ -304,33 +304,30 @@ const SoupFilters = () => {
     hotkeyDisposers.forEach((d) => d.dispose());
   });
 
-  // Task sub-filter hotkeys — only active when task filter is on
-  createEffect(() => {
-    if (!soup.filters.isActive('task')) return;
+  const taskSubFilterHotkeyDisposers = [
+    registerHotkey({
+      hotkey: ['shift+s'],
+      scopeId: panel.splitHotkeyScope,
+      condition: () => soup.filters.isActive('task'),
+      description: 'Open status filter',
+      keyDownHandler: () => {
+        setStatusDropdownOpen((prev) => !prev);
+        return true;
+      },
+    }),
+    registerHotkey({
+      hotkey: ['shift+a'],
+      scopeId: panel.splitHotkeyScope,
+      condition: () => soup.filters.isActive('task'),
+      description: 'Open assignee filter',
+      keyDownHandler: () => {
+        setAssigneeDropdownOpen((prev) => !prev);
+        return true;
+      },
+    }),
+  ];
 
-    const disposers = [
-      registerHotkey({
-        hotkey: ['shift+s'],
-        scopeId: panel.splitHotkeyScope,
-        description: 'Open status filter',
-        keyDownHandler: () => {
-          setStatusDropdownOpen((prev) => !prev);
-          return true;
-        },
-      }),
-      registerHotkey({
-        hotkey: ['shift+a'],
-        scopeId: panel.splitHotkeyScope,
-        description: 'Open assignee filter',
-        keyDownHandler: () => {
-          setAssigneeDropdownOpen((prev) => !prev);
-          return true;
-        },
-      }),
-    ];
-
-    onCleanup(() => disposers.forEach((d) => d.dispose()));
-  });
+  onCleanup(() => taskSubFilterHotkeyDisposers.forEach((d) => d.dispose()));
 
   return (
     <>
