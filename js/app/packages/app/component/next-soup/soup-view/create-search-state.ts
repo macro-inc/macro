@@ -7,7 +7,9 @@ import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
 import { fuzzyMatch } from '@core/util/fuzzy';
 import { mergeAdjacentMacroEmTags } from '@core/util/searchHighlight';
+import { createFreshSearch } from '@core/util/freshSort';
 import type { EntityData, WithSearch } from '@entity';
+import { isChannelEntity, isEmailEntity } from '@entity';
 import {
   type SoupItemsQueryFilters,
   type SoupItemsQueryArgs,
@@ -23,11 +25,13 @@ import {
   createMemo,
   createRenderEffect,
   createSignal,
+  on,
 } from 'solid-js';
 import { match } from 'ts-pattern';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 300;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
+const FEATURED_COUNT = 6;
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
@@ -243,6 +247,39 @@ export const createSearchState = ({
     return searchQuery.data ?? [];
   });
 
+  const freshSearch = createFreshSearch<EntityData>(
+    {
+      useViewedAt: true,
+      channelBoost: 1.5,
+      fuzzyWeight: 0.7,
+      timeWeight: 0.3,
+      minFuzzyThreshold: 0.1,
+      commaSeparatedChannelMatch: true,
+    },
+    (item) => item.name,
+    (item) => isChannelEntity(item),
+    (item) => item
+  );
+
+  const createFeaturedIds = (pool: Accessor<EntityData[]>) => {
+    const [frozen, setFrozen] = createSignal<string[]>([]);
+    createRenderEffect(
+      on(
+        () => [isSearching(), debouncedSearchForLocal()] as const,
+        ([searching, query]) => {
+          if (!searching || !query) {
+            setFrozen([]);
+            return;
+          }
+          const nonEmail = pool().filter((e) => !isEmailEntity(e));
+          const results = freshSearch(nonEmail, query);
+          setFrozen(results.slice(0, FEATURED_COUNT).map((r) => r.item.id));
+        }
+      )
+    );
+    return frozen;
+  };
+
   return {
     searchText,
     setSearchText,
@@ -251,6 +288,7 @@ export const createSearchState = ({
     debouncedSearchForLocal,
     localFuzzyResults,
     freshSearchResults,
+    createFeaturedIds,
     itemsQuery,
     searchQuery,
   };

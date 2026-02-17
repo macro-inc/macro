@@ -7,9 +7,8 @@ import { createSearchState } from '@app/component/next-soup/soup-view/create-sea
 import { sortEntitiesForSearch } from '@app/component/next-soup/soup-view/sort-options';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
 import { ENABLE_FEATURED_SEARCH_RESULTS } from '@core/constant/featureFlags';
-import { createFreshSearch } from '@core/util/freshSort';
 import type { EntityData, WithNotification, WithSearch } from '@entity';
-import { isChannelEntity, isEmailEntity, isWithNotification } from '@entity';
+import { isWithNotification } from '@entity';
 import { useNotificationsForEntity } from '@notifications';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import {
@@ -187,8 +186,6 @@ export const SoupViewContextProvider: FlowComponent<
     }
   );
 
-  const FEATURED_COUNT = 6;
-
   const baseEntities = () => {
     const filters = soup.filters.active();
     let transformed = items();
@@ -224,38 +221,7 @@ export const SoupViewContextProvider: FlowComponent<
     return transformed;
   };
 
-  const freshSearch = createFreshSearch<SoupEntity>(
-    {
-      useViewedAt: true,
-      channelBoost: 1.5,
-      fuzzyWeight: 0.7,
-      timeWeight: 0.3,
-      minFuzzyThreshold: 0.1,
-      commaSeparatedChannelMatch: true,
-    },
-    (item) => item.name,
-    (item) => isChannelEntity(item),
-    (item) => item
-  );
-
-  const frozenFeaturedIds = (() => {
-    const [frozen, setFrozen] = createSignal<string[]>([]);
-    createRenderEffect(
-      on(
-        () => [search.isSearching(), search.debouncedSearchForLocal()] as const,
-        ([searching, query]) => {
-          if (!searching || !query) {
-            setFrozen([]);
-            return;
-          }
-          const pool = baseEntities().filter((e) => !isEmailEntity(e));
-          const results = freshSearch(pool, query);
-          setFrozen(results.slice(0, FEATURED_COUNT).map((r) => r.item.id));
-        }
-      )
-    );
-    return frozen;
-  })();
+  const frozenFeaturedIds = search.createFeaturedIds(baseEntities);
 
   const entities = () => {
     const base = baseEntities();
