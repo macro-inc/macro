@@ -45,7 +45,9 @@ export function CollapsibleList<T>(props: CollapsibleListProps<T>) {
     e.stopPropagation();
     setShowAll(false);
     requestAnimationFrame(() => {
-      collapseButtonRef?.scrollIntoView({
+      const scrollTarget =
+        collapseButtonRef?.closest('[data-entity]') ?? collapseButtonRef;
+      scrollTarget?.scrollIntoView({
         block: 'nearest',
         behavior: 'smooth',
       });
