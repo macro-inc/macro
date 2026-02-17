@@ -11,15 +11,15 @@ use crate::domain::{
     models::{
         Notification, TaggedContent, UserNotificationRow,
         email_notification_digest::ports::{
-            DigestBatcher, LastOnlineChecker, MessageReceiptRepo, NotificationSendChecker,
-            PushNotificationChecker, UserExistenceChecker,
+            DigestBatcher, LastOnlineChecker, MessageId, MessageReceiptRepo,
+            NotificationSendChecker, PushNotificationChecker, UserExistenceChecker,
         },
     },
-    ports::NotificationSender,
+    ports::NotificationRepository,
 };
 use either::Either;
 use macro_user_id::cowlike::CowLike;
-use rootcause::Report;
+use rootcause::{Report, report};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, time::Duration};
 
@@ -231,12 +231,6 @@ pub struct PushNotificationsEnabled {
 }
 
 impl PushNotificationsEnabled {
-    /// assert that the push notification was delivered
-    /// We do not send the bulk email digest
-    fn assert_delivered(self) -> DontSend {
-        DontSend(())
-    }
-
     /// assert that the push notification failed to deliver and therefore
     /// we should queue a bulk email notification
     fn assert_failed(self) -> BatchSend<UserNotificationRow<TaggedContent<serde_json::Value>>> {
@@ -445,7 +439,22 @@ where
 
         match res {
             // the notification succeeded (probably) so we dont send a bulk email
-            Ok(r) => Ok((r, DontSend(()))),
+            Ok(r) => {
+                // record the message id in the repo
+                let message_id = N::extract_message_id(&r);
+
+                // cant really do anything if this fails, so we just ignore the error
+                let _ = self
+                    .message_receipt_repo
+                    .record_message_id(
+                        message_id,
+                        notification_enabled.inner.owner_id,
+                        notification_enabled.inner.notification_id,
+                    )
+                    .await;
+
+                Ok((r, DontSend(())))
+            }
             // the notification failed to send, queue the batch
             Err(e) => {
                 let next = notification_enabled.assert_failed();
@@ -457,5 +466,72 @@ where
                 Err((e, res))
             }
         }
+    }
+}
+
+/// the driver of the state machine which is used to reconcile the SNS failure messages
+/// with the digests that should be sent due to failure
+pub struct StateMachineDriverC<B, R, N> {
+    /// some R that implements [MessageReceiptRepo]
+    pub message_receipt_repo: R,
+    /// Some B that implements [DigestBatcher]
+    pub digest_batcher: B,
+    /// some N that implements [NotificationRepository]
+    pub notif_repo: N,
+    /// the window of time in which the digest emails are collected for before sending
+    pub digest_window: Duration,
+}
+
+/// the outcome of a [StateMachineDriverC]
+pub enum StateMachineDecisionC {
+    /// No batch message was queued
+    NoAction,
+    /// the digest message was queued
+    BatchWasQueued(BatchSend<()>),
+}
+
+impl<B, R, N> StateMachineDriverC<B, R, N>
+where
+    B: DigestBatcher,
+    R: MessageReceiptRepo,
+    N: NotificationRepository,
+{
+    /// mark a message as failed, this will enqueue messages to the batch only once all the
+    /// push notifs for this user_notification have failed
+    pub async fn mark_message_as_failed(
+        &self,
+        message_id: MessageId,
+    ) -> Result<StateMachineDecisionC, Report> {
+        let (user_id, notif_id) = self
+            .message_receipt_repo
+            .mark_message_failed(message_id)
+            .await?;
+        let did_all_pushes_fail = self
+            .message_receipt_repo
+            .did_all_messages_fail(user_id.copied(), notif_id)
+            .await?;
+        let true = did_all_pushes_fail else {
+            return Ok(StateMachineDecisionC::NoAction);
+        };
+
+        // retrieve the notification data and add it to the batch
+        let Some(notif) = self
+            .notif_repo
+            .get_user_notification_by_id::<serde_json::Value>(user_id.as_ref(), notif_id)
+            .await?
+        else {
+            return Err(report!(
+                "No user_notification was found for {} + {}",
+                user_id,
+                notif_id
+            ));
+        };
+        let notif = notif.into_tagged();
+
+        let () = self
+            .digest_batcher
+            .add_to_digest(&notif, self.digest_window)
+            .await?;
+        Ok(StateMachineDecisionC::BatchWasQueued(BatchSend(())))
     }
 }
