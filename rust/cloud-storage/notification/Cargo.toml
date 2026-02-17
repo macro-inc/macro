@@ -6,6 +6,7 @@ version = "0.1.0"
 
 
 [features]
+ai_tool = ["dep:ai"]
 axum = [
   "dep:axum",
   "dep:model-error-response",
@@ -17,6 +18,7 @@ docs = ["dep:aquamarine"]
 schema = ["dep:utoipa"]
 
 [dependencies]
+ai = { path = "../ai", optional = true }
 aquamarine = { version = "0.6", optional = true }
 aws-sdk-sesv2 = { workspace = true }
 cowlike = { path = "../cowlike" }
