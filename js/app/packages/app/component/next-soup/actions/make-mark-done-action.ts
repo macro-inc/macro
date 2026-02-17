@@ -1,6 +1,8 @@
 import { toast } from '@core/component/Toast/Toast';
 import {
   type EntityData,
+  isCurrentUserAssigned,
+  isTaskClosed,
   isTaskEntity,
   type TaskEntityWithProperties,
 } from '@entity';
@@ -11,11 +13,7 @@ import {
 import { useSetPropertyStatusCompleteMutation } from '@queries/properties/entity';
 import type { PropertiesEntityType } from '@service-properties/client';
 import type { SoupState } from '../create-soup-state';
-import {
-  archiveEmail,
-  isCurrentUserAssigned,
-  isTaskClosed,
-} from '@app/component/next-soup/utils';
+import { archiveEmail } from '@app/component/next-soup/utils';
 
 type MakeMarkDoneOptions = {
   userId: () => string | undefined;

@@ -1,7 +1,7 @@
 import { type Component, createMemo, For, Show } from 'solid-js';
 import { Popover } from '@kobalte/core/popover';
 import { Hotkey } from '@core/component/Hotkey';
-import { PROPERTY_OPTION_IDS } from '@core/component/Properties/constants';
+import { TASK_STATUS_OPTIONS } from '@entity';
 import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
 import { useContacts } from '@queries/contacts/contacts';
 import { UserIcon } from '@core/component/UserIcon';
@@ -13,14 +13,6 @@ import UserCircleIcon from '@icon/regular/user-circle.svg';
 import CaretDownIcon from '@icon/regular/caret-down.svg';
 import XIcon from '@icon/regular/x.svg?component-solid';
 import CircleDashedIcon from '@icon/regular/circle-dashed.svg';
-
-const STATUS_OPTIONS = [
-  { value: PROPERTY_OPTION_IDS.STATUS.NOT_STARTED, label: 'Not Started' },
-  { value: PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS, label: 'In Progress' },
-  { value: PROPERTY_OPTION_IDS.STATUS.IN_REVIEW, label: 'In Review' },
-  { value: PROPERTY_OPTION_IDS.STATUS.COMPLETED, label: 'Completed' },
-  { value: PROPERTY_OPTION_IDS.STATUS.CANCELED, label: 'Canceled' },
-] as const;
 
 type DropdownProps = {
   open: () => boolean;
@@ -37,7 +29,8 @@ export const TaskStatusDropdown: Component<DropdownProps> = (props) => {
   const activeLabel = () => {
     if (!statusFilter()) return 'Status';
     return (
-      STATUS_OPTIONS.find((o) => o.value === statusFilter())?.label ?? 'Status'
+      TASK_STATUS_OPTIONS.find((o) => o.value === statusFilter())?.label ??
+      'Status'
     );
   };
 
@@ -58,8 +51,10 @@ export const TaskStatusDropdown: Component<DropdownProps> = (props) => {
 
   const filteredOptions = createMemo(() => {
     const query = dropdown.searchQuery().toLowerCase().trim();
-    if (!query) return [...STATUS_OPTIONS];
-    return STATUS_OPTIONS.filter((o) => o.label.toLowerCase().includes(query));
+    if (!query) return [...TASK_STATUS_OPTIONS];
+    return TASK_STATUS_OPTIONS.filter((o) =>
+      o.label.toLowerCase().includes(query)
+    );
   });
 
   return (

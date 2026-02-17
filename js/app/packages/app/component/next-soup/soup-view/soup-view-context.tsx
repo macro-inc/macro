@@ -15,6 +15,8 @@ import { fuzzyMatch } from '@core/util/fuzzy';
 import { mergeAdjacentMacroEmTags } from '@core/util/searchHighlight';
 import {
   type EntityData,
+  getTaskAssigneeIds,
+  getTaskStatusOptionId,
   type WithNotification,
   type WithSearch,
   isWithNotification,
@@ -45,10 +47,6 @@ import {
   Suspense,
   useContext,
 } from 'solid-js';
-import {
-  getTaskStatusOptionId,
-  getTaskAssigneeIds,
-} from '@app/component/next-soup/utils';
 import { match } from 'ts-pattern';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 300;

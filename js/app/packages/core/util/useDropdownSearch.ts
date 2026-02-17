@@ -25,6 +25,13 @@ export const useDropdownSearch = (options: UseDropdownSearchOptions) => {
     !searchQuery().trim() && options.itemCount() <= 9;
 
   const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      options.onClose();
+      return;
+    }
+
     const count = options.itemCount();
     if (count === 0) return;
 
@@ -44,10 +51,6 @@ export const useDropdownSearch = (options: UseDropdownSearchOptions) => {
     } else if (e.key === 'Enter') {
       e.preventDefault();
       options.onSelect(selectedIndex());
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      e.stopPropagation();
-      options.onClose();
     }
   };
 
