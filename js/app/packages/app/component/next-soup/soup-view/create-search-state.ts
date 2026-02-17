@@ -1,7 +1,7 @@
 import type { SoupState } from '@app/component/next-soup/create-soup-state';
 import {
   type FilterID,
-  getFolderFileTypes,
+  getFileAssociations,
 } from '@app/component/next-soup/filters/filters';
 import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
@@ -131,7 +131,7 @@ export const createSearchState = ({
     let fileTypes = document_filters?.file_types;
 
     if (soup.filters.isActive('file')) {
-      fileTypes = getFolderFileTypes('search');
+      fileTypes = getFileAssociations('search');
     }
 
     return {
