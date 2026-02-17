@@ -93,16 +93,13 @@ export function stackNotifications(
     ...others.flatMap((n) => makeStack(n.notification_metadata.tag, [n])),
   ];
 
-  // Sort: mentions first, then by recency
-  return groups.sort((a, b) => {
-    if ((a.type === 'channel_mention') !== (b.type === 'channel_mention')) {
-      return a.type === 'channel_mention' ? -1 : 1;
-    }
-    return compareDateDesc(
+  // Sort by newest notification in each stack
+  return groups.sort((a, b) =>
+    compareDateDesc(
       a.notifications[0].created_at,
       b.notifications[0].created_at
-    );
-  });
+    )
+  );
 }
 
 function sortByRecency(items: UnifiedNotification[]): UnifiedNotification[] {

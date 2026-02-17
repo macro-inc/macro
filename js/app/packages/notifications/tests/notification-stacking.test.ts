@@ -199,7 +199,7 @@ describe('stackNotifications', () => {
   });
 
   describe('sorting', () => {
-    it('sorts mentions first', () => {
+    it('sorts stacks by newest notification first', () => {
       const notifications = [
         createNewMessageNotification('n1', 'msg-1', 5000), // Most recent overall
         createMentionNotification('m1', 'msg-2', 1000), // Oldest
@@ -208,8 +208,8 @@ describe('stackNotifications', () => {
       const result = stackNotifications(notifications);
 
       expect(result).toHaveLength(2);
-      expect(result[0].type).toBe('channel_mention'); // Mention first despite being older
-      expect(result[1].type).toBe('channel_message_send');
+      expect(result[0].type).toBe('channel_message_send'); // Most recent first
+      expect(result[1].type).toBe('channel_mention');
     });
 
     it('sorts non-mention groups by timestamp descending', () => {
@@ -253,7 +253,7 @@ describe('stackNotifications', () => {
       expect(newMessages).toHaveLength(1);
       expect(replies).toHaveLength(2);
 
-      // Check mentions come first
+      // Check ordering by recency (mentions are newest in this scenario)
       expect(result[0].type).toBe('channel_mention');
       expect(result[1].type).toBe('channel_mention');
 
