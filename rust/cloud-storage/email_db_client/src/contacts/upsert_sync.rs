@@ -26,7 +26,8 @@ pub async fn upsert_contacts(pool: &PgPool, contacts: &[Contact]) -> anyhow::Res
 
     for contact in db_contacts {
         if let Some(email) = &contact.email_address
-            && !email.trim().is_empty() && email.len() < 310
+            && !email.trim().is_empty()
+            && email.len() < 310
         {
             ids.push(contact.id);
             link_ids.push(contact.link_id);
