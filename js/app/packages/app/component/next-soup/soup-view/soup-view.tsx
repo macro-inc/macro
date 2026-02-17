@@ -302,7 +302,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     if (source.isFetchingNextPage() || !source.hasNextPage()) return;
 
     source.fetchNextPage();
-  });
+  }, 15);
 
   const orchestrator = useGlobalBlockOrchestrator();
 
