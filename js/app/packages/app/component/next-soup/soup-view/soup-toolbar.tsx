@@ -84,7 +84,7 @@ export const SoupToolbar = () => {
 
           <div
             ref={setScrollContainerRef}
-            class="flex items-center h-full w-full overflow-x-auto scrollbar-hidden overscroll-none text-xs touch:mobile-width:text-sm"
+            class="flex items-center h-full w-full overflow-x-auto scrollbar-hidden overscroll-none text-xs mobile:text-sm"
           >
             <SoupFilters />
             <SearchBar />
@@ -324,7 +324,7 @@ const SoupFilters = () => {
         <Tooltip tooltip={<LabelAndHotKey label="Unread Only" shortcut="u" />}>
           <button
             type="button"
-            class="flex items-center gap-1 h-[22px] touch:mobile-width:h-9 pr-2.5 pl-1 active:bg-accent active:text-panel rounded-full"
+            class="flex items-center gap-1 h-[22px] mobile:h-9 pr-2.5 pl-1 active:bg-accent active:text-panel rounded-full"
             classList={{
               'bg-accent text-panel': soup.filters.isActive('unread'),
               'text-ink-muted hover:text-accent hover:bg-accent/20':
@@ -377,7 +377,7 @@ const SoupFilters = () => {
       >
         <button
           type="button"
-          class="flex items-center gap-1.5 h-[22px] touch:mobile-width:h-9 px-2.5 active:bg-accent active:text-panel rounded-full"
+          class="flex items-center gap-1.5 h-[22px] mobile:h-9 px-2.5 active:bg-accent active:text-panel rounded-full"
           classList={{
             'bg-accent text-panel': !!soup.previewEntity(),
             'text-ink-muted hover:text-accent hover:bg-accent/20':
@@ -402,7 +402,7 @@ const SoupFilters = () => {
           soup.sort.setAll([value]);
         }}
       />
-      <div class="touch:mobile-width:-order-1">
+      <div class="mobile:-order-1">
         <FilterDivider />
       </div>
       {/* Filter search bar */}
@@ -532,14 +532,14 @@ const SearchBar = () => {
   };
 
   return (
-    <div class="flex items-center grow min-w-0 touch:mobile-width:-order-2">
+    <div class="flex items-center grow min-w-0 mobile:-order-2">
       <Tooltip
         class="w-fit"
         placement="bottom-start"
         tooltip={<LabelAndHotKey label="Filter" shortcut="⌘F" />}
       >
         <div
-          class="relative flex items-center gap-1.5 h-[22px] touch:mobile-width:h-9 px-2.5 rounded-full touch:mobile-width:min-w-35"
+          class="relative flex items-center gap-1.5 h-[22px] mobile:h-9 px-2.5 rounded-full mobile:min-w-35"
           classList={{
             'bg-accent text-panel': !!searchText() && !searchFocused(),
             'text-ink-muted hover:text-accent hover:bg-accent/20':
@@ -652,7 +652,7 @@ export const FilterButton: Component<FilterButtonProps> = (props) => {
       >
         <button
           type="button"
-          class={`flex items-center gap-1 h-[22px] touch:mobile-width:h-9 ${props.paddingClass ?? 'pl-2 pr-2.5'} active:bg-accent active:text-panel rounded-full`}
+          class={`flex items-center gap-1 h-[22px] mobile:h-9 ${props.paddingClass ?? 'pl-2 pr-2.5'} active:bg-accent active:text-panel rounded-full`}
           classList={{
             'bg-accent text-panel': isActive(),
             'text-ink-muted hover:text-accent hover:bg-accent/20': !isActive(),

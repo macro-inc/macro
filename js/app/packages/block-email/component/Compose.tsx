@@ -73,6 +73,7 @@ import { queryClient } from '@queries/client';
 import { soupKeys } from '@queries/soup/keys';
 import { isMobile } from '@core/mobile/isMobile';
 import { invalidateSoupEntity } from '@queries/soup/cache';
+import { WrapUnlessMobile } from '@core/mobile/MobileUnwrap';
 
 const DRAFT_DEBOUNCE_MS = 1000;
 
@@ -724,12 +725,16 @@ export function EmailCompose(props: EmailComposeProps) {
         </Switch>
 
         <div
-          class="macro-message-width macro-message-padding mx-auto w-full max-h-full my-2 @sm:my-12 px-2 @sm:px-4 overflow-hidden"
+          class="macro-message-width @small:macro-message-padding mx-auto w-full max-h-full my-2 @small:my-12 mobile:my-0 px-2 @small:px-4 overflow-hidden"
           classList={{
             'pointer-events-none opacity-50': hasLinkError(),
           }}
         >
-          <ClippedPanel tl={!beveledCorners()}>
+          <WrapUnlessMobile
+            wrapper={(children) => (
+              <ClippedPanel tl={!beveledCorners()}>{children}</ClippedPanel>
+            )}
+          >
             <div
               class="w-full p-4 bg-input max-h-full overflow-y-auto flex flex-col min-h-0"
               classList={{
@@ -907,7 +912,7 @@ export function EmailCompose(props: EmailComposeProps) {
                 </Show>
               </div>
             </div>
-          </ClippedPanel>
+          </WrapUnlessMobile>
         </div>
       </div>
     </>

@@ -132,7 +132,7 @@ const TopBar: Component<MessageTopBarProps> = (props) => {
         </Show>
         {/* Date - hidden when hovering since it shows above hover actions */}
         <Show when={local.timestamp && !context.hover()}>
-          <div class="text-xs touch:mobile-width:text-sm text-ink-muted min-w-0 shrink-2 truncate">
+          <div class="text-xs mobile:text-sm text-ink-muted min-w-0 shrink-2 truncate">
             {local.timestamp && formatDate(local.timestamp)}
           </div>
         </Show>

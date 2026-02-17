@@ -245,6 +245,14 @@
 @custom-variant ios (&:where(.tauri-ios *));
 @custom-variant touch (&:where(html[data-touch-device="true"] *));
 @custom-variant mobile-width (@media (max-width: 639px));
+/* `mobile:` is equivalent to `touch:mobile-width:` */
+@custom-variant mobile {
+  &:where(html[data-touch-device="true"] *) {
+    @media (max-width: 639px) {
+      @slot;
+    }
+  }
+}
 
 :root {
   --color-focus: var(--color-accent);
@@ -509,6 +517,9 @@
     --font-serif: "Georgia", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
 
     --text-xxs: 0.625rem;
+    
+    /* Custom container size */
+    --container-small: 40rem;
 
     /* Colors */
     --color-macro-accent: #00c4ff;

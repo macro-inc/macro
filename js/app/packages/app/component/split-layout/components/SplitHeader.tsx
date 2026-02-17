@@ -160,7 +160,7 @@ function _SplitPreviewToggle() {
 function _SplitControlButtons() {
   return (
     <div class="flex flex-row items-center px-2 h-full shrink-0">
-      <div class="touch:mobile-width:hidden">
+      <div class="mobile:hidden">
         <SplitCloseButton />
       </div>
       <SplitBackButton />
@@ -204,7 +204,7 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
     >
       <div class="absolute inset-0 flex justify-start items-center bg-panel">
         <div class="z-2 relative flex items-center bg-panel pl-2 h-full">
-          <div class="touch:mobile-width:hidden">
+          <div class="mobile:hidden">
             <SplitCloseButton />
           </div>
           <SplitBackButton />
