@@ -38,18 +38,16 @@ where
         let writer = self.clone();
         let writer_id = id.clone();
         tokio::spawn(async move {
-            let consumed = tokio::time::timeout(
-                timeout.unwrap_or(DEFAULT_STREAM_TIMEOUT),
-                async move {
+            let consumed =
+                tokio::time::timeout(timeout.unwrap_or(DEFAULT_STREAM_TIMEOUT), async move {
                     while let Some(payload) = stream.next().await {
                         if let Err(e) = writer.append(&writer_id, payload).await {
                             tracing::error!(error=?e, "failed to append to stream");
                             return;
                         }
                     }
-                },
-            )
-            .await;
+                })
+                .await;
 
             if consumed.is_ok() {
                 tokio::time::sleep(close_delay.unwrap_or(DEFAULT_CLOSE_DELAY)).await;
