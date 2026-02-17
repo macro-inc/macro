@@ -555,7 +555,7 @@ const SearchBar = () => {
           >
             <button
               type="button"
-              class="size-4.5 shrink-0 hover:text-accent"
+              class="size-4.5 shrink-0 hover:opacity-60"
               onMouseDown={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
