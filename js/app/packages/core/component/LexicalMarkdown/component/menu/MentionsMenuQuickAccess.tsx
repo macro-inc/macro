@@ -2,7 +2,6 @@ import type { BlockAlias, BlockName } from '@core/block';
 import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { SUPPORTED_CHAT_ATTACHMENT_BLOCKS } from '@core/component/AI/constant/fileType';
-import { BozzyBracketInnerSibling } from '@core/component/BozzyBracket';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import { UserIcon } from '@core/component/UserIcon';
@@ -27,7 +26,7 @@ import { trackMention } from '@core/signal/mention';
 import ClockIcon from '@icon/regular/clock.svg';
 import EmailIcon from '@icon/regular/envelope.svg';
 import UsersIcon from '@icon/regular/users.svg';
-import type { ChannelEntity, EntityData, WithSearch } from '@macro-entity';
+import type { ChannelEntity, EntityData, WithSearch } from '@entity';
 import {
   createUnifiedSearchInfiniteQuery,
   type EmailEntity,
@@ -193,7 +192,6 @@ function createItemHandler(dependencies: HandlerDependencies) {
       case 'entity':
         return await handleEntityMention(item, dependencies);
       case 'command':
-        // Commands are not mentionable
         return;
     }
   };
@@ -1318,11 +1316,9 @@ function MentionsMenuInner(props: {
             clickOutside(el, () => clickOutsideHandler);
           }}
         >
-          <ClippedPanel active tl>
+          <ClippedPanel active tl class="py-2">
             {inner()}
           </ClippedPanel>
-          {/*<div class="relative overflow-hidden ring-1 ring-edge bg-menu shadow-xl py-2"></div>*/}
-          {/*<BozzyBracketInnerSibling animOnOpen={true} />*/}
         </div>
       </ScopedPortal>
     </Show>

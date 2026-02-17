@@ -297,10 +297,20 @@ export const [QuickAccessProvider, useQuickAccess] =
         // Sort once by sortTimestamp descending (most recent first)
         items.sort((a, b) => b.sortTimestamp - a.sortTimestamp);
 
+        // Deduplicate by id - keep the first occurrence (most recent timestamp)
+        const seenIds = new Set<string>();
+        const deduplicated: QuickAccessItem[] = [];
+        for (const item of items) {
+          if (!seenIds.has(item.id)) {
+            seenIds.add(item.id);
+            deduplicated.push(item);
+          }
+        }
+
         console.log(
-          `All items sorted in ${performance.now() - startAllItems}ms`
+          `All items sorted and deduplicated in ${performance.now() - startAllItems}ms (${items.length} -> ${deduplicated.length} items)`
         );
-        return items;
+        return deduplicated;
       });
 
       // Pre-compute individual bucket lists (each already sorted since we iterate in order)
@@ -367,9 +377,7 @@ export const [QuickAccessProvider, useQuickAccess] =
       // 2. Single bucket = return pre-computed bucket list (O(1))
       // 3. Pre-baked combination = return pre-merged list (O(1))
       // 4. Other combinations = merge-sort bucket lists (O(n+m))
-      const useList = <B extends Bucket>(
-        ...buckets: B[]
-      ): Accessor<QuickAccessItem[]> => {
+      const useList = <B extends Bucket>(...buckets: B[]): Accessor<any> => {
         return createMemo(() => {
           if (buckets.length === 0) {
             return preBakedLists().all;

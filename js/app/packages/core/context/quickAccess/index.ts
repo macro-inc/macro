@@ -15,6 +15,9 @@ export type {
   SearchWeights,
   QuickAccessContextValue,
   BucketEntityMap,
+  BucketItemMap,
+  ItemForBucket,
+  ItemsForBuckets,
 } from './types';
 export {
   ALL_BUCKETS,

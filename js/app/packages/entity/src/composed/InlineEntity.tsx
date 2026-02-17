@@ -4,8 +4,8 @@ import { EntityTitle } from '../extractors/entity-title';
 
 export function InlineEntity(props: { entity: EntityData }) {
   return (
-    <div class="flex items-center gap-1 min-w-0">
-      <span class="w-[1.25em]">
+    <div class="flex items-center gap-1 min-w-0 truncate">
+      <span class="size-[1.25em] shrink-0">
         <EntityIcon entity={props.entity} />
       </span>
       <EntityTitle entity={props.entity} />

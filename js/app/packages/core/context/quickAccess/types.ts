@@ -129,6 +129,37 @@ export type BucketEntityMap = {
   command: never; // CommandItem, not EntityItem
 };
 
+/**
+ * Maps a bucket to its corresponding QuickAccessItem type
+ */
+export type BucketItemMap = {
+  channel: EntityItem<ChannelEntity>;
+  dm: EntityItem<ChannelEntity>;
+  document: EntityItem<DocumentEntity>;
+  task: EntityItem<TaskEntity>;
+  note: EntityItem<DocumentEntity>;
+  chat: EntityItem<ChatEntity>;
+  project: EntityItem<ProjectEntity>;
+  email: EntityItem<EmailEntity>;
+  person: UserItem;
+  command: CommandItem;
+};
+
+/**
+ * Helper type to get the QuickAccessItem type(s) for given bucket(s)
+ */
+export type ItemForBucket<B extends Bucket> = BucketItemMap[B];
+
+/**
+ * Union type of all items for the given buckets
+ */
+export type ItemsForBuckets<Buckets extends Bucket[]> = Buckets extends [
+  infer First extends Bucket,
+  ...infer Rest extends Bucket[],
+]
+  ? ItemForBucket<First> | ItemsForBuckets<Rest>
+  : never;
+
 export type SearchWeights = {
   fuzzy?: number;
   time?: number;
@@ -168,7 +199,11 @@ export type QuickAccessContextValue = {
    * const people = quickAccess.useList('person');
    * const everything = quickAccess.useList();
    */
-  useList: <B extends Bucket>(...buckets: B[]) => Accessor<QuickAccessItem[]>;
+  useList: {
+    (): Accessor<QuickAccessItem[]>;
+    <B extends Bucket>(...buckets: [B]): Accessor<ItemForBucket<B>[]>;
+    <B extends Bucket[]>(...buckets: B): Accessor<ItemsForBuckets<B>[]>;
+  };
 
   /**
    * Whether any data sources are still loading.
