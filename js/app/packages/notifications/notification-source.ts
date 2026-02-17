@@ -27,7 +27,6 @@ import {
   notificationEntity,
   type UnifiedNotification,
 } from './types';
-import { invalidateSoupEntity } from '@queries/soup/normalized-cache';
 
 type NotificationsByEntity = Record<CompositeEntity, UnifiedNotification[]>;
 
