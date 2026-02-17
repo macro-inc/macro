@@ -1,6 +1,6 @@
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
 import IconGear from '@macro-icons/macro-gear.svg';
-import XIcon from '@icon/regular/x.svg?component-solid';
+import BackspaceIcon from '@icon/regular/backspace.svg?component-solid';
 import PreviewIcon from '@macro-icons/wide/preview.svg';
 import NoiseIcon from '@macro-icons/wide/noise.svg';
 import SignalIcon from '@macro-icons/wide/signal.svg';
@@ -102,7 +102,7 @@ export const SoupToolbar = () => {
               class="flex items-center justify-center size-[22px] rounded-full text-ink-muted hover:text-accent hover:bg-accent/20 active:bg-accent active:text-panel"
               onClick={handleClear}
             >
-              <XIcon class="size-4.5" />
+              <BackspaceIcon class="size-4.5" />
             </button>
           </Tooltip>
           <div class="mx-0.5 w-px h-5 bg-edge-muted/50 shrink-0" />
