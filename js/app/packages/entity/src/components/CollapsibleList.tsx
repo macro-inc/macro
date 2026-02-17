@@ -6,6 +6,7 @@ interface CollapsibleListProps<T> {
   items: T[];
   visibleCount?: number;
   children: (item: T, index?: number, count?: number) => JSX.Element;
+  expandText?: (count: number) => string;
 }
 
 /**
@@ -33,6 +34,9 @@ export function CollapsibleList<T>(props: CollapsibleListProps<T>) {
   const count = () => props.items.length;
   const hasMore = () => props.items.length > visibleCount();
 
+  const getExpandTextFn = () =>
+    props.expandText ?? ((count: number) => `Show ${count} More`);
+
   return (
     <>
       <For each={visibleItems()}>
@@ -54,7 +58,7 @@ export function CollapsibleList<T>(props: CollapsibleListProps<T>) {
               })}
             />
             <Show when={!showAll()} fallback="Collapse">
-              Show {props.items.length - visibleCount()} More
+              {getExpandTextFn()(props.items.length - visibleCount())}
             </Show>
           </button>
           <div class="border-t border-edge-muted/50 grow"></div>

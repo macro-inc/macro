@@ -25,6 +25,9 @@ export function ContentHits(props: ExtractorContentHitsProps) {
       <CollapsibleList
         items={contentHits()}
         visibleCount={props.visibleCount ?? 1}
+        expandText={(count) =>
+          `Show ${count} content match${count > 1 ? 'es' : ''}`
+        }
       >
         {(hit, index, count) => (
           <SearchContentHitRow
