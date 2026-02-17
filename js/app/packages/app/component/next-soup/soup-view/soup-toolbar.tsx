@@ -1,6 +1,7 @@
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
 import IconGear from '@macro-icons/macro-gear.svg';
 import BackspaceIcon from '@icon/regular/backspace.svg?component-solid';
+import XIcon from '@icon/regular/x.svg?component-solid';
 import PreviewIcon from '@macro-icons/wide/preview.svg';
 import NoiseIcon from '@macro-icons/wide/noise.svg';
 import SignalIcon from '@macro-icons/wide/signal.svg';
@@ -548,7 +549,22 @@ const SearchBar = () => {
             }
           }}
         >
-          <SearchIcon class="size-4.5 shrink-0" />
+          <Show
+            when={searchText()}
+            fallback={<SearchIcon class="size-4.5 shrink-0" />}
+          >
+            <button
+              type="button"
+              class="size-4.5 shrink-0 hover:text-accent"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setSearchText('');
+              }}
+            >
+              <XIcon class="size-4.5" />
+            </button>
+          </Show>
           <span
             ref={(el) => {
               measureSpan = el;
