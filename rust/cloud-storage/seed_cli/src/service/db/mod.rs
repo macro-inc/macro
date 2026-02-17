@@ -12,6 +12,7 @@ use comms_db_client::channels::create_channel::CreateChannelOptions;
 use comms_db_client::channels::seed_channel::SeedChannelOptions;
 use comms_db_client::messages::create_message::CreateMessageOptions;
 use comms_db_client::messages::seed_message::SeedMessageOptions;
+use models_email::email::service;
 
 /// Wrapper around the database connection pool.
 pub struct SeedDb {
@@ -62,5 +63,40 @@ impl SeedDb {
         let message =
             comms_db_client::messages::seed_message::seed_message(&self.inner, options).await?;
         Ok(message.id)
+    }
+
+    /// Upsert an email link (connects a user to an email provider).
+    #[tracing::instrument(skip(self), err)]
+    pub async fn upsert_email_link(
+        &self,
+        link: service::link::Link,
+    ) -> anyhow::Result<service::link::Link> {
+        let result = email_db_client::links::insert::upsert_link(&self.inner, link).await?;
+        Ok(result)
+    }
+
+    /// Insert or update email labels for a link.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn insert_email_labels(
+        &self,
+        labels: Vec<service::label::Label>,
+    ) -> anyhow::Result<()> {
+        email_db_client::labels::insert::insert_or_update_labels(&self.inner, labels).await
+    }
+
+    /// Insert an email thread with all its messages, contacts, recipients, and labels.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn insert_email_thread(
+        &self,
+        thread: service::thread::Thread,
+        link_id: uuid::Uuid,
+    ) -> anyhow::Result<uuid::Uuid> {
+        let id = email_db_client::threads::insert::insert_thread_and_messages(
+            &self.inner,
+            thread,
+            link_id,
+        )
+        .await?;
+        Ok(id)
     }
 }

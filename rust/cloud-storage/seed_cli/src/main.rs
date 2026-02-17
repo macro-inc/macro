@@ -35,7 +35,7 @@ pub async fn main() -> anyhow::Result<()> {
 
     let db = PgPoolOptions::new()
         .min_connections(1)
-        .max_connections(50)
+        .max_connections(95)
         .connect(
             &env_vars
                 .database_url

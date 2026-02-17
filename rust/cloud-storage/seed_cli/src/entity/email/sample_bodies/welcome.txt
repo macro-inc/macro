@@ -1,0 +1,12 @@
+Welcome to the team! We're excited to have you on board.
+
+Here are a few things to get you started:
+
+1. Check out the onboarding guide in our wiki
+2. Set up your development environment using the README
+3. Join the #engineering and #general channels
+4. Schedule a 1:1 with your team lead this week
+
+If you run into any issues or have questions, don't hesitate to reach out. We have a very open culture and everyone is happy to help.
+
+Looking forward to working with you!

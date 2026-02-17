@@ -1,0 +1,7 @@
+Hey,
+
+Do you have a few minutes to chat about the deployment plan? I had a couple of questions about the rollback strategy and wanted to make sure we're aligned before we push to production.
+
+No rush - tomorrow works too if you're busy today.
+
+Thanks!
