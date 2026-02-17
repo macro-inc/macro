@@ -219,13 +219,11 @@ export const SoupViewContextProvider: FlowComponent<
     }
 
     if (ENABLE_FEATURED_SEARCH_RESULTS && search.isSearching()) {
-      const featuredLocal = search.featuredResults();
-      const featuredIds = new Set(featuredLocal.map((e) => e.id));
-      const featured = featuredLocal
-        .filter((e) => !filters.some((f) => !f.predicate(e)))
-        .map((e) =>
-          isWithNotification(e) ? e : attachNotifications(e)
-        ) as SoupEntity[];
+      const featured = search
+        .featuredResults()
+        .map((e) => (isWithNotification(e) ? e : attachNotifications(e)))
+        .filter((e) => filters.every((f) => f.predicate(e))) as SoupEntity[];
+      const featuredIds = new Set(featured.map((e) => e.id));
       const rest = transformed.filter((e) => !featuredIds.has(e.id));
       transformed = [...featured, ...rest];
     }

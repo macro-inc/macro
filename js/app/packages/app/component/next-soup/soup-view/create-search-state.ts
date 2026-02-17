@@ -246,7 +246,15 @@ export const createSearchState = ({
 
   const featuredResults = createMemo(() => {
     if (!isSearching()) return [];
-    return localFuzzyResults().slice(0, FEATURED_COUNT);
+    const seen = new Set<string>();
+    const results: EntityData[] = [];
+    for (const item of localFuzzyResults()) {
+      if (seen.has(item.id)) continue;
+      seen.add(item.id);
+      results.push(item);
+      if (results.length >= FEATURED_COUNT) break;
+    }
+    return results;
   });
 
   return {
