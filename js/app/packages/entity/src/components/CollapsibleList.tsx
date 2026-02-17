@@ -46,7 +46,7 @@ export function CollapsibleList<T>(props: CollapsibleListProps<T>) {
         <div class="w-full flex items-center gap-2 my-2">
           <button
             type="button"
-            class="flex items-center gap-1 text-xs bracket-never"
+            class="flex items-center gap-1 text-xs bracket-never hover:text-accent"
             onClick={(e) => {
               e.stopPropagation();
               setShowAll((prev) => !prev);
