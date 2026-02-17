@@ -209,6 +209,7 @@ export function BaseInput(props: BaseInputProps) {
     toggleTaskMode,
     potentialTasks,
     updateTaskPropertyValue,
+    resetTaskProperties,
   } = useTaskMode(markdownState);
 
   createRenderEffect(() => {
@@ -389,6 +390,7 @@ export function BaseInput(props: BaseInputProps) {
     };
 
     clearMarkdownArea();
+    resetTaskProperties();
     focusMarkdownArea();
 
     props
