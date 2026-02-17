@@ -586,15 +586,13 @@ export const SoupViewList = (props: SoupViewListProps) => {
                       <>
                         <Show when={i() === 0 && featuredCount() > 0}>
                           <div class="px-3 py-1.5 text-xs text-text-muted font-medium">
-                            Featured Matches
+                            Featured Results
                           </div>
                         </Show>
                         <Show
                           when={i() === featuredCount() && featuredCount() > 0}
                         >
-                          <div class="px-3 py-1.5 text-xs text-text-muted font-medium border-t border-edge-muted mt-1">
-                            More Results
-                          </div>
+                          <div class="border-t border-edge-muted" />
                         </Show>
                         <EntityRow
                           entityId={row.original.id}
