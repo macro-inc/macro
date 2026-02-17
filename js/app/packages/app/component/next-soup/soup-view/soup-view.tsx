@@ -613,9 +613,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
                               highlighted={
                                 panel.isPanelActive() && row.isFocused()
                               }
-                              hideContentHits={
-                                featuredCount() > 0 && i() < featuredCount()
-                              }
                               onMouseMove={() => {
                                 if (isKeypressActive()) return;
                                 if (soup.previewEntity()) return;
