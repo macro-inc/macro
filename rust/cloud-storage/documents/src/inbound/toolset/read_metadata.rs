@@ -21,8 +21,6 @@ pub struct ReadMetadataResponse {
     pub document_metadata: DocumentMetadata,
     /// The users level of access to the document
     pub user_access_level: AccessLevel,
-    /// The users view location if there is one
-    pub view_location: Option<String>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema, Clone, Default)]
@@ -76,7 +74,6 @@ where
         Ok(ReadMetadataResponse {
             document_metadata: result.document_metadata,
             user_access_level: result.user_access_level,
-            view_location: result.view_location,
         })
     }
 }
