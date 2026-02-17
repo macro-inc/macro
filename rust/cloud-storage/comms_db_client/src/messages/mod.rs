@@ -8,3 +8,4 @@ pub mod get_message_owner;
 pub mod get_messages;
 pub mod patch_message;
 pub mod read_message_with_context;
+pub mod seed_message;

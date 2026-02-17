@@ -8,6 +8,7 @@ use std::path::Path;
 use anyhow::Context;
 use clap::{Args, Subcommand};
 use comms_db_client::messages::create_message::CreateMessageOptions;
+use comms_db_client::messages::seed_message::SeedMessageOptions;
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -28,6 +29,23 @@ pub enum ChannelMessageCommand {
     Create(CreateArgs),
     /// Bulk create multiple channel messages
     BulkCreate(BulkCreateArgs),
+    /// Seed channel messages from a fixed CSV file with pre-defined UUIDs
+    Seed,
+}
+
+/// A row in the seed CSV file.
+#[derive(Debug, Deserialize)]
+struct CsvSeedMessageRow {
+    /// Pre-defined message UUID.
+    message_id: Uuid,
+    /// The channel ID to post the message to.
+    channel_id: Uuid,
+    /// The user ID of the message sender.
+    sender_id: String,
+    /// The message content.
+    content: String,
+    /// Optional thread ID if this is a reply.
+    thread_id: Option<Uuid>,
 }
 
 /// Arguments for creating a single channel message.
@@ -74,6 +92,7 @@ impl ChannelMessageArgs {
         match self.command {
             ChannelMessageCommand::Create(args) => create(args, ctx).await,
             ChannelMessageCommand::BulkCreate(args) => bulk_create(args, ctx).await,
+            ChannelMessageCommand::Seed => seed(ctx).await,
         }
     }
 }
@@ -141,6 +160,61 @@ async fn bulk_create(args: BulkCreateArgs, ctx: SeedCliContext) -> anyhow::Resul
     }
 
     println!("\nBulk create complete: {created} created, {failed} failed");
+
+    Ok(())
+}
+
+#[tracing::instrument(skip(ctx), err)]
+async fn seed(ctx: SeedCliContext) -> anyhow::Result<()> {
+    seed_from_file(ctx, Path::new("seed/channel_messages.csv")).await
+}
+
+async fn seed_from_file(ctx: SeedCliContext, path: &Path) -> anyhow::Result<()> {
+    tracing::info!("seeding channel messages");
+
+    let content = std::fs::read_to_string(path)
+        .with_context(|| format!("failed to read csv file: {}", path.display()))?;
+
+    let mut reader = csv::Reader::from_reader(content.as_bytes());
+    let rows: Vec<CsvSeedMessageRow> = reader
+        .deserialize()
+        .collect::<Result<Vec<_>, _>>()
+        .context("failed to parse csv")?;
+
+    if rows.is_empty() {
+        anyhow::bail!("no messages found in csv file");
+    }
+
+    println!("Found {} messages to seed", rows.len());
+
+    let mut created = 0;
+    let mut failed = 0;
+
+    for row in rows {
+        let message_label = format!("channel={} sender={}", row.channel_id, row.sender_id);
+
+        let options = SeedMessageOptions {
+            message_id: row.message_id,
+            channel_id: row.channel_id,
+            sender_id: row.sender_id,
+            content: row.content,
+            thread_id: row.thread_id,
+        };
+
+        match ctx.db.seed_message(options).await {
+            Ok(message_id) => {
+                println!("Seeded message {message_label} with id {message_id}");
+                created += 1;
+            }
+            Err(e) => {
+                tracing::error!(error=?e, message = message_label, "failed to seed message");
+                println!("Failed to seed message {message_label}: {e}");
+                failed += 1;
+            }
+        }
+    }
+
+    println!("\nSeed complete: {created} created, {failed} failed");
 
     Ok(())
 }
