@@ -1,4 +1,4 @@
-import { For, Show, createSignal, type JSX } from 'solid-js';
+import { For, Show, createSignal, onCleanup, type JSX } from 'solid-js';
 import ChevronDownIcon from '@icon/regular/caret-down.svg?component-solid';
 import { cn } from '@ui/utils/classname';
 
@@ -22,6 +22,10 @@ interface CollapsibleListProps<T> {
  */
 export function CollapsibleList<T>(props: CollapsibleListProps<T>) {
   const [showAll, setShowAll] = createSignal(false);
+  const [isCollapseInView, setIsCollapseInView] = createSignal(true);
+  let topAnchorRef: HTMLDivElement | undefined;
+  let observer: IntersectionObserver | undefined;
+
   const visibleCount = () => props.visibleCount ?? 3;
 
   const visibleItems = () => {
@@ -37,19 +41,61 @@ export function CollapsibleList<T>(props: CollapsibleListProps<T>) {
   const getExpandTextFn = () =>
     props.expandText ?? ((count: number) => `Show ${count} More`);
 
+  const scrollToTop = () => {
+    requestAnimationFrame(() => {
+      topAnchorRef?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+  };
+
+  const collapse = (e: MouseEvent) => {
+    e.stopPropagation();
+    setShowAll(false);
+    scrollToTop();
+  };
+
+  const observeCollapseButton = (el: HTMLDivElement) => {
+    observer?.disconnect();
+    observer = new IntersectionObserver(
+      ([entry]) => setIsCollapseInView(entry.isIntersecting),
+      { threshold: 0 }
+    );
+    observer.observe(el);
+  };
+
+  onCleanup(() => observer?.disconnect());
+
   return (
     <>
+      <div ref={topAnchorRef} />
+      <Show when={showAll() && hasMore() && !isCollapseInView()}>
+        <div class="w-full flex items-center gap-2 my-2">
+          <button
+            type="button"
+            class="flex items-center gap-1 text-xs bracket-never hover:text-accent"
+            onClick={collapse}
+          >
+            <ChevronDownIcon class="w-3 h-3 rotate-180 transition-transform duration-100" />
+            Collapse
+          </button>
+          <div class="border-t border-edge-muted/50 grow" />
+        </div>
+      </Show>
       <For each={visibleItems()}>
         {(child, index) => props.children(child, index(), count())}
       </For>
       <Show when={hasMore()}>
-        <div class="w-full flex items-center gap-2 my-2">
+        <div
+          ref={observeCollapseButton}
+          class="w-full flex items-center gap-2 my-2"
+        >
           <button
             type="button"
             class="flex items-center gap-1 text-xs bracket-never hover:text-accent"
             onClick={(e) => {
               e.stopPropagation();
+              const wasExpanded = showAll();
               setShowAll((prev) => !prev);
+              if (wasExpanded) scrollToTop();
             }}
           >
             <ChevronDownIcon
@@ -61,7 +107,7 @@ export function CollapsibleList<T>(props: CollapsibleListProps<T>) {
               {getExpandTextFn()(props.items.length - visibleCount())}
             </Show>
           </button>
-          <div class="border-t border-edge-muted/50 grow"></div>
+          <div class="border-t border-edge-muted/50 grow" />
         </div>
       </Show>
     </>
