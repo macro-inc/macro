@@ -97,11 +97,11 @@ fn parse_email_bulk_generate_missing_email_fails() {
 }
 
 #[test]
-fn parse_email_bulk_create_minimal() {
+fn parse_email_seed_minimal() {
     let cli = Cli::try_parse_from([
         "seed_cli",
         "email",
-        "bulk-create",
+        "seed",
         "--file-path",
         "/tmp/emails.json",
     ])
@@ -109,22 +109,22 @@ fn parse_email_bulk_create_minimal() {
 
     match cli.command {
         crate::entity::EntityCommand::Email(args) => match args.command {
-            EmailCommand::BulkCreate(create) => {
+            EmailCommand::Seed(create) => {
                 assert_eq!(create.file_path, "/tmp/emails.json");
                 assert_eq!(create.concurrency, 95);
             }
-            other => panic!("expected BulkCreate, got {other:?}"),
+            other => panic!("expected Seed, got {other:?}"),
         },
         other => panic!("expected Email, got {other:?}"),
     }
 }
 
 #[test]
-fn parse_email_bulk_create_with_concurrency() {
+fn parse_email_seed_with_concurrency() {
     let cli = Cli::try_parse_from([
         "seed_cli",
         "email",
-        "bulk-create",
+        "seed",
         "--file-path",
         "/tmp/emails.json",
         "--concurrency",
@@ -134,18 +134,18 @@ fn parse_email_bulk_create_with_concurrency() {
 
     match cli.command {
         crate::entity::EntityCommand::Email(args) => match args.command {
-            EmailCommand::BulkCreate(create) => {
+            EmailCommand::Seed(create) => {
                 assert_eq!(create.concurrency, 10);
             }
-            other => panic!("expected BulkCreate, got {other:?}"),
+            other => panic!("expected Seed, got {other:?}"),
         },
         other => panic!("expected Email, got {other:?}"),
     }
 }
 
 #[test]
-fn parse_email_bulk_create_missing_file_path_fails() {
-    let result = Cli::try_parse_from(["seed_cli", "email", "bulk-create"]);
+fn parse_email_seed_missing_file_path_fails() {
+    let result = Cli::try_parse_from(["seed_cli", "email", "seed"]);
     assert!(result.is_err());
 }
 
@@ -202,10 +202,10 @@ fn minimal_seed_json(thread_count: usize) -> String {
     .to_string()
 }
 
-// ── Integration tests (bulk_create) ───────────────────────
+// ── Integration tests (seed) ──────────────────────────────
 
 #[tokio::test]
-async fn bulk_create_inserts_link_labels_and_threads() {
+async fn seed_inserts_link_labels_and_threads() {
     let json = minimal_seed_json(2);
     let file = write_temp_json(&json);
 
@@ -224,7 +224,7 @@ async fn bulk_create_inserts_link_labels_and_threads() {
         .returning(|_, _| Ok(Uuid::nil()));
 
     let args = EmailArgs {
-        command: EmailCommand::BulkCreate(BulkCreateArgs {
+        command: EmailCommand::Seed(SeedArgs {
             file_path: file.path().to_str().unwrap().to_string(),
             concurrency: 95,
         }),
@@ -235,7 +235,7 @@ async fn bulk_create_inserts_link_labels_and_threads() {
 }
 
 #[tokio::test]
-async fn bulk_create_single_thread() {
+async fn seed_single_thread() {
     let json = minimal_seed_json(1);
     let file = write_temp_json(&json);
 
@@ -254,7 +254,7 @@ async fn bulk_create_single_thread() {
         .returning(|_, _| Ok(Uuid::nil()));
 
     let args = EmailArgs {
-        command: EmailCommand::BulkCreate(BulkCreateArgs {
+        command: EmailCommand::Seed(SeedArgs {
             file_path: file.path().to_str().unwrap().to_string(),
             concurrency: 95,
         }),
@@ -265,11 +265,11 @@ async fn bulk_create_single_thread() {
 }
 
 #[tokio::test]
-async fn bulk_create_missing_file_fails() {
+async fn seed_missing_file_fails() {
     let mock_db = Db::default();
 
     let args = EmailArgs {
-        command: EmailCommand::BulkCreate(BulkCreateArgs {
+        command: EmailCommand::Seed(SeedArgs {
             file_path: "/nonexistent/path.json".to_string(),
             concurrency: 95,
         }),
@@ -281,13 +281,13 @@ async fn bulk_create_missing_file_fails() {
 }
 
 #[tokio::test]
-async fn bulk_create_invalid_json_fails() {
+async fn seed_invalid_json_fails() {
     let file = write_temp_json("not valid json {{{");
 
     let mock_db = Db::default();
 
     let args = EmailArgs {
-        command: EmailCommand::BulkCreate(BulkCreateArgs {
+        command: EmailCommand::Seed(SeedArgs {
             file_path: file.path().to_str().unwrap().to_string(),
             concurrency: 95,
         }),
@@ -299,7 +299,7 @@ async fn bulk_create_invalid_json_fails() {
 }
 
 #[tokio::test]
-async fn bulk_create_continues_on_thread_failure() {
+async fn seed_continues_on_thread_failure() {
     let json = minimal_seed_json(3);
     let file = write_temp_json(&json);
 
@@ -328,7 +328,7 @@ async fn bulk_create_continues_on_thread_failure() {
         });
 
     let args = EmailArgs {
-        command: EmailCommand::BulkCreate(BulkCreateArgs {
+        command: EmailCommand::Seed(SeedArgs {
             file_path: file.path().to_str().unwrap().to_string(),
             concurrency: 1, // sequential so ordering is predictable
         }),
@@ -339,7 +339,7 @@ async fn bulk_create_continues_on_thread_failure() {
 }
 
 #[tokio::test]
-async fn bulk_create_link_failure_propagates() {
+async fn seed_link_failure_propagates() {
     let json = minimal_seed_json(1);
     let file = write_temp_json(&json);
 
@@ -350,7 +350,7 @@ async fn bulk_create_link_failure_propagates() {
         .returning(|_| Err(anyhow::anyhow!("link creation failed")));
 
     let args = EmailArgs {
-        command: EmailCommand::BulkCreate(BulkCreateArgs {
+        command: EmailCommand::Seed(SeedArgs {
             file_path: file.path().to_str().unwrap().to_string(),
             concurrency: 95,
         }),
@@ -362,7 +362,7 @@ async fn bulk_create_link_failure_propagates() {
 }
 
 #[tokio::test]
-async fn bulk_create_label_failure_propagates() {
+async fn seed_label_failure_propagates() {
     let json = minimal_seed_json(1);
     let file = write_temp_json(&json);
 
@@ -377,7 +377,7 @@ async fn bulk_create_label_failure_propagates() {
         .returning(|_| Err(anyhow::anyhow!("label insertion failed")));
 
     let args = EmailArgs {
-        command: EmailCommand::BulkCreate(BulkCreateArgs {
+        command: EmailCommand::Seed(SeedArgs {
             file_path: file.path().to_str().unwrap().to_string(),
             concurrency: 95,
         }),

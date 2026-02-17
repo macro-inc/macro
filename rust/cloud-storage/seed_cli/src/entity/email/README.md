@@ -38,12 +38,12 @@ Output is written to `seed_cli/seed/emails.json`.
 - **Body templates** — each message references a template name from `sample_bodies/` (bodies are resolved at import time, not stored in the JSON)
 - **Provider IDs** (random hex strings) on all threads and messages
 
-## Step 2: Bulk Create
+## Step 2: Seed
 
 Reads the generated JSON and inserts everything into the database.
 
 ```bash
-cargo run -- email bulk-create \
+cargo run -- email seed \
   --file-path /absolute/path/to/seed_cli/seed/emails.json
 ```
 

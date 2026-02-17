@@ -46,7 +46,7 @@ pub enum EmailCommand {
     /// Generate a JSON file of randomized email seed data
     BulkGenerate(BulkGenerateArgs),
     /// Import email data from a JSON file into the database
-    BulkCreate(BulkCreateArgs),
+    Seed(SeedArgs),
 }
 
 /// Arguments for generating random email data.
@@ -71,7 +71,7 @@ pub struct BulkGenerateArgs {
 
 /// Arguments for importing email data from a file.
 #[derive(Debug, Args)]
-pub struct BulkCreateArgs {
+pub struct SeedArgs {
     /// Path to the JSON file containing email data to import
     #[arg(long)]
     pub file_path: String,
@@ -212,7 +212,7 @@ impl EmailArgs {
     pub async fn execute(self, ctx: SeedCliContext) -> anyhow::Result<()> {
         match self.command {
             EmailCommand::BulkGenerate(args) => bulk_generate(args).await,
-            EmailCommand::BulkCreate(args) => bulk_create(args, ctx).await,
+            EmailCommand::Seed(args) => seed(args, ctx).await,
         }
     }
 }
@@ -371,7 +371,7 @@ async fn bulk_generate(args: BulkGenerateArgs) -> anyhow::Result<()> {
 }
 
 #[tracing::instrument(skip(ctx), err)]
-async fn bulk_create(args: BulkCreateArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
+async fn seed(args: SeedArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
     tracing::info!("importing email seed data");
 
     let content = std::fs::read_to_string(Path::new(&args.file_path))
