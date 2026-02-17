@@ -65,6 +65,7 @@ interface LayoutProps {
   unread: boolean;
   isShared: boolean;
   hasNotifications: boolean;
+  hideContentHits?: boolean;
   onProjectClick?: (
     entity: ProjectEntity,
     e: PointerEvent | MouseEvent
@@ -140,7 +141,7 @@ function NarrowLayout(props: LayoutProps) {
         when={
           (isEmailEntity(props.entity) || isChannelEntity(props.entity)) &&
           !props.hasNotifications &&
-          !hasSearchContentHits(props.entity)
+          (!hasSearchContentHits(props.entity) || props.hideContentHits)
         }
       >
         <Entity.Slot placement="body" class="flex flex-col gap-1 pb-3 -mt-1">
@@ -230,7 +231,9 @@ function WideLayout(props: LayoutProps) {
             {(entity) => (
               <>
                 <Show
-                  when={!hasSearchContentHits(entity())}
+                  when={
+                    !hasSearchContentHits(entity()) || props.hideContentHits
+                  }
                   fallback={
                     <>
                       <span class="truncate">
@@ -341,6 +344,7 @@ export function ListEntity(props: ListEntityProps) {
     unread: unread(),
     isShared: isShared(),
     hasNotifications: hasNotifications(),
+    hideContentHits: props.hideContentHits,
     onProjectClick: props.onProjectClick,
   });
 
@@ -385,7 +389,7 @@ export function ListEntity(props: ListEntityProps) {
             <Show
               when={
                 isWithNotification(props.entity) &&
-                !hasSearchContentHits(props.entity)
+                (!hasSearchContentHits(props.entity) || props.hideContentHits)
               }
             >
               <Entity.Notification.Stacks
