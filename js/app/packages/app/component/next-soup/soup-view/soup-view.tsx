@@ -77,8 +77,6 @@ import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-o
 import { usePropertyEditorHotkeys } from '@app/component/property-edit-modal/hooks/usePropertyEditorHotkeys';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 
-const DEFAULT_ENTITY_HEIGHT = 40;
-
 const useSoupNotificationInvalidators = () => {
   const notificationSource = useGlobalNotificationSource();
   const entityQueryClient = useQueryClient();
