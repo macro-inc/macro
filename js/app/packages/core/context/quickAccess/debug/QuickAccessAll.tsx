@@ -1,14 +1,34 @@
 import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@app/component/split-layout/components/SplitLabel';
 import { useQuickAccess } from '../QuickAccessProvider';
-import { For, Match, Switch } from 'solid-js';
+import { For } from 'solid-js';
 import { InlineEntity } from '@entity';
-import { isEntityItem } from '../types';
+import type { QuickAccessItem } from '../types';
 
 export default function QuickAccessAll() {
   const { useList } = useQuickAccess();
   // const entities = useList('task', 'note', 'document', 'project');
-  const entities = useList();
+  const entities = useList('person');
+
+  const renderItem = (item: QuickAccessItem) => {
+    if (item.kind === 'entity') {
+      const entity = { ...item.data, ownerId: '' };
+      return <InlineEntity entity={entity as any} />;
+    }
+    if (item.kind === 'user') {
+      return (
+        <span>
+          {item.data.name} ({item.data.email})
+        </span>
+      );
+    }
+    return (
+      <span>
+        {item.bucket} - {item.searchText}
+      </span>
+    );
+  };
+
   return (
     <>
       <SplitHeaderLeft>
@@ -21,16 +41,7 @@ export default function QuickAccessAll() {
               <span class="font-mono text-ink-extra-muted text-xs opacity-50">
                 {(ndx() + 1).toString().padStart(4, '0')}
               </span>
-              <Switch>
-                <Match when={isEntityItem(item) && item}>
-                  {(item) => <InlineEntity entity={item().data} />}
-                </Match>
-                <Match when={true}>
-                  <span>
-                    {item.bucket} - {item.searchText}
-                  </span>
-                </Match>
-              </Switch>
+              {renderItem(item)}
             </div>
           )}
         </For>

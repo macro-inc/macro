@@ -8,8 +8,10 @@ import {
   useContacts,
 } from '@core/user';
 import type { ApiChannelWithLatest } from '@service-comms/generated/models';
-import { useEmails, type ChannelEntity } from '@macro-entity';
+import type { ChannelEntity } from '@entity';
 import { useHistoryQuery, type HistoryItem } from '@queries/history/history';
+import type { DateValue } from '@core/util/date';
+import { toDate } from 'date-fns';
 import { createAssertedContextProvider } from '../createContext';
 import type {
   Bucket,
@@ -25,8 +27,8 @@ function historyItemToEntity(item: HistoryItem): QuickAccessEntity {
   const base = {
     id: item.id,
     name: item.name,
-    createdAt: item.createdAt ? new Date(item.createdAt).getTime() : undefined,
-    updatedAt: item.updatedAt ? new Date(item.updatedAt).getTime() : undefined,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
     viewedAt: item.viewedAt,
   };
 
@@ -79,18 +81,10 @@ function channelToEntity(channel: ApiChannelWithLatest): ChannelEntity {
     ownerId: channel.owner_id ?? '',
     channelType: channel.channel_type ?? 'public',
     participantIds: channel.participants?.map((p) => p.user_id),
-    createdAt: channel.created_at
-      ? new Date(channel.created_at).getTime()
-      : undefined,
-    updatedAt: channel.updated_at
-      ? new Date(channel.updated_at).getTime()
-      : undefined,
-    viewedAt: channel.viewed_at
-      ? new Date(channel.viewed_at).getTime()
-      : undefined,
-    interactedAt: channel.interacted_at
-      ? new Date(channel.interacted_at).getTime()
-      : undefined,
+    createdAt: channel.created_at,
+    updatedAt: channel.updated_at,
+    viewedAt: channel.viewed_at,
+    interactedAt: channel.interacted_at,
   };
 }
 
@@ -124,23 +118,11 @@ function getEntitySearchText(entity: QuickAccessEntity): string {
 }
 
 /**
- * Parses a timestamp that could be a number or ISO string to a number (for sorting).
+ * Converts a DateValue to a timestamp number for sorting.
  */
-function parseTimestamp(value: number | string | null | undefined): number {
+function toTimestamp(value: DateValue | null | undefined): number {
   if (value == null) return 0;
-  if (typeof value === 'number') return value;
-  return new Date(value).getTime();
-}
-
-/**
- * Parses a timestamp that could be a number or ISO string to a Date object.
- */
-function parseTimestampToDate(
-  value: number | string | null | undefined
-): Date | undefined {
-  if (value == null) return undefined;
-  if (typeof value === 'number') return new Date(value);
-  return new Date(value);
+  return toDate(value).getTime();
 }
 
 /**
@@ -192,7 +174,6 @@ export const [QuickAccessProvider, useQuickAccess] =
       const historyQuery = useHistoryQuery();
       const { channels, isLoading: channelsLoading } = useChannelsContext();
       const contacts = useContacts();
-      const emails = useEmails();
       const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
 
       const allItemsSorted = createLazyMemo<QuickAccessItem[]>(() => {
@@ -208,19 +189,19 @@ export const [QuickAccessProvider, useQuickAccess] =
 
           const bucket = getBucketForHistoryItem(item);
           const entity = historyItemToEntity(item);
-          const viewedAtMs = item.viewedAt;
-          const updatedAtMs = parseTimestamp(item.updatedAt);
+          const viewedAtMs = toTimestamp(item.viewedAt);
+          const updatedAtMs = toTimestamp(item.updatedAt);
 
           items.push({
             kind: 'entity',
             id: item.id,
             bucket,
             searchText: getEntitySearchText(entity),
-            sortTimestamp: viewedAtMs ?? updatedAtMs ?? 0,
+            sortTimestamp: viewedAtMs || updatedAtMs,
             timestamps: {
-              viewedAt: parseTimestampToDate(item.viewedAt),
-              updatedAt: parseTimestampToDate(item.updatedAt),
-              createdAt: parseTimestampToDate(item.createdAt),
+              viewedAt: item.viewedAt,
+              updatedAt: item.updatedAt,
+              createdAt: item.createdAt,
             },
             data: entity,
           });
@@ -233,18 +214,18 @@ export const [QuickAccessProvider, useQuickAccess] =
           const isDm = channel.channel_type === 'direct_message';
           const bucket: Bucket = isDm ? 'dm' : 'channel';
           const entity = channelToEntity(channel);
-          const updatedAtMs = parseTimestamp(channel.updated_at) || undefined;
+          const updatedAtMs = toTimestamp(channel.updated_at);
 
           items.push({
             kind: 'entity',
             id: channel.id,
             bucket,
             searchText: channel.name ?? '',
-            sortTimestamp: updatedAtMs ?? 0,
+            sortTimestamp: updatedAtMs,
             timestamps: {
-              viewedAt: parseTimestampToDate(channel.viewed_at),
-              updatedAt: parseTimestampToDate(channel.updated_at),
-              createdAt: parseTimestampToDate(channel.created_at),
+              viewedAt: channel.viewed_at,
+              updatedAt: channel.updated_at,
+              createdAt: channel.created_at,
             },
             data: entity,
           });
@@ -255,42 +236,18 @@ export const [QuickAccessProvider, useQuickAccess] =
         const contactData = contacts();
         for (const contact of contactData) {
           const augmentedUser = augmentUserWithDmActivity(contact);
-          const lastInteractionMs = augmentedUser.lastInteraction;
+          const lastInteractionMs = toTimestamp(augmentedUser.lastInteraction);
 
           items.push({
             kind: 'user',
             id: augmentedUser.id,
             bucket: 'person',
             searchText: getUserSearchText(augmentedUser),
-            sortTimestamp: lastInteractionMs ?? 0,
+            sortTimestamp: lastInteractionMs,
             timestamps: {
-              lastInteraction: parseTimestampToDate(
-                augmentedUser.lastInteraction
-              ),
+              lastInteraction: augmentedUser.lastInteraction,
             },
             data: augmentedUser,
-          });
-        }
-
-        // Process emails
-        // Sort by: viewedAt ?? updatedAt
-        const emailData = emails();
-        for (const email of emailData) {
-          const viewedAtMs = email.viewedAt;
-          const updatedAtMs = email.updatedAt;
-
-          items.push({
-            kind: 'entity',
-            id: email.id,
-            bucket: 'email',
-            searchText: email.name ?? 'No Subject',
-            sortTimestamp: viewedAtMs ?? updatedAtMs ?? 0,
-            timestamps: {
-              viewedAt: parseTimestampToDate(email.viewedAt),
-              updatedAt: parseTimestampToDate(email.updatedAt),
-              createdAt: parseTimestampToDate(email.createdAt),
-            },
-            data: email,
           });
         }
 

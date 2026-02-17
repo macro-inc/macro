@@ -7,19 +7,16 @@ import type {
   TaskEntity,
   EmailEntity,
   ProjectEntity,
-} from '@macro-entity';
+} from '@entity';
 import type { HotkeyCommand } from '@core/hotkey/types';
 import type { IUser } from '@core/user/types';
+import type { DateValue } from '@core/util/date';
 
 export type QuickAccessEntity<T extends EntityData = EntityData> = Omit<
   T,
   'ownerId'
 >;
 
-/**
- * buckets represent logical groupings of items for quick access.
- * consumers can request specific buckets via uselist() or usesearch().
- */
 export type Bucket =
   | 'channel'
   | 'dm'
@@ -56,10 +53,10 @@ export const BUCKET_COMBINATIONS: Record<BucketCombination, Bucket[]> = {
 };
 
 export type ItemTimestamps = {
-  viewedAt?: Date;
-  updatedAt?: Date;
-  createdAt?: Date;
-  lastInteraction?: Date;
+  viewedAt?: DateValue | null;
+  updatedAt?: DateValue | null;
+  createdAt?: DateValue | null;
+  lastInteraction?: DateValue | null;
 };
 
 type QuickAccessBase = {
@@ -215,8 +212,6 @@ export type QuickAccessContextValue = {
    */
   refresh: () => void;
 };
-
-// Helper functions for QuickAccessItem
 
 export function getItemSearchText(item: QuickAccessItem): string {
   return item.searchText;

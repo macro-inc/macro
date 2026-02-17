@@ -12,7 +12,6 @@ import {
   type EntityItem,
   type UserItem,
   isEntityItem,
-  isUserItem,
 } from '@core/context/quickAccess';
 import clickOutside from '@core/directive/clickOutside';
 import type { ChannelWithParticipants, IUser } from '@core/user';
@@ -26,13 +25,15 @@ import { trackMention } from '@core/signal/mention';
 import ClockIcon from '@icon/regular/clock.svg';
 import EmailIcon from '@icon/regular/envelope.svg';
 import UsersIcon from '@icon/regular/users.svg';
-import type { ChannelEntity, EntityData, WithSearch } from '@entity';
-import {
-  createUnifiedSearchInfiniteQuery,
-  type EmailEntity,
-} from '@macro-entity';
-import type { SearchArgs } from '@service-search/client';
-import { debounce } from '@solid-primitives/scheduled';
+import CheckSquareIcon from '@icon/regular/check.svg';
+import HashIcon from '@icon/regular/hammer.svg';
+import FileIcon from '@icon/regular/file.svg';
+import type {
+  ChannelEntity,
+  EntityData,
+  WithSearch,
+  EmailEntity,
+} from '@entity';
 import { globalSplitManager } from 'app/signal/splitLayout';
 import type { LexicalEditor } from 'lexical';
 import type { List } from 'lodash';
@@ -74,6 +75,11 @@ import {
 import type { HistoryItem as Item } from '@queries/history/history';
 import { match } from 'ts-pattern';
 import { ClippedPanel } from '@core/component/ClippedPanel';
+import {
+  type SearchSoupQueryArgs,
+  useSearchSoupQuery,
+} from '@queries/soup/search';
+import { debouncedDependent } from '@core/util/debounce';
 
 const MAX_ITEMS = 8;
 
@@ -201,6 +207,7 @@ function ItemBin(
   props: ParentProps<{
     label: string;
     binType: MentionBins;
+    icon?: JSXElement;
     isNextPage?: Accessor<boolean>;
     totalCount?: number;
     showingCount?: number;
@@ -233,7 +240,8 @@ function ItemBin(
           props.isSelected ? 'text-ink-muted' : 'text-ink-extra-muted'
         }`}
       >
-        <span class="flex items-center gap-1">
+        <span class="flex items-center gap-1.5">
+          <Show when={props.icon}>{props.icon}</Show>
           {props.label}
           <Show when={props.isSelected && showViewAllButton()}> →</Show>
         </span>
@@ -331,14 +339,23 @@ export function computeBins<T extends string>(
   return scaled;
 }
 
-/** The current bins enum */
-export type MentionBins = 'items' | 'users' | 'dates' | 'emails';
+/** Bucket configuration */
+type BucketConfig<T extends string = string> = {
+  id: T;
+  label: string;
+  icon?: JSXElement;
+  getData: () => MentionItem[];
+  getFullCount: () => number;
+};
+
+/** The current bins enum - now dynamic based on bucket configs */
+export type MentionBins = string;
 
 /** View all mode type */
-type ViewAllMode = MentionBins | null;
+type ViewAllMode = string | null;
 
 /** Selected category type */
-type SelectedCategory = MentionBins | null;
+type SelectedCategory = string | null;
 
 /**
  * Get display name for a MentionItem.
@@ -483,14 +500,9 @@ function MentionsMenuInner(props: {
   /** Fetch text then past in a fold-node for plain-text mentions (useful for AI)*/
   useSnapshotForDocuments?: boolean;
 }) {
-  const [searchTerm, setSearchTerm] = createSignal<string>(
-    props.menu.searchTerm()
-  );
-
-  // Get QuickAccess data
+  const searchTerm = debouncedDependent(props.menu.searchTerm, 60);
   const quickAccess = useQuickAccess();
 
-  // Documents & channels from quickAccess (replaces useHistoryQuery + useChannelsContext)
   const itemsAndChannels = quickAccess.useList(
     'document',
     'note',
@@ -501,24 +513,22 @@ function MentionsMenuInner(props: {
     'dm'
   );
 
-  // Users from quickAccess (replaces useContacts)
-  const usersFromQuickAccess = quickAccess.useList('person');
+  const users = quickAccess.useList('person');
 
   // Emails from quickAccess for local data
   const emailsFromQuickAccess = quickAccess.useList('email');
 
   // Dates from useDateSearch (replaces getDateSuggestions)
-  const dateOptionsAccessor = () => searchTerm();
-  const dateOptions = useDateSearch({ query: dateOptionsAccessor });
+  const dateOptions = useDateSearch({ query: searchTerm });
 
   // Keep email unified search for paginated search results
-  const args = createMemo((): SearchArgs => {
+  const args = createMemo((): SearchSoupQueryArgs => {
     return {
       params: {
         cursor: null,
         page_size: 10,
       },
-      request: {
+      body: {
         match_type: 'partial',
         search_on: 'name',
         include: ['emails'],
@@ -527,8 +537,7 @@ function MentionsMenuInner(props: {
     };
   });
 
-  const emailUnifiedSearchInfiniteQuery =
-    createUnifiedSearchInfiniteQuery(args);
+  const emailUnifiedSearchInfiniteQuery = useSearchSoupQuery(args);
 
   const foundEmailsFromSearch = createMemo((): EntityItem[] => {
     if (emailUnifiedSearchInfiniteQuery.status === 'success') {
@@ -544,10 +553,10 @@ function MentionsMenuInner(props: {
           id: e.id,
           bucket: 'email',
           searchText: e.name ?? 'No Subject',
-          sortTimestamp: e.updatedAt ?? 0,
+          sortTimestamp: e.updatedAt ? new Date(e.updatedAt).getTime() : 0,
           timestamps: {
-            updatedAt: e.updatedAt ? new Date(e.updatedAt) : undefined,
-            createdAt: e.createdAt ? new Date(e.createdAt) : undefined,
+            updatedAt: e.updatedAt ?? null,
+            createdAt: e.createdAt ?? null,
           },
           data: e,
         })
@@ -642,13 +651,6 @@ function MentionsMenuInner(props: {
 
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
 
-  const debouncedSetSearchTerm = debounce(
-    (term: string) => setSearchTerm(term.toLowerCase()),
-    60
-  );
-
-  createEffect(() => debouncedSetSearchTerm(props.menu.searchTerm()));
-
   // Helper function to get search text from EntityItem
   const getEntitySearchText = (item: EntityItem): string => item.searchText;
 
@@ -667,9 +669,12 @@ function MentionsMenuInner(props: {
   );
 
   const filteredItems = createMemo((): EntityItem[] => {
-    const allResults = itemSearch(historyAndChannels(), searchTerm()).map(
-      (result) => result.item
-    );
+    const term = searchTerm();
+    const items = historyAndChannels();
+    // Preserve original QuickAccess order when no search term
+    const allResults = term
+      ? itemSearch(items, term).map((result) => result.item)
+      : items;
 
     // Separate open tabs from other items
     const openTabsSet = new Set(openTabs().map((item) => item.id));
@@ -735,10 +740,11 @@ function MentionsMenuInner(props: {
   });
 
   const filteredUsers = createMemo((): MentionItem[] => {
-    const userItems = usersFromQuickAccess().filter(isUserItem);
-    const searchedUsers = userSearch(userItems, searchTerm()).map(
-      (result) => result.item
-    );
+    const currentUsers = users();
+    const term = searchTerm();
+    const searchedUsers = term
+      ? userSearch(currentUsers, term).map((result) => result.item)
+      : currentUsers;
     return [...specialGroups(), ...searchedUsers];
   });
 
@@ -759,16 +765,18 @@ function MentionsMenuInner(props: {
   );
 
   const filteredEmails = createMemo((): EntityItem[] => {
-    const localEmails = emailsFromQuickAccess().filter(isEntityItem);
-    const mail = emailSearch(localEmails, searchTerm()).map(
-      (result) => result.item
-    );
+    const localEmails = emailsFromQuickAccess();
+    const term = searchTerm();
+    // Preserve original QuickAccess order when no search term
+    const mail = term
+      ? emailSearch(localEmails, term).map((result) => result.item)
+      : localEmails;
 
     const otherMail = foundEmailsFromSearch();
 
-    // dedup / preserve order
-    const ids = new Set(mail.map((e) => e.id));
-    return [...mail, ...otherMail.filter((e) => !ids.has(e.id))];
+    // Deduplicate by checking if search result IDs are already in local emails
+    const ids = new Set(mail.map((item) => item.id));
+    return [...mail, ...otherMail.filter((item) => !ids.has(item.id))];
   });
 
   // Convert DateOptions to DateMentionItems
@@ -782,43 +790,110 @@ function MentionsMenuInner(props: {
     );
   });
 
-  // The raw bins store the counts for all matching items
-  const rawBins = createMemo<Record<MentionBins, number>>(() => ({
-    users: filteredUsers().length,
-    items: filteredItems().length,
-    dates: dateSuggestions().length,
-    emails: filteredEmails().length,
-  }));
+  // ============================================================================
+  // BUCKET CONFIGURATION
+  // ============================================================================
+  // Define your buckets here - easy to add, remove, or reorder
+  const bucketConfigs = createMemo((): BucketConfig[] => {
+    // Separate users and groups
+    const usersAndGroups = [...filteredUsers(), ...specialGroups()];
 
-  // The bins is the limited and rounded count for each bucket
+    // Separate tasks from other documents
+    const tasks = filteredItems().filter(
+      (item) => item.kind === 'entity' && item.bucket === 'task'
+    );
+
+    // Separate channels (including DMs)
+    const channels = filteredItems().filter(
+      (item) =>
+        item.kind === 'entity' &&
+        (item.bucket === 'channel' || item.bucket === 'dm')
+    );
+
+    // Other documents (notes, projects, etc.)
+    const otherDocs = filteredItems().filter(
+      (item) =>
+        item.kind === 'entity' &&
+        item.bucket !== 'task' &&
+        item.bucket !== 'channel' &&
+        item.bucket !== 'dm' &&
+        item.bucket !== 'email'
+    );
+
+    return [
+      {
+        id: 'users',
+        label: 'People & Groups',
+        icon: <UsersIcon class="h-3 w-3" />,
+        getData: () => usersAndGroups,
+        getFullCount: () => usersAndGroups.length,
+      },
+      {
+        id: 'tasks',
+        label: 'Tasks',
+        icon: <CheckSquareIcon class="h-3 w-3" />,
+        getData: () => tasks,
+        getFullCount: () => tasks.length,
+      },
+      {
+        id: 'channels',
+        label: 'Channels',
+        icon: <HashIcon class="h-3 w-3" />,
+        getData: () => channels,
+        getFullCount: () => channels.length,
+      },
+      {
+        id: 'documents',
+        label: 'Documents',
+        icon: <FileIcon class="h-3 w-3" />,
+        getData: () => otherDocs,
+        getFullCount: () => otherDocs.length,
+      },
+      {
+        id: 'dates',
+        label: 'Dates',
+        icon: <ClockIcon class="h-3 w-3" />,
+        getData: () => dateSuggestions(),
+        getFullCount: () => dateSuggestions().length,
+      },
+      {
+        id: 'emails',
+        label: 'Emails',
+        icon: <EmailIcon class="h-3 w-3" />,
+        getData: () => filteredEmails(),
+        getFullCount: () => filteredEmails().length,
+      },
+    ].filter((bucket) => bucket.getFullCount() > 0); // Only include non-empty buckets
+  });
+
+  // Compute bins dynamically from bucket configs
+  const rawBins = createMemo(() => {
+    const bins: Record<string, number> = {};
+    bucketConfigs().forEach((config) => {
+      bins[config.id] = config.getFullCount();
+    });
+    return bins;
+  });
+
   const bins = createMemo(() => computeBins(rawBins(), MAX_ITEMS));
 
+  // Combined items based on view mode
   const combinedItems = createMemo<MentionItem[]>(() => {
     const currentViewAllMode = viewAllMode();
 
     if (currentViewAllMode) {
-      // in view all mode, show all items for that category only
-      switch (currentViewAllMode) {
-        case 'users':
-          return filteredUsers();
-        case 'items':
-          return filteredItems();
-        case 'dates':
-          return dateSuggestions();
-        case 'emails':
-          return filteredEmails();
-        default:
-          return [];
-      }
+      // In view all mode, show all items for that category only
+      const bucket = bucketConfigs().find((b) => b.id === currentViewAllMode);
+      return bucket ? bucket.getData() : [];
     }
 
-    // normal mode: show limited items from all categories
-    return [
-      ...filteredUsers().slice(0, bins().users),
-      ...filteredItems().slice(0, bins().items),
-      ...dateSuggestions().slice(0, bins().dates),
-      ...filteredEmails().slice(0, bins().emails),
-    ];
+    // Normal mode: show limited items from all categories
+    const result: MentionItem[] = [];
+    bucketConfigs().forEach((config) => {
+      const limit = bins()[config.id] || 0;
+      result.push(...config.getData().slice(0, limit));
+    });
+    return result;
   });
 
   const [escapeSpaceState, setEscapeSpaceState] = createSignal<
@@ -835,34 +910,17 @@ function MentionsMenuInner(props: {
     if (viewAllMode()) return null; // no category selection in view all mode
 
     const index = selectedIndex();
-    const { users, items, dates, emails } = bins();
-
+    const currentBins = bins();
     let currentIndex = 0;
 
-    if (users > 0) {
-      if (index < currentIndex + users) {
-        return 'users';
-      }
-      currentIndex += users;
-    }
-
-    if (items > 0) {
-      if (index < currentIndex + items) {
-        return 'items';
-      }
-      currentIndex += items;
-    }
-
-    if (dates > 0) {
-      if (index < currentIndex + dates) {
-        return 'dates';
-      }
-      currentIndex += dates;
-    }
-
-    if (emails > 0) {
-      if (index < currentIndex + emails) {
-        return 'emails';
+    // Iterate through bucket configs to find which category the selected index belongs to
+    for (const config of bucketConfigs()) {
+      const count = currentBins[config.id] || 0;
+      if (count > 0) {
+        if (index < currentIndex + count) {
+          return config.id;
+        }
+        currentIndex += count;
       }
     }
 
@@ -1059,11 +1117,7 @@ function MentionsMenuInner(props: {
   };
 
   const hasOnlyOneCategory = createMemo(() => {
-    const currentRawBins = rawBins();
-    const categoriesWithMatches = Object.values(currentRawBins).filter(
-      (count) => count > 0
-    );
-    return categoriesWithMatches.length === 1;
+    return bucketConfigs().length === 1;
   });
 
   const inner = createMemo(() => {
@@ -1075,12 +1129,8 @@ function MentionsMenuInner(props: {
       const totalLength = () => allItems.length;
 
       const renderViewAllOptions = createMemo(() => {
-        const categoryLabel = {
-          users: 'People',
-          items: 'Documents & Channels',
-          dates: 'Dates',
-          emails: 'Emails',
-        }[currentViewAllMode];
+        const bucket = bucketConfigs().find((b) => b.id === currentViewAllMode);
+        const categoryLabel = bucket?.label || 'Items';
 
         return (
           <>
@@ -1138,115 +1188,36 @@ function MentionsMenuInner(props: {
     }
 
     // ------ NORMAL MODE ------------------------------------------------------
-    const users = filteredUsers().slice(0, bins().users);
-    const docs = filteredItems().slice(0, bins().items);
-    const dates = dateSuggestions().slice(0, bins().dates);
-    const emailList = filteredEmails().slice(0, bins().emails);
-    const totalLength = () =>
-      users.length + docs.length + dates.length + emailList.length;
+    const currentBins = bins();
+    const totalLength = () => combinedItems().length;
 
     const RenderOptions = () => {
-      const options = [];
-      if (users.length > 0) {
-        options.push(
-          <ItemBin
-            label="People"
-            binType="users"
-            totalCount={filteredUsers().length}
-            showingCount={users.length}
-            onViewAll={handleViewAll}
-            isSelected={selectedCategory() === 'users'}
-          >
-            <For each={users}>
-              {(item, i) => (
-                <MentionsMenuItem
-                  item={item}
-                  index={i()}
-                  selected={i() === selectedIndex()}
-                  itemAction={itemAction}
-                  setIndex={setSelectedIndexFromMouse}
-                  setOpen={setMenuOpen}
-                />
-              )}
-            </For>
-          </ItemBin>
-        );
-      }
+      const options: JSXElement[] = [];
+      let cumulativeIndex = 0;
 
-      if (docs.length > 0) {
-        options.push(
-          <ItemBin
-            label="Documents & Channels"
-            binType="items"
-            totalCount={filteredItems().length}
-            showingCount={docs.length}
-            onViewAll={handleViewAll}
-            isSelected={selectedCategory() === 'items'}
-          >
-            <For each={docs}>
-              {(item, i) => (
-                <MentionsMenuItem
-                  item={item}
-                  index={users.length + i()}
-                  selected={users.length + i() === selectedIndex()}
-                  itemAction={itemAction}
-                  setIndex={setSelectedIndexFromMouse}
-                  setOpen={setMenuOpen}
-                />
-              )}
-            </For>
-          </ItemBin>
-        );
-      }
+      bucketConfigs().forEach((config) => {
+        const bucketLimit = currentBins[config.id] || 0;
+        if (bucketLimit === 0) return;
 
-      if (dates.length > 0) {
-        options.push(
-          <ItemBin
-            label="Dates"
-            binType="dates"
-            totalCount={dateSuggestions().length}
-            showingCount={dates.length}
-            onViewAll={handleViewAll}
-            isSelected={selectedCategory() === 'dates'}
-          >
-            <For each={dates}>
-              {(item, i) => (
-                <MentionsMenuItem
-                  item={item}
-                  index={users.length + docs.length + i()}
-                  selected={
-                    users.length + docs.length + i() === selectedIndex()
-                  }
-                  itemAction={itemAction}
-                  setIndex={setSelectedIndexFromMouse}
-                  setOpen={setMenuOpen}
-                />
-              )}
-            </For>
-          </ItemBin>
-        );
-      }
+        const bucketItems = config.getData().slice(0, bucketLimit);
+        const startIndex = cumulativeIndex;
 
-      if (emailList.length > 0) {
         options.push(
           <ItemBin
-            label="Emails"
-            binType="emails"
-            isNextPage={() => emailUnifiedSearchInfiniteQuery.hasNextPage}
-            totalCount={filteredEmails().length}
-            showingCount={emailList.length}
+            label={config.label}
+            binType={config.id}
+            icon={config.icon}
+            totalCount={config.getFullCount()}
+            showingCount={bucketItems.length}
             onViewAll={handleViewAll}
-            isSelected={selectedCategory() === 'emails'}
+            isSelected={selectedCategory() === config.id}
           >
-            <For each={emailList}>
+            <For each={bucketItems}>
               {(item, i) => (
                 <MentionsMenuItem
                   item={item}
-                  index={i()}
-                  selected={
-                    users.length + docs.length + dates.length + i() ===
-                    selectedIndex()
-                  }
+                  index={startIndex + i()}
+                  selected={startIndex + i() === selectedIndex()}
                   itemAction={itemAction}
                   setIndex={setSelectedIndexFromMouse}
                   setOpen={setMenuOpen}
@@ -1255,7 +1226,9 @@ function MentionsMenuInner(props: {
             </For>
           </ItemBin>
         );
-      }
+
+        cumulativeIndex += bucketItems.length;
+      });
 
       return options.map(
         (option: JSXElement, index: number, array: List<JSXElement>) => (
