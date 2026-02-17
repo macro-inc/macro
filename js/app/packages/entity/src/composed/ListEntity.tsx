@@ -44,6 +44,7 @@ interface ListEntityProps {
   checked?: boolean;
   highlighted?: boolean;
   hovered?: boolean;
+  hideContentHits?: boolean;
   onChecked?: (checked: boolean, shiftKey: boolean) => void;
   onMouseMove?: () => void;
   showUnrollNotifications?: boolean;
@@ -396,7 +397,7 @@ export function ListEntity(props: ListEntityProps) {
         </div>
       </Show>
 
-      <Show when={hasSearchContentHits(props.entity)}>
+      <Show when={!props.hideContentHits && hasSearchContentHits(props.entity)}>
         <div class="flex gap-2 w-full h-full items-center text-sm px-2 pb-1 -mt-2 min-w-0 overflow-hidden">
           <div class={cn('min-w-0 flex-1 truncate ml-4 @lg/entity:ml-6')}>
             <Entity.Search.ContentHits
