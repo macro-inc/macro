@@ -153,14 +153,10 @@ const Body: Component<MessageBodyProps> = (props) => {
     <Show
       when={!props.isDeleted}
       fallback={
-        <div class="text-xs text-ink-muted font-mono">
-          Message Deleted
-        </div>
+        <div class="text-xs text-ink-muted font-mono">Message Deleted</div>
       }
     >
-      <div class="text-sm text-ink pr-4">
-        {props.children}
-      </div>
+      <div class="text-sm text-ink pr-4">{props.children}</div>
     </Show>
   );
 };
