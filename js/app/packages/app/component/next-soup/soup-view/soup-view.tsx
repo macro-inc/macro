@@ -585,7 +585,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                       <>
                         <Show when={i() === 0 && featuredCount() > 0}>
                           <div class="px-3 py-1.5 text-xs text-text-muted font-medium">
-                            Top Matches
+                            Featured Matches
                           </div>
                         </Show>
                         <Show
