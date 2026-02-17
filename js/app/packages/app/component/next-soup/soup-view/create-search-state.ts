@@ -9,7 +9,7 @@ import { fuzzyMatch } from '@core/util/fuzzy';
 import { mergeAdjacentMacroEmTags } from '@core/util/searchHighlight';
 import { createFreshSearch } from '@core/util/freshSort';
 import type { EntityData, WithSearch } from '@entity';
-import { isChannelEntity, isEmailEntity } from '@entity';
+import { isChannelEntity } from '@entity';
 import {
   type SoupItemsQueryFilters,
   type SoupItemsQueryArgs,
