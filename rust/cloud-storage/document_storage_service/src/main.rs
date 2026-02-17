@@ -6,6 +6,10 @@ use crate::{
     service::s3::S3,
 };
 use anyhow::Context;
+use channels::{
+    domain::service::ChannelMessagesServiceImpl, inbound::axum_router::ChannelsRouterState,
+    outbound::pg_channels_repo::PgChannelMessagesRepo,
+};
 use comms::{
     domain::service::ChannelServiceImpl,
     inbound::CommsRouterState,
@@ -13,6 +17,10 @@ use comms::{
 };
 use config::{Config, Environment};
 use connection_gateway_client::client::ConnectionGatewayClient;
+use documents_hex::domain::models::CloudFrontConfig;
+use documents_hex::domain::service::DocumentServiceImpl;
+use documents_hex::inbound::axum_router::DocumentRouterState;
+use documents_hex::outbound::pg_document_repo::PgDocumentRepo;
 use dynamodb_client::DynamodbClient;
 use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
@@ -240,6 +248,39 @@ async fn main() -> anyhow::Result<()> {
     // Create the CommsRouterState for comms_service routes
     let comms_state = CommsRouterState::new(channel_service_for_comms);
 
+    let entity_access_service = Arc::new(
+        entity_access::domain::service::EntityAccessServiceImpl::new(
+            entity_access::outbound::PgAccessRepository::new(db.clone()),
+        ),
+    );
+
+    let document_repo = PgDocumentRepo::new(db.clone());
+    let cloudfront_config = CloudFrontConfig {
+        distribution_url: config
+            .vars
+            .document_storage_service_cloudfront_distribution_url
+            .as_ref()
+            .to_string(),
+        signer_public_key_id: config
+            .vars
+            .document_storage_service_cloudfront_signer_public_key_id
+            .as_ref()
+            .to_string(),
+        signer_private_key: config
+            .document_storage_service_cloudfront_signer_private_key
+            .as_ref()
+            .to_string(),
+        presigned_url_expiry_seconds: config.document_storage_service_presigned_url_expiry_seconds,
+        browser_cache_expiry_seconds: config
+            .document_storage_service_presigned_url_browser_cache_expiry_seconds,
+    };
+    let document_service = DocumentServiceImpl::new(
+        document_repo,
+        cloudfront_config,
+        sync_service_client.clone(),
+        db.clone(),
+    );
+
     let api_context = ApiContext {
         soup_router_state: SoupRouterState::new(
             SoupImpl::new(
@@ -274,6 +315,15 @@ async fn main() -> anyhow::Result<()> {
         frecency_storage,
         comms_state,
         permissions_token_secret: comms_permissions_token_secret,
+        entity_access_service: entity_access_service.clone(),
+        documents_state: DocumentRouterState {
+            service: Arc::new(document_service),
+            access_service: entity_access_service,
+            pool: db.clone(),
+        },
+        channels_state: ChannelsRouterState::new(ChannelMessagesServiceImpl::new(
+            PgChannelMessagesRepo::new(db.clone()),
+        )),
     };
 
     api::setup_and_serve(api_context).await?;

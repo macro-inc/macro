@@ -1,31 +1,35 @@
 import type { BlockOrchestrator } from '@core/orchestrator';
+import type { DateValue } from '@core/util/date';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
-import type {
-  SplitContent,
-  SplitHandle,
-} from '@app/component/split-layout/layoutManager';
+import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { waitForFrames } from '@core/util/sleep';
 import {
-  type DocumentEntity,
   type EntityData,
   isSearchEntity,
-  queryKeys,
   type SearchLocation,
   type TaskEntityWithProperties,
   type WithSearch,
-} from '@macro-entity';
+} from '@entity';
+import { queryKeys } from '@macro-entity';
 import { queryClient } from '@queries/client';
 import { emailClient } from '@service-email/client';
 import {
   PROPERTY_OPTION_IDS,
   SYSTEM_PROPERTY_IDS,
 } from '@core/component/Properties/constants';
-import { soupKeys } from '@queries/soup/keys';
+import {
+  removeSoupEntities,
+  getSoupEntityById,
+  optimisticUpdateSoupEntity,
+  invalidateSoupEntity,
+} from '@queries/soup/cache';
+import { match } from 'ts-pattern';
+import { isAfter } from 'date-fns';
 
 const mergeSearchEntities = <T extends EntityData>(
   first: WithSearch<T>,
@@ -125,8 +129,8 @@ export const deduplicateEntities = <T extends EntityData>(
 /**
  * Gets the timestamp of an entity (updatedAt or createdAt)
  */
-const getEntityTimestamp = (entity: EntityData): number => {
-  return entity.updatedAt ?? entity.createdAt ?? 0;
+const getEntityTimestamp = (entity: EntityData): DateValue => {
+  return entity.updatedAt ?? entity.createdAt ?? new Date(0);
 };
 
 /**
@@ -136,7 +140,7 @@ export const isNewerEntity = (
   newEntity: EntityData,
   existing: EntityData
 ): boolean => {
-  return getEntityTimestamp(newEntity) >= getEntityTimestamp(existing);
+  return isAfter(getEntityTimestamp(newEntity), getEntityTimestamp(existing));
 };
 
 export const openEntityInNewTab = ({
@@ -282,38 +286,7 @@ export const openEntityInSplitFromUnifiedList = async (
 
   const blockOrchestrator = splitManager.getOrchestrator();
 
-  // Create split functions
-  const insertSplit = (content: SplitContent) => {
-    return splitManager.createNewSplit({
-      content,
-      activate: true,
-      referredFrom: 'unified-list',
-    });
-  };
-
-  const replaceOrInsertSplit = (content: SplitContent) => {
-    const existingSplit = splitManager.getSplitByContent(
-      content.type,
-      content.id
-    );
-    if (existingSplit) {
-      return existingSplit;
-    }
-
-    splitHandle.replace({ next: content, referredFrom: 'unified-list' });
-    return splitHandle;
-  };
-
-  // Handle document entities separately
-  if (entity.type === 'document') {
-    return openDocument(entity as DocumentEntity, {
-      openInNewSplit,
-      blockOrchestrator,
-      location,
-      insertSplit,
-      replaceOrInsertSplit,
-    });
-  }
+  const content = getEntitySplitContent(entity);
 
   // Build params for channel entities with location
   const params =
@@ -324,12 +297,15 @@ export const openEntityInSplitFromUnifiedList = async (
         }
       : undefined;
 
-  // Create or replace split based on openInNewSplit option
-  const handle = openInNewSplit
-    ? insertSplit({ type: entity.type, id: entity.id, params })
-    : replaceOrInsertSplit({ type: entity.type, id: entity.id, params });
-
-  handle?.activate();
+  splitManager.openWithSplit(
+    { ...content, params },
+    {
+      referredFrom: 'unified-list',
+      activate: true,
+      preferNewSplit: openInNewSplit,
+      handle: splitHandle,
+    }
+  );
 
   // Navigate to specific location if provided
   if (!location) return;
@@ -337,41 +313,17 @@ export const openEntityInSplitFromUnifiedList = async (
   await navigateToLocation(entity.id, location, blockOrchestrator);
 };
 
-/**
- * Opens a document entity in a split.
- */
-async function openDocument(
-  entity: DocumentEntity,
-  options: {
-    openInNewSplit?: boolean;
-    blockOrchestrator: BlockOrchestrator;
-    location?: SearchLocation;
-    insertSplit: (content: SplitContent) => SplitHandle | undefined;
-    replaceOrInsertSplit: (content: SplitContent) => SplitHandle | undefined;
-  }
-): Promise<void> {
-  const {
-    openInNewSplit,
-    blockOrchestrator,
-    location,
-    insertSplit,
-    replaceOrInsertSplit,
-  } = options;
+function getEntitySplitContent(entity: EntityData) {
+  return match(entity)
+    .with({ type: 'document' }, (entity) => {
+      const { id, fileType, subType } = entity;
+      const blockName = fileTypeToBlockName(subType?.type ?? fileType);
 
-  const { id, fileType, subType } = entity;
-  const blockName = fileTypeToBlockName(subType?.type ?? fileType);
-
-  // Create or replace split based on openInNewSplit option
-  const handle = openInNewSplit
-    ? insertSplit({ type: blockName, id })
-    : replaceOrInsertSplit({ type: blockName, id });
-
-  handle?.activate();
-
-  // Navigate to specific location if provided
-  if (!location) return;
-
-  await navigateToLocation(id, location, blockOrchestrator);
+      return { type: blockName, id };
+    })
+    .otherwise((entity) => {
+      return { type: entity.type, id: entity.id };
+    });
 }
 
 /**
@@ -424,24 +376,26 @@ export async function archiveEmail(
   id: string,
   options: { isDone: boolean; optimisticallyExclude?: boolean }
 ) {
-  await Promise.all([
-    queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
-    queryClient.cancelQueries({ queryKey: soupKeys.items._def }),
-  ]);
+  await queryClient.cancelQueries({ queryKey: queryKeys.all.email });
 
   const previousEmail = queryClient.getQueriesData<{
     pages: { items: EntityData[] }[];
   }>({
     queryKey: queryKeys.all.email,
   });
-  const previousEmailThreadItemFromDss = queryClient.getQueriesData<{
-    pages: { items: EntityData[] }[];
-  }>({
-    queryKey: soupKeys.items._def,
-  });
 
-  const applyOptimistic = (data?: {
-    pages: { items: (EntityData | { data: EntityData })[] }[];
+  const current = getSoupEntityById(id);
+  const soupTxn = options.optimisticallyExclude
+    ? removeSoupEntities(new Set([id]))
+    : optimisticUpdateSoupEntity({
+        tag: 'emailThread',
+        data: { id, inboxVisible: false },
+        frecency_score: current?.frecency_score ?? 0,
+      });
+
+  // Optimistic update for email queries
+  const applyEmailOptimistic = (data?: {
+    pages: { items: EntityData[] }[];
   }) => {
     if (!data) return data;
 
@@ -450,58 +404,29 @@ export async function archiveEmail(
       pages: data.pages.map((page) => ({
         ...page,
         items: options.optimisticallyExclude
-          ? page.items.filter((item) => {
-              if ('data' in item) {
-                return item.data.id !== id;
-              }
-              return item.id !== id;
-            })
-          : page.items.map((item) => {
-              if ('data' in item) {
-                return item.data.id === id
-                  ? {
-                      ...item,
-                      data: {
-                        ...item.data,
-                        inboxVisible: false,
-                      },
-                    }
-                  : item;
-              }
-              return item.id === id
-                ? {
-                    ...item,
-                    inboxVisible: false,
-                  }
-                : item;
-            }),
+          ? page.items.filter((item) => item.id !== id)
+          : page.items.map((item) =>
+              item.id === id ? { ...item, inboxVisible: false } : item
+            ),
       })),
     };
   };
 
-  for (const [key, data] of [
-    ...previousEmailThreadItemFromDss,
-    ...previousEmail,
-  ]) {
-    queryClient.setQueryData(key, applyOptimistic(data));
+  for (const [key, data] of previousEmail) {
+    queryClient.setQueryData(key, applyEmailOptimistic(data));
   }
 
   try {
-    // server mutation
     await emailClient.flagArchived({ value: !options.isDone, id });
   } catch (_err) {
-    // rollback on error
+    soupTxn.rollback();
     for (const [key, data] of previousEmail) {
       queryClient.setQueryData(key, data);
     }
-    for (const [key, data] of previousEmailThreadItemFromDss) {
-      queryClient.setQueryData(key, data);
-    }
   } finally {
-    // revalidate
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
-      queryClient.invalidateQueries({ queryKey: soupKeys.items._def }),
+      invalidateSoupEntity(id),
     ]);
   }
 }

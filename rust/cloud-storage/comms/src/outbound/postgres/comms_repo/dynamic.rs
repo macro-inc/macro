@@ -92,6 +92,9 @@ fn build_channel_filter(ast: Option<&Expr<ChannelLiteral>>) -> String {
         filter_ast::ExprFrame::Literal(ChannelLiteral::OrganizationId(org_id)) => {
             format!("c.org_id = {org_id}")
         }
+        filter_ast::ExprFrame::Literal(ChannelLiteral::ChannelType(ct)) => {
+            format!("c.channel_type = '{ct}'")
+        }
         // These filters don't apply at the channel level, they're for messages
         // So we return an empty string which will be filtered out
         filter_ast::ExprFrame::Literal(ChannelLiteral::ThreadId(_)) => String::new(),

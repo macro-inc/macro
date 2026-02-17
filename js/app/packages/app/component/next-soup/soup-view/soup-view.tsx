@@ -1,5 +1,4 @@
 import CheckIcon from '@icon/bold/check-bold.svg';
-import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
@@ -12,7 +11,6 @@ import {
 import { useSoup } from '@app/component/next-soup/soup-context';
 import { SoupEntityContextMenu } from '@app/component/next-soup/soup-view/soup-entity-context-menu';
 import {
-  type SoupEntity,
   type SoupRow,
   SoupViewContextProvider,
   useSoupView,
@@ -20,7 +18,9 @@ import {
 import { useSoupNavigationHotkeys } from './use-soup-navigation-hotkeys';
 import { useSoupViewHotkeys } from './use-soup-view-hotkeys';
 import { useElementItemCount } from '@app/component/next-soup/use-element-item-count';
+import { registerPreviewEntity } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import {
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
@@ -33,48 +33,37 @@ import { SplitPanelContext } from '@app/component/split-layout/context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { useTaskProperties } from '@core/component/Properties/hooks';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import {
   type EntityData,
-  isTaskEntity,
-  type Notification,
-  queryKeys,
-  unreadFilterFn,
-  useQueryClient,
-} from '@macro-entity';
-import {
-  createEffectOnEntityTypeNotification,
-  getMetadata,
-  isChannelMention,
-  isChannelMessageReply,
-  isChannelMessageSend,
-  tryToTypedNotification,
-  type UnifiedNotification,
-} from '@notifications';
+  ListEntity,
+  type SearchLocation,
+  type ProjectEntity,
+} from '@entity';
+import { queryKeys } from '@macro-entity';
+import { useQueryClient } from '@queries/client';
+import { createEffectOnEntityTypeNotification } from '@notifications';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui/utils/classname';
 import {
   type Accessor,
   createEffect,
   createMemo,
+  createRenderEffect,
   createSignal,
   type JSX,
   Match,
   on,
   onCleanup,
   Show,
+  Suspense,
   Switch,
 } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { SoupToolbar } from './soup-toolbar';
 import { useUserId } from '@core/context/user';
-import {
-  type EntityClickHandler,
-  type EntityPointerDownHandler,
-  EntityWithEverything,
-} from '../../../../macro-entity/src/components/EntityWithEverything';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { SoupViewFileDropzone } from '@app/component/next-soup/soup-view/soup-view-file-dropzone';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -85,6 +74,9 @@ import { EmptyState } from '@app/component/next-soup/soup-view/empty-states';
 import { SoupChatInput } from '@app/component/SoupChatInput';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
+import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
+import { usePropertyEditorHotkeys } from '@app/component/property-edit-modal/hooks/usePropertyEditorHotkeys';
+import type { SoupItemsQueryFilters } from '@queries/soup/items';
 
 const DEFAULT_ENTITY_HEIGHT = 40;
 
@@ -115,7 +107,7 @@ const useSoupNotificationInvalidators = () => {
     notificationSource,
     'document',
     (notification) => {
-      if (notification.notificationEventType === 'task_assigned') {
+      if (notification.notification_event_type === 'task_assigned') {
         entityQueryClient.invalidateQueries({
           queryKey: soupKeys._def,
         });
@@ -125,11 +117,18 @@ const useSoupNotificationInvalidators = () => {
   );
 };
 
-const cacheMap = new Map<
+const stateCache = new Map<
   string,
   {
-    virtualCache: CacheSnapshot;
-    scrollOffset: number;
+    soup: {
+      focus: string | undefined;
+      filters: string[];
+      queryFilters: SoupItemsQueryFilters;
+      sort: SystemSortOption[];
+      searchText: string;
+    };
+    virtualCache?: CacheSnapshot;
+    scrollOffset?: number;
   }
 >();
 
@@ -148,8 +147,10 @@ export const SoupView = () => {
       }}
     >
       <SoupViewContextProvider soup={soup}>
-        <div class="relative flex-grow min-h-0 flex max-sm:flex-col flex-row size-full">
-          <SoupToolbar />
+        <div class="relative flex-grow min-h-1 flex max-sm:flex-col flex-row size-full">
+          <Suspense>
+            <SoupToolbar />
+          </Suspense>
           <SoupViewFileDropzone>
             <SoupViewList />
           </SoupViewFileDropzone>
@@ -164,14 +165,21 @@ export const SoupView = () => {
 
 interface SoupViewListProps {
   customScrollbarHidden?: boolean;
+  scopeId?: string;
 }
 
 export const SoupViewList = (props: SoupViewListProps) => {
   const panel = useSplitPanelOrThrow();
-  const { soup, source, rows: _rows, searchText } = useSoupView();
+  const {
+    soup,
+    source,
+    rows,
+    searchText,
+    setSearchText,
+    setQueryFilters,
+    queryFilters,
+  } = useSoupView();
   const { getSplitCount } = useSplitLayout();
-
-  const rows = createMemo(() => _rows());
 
   const { isKeypressActive } = useIsKeyPressActive();
 
@@ -194,22 +202,27 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   let initialLoad = true;
 
-  createEffect(
-    on(rows, () => {
-      if (!initialLoad || source.isLoading()) return;
-      focusFirstEntity();
-      initialLoad = false;
-    })
-  );
+  const registerFocusEffects = (moveInitialFocus = true) => {
+    if (moveInitialFocus) {
+      createEffect(
+        on(rows, () => {
+          if (!initialLoad || source.isLoading()) return;
+          focusFirstEntity();
+          initialLoad = false;
+        })
+      );
+    }
 
-  createEffect(
-    on(
-      () => [soup.filters.activeIds(), searchText()] as const,
-      () => {
-        focusFirstEntity();
-      }
-    )
-  );
+    createEffect(
+      on(
+        () => [soup.filters.activeIds(), searchText()] as const,
+        () => {
+          focusFirstEntity();
+        },
+        { defer: true }
+      )
+    );
+  };
 
   const previewPanel = useMaybePreviewPanel();
 
@@ -223,13 +236,16 @@ export const SoupViewList = (props: SoupViewListProps) => {
   const [attachHotkeys, soupViewScope] = useHotkeyDOMScope('soup-view');
 
   const scopeId = createMemo(() => {
-    return previewPanel ? soupViewScope : panel.splitHotkeyScope;
+    return previewPanel
+      ? soupViewScope
+      : (props.scopeId ?? panel.splitHotkeyScope);
   });
 
   // Register navigation hotkeys
   useSoupNavigationHotkeys({
     scopeId: scopeId(),
     soup,
+    splitHandle: panel.handle,
     virtualizerHandle,
     previewPanelRef,
   });
@@ -240,16 +256,40 @@ export const SoupViewList = (props: SoupViewListProps) => {
     soup,
   });
 
+  // Property editor
+  usePropertyEditorHotkeys({
+    scopeId: scopeId(),
+    soup,
+  });
+
   // Register soup view hotkeys (jump navigation, enter, escape, cmd+k, etc.)
   useSoupViewHotkeys({
     splitId: panel.handle.id,
     scopeId: scopeId(),
-    domRef: soupViewRef,
     soup,
     splitHandle: panel.handle,
     virtualizerHandle,
     previewState: () => !!soup.previewEntity(),
     getSplitCount,
+  });
+
+  // Register previewed entity for auto-attach
+  createEffect(() => {
+    const entity = soup.previewEntity() ? soup.focus.item() : undefined;
+    if (!entity) {
+      registerPreviewEntity(panel.handle.id, undefined);
+      return;
+    }
+    const type =
+      entity.type === 'document'
+        ? fileTypeToResolvedBlockName(
+            (entity as { fileType?: string }).fileType
+          )
+        : entity.type;
+    registerPreviewEntity(panel.handle.id, { type, id: entity.id });
+  });
+  onCleanup(() => {
+    registerPreviewEntity(panel.handle.id, undefined);
   });
 
   // Create markDone action for swipe/click handlers
@@ -269,9 +309,15 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   const orchestrator = useGlobalBlockOrchestrator();
 
-  const taskPropertiesStore = useTaskProperties(soup.data);
+  type EntityClickArgs = {
+    type: 'entity' | 'project';
+    entity: EntityData;
+    projectEntity?: ProjectEntity;
+    event: MouseEvent | PointerEvent;
+    location?: SearchLocation;
+  };
 
-  const onEntityClick: EntityClickHandler<EntityData> = async (args) => {
+  const onEntityClick = async (args: EntityClickArgs) => {
     const { type, event, location } = args;
 
     const entity = (
@@ -289,90 +335,10 @@ export const SoupViewList = (props: SoupViewListProps) => {
     }
 
     await openEntityInSplitFromUnifiedList(entity, {
-      openInNewSplit: event.altKey,
+      openInNewSplit: event.shiftKey,
       location,
       splitHandle: panel.handle,
     });
-  };
-
-  const onEntityDoubleClick: EntityClickHandler<EntityData> = async (args) => {
-    const { entity, event, location } = args;
-
-    if (!soup.previewEntity()) {
-      return;
-    }
-
-    await openEntityInSplitFromUnifiedList(entity, {
-      openInNewSplit: event.altKey,
-      location,
-      splitHandle: panel.handle,
-    });
-  };
-
-  const onEntityPointerDown: EntityPointerDownHandler<EntityData> = async (
-    args
-  ) => {
-    const { type, location, event } = args;
-
-    const entity = (
-      type === 'entity' ? args.entity : args.projectEntity
-    ) as EntityData;
-
-    // middle mouse button pressed
-    if (event.button === 1 && event.pointerType === 'mouse') {
-      // TODO: current page should remain focused after opening new tab
-      openEntityInNewTab({ entity, location });
-    }
-  };
-
-  const onClickEntityAction = (entity: EntityData) => {
-    if (markDoneAction.canExecute(entity)) {
-      markDoneAction.executeWithSoup([entity], soup);
-    }
-  };
-
-  const blockOrchestrator = useGlobalBlockOrchestrator();
-  const gotoChannelNotification = async (notification: UnifiedNotification) => {
-    let message_id: string | undefined;
-    let thread_id: string | undefined;
-
-    if (isChannelMention(notification)) {
-      const metadata = getMetadata(notification);
-      message_id = metadata.messageId;
-    } else if (isChannelMessageReply(notification)) {
-      const metadata = getMetadata(notification);
-      message_id = metadata.messageId;
-      thread_id = metadata.threadId;
-    } else if (isChannelMessageSend(notification)) {
-      const metadata = getMetadata(notification);
-      message_id = metadata.messageId;
-    } else {
-      return;
-    }
-
-    const blockHandle = await blockOrchestrator.getBlockHandle(
-      notification.entity_id,
-      'channel'
-    );
-    if (!blockHandle) return;
-
-    notificationSource.markAsRead(notification);
-
-    return blockHandle?.goToLocationFromParams({
-      [CHANNEL_PARAMS.message]: message_id,
-      [CHANNEL_PARAMS.thread]: thread_id,
-    });
-  };
-
-  const onClickNotification = ({
-    entity,
-  }: {
-    entity: SoupEntity & { notification: Notification };
-  }) => {
-    const notification = tryToTypedNotification(entity.notification);
-    if (!notification || entity.type !== 'channel') return;
-
-    gotoChannelNotification(notification);
   };
 
   let lastClickedEntityId = -1;
@@ -463,10 +429,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   onCleanup(() => debouncedFetchMore.clear());
 
-  const [entityContextMenuOpen, setEntityContextMenuOpen] = createSignal<
-    string | undefined
-  >(undefined);
-
   const [localEntityListRef, setLocalEntityListRef] = createSignal<
     HTMLDivElement | undefined
   >();
@@ -501,24 +463,52 @@ export const SoupViewList = (props: SoupViewListProps) => {
   onCleanup(() => {
     const virtualHandle = virtualizerHandle();
 
-    if (!virtualHandle) return;
-
-    cacheMap.set(getCacheKey(), {
-      virtualCache: virtualHandle.cache,
-      scrollOffset: virtualHandle.scrollOffset,
+    stateCache.set(getCacheKey(), {
+      soup: {
+        focus: soup.focus.id(),
+        filters: soup.filters.activeIds(),
+        queryFilters: queryFilters(),
+        sort: soup.sort.active().map((s) => s.id),
+        searchText: searchText(),
+      },
+      virtualCache: virtualHandle?.cache,
+      scrollOffset: virtualHandle?.scrollOffset,
     });
   });
+
+  let restored = false;
+  const restoreState = () => {
+    if (restored) return;
+
+    restored = true;
+
+    const cached = stateCache.get(getCacheKey());
+
+    if (!cached) {
+      registerFocusEffects();
+      return;
+    }
+
+    soup.focus.set(cached.soup.focus);
+    for (const id of cached.soup.filters) {
+      soup.filters.activate(id);
+    }
+
+    setQueryFilters(cached.soup.queryFilters);
+    setSearchText(cached.soup.searchText);
+
+    soup.sort.setAll(cached.soup.sort);
+
+    virtualizerHandle()?.scrollTo(cached.scrollOffset ?? 0);
+    registerFocusEffects(false);
+  };
 
   const registerVirtualizerHandler = (
     handle: VirtualizerHandle | undefined
   ) => {
     setVirtualizerHandle(handle);
 
-    const cached = cacheMap.get(getCacheKey());
-
-    if (!cached) return;
-
-    handle?.scrollTo(cached.scrollOffset);
+    restoreState();
   };
 
   return (
@@ -545,13 +535,13 @@ export const SoupViewList = (props: SoupViewListProps) => {
       >
         <StaticMarkdownContext>
           <Switch>
-            <Match when={source.isLoading()}>
+            <Match when={source.isLoading() && !rows().length}>
               <LoadingBlock />
             </Match>
-            <Match when={!rows().length}>
+            <Match when={!source.isLoading() && !rows().length}>
               <EmptyState search={!!searchText()} />
             </Match>
-            <Match when={!source.isLoading() && rows().length}>
+            <Match when={rows().length}>
               <EntityRowProvider
                 container={localEntityListRef}
                 canSwipeLeft={(entityId) => {
@@ -567,7 +557,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                 setCollapseEntity={soup.collapseEntity.set}
               >
                 <SoupList
-                  cache={cacheMap.get(getCacheKey())?.virtualCache}
+                  cache={stateCache.get(getCacheKey())?.virtualCache}
                   ref={setLocalEntityListRef}
                   virtualizerClass="scrollbar-hidden"
                   class="overflow-hidden flex min-w-0"
@@ -590,21 +580,6 @@ export const SoupViewList = (props: SoupViewListProps) => {
                       }
                     };
 
-                    const properties = () => {
-                      if (isTaskEntity(row.original)) {
-                        return taskPropertiesStore()[row.original.id] ?? [];
-                      }
-                      return undefined;
-                    };
-
-                    const shouldDisplayDoneButton = () => {
-                      if (row.original.type === 'email') {
-                        return !row.original.done;
-                      }
-
-                      return (row.original.notifications?.().length ?? 0) > 0;
-                    };
-
                     return (
                       <EntityRow
                         entityId={row.original.id}
@@ -616,87 +591,60 @@ export const SoupViewList = (props: SoupViewListProps) => {
                         <SoupEntityContextMenu
                           entity={row.original}
                           entityTimestamp={timestamp()}
-                          onOpenChange={(open) => {
-                            setEntityContextMenuOpen(
-                              open ? row.original.id : undefined
-                            );
-                          }}
                         >
-                          <div
-                            class="flex flex-col w-full min-w-0"
-                            style={{
-                              'padding-left': `${row.depth * 8}px`,
+                          <ListEntity
+                            entity={row.original}
+                            timestamp={timestamp()}
+                            highlighted={
+                              panel.isPanelActive() && row.isFocused()
+                            }
+                            onMouseMove={() => {
+                              if (isKeypressActive()) return;
+                              if (soup.previewEntity()) return;
+                              soup.focus.set(row.original.id);
                             }}
-                          >
-                            <Show
-                              when={!row.isGrouped()}
-                              fallback={
-                                <div class="bg-accent flex gap-2 items-center px-2 py-1 text-input font-medium">
-                                  <button
-                                    type="button"
-                                    onClick={() => row.toggleExpanded()}
-                                  >
-                                    {row.isExpanded() ? 'Close' : 'Open'}
-                                  </button>
-                                  <span>{row.original.name}</span>
-                                </div>
-                              }
-                            >
-                              <EntityWithEverything
-                                splitId={panel.handle.id}
-                                entity={row.original}
-                                timestamp={timestamp()}
-                                properties={properties()}
-                                searchActive={!!searchText()}
-                                selected={{
-                                  active:
-                                    row.isFocused() ||
-                                    entityContextMenuOpen() === row.original.id,
-                                  // TODO: Update this to take into account when this is used within a nested
-                                  // view like the preview panel
-                                  muted:
-                                    row.isFocused() && !panel.isPanelActive(),
-                                }}
-                                highlighted={
-                                  panel.isPanelActive() && row.isFocused()
-                                }
-                                onMouseOver={() => {
-                                  if (
-                                    soup.previewEntity() ||
-                                    isKeypressActive()
-                                  )
-                                    return;
-                                  soup.focus.set(row.original.id);
-                                }}
-                                onFocusIn={() => {
-                                  if (soup.previewEntity()) return;
-                                  soup.focus.set(row.original.id);
-                                }}
-                                showUnrollNotifications={
-                                  soup.filters.isActive('signal') &&
-                                  !soup.filters.isActive('noise')
-                                }
-                                unreadIndicatorActive={unreadFilterFn(
-                                  row.original
-                                )}
-                                showDoneButton={shouldDisplayDoneButton()}
-                                checked={row.isSelected()}
-                                onChecked={(next, shiftKey) =>
-                                  handleMultiSelectChecked({
-                                    entity: row.original,
-                                    entityIndex: i(),
-                                    next,
-                                    shiftKey: shiftKey ?? false,
-                                  })
-                                }
-                                onClick={onEntityClick}
-                                onDblClick={onEntityDoubleClick}
-                                onPointerDown={onEntityPointerDown}
-                                onClickRowAction={onClickEntityAction}
-                                onClickNotification={onClickNotification}
-                              />
-                            </Show>
-                          </div>
+                            showUnrollNotifications={
+                              soup.filters.isActive('signal') &&
+                              !soup.filters.isActive('noise')
+                            }
+                            checked={row.isSelected()}
+                            onChecked={(next: boolean, shiftKey: boolean) =>
+                              handleMultiSelectChecked({
+                                entity: row.original,
+                                entityIndex: i(),
+                                next,
+                                shiftKey: shiftKey ?? false,
+                              })
+                            }
+                            onClick={(event: MouseEvent) => {
+                              onEntityClick({
+                                type: 'entity',
+                                entity: row.original,
+                                event,
+                                location: undefined,
+                              });
+                            }}
+                            onProjectClick={(projectEntity, event) => {
+                              onEntityClick({
+                                type: 'project',
+                                projectEntity,
+                                entity: row.original,
+                                event,
+                                location: undefined,
+                              });
+                            }}
+                            onContentHitClick={(
+                              e: PointerEvent | MouseEvent,
+                              location?: SearchLocation
+                            ) => {
+                              onEntityClick({
+                                type: 'entity',
+                                entity: row.original,
+                                event: e,
+                                location,
+                              });
+                            }}
+                          />
                         </SoupEntityContextMenu>
                       </EntityRow>
                     );
@@ -728,7 +676,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
           onClear={soup.selection.clear}
         />
       </Show>
-      <Show when={soup.previewEntity()}>
+      <Show when={soup.previewEntity() || panel.previewState[0]()}>
         <PreviewPanel
           ref={setPreviewPanelRef}
           selectedEntity={soup.focus.item()}
@@ -767,6 +715,12 @@ const SoupList = (props: SoupListProps) => {
   const itemSize = createMemo(() => props.itemSize ?? DEFAULT_ITEM_SIZE);
   const overscan = createMemo(() => props.overscan ?? DEFAULT_OVERSCAN);
 
+  const [stableRows, setStableRows] = createStore<SoupRow[]>([]);
+
+  createRenderEffect(() => {
+    setStableRows(reconcile(props.rows, { key: 'id' }));
+  });
+
   const handleScroll = (offset: number) => {
     const handle = virtualizerHandle();
 
@@ -799,7 +753,7 @@ const SoupList = (props: SoupListProps) => {
         cache={props.cache}
         ref={registerVirtualizerHandler}
         class={props.virtualizerClass}
-        data={props.rows}
+        data={stableRows}
         itemSize={itemSize()}
         bufferSize={overscan() * itemSize()}
         onScroll={handleScroll}

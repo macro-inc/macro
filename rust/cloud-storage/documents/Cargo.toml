@@ -1,0 +1,62 @@
+[package]
+edition = "2024"
+name = "documents"
+publish = false
+version = "0.1.0"
+
+[features]
+default = ["ports", "inbound", "outbound", "axum"]
+ports = ["dep:tokio"]
+inbound = ["axum", "ports"]
+outbound = ["ports"]
+axum = [
+    "dep:axum",
+    "dep:axum-extra",
+    "dep:model_user",
+    "dep:model-error-response",
+    "dep:utoipa",
+    "entity_access/axum",
+]
+
+[dependencies]
+# Core
+anyhow = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+
+# Domain models (always included)
+document_sub_type = { path = "../document_sub_type" }
+entity_access = { path = "../entity_access" }
+macro_user_id = { path = "../macro_user_id" }
+model = { path = "../model" }
+models_permissions = { path = "../models_permissions" }
+
+# Async runtime (for ports)
+tokio = { workspace = true, optional = true }
+
+# Axum dependencies (for inbound)
+axum = { workspace = true, optional = true }
+axum-extra = { workspace = true, optional = true }
+model_user = { path = "../model_user", optional = true, features = ["axum"] }
+model-error-response = { path = "../model-error-response", optional = true }
+utoipa = { workspace = true, optional = true }
+
+# Outbound dependencies
+cloudfront_sign = { workspace = true }
+futures = { workspace = true }
+macro_project_utils = { path = "../macro_project_utils" }
+sqlx = { workspace = true }
+sync_service_client = { path = "../sync_service_client" }
+urlencoding = { workspace = true }
+
+[dev-dependencies]
+http-body-util = { workspace = true }
+macro_db_migrator = { path = "../macro_db_migrator" }
+mockall = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tower = { workspace = true }

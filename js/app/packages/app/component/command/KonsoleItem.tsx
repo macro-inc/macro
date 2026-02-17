@@ -2,6 +2,7 @@ import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
 import type { BlockAlias, BlockName } from '@core/block';
+import type { DateValue } from '@core/util/date';
 import { BozzyBracket } from '@core/component/BozzyBracket';
 import { Hotkey } from '@core/component/Hotkey';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -207,9 +208,8 @@ export type SearchSnippet = {
 type CommandItemBase = {
   snippet?: SearchSnippet;
   height?: number;
-  // Add an optional timestamp to pass to fresh search/sort
-  updatedAt?: number | string;
-  viewedAt?: number | string;
+  updatedAt?: DateValue | null;
+  viewedAt?: DateValue | null;
 };
 
 type SimpleText = {
@@ -229,7 +229,7 @@ export type EmailPreview = {
   id: string;
   name: string; // subject
   sender: string;
-  timestamp: string;
+  timestamp: DateValue;
   is_read: boolean;
   attachments: Attachment[];
 };
@@ -351,27 +351,26 @@ export function useCommandItemAction(args: {
   setCommandScopeCommands: Setter<CommandWithInfo[]>;
 }) {
   const { setCommandScopeCommands } = args;
-  const { replaceSplit, insertSplit } = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
   const blockOrchestrator = useGlobalBlockOrchestrator();
 
   return function itemAction(
     item: CommandItemCard | undefined,
     action: ItemAction
   ) {
-    console.log('ITEM ACTION', item, action);
     if (!item) return;
     const blockName = getCommandItemBlockName(item);
     const id = item.data.id;
 
     if (blockName) {
-      if (action === 'new-split') {
-        insertSplit({ type: blockName, id }, 'kommand-menu');
-      } else {
-        replaceSplit({
-          content: { type: blockName, id },
+      openWithSplit(
+        { type: blockName, id },
+        {
           referredFrom: 'kommand-menu',
-        });
-      }
+          preferNewSplit: action === 'new-split',
+        }
+      );
+
       if (item.snippet) {
         gotoSnippetLocation(blockOrchestrator, id, item.snippet, cleanQuery());
       }
@@ -544,7 +543,7 @@ export function CommandItemCard(props: CommandItemProps) {
 
   const CommandItemContainer = ({ children }: { children?: JSXElement }) => {
     const optionKeyPressed = createMemo(() => {
-      return pressedKeys().has('opt');
+      return pressedKeys().has('shift');
     });
     return (
       <div
@@ -695,9 +694,7 @@ export function CommandItemCard(props: CommandItemProps) {
     const timestamp =
       props.item.type === 'email'
         ? props.item.data.timestamp
-        : props.item.updatedAt
-          ? new Date(props.item.updatedAt).toISOString()
-          : undefined;
+        : props.item.updatedAt;
 
     return (
       <Message

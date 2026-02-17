@@ -48,7 +48,7 @@ import type { Component, JSX } from 'solid-js';
 import { Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
-import { formatDate, isoToUnixTimestamp } from '../util/date';
+import { formatDate } from '../util/date';
 import NotFound from './AccessErrorViews/NotFound';
 import Unauthorized from './AccessErrorViews/Unauthorized';
 import { Tooltip } from './Tooltip';
@@ -296,10 +296,19 @@ export function PopupPreview(props: {
   const blockName = useMaybeBlockName();
   const blockId = useMaybeBlockId();
 
-  const { item, ItemEntityIcon } = useItemPreviewData(() => ({
-    id: props.documentInfo.id,
-    type: blockNameToItemType(props.documentInfo.type),
-  }));
+  const itemPreviewEntity = () => {
+    const type = blockNameToItemType(props.documentInfo.type);
+    let messageId: string | undefined;
+    if (
+      type === 'channel' &&
+      URL_PARAMS_CHANNEL.message in props.documentInfo.params
+    ) {
+      messageId = props.documentInfo.params[URL_PARAMS_CHANNEL.message];
+    }
+    return { id: props.documentInfo.id, type, messageId };
+  };
+
+  const { item, ItemEntityIcon } = useItemPreviewData(itemPreviewEntity);
 
   // Derived state
   const canOpenInChat = createCallback(() => {
@@ -557,7 +566,7 @@ export function PopupPreview(props: {
           >
             {(context) => (
               <MetadataInfo icon={ClockIcon} align="right">
-                {formatDate(isoToUnixTimestamp(context().created_at))}
+                {formatDate(context().created_at)}
               </MetadataInfo>
             )}
           </Show>
@@ -568,7 +577,7 @@ export function PopupPreview(props: {
 
   return (
     <div
-      class="select-none overflow-hidden w-80 bg-dialog text-ink"
+      class="select-none overflow-hidden w-80 text-ink"
       onMouseEnter={props.mouseEnter}
       onMouseLeave={props.mouseLeave}
     >
@@ -605,7 +614,7 @@ export function PopupPreview(props: {
                           <ClockIcon class="size-4" />
                           <span class="text-xs font-medium">
                             Snapshot from{' '}
-                            {formatDate(isoToUnixTimestamp(snapshot().date), {
+                            {formatDate(new Date(snapshot().date), {
                               showTime: true,
                             })}
                           </span>

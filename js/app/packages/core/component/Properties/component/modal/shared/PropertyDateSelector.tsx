@@ -206,7 +206,7 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
                   {(option, index) => (
                     <div
                       data-date-index={index()}
-                      class={`flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 cursor-pointer ${
+                      class={`flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 ${
                         index() === selectedIndex() ? 'bg-hover' : ''
                       }`}
                       onClick={() => handleSelectDate(option.date)}
@@ -233,7 +233,7 @@ export const PropertyDateSelector = (props: DateSelectorProps) => {
               <div class="border-t border-edge-muted mt-1 pt-1">
                 <div
                   data-date-index={dateOptions().length}
-                  class={`flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 cursor-pointer ${
+                  class={`flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 ${
                     selectedIndex() === dateOptions().length ? 'bg-hover' : ''
                   }`}
                   onClick={() => setMode('calendar')}

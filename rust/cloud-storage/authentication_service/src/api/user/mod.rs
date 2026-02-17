@@ -17,6 +17,7 @@ pub(in crate::api) mod get_user_info;
 pub(in crate::api) mod get_user_link_exists;
 pub(in crate::api) mod get_user_organization;
 pub(in crate::api) mod get_user_quota;
+pub(in crate::api) mod patch_ai_consent;
 pub(in crate::api) mod patch_tutorial;
 pub(in crate::api) mod patch_user_group;
 pub(in crate::api) mod patch_user_onboarding;
@@ -51,6 +52,7 @@ fn router_with_auth(state: ApiContext, jwt_args: JwtValidationArgs) -> Router<Ap
         )
         .route("/link_exists", get(get_user_link_exists::handler))
         .route("/tutorial", patch(patch_tutorial::handler))
+        .route("/ai_consent", patch(patch_ai_consent::handler))
         .route(
             "/quota",
             get(get_user_quota::handler).layer(axum::middleware::from_fn_with_state(

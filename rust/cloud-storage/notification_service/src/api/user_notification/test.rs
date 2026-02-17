@@ -2,6 +2,7 @@ use super::*;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
+use model_notifications::ChannelMentionMetadata;
 use notification::domain::models::UserNotificationRow;
 
 /// Build a [`UserNotificationRow<serde_json::Value>`] with the given event type
@@ -191,4 +192,141 @@ fn to_typed_row_preserves_row_fields() {
         }
         _ => panic!("expected TaskAssigned variant"),
     }
+}
+
+/// Verifies that the `notification_metadata` field serializes identically between
+/// `ApiUserNotification` and `ConnGatewayInnerNotif`.
+/// This ensures frontend code can use the same parsing logic for both HTTP API and WebSocket delivery.
+#[test]
+fn api_user_notification_and_conn_gateway_inner_notif_metadata_serialize_identically() {
+    use chrono::{TimeZone, Utc};
+    use notification::domain::models::TaggedContent;
+    use notification::domain::models::queue_message::ConnGatewayInnerNotif;
+
+    let created_at = Utc.with_ymd_and_hms(2025, 1, 15, 12, 0, 0).unwrap();
+    let notification_id = uuid::Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
+    let entity = EntityType::Document.with_entity_string("doc-123".to_string());
+
+    let notif_metadata = ChannelMentionMetadata {
+        message_id: "msg-1".to_string(),
+        message_content: "Hello @user".to_string(),
+        thread_id: None,
+        common: model_notifications::CommonChannelMetadata {
+            channel_type: model_notifications::ChannelType::Public,
+            channel_name: "general".to_string(),
+        },
+    };
+
+    // Create ApiUserNotification (used by HTTP API)
+    let api_notif = ApiUserNotification {
+        owner_id: MacroUserIdStr::parse_from_str("macro|user@example.com")
+            .unwrap()
+            .into_owned(),
+        notification_id,
+        notification_event_type: "channel_mention".to_string(),
+        entity: entity.clone(),
+        sent: true,
+        done: false,
+        created_at: Some(created_at),
+        viewed_at: None,
+        updated_at: None,
+        deleted_at: None,
+        notification_metadata: NotifEvent::ChannelMention(notif_metadata.clone()),
+        sender_id: Some(
+            MacroUserIdStr::parse_from_str("macro|sender@example.com")
+                .unwrap()
+                .into_owned(),
+        ),
+    };
+
+    // Create ConnGatewayInnerNotif (used by WebSocket delivery)
+    let conn_gateway_notif = ConnGatewayInnerNotif {
+        notification_id,
+        notification_event_type: "channel_mention".to_string(),
+        entity,
+        sent: true,
+        done: false,
+        created_at: Some(created_at),
+        viewed_at: None,
+        updated_at: None,
+        deleted_at: None,
+        notification_metadata: TaggedContent::new(notif_metadata),
+        sender_id: Some(
+            MacroUserIdStr::parse_from_str("macro|sender@example.com")
+                .unwrap()
+                .into_owned(),
+        ),
+    };
+
+    let api_json = serde_json::to_value(&api_notif).unwrap();
+    let conn_gateway_json = serde_json::to_value(&conn_gateway_notif).unwrap();
+
+    let key = "notification_metadata";
+    let api_metadata = &api_json[key];
+    let conn_gateway_metadata = &conn_gateway_json[key];
+
+    assert_eq!(
+        api_metadata,
+        conn_gateway_metadata,
+        "notification_metadata should serialize identically.\n\
+         ApiUserNotification (HTTP API): {}\n\
+         ConnGatewayInnerNotif (WebSocket): {}",
+        serde_json::to_string_pretty(api_metadata).unwrap(),
+        serde_json::to_string_pretty(conn_gateway_metadata).unwrap(),
+    );
+}
+
+/// Verifies that `TaggedContent<T>` (used by ConnGatewayInnerNotif for WebSocket delivery)
+/// and `NotifEvent` (used by ApiUserNotification for HTTP API) serialize identically.
+/// This ensures frontend code can use the same parsing logic for both delivery methods.
+#[test]
+fn conn_gateway_inner_val_has_identical_serialization() {
+    use notification::domain::models::TaggedContent;
+
+    // Create test notification metadata
+    let notif_metadata = ChannelMentionMetadata {
+        message_id: "testing".to_string(),
+        message_content: "some data".to_string(),
+        thread_id: Some("threadid".to_string()),
+        common: model_notifications::CommonChannelMetadata {
+            channel_type: model_notifications::ChannelType::Public,
+            channel_name: "my channel".to_string(),
+        },
+    };
+
+    // TaggedContent<T> is what ConnGatewayInnerNotif uses for notification_metadata
+    // when sending via WebSocket
+    let tagged_content = TaggedContent::new(notif_metadata.clone());
+    let tagged_content_json = serde_json::to_value(&tagged_content).unwrap();
+
+    // NotifEvent is what ApiUserNotification uses for notification_metadata
+    // when returning via HTTP API
+    let notif_event = NotifEvent::ChannelMention(notif_metadata);
+    let notif_event_json = serde_json::to_value(&notif_event).unwrap();
+
+    // Both should serialize to the same JSON structure:
+    // { "tag": "channel_mention", "content": { "messageId": "...", ... } }
+    assert_eq!(
+        tagged_content_json,
+        notif_event_json,
+        "TaggedContent and NotifEvent should serialize identically.\n\
+         TaggedContent (WebSocket): {}\n\
+         NotifEvent (HTTP API): {}",
+        serde_json::to_string_pretty(&tagged_content_json).unwrap(),
+        serde_json::to_string_pretty(&notif_event_json).unwrap(),
+    );
+
+    // Verify the expected structure
+    assert_eq!(tagged_content_json["tag"], "channel_mention");
+    assert_eq!(notif_event_json["tag"], "channel_mention");
+
+    // Verify content fields are serialized in camelCase as expected
+    assert_eq!(tagged_content_json["content"]["messageId"], "testing");
+    assert_eq!(
+        tagged_content_json["content"]["messageContent"],
+        "some data"
+    );
+    assert_eq!(tagged_content_json["content"]["threadId"], "threadid");
+    assert_eq!(tagged_content_json["content"]["channelType"], "public");
+    assert_eq!(tagged_content_json["content"]["channelName"], "my channel");
 }

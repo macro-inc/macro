@@ -2,24 +2,26 @@ import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import type { SendBuilder } from '@block-chat/blockClient';
 import { TopBar } from '@block-chat/component/TopBar';
 import type { ChatData } from '@block-chat/definition';
+import { useBlockId } from '@core/block';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
-import { useBuildChatSendRequest } from '@core/component/AI/component/input/buildRequest';
-import { useChatInput } from '@core/component/AI/component/input/useChatInput';
-import { useChatMessages } from '@core/component/AI/component/message';
+import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
+import { useSendChatMessage } from '@core/component/AI/component/input/buildRequest';
+import { useChatMarkdownArea } from '@core/component/AI/component/input/useChatMarkdownArea';
+import { ChatMessages } from '@core/component/AI/component/message/ChatMessages';
+import {
+  ChatInputProvider,
+  ChatProvider,
+  useChatContext,
+  useChatInputContext,
+} from '@core/component/AI/context';
 import { useEntityDropAttachment } from '@core/component/AI/hook/useEntityDropAttachment';
 import { getPendingSend } from '@core/component/AI/signal/pendingSend';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
-import type {
-  CreateAndSend,
-  MessageStream,
-  Send,
-} from '@core/component/AI/types';
 import {
   getChatInputStoredState,
   type StoredStuff,
   storeChatState,
 } from '@core/component/AI/util/storage';
-import { useBlockId } from '@core/block';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -32,13 +34,36 @@ import {
 import { blockHandleSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
 import { invalidateUserQuota } from '@queries/auth';
-import { cognitionWebsocketServiceClient } from '@service-cognition/client';
 import { createCallback } from '@solid-primitives/rootless';
+import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import type { LexicalEditor } from 'lexical';
 import { createEffect, createSignal, Show } from 'solid-js';
 import { pendingLocationParamsSignal } from '../signal/pendingLocationParams';
 
 export function Chat(props: { data: ChatData }) {
+  const loadedState = getChatInputStoredState(props.data.chat.id);
+
+  return (
+    <ChatInputProvider
+      initialAttachments={loadedState.attachments}
+      model={loadedState.model}
+    >
+      <ChatProvider
+        chatId={props.data.chat.id}
+        messages={props.data.chat.messages}
+      >
+        <ChatInner data={props.data} loadedInputText={loadedState.input} />
+      </ChatProvider>
+    </ChatInputProvider>
+  );
+}
+
+function ChatInner(props: {
+  data: ChatData;
+  loadedInputText: string | undefined;
+}) {
+  const input = useChatInputContext();
+  const chat = useChatContext();
   const canEdit = useCanEdit();
   const disabled = () => !canEdit();
   const scopeId = blockHotkeyScopeSignal.get;
@@ -47,94 +72,66 @@ export function Chat(props: { data: ChatData }) {
   const [chatEditor, setChatEditor] = createSignal<LexicalEditor>();
   const [scrollRef, setScrollRef] = createSignal<HTMLElement>();
 
-  const [stream, setStream] = createSignal<MessageStream>();
-  const cancelStream = () => {
-    const s = stream();
-    if (s) {
-      cognitionWebsocketServiceClient.stopChatMessage({
-        stream_id: s.request.stream_id,
-      });
-      s.close();
+  const chatMarkdownArea = useChatMarkdownArea({
+    initialValue: props.loadedInputText,
+    addAttachment: (a) => input.attachments.addAttachment(a),
+  });
+
+  // Local stream signal for registerToolHandler
+
+  createEffect(() => {
+    const chatStream = chat.stream();
+    if (!chatStream || chatStream.isDone()) {
+      input.setIsGenerating(false);
+      return;
     }
-  };
-  const {
-    ChatMessages,
-    addMessage,
-    setStream: setMessagesStream,
-  } = useChatMessages({
-    messages: props.data.chat.messages,
-    chatId: props.data.chat.id,
-    editDisabled: disabled,
-    pendingLocationParams: pendingLocationParamsSignal.get,
+    input.setIsGenerating(true);
+    if (chatStream.data().length > 0) invalidateUserQuota();
   });
+
   const blockHandle = blockHandleSignal.get;
-
-  const loadedState = getChatInputStoredState(props.data.chat.id);
-
-  const {
-    ChatInput,
-    setIsGenerating,
-    attachments,
-    chatMarkdownArea,
-    model,
-    setModel,
-    uploadQueue,
-  } = useChatInput({
-    chatId: props.data.chat.id,
-    initialValue: loadedState.input,
-  });
-
-  if (loadedState.attachments) {
-    attachments.setAttached(loadedState.attachments);
-  }
-  if (loadedState.model) {
-    setModel(loadedState.model);
-  }
 
   // Entity drag-and-drop support
   const chatId = useBlockId();
   const { droppable, isDraggingOver } = useEntityDropAttachment(
     'chat-input-' + chatId,
-    attachments
+    input.attachments
   );
   false && droppable;
 
-  registerToolHandler(stream);
+  registerToolHandler(() => {
+    const s = chat.stream();
+    if (!s) return undefined;
+    return { data: s.data };
+  });
   const { showPaywall } = usePaywallState();
 
-  const onSend = createCallback(async (request: Send | CreateAndSend) => {
-    if (request.type === 'createAndSend') {
-      const response = await request.call();
-      if ('type' in response && response.type === 'error') {
-        if (response.paymentError) showPaywall();
-        return;
-      } else {
-        return onSend(response);
-      }
-    } else {
-      addMessage({
-        attachments: request.request.attachments ?? [],
-        content: request.request.content,
-        role: 'user',
-        id: '',
-      });
-      const stream = request.call();
-      setMessagesStream(stream);
-      setStream(stream);
-      setIsGenerating(true);
-      invalidateUserQuota();
-      createEffect(() => {
-        if (stream.data().length > 0) {
-          invalidateUserQuota();
-        }
-      });
-      createEffect(() => {
-        if (stream.isDone()) {
-          setIsGenerating(false);
-          invalidateUserQuota();
-        }
-      });
+  const sendChatMessage = useSendChatMessage();
+
+  const onSend = createCallback(async (request: ChatSendInput) => {
+    chat.addMessage({
+      id: crypto.randomUUID(),
+      content: request.content,
+      role: 'user',
+      attachments: request.attachments ?? [],
+    });
+    chat.setWaitingForStream(true);
+
+    const result = await sendChatMessage({
+      ...request,
+      chatId: chat.chatId(),
+    });
+
+    chat.setWaitingForStream(false);
+
+    if ('error' in result) {
+      if (result.paymentError) showPaywall();
+      return;
     }
+
+    chat.setStream(result.stream);
+    input.setIsGenerating(true);
+    invalidateUserQuota();
   });
 
   const saveChatState = (state: StoredStuff) => {
@@ -142,19 +139,22 @@ export function Chat(props: { data: ChatData }) {
   };
 
   createEffect(() => {
-    const input = chatMarkdownArea.markdownText();
-    const attached = attachments.attached();
-    const model_ = model();
-    saveChatState({ attachments: attached, input, model: model_ });
+    const inputText = chatMarkdownArea.markdownText();
+    const attached = input.attachments.attached();
+    const model_ = input.model();
+    saveChatState({ attachments: attached, input: inputText, model: model_ });
   });
 
   const setPendingLocation = pendingLocationParamsSignal.set;
-  const buildChatSendRequest = useBuildChatSendRequest();
 
   createMethodRegistration(blockHandle, {
     sendMessage: async (sendRequest: SendBuilder) => {
-      const send = await buildChatSendRequest(sendRequest);
-      onSend(send);
+      onSend({
+        content: sendRequest.userRequest,
+        model: sendRequest.model ?? input.model(),
+        attachments: sendRequest.attachments ?? [],
+        toolset: { type: 'all' },
+      });
     },
     goToLocationFromParams: (params: Record<string, string>) => {
       setPendingLocation(params);
@@ -164,13 +164,12 @@ export function Chat(props: { data: ChatData }) {
   // Check for pending send data (e.g., from SoupChatInput) and send it
   const pendingSend = getPendingSend();
   if (pendingSend) {
-    buildChatSendRequest({
-      chatId: props.data.chat.id,
-      userRequest: pendingSend.content,
-      attachments: pendingSend.attachments,
-      model: pendingSend.model,
-      isPersistent: true,
-    }).then((request) => onSend(request));
+    onSend({
+      content: pendingSend.content,
+      model: pendingSend.model ?? input.model(),
+      attachments: pendingSend.attachments ?? [],
+      toolset: { type: 'all' },
+    });
   }
 
   registerScopeSignalHotkey(scopeId, {
@@ -201,7 +200,6 @@ export function Chat(props: { data: ChatData }) {
   return (
     <DragDropWrapper
       class="size-full bg-panel overscroll-none overflow-hidden flex flex-col"
-      uploadQueue={uploadQueue}
       isEntityDraggingOver={isDraggingOver}
     >
       <TopBar />
@@ -213,7 +211,10 @@ export function Chat(props: { data: ChatData }) {
           ref={setScrollRef}
         >
           <div class="mx-auto w-full max-w-3xl">
-            <ChatMessages />
+            <ChatMessages
+              editDisabled={disabled()}
+              pendingLocationParams={pendingLocationParamsSignal.get}
+            />
           </div>
         </div>
         <CustomScrollbar scrollContainer={scrollRef} />
@@ -222,8 +223,9 @@ export function Chat(props: { data: ChatData }) {
         <div class="flex w-full justify-center pb-2 px-4">
           <div class="w-3xl">
             <ChatInput
+              markdown={chatMarkdownArea}
+              chatId={chat.chatId()}
               onSend={onSend}
-              onStop={cancelStream}
               captureEditor={setChatEditor}
               autoFocusOnMount={!navigatedFromJK()}
             />

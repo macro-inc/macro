@@ -19,7 +19,7 @@ use crate::{
     api::context::ApiContext,
     core::constants::DEFAULT_MAX_TOKENS,
     core::model::{COMPLETION_CONTEXT_WINDOW, COMPLETION_MODEL},
-    model::ws::{FromWebSocketMessage, SendCompletionPayload, WebSocketError},
+    model::ws::{ChatStream, SendCompletionPayload, WebSocketError},
     service::attachment::document::get_document_plaintext_content,
 };
 
@@ -162,7 +162,7 @@ async fn build_completion_request(
 #[instrument(skip(sender), err)]
 async fn stream_completion(
     request: ChatCompletionRequest,
-    sender: &UnboundedSender<FromWebSocketMessage>,
+    sender: &UnboundedSender<ChatStream>,
     completion_id: &str,
     user_id: &str,
 ) -> Result<()> {
@@ -177,7 +177,7 @@ async fn stream_completion(
             let ChatStreamCompletionResponse::Content(content) = part;
             response_message.push_str(&content.content);
 
-            let response = FromWebSocketMessage::CompletionResponse {
+            let response = ChatStream::CompletionResponse {
                 completion_id: completion_id.to_string(),
                 content: response_message.clone(),
                 done: false,
@@ -189,7 +189,7 @@ async fn stream_completion(
 
     ws_send(
         sender,
-        FromWebSocketMessage::CompletionResponse {
+        ChatStream::CompletionResponse {
             completion_id: completion_id.to_string(),
             content: response_message,
             done: true,
@@ -202,7 +202,7 @@ async fn stream_completion(
 #[tracing::instrument(skip_all, fields(user_id, completion_id=?payload.completion_id), err)]
 pub async fn send_completion_handler(
     ctx: Arc<ApiContext>,
-    sender: &UnboundedSender<FromWebSocketMessage>,
+    sender: &UnboundedSender<ChatStream>,
     payload: &SendCompletionPayload,
     user_id: &str,
 ) -> Result<(), WebSocketError> {

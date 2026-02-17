@@ -271,6 +271,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34ac096ce696dc2fcabef30516bb13c0a68a11d30131d3df6f04711467681b04"
 
 [[package]]
+name = "aquamarine"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f50776554130342de4836ba542aa85a4ddb361690d7e8df13774d7284c3d5c2"
+dependencies = [
+ "include_dir",
+ "itertools 0.10.5",
+ "proc-macro-error2",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.98",
+]
+
+[[package]]
 name = "arbitrary"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -510,6 +524,7 @@ dependencies = [
  "document_storage_service_client",
  "doppleganger",
  "email_validator",
+ "fusionauth",
  "futures",
  "http-body-util",
  "jsonwebtoken",
@@ -544,7 +559,6 @@ dependencies = [
  "secretsmanager_client",
  "serde",
  "serde_json",
- "serde_urlencoded",
  "serde_utils",
  "ses_client",
  "sha1",
@@ -1672,6 +1686,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
+name = "channels"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "chrono",
+ "http-body-util",
+ "macro_db_migrator",
+ "mockall",
+ "model-error-response",
+ "model_user",
+ "models_pagination",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.17",
+ "tokio",
+ "tower 0.5.2",
+ "tracing",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
 name = "charset"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1971,6 +2009,7 @@ dependencies = [
  "serde_dynamo",
  "serde_json",
  "sqlx",
+ "stream",
  "strum",
  "strum_macros",
  "tokio",
@@ -2333,6 +2372,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "csv"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52cd9d68cf7efc6ddfaaee42e7288d3a99d613d4b50f76ce9827ae0c6e14f938"
+dependencies = [
+ "csv-core",
+ "itoa",
+ "ryu",
+ "serde_core",
+]
+
+[[package]]
+name = "csv-core"
+version = "0.1.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "704a3c26996a80471189265814dbc2c257598b96b8a7feae2d31ace646bb9782"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "darling"
 version = "0.20.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2603,6 +2663,8 @@ dependencies = [
  "ai_tools",
  "anyhow",
  "async-openai",
+ "async-stream",
+ "async-trait",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
@@ -2637,9 +2699,11 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "model",
+ "model-entity",
  "models_dcs",
  "models_opensearch",
  "models_permissions",
+ "redis",
  "regex",
  "reqwest",
  "schemars",
@@ -2652,6 +2716,7 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "static_file_service_client",
+ "stream",
  "strum",
  "sync_service_client",
  "thiserror 2.0.17",
@@ -2696,6 +2761,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "bzip2",
+ "channels",
  "chrono",
  "clap",
  "cloudfront_sign",
@@ -2705,8 +2771,10 @@ dependencies = [
  "connection_gateway",
  "cool_asserts",
  "document_sub_type",
+ "documents",
  "dynamodb_client",
  "email",
+ "entity_access",
  "frecency",
  "futures",
  "hex",
@@ -2820,6 +2888,40 @@ dependencies = [
  "tokio",
  "tracing",
  "urlencoding",
+ "uuid",
+]
+
+[[package]]
+name = "documents"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "axum-extra",
+ "chrono",
+ "cloudfront_sign",
+ "document_sub_type",
+ "entity_access",
+ "futures",
+ "http-body-util",
+ "macro_db_migrator",
+ "macro_project_utils",
+ "macro_user_id",
+ "mockall",
+ "model",
+ "model-error-response",
+ "model_user",
+ "models_permissions",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "sync_service_client",
+ "thiserror 2.0.17",
+ "tokio",
+ "tower 0.5.2",
+ "tracing",
+ "urlencoding",
+ "utoipa",
  "uuid",
 ]
 
@@ -3254,6 +3356,10 @@ dependencies = [
 [[package]]
 name = "email_utils"
 version = "0.1.0"
+dependencies = [
+ "lazy_static",
+ "regex",
+]
 
 [[package]]
 name = "email_validator"
@@ -3304,6 +3410,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tracing",
+ "utoipa",
  "uuid",
 ]
 
@@ -3577,6 +3684,23 @@ name = "fs_extra"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
+
+[[package]]
+name = "fusionauth"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "macro_env",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "urlencoding",
+]
 
 [[package]]
 name = "futf"
@@ -4477,6 +4601,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0263a3d970d5c054ed9312c0057b4f3bde9c0b33836d3637361d4a9e6e7a408"
 
 [[package]]
+name = "include_dir"
+version = "0.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "923d117408f1e49d914f1a379a309cffe4f18c05cf4e3d12e613a15fc81bd0dd"
+dependencies = [
+ "include_dir_macros",
+]
+
+[[package]]
+name = "include_dir_macros"
+version = "0.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7cab85a7ed0bd5f0e76d93846e0147172bed2e2d3f859bcc33a8d9699cad1a75"
+dependencies = [
+ "proc-macro2",
+ "quote",
+]
+
+[[package]]
 name = "indent_write"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4590,6 +4733,15 @@ dependencies = [
  "thiserror 2.0.17",
  "utoipa",
  "uuid",
+]
+
+[[package]]
+name = "itertools"
+version = "0.10.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0fd2260e829bddf4cb6ea802289de2f86d6a7a690192fbe91b3f46e0f2c8473"
+dependencies = [
+ "either",
 ]
 
 [[package]]
@@ -5092,8 +5244,6 @@ name = "macro_project_utils"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "macro_db_client",
- "model",
  "sqlx",
  "tokio",
  "tracing",
@@ -5499,6 +5649,7 @@ dependencies = [
  "models_comms",
  "models_pagination",
  "notification",
+ "paste",
  "serde",
  "serde_json",
  "sqlx",
@@ -5853,6 +6004,7 @@ checksum = "0676bb32a98c1a483ce53e500a81ad9c3d5b3f7c920c28c24e9cb0980d0b5bc8"
 name = "notification"
 version = "0.1.0"
 dependencies = [
+ "aquamarine",
  "aws-sdk-sesv2",
  "aws-sdk-sns",
  "aws-sdk-sqs",
@@ -6653,6 +6805,27 @@ checksum = "664ec5419c51e34154eec046ebcba56312d5a2fc3b09a06da188e1ad21afadf6"
 dependencies = [
  "proc-macro2",
  "syn 2.0.98",
+]
+
+[[package]]
+name = "proc-macro-error-attr2"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96de42df36bb9bba5542fe9f1a054b8cc87e172759a1868aa05c1f3acc89dfc5"
+dependencies = [
+ "proc-macro2",
+ "quote",
+]
+
+[[package]]
+name = "proc-macro-error2"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11ec05c52be0a07b08061f7dd003e7d7092e0472bc731b4af7bb1ef876109802"
+dependencies = [
+ "proc-macro-error-attr2",
+ "proc-macro2",
+ "quote",
 ]
 
 [[package]]
@@ -7543,6 +7716,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "scc"
+version = "2.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46e6f046b7fef48e2660c57ed794263155d713de679057f2d0c169bfc6e756cc"
+dependencies = [
+ "sdd",
+]
+
+[[package]]
 name = "schannel"
 version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7649,6 +7831,12 @@ dependencies = [
  "ring",
  "untrusted",
 ]
+
+[[package]]
+name = "sdd"
+version = "3.0.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "490dcfcbfef26be6800d11870ff2df8774fa6e86d047e3e8c8a76b25655e41ca"
 
 [[package]]
 name = "search_processing_service"
@@ -7845,6 +8033,31 @@ checksum = "49db231d56a190491cb4aeda9527f1ad45345af50b0851622a7adb8c03b01c32"
 dependencies = [
  "core-foundation-sys",
  "libc",
+]
+
+[[package]]
+name = "seed_cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "comms_db_client",
+ "csv",
+ "fusionauth",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_env_var",
+ "macro_user_id",
+ "mockall",
+ "model",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]
@@ -8050,6 +8263,32 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d00caa5193a3c8362ac2b73be6b9e768aa5a4b2f721d8f4b339600c3cb51f8e"
 dependencies = [
  "darling",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.98",
+]
+
+[[package]]
+name = "serial_test"
+version = "3.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d0b343e184fc3b7bb44dff0705fffcf4b3756ba6aff420dddd8b24ca145e555"
+dependencies = [
+ "futures-executor",
+ "futures-util",
+ "log",
+ "once_cell",
+ "parking_lot",
+ "scc",
+ "serial_test_derive",
+]
+
+[[package]]
+name = "serial_test_derive"
+version = "3.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f50427f258fb77356e4cd4aa0e87e2bd2c66dbcee41dc405282cae2bfc26c83"
+dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.98",
@@ -8656,6 +8895,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "stream"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-stream",
+ "async-trait",
+ "dashmap",
+ "futures",
+ "model-entity",
+ "redis",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "thiserror 2.0.17",
+ "tokio",
+ "tokio-stream",
+ "tokio-test",
+ "tracing",
+]
+
+[[package]]
 name = "string_cache"
 version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9095,6 +9355,18 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
+ "tokio-util",
+]
+
+[[package]]
+name = "tokio-test"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f6d24790a10a7af737693a3e8f1d03faef7e6ca0cc99aae5066f533766de545"
+dependencies = [
+ "futures-core",
+ "tokio",
+ "tokio-stream",
 ]
 
 [[package]]

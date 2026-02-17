@@ -31,6 +31,10 @@ import type { StringIDResponse } from './generated/schemas/stringIDResponse';
 import type { StructedOutputCompletionRequest } from './generated/schemas/structedOutputCompletionRequest';
 import type { StructedOutputCompletionResponse } from './generated/schemas/structedOutputCompletionResponse';
 import type { SuccessResponse } from './generated/schemas/successResponse';
+import type { GetSimpleCompletionStreamPayload } from './generated/schemas/getSimpleCompletionStreamPayload';
+import type { HttpSendChatMessageRequest } from './generated/schemas/httpSendChatMessageRequest';
+import type { SendChatMessageResponse } from './generated/schemas/sendChatMessageResponse';
+import type { SimpleCompletionResponse } from './generated/schemas/simpleCompletionResponse';
 import type { VerifyAttachmentsRequest } from './generated/schemas/verifyAttachmentsRequest';
 import type { VerifyAttachmentsResponse } from './generated/schemas/verifyAttachmentsResponse';
 import type { CognitionWebsocketService } from './service';
@@ -293,6 +297,28 @@ export const cognitionApiServiceClient = {
           body: JSON.stringify(args),
         }
       ),
+      (result) => result
+    );
+  },
+
+  /** Send a chat message via HTTP stream API. Response chunks arrive via connection_gateway. */
+  async sendStreamChatMessage(args: HttpSendChatMessageRequest) {
+    return mapOk(
+      await dcsFetch<SendChatMessageResponse>(`/stream/chat/message`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+      }),
+      (result) => result
+    );
+  },
+
+  /** Start a simple completion via HTTP stream API. Response chunks arrive via connection_gateway. */
+  async streamSimpleCompletion(args: GetSimpleCompletionStreamPayload) {
+    return mapOk(
+      await dcsFetch<SimpleCompletionResponse>(`/stream/completion/simple`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+      }),
       (result) => result
     );
   },

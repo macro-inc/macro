@@ -2,6 +2,7 @@ import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer'
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
 import { filterSafeAttachments } from '@block-channel/utils/attachments';
 import { type BlockAlias, type BlockName, useBlockId } from '@core/block';
+import type { DateValue } from '@core/util/date';
 import { InlineItemPreview } from '@core/component/ItemPreview';
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
@@ -12,7 +13,7 @@ import { tryMacroId, useDisplayName } from '@core/user';
 import BracketLeft from '@macro-icons/macro-group-bracket-left.svg';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import type { MessageMention } from '@service-comms/generated/models';
-import type { Attachment } from '@service-comms/generated/models/attachment';
+import type { Attachment } from '@queries/channel/types';
 import type { ItemType } from '@service-storage/client';
 import { useMentionsQuery } from '@queries/channel/mentions';
 import { createMemo, Show, Suspense } from 'solid-js';
@@ -25,7 +26,7 @@ const DRAWER_ID = 'attachments';
 export function AttachmentsModal() {
   const drawerControl = useDrawerControl(DRAWER_ID);
   const currentBlockId = useBlockId();
-  const { replaceOrInsertSplit } = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
   const channelContext = useChannelContext();
 
   const mentionsQuery = useMentionsQuery(() => currentBlockId);
@@ -51,8 +52,14 @@ export function AttachmentsModal() {
       );
   });
 
-  const navigateToItem = (blockName: BlockName, blockId: string) => {
-    replaceOrInsertSplit({ type: blockName, id: blockId });
+  const onClickAttachment = (
+    event: MouseEvent,
+    details: { blockName: BlockName; blockId: string }
+  ) => {
+    openWithSplit(
+      { type: details.blockName, id: details.blockId },
+      { preferNewSplit: !event.shiftKey }
+    );
   };
 
   return (
@@ -93,7 +100,7 @@ export function AttachmentsModal() {
                     <Suspense>
                       <AttachmentItem
                         attachment={attachment}
-                        onNavigate={navigateToItem}
+                        onNavigate={onClickAttachment}
                         senderId={channelContext
                           .messageSenderMap()
                           .get(attachment.message_id)}
@@ -126,7 +133,10 @@ function makeAttachmentFromMention(
 
 type AttachmentItemProps = {
   attachment: Attachment;
-  onNavigate: (blockName: BlockName | BlockAlias, blockId: string) => void;
+  onNavigate: (
+    event: MouseEvent,
+    details: { blockName: BlockName | BlockAlias; blockId: string }
+  ) => void;
   senderId: string | undefined;
 };
 
@@ -139,10 +149,13 @@ function AttachmentItem(props: AttachmentItemProps) {
     type: props.attachment.entity_type as ItemType,
   }));
 
-  const handleClick = () => {
+  const handleClick = (event: MouseEvent) => {
     const item = preview();
     if (isAccessiblePreviewItem(item) && item.type === 'document') {
-      props.onNavigate(fileTypeToBlockName(item.fileType), item.id);
+      props.onNavigate(event, {
+        blockName: fileTypeToBlockName(item.fileType),
+        blockId: item.id,
+      });
     } else {
       toast.failure('Failed to open attachment');
     }
@@ -175,9 +188,9 @@ function AttachmentItem(props: AttachmentItemProps) {
   );
 }
 
-const formatTimestamp = (timestamp: string) => {
-  const date = new Date(timestamp);
-  const datePart = date
+const formatTimestamp = (date: DateValue) => {
+  const d = date instanceof Date ? date : new Date(date);
+  const datePart = d
     .toLocaleDateString('en-US', {
       month: 'numeric',
       day: 'numeric',
@@ -185,7 +198,7 @@ const formatTimestamp = (timestamp: string) => {
     })
     .replaceAll('/', '-');
 
-  const timePart = date.toLocaleTimeString('en-US', {
+  const timePart = d.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: 'numeric',
   });

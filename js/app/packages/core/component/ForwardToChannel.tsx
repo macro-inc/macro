@@ -46,6 +46,8 @@ interface ForwardToChannelProps {
     getSubmitAccessLevel: () => AccessLevel | null;
     handleSubmit: () => void;
   }) => void;
+  hideAccessLevelSelector?: boolean;
+  initialAccessLevel?: AccessLevel | null;
 }
 
 export function ForwardToChannel(props: ForwardToChannelProps) {
@@ -87,7 +89,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
 
   const { sendToUsers, sendToChannel } = useSendMessageToPeople();
   const [submitAccessLevel, setSubmitAccessLevel] =
-    createSignal<AccessLevel | null>(null);
+    createSignal<AccessLevel | null>(props.initialAccessLevel ?? null);
 
   createEffect(() => {
     const channelPermissions_ = channelPermissions();
@@ -294,7 +296,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
           <div class="flex w-full items-center p-3 gap-3 flex-wrap">
             <Show when={canSendAsGroup()}>
               <label
-                class={`flex items-start gap-2 ${!canSendAsGroup() ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                class={`flex items-start gap-2 ${!canSendAsGroup() ? 'cursor-not-allowed' : 'cursor-default'}`}
               >
                 <div class="relative mt-0.5">
                   <input
@@ -352,7 +354,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
               <Show
                 when={
                   props.submitPermissionInfo?.userPermissions ===
-                  Permissions.OWNER
+                    Permissions.OWNER && !props.hideAccessLevelSelector
                 }
               >
                 <ShareOptions

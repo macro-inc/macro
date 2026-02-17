@@ -122,6 +122,17 @@ export type CreateNewSplitOptions = {
   referredFrom: ReferredFrom;
 };
 
+export type OpenWithSplitOptions = {
+  mergeHistory?: boolean;
+  activate?: boolean;
+  referredFrom?: ReferredFrom;
+  allowDuplicate?: boolean;
+  replaceWhenFull?: boolean;
+  /** If true, prefers opening in a new split. May still replace if layout is at capacity. */
+  preferNewSplit?: boolean;
+  handle?: SplitHandle;
+};
+
 function keyOfSplitState(s: SplitState): SplitKey {
   return `${s.content.type}:${s.content.id}`;
 }
@@ -203,6 +214,11 @@ export type SplitManager = {
   /** Create a new split with the provided initial content and activate it */
   createNewSplit: (options: CreateNewSplitOptions) => SplitHandle;
 
+  openWithSplit: (
+    content: SplitContent,
+    options?: OpenWithSplitOptions
+  ) => SplitHandle;
+
   /** Set a split as active by its split id  */
   activateSplit: (id: SplitId) => void;
 
@@ -213,6 +229,8 @@ export type SplitManager = {
   toggleSpotlightSplit: (id: SplitId) => void;
 
   getOrchestrator: () => BlockOrchestrator;
+
+  canAppendSplit: () => boolean;
 
   /**
    * Reconcile the splits with the provided list of splits.
@@ -400,6 +418,10 @@ export function createSplitLayout(
   });
 
   const [resizeContext, setResizeContext] = createSignal<ResizeZoneCtx>();
+
+  const canAppendSplit = createMemo(
+    () => resizeContext()?.canFit({ minSize: 400 }) ?? true
+  );
 
   const [splitNamesById, setSplitNamesById] = createStore<{
     [id: SplitId]: string;
@@ -972,6 +994,54 @@ export function createSplitLayout(
     });
   }
 
+  function openWithSplit(
+    content: SplitContent,
+    options: OpenWithSplitOptions = {}
+  ): SplitHandle {
+    const existingSplit = getSplitByContent(content.type, content.id);
+
+    if (!options.allowDuplicate && existingSplit) {
+      if (options.activate !== false) {
+        existingSplit.activate();
+      }
+
+      return existingSplit;
+    }
+
+    let splitHandle = options.handle;
+
+    if (!splitHandle) {
+      splitHandle = state.activeSplitId
+        ? getSplit(state.activeSplitId)
+        : undefined;
+    }
+
+    const shouldReplaceWhenFull =
+      options.replaceWhenFull !== false && !canAppendSplit();
+
+    const shouldReplace = !options.preferNewSplit || shouldReplaceWhenFull;
+
+    if (splitHandle && shouldReplace) {
+      splitHandle.replace({
+        next: content,
+        referredFrom: options.referredFrom ?? null,
+        mergeHistory: options.mergeHistory,
+      });
+
+      if (options.activate !== false) {
+        splitHandle.activate();
+      }
+
+      return splitHandle;
+    } else {
+      return createNewSplit({
+        content,
+        activate: options.activate ?? true,
+        referredFrom: options.referredFrom ?? null,
+      });
+    }
+  }
+
   return {
     splits: () => state.splits,
     activeSplitId: () => state.activeSplitId,
@@ -979,6 +1049,7 @@ export function createSplitLayout(
     events: lastEvent,
     reconcile: reconcileSplits,
     getSplit,
+    openWithSplit,
     removeSplit,
     createNewSplit,
     getUrlSegments,
@@ -998,5 +1069,6 @@ export function createSplitLayout(
     getActivePopovers,
     closeAllPopovers,
     popovers: () => state.popovers,
+    canAppendSplit,
   };
 }

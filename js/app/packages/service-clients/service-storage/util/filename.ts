@@ -62,10 +62,20 @@ export const reverseFormatDocumentName = (
   return name.substring(0, name.length - suffix.length);
 };
 
+/**
+ * Appends the file type extension to a document name if it's not already present.
+ * @param originalName - The document name to format.
+ * @param fileType - The file extension to append (e.g. "mp4", "mov").
+ * @param options.fullyQualifiedBlockName - When true, only appends the extension for block types in the fully qualified list (e.g. "unknown", "code").
+ * @param options.caseInsensitiveSuffix - When true, treats existing suffixes as matching regardless of case (e.g. "abc.MOV" won't get ".mov" appended).
+ */
 export const formatDocumentName = (
   originalName: string,
   fileType?: string | null,
-  options?: { fullyQualifiedBlockName?: boolean }
+  options?: {
+    fullyQualifiedBlockName?: boolean;
+    caseInsensitiveSuffix?: boolean;
+  }
 ) => {
   if (!fileType) return originalName;
 
@@ -78,6 +88,13 @@ export const formatDocumentName = (
 
   const suffix = `.${fileType}`;
   if (originalName.endsWith(suffix)) {
+    return originalName;
+  }
+
+  if (
+    options?.caseInsensitiveSuffix &&
+    originalName.toLowerCase().endsWith(suffix.toLowerCase())
+  ) {
     return originalName;
   }
 

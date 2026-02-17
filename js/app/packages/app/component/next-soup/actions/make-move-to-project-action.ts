@@ -1,5 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
-import type { EntityData } from '@macro-entity';
+import type { EntityData } from '@entity';
 import { openBulkEditModal } from '@app/component/bulk-edit-entity/BulkEditEntityModal';
 import type { SoupState } from '../create-soup-state';
 import { restoreSoupFocus } from '../utils';

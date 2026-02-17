@@ -7,7 +7,7 @@ import { SearchContentHitRow } from './search-content-hit-row';
 
 interface ExtractorContentHitsProps {
   entity: EntityData;
-  onClick?: (location?: SearchLocation) => void;
+  onClick?: (e: PointerEvent | MouseEvent, location?: SearchLocation) => void;
   visibleCount?: number;
 }
 

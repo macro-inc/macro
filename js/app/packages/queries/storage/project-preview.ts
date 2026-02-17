@@ -1,14 +1,11 @@
-import { SERVER_HOSTS } from '@core/constant/servers';
 import {
   catchToResult,
   isErr,
   ok,
   type MaybeResult,
 } from '@core/util/maybeResult';
-import type {
-  GetBatchProjectPreviewResponse,
-  ProjectPreviewData,
-} from '@service-storage/generated/schemas';
+import type { ProjectPreviewData } from '@service-storage/generated/schemas';
+import { storageServiceClient } from '@service-storage/client';
 import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
@@ -23,28 +20,15 @@ const PROJECT_PREVIEW_GC_TIME = 10 * 60 * 1000; // 10 minutes
 async function fetchProjectPreview(
   projectId: string
 ): Promise<ProjectPreviewData> {
-  const dssHost = SERVER_HOSTS['document-storage-service'];
-  const apiVersion = 'v2';
-  const url = `${dssHost}/${apiVersion}/projects/preview`;
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    credentials: 'include',
-    body: JSON.stringify({
-      projectIds: [projectId],
-    }),
+  const result = await storageServiceClient.projects.getPreview({
+    projectIds: [projectId],
   });
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch project preview: ${response.statusText}`);
+  if (isErr(result)) {
+    throw new Error(`Failed to fetch project preview`);
   }
 
-  const json = (await response.json()) as GetBatchProjectPreviewResponse;
-
-  const projectPreview = json.previews.find(
+  const projectPreview = result[1].previews.find(
     (preview) => preview.id === projectId
   );
 

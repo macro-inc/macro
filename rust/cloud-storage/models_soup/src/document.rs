@@ -85,18 +85,12 @@ pub struct SoupDocument {
     pub document_family_id: Option<i64>,
 
     /// The time the document was created
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    #[cfg_attr(feature = "schema", schema(value_type = i64))]
     pub created_at: chrono::DateTime<Utc>,
 
     /// The time the document instance / document BOM was updated
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    #[cfg_attr(feature = "schema", schema(value_type = i64))]
     pub updated_at: chrono::DateTime<Utc>,
 
     /// The time the document was last viewed
-    #[serde(with = "chrono::serde::ts_milliseconds_option")]
-    #[cfg_attr(feature = "schema", schema(value_type = i64, nullable = true))]
     pub viewed_at: Option<chrono::DateTime<Utc>>,
 
     /// The sub type of the document if present.
@@ -105,8 +99,6 @@ pub struct SoupDocument {
     pub sub_type: Option<SoupDocumentSubType>,
 
     /// The time the document was deleted
-    #[serde(with = "chrono::serde::ts_milliseconds_option")]
-    #[cfg_attr(feature = "schema", schema(value_type = i64, nullable = true))]
     pub deleted_at: Option<chrono::DateTime<Utc>>,
 
     /// Properties

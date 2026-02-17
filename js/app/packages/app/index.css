@@ -731,18 +731,18 @@ html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
 }
 
 :root {
-  --thread-shift: 23px;
-  --user-icon-width: 30px;
-  --left-of-connector: 20px;
+  --thread-shift: 32px;
+  --user-icon-width: 36px;
+  --body-padding: .5rem;
+  --left-of-connector: 16px;
   --left-of-user-icon: calc(var(--left-of-connector) - var(--user-icon-width) / 2);
 }
 
 @media (min-width: 640px) {
   :root {
-    --thread-shift: 46px;
-    --user-icon-width: 40px;
+    --thread-shift: 40px;
+    --body-padding: .5rem;
     --left-of-connector: 28px;
-    --left-of-user-icon: calc(var(--left-of-connector) - var(--user-icon-width) / 2);
   }
 }
 
@@ -751,14 +751,26 @@ html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
         max-width: 800px;
         min-width: 250px;
     }
+}
 
-    @container (width < 816px) {
-        margin-inline: calc(var(--spacing) * 4);
-    }
-    @container (width < 640px) {
-        margin-inline: calc(var(--spacing) * 2);
-    }
+@utility macro-message-padding {
+  
+  @container (width < 816px) {
+      padding-inline: calc(var(--spacing) * 4);
+  }
+  @container (width < 640px) {
+      padding-inline: calc(var(--spacing) * 2);
+  }
+}
 
+@utility macro-message-margin {
+  
+  @container (width < 816px) {
+      margin-inline: calc(var(--spacing) * 4);
+  }
+  @container (width < 640px) {
+      margin-inline: calc(var(--spacing) * 2);
+  }
 }
 
 ::-webkit-scrollbar {

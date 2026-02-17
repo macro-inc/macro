@@ -65,7 +65,7 @@ async fn attachment_document_exists(
     link_id: Uuid,
     attachment_db_id: Uuid,
 ) -> Result<bool, ProcessingError> {
-    let document_id = email_db_client::attachments::provider::get_document_id_by_attachment_id(
+    let document_id = email_db_client::attachments::provider::get_document_id_by_att_id_and_link(
         &ctx.db,
         link_id,
         attachment_db_id,

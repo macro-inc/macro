@@ -1,5 +1,5 @@
 import type { ChannelWithParticipants, IUser } from '@core/user';
-import type { EmailEntity } from '@macro-entity';
+import type { EmailEntity } from '@entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Accessor } from 'solid-js';
 import type { FreshSortConfig, TimestampedItem } from '@core/util/freshSort';

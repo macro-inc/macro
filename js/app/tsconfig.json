@@ -199,8 +199,11 @@
       "@block-theme/*": [
         "./packages/block-theme/*"
       ],
+      "@entity": [
+        "./packages/entity/src/index.ts"
+      ],
       "@entity/*": [
-        "./packages/entity/*"
+        "./packages/entity/src/*"
       ],
     },
     "rootDir": ".",

@@ -29,7 +29,7 @@ use crate::{
             simple_completion::handle_simple_completion,
         },
     },
-    model::ws::{FromWebSocketMessage, StreamError, ToWebSocketMessage, WebSocketError},
+    model::ws::{ChatStream, StreamError, ToWebSocketMessage, WebSocketError},
 };
 
 use super::attachment_permissions::ensure_user_attachment_access;
@@ -41,7 +41,7 @@ pub static MESSAGE_ABORT_MAP: LazyLock<DashMap<String, bool>> =
     std::sync::LazyLock::new(DashMap::new);
 
 /// Maps a connection id to a websocket sender
-pub static CONNECTION_MAP: LazyLock<DashMap<String, WeakUnboundedSender<FromWebSocketMessage>>> =
+pub static CONNECTION_MAP: LazyLock<DashMap<String, WeakUnboundedSender<ChatStream>>> =
     std::sync::LazyLock::new(DashMap::new);
 
 #[utoipa::path(
@@ -67,7 +67,7 @@ pub async fn ws_handler(
 #[tracing::instrument()]
 async fn process_incoming_message(
     msg: &Message,
-    message_sender: &UnboundedSender<FromWebSocketMessage>,
+    message_sender: &UnboundedSender<ChatStream>,
 ) -> Result<Option<ToWebSocketMessage>> {
     // Need to make sure we properly handle Control Frames like Close, Ping, Pong
     match msg {
@@ -75,7 +75,7 @@ async fn process_incoming_message(
         Message::Text(text) => {
             // Handle heartbeat ping messages
             if text == "ping" {
-                ws_send(message_sender, FromWebSocketMessage::Pong)?;
+                ws_send(message_sender, ChatStream::Pong)?;
                 return Ok(None);
             }
 
@@ -115,7 +115,7 @@ async fn handle_websocket_connection(
 
     // message_sender handles sending messages between threads which are forwarded to the websocket
     // message_receiver handles receiving messages between threads which are forwarded to the websocket
-    let (message_sender, mut message_receiver) = mpsc::unbounded_channel::<FromWebSocketMessage>();
+    let (message_sender, mut message_receiver) = mpsc::unbounded_channel::<ChatStream>();
 
     // store a WeakUnboundedSender in the map
     // this ensures that the sender is not kept alive by the map
@@ -193,7 +193,7 @@ async fn handle_websocket_connection(
             if let Err(err) =
                 ensure_user_attachment_access(&ctx, user_context.clone(), attachments).await
             {
-                ws_send(&message_sender_clone, FromWebSocketMessage::Error(err)).ok();
+                ws_send(&message_sender_clone, ChatStream::Error(err)).ok();
                 continue;
             }
 
@@ -205,7 +205,7 @@ async fn handle_websocket_connection(
                             | UserQuotaError::UnableToGetUserPermissions
                             | UserQuotaError::UnableToGetUserQuota => ws_send(
                                 &message_sender_clone,
-                                FromWebSocketMessage::Error(WebSocketError::StreamError(
+                                ChatStream::Error(WebSocketError::StreamError(
                                     StreamError::InternalError {
                                         stream_id: payload.stream_id,
                                     },
@@ -213,7 +213,7 @@ async fn handle_websocket_connection(
                             ),
                             UserQuotaError::ExceededMaxChatMessages => ws_send(
                                 &message_sender_clone,
-                                FromWebSocketMessage::Error(WebSocketError::StreamError(
+                                ChatStream::Error(WebSocketError::StreamError(
                                     StreamError::PaymentRequired {
                                         stream_id: payload.stream_id,
                                     },
@@ -230,7 +230,7 @@ async fn handle_websocket_connection(
                         Err(_) => {
                             ws_send(
                                 &message_sender_clone,
-                                FromWebSocketMessage::Error(WebSocketError::StreamError(
+                                ChatStream::Error(WebSocketError::StreamError(
                                     StreamError::InternalError {
                                         stream_id: payload.stream_id.clone(),
                                     },
@@ -253,14 +253,14 @@ async fn handle_websocket_connection(
                     .await
                     {
                         Err(e) => {
-                            ws_send(&message_sender_clone, FromWebSocketMessage::Error(e)).ok();
+                            ws_send(&message_sender_clone, ChatStream::Error(e)).ok();
                             continue;
                         }
                         Ok(access) => match access {
                             AccessLevel::View | AccessLevel::Comment => {
                                 ws_send(
                                     &message_sender_clone,
-                                    FromWebSocketMessage::Error(WebSocketError::StreamError(
+                                    ChatStream::Error(WebSocketError::StreamError(
                                         StreamError::Unauthorized {
                                             stream_id: payload.stream_id,
                                         },
@@ -286,7 +286,7 @@ async fn handle_websocket_connection(
                                 &jwt_token
                             )) => {
                                 if let Err(err) = result {
-                                    ws_send(&message_sender_clone, FromWebSocketMessage::Error(err.into())).ok();
+                                    ws_send(&message_sender_clone, ChatStream::Error(err.into())).ok();
                                 }
                             }
                         }
@@ -299,7 +299,7 @@ async fn handle_websocket_connection(
                         Err(_) => {
                             ws_send(
                                 &message_sender_clone,
-                                FromWebSocketMessage::Error(WebSocketError::StreamError(
+                                ChatStream::Error(WebSocketError::StreamError(
                                     StreamError::InternalError {
                                         stream_id: payload.stream_id.clone(),
                                     },
@@ -322,14 +322,14 @@ async fn handle_websocket_connection(
                     .await
                     {
                         Err(e) => {
-                            ws_send(&message_sender_clone, FromWebSocketMessage::Error(e)).ok();
+                            ws_send(&message_sender_clone, ChatStream::Error(e)).ok();
                             continue;
                         }
                         Ok(access) => match access {
                             AccessLevel::View | AccessLevel::Comment => {
                                 ws_send(
                                     &message_sender_clone,
-                                    FromWebSocketMessage::Error(WebSocketError::StreamError(
+                                    ChatStream::Error(WebSocketError::StreamError(
                                         StreamError::Unauthorized {
                                             stream_id: payload.stream_id,
                                         },
@@ -352,11 +352,7 @@ async fn handle_websocket_connection(
                         )
                         .await
                         {
-                            ws_send(
-                                &message_sender_clone,
-                                FromWebSocketMessage::Error(err.into()),
-                            )
-                            .ok();
+                            ws_send(&message_sender_clone, ChatStream::Error(err.into())).ok();
                         }
                     });
                 }
@@ -372,7 +368,7 @@ async fn handle_websocket_connection(
                                 details: Some(err.to_string()),
                             })
                     {
-                        ws_send(&message_sender_clone, FromWebSocketMessage::Error(err)).ok();
+                        ws_send(&message_sender_clone, ChatStream::Error(err)).ok();
                     }
                 }
                 ToWebSocketMessage::ExtractionStatus(payload) => {
@@ -386,7 +382,7 @@ async fn handle_websocket_connection(
                     .await
                     .map_err(|_err| WebSocketError::ExtractionStatusFailed { attachment_id })
                     {
-                        ws_send(&message_sender_clone, FromWebSocketMessage::Error(err)).ok();
+                        ws_send(&message_sender_clone, ChatStream::Error(err)).ok();
                     }
                 }
                 ToWebSocketMessage::SendCompletion(payload) => {
@@ -399,7 +395,7 @@ async fn handle_websocket_connection(
                     )
                     .await
                     {
-                        ws_send(&message_sender_clone, FromWebSocketMessage::Error(err)).ok();
+                        ws_send(&message_sender_clone, ChatStream::Error(err)).ok();
                     }
                 }
                 ToWebSocketMessage::GetSimpleCompletionStream(payload) => {
@@ -412,7 +408,7 @@ async fn handle_websocket_connection(
                     )
                     .await
                     {
-                        ws_send(&message_sender_clone, FromWebSocketMessage::Error(err)).ok();
+                        ws_send(&message_sender_clone, ChatStream::Error(err)).ok();
                     }
                 }
             };
@@ -452,8 +448,8 @@ impl From<WsSendError> for AiError {
 /// Sends a message over the websocket channel
 #[tracing::instrument(skip(sender), err)]
 pub fn ws_send(
-    sender: &UnboundedSender<FromWebSocketMessage>,
-    message: FromWebSocketMessage,
+    sender: &UnboundedSender<ChatStream>,
+    message: ChatStream,
 ) -> Result<(), WsSendError> {
     sender.send(message).map_err(|_| WsSendError)
 }

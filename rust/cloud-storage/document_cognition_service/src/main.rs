@@ -23,6 +23,7 @@ use soup::outbound::pg_soup_repo::PgSoupRepo;
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
+use stream::outbound::redis::RedisStreamRepo;
 use sync_service_client::SyncServiceClient;
 
 mod api;
@@ -171,6 +172,16 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized soup service");
 
+    // Initialize Redis client for stream service
+    let redis_client =
+        redis::Client::open(config.redis_url.as_str()).context("failed to create redis client")?;
+    let stream_repo = RedisStreamRepo::new(redis_client)
+        .await
+        .map_err(|e| anyhow::anyhow!("failed to create stream repo: {}", e))?
+        .obj();
+
+    tracing::info!("initialized stream repo");
+
     api::setup_and_serve(ApiContext {
         db: db.clone(),
         email_service_client_external: Arc::new(EmailServiceClientExternal::new(
@@ -199,6 +210,7 @@ async fn main() -> anyhow::Result<()> {
         config: Arc::new(config),
         internal_auth_key,
         soup_service,
+        stream_repo,
     })
     .await
     .context("failed to setup and serve api")?;

@@ -1,9 +1,11 @@
 use crate::api::context::SearchHandlerState;
 use crate::api::search::simple::SearchError;
+use email_db_client::contacts::get::ThreadContactsMap;
 use indexmap::IndexMap;
 use models_email::service::message::{MessageSenderInfo, ThreadHistoryInfo};
 use models_search::email::{
-    EmailSearchResponseItem, EmailSearchResponseItemWithMetadata, EmailSearchResult,
+    EmailSearchParticipant, EmailSearchResponseItem, EmailSearchResponseItemWithMetadata,
+    EmailSearchResult,
 };
 use opensearch_client::search::model::SearchGotoContent;
 use sqlx::types::Uuid;
@@ -55,17 +57,20 @@ pub(in crate::api::search) async fn enrich_emails(
         })
         .collect();
 
-    let message_senders_map = email_db_client::messages::get::get_message_sender_and_pretty_sender(
-        &ctx.db,
-        link.id,
-        &message_ids,
+    let (message_senders_map, contacts_map) = tokio::try_join!(
+        email_db_client::messages::get::get_message_sender_and_pretty_sender(
+            &ctx.db,
+            link.id,
+            &message_ids,
+        ),
+        email_db_client::contacts::get::fetch_contacts_by_thread_ids(&ctx.db, &thread_ids),
     )
-    .await
     .map_err(SearchError::InternalError)?;
 
     // Construct enriched results
-    let enriched_results = construct_search_result(results, thread_histories, message_senders_map)
-        .map_err(SearchError::InternalError)?;
+    let enriched_results =
+        construct_search_result(results, thread_histories, message_senders_map, contacts_map)
+            .map_err(SearchError::InternalError)?;
 
     Ok(enriched_results)
 }
@@ -74,6 +79,7 @@ pub fn construct_search_result(
     search_results: Vec<opensearch_client::search::model::SearchHit>,
     thread_histories: HashMap<Uuid, ThreadHistoryInfo>,
     message_senders: HashMap<Uuid, MessageSenderInfo>,
+    contacts_map: ThreadContactsMap,
 ) -> anyhow::Result<Vec<EmailSearchResponseItemWithMetadata>> {
     // construct entity hit map of id -> vec<hits> using IndexMap to preserve insertion order
     let entity_id_hit_map: IndexMap<Uuid, Vec<EmailSearchResult>> = search_results
@@ -136,11 +142,28 @@ pub fn construct_search_result(
         .filter_map(|(entity_id, hits)| {
             if let Some(info) = thread_histories.get(&entity_id) {
                 let info = info.clone();
+                let participants = contacts_map
+                    .get(&entity_id)
+                    .map(|contacts| {
+                        contacts
+                            .iter()
+                            .map(|(email, name)| EmailSearchParticipant {
+                                email: email.clone(),
+                                name: name.clone(),
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
                 Some(EmailSearchResponseItemWithMetadata {
-                    created_at: info.created_at.timestamp(),
-                    updated_at: info.updated_at.timestamp(),
-                    viewed_at: info.viewed_at.map(|a| a.timestamp()),
+                    created_at: info.created_at,
+                    updated_at: info.updated_at,
+                    viewed_at: info.viewed_at,
                     snippet: info.snippet,
+                    is_read: info.is_read,
+                    inbox_visible: info.inbox_visible,
+                    is_draft: info.is_draft,
+                    is_important: info.is_important,
                     extra: EmailSearchResponseItem {
                         id: entity_id,
                         thread_id: entity_id,
@@ -149,6 +172,7 @@ pub fn construct_search_result(
                         name: info.subject.clone(),
                         subject: info.subject,
                         email_message_search_results: hits,
+                        participants,
                     },
                 })
             } else {

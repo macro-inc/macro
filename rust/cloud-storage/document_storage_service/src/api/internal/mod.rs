@@ -1,5 +1,5 @@
 use super::{
-    context::ApiContext,
+    context::{ApiContext, EntityAccessService},
     documents::{export_document, get_document_version},
     history::upsert_history,
     permissions,
@@ -24,6 +24,8 @@ use axum::{
     Router,
     routing::{delete, get, post, put},
 };
+use documents_hex::domain::service::DocumentServiceImpl;
+use documents_hex::outbound::pg_document_repo::PgDocumentRepo;
 use macro_middleware::{
     auth::ensure_user_exists,
     cloud_storage::{document::ensure_document_exists, thread::ensure_thread_exists},
@@ -51,7 +53,11 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         // Document routes
         .route(
             "/documents/:document_id",
-            get(get_document::handler).layer(ensure_document_exists_middleware.clone()),
+            get(documents_hex::inbound::axum_router::get_document_handler::<
+                DocumentServiceImpl<PgDocumentRepo>,
+                EntityAccessService,
+            >)
+            .layer(ensure_document_exists_middleware.clone()),
         )
         .route(
             "/documents/:document_id/basic",
@@ -77,7 +83,13 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         )
         .route(
             "/documents/:document_id/location_v3",
-            get(location::get_location_handler_v3).layer(ensure_document_exists_middleware.clone()),
+            get(
+                documents_hex::inbound::axum_router::get_location_v3_handler::<
+                    DocumentServiceImpl<PgDocumentRepo>,
+                    EntityAccessService,
+                >,
+            )
+            .layer(ensure_document_exists_middleware.clone()),
         )
         .route(
             "/documents/:document_id/permissions",

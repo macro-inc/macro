@@ -42,6 +42,8 @@ pub struct Config {
     pub authentication_service_url: String,
     /// authentication service secret key (for soup service)
     pub authentication_service_secret_key: String,
+    /// Redis URL for stream service
+    pub redis_url: String,
 }
 
 impl Config {
@@ -101,6 +103,8 @@ impl Config {
         let authentication_service_secret_key = std::env::var("AUTHENTICATION_SERVICE_SECRET_KEY")
             .context("AUTHENTICATION_SERVICE_SECRET_KEY must be provided")?;
 
+        let redis_url = std::env::var("REDIS_URL").context("REDIS_URL must be provided")?;
+
         Ok(Config {
             database_url,
             port,
@@ -120,6 +124,7 @@ impl Config {
             static_file_service_url,
             authentication_service_url,
             authentication_service_secret_key,
+            redis_url,
         })
     }
 
@@ -144,6 +149,7 @@ impl Config {
             static_file_service_url: Default::default(),
             authentication_service_url: Default::default(),
             authentication_service_secret_key: Default::default(),
+            redis_url: Default::default(),
         }
     }
 }

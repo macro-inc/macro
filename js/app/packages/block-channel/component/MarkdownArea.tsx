@@ -38,7 +38,7 @@ import {
 } from '@core/component/LexicalMarkdown/utils';
 import type { PortalScope } from '@core/component/ScopedPortal';
 import type { IUser } from '@core/user';
-import type { Item } from '@service-storage/generated/schemas/item';
+import type { HistoryItem } from '@queries/history/types';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { isMobile } from '@solid-primitives/platform';
 import { filePastePlugin } from 'core/component/LexicalMarkdown/plugins/file-paste/filePastePlugin';
@@ -178,7 +178,7 @@ export type ConsumableMarkdownAreaProps = {
   initialValue?: string;
   placeholder?: string;
   users?: Accessor<IUser[]>;
-  history?: Accessor<Item[]>;
+  history?: Accessor<HistoryItem[]>;
   onPasteFilesAndDirs?: (
     files: FileSystemFileEntry[],
     directories: FileSystemDirectoryEntry[]

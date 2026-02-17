@@ -1,6 +1,6 @@
 import { createSignal, onMount } from 'solid-js';
-import { createRenameDssEntityMutation } from '../../../macro-entity/src/queries/rename';
-import type { EntityData } from '../../../macro-entity/src/types/entity';
+import { createRenameDssEntityMutation } from '@macro-entity';
+import type { EntityData } from '@entity';
 import { EntityModalActionFooter, EntityModalTitle } from './EntityModal';
 
 export const RenameView = (props: {

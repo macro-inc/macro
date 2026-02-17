@@ -4,6 +4,7 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ChannelMentionMetadata } from './channelMentionMetadata';
 import type { NotifEventOneOfTag } from './notifEventOneOfTag';
 
 /**
@@ -11,6 +12,6 @@ import type { NotifEventOneOfTag } from './notifEventOneOfTag';
  */
 export type NotifEventOneOf = {
   /** Someone mentioned you in a channel. */
-  content: unknown;
+  content: ChannelMentionMetadata;
   tag: NotifEventOneOfTag;
 };

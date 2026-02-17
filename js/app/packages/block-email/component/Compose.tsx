@@ -62,6 +62,7 @@ import {
 } from '@queries/email/draft';
 import {
   useRemoveDraftAttachmentMutation,
+  useRemoveForwardedAttachmentMutation,
   useUploadDraftAttachmentsMutation,
 } from '@queries/email/attachment';
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
@@ -71,6 +72,7 @@ import { stickyGate } from '@core/util/debounce';
 import { queryClient } from '@queries/client';
 import { soupKeys } from '@queries/soup/keys';
 import { isMobile } from '@core/mobile/isMobile';
+import { invalidateSoupEntity } from '@queries/soup/cache';
 
 const DRAFT_DEBOUNCE_MS = 1000;
 
@@ -236,7 +238,7 @@ export function EmailCompose(props: EmailComposeProps) {
 
     // If there's an existing draft, we should send the sendTime so that the send time
     // stays up to date and is not removed
-    const sendTime = existingDraft ? form.sendTime()?.toISOString() : undefined;
+    const sendTime = existingDraft ? form.sendTime() : undefined;
 
     const draftResponse = await saveDraftMutation.mutateAsync({
       draft: {
@@ -292,10 +294,14 @@ export function EmailCompose(props: EmailComposeProps) {
   };
 
   const removeAttachmentMutation = useRemoveDraftAttachmentMutation();
+  const removeForwardedAttachmentMutation =
+    useRemoveForwardedAttachmentMutation();
 
   const handleRemoveAttachment = (attachment: DraftFormAttachment) => {
     if (attachment.type === 'local') {
       form.attachments.removeByFile(attachment.file);
+    } else if (attachment.type === 'forwarded') {
+      form.attachments.removeForwarded(attachment.attachmentID);
     } else {
       form.attachments.removeByID(attachment.attachmentID);
     }
@@ -304,10 +310,17 @@ export function EmailCompose(props: EmailComposeProps) {
 
     if (!savedDraftID || !attachment.attachmentID) return;
 
-    removeAttachmentMutation.mutate({
-      draftID: savedDraftID,
-      attachmentID: attachment.attachmentID,
-    });
+    if (attachment.type === 'forwarded') {
+      removeForwardedAttachmentMutation.mutate({
+        draftID: savedDraftID,
+        attachmentID: attachment.attachmentID,
+      });
+    } else {
+      removeAttachmentMutation.mutate({
+        draftID: savedDraftID,
+        attachmentID: attachment.attachmentID,
+      });
+    }
   };
 
   // We are consuming the first change, because it is the initial value
@@ -542,7 +555,7 @@ export function EmailCompose(props: EmailComposeProps) {
       return;
     }
 
-    const sendTime = form.sendTime()?.toISOString();
+    const sendTime = form.sendTime();
 
     if (sendTime) {
       // Just in case, always get a fresh save of the draft so we don't miss any information
@@ -589,11 +602,9 @@ export function EmailCompose(props: EmailComposeProps) {
   };
 
   const unscheduleMessageMutation = useUnscheduleMessageMutation({
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
       toast.success('Email unscheduled');
-      queryClient.invalidateQueries({
-        queryKey: soupKeys.items._def,
-      });
+      invalidateSoupEntity(vars.draftID);
     },
     onError: () => {
       toast.failure('Failed to unschedule email');
@@ -713,7 +724,7 @@ export function EmailCompose(props: EmailComposeProps) {
         </Switch>
 
         <div
-          class="macro-message-width mx-auto w-full max-h-full my-2 @sm:my-12 px-2 @sm:px-4 overflow-hidden"
+          class="macro-message-width macro-message-padding mx-auto w-full max-h-full my-2 @sm:my-12 px-2 @sm:px-4 overflow-hidden"
           classList={{
             'pointer-events-none opacity-50': hasLinkError(),
           }}

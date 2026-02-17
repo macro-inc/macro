@@ -1,8 +1,4 @@
-import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
-import {
-  PreviewPanel,
-  useMaybePreviewPanel,
-} from '@app/component/PreviewPanel';
+import { useMaybePreviewPanel } from '@app/component/PreviewPanel';
 import { SplitPanelContext } from '@app/component/split-layout/context';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { getIsSpecialProject } from '@block-project/isSpecial';
@@ -12,42 +8,37 @@ import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { ENABLE_PROJECT_VIEW_PREVIEW } from '@core/constant/featureFlags';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { fileSelector } from '@core/directive/fileSelector';
-import { registerHotkey } from '@core/hotkey/hotkeys';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import {
   handleFileFolderDrop,
   type UploadInput,
   uploadFiles,
 } from '@core/util/upload';
-import { useQueryClient } from '@queries/client';
-import { soupKeys } from '@queries/soup/keys';
-import { throttledDependent } from '@core/util/debounce';
+import { refetchSoupEntity } from '@queries/soup/cache';
 import { refetchResources } from '@service-storage/util/refetchResources';
 import { toast } from 'core/component/Toast/Toast';
 import { type Component, createSignal, Show } from 'solid-js';
 import { TopBar } from './TopBar';
-import {
-  SoupContextProvider,
-  useSoup,
-} from '@app/component/next-soup/soup-context';
+import { SoupContextProvider } from '@app/component/next-soup/soup-context';
 import {
   createSoupState,
   type SoupState,
 } from '@app/component/next-soup/create-soup-state';
 import { SoupViewContextProvider } from '@app/component/next-soup/soup-view/soup-view-context';
 import { SoupViewList } from '@app/component/next-soup/soup-view/soup-view';
+import { NIL_UUID } from '@app/component/next-soup/filters/filters';
 
 // HACK: prevent lint error on custom directive
 false && fileFolderDrop;
 false && fileSelector;
 
-const PROJECT_ENTITY_TYPES = ['document', 'agent', 'file', 'task'];
+const PROJECT_ENTITY_TYPES = ['document', 'task', 'chat', 'project'];
 
 const Block: Component = () => {
   const [isDragging, setIsDragging] = createSignal(false);
   const projectId = useBlockId();
   const isSpecialProject = getIsSpecialProject(projectId);
-  const queryClient = useQueryClient();
 
   const handleFileUpload = async (files: UploadInput[]) => {
     if (files.length === 0) return;
@@ -65,12 +56,14 @@ const Block: Component = () => {
 
       const uploads = results.filter((result) => !result.failed);
 
-      // show documents that were immediately uploaded
+      // refetch successfully uploaded documents into soup
       const successfulUploads = uploads.filter((result) => !result.pending);
+      for (const upload of successfulUploads) {
+        if (upload.type === 'document') {
+          refetchSoupEntity(upload.documentId, 'document');
+        }
+      }
       if (successfulUploads.length > 0) {
-        queryClient.invalidateQueries({
-          queryKey: soupKeys.items._def,
-        });
         refetchResources();
       }
 
@@ -80,10 +73,12 @@ const Block: Component = () => {
         .filter((result) => result.type === 'folder')
         .map((result) => result.projectId);
       if (pendingFolderUploads.length > 0) {
-        await Promise.all(pendingFolderUploads);
-        queryClient.invalidateQueries({
-          queryKey: soupKeys.items._def,
-        });
+        const resolved = await Promise.all(pendingFolderUploads);
+        for (const projectId of resolved) {
+          if (projectId) {
+            refetchSoupEntity(projectId, 'project');
+          }
+        }
         refetchResources();
       }
     } catch (error) {
@@ -92,17 +87,11 @@ const Block: Component = () => {
     }
   };
 
-  const orchestrator = useGlobalBlockOrchestrator();
-
-  const soup = useSoup();
-
   const previewPanel = useMaybePreviewPanel();
 
   const splitPanelContext = useSplitPanelOrThrow();
 
   const [preview, setPreview] = splitPanelContext.previewState;
-  const selectedEntity = () => soup.focus.item();
-  const throttledSelectedEntity = throttledDependent(selectedEntity, 150);
 
   if (!previewPanel) {
     registerHotkey({
@@ -123,16 +112,18 @@ const Block: Component = () => {
     filterConfigs: [
       {
         id: 'project-content',
-        label: 'Project content',
         predicate: (entity) => PROJECT_ENTITY_TYPES.includes(entity.type),
       },
     ],
     filterGroups: [],
   });
 
+  const [attachHotkeys, projectViewScope] = useHotkeyDOMScope('project-view');
+
   return (
     <DocumentBlockContainer>
       <div
+        ref={attachHotkeys}
         class="w-full h-full bg-panel flex flex-col relative"
         use:fileFolderDrop={{
           onDragStart: () => setIsDragging(true),
@@ -150,7 +141,11 @@ const Block: Component = () => {
         <Show
           when={ENABLE_PROJECT_VIEW_PREVIEW}
           fallback={
-            <ProjectEntityList projectId={projectId} soup={projectSoup} />
+            <ProjectEntityList
+              projectId={projectId}
+              soup={projectSoup}
+              scopeId={projectViewScope}
+            />
           }
         >
           <div class="flex size-full">
@@ -161,15 +156,12 @@ const Block: Component = () => {
                   preview() ? { side: 'left', percentage: 30 } : undefined,
               }}
             >
-              <ProjectEntityList projectId={projectId} soup={projectSoup} />
-            </SplitPanelContext.Provider>
-            <Show when={preview()}>
-              <PreviewPanel
-                selectedEntity={throttledSelectedEntity()}
-                orchestrator={orchestrator}
-                splitPanelContext={splitPanelContext}
+              <ProjectEntityList
+                projectId={projectId}
+                soup={projectSoup}
+                scopeId={projectViewScope}
               />
-            </Show>
+            </SplitPanelContext.Provider>
           </div>
         </Show>
       </div>
@@ -177,12 +169,19 @@ const Block: Component = () => {
   );
 };
 
-const ProjectEntityList = (props: { projectId: string; soup: SoupState }) => {
+const ProjectEntityList = (props: {
+  scopeId: string;
+  projectId: string;
+  soup: SoupState;
+}) => {
   return (
     <SoupContextProvider soup={props.soup}>
       <SoupViewContextProvider
         soup={props.soup}
         queryFilters={{
+          channel_filters: {
+            channel_ids: [NIL_UUID],
+          },
           chat_filters: {
             project_ids: [props.projectId],
           },
@@ -192,9 +191,12 @@ const ProjectEntityList = (props: { projectId: string; soup: SoupState }) => {
           document_filters: {
             project_ids: [props.projectId],
           },
+          email_filters: {
+            recipients: [NIL_UUID],
+          },
         }}
       >
-        <SoupViewList customScrollbarHidden={true} />
+        <SoupViewList customScrollbarHidden={true} scopeId={props.scopeId} />
       </SoupViewContextProvider>
     </SoupContextProvider>
   );

@@ -156,7 +156,7 @@ export function TaskPreviewRow(props: TaskPreviewRowProps) {
 
   // Cast needed: Property is a discriminated union, but we build it dynamically
   // from definition.data_type which TypeScript can't narrow statically
-  const properties = createMemo(() => {
+  const properties = createMemo((): Property[] => {
     return filterMap(PREVIEW_PROPERTIES, (id) => {
       const definition = definitions().get(id);
       if (!definition) return;
@@ -167,8 +167,8 @@ export function TaskPreviewRow(props: TaskPreviewRowProps) {
         isMultiSelect: definition.is_multi_select,
         owner: definition.owner,
         specificEntityType: definition.specific_entity_type ?? null,
-        updatedAt: '',
-        createdAt: '',
+        updatedAt: new Date(0),
+        createdAt: new Date(0),
         valueType: definition.data_type,
         value: extractPropertyValue(
           definition,
@@ -187,7 +187,7 @@ export function TaskPreviewRow(props: TaskPreviewRowProps) {
     saveDate: async (property: Property, date: Date) => {
       props.onUpdatePropertyValue(property.propertyDefinitionId, {
         valueType: 'DATE',
-        value: date.toISOString(),
+        value: date,
       });
     },
   };

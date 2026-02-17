@@ -20,7 +20,7 @@ pub enum ToolSet {
 
 #[derive(Deserialize, Serialize, ToSchema, Debug, Clone)]
 pub struct SendChatMessagePayload {
-    /// you give me id, i give you id
+    /// Stream ID for tracking the response
     pub stream_id: String,
     /// The content of the message
     pub content: String,
@@ -148,7 +148,7 @@ impl From<macro_db_client::dcs::get_document_text::ExtractionStatusEnum> for Ext
 
 #[derive(Serialize, Deserialize, ToSchema, Debug, Clone)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum FromWebSocketMessage {
+pub enum ChatStream {
     /// Misc error
     Error(WebSocketError),
 
@@ -156,6 +156,16 @@ pub enum FromWebSocketMessage {
     ChatMessageAck {
         message_id: String,
         chat_id: String,
+    },
+
+    /// The user message that initiated this stream, sent as the first item
+    /// so other clients can add it to their local chat state.
+    ChatUserMessage {
+        stream_id: String,
+        chat_id: String,
+        message_id: String,
+        content: String,
+        attachments: Vec<ChatAttachmentWithName>,
     },
 
     /// Indicates a response from the chat completion API for a given message
@@ -243,10 +253,10 @@ impl TryInto<ToWebSocketMessage> for Message {
     }
 }
 
-impl From<FromWebSocketMessage> for Message {
-    fn from(val: FromWebSocketMessage) -> Self {
+impl From<ChatStream> for Message {
+    fn from(val: ChatStream) -> Self {
         match val {
-            FromWebSocketMessage::Pong => Message::Text("pong".to_string()),
+            ChatStream::Pong => Message::Text("pong".to_string()),
             _ => {
                 let payload = serde_json::to_string(&val).unwrap();
                 Message::Text(payload)

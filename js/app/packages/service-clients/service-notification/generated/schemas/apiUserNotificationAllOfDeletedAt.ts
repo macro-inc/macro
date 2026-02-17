@@ -8,4 +8,4 @@
 /**
  * When the notification was deleted.
  */
-export type ApiUserNotificationAllOfDeletedAt = number | null;
+export type ApiUserNotificationAllOfDeletedAt = string | null;

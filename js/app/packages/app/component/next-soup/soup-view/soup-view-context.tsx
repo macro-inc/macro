@@ -4,24 +4,27 @@ import {
   type SoupState,
 } from '@app/component/next-soup/create-soup-state';
 import {
-  buildDssFiltersRequest,
+  type FilterID,
   getFolderFileTypes,
 } from '@app/component/next-soup/filters/filters';
 import { sortEntitiesForSearch } from '@app/component/next-soup/soup-view/sort-options';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
-import { useEmailLinksStatus } from '@core/email-link';
 import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
 import { fuzzyMatch } from '@core/util/fuzzy';
-import type { EntityData, WithNotification, WithSearch } from '@macro-entity';
+import { mergeAdjacentMacroEmTags } from '@core/util/searchHighlight';
+import type { EntityData, WithNotification, WithSearch } from '@entity';
 import { useNotificationsForEntity } from '@notifications';
 import {
   type SoupItemsQueryFilters,
+  type SoupItemsQueryArgs,
   useSoupItemsQuery,
 } from '@queries/soup/items';
 import { useSearchSoupQuery } from '@queries/soup/search';
-import type { SearchArgs } from '@service-search/client';
-import type { UnifiedSearchIndex } from '@service-search/generated/models';
+import type {
+  UnifiedSearchIndex,
+  UnifiedSearchRequest,
+} from '@service-search/generated/models';
 import {
   type Accessor,
   createContext,
@@ -30,16 +33,46 @@ import {
   createSignal,
   type FlowComponent,
   on,
+  type Setter,
   Suspense,
   useContext,
 } from 'solid-js';
+import { isWithNotification } from '@entity';
+
 import { match } from 'ts-pattern';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 300;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
 
+const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+
+const CHANNEL_PRELOAD_ARGS: SoupItemsQueryArgs = {
+  params: { limit: 500, sort_method: 'updated_at' },
+  body: {
+    chat_filters: { chat_ids: [NIL_UUID] },
+    document_filters: { document_ids: [NIL_UUID] },
+    email_filters: { recipients: [NIL_UUID] },
+    project_filters: { project_ids: [NIL_UUID] },
+    channel_filters: {
+      channel_types: [],
+    },
+  },
+};
+
+function mergeEntityPools(
+  items: EntityData[],
+  extra: EntityData[]
+): EntityData[] {
+  if (extra.length === 0) return items;
+  const existingIds = new Set(items.map((e) => e.id));
+  const newItems = extra.filter((e) => !existingIds.has(e.id));
+  if (newItems.length === 0) return items;
+  return [...items, ...newItems];
+}
+
 type Row<T> = {
   original: T;
+  id: string;
   depth: number;
   isSelected: () => boolean;
   isExpanded: () => boolean;
@@ -68,6 +101,8 @@ interface SoupViewContextValues {
   setSearchText: (value: string) => void;
   isSearchDisabled: Accessor<boolean>;
   rows: Accessor<SoupRow[]>;
+  queryFilters: Accessor<SoupItemsQueryFilters>;
+  setQueryFilters: Setter<SoupItemsQueryFilters>;
 }
 
 export const SoupViewContext = createContext<SoupViewContextValues>();
@@ -96,43 +131,52 @@ export const SoupViewContextProvider: FlowComponent<
 > = (props) => {
   const soup = props.soup ?? createSoupState();
 
-  const emailActive = useEmailLinksStatus();
-
   const [searchText, setSearchText] = createSignal('');
+  const [internalQueryFilters, setQueryFilters] =
+    createSignal<SoupItemsQueryFilters>({});
+
+  const trimmedSearchText = createMemo(() => searchText().trim());
 
   const debouncedSearchForLocal = debouncedDependent(
-    searchText,
+    trimmedSearchText,
     LOCAL_FUZZY_SEARCH_DEBOUNCE_MS
   );
 
   const debouncedSearchForService = debouncedDependent(
-    searchText,
+    trimmedSearchText,
     SEARCH_SERVICE_DEBOUNCE_MS
   );
 
+  const isSearching = createMemo(() => trimmedSearchText().length > 0);
+
   const unifiedSearchIncludeArray = createMemo<UnifiedSearchIndex[]>(
     () => {
-      let types = soup.filters.activeIds();
+      const types = soup.filters.activeIds() as FilterID[];
       // NOTE: empty array means search all
-      if (types.length === 0) types = [];
       const includeArray: UnifiedSearchIndex[] = [];
       for (const type of types) {
         match(type)
-          .with('document', () => {
+          .with('document', 'file', 'task', () => {
             includeArray.push('documents');
           })
           .with('agent', () => {
             includeArray.push('chats');
           })
-          .with('people', 'teams', () => {
+          .with('people', 'teams', 'channels', () => {
             includeArray.push('channels');
           })
           .with('email', () => {
             includeArray.push('emails');
           })
-          .with('project', () => {
-            includeArray.push('projects');
-          });
+          .with(
+            'signal',
+            'noise',
+            'explicit-noise',
+            'unread',
+            'not-done',
+            () => {}
+          )
+          .exhaustive();
       }
       return Array.from(new Set(includeArray));
     },
@@ -145,51 +189,34 @@ export const SoupViewContextProvider: FlowComponent<
   );
   const isSearchDisabled = createMemo(() => !validSearchTerms());
 
-  const searchUnifiedNameContentQueryParams = createMemo(
-    (prev: SearchArgs | undefined): SearchArgs => {
-      if (prev && prev.request.terms?.[0] === debouncedSearchForService()) {
-        return prev;
-      }
-
-      return {
-        params: {
-          cursor: null,
-          page_size: 100,
-        },
-        request: {
-          search_on: 'name_content',
-          match_type: 'partial',
-          terms:
-            debouncedSearchForService().length > 0
-              ? [debouncedSearchForService()]
-              : undefined,
-          // filters: unifiedSearchFilters(),
-          include: unifiedSearchIncludeArray(),
-        },
-      };
-    }
-  );
-
   const queryFilters = createMemo(() => {
-    const base = buildDssFiltersRequest(soup.filters.active(), {
-      extra: props.queryFilters,
-      isSearchActive: !isSearchDisabled(),
-      emailActive: emailActive(),
-    });
+    const base = internalQueryFilters();
 
-    if (soup.filters.isActive('file')) {
-      if (base.document_filters?.file_types) {
-        base.document_filters.file_types = getFolderFileTypes('soup');
-      }
-    }
-
-    if (soup.filters.isActive('task')) {
-      if (base.document_filters?.file_types) {
-        base.document_filters.file_types = ['md'];
-      }
-    }
-
-    return base;
+    return {
+      ...base,
+      ...props.queryFilters,
+      // Deep merge individual filter objects if both exist
+      channel_filters: {
+        ...base.channel_filters,
+        ...props.queryFilters?.channel_filters,
+      },
+      chat_filters: {
+        ...base.chat_filters,
+        ...props.queryFilters?.chat_filters,
+      },
+      document_filters: {
+        ...base.document_filters,
+        ...props.queryFilters?.document_filters,
+      },
+      email_filters: {
+        ...base.email_filters,
+        ...props.queryFilters?.email_filters,
+      },
+      project_filters: {
+        ...base.project_filters,
+        ...props.queryFilters?.project_filters,
+      },
+    };
   });
 
   const searchFilters = createMemo(() => {
@@ -208,7 +235,11 @@ export const SoupViewContextProvider: FlowComponent<
     }
 
     return {
-      channel: channel_filters?.channel_ids?.length ? channel_filters : null,
+      channel:
+        channel_filters?.channel_ids?.length ||
+        channel_filters?.channel_types?.length
+          ? channel_filters
+          : null,
       chat:
         chat_filters?.chat_ids?.length || chat_filters?.project_ids?.length
           ? chat_filters
@@ -224,14 +255,29 @@ export const SoupViewContextProvider: FlowComponent<
     };
   });
 
+  const searchUnifiedNameContentRequest = createMemo(
+    (): UnifiedSearchRequest => {
+      const terms = debouncedSearchForService();
+      const include = unifiedSearchIncludeArray();
+      const filters = searchFilters();
+
+      return {
+        search_on: 'name_content',
+        match_type: 'partial',
+        terms: terms.length > 0 ? [terms] : undefined,
+        include,
+        filters,
+      };
+    }
+  );
+
   const itemsQuery = useSoupItemsQuery(
     () => ({
       params: {
         limit: 100,
-        sort_method:
-          (soup.sort.active()[0]?.id as 'updated_at') ?? 'updated_at',
+        sort_method: soup.sort.active()[0]?.id ?? 'updated_at',
       },
-      body: queryFilters(),
+      body: { ...queryFilters(), emailView: 'all' },
     }),
     () => ({
       enabled: isSearchDisabled(),
@@ -244,14 +290,24 @@ export const SoupViewContextProvider: FlowComponent<
         page_size: 100,
       },
       body: {
-        ...searchFilters(),
-        ...searchUnifiedNameContentQueryParams().request,
+        ...searchUnifiedNameContentRequest(),
       },
     }),
     () => ({
       enabled: !isSearchDisabled(),
     })
   );
+
+  // load all channels into memory for local search
+  const channelItemsQuery = useSoupItemsQuery(() => CHANNEL_PRELOAD_ARGS);
+  createRenderEffect(() => {
+    if (
+      channelItemsQuery.hasNextPage &&
+      !channelItemsQuery.isFetchingNextPage
+    ) {
+      channelItemsQuery.fetchNextPage();
+    }
+  });
 
   const nameFuzzySearchFilter = (items: EntityData[]) => {
     const query = debouncedSearchForLocal();
@@ -263,7 +319,7 @@ export const SoupViewContextProvider: FlowComponent<
       return {
         ...result.item,
         search: {
-          nameHighlight: result.nameHighlight,
+          nameHighlight: mergeAdjacentMacroEmTags(result.nameHighlight),
           contentHitData: null,
           source: 'local',
         },
@@ -286,6 +342,7 @@ export const SoupViewContextProvider: FlowComponent<
   ): SoupRow => {
     return {
       original: entity,
+      id: entity.id,
       depth,
       isFocused() {
         return soup.focus.id() === entity.id;
@@ -305,43 +362,75 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
+  const localFuzzyResults = createMemo(() => {
+    const pool = mergeEntityPools(
+      itemsQuery.data ?? [],
+      channelItemsQuery.data ?? []
+    );
+    return nameFuzzySearchFilter(pool);
+  });
+
+  const freshSearchResults = createMemo<EntityData[]>(() => {
+    if (isSearchDisabled()) return [];
+    if (searchQuery.isFetching && !searchQuery.isFetchingNextPage) return [];
+    return searchQuery.data ?? [];
+  });
+
+  const items = createMemo<SoupEntity[]>(
+    (prev) => {
+      const searching = isSearching();
+
+      if (!searching) {
+        const data = itemsQuery.data;
+        if (!data) return prev;
+        return data.map((e) =>
+          isWithNotification(e) ? e : attachNotifications(e)
+        ) as SoupEntity[];
+      }
+
+      const local = localFuzzyResults();
+      const service = freshSearchResults();
+
+      const merged: SoupEntity[] = [...service, ...local];
+
+      for (let i = 0; i < merged.length; i++) {
+        const entity = merged[i];
+        if (entity.notifications) continue;
+        merged[i] = attachNotifications(entity);
+      }
+
+      return merged;
+    },
+    [],
+    {
+      equals: false,
+    }
+  );
+
   const entities = () => {
-    const itemsData = itemsQuery.data;
-    const searchData = searchQuery.data;
-
-    if (!itemsData && !searchData) return [];
-
     const filters = soup.filters.active();
+    let transformed = items();
 
-    const isSearching = searchText().length > 0;
+    const next = [];
 
-    const items = itemsData ?? [];
-    const searchItems = isSearching ? (searchData ?? []) : [];
+    for (const entity of transformed) {
+      if (!filters.every((f) => f.predicate(entity))) {
+        continue;
+      }
 
-    let transformed: SoupEntity[] = [...searchItems];
-
-    if (isSearching) {
-      transformed.push(...nameFuzzySearchFilter(items));
-    } else {
-      transformed.push(...items);
+      next.push(entity);
     }
 
-    transformed = transformed.map(attachNotifications);
+    transformed = deduplicateEntities(next);
 
-    for (const filter of filters) {
-      transformed = transformed.filter(filter.predicate);
-    }
-
-    transformed = deduplicateEntities(transformed);
-
-    if (isSearching) {
-      transformed = transformed.toSorted(sortEntitiesForSearch);
+    if (isSearching()) {
+      transformed.sort(sortEntitiesForSearch);
     }
 
     const sorts = soup.sort.active();
 
     if (sorts.length > 0) {
-      transformed = transformed.toSorted((a, b) => {
+      transformed.sort((a, b) => {
         for (const sort of sorts) {
           const result = sort.fn(a, b);
           if (result !== 0) return result;
@@ -353,15 +442,19 @@ export const SoupViewContextProvider: FlowComponent<
     return transformed;
   };
 
-  const rows = () => {
+  const rows = createMemo(() => {
     return entities().map((e) => attachMethods(e));
-  };
+  });
 
   const context = {
     soup,
     source: {
       data: entities,
-      isLoading: () => searchQuery.isLoading || itemsQuery.isLoading,
+      isLoading: () => {
+        if (itemsQuery.isLoading) return true;
+        if (searchQuery.isLoading && !itemsQuery.data) return true;
+        return false;
+      },
       isFetching: () => searchQuery.isFetching || itemsQuery.isFetching,
       isFetchingNextPage: () =>
         searchQuery.isFetchingNextPage || itemsQuery.isFetchingNextPage,
@@ -385,6 +478,8 @@ export const SoupViewContextProvider: FlowComponent<
     searchText,
     setSearchText,
     isSearchDisabled,
+    queryFilters,
+    setQueryFilters,
   };
 
   return (

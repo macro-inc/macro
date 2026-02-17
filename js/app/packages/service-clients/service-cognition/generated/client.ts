@@ -7,6 +7,7 @@
 import type {
   ChatHistory,
   ChatHistoryBatchMessagesRequest,
+  ChatMessageError,
   ChatsResponse,
   CopyChatRequest,
   CreateTextRequestBody,
@@ -23,6 +24,11 @@ import type {
   GetModelsForAttachmentsRequest,
   GetModelsForAttachmentsResponse,
   GetModelsResponse,
+  GetSimpleCompletionStreamPayload,
+  HttpSendChatMessageRequest,
+  SendChatMessageResponse,
+  SimpleCompletionError,
+  SimpleCompletionResponse,
   StringIDResponse,
   StructedOutputCompletionRequest,
   StructedOutputCompletionResponse,
@@ -1171,6 +1177,130 @@ export const wsHandler = async (
     status: res.status,
     headers: res.headers,
   } as wsHandlerResponse;
+};
+
+/**
+ * This endpoint initiates a chat message and streams the response via the stream service.
+The client should subscribe to the returned stream_id via connection_gateway to receive chunks.
+ * @summary Send a new chat message and stream the AI response.
+ */
+export type sendChatMessageResponse200 = {
+  data: SendChatMessageResponse;
+  status: 200;
+};
+
+export type sendChatMessageResponse400 = {
+  data: ChatMessageError;
+  status: 400;
+};
+
+export type sendChatMessageResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type sendChatMessageResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type sendChatMessageResponseSuccess = sendChatMessageResponse200 & {
+  headers: Headers;
+};
+export type sendChatMessageResponseError = (
+  | sendChatMessageResponse400
+  | sendChatMessageResponse401
+  | sendChatMessageResponse403
+) & {
+  headers: Headers;
+};
+
+export type sendChatMessageResponse =
+  | sendChatMessageResponseSuccess
+  | sendChatMessageResponseError;
+
+export const getSendChatMessageUrl = () => {
+  return `/stream/chat/message`;
+};
+
+export const sendChatMessage = async (
+  httpSendChatMessageRequest: HttpSendChatMessageRequest,
+  options?: RequestInit
+): Promise<sendChatMessageResponse> => {
+  const res = await fetch(getSendChatMessageUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(httpSendChatMessageRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: sendChatMessageResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as sendChatMessageResponse;
+};
+
+/**
+ * This endpoint initiates a completion and streams the response via the stream service.
+The client should subscribe to the completion_id stream via connection_gateway to receive chunks.
+ * @summary Start a simple completion stream.
+ */
+export type simpleCompletionResponse200 = {
+  data: SimpleCompletionResponse;
+  status: 200;
+};
+
+export type simpleCompletionResponse400 = {
+  data: SimpleCompletionError;
+  status: 400;
+};
+
+export type simpleCompletionResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type simpleCompletionResponseSuccess = simpleCompletionResponse200 & {
+  headers: Headers;
+};
+export type simpleCompletionResponseError = (
+  | simpleCompletionResponse400
+  | simpleCompletionResponse401
+) & {
+  headers: Headers;
+};
+
+export type simpleCompletionResponse =
+  | simpleCompletionResponseSuccess
+  | simpleCompletionResponseError;
+
+export const getSimpleCompletionUrl = () => {
+  return `/stream/completion/simple`;
+};
+
+export const simpleCompletion = async (
+  getSimpleCompletionStreamPayload: GetSimpleCompletionStreamPayload,
+  options?: RequestInit
+): Promise<simpleCompletionResponse> => {
+  const res = await fetch(getSimpleCompletionUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(getSimpleCompletionStreamPayload),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: simpleCompletionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as simpleCompletionResponse;
 };
 
 /**

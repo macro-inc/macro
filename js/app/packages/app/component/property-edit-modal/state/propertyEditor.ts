@@ -1,4 +1,4 @@
-import type { EntityData } from '@macro-entity';
+import type { EntityData } from '@entity';
 import type {
   Property,
   PropertyDefinitionDomain,

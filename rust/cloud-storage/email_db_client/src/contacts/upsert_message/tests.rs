@@ -323,3 +323,135 @@ async fn insert_new_contacts_allows_same_email_different_links(pool: Pool<Postgr
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("update_missing_contact_names"))
+)]
+// should update name for a contact that has no name
+async fn update_missing_contact_names_sets_name_when_null(pool: Pool<Postgres>) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let contact_id = Uuid::parse_str("00000000-0000-0000-0000-0000000c0002")?;
+    let updates = vec![(contact_id, "Now Has A Name".to_string())];
+
+    update_missing_contact_names(&pool, &updates).await?;
+
+    let row = sqlx::query!("SELECT name FROM email_contacts WHERE id = $1", contact_id)
+        .fetch_one(&pool)
+        .await?;
+    assert_eq!(row.name.as_deref(), Some("Now Has A Name"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("update_missing_contact_names"))
+)]
+// should not overwrite an existing name
+async fn update_missing_contact_names_does_not_overwrite_existing_name(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let contact_id = Uuid::parse_str("00000000-0000-0000-0000-0000000c0001")?;
+    let updates = vec![(contact_id, "Should Not Replace".to_string())];
+
+    update_missing_contact_names(&pool, &updates).await?;
+
+    let row = sqlx::query!("SELECT name FROM email_contacts WHERE id = $1", contact_id)
+        .fetch_one(&pool)
+        .await?;
+    assert_eq!(row.name.as_deref(), Some("Already Has Name"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("update_missing_contact_names"))
+)]
+// should handle a batch with mixed null and non-null existing names
+async fn update_missing_contact_names_mixed_batch(pool: Pool<Postgres>) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let has_name_id = Uuid::parse_str("00000000-0000-0000-0000-0000000c0001")?;
+    let no_name_id = Uuid::parse_str("00000000-0000-0000-0000-0000000c0002")?;
+    let no_name_2_id = Uuid::parse_str("00000000-0000-0000-0000-0000000c0003")?;
+
+    let updates = vec![
+        (has_name_id, "Should Not Replace".to_string()),
+        (no_name_id, "New Name One".to_string()),
+        (no_name_2_id, "New Name Two".to_string()),
+    ];
+
+    update_missing_contact_names(&pool, &updates).await?;
+
+    let has_name_row = sqlx::query!("SELECT name FROM email_contacts WHERE id = $1", has_name_id)
+        .fetch_one(&pool)
+        .await?;
+    assert_eq!(has_name_row.name.as_deref(), Some("Already Has Name"));
+
+    let no_name_row = sqlx::query!("SELECT name FROM email_contacts WHERE id = $1", no_name_id)
+        .fetch_one(&pool)
+        .await?;
+    assert_eq!(no_name_row.name.as_deref(), Some("New Name One"));
+
+    let no_name_2_row = sqlx::query!(
+        "SELECT name FROM email_contacts WHERE id = $1",
+        no_name_2_id
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(no_name_2_row.name.as_deref(), Some("New Name Two"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("update_missing_contact_names"))
+)]
+// should handle empty updates slice without error
+async fn update_missing_contact_names_empty_input(pool: Pool<Postgres>) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let updates: Vec<(Uuid, String)> = vec![];
+
+    update_missing_contact_names(&pool, &updates).await?;
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("update_missing_contact_names"))
+)]
+// should update updated_at timestamp when name is set
+async fn update_missing_contact_names_updates_timestamp(pool: Pool<Postgres>) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let contact_id = Uuid::parse_str("00000000-0000-0000-0000-0000000c0002")?;
+
+    let before = sqlx::query!(
+        "SELECT updated_at FROM email_contacts WHERE id = $1",
+        contact_id
+    )
+    .fetch_one(&pool)
+    .await?;
+
+    let updates = vec![(contact_id, "Updated Name".to_string())];
+    update_missing_contact_names(&pool, &updates).await?;
+
+    let after = sqlx::query!(
+        "SELECT updated_at FROM email_contacts WHERE id = $1",
+        contact_id
+    )
+    .fetch_one(&pool)
+    .await?;
+
+    assert!(after.updated_at > before.updated_at);
+
+    Ok(())
+}

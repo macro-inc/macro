@@ -13,6 +13,8 @@ import { type Service, services } from './services';
 // Map service names to Rust crate names
 const serviceToCrate: Record<string, string> = {
   'cloud-storage': 'document_storage_service',
+  'comms-service': 'comms_service',
+  'properties-service': 'properties_service',
   'document-cognition': 'document_cognition_service',
   'auth-service': 'authentication_service',
   'notification-service': 'notification_service',
@@ -36,6 +38,11 @@ async function buildOpenApiBinaries(crateNames: string[], rustCloudStorageDir = 
   const packageArgs = crateNames.flatMap(crate => ['-p', crate]);
   const binArgs = crateNames.flatMap(crate => ['--bin', `${crate}_openapi`]);
 
+  // Also build the DCS models binary if document_cognition_service is included
+  if (crateNames.includes('document_cognition_service')) {
+    binArgs.push('--bin', 'document_cognition_service_models');
+  }
+
   console.log(`Building ${crateNames.length} OpenAPI binaries in parallel...`);
   await $`cd ${rustCloudStorageDir} && SQLX_OFFLINE=true cargo build --release ${packageArgs} ${binArgs}`;
   console.log('Build complete.\n');
@@ -44,6 +51,13 @@ async function buildOpenApiBinaries(crateNames: string[], rustCloudStorageDir = 
 // Run pre-built binary directly (no cargo lock needed)
 async function runOpenApiBinary(crateName: string, rustCloudStorageDir = getRustCloudStorageDir()): Promise<string> {
   const binaryPath = path.join(rustCloudStorageDir, 'target', 'release', `${crateName}_openapi`);
+  const result = await $`${binaryPath}`.text();
+  return result;
+}
+
+// Run a named binary from the release directory
+async function runBinary(binaryName: string, rustCloudStorageDir = getRustCloudStorageDir()): Promise<string> {
+  const binaryPath = path.join(rustCloudStorageDir, 'target', 'release', binaryName);
   const result = await $`${binaryPath}`.text();
   return result;
 }
@@ -119,7 +133,18 @@ const processService = async (service: Service, { serviceClientsDir }: { service
 
     // Special handling for document-cognition
     if (service.name === 'document-cognition') {
-      await $`cd ${path.resolve(import.meta.dirname, '..')} && bun scripts/generate-dcs-types.ts`.quiet();
+      // Run the models binary to get the models JSON from local Rust code
+      const rustCloudStorageDir = getRustCloudStorageDir();
+      const modelsJson = await runBinary('document_cognition_service_models', rustCloudStorageDir);
+      const modelsJsonPath = path.join(import.meta.dirname, '.models.json');
+      await write(modelsJsonPath, modelsJson);
+
+      const appDir = path.resolve(import.meta.dirname, '..');
+      try {
+        await $`cd ${appDir} && MODELS_JSON=${modelsJsonPath} bun scripts/generate-dcs-types.ts`.quiet();
+      } finally {
+        await $`rm -f ${modelsJsonPath}`.quiet();
+      }
     }
 
     console.log(`[${service.name}] ✓ Done`);

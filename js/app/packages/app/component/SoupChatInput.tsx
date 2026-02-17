@@ -1,28 +1,35 @@
-import { useChatInput } from '@core/component/AI/component/input/useChatInput';
+import {
+  ChatInputProvider,
+  useChatInputContext,
+} from '@core/component/AI/context';
+import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
+import { useChatMarkdownArea } from '@core/component/AI/component/input/useChatMarkdownArea';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
-import type { CreateAndSend, Send } from '@core/component/AI/types';
 import { isErr } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
+import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import { useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import { onMount, Show } from 'solid-js';
-import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import { useSoup } from '@app/component/next-soup/soup-context';
+import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
-export function SoupChatInput() {
+function SoupChatInputInner() {
   let containerRef!: HTMLDivElement;
   const splitPanelContext = useSplitPanelOrThrow();
   const soup = useSoup();
+  const input = useChatInputContext();
 
-  const { ChatInput } = useChatInput({ autoAttach: false });
+  const chatMarkdownArea = useChatMarkdownArea({
+    addAttachment: (a) => input.attachments.addAttachment(a),
+  });
+
   const [attachHotkeys] = useHotkeyDOMScope('soup.chatInput');
 
   onMount(() => {
     attachHotkeys(containerRef);
   });
 
-  const handleSend = async (request: Send | CreateAndSend) => {
-    if (request.type !== 'createAndSend') return;
-
+  const handleSend = async (request: ChatSendInput) => {
     // Create a new persistent chat
     const response = await cognitionApiServiceClient.createChat({
       isPersistent: true,
@@ -58,6 +65,7 @@ export function SoupChatInput() {
         <div class="w-full max-w-3xl">
           <div class="pointer-events-auto">
             <ChatInput
+              markdown={chatMarkdownArea}
               onSend={handleSend}
               isPersistent={true}
               autoFocusOnMount={false}
@@ -66,5 +74,13 @@ export function SoupChatInput() {
         </div>
       </div>
     </Show>
+  );
+}
+
+export function SoupChatInput() {
+  return (
+    <ChatInputProvider autoAttach={false}>
+      <SoupChatInputInner />
+    </ChatInputProvider>
   );
 }

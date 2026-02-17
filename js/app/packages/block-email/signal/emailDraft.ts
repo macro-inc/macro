@@ -6,11 +6,11 @@ import type { MessageToSend } from '@service-email/generated/schemas/messageToSe
 
 export async function saveEmailDraft(
   draft: MessageToSend,
-  sendTime?: string | null
+  sendTime?: Date | null
 ): Promise<MessageToSendDbId | false> {
   const createRes = await emailClient.createDraft({
     draft,
-    send_time: sendTime,
+    send_time: sendTime?.toISOString() ?? null,
   });
   if (isErr(createRes)) {
     logger.error(new Error('Failed to save draft', { cause: createRes[0] }));

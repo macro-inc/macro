@@ -1,4 +1,3 @@
-use chrono::serde::ts_seconds_option;
 use utoipa::ToSchema;
 
 use crate::item::Item;
@@ -17,12 +16,8 @@ pub struct Pin {
     /// Who the chat belongs to
     pub user_id: String,
     /// The time the pin was created
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     /// The time the pin was last updated
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 

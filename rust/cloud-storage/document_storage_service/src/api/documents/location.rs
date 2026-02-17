@@ -17,15 +17,13 @@ use axum::{
     body::Body,
     extract::{Path, Query, State},
     http::{Response, StatusCode},
-    response::{IntoResponse, Response as AxumResponse},
+    response::IntoResponse,
 };
 use cloudfront_sign::{SignedOptions, get_signed_url};
-use futures::{FutureExt, pin_mut, select};
 use model::{
     document::{
         CONVERTED_DOCUMENT_FILE_NAME, DocumentBasic, FileType, FileTypeExt,
-        build_cloud_storage_bucket_document_key,
-        response::{LocationResponseData, LocationResponseV3},
+        build_cloud_storage_bucket_document_key, response::LocationResponseData,
     },
     response::{GenericErrorResponse, GenericResponse, PresignedUrl},
     user::UserContext,
@@ -37,144 +35,6 @@ pub struct Params {
 }
 
 static DOCUMENT_DOES_NOT_EXIST: &str = "document does not exist in s3";
-
-/// Attempts to retrieve metadata from sync service using optimized concurrent exists/metadata checks
-async fn try_get_from_sync_service(
-    sync_service_client: &sync_service_client::SyncServiceClient,
-    document_id: &str,
-) -> Result<Option<model::sync_service::DocumentMetadata>, anyhow::Error> {
-    let exists_fut = sync_service_client.exists(document_id).fuse();
-    let metadata_fut = sync_service_client.get_metadata(document_id).fuse();
-
-    pin_mut!(exists_fut, metadata_fut);
-
-    // Use select to handle whichever completes first for better performance
-    select! {
-        exists_result = exists_fut => {
-            match exists_result {
-                Ok(false) => Ok(None),
-                Ok(true) | Err(_) => {
-                    metadata_fut.await.map(Some)
-                }
-            }
-        },
-        metadata_result = metadata_fut => {
-            match metadata_result {
-                Ok(metadata) => Ok(Some(metadata)),
-                Err(e) => {
-                    match exists_fut.await {
-                        Ok(false) => Ok(None),
-                        _ => Err(e),
-                    }
-                }
-            }
-        }
-    }
-}
-
-#[utoipa::path(
-    tag = "document",
-    get,
-    path = "/documents/{document_id}/location_v3",
-    params(
-        ("document_id" = String, Path, description = "Document ID"),
-        ("document_version_id" = i64, Query, description = "A specific document version id to get the location for."),
-        ("get_converted_docx_url" = bool, Query, description = "If true, this will return the converted docx url.")
-    ),
-    responses(
-        (status = 200, body=LocationResponseV3),
-        (status = 401, body=GenericErrorResponse),
-        (status = 404, body=GenericErrorResponse),
-        (status = 410, body=GenericErrorResponse),
-        (status = 500, body=GenericErrorResponse),
-    )
-)]
-#[tracing::instrument(skip(user_context, document_context, state, _access), fields(user_id=?user_context.user_id))]
-pub async fn get_location_handler_v3(
-    _access: DocumentAccessExtractor<ViewAccessLevel>,
-    State(state): State<ApiContext>,
-    user_context: Extension<UserContext>,
-    Extension(document_context): Extension<DocumentBasic>,
-    Path(Params { document_id }): Path<Params>,
-    Query(params): Query<LocationQueryParams>,
-) -> AxumResponse {
-    let file_type = document_context.try_file_type();
-
-    let make_result = |response: anyhow::Result<LocationResponseV3>| {
-        let response_data: LocationResponseV3 = match response {
-            Ok(response_data) => response_data,
-            Err(e) => {
-                tracing::error!(error=?e, "unable to get document location");
-                let status_code = if e.to_string() == DOCUMENT_DOES_NOT_EXIST {
-                    tracing::error!("document does not exist in s3");
-                    StatusCode::GONE
-                } else {
-                    StatusCode::INTERNAL_SERVER_ERROR
-                };
-                return GenericResponse::builder()
-                    .message("unable to get document location")
-                    .is_error(true)
-                    .send(status_code);
-            }
-        };
-
-        let max_age = state
-            .config
-            .document_storage_service_presigned_url_browser_cache_expiry_seconds;
-
-        Response::builder()
-            .status(StatusCode::OK)
-            .header(reqwest::header::CONTENT_TYPE, "application/json")
-            .header("Cache-Control", format!("max-age={}", max_age))
-            .header(
-                "X-custom-response-uuid",
-                macro_uuid::generate_uuid_v7().to_string(),
-            ) // this is used to verify if a response is cached between requests
-            .body(Body::from(serde_json::to_vec(&response_data).unwrap()))
-            .unwrap()
-    };
-
-    // do sync service check for markdown files
-    if matches!(file_type, Some(FileType::Md)) {
-        match try_get_from_sync_service(&state.sync_service_client, &document_id).await {
-            Ok(Some(sync_service_metadata)) => {
-                let data = LocationResponseV3::SyncServiceContent {
-                    metadata: document_context,
-                    sync_service_metadata,
-                };
-                return make_result(Ok(data)).into_response();
-            }
-            Ok(None) => {
-                // Document doesn't exist in sync service, continue to check S3
-            }
-            Err(e) => {
-                tracing::error!(error=?e, "sync service failed");
-                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-            }
-        }
-    }
-
-    let response_data = get_presigned_url_by_type(
-        &state,
-        document_context.owner.as_ref(),
-        &document_id,
-        file_type,
-        params.document_version_id,
-        params.get_converted_docx_url.unwrap_or(false),
-    )
-    .await
-    .map(|response| match response {
-        LocationResponseData::PresignedUrl(url) => LocationResponseV3::PresignedUrl {
-            presigned_url: url,
-            metadata: document_context,
-        },
-        LocationResponseData::PresignedUrls(urls) => LocationResponseV3::PresignedUrls {
-            presigned_urls: urls,
-            metadata: document_context,
-        },
-    });
-    make_result(response_data).into_response()
-}
 
 /// Gets the presigned url(s) for the document. aka location
 #[utoipa::path(

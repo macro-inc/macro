@@ -10,12 +10,14 @@ use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use redis::{RedisError, aio::MultiplexedConnection};
 use secretsmanager_client::LocalOrRemoteSecret;
 use std::sync::Arc;
+use stream::domain::StreamManager;
 
 #[derive(Clone, FromRef)]
 pub struct ApiContext {
     pub connection_manager: crate::service::connection::ConnectionManager,
     pub frecency_ingestor_service: EventIngestorImpl<FrecencyPgStorage>,
     pub redis_client: Arc<redis::Client>,
+    pub stream_manager: Arc<dyn StreamManager + Send + Sync>,
 }
 
 impl ApiContext {

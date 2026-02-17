@@ -117,10 +117,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             "/:document_id/location",
             get(location::get_location_handler).layer(ensure_document_exists_middleware.clone()),
         )
-        .route(
-            "/:document_id/location_v3",
-            get(location::get_location_handler_v3).layer(ensure_document_exists_middleware.clone()),
-        )
+        // NOTE: /:document_id/location_v3 is now served by the documents hex crate router
         .route(
             "/:document_id/text",
             get(get_document_text::handler).layer(ensure_document_exists_middleware.clone()),
@@ -148,10 +145,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
                     )),
             ),
         )
-        .route(
-            "/:document_id",
-            get(get_document::handler).layer(ensure_document_exists_middleware.clone()),
-        )
+        // NOTE: GET /:document_id is now served by the documents hex crate router
         .route(
             "/:document_id/views",
             get(get_document_views::get_document_views_handler)
@@ -185,11 +179,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             "/:document_id/simple_save",
             put(simple_save::handler).layer(ensure_document_exists_middleware.clone()),
         )
-        .route(
-            "/:document_id",
-            delete(delete_document::delete_document_handler)
-                .layer(ensure_document_exists_middleware.clone()),
-        )
+        // NOTE: DELETE /:document_id is now served by the documents hex crate router
         .route(
             "/:document_id/permanent",
             delete(delete_document::permanently_delete_document_handler)

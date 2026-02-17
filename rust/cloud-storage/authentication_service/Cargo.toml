@@ -14,10 +14,6 @@ name = "generate_keys"
 path = "src/bin/generate_keys.rs"
 
 [[bin]]
-name = "backfill_null_macro_user_id"
-path = "src/bin/backfill_null_macro_user_id.rs"
-
-[[bin]]
 name = "authentication_service_openapi"
 path = "src/openapi.rs"
 
@@ -45,6 +41,7 @@ cookie = { workspace = true }
 document_storage_service_client = { path = "../document_storage_service_client" }
 doppleganger = { workspace = true }
 email_validator = { path = "../email_validator" }
+fusionauth = { path = "../fusionauth" }
 futures = { workspace = true }
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }
@@ -91,7 +88,6 @@ rsa = "0.9.10"
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
-serde_urlencoded = "0.7.1"
 serde_utils = { path = "../serde_utils", features = ["urlencode"] }
 ses_client = { path = "../ses_client" }
 sha1 = "0.10.6"

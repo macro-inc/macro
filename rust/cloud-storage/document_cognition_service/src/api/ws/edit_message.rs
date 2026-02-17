@@ -1,6 +1,6 @@
 use crate::{
     api::{context::ApiContext, utils::search},
-    model::ws::{FromWebSocketMessage, SendChatMessagePayload, StreamWebSocketError},
+    model::ws::{ChatStream, SendChatMessagePayload, StreamWebSocketError},
     service::get_chat::get_chat,
 };
 
@@ -18,7 +18,7 @@ use tokio::sync::mpsc::UnboundedSender;
 #[tracing::instrument(skip(ctx, sender, jwt_token, incoming_message, user_id))]
 pub async fn handle_edit_last_user_message(
     ctx: Arc<ApiContext>,
-    sender: &UnboundedSender<FromWebSocketMessage>,
+    sender: &UnboundedSender<ChatStream>,
     incoming_message: SendChatMessagePayload,
     user_id: Arc<MacroUserIdStr<'static>>,
     connection_id: &str,
@@ -58,7 +58,7 @@ pub async fn handle_edit_last_user_message(
 
     ws_send(
         sender,
-        FromWebSocketMessage::ChatMessageAck {
+        ChatStream::ChatMessageAck {
             message_id: message_id.clone(),
             chat_id: incoming_message.chat_id.clone(),
         },

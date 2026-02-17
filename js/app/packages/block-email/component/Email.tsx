@@ -472,7 +472,7 @@ function EmailContent(props: EmailViewProps) {
                 <Show when={!isMobile()}>
                   <div class="shrink-0 w-full flex justify-center">
                     <div
-                      class="macro-message-width w-full border-b"
+                      class="macro-message-width macro-message-padding w-full border-b"
                       classList={{
                         'border-edge-muted/50': isScrolled(),
                         'border-transparent': !isScrolled(),
@@ -503,8 +503,8 @@ function EmailContent(props: EmailViewProps) {
               >
                 {(info) => {
                   return (
-                    <div class="shrink-0 w-full px-4 pb-2">
-                      <div class="relative w-full flex flex-row justify-center bg-panel macro-message-width mx-auto">
+                    <div class="shrink-0 w-full pb-2">
+                      <div class="relative w-full flex flex-row justify-center bg-panel macro-message-width macro-message-padding mx-auto">
                         <FloatingInputLoader
                           isLoading={context.query.isFetching}
                           loadingText="Loading messages"

@@ -4,12 +4,7 @@ import {
   SYSTEM_PROPERTY_IDS,
 } from '@core/component/Properties/constants';
 import { throwOnErr } from '@core/util/maybeResult';
-import {
-  type InfiniteData,
-  type QueryKey,
-  useMutation,
-  useQuery,
-} from '@tanstack/solid-query';
+import { type QueryKey, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import {
   entityPropertyFromApi,
@@ -23,14 +18,20 @@ import {
   type PropertiesEntityType,
   propertiesServiceClient,
 } from '../../service-clients/service-properties/client';
-import type { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
-import type { SoupPage } from '../../service-clients/service-storage/generated/schemas/soupPage';
-import type { SoupProperty } from '../../service-clients/service-storage/generated/schemas/soupProperty';
+import { EntityType } from '../../service-clients/service-properties/generated/schemas/entityType';
+import type { SoupPropertyValue } from '../../service-clients/service-storage/generated/schemas/soupPropertyValue';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { propertiesKeys } from './keys';
-import { soupKeys } from '../soup/keys';
-import type { BulkEntityPropertiesData } from './bulk';
+import {
+  getSoupEntityById,
+  optimisticUpdateSoupEntity,
+  invalidateSoupEntity,
+  type SoupTransaction,
+  refetchSoupEntity,
+  type SoupEntityTag,
+} from '../soup/cache';
+import { match, P } from 'ts-pattern';
 
 export function useEntityPropertiesQuery(
   entityType: Accessor<EntityType>,
@@ -64,28 +65,12 @@ export function useEntityPropertiesQuery(
   );
 }
 
-function bulkIncludesEntityPredicate(queryKey: QueryKey, entityId: string) {
-  return (
-    queryKey.includes('properties') &&
-    queryKey.includes('bulk') &&
-    queryKey.some(
-      (subKey) => Array.isArray(subKey) && subKey.includes(entityId)
-    )
-  );
-}
-
 export function invalidatePropertiesForEntity(
   entityType: EntityType,
   entityId: string
 ) {
   queryClient.invalidateQueries({
     queryKey: propertiesKeys.entity({ entityType, entityId }).queryKey,
-  });
-
-  // This invalidates any bulk query including this entity
-  queryClient.invalidateQueries({
-    predicate: ({ queryKey }) =>
-      bulkIncludesEntityPredicate(queryKey, entityId),
   });
 }
 
@@ -96,8 +81,56 @@ export type SaveEntityPropertyParams = {
   apiValues: PropertyApiValues;
 };
 
+type SaveEntityPropertyContext = SoupTransaction | undefined;
+
+/**
+ * Converts PropertyApiValues to the SoupProperty value format for optimistic updates.
+ */
+function apiValuesToSoupPropertyValue(
+  apiValues: PropertyApiValues
+): SoupPropertyValue {
+  switch (apiValues.valueType) {
+    case 'STRING':
+      return apiValues.value != null
+        ? { type: 'String', value: apiValues.value }
+        : null;
+    case 'NUMBER':
+      return apiValues.value != null
+        ? { type: 'Number', value: apiValues.value }
+        : null;
+    case 'BOOLEAN':
+      return apiValues.value != null
+        ? { type: 'Boolean', value: apiValues.value }
+        : null;
+    case 'DATE':
+      return apiValues.value != null
+        ? { type: 'Date', value: apiValues.value.toISOString() }
+        : null;
+    case 'SELECT_STRING':
+    case 'SELECT_NUMBER':
+      return apiValues.values != null && apiValues.values.length > 0
+        ? { type: 'SelectOption', value: apiValues.values }
+        : null;
+    case 'ENTITY':
+      return apiValues.refs != null && apiValues.refs.length > 0
+        ? { type: 'EntityReference', value: apiValues.refs }
+        : null;
+    case 'LINK':
+      return apiValues.values != null && apiValues.values.length > 0
+        ? { type: 'Link', value: apiValues.values }
+        : null;
+    default:
+      return null;
+  }
+}
+
 export function useSaveEntityPropertyMutation(
-  callbacks?: MutationCallbacks<void, Error, SaveEntityPropertyParams>
+  callbacks?: MutationCallbacks<
+    void,
+    Error,
+    SaveEntityPropertyParams,
+    SaveEntityPropertyContext
+  >
 ) {
   return useMutation(() => ({
     mutationFn: async (vars: SaveEntityPropertyParams) => {
@@ -118,30 +151,49 @@ export function useSaveEntityPropertyMutation(
           })
       );
     },
-    ...withCallbacks<void, Error, SaveEntityPropertyParams>(
-      {
-        onError(error) {
-          console.error('Failed to save property', error);
-          toast.failure('Failed to save property');
-        },
-        onSettled: (_data, _error, variables) => {
-          invalidatePropertiesForEntity(
-            variables.entityType,
-            variables.entityId
-          );
+    onMutate: async (
+      vars: SaveEntityPropertyParams
+    ): Promise<SaveEntityPropertyContext> => {
+      const current = getSoupEntityById(vars.entityId);
+      if (!current || current.tag === 'channel') return;
 
-          // If the status property was changed, also invalidate DSS
-          // so that tasks can reappear in Signal when marked un-done
-          if (
-            variables.property.propertyDefinitionId ===
-            SYSTEM_PROPERTY_IDS.STATUS
-          ) {
-            queryClient.invalidateQueries({ queryKey: soupKeys.items._def });
-          }
-        },
-      },
-      callbacks
-    ),
+      const soupValue = apiValuesToSoupPropertyValue(vars.apiValues);
+      if (current.data.properties) {
+        return optimisticUpdateSoupEntity({
+          tag: current.tag,
+          data: {
+            id: current.data.id,
+            properties: current.data.properties.map((prop) =>
+              prop.definition.id === vars.property.propertyDefinitionId
+                ? { ...prop, value: soupValue }
+                : prop
+            ),
+          },
+          frecency_score: current.frecency_score,
+        });
+      }
+    },
+    onError: (
+      error: Error,
+      _vars: SaveEntityPropertyParams,
+      context: SaveEntityPropertyContext
+    ) => {
+      context?.rollback();
+      console.error('Failed to save property', error);
+      toast.failure('Failed to save property');
+    },
+    onSettled: (_data, _error, variables) => {
+      invalidatePropertiesForEntity(variables.entityType, variables.entityId);
+      invalidateSoupEntity(variables.entityId);
+    },
+    ...(callbacks
+      ? withCallbacks<
+          void,
+          Error,
+          SaveEntityPropertyParams,
+          SaveEntityPropertyContext
+        >({}, callbacks)
+      : {}),
   }));
 }
 
@@ -230,8 +282,7 @@ export type SetPropertyStatusCompleteParams = {
 
 type SetPropertyStatusCompleteContext = {
   previousEntityProperties: [QueryKey, Property[] | undefined][];
-  previousBulkProperties: [QueryKey, BulkEntityPropertiesData | undefined][];
-  previousDss: [QueryKey, InfiniteData<SoupPage, unknown> | undefined][];
+  soupTxn?: SoupTransaction;
 };
 
 /**
@@ -270,43 +321,31 @@ function updateStatusPropertyToCompleted<
   });
 }
 
-/**
- * Updates DSS query data to set the status property to COMPLETED for a given entity.
- */
-function updateDssStatusToCompleted(
-  data: InfiniteData<SoupPage, unknown> | undefined,
-  entityId: string
-): InfiniteData<SoupPage, unknown> | undefined {
-  if (!data) return data;
+function propertyEntityTypeToSoupTag(
+  entityType: EntityType
+): SoupEntityTag | null {
+  return match(entityType)
+    .with(EntityType.CHANNEL, () => 'channel' as const)
+    .with(EntityType.THREAD, () => 'emailThread' as const)
+    .with(EntityType.CHAT, () => 'chat' as const)
+    .with(P.union(EntityType.COMPANY, EntityType.USER), () => null)
+    .with(
+      P.union(EntityType.DOCUMENT, EntityType.TASK),
+      () => 'document' as const
+    )
+    .with(EntityType.PROJECT, () => 'project' as const)
 
-  return {
-    ...data,
-    pages: data.pages.map((page) => ({
-      ...page,
-      items: page.items.map((item) => {
-        // SoupApiItem has { tag, data } structure where data contains the entity
-        if ('data' in item && item.data && 'id' in item.data) {
-          const itemData = item.data as {
-            id: string;
-            properties?: SoupProperty[];
-          };
-          if (itemData.id === entityId && itemData.properties) {
-            // Use Object.assign to preserve the original type while updating properties
-            const updatedData = {
-              ...item.data,
-              properties: updateStatusPropertyToCompleted(itemData.properties),
-            };
-            return {
-              ...item,
-              data: updatedData,
-            } as typeof item;
-          }
-        }
-        return item;
-      }),
-    })),
-    pageParams: data.pageParams,
-  };
+    .exhaustive();
+}
+
+function withValidSoupTag(
+  entityType: EntityType,
+  callback: (tag: SoupEntityTag) => void
+) {
+  const tag = propertyEntityTypeToSoupTag(entityType);
+  if (tag) {
+    callback(tag);
+  }
 }
 
 /** Sets the status property to complete for an entity (mark as done) */
@@ -331,7 +370,7 @@ export function useSetPropertyStatusCompleteMutation(
     onMutate: async (
       vars: SetPropertyStatusCompleteParams
     ): Promise<SetPropertyStatusCompleteContext> => {
-      // Cancel any in-flight queries that might overwrite our optimistic update
+      // Cancel any in-flight property queries
       await Promise.all([
         queryClient.cancelQueries({
           queryKey: propertiesKeys.entity({
@@ -339,31 +378,14 @@ export function useSetPropertyStatusCompleteMutation(
             entityId: vars.entityId,
           }).queryKey,
         }),
-        queryClient.cancelQueries({
-          predicate: ({ queryKey }) =>
-            bulkIncludesEntityPredicate(queryKey, vars.entityId),
-        }),
-        queryClient.cancelQueries({ queryKey: soupKeys.items._def }),
       ]);
 
-      // Snapshot previous data for rollback
+      // Snapshot previous property data for rollback
       const previousEntityProperties = queryClient.getQueriesData<Property[]>({
         queryKey: propertiesKeys.entity({
           entityType: vars.entityType,
           entityId: vars.entityId,
         }).queryKey,
-      });
-
-      const previousBulkProperties =
-        queryClient.getQueriesData<BulkEntityPropertiesData>({
-          predicate: ({ queryKey }) =>
-            bulkIncludesEntityPredicate(queryKey, vars.entityId),
-        });
-
-      const previousDss = queryClient.getQueriesData<
-        InfiniteData<SoupPage, unknown>
-      >({
-        queryKey: soupKeys.items._def,
       });
 
       // Optimistically update entity properties query
@@ -377,33 +399,26 @@ export function useSetPropertyStatusCompleteMutation(
         (old) => (old ? updateStatusPropertyToCompleted(old) : old)
       );
 
-      // Optimistically update bulk properties queries
-      queryClient.setQueriesData<BulkEntityPropertiesData>(
-        {
-          predicate: ({ queryKey }) =>
-            bulkIncludesEntityPredicate(queryKey, vars.entityId),
-        },
-        (old) => {
-          if (!old || !old[vars.entityId]) return old;
-          return {
-            ...old,
-            [vars.entityId]: updateStatusPropertyToCompleted(
-              old[vars.entityId]
-            ),
-          };
-        }
-      );
-
       // Optimistically update soup queries (embedded properties on entities)
-      queryClient.setQueriesData<InfiniteData<SoupPage, unknown>>(
-        { queryKey: soupKeys.items._def },
-        (old) => updateDssStatusToCompleted(old, vars.entityId)
-      );
+      const current = getSoupEntityById(vars.entityId);
+
+      let soupTxn: SoupTransaction | undefined;
+      if (current && current.tag !== 'channel' && current.data.properties) {
+        soupTxn = optimisticUpdateSoupEntity({
+          tag: current.tag,
+          data: {
+            id: current.data.id,
+            properties: updateStatusPropertyToCompleted(
+              current.data.properties
+            ),
+          },
+          frecency_score: current.frecency_score,
+        });
+      }
 
       return {
         previousEntityProperties,
-        previousBulkProperties,
-        previousDss,
+        soupTxn,
       };
     },
     onError: (
@@ -413,23 +428,18 @@ export function useSetPropertyStatusCompleteMutation(
     ) => {
       console.error('Failed to set status complete', error);
 
-      // Rollback optimistic updates
       if (context) {
+        context.soupTxn?.rollback();
         for (const [key, data] of context.previousEntityProperties) {
-          queryClient.setQueryData(key, data);
-        }
-        for (const [key, data] of context.previousBulkProperties) {
-          queryClient.setQueryData(key, data);
-        }
-        for (const [key, data] of context.previousDss) {
           queryClient.setQueryData(key, data);
         }
       }
     },
     onSettled: (_data, _error, variables) => {
       invalidatePropertiesForEntity(variables.entityType, variables.entityId);
-      // Also invalidate soup items to ensure consistency
-      queryClient.invalidateQueries({ queryKey: soupKeys.items._def });
+      withValidSoupTag(variables.entityType, (tag) =>
+        refetchSoupEntity(variables.entityId, tag)
+      );
     },
     ...(callbacks
       ? withCallbacks<
@@ -503,6 +513,9 @@ export function useBulkSaveEntityPropertiesMutation(
           entityGroups.forEach((entityIds, entityType) => {
             entityIds.forEach((entityId) => {
               invalidatePropertiesForEntity(entityType, entityId);
+              withValidSoupTag(entityType, (tag) =>
+                refetchSoupEntity(entityId, tag)
+              );
             });
           });
         },

@@ -4,17 +4,19 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use axum::{
-    RequestPartsExt, async_trait,
+    Extension, RequestPartsExt, async_trait,
     extract::{FromRef, FromRequestParts, Path},
     http::request::Parts,
 };
 
-use super::{ExtractorError, RequiredAccessLevel};
+use super::{ExtractorError, InternalUser, RequiredAccessLevel};
 use crate::domain::{
-    models::{AccessLevel, EntityType},
+    models::{
+        AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
+    },
     ports::EntityAccessService,
 };
-use model_user::axum_extractor::MacroUserExtractor;
+use model_user::axum_extractor::OptionalMacroUserExtractor;
 
 /// Path parameters for history routes.
 #[derive(serde::Deserialize)]
@@ -28,10 +30,10 @@ pub struct HistoryParams {
 /// Validates the user has access to view the history of a particular item.
 ///
 /// Extracts both item_id and item_type from the path parameters.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct HistoryAccessExtractor<T, Svc> {
-    /// The actual access level the user has.
-    pub access_level: AccessLevel,
+    /// The entity access receipt
+    pub entity_access_receipt: EntityAccessReceipt,
     _marker: PhantomData<(T, Svc)>,
 }
 
@@ -49,7 +51,7 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let service = <Arc<Svc>>::from_ref(state);
 
-        let MacroUserExtractor { macro_user_id, .. } = parts
+        let OptionalMacroUserExtractor { macro_user_id, .. } = parts
             .extract()
             .await
             .map_err(|_| ExtractorError::Internal)?;
@@ -64,15 +66,55 @@ where
             .parse()
             .map_err(|_| ExtractorError::BadRequest("Invalid item_type"))?;
 
-        // Check access via service
+        let internal_user: Option<Extension<InternalUser>> = if macro_user_id.is_none() {
+            parts
+                .extract()
+                .await
+                .map_err(|_| ExtractorError::Internal)?
+        } else {
+            None
+        };
+
+        if internal_user.is_some() {
+            return Ok(Self {
+                entity_access_receipt: EntityAccessReceipt {
+                    entity: Entity {
+                        entity_id: item_id,
+                        entity_type,
+                    },
+                    auth: EntityAccessAuth::Internal,
+                    entity_permission: EntityPermission::AccessLevel {
+                        access_level: AccessLevel::Owner,
+                    },
+                },
+                _marker: PhantomData,
+            });
+        }
+
         let required_level = T::required_level();
-        let access_level = service
-            .check_access(&macro_user_id, &item_id, entity_type, required_level)
-            .await
-            .map_err(ExtractorError::from)?;
+        // Check access based on auth state
+        let access_level: AccessLevel = match macro_user_id.as_ref() {
+            Some(macro_user_id) => service
+                .check_access(Some(macro_user_id), &item_id, entity_type, required_level)
+                .await
+                .map_err(ExtractorError::from)?,
+            None => service
+                .check_public_access(&item_id, entity_type, required_level)
+                .await
+                .map_err(ExtractorError::from)?,
+        };
 
         Ok(Self {
-            access_level,
+            entity_access_receipt: EntityAccessReceipt {
+                entity: Entity {
+                    entity_id: item_id,
+                    entity_type,
+                },
+                auth: macro_user_id
+                    .map(|m| EntityAccessAuth::Authenticated(m.0))
+                    .unwrap_or(EntityAccessAuth::Unauthenticated),
+                entity_permission: EntityPermission::AccessLevel { access_level },
+            },
             _marker: PhantomData,
         })
     }

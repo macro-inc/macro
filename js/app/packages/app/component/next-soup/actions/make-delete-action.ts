@@ -1,5 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
-import type { EntityData } from '@macro-entity';
+import type { EntityData } from '@entity';
 import { openBulkEditModal } from '@app/component/bulk-edit-entity/BulkEditEntityModal';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { globalRemoveFromSplitHistory } from '@app/component/split-layout/layoutUtils';

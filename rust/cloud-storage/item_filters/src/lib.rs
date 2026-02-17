@@ -124,6 +124,10 @@ pub struct EmailFilters {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub recipients: Vec<String>,
 
+    /// Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub email_thread_ids: Vec<String>,
+
     /// Filter by email importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub importance: Option<bool>,
@@ -136,12 +140,14 @@ impl IsEmpty for EmailFilters {
             cc,
             bcc,
             recipients,
+            email_thread_ids,
             importance,
         } = self;
         senders.is_empty()
             && cc.is_empty()
             && bcc.is_empty()
             && recipients.is_empty()
+            && email_thread_ids.is_empty()
             && importance.is_none()
     }
 }
@@ -166,6 +172,10 @@ pub struct ChannelFilters {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sender_ids: Vec<String>,
 
+    /// Channel types to filter by. Examples: ['public'], ['direct_message', 'private']. Empty to search all channel types.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub channel_types: Vec<String>,
+
     /// Filter by channel importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub importance: Option<bool>,
@@ -179,6 +189,7 @@ impl IsEmpty for ChannelFilters {
             org_id,
             channel_ids,
             sender_ids,
+            channel_types,
             importance,
         } = self;
         thread_ids.is_empty()
@@ -186,6 +197,7 @@ impl IsEmpty for ChannelFilters {
             && org_id.is_none()
             && channel_ids.is_empty()
             && sender_ids.is_empty()
+            && channel_types.is_empty()
             && importance.is_none()
     }
 }

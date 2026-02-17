@@ -18,7 +18,9 @@ import {
   getSenderDisplayName,
   isMessageFromCurrentUser,
 } from '../util/emailUser';
+import { useEmailContext } from './EmailContext';
 import { type EmailMessageAction, MessageActions } from './MessageActions';
+import type { DateValue } from '@core/util/date';
 
 interface EmailMessageTopBarProps {
   message: MessageWithBodyReplyless;
@@ -38,8 +40,8 @@ interface Recipient {
   email?: string | null;
 }
 
-function formatFullDate(timestamp: string): string {
-  return new Date(timestamp)
+function formatFullDate(date: DateValue): string {
+  return new Date(date)
     .toLocaleString('en-US', {
       weekday: 'long',
       year: 'numeric',
@@ -52,16 +54,16 @@ function formatFullDate(timestamp: string): string {
     .replace(',', '');
 }
 
-export function formatShortDate(timestamp: string): string {
-  const date = new Date(timestamp);
-  if (date.getFullYear() !== new Date().getFullYear()) {
-    return date.toLocaleDateString('en-US', {
+export function formatShortDate(date: DateValue): string {
+  const d = new Date(date);
+  if (d.getFullYear() !== new Date().getFullYear()) {
+    return d.toLocaleDateString('en-US', {
       month: 'numeric',
       day: 'numeric',
       year: '2-digit',
     });
   }
-  return date.toLocaleDateString('en-US', {
+  return d.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
   });
@@ -114,7 +116,7 @@ function ExpandedHeader(props: {
   onClose: () => void;
 }): JSX.Element {
   return (
-    <div class="flex flex-col gap-1 text-sm">
+    <div class="flex flex-col gap-1 text-sm select-children cursor-text">
       <div class="flex flex-row gap-2">
         <span class="text-ink-extra-muted min-w-10">From</span>
         <span class="select-text cursor-text">
@@ -161,7 +163,7 @@ function CollapsedHeader(props: {
   return (
     <div class="flex flex-row w-full items-center justify-between">
       <div class="flex flex-row items-center gap-1 text-sm min-w-0">
-        <span class="text-ink truncate">
+        <span class="text-ink font-semibold truncate">
           {props.senderName}
           <span style={{ padding: '0 0.375em' }}>to</span>
           {props.recipientSummary}
@@ -207,6 +209,26 @@ function CollapsedHeader(props: {
 export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
   const [isHovering, setIsHovering] = createSignal(false);
   const userEmail = useEmail();
+  const context = useEmailContext();
+
+  // Wraps setExpandedHeader with scroll compensation.
+  // The message list uses flex-col-reverse, so expanding the header
+  // shifts content above upward. This adjusts scrollTop to keep the
+  // visual position stable.
+  const toggleExpandedHeader = (expanded: boolean) => {
+    const scrollContainer = context.messagesListRef();
+    if (!scrollContainer) {
+      props.setExpandedHeader(expanded);
+      return;
+    }
+    const prevScrollHeight = scrollContainer.scrollHeight;
+    const prevScrollTop = scrollContainer.scrollTop;
+    props.setExpandedHeader(expanded);
+    requestAnimationFrame(() => {
+      const delta = scrollContainer.scrollHeight - prevScrollHeight;
+      scrollContainer.scrollTop = prevScrollTop - delta;
+    });
+  };
 
   const _isFromCurrentUser = createMemo(() =>
     isMessageFromCurrentUser(props.message, userEmail())
@@ -252,7 +274,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
           fallback={
             <ExpandedHeader
               message={props.message}
-              onClose={() => props.setExpandedHeader(false)}
+              onClose={() => toggleExpandedHeader(false)}
             />
           }
         >
@@ -260,7 +282,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
             senderName={senderName()}
             recipientSummary={recipientSummary()}
             isHovering={isHovering()}
-            onExpand={() => props.setExpandedHeader(true)}
+            onExpand={() => toggleExpandedHeader(true)}
             message={props.message}
             focused={props.focused}
             setShowReply={props.setShowReply}

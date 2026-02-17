@@ -14,6 +14,8 @@ export interface EmailFilters {
   bcc?: string[];
   /** Email CC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by CC. */
   cc?: string[];
+  /** Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads. */
+  email_thread_ids?: string[];
   /** Filter by email importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing. */
   importance?: EmailFiltersImportance;
   /** Email Recipient addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by Recipient. */

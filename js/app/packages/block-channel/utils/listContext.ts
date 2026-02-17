@@ -1,8 +1,9 @@
-import type { Message } from '@service-comms/generated/models/message';
+import type { DateValue } from '@core/util/date';
+import type { Message } from '@queries/channel/types';
 
 export type MinimalMessage = {
   id: string;
-  created_at: string;
+  created_at: DateValue;
   sender_id: string;
   thread_id?: string | null;
 };
@@ -11,6 +12,8 @@ export type MessageListContext<T extends MinimalMessage = Message> = {
   index: number;
   isNewMessage: boolean;
   isParentNewMessage: boolean;
+  /** True only for the first (oldest) new message — where the "New" indicator should appear */
+  isFirstNewMessage: boolean;
   threadIndex: number;
   /** The previous non-threaded message outside of the current thread */
   previousNonThreadedMessage: T | undefined;
@@ -46,6 +49,7 @@ export function createMessageListContextLookup<
   const context: MessageListContextLookup<T> = {};
   const threadIndexCounters = new Map<string, number>();
   const messagesById = new Map<string, [number, T]>();
+  let foundFirstNewMessage = false;
 
   for (const [index, message] of messages.entries()) {
     messagesById.set(message.id, [index, message]);
@@ -61,7 +65,7 @@ export function createMessageListContextLookup<
   }
 
   for (const [messageIndex, message] of messages.entries()) {
-    const isNewMessage = !message.thread_id && isNewMessageFn(message);
+    const isNewMessage = isNewMessageFn(message);
     let threadIndex = -1;
     let previousNonThreadedMessage: T | undefined;
     let isParentNewMessage = false;
@@ -103,9 +107,16 @@ export function createMessageListContextLookup<
       message.thread_id !== undefined &&
       message.thread_id === lastTopLevelMessageId;
 
+    const isFirstNewMessage =
+      isNewMessage && !message.thread_id && !foundFirstNewMessage;
+    if (isFirstNewMessage) {
+      foundFirstNewMessage = true;
+    }
+
     context[message.id] = {
       index: messageIndex,
       isNewMessage: isNewMessage,
+      isFirstNewMessage,
       isParentNewMessage: isParentNewMessage,
       threadIndex,
       previousNonThreadedMessage,

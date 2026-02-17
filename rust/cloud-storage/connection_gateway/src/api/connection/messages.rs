@@ -20,7 +20,9 @@ pub async fn handle_websocket_stream(
     while let Some(msg) = stream.next().await {
         match msg {
             Ok(msg) => {
-                handle_message(connection_context, msg, &sender).await?;
+                if let Err(e) = handle_message(connection_context, msg, &sender).await {
+                    tracing::error!(error=?e, "error handling message");
+                }
             }
             Err(err) => {
                 match err
@@ -84,13 +86,16 @@ pub async fn handle_message(
 
     match parsed_message {
         ToWebsocketMessage::TrackEntityMessage(message) => {
+            let entity_id = message.extra.entity_id.to_string();
+
             tracker::track_entity(
+                sender,
                 connection_context,
                 TrackingData {
                     entity: message
                         .extra
                         .entity_type
-                        .with_entity_str(&message.extra.entity_id)
+                        .with_entity_str(&entity_id)
                         .with_connection_str(connection_context.connection_id)
                         .with_user_str(&connection_context.user_context.user_id),
                     action: message.action,

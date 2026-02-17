@@ -3,7 +3,7 @@ import type { Attachment } from '@core/component/AI/types';
 import { useChannelsContext } from '@core/context/channels';
 import type { ChannelWithParticipants } from '@core/user';
 import { isOk } from '@core/util/maybeResult';
-import { type EmailEntity, useEmails } from '@macro-entity';
+import type { EmailEntity } from '@entity';
 import type {
   AttachmentType,
   ChannelType,
@@ -14,7 +14,10 @@ import { emailClient } from '@service-email/client';
 import { useHistoryQuery } from '@queries/history/history';
 import { useQuery } from '@tanstack/solid-query';
 import type { SplitContent } from 'app/component/split-layout/layoutManager';
-import { globalSplitManager } from 'app/signal/splitLayout';
+import {
+  globalSplitManager,
+  globalPreviewEntities,
+} from 'app/signal/splitLayout';
 import type { Accessor } from 'solid-js';
 import { createMemo } from 'solid-js';
 import type { HistoryItem } from '@queries/history/history';
@@ -96,14 +99,13 @@ export function useTabAttachments(): Accessor<ChatAttachmentWithName[]> {
   const historyQuery = useHistoryQuery();
   const channelsContext = useChannelsContext();
   const channels = channelsContext.channels;
-  const emails = useEmails();
+  // TODO: hook into email query because useEmails was deprecated
+  const emails: Accessor<EmailEntity[]> = () => [];
 
   // Get valid active tabs using createMemo
   const tabs = createMemo(() => {
     const splitManager = globalSplitManager();
-    if (!splitManager) return [];
-
-    const splits = splitManager.splits();
+    const splits = splitManager?.splits() ?? [];
     const historyItems = historyQuery.data ?? [];
     const channelList = channels();
     const emailList = emails();
@@ -174,15 +176,78 @@ export function useTabAttachments(): Accessor<ChatAttachmentWithName[]> {
       }
     }
 
+    // Include entities from preview panels
+    for (const [, previewContent] of globalPreviewEntities()) {
+      if (
+        previewContent.type === 'component' ||
+        !SUPPORTED_CHAT_ATTACHMENT_BLOCKS.includes(previewContent.type)
+      ) {
+        continue;
+      }
+
+      const key = `${previewContent.type}:${previewContent.id}`;
+      if (uniqueSplits.has(key)) continue;
+
+      if (previewContent.type === 'email') {
+        const emailItem = emailList.find(
+          (email) => email.id === previewContent.id
+        );
+        if (emailItem) {
+          uniqueSplits.set(key, {
+            split: previewContent,
+            item: null,
+            channel: null,
+            email: emailItem,
+          });
+        }
+        continue;
+      }
+
+      if (previewContent.type === 'channel') {
+        const channelItem =
+          channelList.find((channel) => channel.id === previewContent.id) ||
+          null;
+        uniqueSplits.set(key, {
+          split: previewContent,
+          item: null,
+          channel: channelItem,
+          email: null,
+        });
+        continue;
+      }
+
+      const historyItem =
+        historyItems.find((item) => item.id === previewContent.id) || null;
+      if (historyItem) {
+        uniqueSplits.set(key, {
+          split: previewContent,
+          item: historyItem,
+          channel: null,
+          email: null,
+        });
+      }
+    }
+
     return Array.from(uniqueSplits.values());
   });
 
   const emailTabs = createMemo(() => {
+    const result: { content: SplitContent }[] = [];
     const splitManager = globalSplitManager();
-    if (!splitManager) return [];
-    return splitManager
-      .splits()
-      .filter((split) => split.content.type === 'email');
+    if (splitManager) {
+      result.push(
+        ...splitManager
+          .splits()
+          .filter((split) => split.content.type === 'email')
+      );
+    }
+    // Include previewed emails
+    for (const [, previewContent] of globalPreviewEntities()) {
+      if (previewContent.type === 'email') {
+        result.push({ content: previewContent });
+      }
+    }
+    return result;
   });
 
   const emailQuery = useQuery(() => ({

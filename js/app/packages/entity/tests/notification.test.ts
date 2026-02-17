@@ -15,36 +15,36 @@ describe('notification utils', () => {
       expect(filterValidNotifications(undefined)).toEqual([]);
     });
 
-    it('filters out channel_message_document notifications', () => {
+    it('keeps all notifications with defined notificationEventType', () => {
       const notifications: Notification[] = [
         {
           id: '1',
-          notificationEventType: 'channel_mention',
+          notification_event_type: 'channel_mention',
         } as Notification,
         {
           id: '2',
-          notificationEventType: 'channel_message_document',
+          notification_event_type: 'channel_message_send',
         } as Notification,
         {
           id: '3',
-          notificationEventType: 'channel_message_send',
+          notification_event_type: 'new_email',
         } as Notification,
       ];
 
       const result = filterValidNotifications(notifications);
-      expect(result).toHaveLength(2);
-      expect(result.map((n) => n.id)).toEqual(['1', '3']);
+      expect(result).toHaveLength(3);
+      expect(result.map((n) => n.id)).toEqual(['1', '2', '3']);
     });
 
     it('filters out notifications with undefined type', () => {
       const notifications = [
         {
           id: '1',
-          notificationEventType: 'channel_mention',
+          notification_event_type: 'channel_mention',
         } as Notification,
         {
           id: '2',
-          notificationEventType: undefined,
+          notification_event_type: undefined,
         } as any,
       ];
 
@@ -57,14 +57,17 @@ describe('notification utils', () => {
       const notifications: Notification[] = [
         {
           id: '1',
-          notificationEventType: 'channel_mention',
+          notification_event_type: 'channel_mention',
         } as Notification,
         {
           id: '2',
-          notificationEventType: 'document_mention',
+          notification_event_type: 'document_mention',
         } as Notification,
-        { id: '3', notificationEventType: 'item_shared_user' } as Notification,
-        { id: '4', notificationEventType: 'new_email' } as Notification,
+        {
+          id: '3',
+          notification_event_type: 'item_shared_user',
+        } as Notification,
+        { id: '4', notification_event_type: 'new_email' } as Notification,
       ];
 
       const result = filterValidNotifications(notifications);
@@ -101,17 +104,11 @@ describe('notification utils', () => {
   });
 
   describe('extractNotificationSenderIds', () => {
-    it('extracts sender IDs from notification metadata', () => {
+    it('extracts sender IDs from notifications', () => {
       const notifications = [
-        {
-          notificationMetadata: { senderId: 'user1' },
-        },
-        {
-          notificationMetadata: { senderId: 'user2' },
-        },
-        {
-          notificationMetadata: { senderId: 'user3' },
-        },
+        { sender_id: 'user1' },
+        { sender_id: 'user2' },
+        { sender_id: 'user3' },
       ] as any[];
 
       const result = extractNotificationSenderIds(notifications);
@@ -120,10 +117,10 @@ describe('notification utils', () => {
 
     it('limits results to maxCount', () => {
       const notifications = [
-        { notificationMetadata: { senderId: 'user1' } },
-        { notificationMetadata: { senderId: 'user2' } },
-        { notificationMetadata: { senderId: 'user3' } },
-        { notificationMetadata: { senderId: 'user4' } },
+        { sender_id: 'user1' },
+        { sender_id: 'user2' },
+        { sender_id: 'user3' },
+        { sender_id: 'user4' },
       ] as any[];
 
       const result = extractNotificationSenderIds(notifications, 2);
@@ -133,10 +130,10 @@ describe('notification utils', () => {
 
     it('defaults to maxCount of 3', () => {
       const notifications = [
-        { notificationMetadata: { senderId: 'user1' } },
-        { notificationMetadata: { senderId: 'user2' } },
-        { notificationMetadata: { senderId: 'user3' } },
-        { notificationMetadata: { senderId: 'user4' } },
+        { sender_id: 'user1' },
+        { sender_id: 'user2' },
+        { sender_id: 'user3' },
+        { sender_id: 'user4' },
       ] as any[];
 
       const result = extractNotificationSenderIds(notifications);
@@ -145,9 +142,9 @@ describe('notification utils', () => {
 
     it('deduplicates sender IDs', () => {
       const notifications = [
-        { notificationMetadata: { senderId: 'user1' } },
-        { notificationMetadata: { senderId: 'user2' } },
-        { notificationMetadata: { senderId: 'user1' } },
+        { sender_id: 'user1' },
+        { sender_id: 'user2' },
+        { sender_id: 'user1' },
       ] as any[];
 
       const result = extractNotificationSenderIds(notifications);
@@ -156,9 +153,9 @@ describe('notification utils', () => {
 
     it('skips notifications without senderId', () => {
       const notifications = [
-        { notificationMetadata: { senderId: 'user1' } },
-        { notificationMetadata: {} },
-        { notificationMetadata: { senderId: 'user2' } },
+        { sender_id: 'user1' },
+        {},
+        { sender_id: 'user2' },
       ] as any[];
 
       const result = extractNotificationSenderIds(notifications);
@@ -167,9 +164,9 @@ describe('notification utils', () => {
 
     it('skips notifications with empty senderId', () => {
       const notifications = [
-        { notificationMetadata: { senderId: 'user1' } },
-        { notificationMetadata: { senderId: '' } },
-        { notificationMetadata: { senderId: 'user2' } },
+        { sender_id: 'user1' },
+        { sender_id: '' },
+        { sender_id: 'user2' },
       ] as any[];
 
       const result = extractNotificationSenderIds(notifications);
@@ -178,9 +175,9 @@ describe('notification utils', () => {
 
     it('reverses result when reverse is true', () => {
       const notifications = [
-        { notificationMetadata: { senderId: 'user1' } },
-        { notificationMetadata: { senderId: 'user2' } },
-        { notificationMetadata: { senderId: 'user3' } },
+        { sender_id: 'user1' },
+        { sender_id: 'user2' },
+        { sender_id: 'user3' },
       ] as any[];
 
       const result = extractNotificationSenderIds(notifications, 3, true);
@@ -191,95 +188,74 @@ describe('notification utils', () => {
   describe('getNotificationActionText', () => {
     it('returns correct action text for channel_mention', () => {
       const notification = {
-        notificationEventType: 'channel_mention',
+        notification_metadata: { tag: 'channel_mention' },
       } as Notification;
       expect(getNotificationActionText(notification)).toBe('mentioned');
     });
 
     it('returns correct action text for channel_message_send', () => {
       const notification = {
-        notificationEventType: 'channel_message_send',
+        notification_metadata: { tag: 'channel_message_send' },
       } as Notification;
       expect(getNotificationActionText(notification)).toBe('sent');
     });
 
     it('returns correct action text for channel_message_reply', () => {
       const notification = {
-        notificationEventType: 'channel_message_reply',
+        notification_metadata: { tag: 'channel_message_reply' },
       } as Notification;
       expect(getNotificationActionText(notification)).toBe('replied');
     });
 
     it('returns correct action text for document_mention', () => {
       const notification = {
-        notificationEventType: 'document_mention',
+        notification_metadata: { tag: 'document_mention' },
       } as Notification;
       expect(getNotificationActionText(notification)).toBe('mentioned');
     });
 
-    it('returns correct action text for item_shared_user', () => {
+    it('returns correct action text for mentioned_in_document_comment', () => {
       const notification = {
-        notificationEventType: 'item_shared_user',
+        notification_metadata: { tag: 'mentioned_in_document_comment' },
       } as Notification;
-      expect(getNotificationActionText(notification)).toBe('shared');
-    });
-
-    it('returns correct action text for item_shared_organization', () => {
-      const notification = {
-        notificationEventType: 'item_shared_organization',
-      } as Notification;
-      expect(getNotificationActionText(notification)).toBe('shared');
+      expect(getNotificationActionText(notification)).toBe('mentioned');
     });
 
     it('returns correct action text for channel_invite', () => {
       const notification = {
-        notificationEventType: 'channel_invite',
+        notification_metadata: { tag: 'channel_invite' },
       } as Notification;
       expect(getNotificationActionText(notification)).toBe('invited');
     });
 
     it('returns correct action text for new_email', () => {
       const notification = {
-        notificationEventType: 'new_email',
+        notification_metadata: { tag: 'new_email' },
       } as Notification;
       expect(getNotificationActionText(notification)).toBe('emailed');
     });
 
     it('returns correct action text for invite_to_team', () => {
       const notification = {
-        notificationEventType: 'invite_to_team',
+        notification_metadata: { tag: 'invite_to_team' },
       } as Notification;
       expect(getNotificationActionText(notification)).toBe('invited');
     });
 
-    it('returns correct action text for reject_team_invite', () => {
-      const notification = {
-        notificationEventType: 'reject_team_invite',
-      } as Notification;
-      expect(getNotificationActionText(notification)).toBe('declined');
-    });
-
     it('returns correct action text for task_assigned', () => {
       const notification = {
-        notificationEventType: 'task_assigned',
+        notification_metadata: { tag: 'task_assigned' },
       } as Notification;
       expect(getNotificationActionText(notification)).toBe('assigned');
-    });
-
-    it('returns correct action text for channel_message_document', () => {
-      const notification = {
-        notificationEventType: 'channel_message_document',
-      } as Notification;
-      expect(getNotificationActionText(notification)).toBe('notified');
     });
   });
 
   describe('extractMessageContent', () => {
     it('extracts messageContent for channel_mention', () => {
       const notification = {
-        notificationEventType: 'channel_mention',
-        notificationMetadata: {
-          messageContent: 'Hey @user, check this out',
+        notification_metadata: {
+          tag: 'channel_mention',
+          content: { messageContent: 'Hey @user, check this out' },
         },
       } as any;
 
@@ -290,9 +266,9 @@ describe('notification utils', () => {
 
     it('extracts messageContent for channel_message_send', () => {
       const notification = {
-        notificationEventType: 'channel_message_send',
-        notificationMetadata: {
-          messageContent: 'Hello everyone',
+        notification_metadata: {
+          tag: 'channel_message_send',
+          content: { messageContent: 'Hello everyone' },
         },
       } as any;
 
@@ -301,9 +277,9 @@ describe('notification utils', () => {
 
     it('extracts messageContent for channel_message_reply', () => {
       const notification = {
-        notificationEventType: 'channel_message_reply',
-        notificationMetadata: {
-          messageContent: 'Great point!',
+        notification_metadata: {
+          tag: 'channel_message_reply',
+          content: { messageContent: 'Great point!' },
         },
       } as any;
 
@@ -312,52 +288,65 @@ describe('notification utils', () => {
 
     it('extracts documentName for document_mention', () => {
       const notification = {
-        notificationEventType: 'document_mention',
-        notificationMetadata: {
-          documentName: 'Project Plan.doc',
+        notification_metadata: {
+          tag: 'document_mention',
+          content: { documentName: 'Project Plan.doc' },
         },
       } as any;
 
       expect(extractMessageContent(notification)).toBe('Project Plan.doc');
     });
 
-    it('extracts itemName for item_shared_user', () => {
+    it('extracts text for mentioned_in_document_comment', () => {
       const notification = {
-        notificationEventType: 'item_shared_user',
-        notificationMetadata: {
-          itemName: 'Shared Folder',
+        notification_metadata: {
+          tag: 'mentioned_in_document_comment',
+          content: { text: 'Check this comment' },
         },
       } as any;
 
-      expect(extractMessageContent(notification)).toBe('Shared Folder');
-    });
-
-    it('extracts itemName for item_shared_organization', () => {
-      const notification = {
-        notificationEventType: 'item_shared_organization',
-        notificationMetadata: {
-          itemName: 'Company Docs',
-        },
-      } as any;
-
-      expect(extractMessageContent(notification)).toBe('Company Docs');
+      expect(extractMessageContent(notification)).toBe('Check this comment');
     });
 
     it('extracts subject for new_email', () => {
       const notification = {
-        notificationEventType: 'new_email',
-        notificationMetadata: {
-          subject: 'Important Update',
+        notification_metadata: {
+          tag: 'new_email',
+          content: { subject: 'Important Update' },
         },
       } as any;
 
       expect(extractMessageContent(notification)).toBe('Important Update');
     });
 
-    it('returns empty string for unsupported notification type', () => {
+    it('extracts taskName for task_assigned', () => {
       const notification = {
-        notificationEventType: 'channel_invite',
-        notificationMetadata: {},
+        notification_metadata: {
+          tag: 'task_assigned',
+          content: { taskName: 'Review PR' },
+        },
+      } as any;
+
+      expect(extractMessageContent(notification)).toBe('Review PR');
+    });
+
+    it('returns empty string for channel_invite', () => {
+      const notification = {
+        notification_metadata: {
+          tag: 'channel_invite',
+          content: {},
+        },
+      } as any;
+
+      expect(extractMessageContent(notification)).toBe('');
+    });
+
+    it('returns empty string for invite_to_team', () => {
+      const notification = {
+        notification_metadata: {
+          tag: 'invite_to_team',
+          content: {},
+        },
       } as any;
 
       expect(extractMessageContent(notification)).toBe('');
@@ -365,8 +354,10 @@ describe('notification utils', () => {
 
     it('returns empty string when content is missing', () => {
       const notification = {
-        notificationEventType: 'channel_mention',
-        notificationMetadata: {},
+        notification_metadata: {
+          tag: 'channel_mention',
+          content: {},
+        },
       } as any;
 
       expect(extractMessageContent(notification)).toBe('');
@@ -377,7 +368,7 @@ describe('notification utils', () => {
     describe('single notification', () => {
       it('returns true for unviewed notification', () => {
         const notification = {
-          viewedAt: null,
+          viewed_at: null,
           done: false,
         } as Notification;
 
@@ -386,7 +377,7 @@ describe('notification utils', () => {
 
       it('returns false for viewed notification', () => {
         const notification = {
-          viewedAt: 1234567890,
+          viewed_at: new Date(1234567890).toISOString(),
           done: false,
         } as Notification;
 
@@ -395,7 +386,7 @@ describe('notification utils', () => {
 
       it('returns false for done notification', () => {
         const notification = {
-          viewedAt: null,
+          viewed_at: null,
           done: true,
         } as Notification;
 
@@ -404,7 +395,7 @@ describe('notification utils', () => {
 
       it('returns false for viewed and done notification', () => {
         const notification = {
-          viewedAt: 1234567890,
+          viewed_at: new Date(1234567890).toISOString(),
           done: true,
         } as Notification;
 
@@ -416,9 +407,15 @@ describe('notification utils', () => {
       it('returns true if any notification in stack is unread', () => {
         const stack = {
           notifications: [
-            { viewedAt: 1234567890, done: false } as Notification,
-            { viewedAt: null, done: false } as Notification,
-            { viewedAt: 1234567890, done: false } as Notification,
+            {
+              viewed_at: new Date(1234567890).toISOString(),
+              done: false,
+            } as Notification,
+            { viewed_at: null, done: false } as Notification,
+            {
+              viewed_at: new Date(1234567890).toISOString(),
+              done: false,
+            } as Notification,
           ],
         } as any;
 
@@ -428,8 +425,14 @@ describe('notification utils', () => {
       it('returns false if all notifications are viewed', () => {
         const stack = {
           notifications: [
-            { viewedAt: 1234567890, done: false } as Notification,
-            { viewedAt: 1234567890, done: false } as Notification,
+            {
+              viewed_at: new Date(1234567890).toISOString(),
+              done: false,
+            } as Notification,
+            {
+              viewed_at: new Date(1234567890).toISOString(),
+              done: false,
+            } as Notification,
           ],
         } as any;
 
@@ -439,8 +442,8 @@ describe('notification utils', () => {
       it('returns false if all notifications are done', () => {
         const stack = {
           notifications: [
-            { viewedAt: null, done: true } as Notification,
-            { viewedAt: null, done: true } as Notification,
+            { viewed_at: null, done: true } as Notification,
+            { viewed_at: null, done: true } as Notification,
           ],
         } as any;
 

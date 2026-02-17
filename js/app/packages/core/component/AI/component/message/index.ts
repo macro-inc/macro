@@ -1,1 +1,1 @@
-export { useChatMessages } from './ChatMessages';
+export { ChatMessages, type ChatMessagesProps } from './ChatMessages';

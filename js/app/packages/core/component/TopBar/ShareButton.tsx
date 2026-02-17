@@ -533,6 +533,8 @@ export function ShareModal(props: ShareModalProps) {
                 onSubmit={() => props.setIsSharePermOpen(false)}
                 refetch={refetch}
                 name={props.name}
+                hideAccessLevelSelector={props.itemType === 'email'}
+                initialAccessLevel={props.itemType === 'email' ? 'view' : null}
               />
 
               <Show when={(recipients()?.length ?? 0) > 0}>

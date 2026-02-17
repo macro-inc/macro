@@ -28,7 +28,7 @@ export function NotificationsModal(props: NotificationsModalProps) {
   );
 
   const unreadCount = createMemo(() => {
-    return notifications().filter((n) => !n.viewedAt).length;
+    return notifications().filter((n) => !n.viewed_at).length;
   });
 
   const title = () => {

@@ -4,7 +4,7 @@ import type { Attachment, Attachments } from '@core/component/AI/types';
 import { asFileType } from '@core/component/AI/util';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import type { EntityDragData, EntityDragEvent } from '@macro-entity';
+import type { EntityDragData, EntityDragEvent } from '@entity';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import type { AttachmentType } from '@service-cognition/generated/schemas';
 import { type Accessor, createMemo } from 'solid-js';
@@ -14,7 +14,7 @@ import { type Accessor, createMemo } from 'solid-js';
  * Creates a droppable zone and handles converting dropped entities to attachments.
  *
  * @param droppableId - Unique ID for the droppable zone
- * @param attachments - The attachments object from useChatInput
+ * @param attachments - The attachments object from ChatContext
  * @returns Object with droppable directive and isDraggingOver signal
  */
 export function useEntityDropAttachment(

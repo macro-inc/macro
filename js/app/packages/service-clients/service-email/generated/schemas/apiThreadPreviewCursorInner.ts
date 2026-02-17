@@ -13,7 +13,7 @@ import type { ApiThreadPreviewCursorInnerSnippet } from './apiThreadPreviewCurso
 import type { ApiThreadPreviewCursorInnerViewedAt } from './apiThreadPreviewCursorInnerViewedAt';
 
 export interface ApiThreadPreviewCursorInner {
-  createdAt: number;
+  createdAt: string;
   id: string;
   inboxVisible: boolean;
   isDraft: boolean;
@@ -26,7 +26,7 @@ export interface ApiThreadPreviewCursorInner {
   senderName?: ApiThreadPreviewCursorInnerSenderName;
   senderPhotoUrl?: ApiThreadPreviewCursorInnerSenderPhotoUrl;
   snippet?: ApiThreadPreviewCursorInnerSnippet;
-  sortTs: number;
-  updatedAt: number;
-  viewedAt: ApiThreadPreviewCursorInnerViewedAt;
+  sortTs: string;
+  updatedAt: string;
+  viewedAt?: ApiThreadPreviewCursorInnerViewedAt;
 }

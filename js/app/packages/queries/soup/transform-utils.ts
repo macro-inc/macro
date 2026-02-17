@@ -20,7 +20,7 @@ import type {
   ProjectEntity,
   EmailEntity,
   ChannelEntity,
-} from '@macro-entity';
+} from '@entity';
 import { useHistoryQuery } from '@queries/history/history';
 import type { ChannelType } from '@service-comms/generated/models';
 import type {
@@ -212,16 +212,6 @@ export const useSearchResponseItemMapper = () => {
         };
       }
       case 'email': {
-        const messageHits = result.email_message_search_results.filter(
-          (m) => m.message_id
-        );
-        // NOTE: guaranteed to be empty or singleton array
-        const threadHits = result.email_message_search_results.filter(
-          (m) => !m.message_id
-        );
-
-        const singleMessage = messageHits.length === 1;
-
         const search = getSearchData({
           results: result.email_message_search_results,
           type: 'email',
@@ -229,39 +219,24 @@ export const useSearchResponseItemMapper = () => {
 
         const name = result.name ?? blockNameToDefaultFile('email');
 
-        // TODO: display sender for each message in the content hit list
-        const combinedSenders =
-          [...new Set(messageHits.map((m) => m.pretty_sender))].join(', ') ||
-          threadHits.at(0)?.pretty_sender;
-
-        // TODO: we probably want to get the actual latest message info on the full thread
-        const messagesSentAt = messageHits
-          .map((m) => m.sent_at)
-          .filter((m) => m != null);
-        const latestMessageSentAt =
-          messagesSentAt.length > 0 ? Math.max(...messagesSentAt) : null;
+        const participants = result.participants?.map((p) => ({
+          email: p.email,
+          name: p.name ?? undefined,
+        }));
 
         return {
           type: 'email',
           id: result.thread_id,
           name,
           ownerId: result.owner_id,
-          createdAt: latestMessageSentAt ?? result.created_at,
-          updatedAt: latestMessageSentAt ?? result.updated_at,
-          viewedAt: result.viewed_at ?? undefined,
-          isRead: singleMessage
-            ? !messageHits[0].labels.includes('UNREAD')
-            : false,
-          isImportant: singleMessage
-            ? messageHits[0].labels.includes('IMPORTANT')
-            : false,
-          isDraft: singleMessage
-            ? messageHits[0].labels.includes('DRAFT')
-            : false,
-          done: singleMessage
-            ? !messageHits[0].labels.includes('INBOX')
-            : false,
-          senderName: combinedSenders,
+          createdAt: result.created_at,
+          updatedAt: result.updated_at,
+          viewedAt: result.viewed_at,
+          isRead: result.is_read,
+          isImportant: result.is_important,
+          isDraft: result.is_draft,
+          done: !result.inbox_visible,
+          participants,
           search,
         };
       }
@@ -308,7 +283,7 @@ export const useSearchResponseItemMapper = () => {
           createdAt: result.metadata?.created_at,
           updatedAt: result.metadata?.updated_at,
           channelType: result.channel_type as ChannelType,
-          interactedAt: result.metadata?.interacted_at ?? undefined,
+          interactedAt: result.metadata?.interacted_at,
           participantIds: channelWithLatest?.participants?.map(
             (p) => p.user_id
           ),
@@ -385,10 +360,12 @@ export const mapSoupPageToEntityList: (
         if (item.tag === 'chat') {
           return {
             ...item.data,
+            createdAt: item.data.createdAt,
+            updatedAt: item.data.updatedAt,
             type: item.tag,
             name: item.data.name || 'New Chat',
             frecencyScore: item.frecency_score,
-            viewedAt: item.data.viewedAt ?? undefined,
+            viewedAt: item.data.viewedAt,
             projectId: item.data.projectId ?? undefined,
           };
         }
@@ -400,7 +377,7 @@ export const mapSoupPageToEntityList: (
             id: item.data.id,
             ownerId: item.data.ownerId,
             frecencyScore: item.frecency_score,
-            viewedAt: item.data.viewedAt ?? undefined,
+            viewedAt: item.data.viewedAt,
             projectId: item.data.parentId ?? undefined,
             type: item.tag,
             name: item.data.name || 'New Project',
@@ -415,6 +392,8 @@ export const mapSoupPageToEntityList: (
 
           return {
             ...item.data,
+            createdAt: item.data.createdAt,
+            updatedAt: item.data.updatedAt,
             senderEmail: item.data.senderEmail ?? undefined,
             senderName: item.data.senderName ?? undefined,
             snippet: item.data.snippet ?? undefined,
@@ -422,7 +401,7 @@ export const mapSoupPageToEntityList: (
             type: 'email',
             name: item.data.name || 'Email Thread',
             frecencyScore: item.frecency_score,
-            viewedAt: item.data.viewedAt ?? undefined,
+            viewedAt: item.data.viewedAt,
             participants,
           };
         }
@@ -435,21 +414,15 @@ export const mapSoupPageToEntityList: (
             channelType: item.data.channel.channel_type,
             ownerId: item.data.channel.owner_id,
             frecencyScore: item.frecency_score ?? 0,
-            updatedAt: Date.parse(item.data.channel.updated_at),
-            createdAt: Date.parse(item.data.channel.created_at),
+            updatedAt: item.data.channel.updated_at,
+            createdAt: item.data.channel.created_at,
             participantIds: item.data.participants.map((p) => p.user_id),
-            viewedAt: item.data.viewed_at
-              ? Date.parse(item.data.viewed_at)
-              : item.data.interacted_at
-                ? Date.parse(item.data.interacted_at)
-                : undefined,
+            viewedAt: item.data.viewed_at ?? item.data.interacted_at,
             latestMessage: item.data.latest_non_thread_message
               ? {
                   content: item.data.latest_non_thread_message.content,
                   senderId: item.data.latest_non_thread_message.sender_id,
-                  createdAt: Date.parse(
-                    item.data.latest_non_thread_message.created_at
-                  ),
+                  createdAt: item.data.latest_non_thread_message.created_at,
                 }
               : undefined,
           };
@@ -458,9 +431,11 @@ export const mapSoupPageToEntityList: (
 
         return {
           ...item.data,
+          createdAt: item.data.createdAt,
+          updatedAt: item.data.updatedAt,
           type: item.tag,
           frecencyScore: item.frecency_score,
-          viewedAt: item.data.viewedAt ?? undefined,
+          viewedAt: item.data.viewedAt,
           fileType: item.data.fileType ?? undefined,
           projectId: item.data.projectId ?? undefined,
           subType:

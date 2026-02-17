@@ -40,6 +40,16 @@ import type { PostTypingRequest } from './generated/models/postTypingRequest';
 import type { RemoveParticipantsRequest } from './generated/models/removeParticipantsRequest';
 import { ChannelType } from './generated/models/channelType';
 
+import type { ApiChannelMessagesPage } from '@service-storage/generated/schemas/apiChannelMessagesPage';
+import type { ApiChannelAttachmentsPage } from '@service-storage/generated/schemas/apiChannelAttachmentsPage';
+import type { ApiChannelParticipant } from '@service-storage/generated/schemas/apiChannelParticipant';
+
+export type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
+export type { ApiChannelMessagesPage as ChannelMessagesPage } from '@service-storage/generated/schemas/apiChannelMessagesPage';
+export type { ApiChannelAttachment } from '@service-storage/generated/schemas/apiChannelAttachment';
+export type { ApiChannelAttachmentsPage as ChannelAttachmentsPage } from '@service-storage/generated/schemas/apiChannelAttachmentsPage';
+export type { ApiChannelParticipant } from '@service-storage/generated/schemas/apiChannelParticipant';
+
 const commsHost: string = SERVER_HOSTS['document-storage-service'];
 
 export function commsFetch(
@@ -356,6 +366,46 @@ export const commsServiceClient = {
         {
           method: 'GET',
         }
+      ),
+      (result) => result
+    );
+  },
+  async getChannelMessages(
+    args: WithChannelId & { limit: number; cursor: string | null }
+  ) {
+    const { channel_id, limit, cursor } = args;
+    const params = new URLSearchParams();
+    params.append('limit', limit.toString());
+    if (cursor) params.append('cursor', cursor);
+    return mapOk(
+      await commsFetch<ApiChannelMessagesPage>(
+        `/channels/${channel_id}/messages?${params.toString()}`,
+        { method: 'GET' }
+      ),
+      (result) => result
+    );
+  },
+  async getChannelAttachments(
+    args: WithChannelId & { limit: number; cursor: string | null }
+  ) {
+    const { channel_id, limit, cursor } = args;
+    const params = new URLSearchParams();
+    params.append('limit', limit.toString());
+    if (cursor) params.append('cursor', cursor);
+    return mapOk(
+      await commsFetch<ApiChannelAttachmentsPage>(
+        `/channels/${channel_id}/attachments?${params.toString()}`,
+        { method: 'GET' }
+      ),
+      (result) => result
+    );
+  },
+  async getChannelParticipants(args: WithChannelId) {
+    const { channel_id } = args;
+    return mapOk(
+      await commsFetch<ApiChannelParticipant[]>(
+        `/channels/${channel_id}/participants`,
+        { method: 'GET' }
       ),
       (result) => result
     );

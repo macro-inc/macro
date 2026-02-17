@@ -2,19 +2,24 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { useIsAuthenticated } from '@core/auth';
 import { AiChatEmptyState } from '@core/component/AI/component/AIChatEmptyState';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
-import { useBuildChatSendRequest } from '@core/component/AI/component/input/buildRequest';
-import { useChatInput } from '@core/component/AI/component/input/useChatInput';
+import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
+import { useSendChatMessage } from '@core/component/AI/component/input/buildRequest';
+import { useChatMarkdownArea } from '@core/component/AI/component/input/useChatMarkdownArea';
 import { ChatMessages } from '@core/component/AI/component/message/ChatMessages';
+import {
+  ChatInputProvider,
+  ChatProvider,
+  useChatContext,
+  useChatInputContext,
+} from '@core/component/AI/context';
 import { useEntityDropAttachment } from '@core/component/AI/hook/useEntityDropAttachment';
 import { getPendingSend } from '@core/component/AI/signal/pendingSend';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
 import type {
   Attachment,
+  ChatMessageStream,
   ChatMessageWithAttachments,
-  CreateAndSend,
-  MessageStream,
   Model,
-  Send,
 } from '@core/component/AI/types';
 import { parseModel } from '@core/component/AI/util';
 import {
@@ -23,12 +28,13 @@ import {
 } from '@core/component/AI/util/storage';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
+import { Hotkey } from '@core/component/Hotkey';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { ReferencesModal } from '@core/component/ReferencesModal';
-import { ShareButton } from '@core/component/TopBar/ShareButton';
-import { getPermissions } from '@core/component/SharePermissions';
-import type { Permissions } from '@core/component/SharePermissions';
 import { Resize } from '@core/component/Resize';
+import type { Permissions } from '@core/component/SharePermissions';
+import { getPermissions } from '@core/component/SharePermissions';
+import { ShareButton } from '@core/component/TopBar/ShareButton';
 import { ENABLE_REFERENCES_MODAL } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { settingsOpen } from '@core/constant/SettingsState';
@@ -50,11 +56,14 @@ import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { invalidateUserQuota } from '@queries/auth';
-import {
-  cognitionApiServiceClient,
-  cognitionWebsocketServiceClient,
-} from '@service-cognition/client';
 import { refetchHistory, useHistoryQuery } from '@queries/history/history';
+import { cognitionApiServiceClient } from '@service-cognition/client';
+import { AccessLevel } from '@service-cognition/generated/schemas/accessLevel';
+import { connectionGatewayClient } from '@service-connection/client';
+import { state as connectionState } from '@service-connection/websocket';
+import { Button } from '@ui/components/Button';
+import { WebsocketConnectionState } from '@websocket';
+import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
 import type { LexicalEditor } from 'lexical';
 import {
@@ -63,6 +72,7 @@ import {
   createMemo,
   createSignal,
   For,
+  type JSXElement,
   on,
   onCleanup,
   type Setter,
@@ -70,11 +80,8 @@ import {
   Suspense,
   untrack,
 } from 'solid-js';
+import { useWaitChatRename } from '@macro-entity';
 import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
-import { Button } from '@ui/components/Button';
-import { Hotkey } from '@core/component/Hotkey';
-import { AccessLevel } from '@service-cognition/generated/schemas/accessLevel';
-import { useWaitChatRename } from '../../../macro-entity/src/queries/rename';
 
 type ChatData = {
   messages: ChatMessageWithAttachments[];
@@ -271,82 +278,103 @@ function TopBar(props: {
   );
 }
 
-export function Rightbar(props: {
-  chatId: string | undefined;
-  chatName: string | undefined;
-  stream: Accessor<MessageStream | undefined>;
-  onSend: (args: CreateAndSend | Send) => void;
-  stopGenerating: () => void;
-  onUnmount?: () => void;
-  messages: Accessor<ChatMessageWithAttachments[]>;
-  initialState?: {
-    model: Model | undefined;
-    attachments: Attachment[];
-    text: string | undefined;
-  };
-  userPermissions: Accessor<Permissions>;
-  setState: {
-    setChatId: (chatId: string | undefined) => void;
-    setModel: Setter<Model | undefined>;
-    setAttachments: Setter<Attachment[]>;
-    setText: Setter<string | undefined>;
-    setMessages: Setter<ChatMessageWithAttachments[]>;
-    setStream: Setter<MessageStream | undefined>;
-  };
-  isBig?: boolean;
-  setIsBig?: (val: boolean) => void;
-}) {
+/** Renders messages + stream effects. Only mounted inside ChatProvider. */
+function RightbarChatArea(props: { isBig?: boolean }) {
+  const chat = useChatContext();
+  const input = useChatInputContext();
   const [messagesContainerRef, setMessagesContainerRef] =
     createSignal<HTMLElement>();
 
   createEffect(() => {
-    const stream_ = props.stream();
+    const stream_ = chat.stream();
     if (stream_ && stream_.data().length > 0) {
       invalidateUserQuota();
     }
   });
 
   createEffect(() => {
-    const stream_ = props.stream();
+    const stream_ = chat.stream();
     if (!stream_ || stream_.isDone()) {
-      setIsGenerating(false);
+      input.setIsGenerating(false);
       if (stream_?.isDone()) {
         invalidateUserQuota();
       }
       return;
     } else {
-      setIsGenerating(true);
+      input.setIsGenerating(true);
     }
   });
 
-  registerToolHandler(props.stream);
+  registerToolHandler(() => {
+    const s = chat.stream();
+    if (!s) return undefined;
+    return { data: s.data };
+  });
 
-  const stopGenerating = props.stopGenerating;
+  return (
+    <>
+      <Show when={chat.messages().length === 0}>
+        <div class="h-full flex flex-col items-center justify-center">
+          <AiChatEmptyState />
+        </div>
+      </Show>
+      <Show when={chat.messages().length > 0 || !props.isBig}>
+        <div class="relative flex-1 min-h-0 w-full">
+          <div
+            data-chat-scroll
+            class="size-full overflow-y-auto overflow-x-hidden scroll-smooth flex justify-center scrollbar-hidden"
+            ref={setMessagesContainerRef}
+          >
+            <div class="w-full macro-message-width macro-message-padding">
+              <ChatMessages messageActions={undefined} />
+            </div>
+          </div>
+          <CustomScrollbar scrollContainer={messagesContainerRef} />
+        </div>
+      </Show>
+    </>
+  );
+}
+
+export function Rightbar(props: {
+  chatId: string | undefined;
+  onSend: (args: ChatSendInput) => void;
+  chatName: string | undefined;
+  isBig?: boolean;
+  userPermissions: Accessor<Permissions>;
+  onUnmount?: () => void;
+  initialState?: {
+    model: Model | undefined;
+    attachments: Attachment[];
+    text: string | undefined;
+  };
+  setState: {
+    setChatId: (chatId: string | undefined) => void;
+    setModel: Setter<Model | undefined>;
+    setAttachments: Setter<Attachment[]>;
+    setText: Setter<string | undefined>;
+  };
+  children?: JSXElement;
+}) {
+  const input = useChatInputContext();
 
   // NOTE: due to mount race condition in the markdown area, we need to set the initial value here
-  const {
-    ChatInput,
-    setChatId,
-    attachments,
-    chatMarkdownArea,
-    model,
-    setModel,
-    setIsGenerating,
-    uploadQueue,
-  } = useChatInput({ initialValue: props.initialState?.text });
+  const chatMarkdownArea = useChatMarkdownArea({
+    initialValue: props.initialState?.text,
+    addAttachment: (a) => input.attachments.addAttachment(a),
+  });
 
   // Entity drag-and-drop support
   const { droppable, isDraggingOver } = useEntityDropAttachment(
     'rightbar-chat-input',
-    attachments
+    input.attachments
   );
   false && droppable;
 
   createEffect(() => {
-    setChatId(props.chatId);
     if (!props.initialState) return;
-    setModel(props.initialState.model);
-    attachments.setAttached(props.initialState.attachments);
+    input.setModel(props.initialState.model);
+    input.attachments.setAttached(props.initialState.attachments);
   });
 
   onCleanup(() => {
@@ -354,10 +382,10 @@ export function Rightbar(props: {
   });
 
   createEffect(() => {
-    const input = chatMarkdownArea.markdownText();
-    const attached = attachments.attached();
-    const model_ = model();
-    props.setState.setText(input);
+    const inputText = chatMarkdownArea.markdownText();
+    const attached = input.attachments.attached();
+    const model_ = input.model();
+    props.setState.setText(inputText);
     props.setState.setAttachments(attached);
     props.setState.setModel(model_);
   });
@@ -414,7 +442,6 @@ export function Rightbar(props: {
   return (
     <DragDropWrapper
       class="relative flex flex-col size-full select-none"
-      uploadQueue={uploadQueue}
       isEntityDraggingOver={isDraggingOver}
     >
       <div class="overflow-hidden size-full flex flex-col items-center relative">
@@ -426,38 +453,16 @@ export function Rightbar(props: {
           userPermissions={props.userPermissions}
         />
         <div class="flex flex-col flex-1 min-h-0 p-2 w-full items-center">
-          <Show when={props.messages().length === 0}>
-            <div class="h-full flex flex-col items-center justify-center">
-              <AiChatEmptyState />
-            </div>
-          </Show>
-          <Show when={props.messages().length > 0 || !props.isBig}>
-            <div class="relative flex-1 min-h-0 w-full">
-              <div
-                data-chat-scroll
-                class="size-full overflow-y-auto overflow-x-hidden scroll-smooth flex justify-center scrollbar-hidden"
-                ref={setMessagesContainerRef}
-              >
-                <div class="w-full macro-message-width">
-                  <ChatMessages
-                    chatId={props.chatId}
-                    messages={[props.messages, props.setState.setMessages]}
-                    messageActions={undefined}
-                    stream={[props.stream, props.setState.setStream]}
-                  />
-                </div>
-              </div>
-              <CustomScrollbar scrollContainer={messagesContainerRef} />
-            </div>
-          </Show>
+          {props.children}
 
           <div class="w-full">
-            <div class="flex-shrink-0 pt-2 macro-message-width mx-auto">
+            <div class="flex-shrink-0 pt-2 macro-message-width macro-message-padding mx-auto">
               <ChatInput
+                markdown={chatMarkdownArea}
+                chatId={props.chatId}
                 isPersistent
                 showActiveTabs
                 onSend={props.onSend}
-                onStop={stopGenerating}
                 captureEditor={setEditor}
               />
             </div>
@@ -484,7 +489,8 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
   >();
   const [model, setModel] = createSignal<Model | undefined>();
   const [attachments, setAttachments] = createSignal<Attachment[]>([]);
-  const [stream, setStream] = createSignal<MessageStream>();
+  const [stream, setStream] = createSignal<ChatMessageStream>();
+  const [waitingForStream, setWaitingForStream] = createSignal(false);
   const [initialChatState, setInitialChatState] = createSignal<
     | {
         model: Model | undefined;
@@ -542,49 +548,46 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
   });
 
   const { showPaywall } = usePaywallState();
+  const sendChatMessage = useSendChatMessage();
 
-  const onSend = async (request: Send | CreateAndSend) => {
-    if (request.type === 'createAndSend') {
-      const response = await request.call();
-      if (response.type === 'error') {
-        // TODO: show error state
-        console.error('error creating chat', response);
-        if (response.paymentError) {
-          showPaywall();
-        }
-        return;
+  const onSend = async (request: ChatSendInput) => {
+    setMessages((p) => [
+      ...p,
+      {
+        id: crypto.randomUUID(),
+        content: request.content,
+        role: 'user' as const,
+        attachments: request.attachments ?? [],
+      },
+    ]);
+    setWaitingForStream(true);
+
+    const result = await sendChatMessage({
+      ...request,
+      chatId: chatId(),
+    });
+
+    setWaitingForStream(false);
+
+    if ('error' in result) {
+      if (result.paymentError) {
+        showPaywall();
       }
-      const newChatId = response.chat_id;
-      setNewChatId(newChatId);
-      setChatId(newChatId);
-      setUserAccessLevel(AccessLevel.owner);
-
-      refetchHistory();
-      useWaitChatRename(newChatId);
-      return await onSend(response);
-    } else if (request.type === 'send') {
-      setMessages((p) => {
-        return [
-          ...p,
-          {
-            attachments: request.request.attachments ?? [],
-            content: request.request.content,
-            role: 'user',
-            // TODO: no id because it's a user message that hasn't been uploaded yet
-            id: '',
-          },
-        ];
-      });
-
-      const stream = request.call();
-      setStream(stream);
-      invalidateUserQuota();
-    } else {
-      console.error('Invalid send request', request);
+      return;
     }
-  };
 
-  const buildChatSendRequest = useBuildChatSendRequest();
+    // If no chatId existed, a new chat was created
+    if (!chatId()) {
+      setNewChatId(result.chat_id);
+      setChatId(result.chat_id);
+      setUserAccessLevel(AccessLevel.owner);
+      refetchHistory();
+      useWaitChatRename(result.chat_id);
+    }
+
+    setStream(result.stream);
+    invalidateUserQuota();
+  };
 
   // Check for pending sends from SoupChatInput when bigchat opens
   createEffect(
@@ -592,15 +595,12 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
       if (isOpen && !wasOpen) {
         const pending = getPendingSend();
         if (pending) {
-          // Build and send the request
-          const request = await buildChatSendRequest({
-            chatId: chatId(),
-            userRequest: pending.content,
-            attachments: pending.attachments,
-            model: pending.model,
-            isPersistent: true,
+          onSend({
+            content: pending.content,
+            model: pending.model ?? model() ?? 'claude-haiku-4-5-20251001',
+            attachments: pending.attachments ?? [],
+            toolset: { type: 'all' },
           });
-          onSend(request);
         }
       }
     })
@@ -649,6 +649,28 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
     })
   );
 
+  // Track/untrack chat entity with connection gateway for stream delivery
+  createEffect(() => {
+    const id = chatId();
+    const connected = connectionState() === WebsocketConnectionState.Open;
+    if (id && connected) {
+      connectionGatewayClient.trackEntity({
+        entity_type: 'chat',
+        entity_id: id,
+        action: 'open',
+      });
+    }
+    onCleanup(() => {
+      if (id) {
+        connectionGatewayClient.trackEntity({
+          entity_type: 'chat',
+          entity_id: id,
+          action: 'close',
+        });
+      }
+    });
+  });
+
   const toggleRightPanel = useToggleRightPanel();
 
   registerHotkey({
@@ -675,27 +697,19 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
     description: 'Create a new chat',
     runWithInputFocused: true,
     keyDownHandler: () => {
-      console.log('create new chat');
       setChatId(undefined);
       return true;
     },
   });
 
-  const stopGenerating = () => {
-    const stream_ = stream();
-    if (!stream_) return false;
-    cognitionWebsocketServiceClient.stopChatMessage({
-      stream_id: stream_.request.stream_id,
-    });
-    stream_.close();
-    return true;
-  };
-
   registerHotkey({
     scopeId,
     hotkey: 'ctrl+c',
     description: 'Stop stream',
-    keyDownHandler: stopGenerating,
+    keyDownHandler: () => {
+      // TODO: implement stop for connection gateway streams
+      return true;
+    },
     runWithInputFocused: true,
   });
   return (
@@ -722,26 +736,48 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
             tr={!bigChatOpen() && !settingsOpen()}
           >
             <Suspense>
-              <Rightbar
-                chatId={chatId()}
-                chatName={chatName()}
-                messages={messages}
-                onUnmount={getChatInputState}
-                initialState={initialChatState()}
-                onSend={onSend}
-                stream={stream}
-                stopGenerating={stopGenerating}
-                userPermissions={userPermissions}
-                setState={{
-                  setChatId,
-                  setModel,
-                  setAttachments,
-                  setText,
-                  setMessages,
-                  setStream,
-                }}
-                isBig={bigChatOpen()}
-              />
+              <ChatInputProvider>
+                <Rightbar
+                  chatId={chatId()}
+                  chatName={chatName()}
+                  onUnmount={getChatInputState}
+                  initialState={initialChatState()}
+                  onSend={onSend}
+                  userPermissions={userPermissions}
+                  setState={{
+                    setChatId,
+                    setModel,
+                    setAttachments,
+                    setText,
+                  }}
+                  isBig={bigChatOpen()}
+                >
+                  <Show
+                    when={chatId()}
+                    fallback={
+                      <div class="h-full flex flex-col items-center justify-center">
+                        <AiChatEmptyState />
+                      </div>
+                    }
+                  >
+                    {(id) => (
+                      <ChatProvider
+                        chatId={id()}
+                        external={{
+                          messages: [messages, setMessages],
+                          stream: [stream, setStream],
+                          waitingForStream: [
+                            waitingForStream,
+                            setWaitingForStream,
+                          ],
+                        }}
+                      >
+                        <RightbarChatArea isBig={bigChatOpen()} />
+                      </ChatProvider>
+                    )}
+                  </Show>
+                </Rightbar>
+              </ChatInputProvider>
             </Suspense>
           </SplitlikeContainer>
         </div>

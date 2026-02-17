@@ -116,6 +116,7 @@ mod tests {
             body_text: None,
             attachments: vec![],
             attachments_draft: vec![],
+            attachments_forwarded: vec![],
             headers_json: None,
             created_at: Default::default(),
             labels: vec![],

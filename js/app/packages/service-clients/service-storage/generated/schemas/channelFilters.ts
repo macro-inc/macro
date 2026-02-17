@@ -13,6 +13,8 @@ import type { ChannelFiltersOrgId } from './channelFiltersOrgId';
 export interface ChannelFilters {
   /** Channel IDs to search within. Examples: ['general']. Empty to search all accessible channels. */
   channel_ids?: string[];
+  /** Channel types to filter by. Examples: ['public'], ['direct_message', 'private']. Empty to search all channel types. */
+  channel_types?: string[];
   /** Filter by channel importance. None to ignore, true to pass through (no clause), false to short-circuit and return nothing. */
   importance?: ChannelFiltersImportance;
   /** Channel user mentions to search for. Examples: ['@username']. Empty if not filtering by mentions. */

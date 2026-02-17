@@ -1,5 +1,7 @@
 use crate::api::{activity::post_activity, context::AppState};
 use axum::{Router, routing::post};
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 
 pub mod activity;
 pub mod attachments;
@@ -22,4 +24,5 @@ pub fn router(app_state: &AppState) -> Router<AppState> {
         .nest("/preview", preview::router())
         .nest("/attachments", attachments::router())
         .nest("/mentions", mentions::router())
+        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
 }

@@ -5,7 +5,7 @@ import { createCallback } from '@solid-primitives/rootless';
 import { createStore, type SetStoreFunction, type Store } from 'solid-js/store';
 
 // 60 seconds
-const EXPIRATION_THRESHOLD = 60;
+const EXPIRATION_THRESHOLD_SECONDS = 60;
 
 type Token = string;
 type TokenStore = Record<CompositeKey, Token>;
@@ -32,7 +32,7 @@ function isTokenExpired(token: string) {
   try {
     const payload = JSON.parse(atob(token.split('.')[1]));
     const currentTime = Math.floor(Date.now() / 1000);
-    return payload.exp < currentTime + EXPIRATION_THRESHOLD;
+    return payload.exp < currentTime + EXPIRATION_THRESHOLD_SECONDS;
   } catch (_error) {
     return true;
   }
