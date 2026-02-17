@@ -31,7 +31,7 @@ import { match } from 'ts-pattern';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 300;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
-const FEATURED_COUNT = 6;
+const FEATURED_COUNT = 3;
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
