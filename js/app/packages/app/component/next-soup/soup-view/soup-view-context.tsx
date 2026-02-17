@@ -186,7 +186,9 @@ export const SoupViewContextProvider: FlowComponent<
     }
   );
 
-  const entities = () => {
+  const FEATURED_COUNT = 6;
+
+  const baseEntities = () => {
     const filters = soup.filters.active();
     let transformed = items();
 
@@ -218,26 +220,60 @@ export const SoupViewContextProvider: FlowComponent<
       });
     }
 
-    if (ENABLE_FEATURED_SEARCH_RESULTS && search.isSearching()) {
-      const featured = search
-        .featuredResults()
-        .map((e) => (isWithNotification(e) ? e : attachNotifications(e)))
-        .filter((e) => filters.every((f) => f.predicate(e))) as SoupEntity[];
-      const featuredIds = new Set(featured.map((e) => e.id));
-      const rest = transformed.filter((e) => !featuredIds.has(e.id));
-      transformed = [...featured, ...rest];
-    }
-
     return transformed;
+  };
+
+  const frozenFeaturedIds = (() => {
+    const [frozen, setFrozen] = createSignal<string[]>([]);
+    createRenderEffect(
+      on(
+        () => [search.isSearching(), search.debouncedSearchForLocal()] as const,
+        ([searching, query]) => {
+          if (!searching || !query) {
+            setFrozen([]);
+            return;
+          }
+          const localIds = new Set(search.localFuzzyResults().map((e) => e.id));
+          const ids: string[] = [];
+          for (const e of baseEntities()) {
+            if (localIds.has(e.id)) {
+              ids.push(e.id);
+              if (ids.length >= FEATURED_COUNT) break;
+            }
+          }
+          setFrozen(ids);
+        }
+      )
+    );
+    return frozen;
+  })();
+
+  const entities = () => {
+    const base = baseEntities();
+    if (!ENABLE_FEATURED_SEARCH_RESULTS || !search.isSearching()) return base;
+
+    const featuredIdSet = new Set(frozenFeaturedIds());
+    if (featuredIdSet.size === 0) return base;
+
+    const featured: SoupEntity[] = [];
+    const rest: SoupEntity[] = [];
+    for (const e of base) {
+      if (featuredIdSet.has(e.id)) {
+        featured.push(e);
+      } else {
+        rest.push(e);
+      }
+    }
+    return [...featured, ...rest];
   };
 
   const featuredCount = createMemo(() => {
     if (!ENABLE_FEATURED_SEARCH_RESULTS) return 0;
     if (!search.isSearching()) return 0;
-    const featuredIds = new Set(search.featuredResults().map((e) => e.id));
+    const featuredIdSet = new Set(frozenFeaturedIds());
     let count = 0;
     for (const e of entities()) {
-      if (!featuredIds.has(e.id)) break;
+      if (!featuredIdSet.has(e.id)) break;
       count++;
     }
     return count;
