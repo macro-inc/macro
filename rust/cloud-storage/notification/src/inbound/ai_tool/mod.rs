@@ -4,13 +4,17 @@
 mod test;
 
 use crate::domain::{
-    models::request::{NotificationStatus, UpdateNotificationsRequest},
+    models::{
+        UserNotificationRow,
+        request::{NotificationStatus, UpdateNotificationsRequest},
+    },
     service::NotificationIngress,
 };
 use ai::tool::{
     AsyncTool, AsyncToolSet, RequestContext, ServiceContext, ToolCallError, ToolResult,
 };
 use async_trait::async_trait;
+use models_pagination::CreatedAt;
 use rootcause::compat::boxed_error::IntoBoxedError;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -46,10 +50,119 @@ where
     T: NotificationIngress,
 {
     AsyncToolSet::new()
+        .add_tool::<ListNotifications, NotificationToolContext<T>>()
+        .expect("failed to add ListNotifications tool")
         .add_tool::<MarkNotificationsSeen, NotificationToolContext<T>>()
         .expect("failed to add MarkNotificationsSeen tool")
         .add_tool::<MarkNotificationsDone, NotificationToolContext<T>>()
         .expect("failed to add MarkNotificationsDone tool")
+}
+
+/// List the current user's active notifications.
+#[derive(Debug, Deserialize, JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+#[schemars(
+    title = "ListNotifications",
+    description = "List the current user's active (not deleted, not done) notifications. Returns notifications ordered by most recent first. Use this to show the user their unread or pending notifications."
+)]
+pub struct ListNotifications {
+    /// Maximum number of notifications to return. Defaults to 20, max 50.
+    #[schemars(description = "Maximum number of notifications to return. Defaults to 20, max 50.")]
+    pub limit: Option<u32>,
+}
+
+/// A single notification item in the list response.
+#[derive(Debug, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct NotificationItem {
+    /// The notification ID.
+    pub id: Uuid,
+    /// The notification event type (e.g. "channel_mention").
+    pub event_type: String,
+    /// The type of entity this notification is about (e.g. "channel", "document").
+    pub entity_type: String,
+    /// The ID of the entity this notification is about.
+    pub entity_id: String,
+    /// Whether the notification has been seen.
+    pub seen: bool,
+    /// Whether the notification is marked as done.
+    pub done: bool,
+    /// When the notification was created (ISO 8601).
+    pub created_at: Option<String>,
+    /// The notification metadata/payload.
+    pub metadata: serde_json::Value,
+    /// The user ID of the sender, if any.
+    pub sender_id: Option<String>,
+}
+
+impl From<UserNotificationRow<serde_json::Value>> for NotificationItem {
+    fn from(row: UserNotificationRow<serde_json::Value>) -> Self {
+        Self {
+            id: row.notification_id,
+            event_type: row.notification_event_type,
+            entity_type: row.entity.entity_type.to_string(),
+            entity_id: row.entity.entity_id.into_owned(),
+            seen: row.viewed_at.is_some(),
+            done: row.done,
+            created_at: row.created_at.map(|t| t.to_rfc3339()),
+            metadata: row.notification_metadata,
+            sender_id: row.sender_id.map(|s| (*s).as_ref().to_owned()),
+        }
+    }
+}
+
+/// Response from listing notifications.
+#[derive(Debug, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ListNotificationsResponse {
+    /// The list of notifications.
+    pub notifications: Vec<NotificationItem>,
+    /// Whether there are more notifications available.
+    pub has_more: bool,
+}
+
+#[async_trait]
+impl<T> AsyncTool<NotificationToolContext<T>> for ListNotifications
+where
+    T: NotificationIngress,
+{
+    type Output = ListNotificationsResponse;
+
+    #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id, limit=?self.limit), err)]
+    async fn call(
+        &self,
+        service_context: ServiceContext<NotificationToolContext<T>>,
+        request_context: RequestContext,
+    ) -> ToolResult<Self::Output> {
+        let limit = self.limit.unwrap_or(20).min(50);
+
+        tracing::info!("Listing notifications");
+
+        let paginated = service_context
+            .service
+            .get_user_notifications::<serde_json::Value>(
+                (*request_context.user_id).as_ref(),
+                Some(limit),
+                models_pagination::Query::Sort(CreatedAt, ()),
+            )
+            .await
+            .map_err(|e| ToolCallError {
+                description: format!("Failed to list notifications: {e}"),
+                internal_error: anyhow::Error::from_boxed(e.into_boxed_error()),
+            })?;
+
+        let has_more = paginated.next_cursor.is_some();
+        let notifications = paginated
+            .items
+            .into_iter()
+            .map(NotificationItem::from)
+            .collect();
+
+        Ok(ListNotificationsResponse {
+            notifications,
+            has_more,
+        })
+    }
 }
 
 /// Response from marking notifications as seen or done.
@@ -102,7 +215,7 @@ where
             .await
             .map_err(|e| ToolCallError {
                 description: format!("Failed to mark notifications as seen: {e}"),
-                internal_error: anyhow::Error::from(e.into_boxed_error()),
+                internal_error: anyhow::Error::from_boxed(e.into_boxed_error()),
             })?;
 
         Ok(MarkNotificationsResponse {
@@ -156,7 +269,7 @@ where
             .await
             .map_err(|e| ToolCallError {
                 description: format!("Failed to mark notifications as done: {e}"),
-                internal_error: anyhow::Error::from(e.into_boxed_error()),
+                internal_error: anyhow::Error::from_boxed(e.into_boxed_error()),
             })?;
 
         Ok(MarkNotificationsResponse {

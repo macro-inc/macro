@@ -6,7 +6,7 @@ version = "0.1.0"
 
 
 [features]
-ai_tool = ["dep:ai"]
+ai_tool = ["dep:ai", "dep:anyhow", "dep:async-trait", "dep:schemars"]
 axum = [
   "dep:axum",
   "dep:model-error-response",
@@ -19,7 +19,9 @@ schema = ["dep:utoipa"]
 
 [dependencies]
 ai = { path = "../ai", optional = true }
+anyhow = { workspace = true, optional = true }
 aquamarine = { version = "0.6", optional = true }
+async-trait = { workspace = true, optional = true }
 aws-sdk-sesv2 = { workspace = true }
 cowlike = { path = "../cowlike" }
 aws-sdk-sns = { workspace = true }
@@ -37,6 +39,7 @@ models_pagination = { path = "../models_pagination" }
 redis = { workspace = true, features = ["tokio-native-tls-comp"] }
 reqwest = { workspace = true }
 rootcause = { workspace = true }
+schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
