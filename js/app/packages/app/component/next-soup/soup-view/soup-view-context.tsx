@@ -15,8 +15,6 @@ import { fuzzyMatch } from '@core/util/fuzzy';
 import { mergeAdjacentMacroEmTags } from '@core/util/searchHighlight';
 import {
   type EntityData,
-  getTaskAssigneeIds,
-  getTaskStatusOptionId,
   type WithNotification,
   type WithSearch,
   isWithNotification,
@@ -48,6 +46,7 @@ import {
   useContext,
 } from 'solid-js';
 import { match } from 'ts-pattern';
+import { matchesTaskSubFilters } from './task-sub-filter-matcher';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 300;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
@@ -454,14 +453,10 @@ export const SoupViewContextProvider: FlowComponent<
       ) {
         const taskEntity = entity as unknown as TaskEntityWithProperties;
         if (
-          currentStatusFilter &&
-          getTaskStatusOptionId(taskEntity) !== currentStatusFilter
-        ) {
-          continue;
-        }
-        if (
-          currentAssigneeFilter &&
-          !getTaskAssigneeIds(taskEntity).includes(currentAssigneeFilter)
+          !matchesTaskSubFilters(taskEntity, {
+            statusFilter: currentStatusFilter,
+            assigneeFilter: currentAssigneeFilter,
+          })
         ) {
           continue;
         }
