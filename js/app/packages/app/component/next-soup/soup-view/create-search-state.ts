@@ -273,7 +273,8 @@ export const createSearchState = ({
     const [frozen, setFrozen] = createSignal<string[]>([]);
     createRenderEffect(
       on(
-        () => [isSearching(), debouncedSearchForLocal()] as const,
+        () =>
+          [isSearching(), debouncedSearchForLocal(), queryFilters()] as const,
         ([searching, query]) => {
           if (!searching || !query) {
             setFrozen([]);
