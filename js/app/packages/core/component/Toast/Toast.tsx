@@ -15,12 +15,11 @@ export enum ToastType {
 }
 
 interface ToastStyle {
-  /** Background color for the toast container */
   background: string;
-  /** Accent color for left bar, icon background, and progress bar */
+  /** Accent color for icon and icon background */
   accent: string;
-  /** Stroke color for animated border (CSS color value) */
-  strokeColor: string;
+  /** Border color class for animated border (Tailwind class, e.g. 'border-success') */
+  borderColor: string;
   /** Text color for title */
   titleText: string;
   /** Text color for subtext/description */
@@ -39,7 +38,7 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
   [ToastType.SUCCESS]: {
     background: 'bg-success/10',
     accent: 'bg-success',
-    strokeColor: 'var(--color-success)',
+    borderColor: 'border-success',
     titleText: 'text-success-ink',
     subtitleText: 'text-success-ink/70',
     icon: CheckIcon,
@@ -52,7 +51,7 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
   [ToastType.FAILURE]: {
     background: 'bg-failure/10',
     accent: 'bg-failure',
-    strokeColor: 'var(--color-failure)',
+    borderColor: 'border-failure',
     titleText: 'text-failure-ink',
     subtitleText: 'text-failure-ink/70',
     icon: ExclamationIcon,
@@ -65,7 +64,7 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
   [ToastType.ALERT]: {
     background: 'bg-alert/10',
     accent: 'bg-alert',
-    strokeColor: 'var(--color-alert)',
+    borderColor: 'border-alert',
     titleText: 'text-alert-ink',
     subtitleText: 'text-alert-ink/70',
     icon: ExclamationIcon,
@@ -78,7 +77,7 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
   [ToastType.LOADING]: {
     background: 'bg-accent/10',
     accent: 'bg-accent',
-    strokeColor: 'var(--color-accent)',
+    borderColor: 'border-accent',
     titleText: 'text-ink',
     subtitleText: 'text-ink-muted',
     icon: Spinner,
@@ -187,9 +186,6 @@ function ToastContent(props: {
     onCleanup(() => cancelAnimationFrame(rafId));
   });
 
-  // Border radius for the toast (matches rounded-xs ~2px)
-  const r = 2;
-
   return (
     <Toast
       toastId={props.toastId}
@@ -205,16 +201,13 @@ function ToastContent(props: {
       {/* Animated border that fades from opacity 1 to 0 */}
       <Show when={!props.persistent}>
         <div
-          class={`absolute inset-0 rounded-xs border-1 pointer-events-none`}
-          style={{
-            'border-color': styles().strokeColor,
-            opacity: progress(),
-          }}
+          class={`absolute inset-0 rounded-xs border-1 pointer-events-none ${styles().borderColor}`}
+          style={{ opacity: progress() }}
         />
       </Show>
 
       <div class="flex">
-        {/* Left accent bar with icon */}
+        {/* Left accent area with icon */}
         <div
           class={`flex items-center justify-center w-12 shrink-0 ${styles().accent}/20`}
         >
