@@ -191,7 +191,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
       ref={setComposeContainerRef}
       class="relative flex flex-col flex-1 items-center justify-between min-h-0"
     >
-      <div class="w-full h-full flex flex-col min-h-0">
+      <div class="w-full h-full min-h-60 max-h-full flex flex-col">
         <Show when={showFormatRibbon()}>
           <FormatRibbon
             class="-ml-3"
@@ -206,7 +206,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
         </Show>
 
         <div
-          class="min-h-60 grow w-full h-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 overflow-auto"
+          class="grow w-full h-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 overflow-auto"
           ref={bodyDiv}
           onclick={() => {
             editor()?.focus();
