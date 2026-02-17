@@ -1,7 +1,9 @@
+import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import type { ChatMessageWithAttachments } from '@service-cognition/generated/schemas';
 import type { MessageStream } from '@service-cognition/websocket';
 import { createSignal } from 'solid-js';
+import type { ChatMessageStream } from '../../../types';
 import {
   ChatInputProvider,
   ChatProvider,
@@ -9,6 +11,16 @@ import {
 } from '../../../context';
 import { ChatMessages } from '../../message/ChatMessages';
 import { StreamStatus } from './StreamStatus';
+
+function toChat(stream: MessageStream): ChatMessageStream {
+  return {
+    data: stream.data,
+    isDone: stream.isDone,
+    model: DEFAULT_MODEL,
+    attachments: [],
+    streamId: stream.request.stream_id,
+  };
+}
 
 export function StreamDebuggerWithControls(props: {
   stream: () => MessageStream;
@@ -35,8 +47,9 @@ function StreamDebuggerWithControlsInner(props: {
   const [stream, setStream] = createSignal<MessageStream>();
 
   if (props.autoStart) {
-    setStream(props.stream());
-    chat.setStream(props.stream());
+    const s = props.stream();
+    setStream(s);
+    chat.setStream(toChat(s));
   }
 
   return (
@@ -47,7 +60,7 @@ function StreamDebuggerWithControlsInner(props: {
           onClick={() => {
             const stream = props.stream();
             setStream(stream);
-            chat.setStream(stream);
+            chat.setStream(toChat(stream));
           }}
           theme="accent"
         />
@@ -70,7 +83,7 @@ function StreamDebuggerWithControlsInner(props: {
 }
 
 export function StreamDebugger(props: {
-  stream: MessageStream;
+  stream: ChatMessageStream;
   messages?: ChatMessageWithAttachments[];
 }) {
   return (
@@ -82,7 +95,7 @@ export function StreamDebugger(props: {
   );
 }
 
-function StreamDebuggerInner(props: { stream: MessageStream }) {
+function StreamDebuggerInner(props: { stream: ChatMessageStream }) {
   const chat = useChatContext();
   chat.setStream(props.stream);
   return (
@@ -90,7 +103,11 @@ function StreamDebuggerInner(props: { stream: MessageStream }) {
       data-chat-scroll
       class="size-full flex flex-col gap-y-2 overflow-y-auto"
     >
-      <StreamStatus stream={() => props.stream} />
+      <div class="p-2 bg-menu border border-edge text-ink font-mono text-sm">
+        <span>chunks: {props.stream.data().length}</span>
+        {' | '}
+        <span>isDone: {String(props.stream.isDone())}</span>
+      </div>
       <ChatMessages />
     </div>
   );

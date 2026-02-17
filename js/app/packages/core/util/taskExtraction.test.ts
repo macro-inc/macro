@@ -144,7 +144,8 @@ Regular bullet point
     const result = extractCheckboxesFromMarkdown(markdown);
 
     expect(result).toHaveLength(1);
-    expect(result[0].dueDate).toBe('2024-03-15T00:00:00Z');
+    expect(result[0].dueDate).toBeInstanceOf(Date);
+    expect(result[0].dueDate?.toISOString()).toBe('2024-03-15T00:00:00.000Z');
     expect(result[0].title).toBe('Submit report');
   });
 
@@ -154,11 +155,10 @@ Regular bullet point
     const result = extractCheckboxesFromMarkdown(markdown);
 
     expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({
-      title: 'Complete task by',
-      assigneeUserIds: ['u1'],
-      dueDate: '2024-12-31',
-    });
+    expect(result[0].title).toBe('Complete task by');
+    expect(result[0].assigneeUserIds).toEqual(['u1']);
+    expect(result[0].dueDate).toBeInstanceOf(Date);
+    expect(result[0].dueDate?.toISOString()).toBe('2024-12-31T00:00:00.000Z');
   });
 
   it('should return empty array for markdown without checkboxes', () => {

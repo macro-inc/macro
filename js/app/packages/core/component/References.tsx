@@ -20,6 +20,7 @@ import { InlineItemPreview } from './ItemPreview';
 import { StaticMarkdown } from './LexicalMarkdown/component/core/StaticMarkdown';
 import { UserIcon } from './UserIcon';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
+import { compareDateDesc, type DateValue } from '@core/util/date';
 
 export type ReferenceProps = {
   documentId: string;
@@ -52,6 +53,14 @@ function isGenericReference(
     'created_at' in ref
   );
 }
+
+const getReferenceCreatedAt = (ref: EntityReference) => {
+  if (isChannelReference(ref)) {
+    return ref.attachment_created_at;
+  } else if (isGenericReference(ref)) {
+    return ref.created_at;
+  }
+};
 
 export function References(props: ReferenceProps) {
   const [references] = createResource(async () => {
@@ -136,29 +145,14 @@ export function References(props: ReferenceProps) {
 
   const sortedReferences = createMemo(() => {
     const refs = references() ?? [];
-    return refs.sort((a, b) => {
-      let timeA = '0';
-      let timeB = '0';
-
-      if (isChannelReference(a)) {
-        timeA = a.attachment_created_at;
-      } else if (isGenericReference(a)) {
-        timeA = a.created_at;
-      }
-
-      if (isChannelReference(b)) {
-        timeB = b.attachment_created_at;
-      } else if (isGenericReference(b)) {
-        timeB = b.created_at;
-      }
-
-      return new Date(timeB).getTime() - new Date(timeA).getTime();
-    });
+    return refs.sort((a, b) =>
+      compareDateDesc(getReferenceCreatedAt(a), getReferenceCreatedAt(b))
+    );
   });
 
-  const formatTimestamp = (timestamp: string) => {
-    const date = new Date(timestamp);
-    const datePart = date
+  const formatTimestamp = (input: DateValue) => {
+    const timestamp = input instanceof Date ? input : new Date(input);
+    const datePart = timestamp
       .toLocaleDateString('en-US', {
         month: 'numeric',
         day: 'numeric',
@@ -166,7 +160,7 @@ export function References(props: ReferenceProps) {
       })
       .replaceAll('/', '-');
 
-    const timePart = date.toLocaleTimeString('en-US', {
+    const timePart = timestamp.toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: 'numeric',
     });

@@ -1,4 +1,4 @@
-import { type EntityData, isTaskEntity } from '@macro-entity';
+import { type EntityData, isTaskEntity } from '@entity';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { ItemType } from '@service-storage/client';

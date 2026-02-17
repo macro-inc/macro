@@ -33,7 +33,7 @@ where
     async fn get_optimized_access(
         &self,
         entity_id: &str,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
         entity_type: EntityType,
     ) -> Result<Option<AccessLevel>, AccessError> {
         match entity_type {
@@ -51,7 +51,7 @@ where
     async fn get_channel_access(
         &self,
         channel_id: &str,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
         let channel_uuid = Uuid::from_str(channel_id)
             .map_err(|_| AccessError::BadRequest("Invalid channel ID format"))?;
@@ -76,7 +76,7 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn get_access_level(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
         entity_id: &str,
         entity_type: EntityType,
     ) -> Result<Option<AccessLevel>, AccessError> {
@@ -97,7 +97,7 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn check_access(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
         entity_id: &str,
         entity_type: EntityType,
         required_level: AccessLevel,
@@ -114,9 +114,24 @@ where
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn check_public_access(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        required_level: AccessLevel,
+    ) -> Result<AccessLevel, AccessError> {
+        let access_level = self.get_access_level(None, entity_id, entity_type).await?;
+
+        match access_level {
+            Some(level) if level >= required_level => Ok(level),
+            Some(_) | None => Err(AccessError::Unauthorized),
+        }
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn get_entity_permission(
         &self,
-        user_id: &MacroUserId<Lowercase<'_>>,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
         entity_id: &str,
         entity_type: EntityType,
         user_org_id: Option<i64>,

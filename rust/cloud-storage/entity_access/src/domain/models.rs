@@ -1,5 +1,6 @@
 //! Domain models for entity access.
 
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use serde::{Deserialize, Serialize};
 
 pub use model_entity::EntityType;
@@ -51,6 +52,54 @@ pub enum ChannelRoleResult {
     NoAccess,
     /// Channel does not exist.
     NotFound,
+}
+
+/// A given entity
+#[derive(Debug)]
+pub struct Entity {
+    /// The id of the entity
+    pub entity_id: String,
+    /// The type of the entity
+    pub entity_type: EntityType,
+}
+
+/// The entity access auth type
+#[derive(Debug)]
+pub enum EntityAccessAuth {
+    /// The user is authenticated
+    Authenticated(MacroUserId<Lowercase<'static>>),
+    /// The user is unauthenticated
+    Unauthenticated,
+    /// Internally authenticated
+    Internal,
+}
+
+/// Represents that a given user has a given permission for the provided id.
+#[derive(Debug)]
+pub struct EntityAccessReceipt {
+    /// The entity access authentication method
+    pub(crate) auth: EntityAccessAuth,
+    /// The entity that was requested access
+    pub(crate) entity: Entity,
+    /// The permission for the user on the entity
+    pub(crate) entity_permission: EntityPermission,
+}
+
+impl EntityAccessReceipt {
+    /// Getter for auth
+    pub fn auth(&self) -> &EntityAccessAuth {
+        &self.auth
+    }
+
+    /// Getter for entity
+    pub fn entity(&self) -> &Entity {
+        &self.entity
+    }
+
+    /// Getter for entity permission
+    pub fn entity_permission(&self) -> &EntityPermission {
+        &self.entity_permission
+    }
 }
 
 /// Errors that can occur during access checking.

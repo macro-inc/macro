@@ -1,6 +1,19 @@
+import { tz } from '@date-fns/tz';
+import {
+  compareAsc,
+  compareDesc,
+  differenceInWeeks,
+  isToday,
+  isYesterday,
+  toDate,
+} from 'date-fns';
+
+/** Represents a Date or an Api RFC3339 string response that can be parsed into a Date object. */
+export type DateValue = Date | string;
+
+const EPOCH_ZERO = new Date(0);
+
 export interface FormatDateOptions {
-  /** Unix timestamp in seconds. An optional reference date. */
-  epochNow?: number;
   /** IANA timezone string (e.g., 'America/New_York', 'UTC'). Defaults to system timezone. */
   timeZone?: string;
   /** If true, always include time in the output (e.g., 'Thursday at 4:53 PM' instead of 'Thursday'). */
@@ -8,107 +21,66 @@ export interface FormatDateOptions {
 }
 
 /**
- * Formats epoch date (unix timestamp seconds) to a human readable date.
- * @param epochDate - Unix timestamp in seconds. The date to format.
+ * Formats a date to a human readable string.
+ * @param date - Date object or Unix timestamp in seconds
  * @param options - Optional formatting options.
  * @returns Formatted date string. Like '4:53 PM' for same local day or, 'Yesterday at 8:10 AM' for
  *     single day offsets, 'Thursday' for a day within the week and '01/23/2025' for dates outside the week.
  */
-export const formatDate = (epochDate: number, options?: FormatDateOptions) => {
-  const { epochNow, timeZone, showTime } = options ?? {};
-  // handle computation in different timezones
-  const getDatePartsInTimezone = (date: Date, tz?: string) => {
-    if (tz) {
-      const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: tz,
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric',
-      });
-      const parts = formatter.formatToParts(date);
-      const year = parseInt(
-        parts.find((p) => p.type === 'year')?.value || '1970'
-      );
-      const month = Math.max(
-        0,
-        parseInt(parts.find((p) => p.type === 'month')?.value || '1') - 1
-      );
-      const day = Math.max(
-        1,
-        parseInt(parts.find((p) => p.type === 'day')?.value || '1')
-      );
-      return { year, month, day };
-    } else {
-      return {
-        year: date.getFullYear(),
-        month: date.getMonth(),
-        day: date.getDate(),
-      };
-    }
-  };
+export const formatDate = (
+  date: DateValue | null | undefined,
+  options?: FormatDateOptions
+) => {
+  if (!date) return '';
+  const d = date instanceof Date ? date : toDate(date);
+  const { timeZone, showTime } = options ?? {};
+  const timeZoneOpts = timeZone ? { in: tz(timeZone) } : {};
+  const now = new Date();
 
-  const now = epochNow ? new Date(epochNow * 1000) : new Date();
-  const inputDate = new Date(epochDate * 1000);
-
-  // calculate a midnight aware day boundary
-  const nowParts = getDatePartsInTimezone(now, timeZone);
-  const inputParts = getDatePartsInTimezone(inputDate, timeZone);
-
-  const today = new Date(nowParts.year, nowParts.month, nowParts.day);
-  const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
-  const inputDateStart = new Date(
-    inputParts.year,
-    inputParts.month,
-    inputParts.day
-  );
-
-  const time = inputDate.toLocaleTimeString('en-US', {
+  const time = d.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
     timeZone,
   });
 
-  if (inputDateStart.getTime() === today.getTime()) {
+  if (isToday(date, timeZoneOpts)) {
     return time;
   }
 
-  if (inputDateStart.getTime() === yesterday.getTime()) {
+  if (isYesterday(date, timeZoneOpts)) {
     return `Yesterday at ${time}`;
   }
 
-  const diffMs = now.getTime() - inputDate.getTime();
-  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  if (days < 7) {
-    const weekday = inputDate.toLocaleDateString(undefined, {
+  if (differenceInWeeks(now, date) < 1) {
+    const weekday = d.toLocaleDateString(undefined, {
       weekday: 'long',
       timeZone,
     });
     return showTime ? `${weekday} at ${time}` : weekday;
   }
 
-  const date = inputDate.toLocaleDateString(undefined, {
+  const displayDate = d.toLocaleDateString(undefined, {
     month: '2-digit',
     day: '2-digit',
     year: '2-digit',
     timeZone,
   });
-  return showTime ? `${date} at ${time}` : date;
+  return showTime ? `${displayDate} at ${time}` : displayDate;
 };
 
 /**
  * Formats a date in the format "Fri, Jul 4, 2025 at 12:20 AM"
- * @param epochDate - Unix timestamp in seconds
+ * @param date - Date object or Unix timestamp in seconds
  * @returns Formatted date string
  */
-export const formatEmailDate = (epochDate: number) => {
-  const inputDate = new Date(epochDate * 1000);
-
-  const weekday = inputDate.toLocaleDateString('en-US', { weekday: 'short' });
-  const month = inputDate.toLocaleDateString('en-US', { month: 'short' });
-  const day = inputDate.getDate();
-  const year = inputDate.getFullYear();
-  const time = inputDate.toLocaleTimeString('en-US', {
+export const formatEmailDate = (date: DateValue) => {
+  const d = toDate(date);
+  const weekday = d.toLocaleDateString('en-US', { weekday: 'short' });
+  const month = d.toLocaleDateString('en-US', { month: 'short' });
+  const day = d.getDate();
+  const year = d.getFullYear();
+  const time = d.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
@@ -118,10 +90,38 @@ export const formatEmailDate = (epochDate: number) => {
 };
 
 /**
- * Converts an ISO 8601 date string to Unix timestamp in seconds
- * @param isoString - ISO 8601 date string (e.g., "2025-08-18T18:07:54.000Z")
- * @returns Unix timestamp in seconds
+ * Compares two dates in descending order (most recent first).
+ * Handles undefined/null dates by treating them as epoch zero.
+ * @returns Positive if a > b, negative if a < b, zero if equal
  */
-export const isoToUnixTimestamp = (isoString: string): number => {
-  return Math.floor(new Date(isoString).getTime() / 1000);
+export const compareDateDesc = (
+  a: DateValue | null | undefined,
+  b: DateValue | null | undefined
+): number => {
+  const dateA = a ?? EPOCH_ZERO;
+  const dateB = b ?? EPOCH_ZERO;
+  return compareDesc(dateA, dateB);
+};
+
+/**
+ * Compares two dates in ascending order (oldest first).
+ * Handles undefined/null dates by treating them as epoch zero.
+ * @returns Positive if a > b, negative if a < b, zero if equal
+ */
+export const compareDateAsc = (
+  a: DateValue | null | undefined,
+  b: DateValue | null | undefined
+): number => {
+  const dateA = a ?? EPOCH_ZERO;
+  const dateB = b ?? EPOCH_ZERO;
+  return compareAsc(dateA, dateB);
+};
+
+const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z?$/;
+
+export const convertIsoString = (isoString: string): Date | undefined => {
+  if (ISO_DATE_REGEX.test(isoString)) {
+    return new Date(isoString);
+  }
+  return undefined;
 };

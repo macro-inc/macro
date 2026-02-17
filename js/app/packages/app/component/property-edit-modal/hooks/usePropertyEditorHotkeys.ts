@@ -4,7 +4,7 @@ import type {
   Property,
   PropertyDefinitionDomain,
 } from '@core/component/Properties/types';
-import { isTaskEntity, type EntityData } from '@macro-entity';
+import { isTaskEntity, type EntityData } from '@entity';
 import { TOKENS } from '@core/hotkey/tokens';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { useAllProperties } from './useAllProperties';

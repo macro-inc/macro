@@ -65,6 +65,11 @@ use crate::{
         },
     },
 };
+use channels::inbound::axum_router::{
+    ApiChannelAttachment, ApiChannelAttachmentsPage, ApiChannelMessage, ApiChannelMessagesPage,
+    ApiChannelParticipant, ApiCountedReaction, ApiMessageAttachment, ApiParticipantRole,
+    ApiThreadInfo, ApiThreadReply,
+};
 use document_sub_type::DocumentSubType;
 use model::document::response::{
     CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
@@ -134,19 +139,20 @@ use utoipa::OpenApi;
 
         // documents
         documents::get_user_documents::get_user_documents_handler,
-        documents::get_document::handler,
+        documents_hex::inbound::axum_router::get_document_handler,
         documents::get_document_version::handler,
         documents::create_document::create_document_handler,
         documents::copy_document::copy_document_handler,
         documents::save_document::save_document_handler,
         documents::pre_save::presave_document_handler,
         documents::edit_document::edit_document_handler_v2,
-        documents::delete_document::delete_document_handler,
+        documents_hex::inbound::axum_router::delete_document_handler,
         documents::delete_document::permanently_delete_document_handler,
         documents::get_document_list::get_document_list_handler,
         documents::get_document_permissions::get_document_permissions_handler_v2,
         documents::get_document_views::get_document_views_handler,
         documents::location::get_location_handler,
+        documents_hex::inbound::axum_router::get_location_v3_handler,
         documents::simple_save::handler,
         documents::initialize_user_documents::handler,
         documents::get_batch_preview::get_batch_preview_handler,
@@ -177,6 +183,11 @@ use utoipa::OpenApi;
         // items
         soup::inbound::axum_router::get_soup_handler,
         soup::inbound::axum_router::post_soup_handler,
+
+        // channels
+        channels::inbound::axum_router::get_channel_messages_handler,
+        channels::inbound::axum_router::get_channel_attachments_handler,
+        channels::inbound::axum_router::get_channel_participants_handler,
 
         // pins
         pins::add_pin::add_pin_handler,
@@ -297,6 +308,18 @@ use utoipa::OpenApi;
             SoupMessageListVisibility,
             SoupLabelType,
             PostSoupRequest,
+
+            // Channels
+            ApiChannelMessagesPage,
+            ApiChannelMessage,
+            ApiThreadInfo,
+            ApiThreadReply,
+            ApiCountedReaction,
+            ApiMessageAttachment,
+            ApiChannelAttachmentsPage,
+            ApiChannelAttachment,
+            ApiChannelParticipant,
+            ApiParticipantRole,
 
             DocumentSubType,
 

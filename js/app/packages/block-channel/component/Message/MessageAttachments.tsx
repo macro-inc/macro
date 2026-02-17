@@ -1,6 +1,6 @@
 import { ItemPreview } from '@core/component/ItemPreview';
 import { VideoPreview } from '@core/component/VideoPreview';
-import type { Attachment } from '@service-comms/generated/models/attachment';
+import type { Attachment } from '@queries/channel/types';
 import { stringToItemType } from '@service-storage/client';
 import { type Accessor, For, Show } from 'solid-js';
 import { DynamicImageList } from './DynamicImageList';

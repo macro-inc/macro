@@ -8,6 +8,7 @@ members = [
   "ai_toolset",
   "anthropic",
   "authentication_service",
+  "channels",
   "authentication_service_client",
   "comms_db_client",
   "comms_service",
@@ -25,6 +26,7 @@ members = [
   "document_storage_service",
   "document_storage_service_client",
   "document_sub_type",
+  "documents",
   "document_text_extractor",
   "docx_unzip_handler",
   "dynamodb_client",
@@ -143,6 +145,7 @@ base64 = "0.22.1"
 cached = { version = "0.54.0", features = ["async_tokio_rt_multi_thread"] }
 chrono = { version = "0.4.39", features = ["serde"] }
 clap = { version = "4.5.20", features = ["derive"] }
+csv = "1"
 cloudfront_sign = "0.3.0"
 cookie = "0.18.1"
 dashmap = "6.1.0"

@@ -8,4 +8,4 @@
 /**
  * The time the document was last viewed
  */
-export type SoupProjectViewedAt = number | null;
+export type SoupProjectViewedAt = string | null;

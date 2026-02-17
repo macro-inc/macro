@@ -11,7 +11,7 @@ import {
 } from '@core/block';
 import { IS_MAC } from '@core/constant/isMac';
 import { ENABLE_MARKDOWN_AI_GENERATE } from '@core/constant/featureFlags';
-import type { EntityDragEvent } from '@macro-entity';
+import type { EntityDragEvent } from '@entity';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
 import {

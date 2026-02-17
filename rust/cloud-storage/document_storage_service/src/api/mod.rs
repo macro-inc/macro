@@ -91,9 +91,13 @@ fn api_router(state: ApiContext) -> Router {
     let internal_router = Router::new()
         .nest(
             "/documents",
-            documents::router(state.clone()).layer(ServiceBuilder::new().layer(
-                axum::middleware::from_fn(macro_middleware::connection_drop_prevention_handler),
-            )),
+            documents::router(state.clone())
+                .merge(documents_hex::inbound::axum_router::documents_router(
+                    state.documents_state.clone(),
+                ))
+                .layer(ServiceBuilder::new().layer(axum::middleware::from_fn(
+                    macro_middleware::connection_drop_prevention_handler,
+                ))),
         )
         .nest(
             "/history",
@@ -167,6 +171,10 @@ fn api_router(state: ApiContext) -> Router {
                 .with_state(CommsHandlerState::from_ref(&state)),
         )
         .nest("/entity", entity::router())
+        .nest(
+            "/channels",
+            channels::inbound::axum_router::channels_router(state.channels_state.clone()),
+        )
         .layer(
             ServiceBuilder::new()
                 .layer(axum::middleware::from_fn(

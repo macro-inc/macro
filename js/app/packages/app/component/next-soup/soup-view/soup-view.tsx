@@ -40,7 +40,8 @@ import {
   type SearchLocation,
   type ProjectEntity,
 } from '@entity';
-import { queryKeys, useQueryClient } from '@macro-entity';
+import { queryKeys } from '@macro-entity';
+import { useQueryClient } from '@queries/client';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui/utils/classname';
@@ -48,14 +49,17 @@ import {
   type Accessor,
   createEffect,
   createMemo,
+  createRenderEffect,
   createSignal,
   type JSX,
   Match,
   on,
   onCleanup,
   Show,
+  Suspense,
   Switch,
 } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { SoupEntitySelectionToolbar } from './soup-entity-selection-toolbar';
 import { SoupToolbar } from './soup-toolbar';
@@ -72,6 +76,7 @@ import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { usePropertyEditorHotkeys } from '@app/component/property-edit-modal/hooks/usePropertyEditorHotkeys';
+import type { SoupItemsQueryFilters } from '@queries/soup/items';
 
 const DEFAULT_ENTITY_HEIGHT = 40;
 
@@ -102,7 +107,7 @@ const useSoupNotificationInvalidators = () => {
     notificationSource,
     'document',
     (notification) => {
-      if (notification.notificationEventType === 'task_assigned') {
+      if (notification.notification_event_type === 'task_assigned') {
         entityQueryClient.invalidateQueries({
           queryKey: soupKeys._def,
         });
@@ -118,7 +123,9 @@ const stateCache = new Map<
     soup: {
       focus: string | undefined;
       filters: string[];
+      queryFilters: SoupItemsQueryFilters;
       sort: SystemSortOption[];
+      searchText: string;
     };
     virtualCache?: CacheSnapshot;
     scrollOffset?: number;
@@ -140,8 +147,10 @@ export const SoupView = () => {
       }}
     >
       <SoupViewContextProvider soup={soup}>
-        <div class="relative flex-grow min-h-0 flex max-sm:flex-col flex-row size-full">
-          <SoupToolbar />
+        <div class="relative flex-grow min-h-1 flex max-sm:flex-col flex-row size-full">
+          <Suspense>
+            <SoupToolbar />
+          </Suspense>
           <SoupViewFileDropzone>
             <SoupViewList />
           </SoupViewFileDropzone>
@@ -161,7 +170,15 @@ interface SoupViewListProps {
 
 export const SoupViewList = (props: SoupViewListProps) => {
   const panel = useSplitPanelOrThrow();
-  const { soup, source, rows, searchText } = useSoupView();
+  const {
+    soup,
+    source,
+    rows,
+    searchText,
+    setSearchText,
+    setQueryFilters,
+    queryFilters,
+  } = useSoupView();
   const { getSplitCount } = useSplitLayout();
 
   const { isKeypressActive } = useIsKeyPressActive();
@@ -450,17 +467,20 @@ export const SoupViewList = (props: SoupViewListProps) => {
       soup: {
         focus: soup.focus.id(),
         filters: soup.filters.activeIds(),
+        queryFilters: queryFilters(),
         sort: soup.sort.active().map((s) => s.id),
+        searchText: searchText(),
       },
       virtualCache: virtualHandle?.cache,
       scrollOffset: virtualHandle?.scrollOffset,
     });
   });
 
-  const registerVirtualizerHandler = (
-    handle: VirtualizerHandle | undefined
-  ) => {
-    setVirtualizerHandle(handle);
+  let restored = false;
+  const restoreState = () => {
+    if (restored) return;
+
+    restored = true;
 
     const cached = stateCache.get(getCacheKey());
 
@@ -474,10 +494,21 @@ export const SoupViewList = (props: SoupViewListProps) => {
       soup.filters.activate(id);
     }
 
+    setQueryFilters(cached.soup.queryFilters);
+    setSearchText(cached.soup.searchText);
+
     soup.sort.setAll(cached.soup.sort);
 
-    handle?.scrollTo(cached.scrollOffset ?? 0);
+    virtualizerHandle()?.scrollTo(cached.scrollOffset ?? 0);
     registerFocusEffects(false);
+  };
+
+  const registerVirtualizerHandler = (
+    handle: VirtualizerHandle | undefined
+  ) => {
+    setVirtualizerHandle(handle);
+
+    restoreState();
   };
 
   return (
@@ -504,13 +535,13 @@ export const SoupViewList = (props: SoupViewListProps) => {
       >
         <StaticMarkdownContext>
           <Switch>
-            <Match when={source.isLoading()}>
+            <Match when={source.isLoading() && !rows().length}>
               <LoadingBlock />
             </Match>
-            <Match when={!rows().length}>
+            <Match when={!source.isLoading() && !rows().length}>
               <EmptyState search={!!searchText()} />
             </Match>
-            <Match when={!source.isLoading() && rows().length}>
+            <Match when={rows().length}>
               <EntityRowProvider
                 container={localEntityListRef}
                 canSwipeLeft={(entityId) => {
@@ -684,6 +715,12 @@ const SoupList = (props: SoupListProps) => {
   const itemSize = createMemo(() => props.itemSize ?? DEFAULT_ITEM_SIZE);
   const overscan = createMemo(() => props.overscan ?? DEFAULT_OVERSCAN);
 
+  const [stableRows, setStableRows] = createStore<SoupRow[]>([]);
+
+  createRenderEffect(() => {
+    setStableRows(reconcile(props.rows, { key: 'id' }));
+  });
+
   const handleScroll = (offset: number) => {
     const handle = virtualizerHandle();
 
@@ -716,7 +753,7 @@ const SoupList = (props: SoupListProps) => {
         cache={props.cache}
         ref={registerVirtualizerHandler}
         class={props.virtualizerClass}
-        data={props.rows}
+        data={stableRows}
         itemSize={itemSize()}
         bufferSize={overscan() * itemSize()}
         onScroll={handleScroll}

@@ -113,7 +113,7 @@ export function MessageList(props: MessageListProps) {
       </StaticMarkdownContext>
       <Show when={isMobile() && props.title}>
         <div class="shrink-0 w-full flex justify-center pb-4">
-          <div class="macro-message-width w-full">
+          <div class="macro-message-width macro-message-padding w-full">
             <h1 class="text-3xl font-semibold text-ink pt-1 pb-4">
               {props.title}
             </h1>

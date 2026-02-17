@@ -1,7 +1,8 @@
 use crate::pubsub::scheduled::context::ScheduledContext;
 use crate::util::gmail::auth::fetch_gmail_access_token_from_link;
 use crate::util::gmail::send::{
-    cleanup_draft_attachments, fetch_and_attach_draft_attachments, generate_email_threading_headers,
+    cleanup_draft_attachments, fetch_and_attach_draft_attachments,
+    fetch_and_attach_forwarded_attachments, generate_email_threading_headers,
 };
 use anyhow::Context;
 use chrono::Utc;
@@ -127,11 +128,21 @@ async fn process_scheduled_message_inner(
         generate_email_threading_headers(&ctx.db, message_to_send.replying_to_id, data.link_id)
             .await;
 
-    // Include attachments for message
+    // Include draft attachments (user-uploaded files from S3)
     let db_attachments = fetch_and_attach_draft_attachments(
         &ctx.db,
         &ctx.s3_client,
         ctx.attachment_bucket.as_str(),
+        &link,
+        &mut message_to_send,
+    )
+    .await?;
+
+    // Include forwarded attachments (fetched from Gmail at send time)
+    fetch_and_attach_forwarded_attachments(
+        &ctx.db,
+        &ctx.gmail_client,
+        &gmail_access_token,
         &link,
         &mut message_to_send,
     )

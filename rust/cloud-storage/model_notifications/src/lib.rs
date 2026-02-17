@@ -1,4 +1,4 @@
-use chrono::serde::ts_seconds_option;
+use chrono::DateTime;
 use serde::{Deserialize, Serialize};
 use std::hash::{DefaultHasher, Hasher};
 use utoipa::ToSchema;
@@ -13,23 +13,13 @@ pub use unsubscribe::*;
 #[serde(transparent)]
 pub struct ChannelMessageDocumentMetadata(pub DocumentMentionMetadata);
 
-type TimestampOption = Option<chrono::DateTime<chrono::Utc>>;
-
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct NotificationTemporalData {
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable = false)]
-    pub created_at: TimestampOption,
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable = true)]
-    pub viewed_at: TimestampOption,
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable = true)]
-    pub updated_at: TimestampOption,
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable = true)]
-    pub deleted_at: TimestampOption,
+    pub created_at: Option<DateTime<chrono::Utc>>,
+    pub viewed_at: Option<DateTime<chrono::Utc>>,
+    pub updated_at: Option<DateTime<chrono::Utc>>,
+    pub deleted_at: Option<DateTime<chrono::Utc>>,
 }
 
 /// used to build up the data to construct a [HashedCollapseKey]

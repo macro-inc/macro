@@ -1041,6 +1041,95 @@
         }
       }
     },
+    "/stream/chat/message": {
+      "post": {
+        "tags": ["chat_message"],
+        "summary": "Send a new chat message and stream the AI response.",
+        "description": "This endpoint initiates a chat message and streams the response via the stream service.\nThe client should subscribe to the returned stream_id via connection_gateway to receive chunks.",
+        "operationId": "send_chat_message",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HttpSendChatMessageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Stream initiated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendChatMessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatMessageError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/stream/completion/simple": {
+      "post": {
+        "tags": ["simple_completion"],
+        "summary": "Start a simple completion stream.",
+        "description": "This endpoint initiates a completion and streams the response via the stream service.\nThe client should subscribe to the completion_id stream via connection_gateway to receive chunks.",
+        "operationId": "simple_completion",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetSimpleCompletionStreamPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Stream initiated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleCompletionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleCompletionError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
     "/v2/chats/{chat_id}/permissions": {
       "get": {
         "tags": ["get_chat_permissions"],
@@ -1292,24 +1381,16 @@
       },
       "Chat": {
         "type": "object",
-        "required": [
-          "id",
-          "name",
-          "userId",
-          "createdAt",
-          "updatedAt",
-          "isPersistent",
-          "deletedAt"
-        ],
+        "required": ["id", "name", "userId", "isPersistent"],
         "properties": {
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the chat was created"
           },
           "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the chat was deleted"
           },
           "id": {
@@ -1336,8 +1417,8 @@
             "format": "int64"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the chat was last updated"
           },
           "userId": {
@@ -1460,6 +1541,19 @@
           }
         ]
       },
+      "ChatMessageError": {
+        "type": "object",
+        "description": "Error response for chat message endpoints",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "stream_id": {
+            "type": ["string", "null"]
+          }
+        }
+      },
       "ChatMessageWithAttachments": {
         "type": "object",
         "required": ["id", "content", "role", "attachments"],
@@ -1546,7 +1640,7 @@
       },
       "ChatPreviewData": {
         "type": "object",
-        "required": ["chat_id", "chat_name", "owner", "updated_at"],
+        "required": ["chat_id", "chat_name", "owner"],
         "properties": {
           "chat_id": {
             "type": "string"
@@ -1558,8 +1652,8 @@
             "type": "string"
           },
           "updated_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         }
       },
@@ -1570,8 +1664,6 @@
           "userId",
           "name",
           "messages",
-          "createdAt",
-          "updatedAt",
           "attachments",
           "availableModels",
           "webCitations",
@@ -1594,8 +1686,8 @@
             "description": "Available models for the chat"
           },
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the chat was created"
           },
           "id": {
@@ -1638,8 +1730,8 @@
             "description": "Current number of tokens in the chat"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the chat was last updated"
           },
           "userId": {
@@ -1685,236 +1777,7 @@
           }
         }
       },
-      "ChatsResponse": {
-        "type": "object",
-        "required": ["chats"],
-        "properties": {
-          "chats": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Chat"
-            }
-          }
-        }
-      },
-      "ConversationRecord": {
-        "type": "object",
-        "required": ["chat_id", "title", "messages"],
-        "properties": {
-          "chat_id": {
-            "type": "string"
-          },
-          "messages": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MessageWithAttachments"
-            }
-          },
-          "title": {
-            "type": "string"
-          }
-        }
-      },
-      "CopyChatRequest": {
-        "type": "object",
-        "required": ["name"],
-        "properties": {
-          "name": {
-            "type": "string"
-          }
-        }
-      },
-      "CreateChatRequest": {
-        "type": "object",
-        "properties": {
-          "attachments": {
-            "type": ["array", "null"],
-            "items": {
-              "$ref": "#/components/schemas/NewAttachment"
-            }
-          },
-          "isPersistent": {
-            "type": ["boolean", "null"]
-          },
-          "model": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/Model"
-              }
-            ]
-          },
-          "name": {
-            "type": ["string", "null"]
-          },
-          "projectId": {
-            "type": ["string", "null"]
-          }
-        }
-      },
-      "CreateTextRequestBody": {
-        "type": "object",
-        "required": ["content"],
-        "properties": {
-          "content": {
-            "type": "string"
-          }
-        }
-      },
-      "CreateTextRequestParams": {
-        "type": "object",
-        "required": ["document_id"],
-        "properties": {
-          "document_id": {
-            "type": "string"
-          }
-        }
-      },
-      "DocumentCognitionServiceApiVersion": {
-        "type": "string",
-        "enum": ["v1", "v2"]
-      },
-      "DocumentReference": {
-        "oneOf": [
-          {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/UserPdfRect"
-              },
-              {
-                "type": "object",
-                "required": ["kind"],
-                "properties": {
-                  "kind": {
-                    "type": "string",
-                    "enum": ["pdf"]
-                  }
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "DocumentTextPart": {
-        "type": "object",
-        "required": ["id", "document_id", "reference"],
-        "properties": {
-          "document_id": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "reference": {
-            "$ref": "#/components/schemas/DocumentReference"
-          }
-        }
-      },
-      "EmptyResponse": {
-        "type": "object",
-        "description": "Empty response is required due to custom fetch forcing `response.json()`"
-      },
-      "ExtractionStatusEnum": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": ["type"],
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": ["incomplete"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": ["type"],
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": ["empty"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": ["type"],
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": ["insufficient"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": ["type"],
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": ["complete"]
-              }
-            }
-          }
-        ]
-      },
-      "ExtractionStatusPayload": {
-        "type": "object",
-        "required": ["attachment_id"],
-        "properties": {
-          "attachment_id": {
-            "type": "string"
-          }
-        }
-      },
-      "FileType": {
-        "type": "string",
-        "description": "Generates a FileType enum and associated ContentType enum with their implementations.\n\nThis macro takes a list of tuples in the format:\n(Variant, \"extension\", \"mime_type\", CONTENT_TYPE_VARIANT)\n\nFor each tuple it generates:\n- A variant in the FileType enum\n- A variant in the ContentType enum\n- Implementations for:\n  - FileType::to_str() - Converts FileType to extension string\n  - FileType::from_str() - Converts extension string to FileType\n  - From<FileType> for ContentType - Maps FileType to ContentType\n  - ContentType::mime_type() - Gets MIME type for ContentType\n",
-        "enum": [
-          "docx",
-          "pdf",
-          "md",
-          "canvas",
-          "py",
-          "js",
-          "ts",
-          "jsx",
-          "tsx",
-          "json",
-          "html",
-          "css",
-          "xml",
-          "yaml",
-          "yml",
-          "sql",
-          "sh",
-          "bash",
-          "markdown",
-          "txt",
-          "csv",
-          "jpeg",
-          "jpg",
-          "png",
-          "gif",
-          "svg",
-          "webp",
-          "heic",
-          "heif",
-          "zip",
-          "tar",
-          "targz",
-          "tgz",
-          "gz",
-          "mp4",
-          "xls",
-          "ppt",
-          "pptx",
-          "xlsx"
-        ]
-      },
-      "FromWebSocketMessage": {
+      "ChatStream": {
         "oneOf": [
           {
             "allOf": [
@@ -1949,6 +1812,42 @@
               "type": {
                 "type": "string",
                 "enum": ["chat_message_ack"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The user message that initiated this stream, sent as the first item\nso other clients can add it to their local chat state.",
+            "required": [
+              "stream_id",
+              "chat_id",
+              "message_id",
+              "content",
+              "attachments",
+              "type"
+            ],
+            "properties": {
+              "attachments": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ChatAttachmentWithName"
+                }
+              },
+              "chat_id": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "message_id": {
+                "type": "string"
+              },
+              "stream_id": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["chat_user_message"]
               }
             }
           },
@@ -2186,6 +2085,246 @@
           }
         ]
       },
+      "ChatsResponse": {
+        "type": "object",
+        "required": ["chats"],
+        "properties": {
+          "chats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Chat"
+            }
+          }
+        }
+      },
+      "ConversationRecord": {
+        "type": "object",
+        "required": ["chat_id", "title", "messages"],
+        "properties": {
+          "chat_id": {
+            "type": "string"
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MessageWithAttachments"
+            }
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "CopyChatRequest": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateChatRequest": {
+        "type": "object",
+        "properties": {
+          "attachments": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/NewAttachment"
+            }
+          },
+          "isPersistent": {
+            "type": ["boolean", "null"]
+          },
+          "model": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Model"
+              }
+            ]
+          },
+          "name": {
+            "type": ["string", "null"]
+          },
+          "projectId": {
+            "type": ["string", "null"]
+          }
+        }
+      },
+      "CreateTextRequestBody": {
+        "type": "object",
+        "required": ["content"],
+        "properties": {
+          "content": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateTextRequestParams": {
+        "type": "object",
+        "required": ["document_id"],
+        "properties": {
+          "document_id": {
+            "type": "string"
+          }
+        }
+      },
+      "DocumentCognitionServiceApiVersion": {
+        "type": "string",
+        "enum": ["v1", "v2"]
+      },
+      "DocumentReference": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UserPdfRect"
+              },
+              {
+                "type": "object",
+                "required": ["kind"],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": ["pdf"]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "DocumentTextPart": {
+        "type": "object",
+        "required": ["id", "document_id", "reference"],
+        "properties": {
+          "document_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "reference": {
+            "$ref": "#/components/schemas/DocumentReference"
+          }
+        }
+      },
+      "EmptyResponse": {
+        "type": "object",
+        "description": "Empty response is required due to custom fetch forcing `response.json()`"
+      },
+      "ExtractionStatusEnum": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["incomplete"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["empty"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["insufficient"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["complete"]
+              }
+            }
+          }
+        ]
+      },
+      "ExtractionStatusPayload": {
+        "type": "object",
+        "required": ["attachment_id"],
+        "properties": {
+          "attachment_id": {
+            "type": "string"
+          }
+        }
+      },
+      "FileType": {
+        "type": "string",
+        "description": "Generates a FileType enum and associated ContentType enum with their implementations.\n\nThis macro takes a list of tuples in the format:\n(Variant, \"extension\", \"mime_type\", CONTENT_TYPE_VARIANT)\n\nFor each tuple it generates:\n- A variant in the FileType enum\n- A variant in the ContentType enum\n- Implementations for:\n  - FileType::to_str() - Converts FileType to extension string\n  - FileType::from_str() - Converts extension string to FileType\n  - From<FileType> for ContentType - Maps FileType to ContentType\n  - ContentType::mime_type() - Gets MIME type for ContentType\n",
+        "enum": [
+          "docx",
+          "pdf",
+          "md",
+          "canvas",
+          "py",
+          "js",
+          "ts",
+          "jsx",
+          "tsx",
+          "json",
+          "html",
+          "css",
+          "xml",
+          "yaml",
+          "yml",
+          "sql",
+          "sh",
+          "bash",
+          "markdown",
+          "txt",
+          "csv",
+          "jpeg",
+          "jpg",
+          "png",
+          "gif",
+          "svg",
+          "webp",
+          "heic",
+          "heif",
+          "zip",
+          "tar",
+          "targz",
+          "tgz",
+          "gz",
+          "mp4",
+          "mkv",
+          "webm",
+          "avi",
+          "mov",
+          "wmv",
+          "mpg",
+          "mpeg",
+          "m4v",
+          "flv",
+          "f4v",
+          "threegp",
+          "xls",
+          "ppt",
+          "pptx",
+          "xlsx"
+        ]
+      },
       "GenericErrorResponse": {
         "type": "object",
         "required": ["error", "message"],
@@ -2413,6 +2552,40 @@
           }
         }
       },
+      "HttpSendChatMessageRequest": {
+        "type": "object",
+        "description": "HTTP request payload for sending a chat message.\nUnlike the WebSocket payload, this does not include stream_id as it's generated server-side.",
+        "required": ["content", "model"],
+        "properties": {
+          "additional_instructions": {
+            "type": ["string", "null"],
+            "description": "Additional system instructions appended to the base system prompt"
+          },
+          "attachments": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/ChatAttachmentWithName"
+            },
+            "description": "Attachments for the message"
+          },
+          "chat_id": {
+            "type": ["string", "null"],
+            "description": "Id of the chat the message belongs to (optional - if not provided, a new chat is created)"
+          },
+          "content": {
+            "type": "string",
+            "description": "The content of the message"
+          },
+          "model": {
+            "$ref": "#/components/schemas/Model",
+            "description": "The model to respond with"
+          },
+          "toolset": {
+            "$ref": "#/components/schemas/ToolSet",
+            "description": "Which toolset to use. Defaults to `all`"
+          }
+        }
+      },
       "JwtPayload": {
         "type": "object",
         "required": ["token"],
@@ -2504,6 +2677,10 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "id": {
+            "type": ["string", "null"],
+            "description": "Optional pre-generated ID. If None, the database generates one."
           },
           "model": {
             "$ref": "#/components/schemas/Model",
@@ -2626,7 +2803,7 @@
               },
               "stream_id": {
                 "type": "string",
-                "description": "you give me id, i give you id"
+                "description": "Stream ID for tracking the response"
               },
               "toolset": {
                 "$ref": "#/components/schemas/ToolSet",
@@ -2635,6 +2812,25 @@
             }
           }
         ]
+      },
+      "SendChatMessageResponse": {
+        "type": "object",
+        "description": "Response for initiating a chat message stream",
+        "required": ["stream_id", "message_id", "chat_id"],
+        "properties": {
+          "chat_id": {
+            "type": "string",
+            "description": "The chat ID (may differ from request if a new chat was created)"
+          },
+          "message_id": {
+            "type": "string",
+            "description": "The message ID for the AI response"
+          },
+          "stream_id": {
+            "type": "string",
+            "description": "The stream ID that will receive the response chunks (same as message_id)"
+          }
+        }
       },
       "SendCompletionPayload": {
         "type": "object",
@@ -2691,6 +2887,30 @@
                 "description": "The level of public access"
               }
             ]
+          }
+        }
+      },
+      "SimpleCompletionError": {
+        "type": "object",
+        "description": "Error response for simple completion endpoint",
+        "required": ["error"],
+        "properties": {
+          "completion_id": {
+            "type": ["string", "null"]
+          },
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "SimpleCompletionResponse": {
+        "type": "object",
+        "description": "Response for initiating a simple completion stream",
+        "required": ["completion_id"],
+        "properties": {
+          "completion_id": {
+            "type": "string",
+            "description": "The completion ID that will receive the response chunks"
           }
         }
       },

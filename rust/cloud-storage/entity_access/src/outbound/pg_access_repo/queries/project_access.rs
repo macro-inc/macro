@@ -13,9 +13,9 @@ use std::str::FromStr;
 pub async fn get_project_access(
     pool: &PgPool,
     project_id: &str,
-    user_id: &MacroUserId<Lowercase<'_>>,
+    user_id: Option<&MacroUserId<Lowercase<'_>>>,
 ) -> Result<Option<AccessLevel>, sqlx::Error> {
-    let user_id = user_id.as_ref();
+    let user_id = user_id.map(AsRef::as_ref).unwrap_or("");
     let all_level_strings: Vec<Option<String>> = sqlx::query_scalar!(
         r#"
         -- CTE to recursively find all parent projects, starting from the given project.

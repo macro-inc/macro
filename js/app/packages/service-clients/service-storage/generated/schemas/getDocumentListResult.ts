@@ -6,8 +6,10 @@
  */
 import type { GetDocumentListResultBranchedFromId } from './getDocumentListResultBranchedFromId';
 import type { GetDocumentListResultBranchedFromVersionId } from './getDocumentListResultBranchedFromVersionId';
+import type { GetDocumentListResultCreatedAt } from './getDocumentListResultCreatedAt';
 import type { GetDocumentListResultDocumentFamilyId } from './getDocumentListResultDocumentFamilyId';
 import type { GetDocumentListResultFileType } from './getDocumentListResultFileType';
+import type { GetDocumentListResultUpdatedAt } from './getDocumentListResultUpdatedAt';
 
 export interface GetDocumentListResult {
   /** The id of the document this document branched from */
@@ -17,7 +19,7 @@ This could be either DocumentInstance or DocumentBom id depending on
 the file type */
   branchedFromVersionId?: GetDocumentListResultBranchedFromVersionId;
   /** The time the document was created */
-  createdAt: number;
+  createdAt?: GetDocumentListResultCreatedAt;
   /** The id of the document family this document belongs to */
   documentFamilyId?: GetDocumentListResultDocumentFamilyId;
   /** The id of the document */
@@ -29,5 +31,5 @@ the file type */
   /** The file type of the document */
   fileType?: GetDocumentListResultFileType;
   /** The time the document instance / document BOM was updated */
-  updatedAt: number;
+  updatedAt?: GetDocumentListResultUpdatedAt;
 }

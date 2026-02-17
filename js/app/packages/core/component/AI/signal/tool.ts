@@ -1,8 +1,11 @@
-import type { MessageStream } from '@service-cognition/websocket';
+import type { ChatStream } from '@service-cognition/generated/schemas';
+import type { Accessor } from 'solid-js';
 import { createEffect, on } from 'solid-js';
 import { triggerToolCall } from '../component/tool/handler';
 
-export function registerToolHandler(stream: () => MessageStream | undefined) {
+type StreamLike = { data: Accessor<ChatStream[]> };
+
+export function registerToolHandler(stream: () => StreamLike | undefined) {
   createEffect(
     on(
       [stream, () => stream()?.data()],

@@ -6,7 +6,7 @@ import {
   type FileTypeString,
   type MimeType,
 } from '@core/block';
-import type { SubType } from '@macro-entity';
+import type { SubType } from '@entity';
 import type { ItemType } from '@service-storage/client';
 import type { BasicDocumentSubTypeProperty } from '@service-storage/generated/schemas';
 import type { BasicDocumentFileType } from '@service-storage/generated/schemas/basicDocumentFileType';

@@ -598,6 +598,172 @@
         }
       }
     },
+    "/channels/{channel_id}/attachments": {
+      "get": {
+        "tags": ["channels::inbound::axum_router"],
+        "summary": "Handler for `GET /channels/:channel_id/attachments`.",
+        "operationId": "get_channel_attachments",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size (1-100, default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Base64 encoded cursor value",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiChannelAttachmentsPage"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/messages": {
+      "get": {
+        "tags": ["channels::inbound::axum_router"],
+        "summary": "Handler for `GET /channels/:channel_id/messages`.",
+        "operationId": "get_channel_messages",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size (1-100, default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Base64 encoded cursor value",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiChannelMessagesPage"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/participants": {
+      "get": {
+        "tags": ["channels::inbound::axum_router"],
+        "summary": "Handler for `GET /channels/:channel_id/participants`.",
+        "operationId": "get_channel_participants",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ApiChannelParticipant"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents": {
       "get": {
         "tags": ["document"],
@@ -1204,7 +1370,8 @@
     "/documents/{document_id}": {
       "get": {
         "tags": ["document"],
-        "summary": "Gets a particular document by its id",
+        "summary": "Handler for `GET /documents/:document_id`.",
+        "description": "Returns document metadata, user access level, and view location.",
         "operationId": "get_document",
         "parameters": [
           {
@@ -1233,7 +1400,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1243,7 +1410,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1253,7 +1420,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1340,8 +1507,9 @@
       },
       "delete": {
         "tags": ["document"],
-        "summary": "Deletes a specific document.\nThe document will be soft deleted and appear in the user's trash for 30 days.",
-        "operationId": "delete_document_handler",
+        "summary": "Handler for `DELETE /documents/:document_id`.",
+        "description": "Soft-deletes a document (only owners can delete).",
+        "operationId": "delete_document",
         "parameters": [
           {
             "name": "document_id",
@@ -1359,7 +1527,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse"
+                  "$ref": "#/components/schemas/GenericSuccessResponse"
                 }
               }
             }
@@ -1369,7 +1537,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1379,7 +1547,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1389,7 +1557,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1649,6 +1817,89 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/location_v3": {
+      "get": {
+        "tags": ["document"],
+        "summary": "Handler for `GET /documents/:document_id/location_v3`.",
+        "description": "Returns a presigned URL or sync service content for accessing the document.",
+        "operationId": "get_document_location_v3",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "document_version_id",
+            "in": "query",
+            "description": "A specific document version id to get the location for.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "get_converted_docx_url",
+            "in": "query",
+            "description": "If true, this will return the converted docx url.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -4519,17 +4770,324 @@
           }
         ]
       },
-      "BasicDocument": {
+      "ApiChannelAttachment": {
         "type": "object",
+        "description": "A channel-level attachment.",
         "required": [
           "id",
-          "documentVersionId",
-          "owner",
-          "name",
-          "createdAt",
-          "updatedAt",
-          "deletedAt"
+          "channel_id",
+          "message_id",
+          "entity_type",
+          "entity_id",
+          "created_at"
         ],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel id."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the attachment was created."
+          },
+          "entity_id": {
+            "type": "string",
+            "description": "Entity id."
+          },
+          "entity_type": {
+            "type": "string",
+            "description": "Type of entity."
+          },
+          "height": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Height (for images)."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Attachment id."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Message id this attachment belongs to."
+          },
+          "width": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Width (for images)."
+          }
+        }
+      },
+      "ApiChannelAttachmentsPage": {
+        "type": "object",
+        "description": "Paginated response of channel attachments.",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiChannelAttachment"
+            },
+            "description": "Attachments on this page."
+          },
+          "next_cursor": {
+            "type": ["string", "null"],
+            "description": "Cursor for the next page, null if no more pages."
+          }
+        }
+      },
+      "ApiChannelMessage": {
+        "type": "object",
+        "description": "A top-level channel message with thread info.",
+        "required": [
+          "id",
+          "channel_id",
+          "sender_id",
+          "content",
+          "created_at",
+          "updated_at",
+          "thread",
+          "reactions",
+          "attachments"
+        ],
+        "properties": {
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiMessageAttachment"
+            },
+            "description": "Attachments on this message."
+          },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel id."
+          },
+          "content": {
+            "type": "string",
+            "description": "Message content."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the message was created."
+          },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the message was soft-deleted."
+          },
+          "edited_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the message was edited."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Message id."
+          },
+          "reactions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiCountedReaction"
+            },
+            "description": "Reactions on this message."
+          },
+          "sender_id": {
+            "type": "string",
+            "description": "Sender user id."
+          },
+          "thread": {
+            "$ref": "#/components/schemas/ApiThreadInfo",
+            "description": "Thread metadata and preview."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the message was last updated."
+          }
+        }
+      },
+      "ApiChannelMessagesPage": {
+        "type": "object",
+        "description": "Paginated response of channel messages.",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiChannelMessage"
+            },
+            "description": "Messages on this page."
+          },
+          "next_cursor": {
+            "type": ["string", "null"],
+            "description": "Cursor for the next page, null if no more pages."
+          }
+        }
+      },
+      "ApiChannelParticipant": {
+        "type": "object",
+        "description": "A channel participant.",
+        "required": ["channel_id", "user_id", "role", "joined_at"],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel id."
+          },
+          "joined_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the user joined."
+          },
+          "role": {
+            "$ref": "#/components/schemas/ApiParticipantRole",
+            "description": "Role in the channel."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User id."
+          }
+        }
+      },
+      "ApiCountedReaction": {
+        "type": "object",
+        "description": "A reaction with emoji and user list.",
+        "required": ["emoji", "users"],
+        "properties": {
+          "emoji": {
+            "type": "string",
+            "description": "The emoji string."
+          },
+          "users": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "User ids who added this reaction."
+          }
+        }
+      },
+      "ApiMessageAttachment": {
+        "type": "object",
+        "description": "An attachment on a message.",
+        "required": ["id", "entity_type", "entity_id", "created_at"],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the attachment was created."
+          },
+          "entity_id": {
+            "type": "string",
+            "description": "Entity id."
+          },
+          "entity_type": {
+            "type": "string",
+            "description": "Type of entity."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Attachment id."
+          }
+        }
+      },
+      "ApiParticipantRole": {
+        "type": "string",
+        "description": "Participant role in a channel.",
+        "enum": ["owner", "admin", "member"]
+      },
+      "ApiThreadInfo": {
+        "type": "object",
+        "description": "Thread metadata and preview replies.",
+        "required": ["reply_count", "preview"],
+        "properties": {
+          "latest_reply_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Timestamp of the latest reply."
+          },
+          "preview": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiThreadReply"
+            },
+            "description": "Last N replies for thread preview."
+          },
+          "reply_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total reply count."
+          }
+        }
+      },
+      "ApiThreadReply": {
+        "type": "object",
+        "description": "A thread reply shown in preview.",
+        "required": [
+          "id",
+          "sender_id",
+          "content",
+          "created_at",
+          "updated_at",
+          "reactions",
+          "attachments"
+        ],
+        "properties": {
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiMessageAttachment"
+            },
+            "description": "Attachments on this reply."
+          },
+          "content": {
+            "type": "string",
+            "description": "Reply content."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the reply was created."
+          },
+          "edited_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the reply was edited."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Reply id."
+          },
+          "reactions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiCountedReaction"
+            },
+            "description": "Reactions on this reply."
+          },
+          "sender_id": {
+            "type": "string",
+            "description": "Sender user id."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the reply was last updated."
+          }
+        }
+      },
+      "BasicDocument": {
+        "type": "object",
+        "required": ["id", "documentVersionId", "owner", "name"],
         "properties": {
           "branchedFromId": {
             "type": ["string", "null"],
@@ -4541,13 +5099,13 @@
             "description": "The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type"
           },
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document was created"
           },
           "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document was deleted"
           },
           "documentFamilyId": {
@@ -4596,8 +5154,8 @@
             ]
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document instance / document BOM was updated"
           }
         }
@@ -4688,6 +5246,13 @@
               "type": "string"
             },
             "description": "Channel IDs to search within. Examples: ['general']. Empty to search all accessible channels."
+          },
+          "channel_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Channel types to filter by. Examples: ['public'], ['direct_message', 'private']. Empty to search all channel types."
           },
           "importance": {
             "type": ["boolean", "null"],
@@ -4827,24 +5392,16 @@
       },
       "Chat": {
         "type": "object",
-        "required": [
-          "id",
-          "name",
-          "userId",
-          "createdAt",
-          "updatedAt",
-          "isPersistent",
-          "deletedAt"
-        ],
+        "required": ["id", "name", "userId", "isPersistent"],
         "properties": {
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the chat was created"
           },
           "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the chat was deleted"
           },
           "id": {
@@ -4871,8 +5428,8 @@
             "format": "int64"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the chat was last updated"
           },
           "userId": {
@@ -4925,27 +5482,19 @@
       },
       "Comment": {
         "type": "object",
-        "required": [
-          "commentId",
-          "threadId",
-          "owner",
-          "text",
-          "createdAt",
-          "updatedAt",
-          "deletedAt"
-        ],
+        "required": ["commentId", "threadId", "owner", "text"],
         "properties": {
           "commentId": {
             "type": "integer",
             "format": "int64"
           },
           "createdAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "metadata": {},
           "order": {
@@ -4966,8 +5515,8 @@
             "format": "int64"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         }
       },
@@ -5531,10 +6080,7 @@
           "documentId",
           "documentVersionId",
           "owner",
-          "documentName",
-          "createdAt",
-          "updatedAt",
-          "deletedAt"
+          "documentName"
         ],
         "properties": {
           "branchedFromId": {
@@ -5547,13 +6093,13 @@
             "description": "The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type"
           },
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document was created"
           },
           "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document was deleted"
           },
           "documentBom": {
@@ -5616,8 +6162,8 @@
             ]
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document instance / document BOM was updated"
           }
         }
@@ -5726,7 +6272,7 @@
       },
       "DocumentPreviewData": {
         "type": "object",
-        "required": ["document_id", "document_name", "owner", "updated_at"],
+        "required": ["document_id", "document_name", "owner"],
         "properties": {
           "document_id": {
             "type": "string",
@@ -5756,8 +6302,8 @@
             ]
           },
           "updated_at": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document was last updated"
           }
         }
@@ -5800,9 +6346,7 @@
           "documentId",
           "documentVersionId",
           "owner",
-          "documentName",
-          "createdAt",
-          "updatedAt"
+          "documentName"
         ],
         "properties": {
           "branchedFromId": {
@@ -5815,8 +6359,8 @@
             "description": "The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type"
           },
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document was created"
           },
           "documentBom": {
@@ -5871,8 +6415,8 @@
             ]
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document instance / document BOM was updated"
           }
         }
@@ -6086,6 +6630,13 @@
               "type": "string"
             },
             "description": "Email CC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by CC."
+          },
+          "email_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Email thread IDs to filter by. Examples: ['thread-uuid-1']. Empty to search all threads."
           },
           "importance": {
             "type": ["boolean", "null"],
@@ -6360,6 +6911,17 @@
           "tgz",
           "gz",
           "mp4",
+          "mkv",
+          "webm",
+          "avi",
+          "mov",
+          "wmv",
+          "mpg",
+          "mpeg",
+          "m4v",
+          "flv",
+          "f4v",
+          "threegp",
           "xls",
           "ppt",
           "pptx",
@@ -6536,13 +7098,7 @@
       },
       "GetDocumentListResult": {
         "type": "object",
-        "required": [
-          "documentId",
-          "documentVersionId",
-          "documentName",
-          "createdAt",
-          "updatedAt"
-        ],
+        "required": ["documentId", "documentVersionId", "documentName"],
         "properties": {
           "branchedFromId": {
             "type": ["string", "null"],
@@ -6554,8 +7110,8 @@
             "description": "The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type"
           },
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document was created"
           },
           "documentFamilyId": {
@@ -6581,8 +7137,8 @@
             "description": "The file type of the document"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document instance / document BOM was updated"
           }
         }
@@ -7189,9 +7745,6 @@
           "text",
           "pageViewportWidth",
           "pageViewportHeight",
-          "createdAt",
-          "updatedAt",
-          "deletedAt",
           "highlightRects"
         ],
         "properties": {
@@ -7204,12 +7757,12 @@
             "format": "int32"
           },
           "createdAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "documentId": {
             "type": "string"
@@ -7254,8 +7807,8 @@
             "format": "int64"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "uuid": {
             "type": "string",
@@ -7618,23 +8171,16 @@
       },
       "Project": {
         "type": "object",
-        "required": [
-          "id",
-          "name",
-          "userId",
-          "createdAt",
-          "updatedAt",
-          "deletedAt"
-        ],
+        "required": ["id", "name", "userId"],
         "properties": {
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the project was created"
           },
           "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "id": {
             "type": "string",
@@ -7649,8 +8195,8 @@
             "description": "The parent project id"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the project was updated"
           },
           "userId": {
@@ -7779,7 +8325,7 @@
       },
       "ProjectPreviewData": {
         "type": "object",
-        "required": ["id", "name", "owner", "path", "updatedAt"],
+        "required": ["id", "name", "owner", "path"],
         "properties": {
           "id": {
             "type": "string"
@@ -7797,8 +8343,8 @@
             }
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         }
       },
@@ -8395,8 +8941,8 @@
             "type": ["string", "null"]
           },
           "createdAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "filename": {
             "type": ["string", "null"]
@@ -8453,19 +8999,17 @@
           "isPersistent",
           "createdAt",
           "updatedAt",
-          "viewedAt",
-          "deletedAt",
           "properties"
         ],
         "properties": {
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": "string",
+            "format": "date-time",
             "description": "The time the chat was created"
           },
           "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the chat was deleted"
           },
           "id": {
@@ -8498,13 +9042,13 @@
             "description": "Properties"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": "string",
+            "format": "date-time",
             "description": "The time the chat was last updated"
           },
           "viewedAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the chat was last viewed"
           }
         }
@@ -8541,8 +9085,6 @@
           "name",
           "createdAt",
           "updatedAt",
-          "viewedAt",
-          "deletedAt",
           "properties"
         ],
         "properties": {
@@ -8557,13 +9099,13 @@
             "description": "The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on the file type"
           },
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": "string",
+            "format": "date-time",
             "description": "The time the document was created"
           },
           "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document was deleted"
           },
           "documentFamilyId": {
@@ -8621,13 +9163,13 @@
             ]
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": "string",
+            "format": "date-time",
             "description": "The time the document instance / document BOM was updated"
           },
           "viewedAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document was last viewed"
           }
         }
@@ -8663,13 +9205,12 @@
           "isImportant",
           "sortTs",
           "createdAt",
-          "updatedAt",
-          "viewedAt"
+          "updatedAt"
         ],
         "properties": {
           "createdAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "id": {
             "type": "string",
@@ -8709,16 +9250,16 @@
             "type": ["string", "null"]
           },
           "sortTs": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time"
           },
           "viewedAt": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         }
       },
@@ -8905,19 +9446,17 @@
           "ownerId",
           "createdAt",
           "updatedAt",
-          "viewedAt",
-          "deletedAt",
           "properties"
         ],
         "properties": {
           "createdAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": "string",
+            "format": "date-time",
             "description": "The time the project was created"
           },
           "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the project was deleted"
           },
           "id": {
@@ -8946,13 +9485,13 @@
             "description": "Properties"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64",
+            "type": "string",
+            "format": "date-time",
             "description": "The time the project was updated"
           },
           "viewedAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
+            "type": ["string", "null"],
+            "format": "date-time",
             "description": "The time the document was last viewed"
           }
         }
@@ -9008,23 +9547,15 @@
       },
       "Thread": {
         "type": "object",
-        "required": [
-          "threadId",
-          "owner",
-          "resolved",
-          "documentId",
-          "createdAt",
-          "updatedAt",
-          "deletedAt"
-        ],
+        "required": ["threadId", "owner", "resolved", "documentId"],
         "properties": {
           "createdAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           },
           "documentId": {
             "type": "string"
@@ -9041,8 +9572,8 @@
             "format": "int64"
           },
           "updatedAt": {
-            "type": "integer",
-            "format": "int64"
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         }
       },

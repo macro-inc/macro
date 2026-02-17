@@ -100,6 +100,17 @@ const authenticationServiceInternalApiKeyArn: pulumi.Output<string> =
 
 export const coparse_api_vpc = get_coparse_api_vpc();
 
+const connectionGatewayStack = new pulumi.StackReference(
+  'connection-gateway-stack',
+  {
+    name: `macro-inc/connection-gateway/${stack}`,
+  }
+);
+
+const connectionGatewayRedisUrl: pulumi.Output<string> = connectionGatewayStack
+  .getOutput('connectionGatewayRedisUrl')
+  .apply((url) => url as string);
+
 const cloudStorageStack = new pulumi.StackReference('cloud-storage-stack', {
   name: `macro-inc/document-storage/${stack}`,
 });
@@ -311,6 +322,10 @@ const documentCognitionService = new DocumentCognitionService(
       {
         name: 'AUTHENTICATION_SERVICE_SECRET_KEY',
         value: AUTHENTICATION_SERVICE_INTERNAL_API_KEY_SECRET_NAME,
+      },
+      {
+        name: 'REDIS_URL',
+        value: pulumi.interpolate`redis://${connectionGatewayRedisUrl}`,
       },
       // OpenTelemetry / Datadog tracing configuration
       {

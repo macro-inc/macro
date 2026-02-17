@@ -12,6 +12,7 @@ use search_service_client::SearchServiceClient;
 use secretsmanager_client::LocalOrRemoteSecret;
 use sqlx::PgPool;
 use std::sync::{Arc, OnceLock};
+use stream::domain::StreamRepo;
 
 pub type DcsScribe =
     ScribeClient<DocumentClient, ChannelClient, DcsClient, EmailClient, StaticFileClient>;
@@ -29,9 +30,52 @@ pub struct ApiContext {
     pub config: Arc<Config>,
     pub internal_auth_key: LocalOrRemoteSecret<InternalApiSecretKey>,
     pub soup_service: Arc<ToolSoupService>,
+    pub stream_repo: Arc<dyn StreamRepo>,
 }
 
 pub static GLOBAL_CONTEXT: OnceLock<ApiContext> = OnceLock::new();
+
+#[cfg(test)]
+mod mock_stream {
+    use std::sync::Arc;
+    use stream::domain::{ItemId, ItemStream, Result, StreamId, StreamRepo};
+    use tokio::sync::broadcast::{self, Receiver};
+
+    /// Mock StreamRepo for testing - does nothing but satisfies the interface
+    pub struct MockStreamRepo {
+        tx: broadcast::Sender<StreamId>,
+    }
+
+    impl MockStreamRepo {
+        pub fn new() -> Arc<dyn StreamRepo> {
+            let (tx, _) = broadcast::channel(16);
+            Arc::new(Self { tx })
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl StreamRepo for MockStreamRepo {
+        async fn append(&self, _id: &StreamId, _payload: serde_json::Value) -> Result<ItemId> {
+            Ok("mock-item-id".to_string())
+        }
+
+        async fn stream_from_beginning(&self, _id: &StreamId) -> Result<ItemStream> {
+            Ok(Box::pin(futures::stream::empty()))
+        }
+
+        async fn close(&self, _id: &StreamId) -> Result<()> {
+            Ok(())
+        }
+
+        async fn active_streams(&self, _entity_id: &str) -> Result<Vec<StreamId>> {
+            Ok(vec![])
+        }
+
+        async fn notify(&self) -> Receiver<StreamId> {
+            self.tx.subscribe()
+        }
+    }
+}
 
 #[cfg(test)]
 pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Arc<ApiContext> {
@@ -139,6 +183,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         config: Arc::new(Config::new_empty_for_test()),
         internal_auth_key: LocalOrRemoteSecret::Local(InternalApiSecretKey::Comptime("testing")),
         soup_service,
+        stream_repo: mock_stream::MockStreamRepo::new(),
     };
     Arc::new(api_context)
 }

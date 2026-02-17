@@ -3,7 +3,7 @@ import type { Attachment } from '@core/component/AI/types';
 import { useChannelsContext } from '@core/context/channels';
 import type { ChannelWithParticipants } from '@core/user';
 import { isOk } from '@core/util/maybeResult';
-import { type EmailEntity, useEmails } from '@macro-entity';
+import type { EmailEntity } from '@entity';
 import type {
   AttachmentType,
   ChannelType,
@@ -99,7 +99,8 @@ export function useTabAttachments(): Accessor<ChatAttachmentWithName[]> {
   const historyQuery = useHistoryQuery();
   const channelsContext = useChannelsContext();
   const channels = channelsContext.channels;
-  const emails = useEmails();
+  // TODO: hook into email query because useEmails was deprecated
+  const emails: Accessor<EmailEntity[]> = () => [];
 
   // Get valid active tabs using createMemo
   const tabs = createMemo(() => {

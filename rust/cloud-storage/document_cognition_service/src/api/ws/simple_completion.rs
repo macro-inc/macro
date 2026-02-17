@@ -1,7 +1,7 @@
 /* A completion without a chat or attachments */
 use crate::api::context::ApiContext;
 use crate::core::constants::DEFAULT_MAX_TOKENS;
-use crate::model::ws::{FromWebSocketMessage, GetSimpleCompletionStreamPayload, WebSocketError};
+use crate::model::ws::{ChatStream, GetSimpleCompletionStreamPayload, WebSocketError};
 use crate::service::attachment::document::get_document_plaintext_content;
 use ai::chat_stream::get_chat_stream;
 use ai::types::{ChatStreamCompletionResponse, MessageBuilder, Model, RequestBuilder};
@@ -18,7 +18,7 @@ const SIMPLE_COMPLETION_DEFAULT_MODEL: Model = Model::OpenAIGPT4oMini;
 #[tracing::instrument(skip(ctx, payload, sender))]
 pub async fn handle_simple_completion(
     ctx: Arc<ApiContext>,
-    sender: &UnboundedSender<FromWebSocketMessage>,
+    sender: &UnboundedSender<ChatStream>,
     payload: &GetSimpleCompletionStreamPayload,
     user_id: &str,
 ) -> Result<(), WebSocketError> {
@@ -84,7 +84,7 @@ pub async fn handle_simple_completion(
         for part in parts {
             let ChatStreamCompletionResponse::Content(content) = part;
             cumulative_content.push_str(&content.content);
-            let message = FromWebSocketMessage::CompletionStreamChunk {
+            let message = ChatStream::CompletionStreamChunk {
                 completion_id: payload.completion_id.clone(),
                 content: cumulative_content.clone(),
                 done: false,
@@ -97,7 +97,7 @@ pub async fn handle_simple_completion(
             })?;
         }
     }
-    let message = FromWebSocketMessage::CompletionStreamChunk {
+    let message = ChatStream::CompletionStreamChunk {
         completion_id: payload.completion_id.clone(),
         content: cumulative_content.clone(),
         done: true,

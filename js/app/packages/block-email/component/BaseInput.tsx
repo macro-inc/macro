@@ -105,7 +105,9 @@ import {
 } from './EmailContext';
 import { getOrInitEmailFormContext } from './EmailFormContext';
 import {
+  useAddForwardedAttachmentsMutation,
   useRemoveDraftAttachmentMutation,
+  useRemoveForwardedAttachmentMutation,
   useUploadDraftAttachmentsMutation,
 } from '@queries/email/attachment';
 import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
@@ -392,6 +394,7 @@ export function BaseInput(props: {
   });
 
   const uploadAttachmentMutation = useUploadDraftAttachmentsMutation();
+  const addForwardedAttachmentsMutation = useAddForwardedAttachmentsMutation();
   const saveDraftMutation = useSaveDraftMutation();
   const deleteDraftMutation = useDeleteDraftMutation();
 
@@ -528,9 +531,7 @@ export function BaseInput(props: {
 
     // If there's an existing draft, we should send the sendTime so that the send time
     // stays up to date and is not removed
-    const sendTime = existingDraft
-      ? form().sendTime()?.toISOString()
-      : undefined;
+    const sendTime = existingDraft ? form().sendTime() : undefined;
 
     const draftResponse = await saveDraftMutation.mutateAsync({
       draft: {
@@ -568,6 +569,23 @@ export function BaseInput(props: {
             attachment.attachmentID
           );
         }
+      }
+
+      // Sync forwarded attachments
+      const forwardedAttachments = form()
+        .attachments.list()
+        .filter((a) => a.type === 'forwarded') as Extract<
+        DraftFormAttachment,
+        { type: 'forwarded' }
+      >[];
+
+      if (forwardedAttachments.length) {
+        await addForwardedAttachmentsMutation.mutateAsync({
+          draftID: draftId,
+          attachments: forwardedAttachments.map((a) => ({
+            attachmentID: a.attachmentID,
+          })),
+        });
       }
 
       setSavedDraftId(draftId);
@@ -723,7 +741,7 @@ export function BaseInput(props: {
     const currentDraftID = savedDraftId();
     if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
 
-    const sendTime = form().sendTime()?.toISOString();
+    const sendTime = form().sendTime();
 
     if (sendTime) {
       // Just in case, always get a fresh save of the draft so we don't miss any information
@@ -943,10 +961,14 @@ export function BaseInput(props: {
   };
 
   const removeAttachmentMutation = useRemoveDraftAttachmentMutation();
+  const removeForwardedAttachmentMutation =
+    useRemoveForwardedAttachmentMutation();
 
   const handleRemoveAttachment = (attachment: DraftFormAttachment) => {
     if (attachment.type === 'local') {
       form().attachments.removeByFile(attachment.file);
+    } else if (attachment.type === 'forwarded') {
+      form().attachments.removeForwarded(attachment.attachmentID);
     } else {
       form().attachments.removeByID(attachment.attachmentID);
     }
@@ -955,10 +977,17 @@ export function BaseInput(props: {
 
     if (!currentDraftID || !attachment.attachmentID) return;
 
-    removeAttachmentMutation.mutate({
-      draftID: currentDraftID,
-      attachmentID: attachment.attachmentID,
-    });
+    if (attachment.type === 'forwarded') {
+      removeForwardedAttachmentMutation.mutate({
+        draftID: currentDraftID,
+        attachmentID: attachment.attachmentID,
+      });
+    } else {
+      removeAttachmentMutation.mutate({
+        draftID: currentDraftID,
+        attachmentID: attachment.attachmentID,
+      });
+    }
   };
 
   const unscheduleMessageMutation = useUnscheduleMessageMutation({
@@ -1285,6 +1314,18 @@ export function BaseInput(props: {
                         attachment={{
                           fileName: attachment().fileName,
                           mimeType: attachment().contentType,
+                        }}
+                        removable
+                        onRemove={() => handleRemoveAttachment(attachment())}
+                      />
+                    )}
+                  </Match>
+                  <Match when={attachment.type === 'forwarded' && attachment}>
+                    {(attachment) => (
+                      <EmailAttachmentPill
+                        attachment={{
+                          fileName: attachment().fileName,
+                          mimeType: attachment().mimeType,
                         }}
                         removable
                         onRemove={() => handleRemoveAttachment(attachment())}

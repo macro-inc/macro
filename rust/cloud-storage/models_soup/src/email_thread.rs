@@ -79,8 +79,6 @@ pub struct SoupAttachment {
     pub mime_type: Option<String>,
     pub size_bytes: Option<i64>,
     pub content_id: Option<String>,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    #[cfg_attr(feature = "schema", schema(value_type = i64))]
     pub created_at: DateTime<Utc>,
 }
 
@@ -103,17 +101,9 @@ pub struct SoupEmailThreadPreview {
     pub sender_email: Option<String>,
     pub sender_name: Option<String>,
     pub sender_photo_url: Option<String>,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    #[cfg_attr(feature = "schema", schema(value_type = i64))]
     pub sort_ts: DateTime<Utc>,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    #[cfg_attr(feature = "schema", schema(value_type = i64))]
     pub created_at: DateTime<Utc>,
-    #[serde(with = "chrono::serde::ts_milliseconds")]
-    #[cfg_attr(feature = "schema", schema(value_type = i64))]
     pub updated_at: DateTime<Utc>,
-    #[serde(with = "chrono::serde::ts_milliseconds_option")]
-    #[cfg_attr(feature = "schema", schema(value_type = i64, nullable = true))]
     pub viewed_at: Option<DateTime<Utc>>,
 }
 

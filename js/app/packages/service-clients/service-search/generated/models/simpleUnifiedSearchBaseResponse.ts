@@ -4,8 +4,8 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
-import type { SimpleUnifiedSearchResponseBaseItemTimestampSeconds } from './simpleUnifiedSearchResponseBaseItemTimestampSeconds';
+import type { SimpleUnifiedSearchResponseBaseItemHumanReadableTimestamp } from './simpleUnifiedSearchResponseBaseItemHumanReadableTimestamp';
 
 export interface SimpleUnifiedSearchBaseResponse {
-  results: SimpleUnifiedSearchResponseBaseItemTimestampSeconds[];
+  results: SimpleUnifiedSearchResponseBaseItemHumanReadableTimestamp[];
 }

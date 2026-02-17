@@ -1,3 +1,5 @@
+//! Queue message models for notification delivery via SQS.
+
 use crate::domain::models::{
     Notification, RateLimitConfig, RateLimitKey, SendNotificationRequest, TaggedContent,
     apple::APNSPushNotification, mobile::MessageAttributes,
@@ -14,6 +16,7 @@ use uuid::Uuid;
 pub struct APNSTargets<T> {
     /// The APNS notification payload.
     pub notif: APNSPushNotification<T>,
+    /// The APNS message attributes.
     pub attributes: MessageAttributes,
     /// The iOS device endpoints to deliver to.
     pub ios_device_endpoints: Vec<String>,
@@ -33,6 +36,7 @@ pub struct EmailContent {
 pub struct EmailNotification<'a> {
     /// The recipient email/user ID.
     pub to: MacroUserIdStr<'a>,
+    /// The email content (subject and body).
     pub content: EmailContent,
 }
 
@@ -40,29 +44,29 @@ pub struct EmailNotification<'a> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConnGatewayInnerNotif<T> {
     /// The notification ID.
-    pub(crate) notification_id: uuid::Uuid,
+    pub notification_id: uuid::Uuid,
     /// The notification event type string (e.g. "channel_mention").
     /// TODO make this a new type
-    pub(crate) notification_event_type: String,
+    pub notification_event_type: String,
     /// The entity the notification is about.
     #[serde(flatten)]
-    pub(crate) entity: Entity<'static>,
+    pub entity: Entity<'static>,
     /// Whether the notification has been sent.
-    pub(crate) sent: bool,
+    pub sent: bool,
     /// Whether the notification is marked as done.
-    pub(crate) done: bool,
+    pub done: bool,
     /// When the notification was created.
-    pub(crate) created_at: Option<DateTime<Utc>>,
+    pub created_at: Option<DateTime<Utc>>,
     /// When the notification was viewed/seen.
-    pub(crate) viewed_at: Option<DateTime<Utc>>,
+    pub viewed_at: Option<DateTime<Utc>>,
     /// When the notification was last updated.
-    pub(crate) updated_at: Option<DateTime<Utc>>,
+    pub updated_at: Option<DateTime<Utc>>,
     /// When the notification was deleted.
-    pub(crate) deleted_at: Option<DateTime<Utc>>,
+    pub deleted_at: Option<DateTime<Utc>>,
     /// Deserialized notification metadata.
-    pub(crate) notification_metadata: TaggedContent<T>,
+    pub notification_metadata: TaggedContent<T>,
     /// The user who triggered the notification.
-    pub(crate) sender_id: Option<MacroUserIdStr<'static>>,
+    pub sender_id: Option<MacroUserIdStr<'static>>,
 }
 
 /// Connection gateway (WebSocket) notification payload.
@@ -97,6 +101,7 @@ impl<'a, T: Notification + Clone> ConnGatewayNotification<'a, T> {
 
 #[cfg(test)]
 impl<'a, T: Notification> ConnGatewayNotification<'a, T> {
+    /// function which is used for testing do not use in runtime code
     pub fn testing_to_value(self) -> ConnGatewayNotification<'a, serde_json::Value> {
         let ConnGatewayNotification {
             notif:
@@ -200,10 +205,13 @@ pub enum DeliverySuccess {
     Email,
 }
 
+/// Failure during notification delivery.
 #[derive(Debug, Error)]
 pub enum DeliveryFailure {
+    /// The rate limit for this notification type was exceeded.
     #[error("The rate limit was exceeded")]
     RateLimit,
+    /// A delivery error occurred.
     #[error("A delivery error occured")]
     Other,
 }

@@ -13,7 +13,7 @@ import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler'
 import EyeSlash from '@icon/duotone/eye-slash-duotone.svg';
 import TrashSimple from '@icon/duotone/trash-simple-duotone.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
-import type { NamedSubType } from '@macro-entity';
+import type { NamedSubType } from '@entity';
 import type { ItemType } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import {

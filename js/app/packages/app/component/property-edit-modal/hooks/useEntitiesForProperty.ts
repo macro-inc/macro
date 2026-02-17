@@ -11,11 +11,9 @@ import {
 import { useAugmentUserWithDmActivity, useContacts } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
 import { useEmail } from '@core/context/user';
-import {
-  createEmailsInfiniteQuery,
-  createUnifiedSearchInfiniteQuery,
-  type EmailEntity,
-} from '@macro-entity';
+import { createEmailsInfiniteQuery } from '@macro-entity';
+import type { EmailEntity } from '@entity';
+import { useSearchSoupQuery } from '@queries/soup/search';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { useHistoryQuery } from '@queries/history/history';
 import { debounce } from '@solid-primitives/scheduled';
@@ -62,19 +60,19 @@ export function useEntitiesForProperty(
   const emails = () => emailsQuery.data ?? [];
 
   // Server-side email search
-  const emailSearchQuery = createUnifiedSearchInfiniteQuery(
+  const emailSearchQuery = useSearchSoupQuery(
     () => ({
-      params: { page: 0, page_size: 20 },
-      request: {
+      params: { page_size: 20 },
+      body: {
         query: searchTerm(),
         match_type: 'partial' as const,
         include: ['emails' as const],
         search_on: 'name' as const,
       },
     }),
-    {
-      disabled: () => !needsEmailSearch() || !searchTerm(),
-    }
+    () => ({
+      enabled: needsEmailSearch() && !!searchTerm(),
+    })
   );
 
   // Server search results mapped to our format

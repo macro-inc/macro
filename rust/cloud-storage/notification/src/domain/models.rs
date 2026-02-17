@@ -8,7 +8,7 @@ pub mod apple;
 
 pub mod email_notification_digest;
 pub mod mobile;
-pub(crate) mod queue_message;
+pub mod queue_message;
 pub mod rate_limit;
 pub mod recipient;
 pub mod request;

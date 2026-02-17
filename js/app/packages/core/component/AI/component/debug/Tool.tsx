@@ -1,7 +1,20 @@
+import { DEFAULT_MODEL } from '@core/component/AI/constant';
+import type { ChatMessageStream } from '@core/component/AI/types';
 import { blockDone, createStream } from '@core/component/AI/util/stream';
+import type { MessageStream } from '@service-cognition/websocket';
 import { mockMessages } from './mockData';
 import { StreamDebugger } from './stream';
 import { Item } from './util';
+
+function toChat(stream: MessageStream): ChatMessageStream {
+  return {
+    data: stream.data,
+    isDone: stream.isDone,
+    model: DEFAULT_MODEL,
+    attachments: [],
+    streamId: stream.request.stream_id,
+  };
+}
 
 export default function DebugTools() {
   return (
@@ -35,7 +48,7 @@ function ToolCall() {
   const neverDone = blockDone(stream);
   return (
     <Item label="Tool Call">
-      <StreamDebugger stream={neverDone} messages={messages} />
+      <StreamDebugger stream={toChat(neverDone)} messages={messages} />
     </Item>
   );
 }
@@ -78,7 +91,7 @@ function ToolResponse() {
   const neverDone = blockDone(stream);
   return (
     <Item label="Tool Response">
-      <StreamDebugger stream={neverDone} messages={messages} />
+      <StreamDebugger stream={toChat(neverDone)} messages={messages} />
     </Item>
   );
 }
@@ -120,7 +133,7 @@ function ToolResponsStreamEnd() {
   ]);
   return (
     <Item label="Tool Response Stream Done">
-      <StreamDebugger stream={stream} messages={messages} />
+      <StreamDebugger stream={toChat(stream)} messages={messages} />
     </Item>
   );
 }

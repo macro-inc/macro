@@ -1,0 +1,562 @@
+//! HTTP endpoint for sending chat messages with streaming responses.
+
+use crate::api::context::ApiContext;
+use crate::api::utils::log;
+use crate::api::ws::chat_message::ai_request::build_chat_completion_request;
+use crate::api::ws::chat_message::toolset::choose_toolset;
+use crate::api::ws::chat_message::{store_conversation_messages, store_incoming_message};
+use crate::api::ws::chat_permissions;
+use crate::api::ws::connection::MESSAGE_ABORT_MAP;
+use crate::core::constants::DEFAULT_CHAT_NAME;
+use crate::core::model::FALLBACK_MODEL;
+use crate::model::ws::{ChatStream, JwtPayload, SendChatMessagePayload, StreamError, ToolSet};
+use crate::service::ai::name::maybe_rename_chat;
+use crate::service::get_chat::get_chat;
+use ai::tool::ToolLoop;
+use ai::tool::types::StreamPart;
+use ai::types::{AssistantMessagePart, ChatMessage, Model};
+use ai_tools::{AiToolSet, RequestContext, ToolServiceContext};
+use async_stream::stream;
+use axum::Json;
+use axum::extract::{Extension, Request, State};
+use axum::http::StatusCode;
+use axum::middleware::Next;
+use axum::response::IntoResponse;
+use futures::StreamExt;
+use macro_db_client::dcs::create_chat;
+use macro_user_id::user_id::MacroUserIdStr;
+use model::chat::ChatAttachmentWithName;
+use model::user::UserContext;
+use model_entity::EntityType;
+use models_permissions::share_permission::SharePermissionV2;
+use models_permissions::share_permission::access_level::AccessLevel;
+use serde::{Deserialize, Serialize};
+use std::fmt;
+use std::sync::Arc;
+use stream::domain::{PayloadStream, StreamId, StreamManagerExt};
+use tokio::sync::oneshot;
+use utoipa::ToSchema;
+
+/// Raw Bearer token extracted from the Authorization header.
+#[derive(Clone)]
+pub(crate) struct BearerToken(pub String);
+
+/// Middleware that extracts the raw access token from request headers or cookies
+/// and inserts it into request extensions.
+pub(crate) async fn attach_bearer_token(
+    mut req: Request,
+    next: Next,
+) -> Result<axum::response::Response, StatusCode> {
+    if cfg!(feature = "local_auth") {
+        let token = macro_auth::headers::extract_access_token_from_request_headers(req.headers())
+            .unwrap_or_default();
+        req.extensions_mut().insert(BearerToken(token));
+        return Ok(next.run(req).await);
+    }
+
+    let token = macro_auth::headers::extract_access_token_from_request_headers(req.headers())
+        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+
+    req.extensions_mut().insert(BearerToken(token));
+    Ok(next.run(req).await)
+}
+
+/// HTTP request payload for sending a chat message.
+/// Unlike the WebSocket payload, this does not include stream_id as it's generated server-side.
+#[derive(Debug, Serialize, Deserialize, ToSchema, Clone)]
+pub struct HttpSendChatMessageRequest {
+    /// The content of the message
+    pub content: String,
+    /// Id of the chat the message belongs to (optional - if not provided, a new chat is created)
+    pub chat_id: Option<String>,
+    /// The model to respond with
+    pub model: Model,
+    /// Additional system instructions appended to the base system prompt
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub additional_instructions: Option<String>,
+    /// Attachments for the message
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attachments: Option<Vec<ChatAttachmentWithName>>,
+    /// Which toolset to use. Defaults to `all`
+    #[serde(default)]
+    pub toolset: ToolSet,
+}
+
+/// Response for initiating a chat message stream
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct SendChatMessageResponse {
+    /// The stream ID that will receive the response chunks (same as message_id)
+    pub stream_id: String,
+    /// The message ID for the AI response
+    pub message_id: String,
+    /// The chat ID (may differ from request if a new chat was created)
+    pub chat_id: String,
+}
+
+/// Error response for chat message endpoints
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct ChatMessageError {
+    pub error: String,
+    pub stream_id: Option<String>,
+}
+
+impl fmt::Display for ChatMessageError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.error)
+    }
+}
+
+impl IntoResponse for ChatMessageError {
+    fn into_response(self) -> axum::response::Response {
+        (StatusCode::BAD_REQUEST, Json(self)).into_response()
+    }
+}
+
+/// Send a new chat message and stream the AI response.
+///
+/// This endpoint initiates a chat message and streams the response via the stream service.
+/// The client should subscribe to the returned stream_id via connection_gateway to receive chunks.
+#[utoipa::path(
+    post,
+    path = "/stream/chat/message",
+    request_body = HttpSendChatMessageRequest,
+    responses(
+        (status = 200, description = "Stream initiated successfully", body = SendChatMessageResponse),
+        (status = 400, description = "Bad request", body = ChatMessageError),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+    )
+)]
+#[tracing::instrument(skip(state, user_context, bearer, request), fields(chat_id=?request.chat_id), err)]
+pub async fn send_chat_message(
+    State(state): State<ApiContext>,
+    Extension(user_context): Extension<UserContext>,
+    Extension(bearer): Extension<BearerToken>,
+    Json(request): Json<HttpSendChatMessageRequest>,
+) -> Result<Json<SendChatMessageResponse>, ChatMessageError> {
+    let now = std::time::Instant::now();
+    let ctx = Arc::new(state);
+    let jwt_token = bearer.0;
+
+    // Generate message_id which also serves as the stream_id
+    let message_id = uuid::Uuid::new_v4().to_string();
+    let stream_id = message_id.clone();
+
+    // Validate user ID
+    let user_id =
+        MacroUserIdStr::try_from(user_context.user_id.clone()).map_err(|_| ChatMessageError {
+            error: "Invalid user ID".to_string(),
+            stream_id: Some(stream_id.clone()),
+        })?;
+    let user_id = Arc::new(user_id);
+
+    // Determine chat_id - use provided or we'll create a new chat
+    let requested_chat_id = request.chat_id.clone().unwrap_or_default();
+
+    // Try to get the chat first - if it doesn't exist or no chat_id provided, create it
+    let (chat, actual_chat_id) = if requested_chat_id.is_empty() {
+        // No chat_id provided - create a new chat
+        create_new_chat(&ctx, &user_id, request.model, &stream_id).await?
+    } else {
+        match get_chat(&ctx, &requested_chat_id, user_id.0.as_ref()).await {
+            Ok(chat) => {
+                // Chat exists - check permissions
+                match chat_permissions::chat_access(
+                    &ctx,
+                    &user_context,
+                    &requested_chat_id,
+                    stream_id.clone(),
+                )
+                .await
+                {
+                    Err(e) => {
+                        return Err(ChatMessageError {
+                            error: format!("Permission check failed: {:?}", e),
+                            stream_id: Some(stream_id),
+                        });
+                    }
+                    Ok(access) => match access {
+                        AccessLevel::View | AccessLevel::Comment => {
+                            return Err(ChatMessageError {
+                                error: "Insufficient permissions to send messages".to_string(),
+                                stream_id: Some(stream_id),
+                            });
+                        }
+                        _ => (),
+                    },
+                };
+                (chat, requested_chat_id)
+            }
+            Err(_) => {
+                // Chat doesn't exist - create a new one
+                tracing::info!(
+                    requested_chat_id = %requested_chat_id,
+                    "Chat not found, creating new chat"
+                );
+                create_new_chat(&ctx, &user_id, request.model, &stream_id).await?
+            }
+        }
+    };
+
+    let is_first_message = chat.messages.is_empty();
+    let model = if request.model == Model::Claude45Opus {
+        Model::Claude45Opus
+    } else {
+        FALLBACK_MODEL
+    };
+
+    // Convert HTTP request to internal payload for existing functions
+    let payload = SendChatMessagePayload {
+        stream_id: stream_id.clone(),
+        content: request.content.clone(),
+        chat_id: actual_chat_id.clone(),
+        model: request.model,
+        additional_instructions: request.additional_instructions.clone(),
+        attachments: request.attachments.clone(),
+        toolset: request.toolset.clone(),
+        jwt: JwtPayload {
+            token: jwt_token.clone(),
+        },
+    };
+
+    // Store the incoming user message
+    let user_message_id =
+        store_incoming_message(ctx.clone(), user_id.0.as_ref(), &chat, model, &payload)
+            .await
+            .map_err(|err| {
+                tracing::error!(error=?err, "failed to store incoming message");
+                ChatMessageError {
+                    error: "Failed to store message".to_string(),
+                    stream_id: Some(stream_id.clone()),
+                }
+            })?;
+
+    // Build the completion request
+    let toolset = choose_toolset(&payload);
+    let ai_request =
+        build_chat_completion_request(ctx.clone(), &chat, &payload, toolset.prompt, &jwt_token)
+            .await
+            .map_err(|err| {
+                tracing::error!(error=?err, "failed to build chat completion request");
+                ChatMessageError {
+                    error: "Failed to build request".to_string(),
+                    stream_id: Some(stream_id.clone()),
+                }
+            })?;
+
+    // Log time to send request
+    log::log_timing(log::LatencyMetric::TimeToSendRequest, model, now.elapsed());
+
+    // Create stream ID for publishing
+    let durable_stream_id = StreamId {
+        entity_type: EntityType::Chat,
+        entity_id: actual_chat_id.clone(),
+        stream_id: stream_id.clone(),
+    };
+
+    // Create a channel to receive new_messages after streaming completes
+    let (messages_tx, messages_rx) = oneshot::channel::<Vec<ChatMessage>>();
+
+    // Create the payload stream
+    let payload_stream = create_chat_payload_stream(
+        ctx.clone(),
+        ai_request,
+        toolset.toolset,
+        user_id.clone(),
+        jwt_token,
+        actual_chat_id.clone(),
+        message_id.clone(),
+        stream_id.clone(),
+        messages_tx,
+        model,
+        now,
+        request.content.clone(),
+        user_message_id,
+        request.attachments.clone().unwrap_or_default(),
+    );
+
+    // Use the extension trait to handle spawning and stream management
+    let stream_handle =
+        ctx.stream_repo
+            .clone()
+            .from_async_stream(durable_stream_id, payload_stream, None);
+
+    // Spawn post-processing task
+    let ctx_clone = ctx.clone();
+    let user_id_clone = user_id.clone();
+    let chat_id = actual_chat_id.clone();
+    let message_id_for_store = message_id.clone();
+
+    tokio::spawn(async move {
+        // Wait for the stream to complete
+        let _ = stream_handle.await;
+
+        // Get the new messages from the channel
+        if let Ok(new_messages) = messages_rx.await {
+            // Store conversation messages, using the pre-generated message_id for the first assistant message
+            if let Err(err) = store_conversation_messages(
+                ctx_clone.clone(),
+                user_id_clone.0.as_ref(),
+                &chat_id,
+                new_messages,
+                model,
+                Some(message_id_for_store),
+            )
+            .await
+            {
+                tracing::error!(error=?err, "failed to store conversation messages");
+            }
+
+            // Maybe rename chat if first message
+            if is_first_message
+                && let Ok(new_name) =
+                    maybe_rename_chat(&chat_id, &ctx_clone, user_id_clone.0.as_ref())
+                        .await
+                        .inspect_err(|err| tracing::error!(error=?err, "failed to rename chat"))
+            {
+                tracing::info!(chat_id, new_name, "chat renamed after first message");
+            }
+        }
+    });
+
+    Ok(Json(SendChatMessageResponse {
+        stream_id,
+        message_id,
+        chat_id: actual_chat_id,
+    }))
+}
+
+/// Helper function to create a new chat
+async fn create_new_chat(
+    ctx: &Arc<ApiContext>,
+    user_id: &Arc<MacroUserIdStr<'static>>,
+    model: Model,
+    stream_id: &str,
+) -> Result<(crate::model::chats::ChatResponse, String), ChatMessageError> {
+    let share_permission = SharePermissionV2::new_chat_share_permission();
+    let new_chat_id = create_chat::create_chat_v2(
+        &ctx.db,
+        (**user_id).clone(),
+        DEFAULT_CHAT_NAME,
+        model,
+        None, // project_id
+        &share_permission,
+        vec![], // attachments
+        0,      // attachment_token_count
+        true,   // is_persistent
+    )
+    .await
+    .map_err(|err| {
+        tracing::error!(error=?err, "failed to create chat");
+        ChatMessageError {
+            error: "Failed to create chat".to_string(),
+            stream_id: Some(stream_id.to_string()),
+        }
+    })?;
+
+    // Get the newly created chat
+    let chat = get_chat(ctx, &new_chat_id, user_id.0.as_ref())
+        .await
+        .map_err(|err| {
+            tracing::error!(error=?err, "failed to get newly created chat");
+            ChatMessageError {
+                error: "Failed to get chat".to_string(),
+                stream_id: Some(stream_id.to_string()),
+            }
+        })?;
+
+    Ok((chat, new_chat_id))
+}
+
+/// Creates the AI stream and returns a PayloadStream that yields JSON values.
+/// Returns Err if the stream should not be started (e.g., aborted).
+#[expect(clippy::too_many_arguments, reason = "matches WS handler signature")]
+fn create_chat_payload_stream(
+    ctx: Arc<ApiContext>,
+    request: ai::types::ChatCompletionRequest,
+    toolset: AiToolSet,
+    user_id: Arc<MacroUserIdStr<'static>>,
+    jwt_token: String,
+    chat_id: String,
+    message_id: String,
+    stream_id: String,
+    messages_tx: oneshot::Sender<Vec<ChatMessage>>,
+    model: Model,
+    now: std::time::Instant,
+    user_message_content: String,
+    user_message_id: String,
+    user_message_attachments: Vec<ChatAttachmentWithName>,
+) -> PayloadStream {
+    // Check for abort before starting
+    if MESSAGE_ABORT_MAP.contains_key(&stream_id) {
+        MESSAGE_ABORT_MAP.remove(&stream_id);
+        let _ = messages_tx.send(vec![]);
+        return Box::pin(futures::stream::empty());
+    }
+
+    tracing::trace!(request=?request, "streaming chat request");
+
+    let tool_context = ToolServiceContext {
+        email_service_client: ctx.email_service_client_external.clone(),
+        search_service_client: ctx.search_service_client.clone(),
+        scribe: ctx.scribe.clone(),
+        soup_service: ctx.soup_service.clone(),
+    };
+
+    #[expect(deprecated)]
+    let request_context = RequestContext {
+        user_id: user_id.clone(),
+        jwt: Arc::new(jwt_token),
+    };
+
+    let payload_stream = stream! {
+        // Yield the user message as the first item so other clients can display it
+        let user_msg = ChatStream::ChatUserMessage {
+            stream_id: stream_id.clone(),
+            chat_id: chat_id.clone(),
+            message_id: user_message_id,
+            content: user_message_content,
+            attachments: user_message_attachments,
+        };
+        if let Ok(json) = serde_json::to_value(&user_msg) {
+            yield json;
+        }
+
+        let client = ToolLoop::new(toolset, tool_context);
+        let mut chat = client.chat();
+
+        // Create the AI stream - yield error if it fails
+        let mut ai_stream = match chat
+            .send_message(request, request_context, user_id.as_ref().to_string())
+            .await
+        {
+            Ok(stream) => stream,
+            Err(e) => {
+                tracing::error!(error=?e, "failed to create AI stream");
+                let stream_error = match e {
+                    ai::types::AiError::ContextWindowExceeded => {
+                        StreamError::ModelContextOverflow {
+                            stream_id: stream_id.clone(),
+                        }
+                    }
+                    ai::types::AiError::Generic(_) => StreamError::InternalError {
+                        stream_id: stream_id.clone(),
+                    },
+                };
+                let error_msg = ChatStream::Error(
+                    crate::model::ws::WebSocketError::StreamError(stream_error),
+                );
+                if let Ok(json) = serde_json::to_value(&error_msg) {
+                    yield json;
+                }
+                let _ = messages_tx.send(vec![]);
+                return;
+            }
+        };
+
+        let mut is_first_token = false;
+
+        while let Some(response) = ai_stream.next().await {
+            tracing::trace!("{:#?}", response);
+
+            // Log time to first token
+            if !is_first_token {
+                is_first_token = true;
+                log::log_timing(log::LatencyMetric::TimeToFirstToken, model, now.elapsed());
+            }
+
+            // Check for abort during streaming
+            if MESSAGE_ABORT_MAP.contains_key(&stream_id) {
+                MESSAGE_ABORT_MAP.remove(&stream_id);
+                let _ = messages_tx.send(vec![]);
+                return;
+            }
+
+            match response {
+                Ok(response_chunk) => {
+                    let message_part = match response_chunk {
+                        StreamPart::Content(content) => {
+                            if content.is_empty() {
+                                continue;
+                            }
+                            AssistantMessagePart::Text { text: content }
+                        }
+                        StreamPart::ToolCall(call) => AssistantMessagePart::ToolCall {
+                            name: call.name,
+                            json: call.json,
+                            id: call.id,
+                        },
+                        StreamPart::Usage(usage) => {
+                            tracing::debug!(record=?usage, "usage");
+                            continue;
+                        }
+                        StreamPart::ToolResponse(ai::tool::types::ToolResponse::Json {
+                            id,
+                            json,
+                            name,
+                        }) => AssistantMessagePart::ToolCallResponseJson { name, json, id },
+                        StreamPart::ToolResponse(ai::tool::types::ToolResponse::Err {
+                            id,
+                            name,
+                            description,
+                        }) => AssistantMessagePart::ToolCallErr {
+                            name,
+                            description,
+                            id,
+                        },
+                    };
+
+                    let response = ChatStream::ChatMessageResponse {
+                        stream_id: stream_id.clone(),
+                        chat_id: chat_id.clone(),
+                        message_id: message_id.clone(),
+                        content: message_part,
+                    };
+
+                    if let Ok(json) = serde_json::to_value(&response) {
+                        yield json;
+                    }
+                }
+                Err(e) => {
+                    tracing::error!(error=?e, "error in AI stream");
+                    // Map error type to appropriate StreamError
+                    let stream_error = match e {
+                        ai::types::AiError::ContextWindowExceeded => {
+                            StreamError::ModelContextOverflow {
+                                stream_id: stream_id.clone(),
+                            }
+                        }
+                        ai::types::AiError::Generic(_) => StreamError::InternalError {
+                            stream_id: stream_id.clone(),
+                        },
+                    };
+                    let error_msg = ChatStream::Error(
+                        crate::model::ws::WebSocketError::StreamError(stream_error),
+                    );
+                    if let Ok(json) = serde_json::to_value(&error_msg) {
+                        yield json;
+                    }
+                    let _ = messages_tx.send(vec![]);
+                    return;
+                }
+            }
+        }
+
+        // Drop the AI stream before accessing chat
+        drop(ai_stream);
+
+        // Send stream end message
+        let end_msg = ChatStream::StreamEnd {
+            stream_id: stream_id.clone(),
+        };
+        if let Ok(json) = serde_json::to_value(&end_msg) {
+            yield json;
+        }
+
+        // Get new messages and send through channel
+        let new_messages = chat.get_new_conversation_messages();
+        let _ = messages_tx.send(new_messages);
+    };
+
+    Box::pin(payload_stream)
+}

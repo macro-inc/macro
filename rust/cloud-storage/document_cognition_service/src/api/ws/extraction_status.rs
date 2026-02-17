@@ -13,7 +13,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     api::context::{ApiContext, GLOBAL_CONTEXT},
-    model::ws::{ExtractionStatusPayload, FromWebSocketMessage, WebSocketError},
+    model::ws::{ChatStream, ExtractionStatusPayload, WebSocketError},
     service::attachment::document::get_document_plaintext_content,
 };
 
@@ -45,7 +45,7 @@ static ATTACHMENT_POLLING_MAP: LazyLock<DashMap<String, DashMap<String, Instant>
 
 #[tracing::instrument(skip(sender, ctx), fields(attachment_id=?payload.attachment_id, connection_id=connection_id))]
 pub async fn extraction_status_handler(
-    sender: &UnboundedSender<FromWebSocketMessage>,
+    sender: &UnboundedSender<ChatStream>,
     ctx: Arc<ApiContext>,
     connection_id: &str,
     payload: ExtractionStatusPayload,
@@ -80,7 +80,7 @@ pub async fn extraction_status_handler(
 
     ws_send(
         sender,
-        FromWebSocketMessage::ExtractionStatusAck {
+        ChatStream::ExtractionStatusAck {
             attachment_id: payload.attachment_id.clone(),
             status: extraction_status.into(),
         },
@@ -217,7 +217,7 @@ pub fn spawn_poller() {
                     if extraction_status != ExtractionStatusEnum::Incomplete {
                         ws_send(
                             &sender,
-                            FromWebSocketMessage::ExtractionStatusUpdate {
+                            ChatStream::ExtractionStatusUpdate {
                                 attachment_id: attachment_id.clone(),
                                 status: extraction_status.into(),
                             },
@@ -233,7 +233,7 @@ pub fn spawn_poller() {
                         // polling it.
                         ws_send(
                             &sender,
-                            FromWebSocketMessage::Error(WebSocketError::ExtractionStatusFailed {
+                            ChatStream::Error(WebSocketError::ExtractionStatusFailed {
                                 attachment_id: attachment_id.to_string(),
                             }),
                         )

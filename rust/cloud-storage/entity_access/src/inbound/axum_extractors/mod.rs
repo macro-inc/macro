@@ -22,6 +22,15 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use model_error_response::ErrorResponse;
 
+/// Marker struct for internal service-to-service requests.
+///
+/// Middleware inserts this into request extensions for authenticated internal callers.
+#[derive(Debug, Clone)]
+pub struct InternalUser {
+    /// The access level granted to the internal user.
+    pub access_level: AccessLevel,
+}
+
 /// Trait to convert a unit struct marker into an [`AccessLevel`].
 ///
 /// This allows extractors to be parameterized by required access level.

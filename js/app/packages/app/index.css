@@ -492,6 +492,16 @@
 /** isolate the app-root stacking context from the kobalte dialog and modal stacking context */
 #root { isolation: isolate; }
 
+/* On mobile (width and touch) bump tailwind's font-sizes up 1px. Purposefully only changing the "reading" sizes, not the heading sizes. */
+@media (max-width: 639px) {
+  :root:where(html[data-touch-device="true"]) {
+    --text-xxs: 0.6875rem;
+    --text-xs: 0.8125rem;
+    --text-sm: 0.9375rem;
+    --text-base: 1.0625rem;
+  }
+}
+
 @theme default {
     /* Font families */
     --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
@@ -721,18 +731,18 @@ html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
 }
 
 :root {
-  --thread-shift: 23px;
-  --user-icon-width: 30px;
-  --left-of-connector: 20px;
+  --thread-shift: 32px;
+  --user-icon-width: 36px;
+  --body-padding: .5rem;
+  --left-of-connector: 16px;
   --left-of-user-icon: calc(var(--left-of-connector) - var(--user-icon-width) / 2);
 }
 
 @media (min-width: 640px) {
   :root {
     --thread-shift: 40px;
-    --user-icon-width: 36px;
+    --body-padding: .5rem;
     --left-of-connector: 28px;
-    --left-of-user-icon: calc(var(--left-of-connector) - var(--user-icon-width) / 2);
   }
 }
 
@@ -741,14 +751,26 @@ html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
         max-width: 800px;
         min-width: 250px;
     }
+}
 
-    @container (width < 816px) {
-        margin-inline: calc(var(--spacing) * 4);
-    }
-    @container (width < 640px) {
-        margin-inline: calc(var(--spacing) * 2);
-    }
+@utility macro-message-padding {
+  
+  @container (width < 816px) {
+      padding-inline: calc(var(--spacing) * 4);
+  }
+  @container (width < 640px) {
+      padding-inline: calc(var(--spacing) * 2);
+  }
+}
 
+@utility macro-message-margin {
+  
+  @container (width < 816px) {
+      margin-inline: calc(var(--spacing) * 4);
+  }
+  @container (width < 640px) {
+      margin-inline: calc(var(--spacing) * 2);
+  }
 }
 
 ::-webkit-scrollbar {

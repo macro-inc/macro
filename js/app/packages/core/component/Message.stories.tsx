@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from 'storybook-solidjs-vite';
+import { applyDurationToDate } from '@core/util/dateSearch/dateParser';
 import { Message } from './Message';
 
 const meta = {
@@ -26,7 +27,7 @@ export const SingleMessage: Story = {
         isLastMessage={true}
         isConsecutive={false}
       >
-        <Message.TopBar name="John Doe" timestamp={new Date().toISOString()} />
+        <Message.TopBar name="John Doe" timestamp={new Date()} />
         <Message.Body>
           This is a single message with a timestamp and user name.
         </Message.Body>
@@ -50,7 +51,7 @@ export const ThreadedMessages: Story = {
       >
         <Message.TopBar
           name="Alice"
-          timestamp={new Date(Date.now() - 3600000).toISOString()}
+          timestamp={applyDurationToDate(new Date(), { value: -1, unit: 'h' })}
         />
         <Message.Body>
           This is the root message. It has replies below.
@@ -69,7 +70,10 @@ export const ThreadedMessages: Story = {
       >
         <Message.TopBar
           name="Bob"
-          timestamp={new Date(Date.now() - 1800000).toISOString()}
+          timestamp={applyDurationToDate(new Date(), {
+            value: -30,
+            unit: 'min',
+          })}
         />
         <Message.Body>This is the first reply in the thread.</Message.Body>
       </Message>
@@ -84,7 +88,7 @@ export const ThreadedMessages: Story = {
         threadDepth={1}
         isLastInThread={true}
       >
-        <Message.TopBar name="Charlie" timestamp={new Date().toISOString()} />
+        <Message.TopBar name="Charlie" timestamp={new Date()} />
         <Message.Body>
           And this is another reply in the same thread!
         </Message.Body>
@@ -104,7 +108,7 @@ export const ConsecutiveMessages: Story = {
         isLastMessage={false}
         isConsecutive={false}
       >
-        <Message.TopBar name="Alice" timestamp={new Date().toISOString()} />
+        <Message.TopBar name="Alice" timestamp={new Date()} />
         <Message.Body>First message from Alice</Message.Body>
       </Message>
 
@@ -145,10 +149,7 @@ export const FocusedMessage: Story = {
         isLastMessage={true}
         isConsecutive={false}
       >
-        <Message.TopBar
-          name="Focused User"
-          timestamp={new Date().toISOString()}
-        />
+        <Message.TopBar name="Focused User" timestamp={new Date()} />
         <Message.Body>
           This message is focused (has active bracket styling).
         </Message.Body>
@@ -168,10 +169,7 @@ export const DeletedMessage: Story = {
         isConsecutive={false}
         isDeleted={true}
       >
-        <Message.TopBar
-          name="Deleted User"
-          timestamp={new Date().toISOString()}
-        />
+        <Message.TopBar name="Deleted User" timestamp={new Date()} />
         <Message.Body isDeleted={true}>
           This message has been deleted.
         </Message.Body>

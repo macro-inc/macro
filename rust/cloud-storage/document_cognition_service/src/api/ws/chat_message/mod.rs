@@ -1,5 +1,5 @@
-mod ai_request;
-mod toolset;
+pub mod ai_request;
+pub mod toolset;
 
 use crate::api::ws::connection::{MESSAGE_ABORT_MAP, ws_send};
 use crate::core::model::FALLBACK_MODEL;
@@ -10,7 +10,7 @@ use crate::{
         context::ApiContext,
         utils::{log, search},
     },
-    model::ws::{FromWebSocketMessage, SendChatMessagePayload},
+    model::ws::{ChatStream, SendChatMessagePayload},
     service::{ai::name::maybe_rename_chat, get_chat::get_chat},
 };
 
@@ -42,6 +42,7 @@ pub async fn store_incoming_message(
 ) -> Result<String> {
     let created_at = chrono::Utc::now();
     let new_chat_message = NewChatMessage {
+        id: None,
         content: ChatMessageContent::Text(incoming_message.content.clone()),
         role: Role::User,
         // Attach the current chat attachments to the user message
@@ -91,7 +92,7 @@ pub async fn stream_chat_response(
     user_id: Arc<MacroUserIdStr<'static>>,
     request: ChatCompletionRequest,
     toolset: AiToolSet,
-    sender: &UnboundedSender<FromWebSocketMessage>,
+    sender: &UnboundedSender<ChatStream>,
     chat_id: &str,
     message_id: &str,
     connection_id: &str,
@@ -154,7 +155,7 @@ pub async fn stream_chat_response(
                 let message_part = AssistantMessagePart::Text { text: content };
 
                 // Send to websocket
-                let response = FromWebSocketMessage::ChatMessageResponse {
+                let response = ChatStream::ChatMessageResponse {
                     stream_id: stream_id.to_string(),
                     chat_id: chat_id.to_string(),
                     message_id: message_id.to_string(),
@@ -169,7 +170,7 @@ pub async fn stream_chat_response(
                     id: call.id,
                 };
 
-                let response = FromWebSocketMessage::ChatMessageResponse {
+                let response = ChatStream::ChatMessageResponse {
                     stream_id: stream_id.to_string(),
                     chat_id: chat_id.to_string(),
                     message_id: message_id.to_string(),
@@ -185,7 +186,7 @@ pub async fn stream_chat_response(
 
                 ws_send(
                     sender,
-                    FromWebSocketMessage::ChatMessageResponse {
+                    ChatStream::ChatMessageResponse {
                         stream_id: stream_id.to_string(),
                         message_id: message_id.to_string(),
                         chat_id: chat_id.to_string(),
@@ -206,7 +207,7 @@ pub async fn stream_chat_response(
 
                 ws_send(
                     sender,
-                    FromWebSocketMessage::ChatMessageResponse {
+                    ChatStream::ChatMessageResponse {
                         stream_id: stream_id.to_string(),
                         message_id: message_id.to_string(),
                         chat_id: chat_id.to_string(),
@@ -226,7 +227,8 @@ pub async fn stream_chat_response(
     Ok(StreamChatResponse { new_messages })
 }
 
-/// Stores multiple conversation messages to the database
+/// Stores multiple conversation messages to the database.
+/// If `first_message_id` is provided, the first assistant message will use that ID.
 #[tracing::instrument(err, skip(ctx, messages), fields(chat_id=?chat_id, message_count=messages.len()))]
 pub async fn store_conversation_messages(
     ctx: Arc<ApiContext>,
@@ -234,17 +236,28 @@ pub async fn store_conversation_messages(
     chat_id: &str,
     messages: Vec<ChatMessage>,
     model: Model,
+    first_message_id: Option<String>,
 ) -> Result<Vec<String>> {
     if messages.is_empty() {
         return Ok(vec![]);
     }
 
     let mut message_ids = Vec::new();
+    let mut first_id_used = false;
 
     let created_at = chrono::Utc::now();
 
     for message in messages {
+        // Use the pre-generated ID for the first assistant message
+        let id = if !first_id_used && message.role == Role::Assistant {
+            first_id_used = true;
+            first_message_id.clone()
+        } else {
+            None
+        };
+
         let new_chat_message = model::chat::NewChatMessage {
+            id,
             content: message.content,
             role: message.role,
             attachments: None, // New messages from streaming don't have attachments (they are asssistant messages)
@@ -276,7 +289,7 @@ pub async fn store_conversation_messages(
 /// Handles incoming messages of type `send_message`
 #[tracing::instrument(skip(ctx, sender, incoming_message, jwt_token, user_id), fields(chat_id=?incoming_message.chat_id, stream_id=?incoming_message.stream_id))]
 pub async fn handle_send_chat_message(
-    sender: &UnboundedSender<FromWebSocketMessage>,
+    sender: &UnboundedSender<ChatStream>,
     ctx: Arc<ApiContext>,
     message_id: String,
     incoming_message: SendChatMessagePayload,
@@ -359,7 +372,7 @@ pub async fn handle_send_chat_message(
 
     ws_send(
         sender,
-        FromWebSocketMessage::StreamEnd {
+        ChatStream::StreamEnd {
             stream_id: incoming_message.stream_id.clone(),
         },
     )
@@ -373,6 +386,7 @@ pub async fn handle_send_chat_message(
         &incoming_message.chat_id,
         new_messages,
         model,
+        None,
     )
     .await
     .map_err(|err| {
@@ -390,7 +404,7 @@ pub async fn handle_send_chat_message(
     {
         ws_send(
             sender,
-            FromWebSocketMessage::ChatRenamed {
+            ChatStream::ChatRenamed {
                 chat_id: incoming_message.chat_id.clone(),
                 stream_id: incoming_message.stream_id.clone(),
                 name: new_name,

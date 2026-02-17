@@ -33,7 +33,7 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
   };
 
   const notificationType = (): NotificationType | undefined => {
-    if (props.notification) return props.notification.notificationMetadata.tag;
+    if (props.notification) return props.notification.notification_metadata.tag;
     if (props.stack) return props.stack.type;
     return undefined;
   };
@@ -44,8 +44,8 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
   };
 
   const primarySenderId = () => {
-    if (props.notification?.senderId) {
-      return props.notification.senderId;
+    if (props.notification?.sender_id) {
+      return props.notification.sender_id;
     }
     if (props.stack) {
       const senderIds = getUniqueSenderIds(props.stack.notifications);

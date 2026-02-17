@@ -960,26 +960,22 @@
           {
             "type": "object",
             "required": [
-              "ownerId",
+              "owner_id",
               "id",
-              "notificationEventType",
+              "notification_event_type",
               "sent",
               "done",
-              "createdAt",
-              "viewedAt",
-              "updatedAt",
-              "deletedAt",
-              "notificationMetadata"
+              "notification_metadata"
             ],
             "properties": {
-              "createdAt": {
-                "type": "integer",
-                "format": "int64",
+              "created_at": {
+                "type": ["string", "null"],
+                "format": "date-time",
                 "description": "When the notification was created."
               },
-              "deletedAt": {
-                "type": ["integer", "null"],
-                "format": "int64",
+              "deleted_at": {
+                "type": ["string", "null"],
+                "format": "date-time",
                 "description": "When the notification was deleted."
               },
               "done": {
@@ -991,19 +987,19 @@
                 "format": "uuid",
                 "description": "The notification ID."
               },
-              "notificationEventType": {
+              "notification_event_type": {
                 "type": "string",
                 "description": "The notification event type string (e.g. \"channel_mention\").\nTODO make this a new type"
               },
-              "notificationMetadata": {
+              "notification_metadata": {
                 "$ref": "#/components/schemas/NotifEvent",
                 "description": "Deserialized notification metadata."
               },
-              "ownerId": {
+              "owner_id": {
                 "type": "string",
                 "description": "The user who owns this notification."
               },
-              "senderId": {
+              "sender_id": {
                 "type": ["string", "null"],
                 "description": "The user who triggered the notification."
               },
@@ -1011,14 +1007,14 @@
                 "type": "boolean",
                 "description": "Whether the notification has been sent."
               },
-              "updatedAt": {
-                "type": ["integer", "null"],
-                "format": "int64",
+              "updated_at": {
+                "type": ["string", "null"],
+                "format": "date-time",
                 "description": "When the notification was last updated."
               },
-              "viewedAt": {
-                "type": ["integer", "null"],
-                "format": "int64",
+              "viewed_at": {
+                "type": ["string", "null"],
+                "format": "date-time",
                 "description": "When the notification was viewed/seen."
               }
             }

@@ -3,21 +3,28 @@ import {
   createSoupState,
   type SoupState,
 } from '@app/component/next-soup/create-soup-state';
-import { getFolderFileTypes } from '@app/component/next-soup/filters/filters';
+import {
+  type FilterID,
+  getFolderFileTypes,
+} from '@app/component/next-soup/filters/filters';
 import { sortEntitiesForSearch } from '@app/component/next-soup/soup-view/sort-options';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
 import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
 import { fuzzyMatch } from '@core/util/fuzzy';
+import { mergeAdjacentMacroEmTags } from '@core/util/searchHighlight';
 import type { EntityData, WithNotification, WithSearch } from '@entity';
 import { useNotificationsForEntity } from '@notifications';
 import {
   type SoupItemsQueryFilters,
+  type SoupItemsQueryArgs,
   useSoupItemsQuery,
 } from '@queries/soup/items';
 import { useSearchSoupQuery } from '@queries/soup/search';
-import type { SearchArgs } from '@service-search/client';
-import type { UnifiedSearchIndex } from '@service-search/generated/models';
+import type {
+  UnifiedSearchIndex,
+  UnifiedSearchRequest,
+} from '@service-search/generated/models';
 import {
   type Accessor,
   createContext,
@@ -30,11 +37,38 @@ import {
   Suspense,
   useContext,
 } from 'solid-js';
-import { reconcile } from 'solid-js/store';
+import { isWithNotification } from '@entity';
+
 import { match } from 'ts-pattern';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 300;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
+
+const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+
+const CHANNEL_PRELOAD_ARGS: SoupItemsQueryArgs = {
+  params: { limit: 500, sort_method: 'updated_at' },
+  body: {
+    chat_filters: { chat_ids: [NIL_UUID] },
+    document_filters: { document_ids: [NIL_UUID] },
+    email_filters: { recipients: [NIL_UUID] },
+    project_filters: { project_ids: [NIL_UUID] },
+    channel_filters: {
+      channel_types: [],
+    },
+  },
+};
+
+function mergeEntityPools(
+  items: EntityData[],
+  extra: EntityData[]
+): EntityData[] {
+  if (extra.length === 0) return items;
+  const existingIds = new Set(items.map((e) => e.id));
+  const newItems = extra.filter((e) => !existingIds.has(e.id));
+  if (newItems.length === 0) return items;
+  return [...items, ...newItems];
+}
 
 type Row<T> = {
   original: T;
@@ -67,6 +101,7 @@ interface SoupViewContextValues {
   setSearchText: (value: string) => void;
   isSearchDisabled: Accessor<boolean>;
   rows: Accessor<SoupRow[]>;
+  queryFilters: Accessor<SoupItemsQueryFilters>;
   setQueryFilters: Setter<SoupItemsQueryFilters>;
 }
 
@@ -100,39 +135,48 @@ export const SoupViewContextProvider: FlowComponent<
   const [internalQueryFilters, setQueryFilters] =
     createSignal<SoupItemsQueryFilters>({});
 
+  const trimmedSearchText = createMemo(() => searchText().trim());
+
   const debouncedSearchForLocal = debouncedDependent(
-    searchText,
+    trimmedSearchText,
     LOCAL_FUZZY_SEARCH_DEBOUNCE_MS
   );
 
   const debouncedSearchForService = debouncedDependent(
-    searchText,
+    trimmedSearchText,
     SEARCH_SERVICE_DEBOUNCE_MS
   );
 
+  const isSearching = createMemo(() => trimmedSearchText().length > 0);
+
   const unifiedSearchIncludeArray = createMemo<UnifiedSearchIndex[]>(
     () => {
-      let types = soup.filters.activeIds();
+      const types = soup.filters.activeIds() as FilterID[];
       // NOTE: empty array means search all
-      if (types.length === 0) types = [];
       const includeArray: UnifiedSearchIndex[] = [];
       for (const type of types) {
         match(type)
-          .with('document', () => {
+          .with('document', 'file', 'task', () => {
             includeArray.push('documents');
           })
           .with('agent', () => {
             includeArray.push('chats');
           })
-          .with('people', 'teams', () => {
+          .with('people', 'teams', 'channels', () => {
             includeArray.push('channels');
           })
           .with('email', () => {
             includeArray.push('emails');
           })
-          .with('project', () => {
-            includeArray.push('projects');
-          });
+          .with(
+            'signal',
+            'noise',
+            'explicit-noise',
+            'unread',
+            'not-done',
+            () => {}
+          )
+          .exhaustive();
       }
       return Array.from(new Set(includeArray));
     },
@@ -144,31 +188,6 @@ export const SoupViewContextProvider: FlowComponent<
     () => debouncedSearchForService().length >= 3
   );
   const isSearchDisabled = createMemo(() => !validSearchTerms());
-
-  const searchUnifiedNameContentQueryParams = createMemo(
-    (prev: SearchArgs | undefined): SearchArgs => {
-      if (prev && prev.request.terms?.[0] === debouncedSearchForService()) {
-        return prev;
-      }
-
-      return {
-        params: {
-          cursor: null,
-          page_size: 100,
-        },
-        request: {
-          search_on: 'name_content',
-          match_type: 'partial',
-          terms:
-            debouncedSearchForService().length > 0
-              ? [debouncedSearchForService()]
-              : undefined,
-          // filters: unifiedSearchFilters(),
-          include: unifiedSearchIncludeArray(),
-        },
-      };
-    }
-  );
 
   const queryFilters = createMemo(() => {
     const base = internalQueryFilters();
@@ -216,7 +235,11 @@ export const SoupViewContextProvider: FlowComponent<
     }
 
     return {
-      channel: channel_filters?.channel_ids?.length ? channel_filters : null,
+      channel:
+        channel_filters?.channel_ids?.length ||
+        channel_filters?.channel_types?.length
+          ? channel_filters
+          : null,
       chat:
         chat_filters?.chat_ids?.length || chat_filters?.project_ids?.length
           ? chat_filters
@@ -232,13 +255,29 @@ export const SoupViewContextProvider: FlowComponent<
     };
   });
 
+  const searchUnifiedNameContentRequest = createMemo(
+    (): UnifiedSearchRequest => {
+      const terms = debouncedSearchForService();
+      const include = unifiedSearchIncludeArray();
+      const filters = searchFilters();
+
+      return {
+        search_on: 'name_content',
+        match_type: 'partial',
+        terms: terms.length > 0 ? [terms] : undefined,
+        include,
+        filters,
+      };
+    }
+  );
+
   const itemsQuery = useSoupItemsQuery(
     () => ({
       params: {
         limit: 100,
         sort_method: soup.sort.active()[0]?.id ?? 'updated_at',
       },
-      body: queryFilters(),
+      body: { ...queryFilters(), emailView: 'all' },
     }),
     () => ({
       enabled: isSearchDisabled(),
@@ -251,14 +290,24 @@ export const SoupViewContextProvider: FlowComponent<
         page_size: 100,
       },
       body: {
-        ...searchFilters(),
-        ...searchUnifiedNameContentQueryParams().request,
+        ...searchUnifiedNameContentRequest(),
       },
     }),
     () => ({
       enabled: !isSearchDisabled(),
     })
   );
+
+  // load all channels into memory for local search
+  const channelItemsQuery = useSoupItemsQuery(() => CHANNEL_PRELOAD_ARGS);
+  createRenderEffect(() => {
+    if (
+      channelItemsQuery.hasNextPage &&
+      !channelItemsQuery.isFetchingNextPage
+    ) {
+      channelItemsQuery.fetchNextPage();
+    }
+  });
 
   const nameFuzzySearchFilter = (items: EntityData[]) => {
     const query = debouncedSearchForLocal();
@@ -270,7 +319,7 @@ export const SoupViewContextProvider: FlowComponent<
       return {
         ...result.item,
         search: {
-          nameHighlight: result.nameHighlight,
+          nameHighlight: mergeAdjacentMacroEmTags(result.nameHighlight),
           contentHitData: null,
           source: 'local',
         },
@@ -313,35 +362,46 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
-  const items = createMemo(
+  const localFuzzyResults = createMemo(() => {
+    const pool = mergeEntityPools(
+      itemsQuery.data ?? [],
+      channelItemsQuery.data ?? []
+    );
+    return nameFuzzySearchFilter(pool);
+  });
+
+  const freshSearchResults = createMemo<EntityData[]>(() => {
+    if (isSearchDisabled()) return [];
+    if (searchQuery.isFetching && !searchQuery.isFetchingNextPage) return [];
+    return searchQuery.data ?? [];
+  });
+
+  const items = createMemo<SoupEntity[]>(
     (prev) => {
-      const itemsData = itemsQuery.data;
-      const searchData = searchQuery.data;
+      const searching = isSearching();
 
-      if (!itemsData && !searchData) return [];
-
-      const isSearching = searchText().length > 0;
-
-      const items = itemsData ?? [];
-      const searchItems = isSearching ? (searchData ?? []) : [];
-
-      let transformed: SoupEntity[] = [...searchItems];
-
-      if (isSearching) {
-        transformed.push(...nameFuzzySearchFilter(items));
-      } else {
-        transformed.push(...items);
+      if (!searching) {
+        const data = itemsQuery.data;
+        if (!data) return prev;
+        return data.map((e) =>
+          isWithNotification(e) ? e : attachNotifications(e)
+        ) as SoupEntity[];
       }
 
-      const next = reconcile(transformed)(prev);
+      const local = localFuzzyResults();
+      const service = freshSearchResults();
 
-      for (let i = 0; i < next.length; i++) {
-        const entity = next[i];
+      const merged: SoupEntity[] = [...service, ...local];
+
+      if (merged.length === 0) return prev;
+
+      for (let i = 0; i < merged.length; i++) {
+        const entity = merged[i];
         if (entity.notifications) continue;
-        next[i] = attachNotifications(entity);
+        merged[i] = attachNotifications(entity);
       }
 
-      return next;
+      return merged;
     },
     [],
     {
@@ -365,8 +425,7 @@ export const SoupViewContextProvider: FlowComponent<
 
     transformed = deduplicateEntities(next);
 
-    const isSearching = searchText().length > 0;
-    if (isSearching) {
+    if (isSearching()) {
       transformed.sort(sortEntitiesForSearch);
     }
 
@@ -393,7 +452,11 @@ export const SoupViewContextProvider: FlowComponent<
     soup,
     source: {
       data: entities,
-      isLoading: () => searchQuery.isLoading || itemsQuery.isLoading,
+      isLoading: () => {
+        if (itemsQuery.isLoading) return true;
+        if (searchQuery.isLoading && !itemsQuery.data) return true;
+        return false;
+      },
       isFetching: () => searchQuery.isFetching || itemsQuery.isFetching,
       isFetchingNextPage: () =>
         searchQuery.isFetchingNextPage || itemsQuery.isFetchingNextPage,
@@ -417,6 +480,7 @@ export const SoupViewContextProvider: FlowComponent<
     searchText,
     setSearchText,
     isSearchDisabled,
+    queryFilters,
     setQueryFilters,
   };
 

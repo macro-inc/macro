@@ -6,6 +6,9 @@ use crate::api::email::contacts::list::ListContactsResponse;
 use crate::api::email::drafts::add_attachment::{
     AddDraftAttachmentRequest, AddDraftAttachmentResponse,
 };
+use crate::api::email::drafts::add_forwarded_attachment::{
+    AddForwardedAttachmentRequest, AddForwardedAttachmentResponse,
+};
 use crate::api::email::drafts::create::{CreateDraftRequest, CreateDraftResponse};
 use crate::api::email::init::InitResponse;
 use crate::api::email::labels::create::CreateLabelRequest;
@@ -52,6 +55,8 @@ use utoipa::OpenApi;
         email::drafts::scheduled::upsert::handler,
         email::drafts::add_attachment::handler,
         email::drafts::remove_attachment::handler,
+        email::drafts::add_forwarded_attachment::handler,
+        email::drafts::remove_forwarded_attachment::handler,
         email::messages::get::handler,
         email::messages::get::batch_handler,
         email::messages::labels::handler,
@@ -82,6 +87,8 @@ use utoipa::OpenApi;
             CreateDraftResponse,
             AddDraftAttachmentRequest,
             AddDraftAttachmentResponse,
+            AddForwardedAttachmentRequest,
+            AddForwardedAttachmentResponse,
             // Init types
             InitResponse,
             // Label types

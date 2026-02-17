@@ -1,10 +1,11 @@
-import type {
-  CreateAndSend,
-  MessageStream,
-  Model,
-  Send,
-} from '@core/component/AI/types';
+import { DEFAULT_MODEL } from '@core/component/AI/constant';
+import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
+import type { ChatMessageStream, Model } from '@core/component/AI/types';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
+import { isErr } from '@core/util/maybeResult';
+import { cognitionApiServiceClient } from '@service-cognition/client';
+import type { MessageStream } from '@service-cognition/websocket';
+import { subscribe } from '@service-connection/stream';
 import { createEffect, createSignal } from 'solid-js';
 import {
   ChatInputProvider,
@@ -14,10 +15,20 @@ import {
 } from '../../context';
 import { useAttachments } from '../../signal/attachment';
 import { pausableStream } from '../../util/stream';
-import { ChatInput } from '../input/useChatInput';
+import { ChatInput } from '../input/ChatInput';
 import { ModelSelector } from '../input/ModelSelector';
 import { useChatMarkdownArea } from '../input/useChatMarkdownArea';
 import { ChatMessages } from '../message/ChatMessages';
+
+function toChat(stream: MessageStream): ChatMessageStream {
+  return {
+    data: stream.data,
+    isDone: stream.isDone,
+    model: DEFAULT_MODEL,
+    attachments: [],
+    streamId: stream.request.stream_id,
+  };
+}
 import {
   blockDone,
   createStream,
@@ -142,26 +153,31 @@ function ChatInputBoxConnectedInner() {
   });
 
   const [_gen, setGen] = createSignal(false);
-  const onSend = async (request: Send | CreateAndSend) => {
-    if (request.type === 'createAndSend') {
-      const response = await request.call();
-      if ('type' in response && response.type === 'error') {
-        console.log('error creating chat', response);
-        return;
-      } else {
-        console.log('created chat ', response.chat_id);
-        return onSend(response);
-      }
-    } else {
-      const stream = request.call();
-      setGen(true);
-      createEffect(() => {
-        const items = stream.data();
-        const latest = items.at(-1);
-        if (latest) console.log(JSON.stringify(latest, null, 2));
-        if (stream.isDone()) setGen(false);
-      });
+  const onSend = async (input: ChatSendInput) => {
+    const response = await cognitionApiServiceClient.sendStreamChatMessage({
+      content: input.content,
+      model: input.model,
+      attachments: input.attachments.length > 0 ? input.attachments : undefined,
+      toolset: input.toolset,
+    });
+    if (isErr(response)) {
+      console.log('error sending message', response);
+      return;
     }
+    const [, { stream_id, chat_id }] = response;
+    console.log('created chat', chat_id);
+    const connectionStream = subscribe('chat', chat_id, stream_id);
+    if (!connectionStream) {
+      console.log('no connection stream');
+      return;
+    }
+    setGen(true);
+    createEffect(() => {
+      const items = connectionStream.data();
+      const latest = items.at(-1);
+      if (latest) console.log(JSON.stringify(latest, null, 2));
+      if (connectionStream.isDone()) setGen(false);
+    });
   };
 
   return (
@@ -195,7 +211,7 @@ function StreamMessagesInner() {
         onClick={() => {
           const poemStream = makeStream();
           setStream(poemStream);
-          chat.setStream(poemStream);
+          chat.setStream(toChat(poemStream));
         }}
       >
         Stream
@@ -241,43 +257,51 @@ function FullChatInner() {
     addAttachment: (a) => input.attachments.addAttachment(a),
   });
   const [_isGen, setIsGen] = createSignal(false);
-  const [stream, setDebugStream] = createSignal<MessageStream>();
+  const [debugStream, _setDebugStream] = createSignal<MessageStream>();
 
-  const onSend = async (request: Send | CreateAndSend) => {
-    if (request.type === 'createAndSend') {
-      const response = await request.call();
-      if ('type' in response && response.type === 'error') {
-        console.log('error creating chat', response);
-        return;
-      } else {
-        console.log('created chat ', response.chat_id);
-        return onSend(response);
-      }
-    } else {
-      chat.addMessage({
-        attachments: request.request.attachments ?? [],
-        content: request.request.content,
-        role: 'user',
-        id: '',
-      });
-      const stream = request.call();
-      console.log('set stream');
-      chat.setStream(stream);
-      setDebugStream(stream);
-      setIsGen(true);
-      createEffect(() => {
-        if (stream.isErr()) {
-          console.log('stream error');
-        }
-        if (stream.isDone()) {
-          console.log('stream done');
-          setIsGen(false);
-        }
-      });
-      createEffect(() => {
-        console.log('stream', JSON.stringify(stream.data(), null, 2));
-      });
+  const onSend = async (input: ChatSendInput) => {
+    chat.addMessage({
+      attachments: input.attachments,
+      content: input.content,
+      role: 'user',
+      id: '',
+    });
+    const response = await cognitionApiServiceClient.sendStreamChatMessage({
+      content: input.content,
+      model: input.model,
+      chat_id: chat.chatId(),
+      attachments: input.attachments.length > 0 ? input.attachments : undefined,
+      toolset: input.toolset,
+    });
+    if (isErr(response)) {
+      console.log('error sending message', response);
+      return;
     }
+    const [, { stream_id, chat_id }] = response;
+    const connectionStream = subscribe('chat', chat_id, stream_id);
+    if (!connectionStream) {
+      console.log('no connection stream');
+      return;
+    }
+    const chatStream: ChatMessageStream = {
+      data: connectionStream.data,
+      isDone: connectionStream.isDone,
+      model: input.model,
+      attachments: input.attachments,
+      streamId: stream_id,
+    };
+    console.log('set stream');
+    chat.setStream(chatStream);
+    setIsGen(true);
+    createEffect(() => {
+      if (connectionStream.isDone()) {
+        console.log('stream done');
+        setIsGen(false);
+      }
+    });
+    createEffect(() => {
+      console.log('stream', JSON.stringify(connectionStream.data(), null, 2));
+    });
   };
 
   return (
@@ -286,7 +310,7 @@ function FullChatInner() {
         data-chat-scroll
         class="size-full min-h-0 max-h-[400px] overflow-y-auto"
       >
-        <StreamStatus stream={stream} />
+        <StreamStatus stream={debugStream} />
         <ChatMessages />
         <ChatInput
           markdown={chatMarkdownArea}
@@ -316,7 +340,7 @@ function ToolCallRender() {
 
 function ToolCallRenderInner(props: { stream: MessageStream }) {
   const chat = useChatContext();
-  chat.setStream(props.stream);
+  chat.setStream(toChat(props.stream));
 
   return (
     <Item label="Tool call - static">
@@ -466,7 +490,7 @@ function TableStreamInner() {
       onChunk: (text) => setRawText((prev) => prev + text),
     });
     setStream(controlled);
-    chat.setStream(controlled);
+    chat.setStream(toChat(controlled));
   };
 
   return (

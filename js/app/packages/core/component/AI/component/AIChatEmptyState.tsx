@@ -6,7 +6,7 @@ import { isMobile } from '@core/mobile/isMobile';
 export function AiChatEmptyState() {
   const openInstructions = useOpenInstructionsMd();
   return (
-    <div class="relative p-2 border border-edge-muted bg-dialog text-sm flex flex-col gap-2 text-ink">
+    <div class="relative p-2 border border-edge-muted bg-dialog text-sm flex flex-col gap-2 text-ink macro-message-margin">
       <Show when={!isMobile()}>
         <div class="grid justify-start grid-cols-[max-content_auto] gap-y-1 grid-template items-center">
           <span class="p-1 bg-accent text-panel mr-2 text-center">@</span>

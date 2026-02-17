@@ -216,10 +216,6 @@ describe('buildSingleEntityFilter', () => {
       }
     }
   );
-
-  it('returns null for emailThread', () => {
-    expect(buildSingleEntityFilter('emailThread', 'e-1')).toBeNull();
-  });
 });
 
 describe('insertSoupEntity', () => {

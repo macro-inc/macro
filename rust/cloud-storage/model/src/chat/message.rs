@@ -36,6 +36,8 @@ pub struct ChatMessageWithAttachments {
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct NewChatMessage {
+    /// Optional pre-generated ID. If None, the database generates one.
+    pub id: Option<String>,
     /// Content of the message
     pub content: ChatMessageContent,
     /// Whether the chat is from the user or system

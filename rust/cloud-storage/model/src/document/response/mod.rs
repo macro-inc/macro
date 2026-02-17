@@ -8,7 +8,6 @@ use std::str::FromStr;
 use crate::document::{BomPart, FileType};
 use crate::response::TypedSuccessResponse;
 use crate::{document::DocumentMetadata, response::PresignedUrl};
-use chrono::serde::ts_seconds_option;
 use models_permissions::share_permission::access_level::AccessLevel;
 use tracing::instrument;
 use utoipa::ToSchema;
@@ -38,12 +37,8 @@ pub struct GetDocumentListResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub document_family_id: Option<i64>,
     /// The time the document was created
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     /// The time the document instance / document BOM was updated
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
@@ -123,12 +118,8 @@ pub struct DocumentResponseMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub modification_data: Option<serde_json::Value>,
     /// The time the document was created
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     /// The time the document instance / document BOM was updated
-    #[serde(with = "ts_seconds_option")]
-    #[schema(value_type = i64, nullable=false)]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
     /// The sub type of the document if present.
     #[serde(skip_serializing_if = "Option::is_none")]

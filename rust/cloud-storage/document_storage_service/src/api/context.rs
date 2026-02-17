@@ -1,5 +1,9 @@
 use crate::{config::Config, service::s3::S3};
 use axum::extract::FromRef;
+use channels::{
+    domain::service::ChannelMessagesServiceImpl, inbound::axum_router::ChannelsRouterState,
+    outbound::pg_channels_repo::PgChannelMessagesRepo,
+};
 use comms::{
     domain::service::ChannelServiceImpl,
     inbound::CommsRouterState,
@@ -7,6 +11,9 @@ use comms::{
 };
 use comms_service::CommsHandlerState;
 use connection_gateway_client::client::ConnectionGatewayClient;
+use documents_hex::domain::service::DocumentServiceImpl;
+use documents_hex::inbound::axum_router::DocumentRouterState;
+use documents_hex::outbound::pg_document_repo::PgDocumentRepo;
 use dynamodb_client::DynamodbClient;
 use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
@@ -59,12 +66,20 @@ type PropertiesService = PropertiesServiceImpl<
 /// Type alias for the entity access service.
 pub(crate) type EntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
 
+/// Type alias for the documents router state.
+pub(crate) type DocumentsState =
+    DocumentRouterState<DocumentServiceImpl<PgDocumentRepo>, EntityAccessService>;
+
 /// Type alias for the ChannelServiceImpl used by comms
 pub(crate) type CommsChannelService =
     ChannelServiceImpl<PgCommsRepo, UserRepoImpl, FrecencyPgStorage>;
 
 /// Type alias for the CommsRouterState
 pub(crate) type CommsState = CommsRouterState<CommsChannelService>;
+
+/// Type alias for the channels router state.
+pub(crate) type DssChannelsState =
+    ChannelsRouterState<ChannelMessagesServiceImpl<PgChannelMessagesRepo>>;
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
@@ -90,6 +105,8 @@ pub(crate) struct ApiContext {
     pub permissions_token_secret:
         LocalOrRemoteSecret<comms_service::DocumentPermissionJwtSecretKey>,
     pub entity_access_service: Arc<EntityAccessService>,
+    pub documents_state: DocumentsState,
+    pub channels_state: DssChannelsState,
 }
 
 env_var! {

@@ -542,6 +542,7 @@ pub async fn convert_db_messages_to_service_concurrent(
         labels_map,
         attachments_map,
         draft_attachments_map,
+        forwarded_attachments_map,
     ) = tokio::try_join!(
         contacts::get::fetch_senders_by_message_ids(pool, &message_ids),
         contacts::get::fetch_db_recipients_in_bulk(pool, &message_ids),
@@ -549,6 +550,7 @@ pub async fn convert_db_messages_to_service_concurrent(
         labels::get::fetch_message_labels_in_bulk(pool, &message_ids),
         attachments::provider::fetch_db_attachments_in_bulk(pool, &message_ids_with_attachments),
         attachments::draft::fetch_db_draft_attachments_in_bulk(pool, &draft_message_ids),
+        attachments::forwarded::fetch_forwarded_attachments_in_bulk(pool, &draft_message_ids),
     )?;
 
     // Build service messages concurrently by looking up data from the hashmaps
@@ -568,6 +570,10 @@ pub async fn convert_db_messages_to_service_concurrent(
             .get(&message_id)
             .cloned()
             .unwrap_or_default();
+        let forwarded_attachments = forwarded_attachments_map
+            .get(&message_id)
+            .cloned()
+            .unwrap_or_default();
 
         async move {
             // Build the service message without attachments first
@@ -580,6 +586,7 @@ pub async fn convert_db_messages_to_service_concurrent(
                 service_message,
                 attachments,
                 draft_attachments,
+                forwarded_attachments,
             )
         }
     });

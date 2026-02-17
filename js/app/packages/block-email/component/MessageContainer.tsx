@@ -139,6 +139,10 @@ export function MessageContainer(props: MessageContainerProps) {
     return props.message.attachments_draft ?? [];
   });
 
+  const forwardedAttachments = createMemo(() => {
+    return props.message.attachments_forwarded ?? [];
+  });
+
   const onClickAttachment = async (
     event: MouseEvent,
     attachment: Attachment,
@@ -206,7 +210,7 @@ export function MessageContainer(props: MessageContainerProps) {
     >
       {/* Expanded message view */}
       <div class="shrink-0 flex justify-center w-full">
-        <div class="macro-message-width w-full">
+        <div class="macro-message-width macro-message-padding w-full">
           <Message
             id={props.message.db_id ?? undefined}
             focused={props.isFocused}
@@ -290,7 +294,12 @@ export function MessageContainer(props: MessageContainerProps) {
             </Show>
 
             {/* Draft attachments. Needed to display attachments of sent messages before they actually get sent (undo window). */}
-            <Show when={draftAttachments().length > 0}>
+            <Show
+              when={
+                draftAttachments().length > 0 ||
+                forwardedAttachments().length > 0
+              }
+            >
               <div class="flex flex-row overflow-x-scroll mt-2 gap-2">
                 <For each={draftAttachments()}>
                   {(attachment) => (
@@ -298,6 +307,16 @@ export function MessageContainer(props: MessageContainerProps) {
                       attachment={{
                         fileName: attachment.file_name,
                         mimeType: attachment.content_type,
+                      }}
+                    />
+                  )}
+                </For>
+                <For each={forwardedAttachments()}>
+                  {(attachment) => (
+                    <EmailAttachmentPill
+                      attachment={{
+                        fileName: attachment.filename ?? '',
+                        mimeType: attachment.mime_type ?? undefined,
                       }}
                     />
                   )}

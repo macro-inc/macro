@@ -104,7 +104,7 @@ export function EntityKeyProperties(props: EntityKeyPropertiesProps) {
         property,
         apiValues: {
           valueType: 'DATE',
-          value: date.toISOString(),
+          value: date,
         },
       }),
   };

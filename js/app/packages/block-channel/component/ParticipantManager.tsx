@@ -20,7 +20,7 @@ import UsersIcon from '@icon/regular/users.svg';
 import CloseIcon from '@icon/regular/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import BracketLeft from '@macro-icons/macro-group-bracket-left.svg';
-import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
+import type { ChannelParticipant } from '@queries/channel/types';
 import { ChannelType } from '@service-comms/generated/models/channelType';
 import { useUserId } from '@core/context/user';
 import { createMemo, createSignal, Show } from 'solid-js';

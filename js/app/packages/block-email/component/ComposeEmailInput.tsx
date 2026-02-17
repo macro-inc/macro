@@ -277,6 +277,18 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
                       />
                     )}
                   </Match>
+                  <Match when={attachment.type === 'forwarded' && attachment}>
+                    {(attachment) => (
+                      <EmailAttachmentPill
+                        attachment={{
+                          fileName: attachment().fileName,
+                          mimeType: attachment().mimeType,
+                        }}
+                        removable
+                        onRemove={handleRemoveAttachment}
+                      />
+                    )}
+                  </Match>
                 </Switch>
               );
             }}
