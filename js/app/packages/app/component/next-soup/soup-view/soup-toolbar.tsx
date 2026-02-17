@@ -99,14 +99,10 @@ export const SoupToolbar = () => {
           >
             <button
               type="button"
-              class="flex items-center gap-1.5 px-2.5 rounded-full text-ink-muted hover:text-accent hover:bg-accent/20 active:bg-accent active:text-panel"
+              class="flex items-center justify-center size-[22px] rounded-full text-ink-muted hover:text-accent hover:bg-accent/20 active:bg-accent active:text-panel"
               onClick={handleClear}
             >
               <XIcon class="size-4.5" />
-              <span class="text-xs touch:mobile-width:text-sm leading-none">
-                Clear
-                <span class="ml-1 font-mono opacity-70">/</span>
-              </span>
             </button>
           </Tooltip>
           <div class="mx-0.5 w-px h-5 bg-edge-muted/50 shrink-0" />
