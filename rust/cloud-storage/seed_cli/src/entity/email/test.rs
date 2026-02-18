@@ -137,14 +137,7 @@ fn parse_email_seed_with_file_path_override() {
 
 #[test]
 fn parse_email_seed_with_concurrency() {
-    let cli = Cli::try_parse_from([
-        "seed_cli",
-        "email",
-        "seed",
-        "--concurrency",
-        "10",
-    ])
-    .unwrap();
+    let cli = Cli::try_parse_from(["seed_cli", "email", "seed", "--concurrency", "10"]).unwrap();
 
     match cli.command {
         crate::entity::EntityCommand::Email(args) => match args.command {
