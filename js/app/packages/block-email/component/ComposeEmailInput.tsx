@@ -29,7 +29,15 @@ import {
   type TextFormatType,
 } from 'lexical';
 import PaperPlane from '@macro-icons/wide/paper-plane-cutout.svg';
-import { createSignal, For, Match, onMount, Show, Switch } from 'solid-js';
+import {
+  type Accessor,
+  createSignal,
+  For,
+  Match,
+  onMount,
+  Show,
+  Switch,
+} from 'solid-js';
 import { type FocusableElement, tabbable } from 'tabbable';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
 import { Button } from '@ui/components/Button';
@@ -63,6 +71,7 @@ type ComposeEmailInputProps = {
   onContentChange?: (content: string) => void;
   sendTime?: Date | null;
   onSendTimeChange?: (date: Date | null) => void;
+  mobileScrollRef?: Accessor<HTMLElement | undefined>;
 };
 
 export function ComposeEmailInput(props: ComposeEmailInputProps) {
@@ -237,6 +246,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
           <MarkdownTextarea
             domRef={props.inputRef}
             captureEditor={captureEditor}
+            scrollRef={props.mobileScrollRef}
             initialHtml={props.initialHtml}
             class="text-sm break-words text-ink mobile:overflow-auto h-auto"
             editable={() => !props.disabled}

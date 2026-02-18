@@ -128,6 +128,8 @@ export function EmailCompose(props: EmailComposeProps) {
     messageInput: undefined,
   });
 
+  let mobileScrollRef: HTMLDivElement | undefined;
+
   const registerRef = (name: keyof EmailComposeElementRefs) => {
     return (el: HTMLElement) => {
       setRefs((p) => ({ ...p, [name]: el }));
@@ -733,6 +735,7 @@ export function EmailCompose(props: EmailComposeProps) {
         </Switch>
 
         <div
+          ref={mobileScrollRef}
           class="macro-message-width sm:macro-message-padding mx-auto w-full max-h-full my-2 sm:my-12 mobile:my-0 px-2 sm:px-4 mobile:px-0 overflow-hidden mobile:overflow-y-auto mobile:hide-scrollbar mobile:min-h-full"
           classList={{
             'pointer-events-none opacity-50': hasLinkError(),
@@ -900,6 +903,7 @@ export function EmailCompose(props: EmailComposeProps) {
                 <ComposeEmailInput
                   captureEditor={setEditor}
                   inputRef={registerRef('messageInput')}
+                  mobileScrollRef={() => mobileScrollRef}
                   initialHtml={initialHtml()}
                   onContentChange={onContentChange}
                   onAddAttachments={onAddAttachments}

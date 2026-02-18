@@ -33,6 +33,7 @@ import {
   customSelectionDataPlugin,
   emojisPlugin,
   filePastePlugin,
+  iosCursorScrollPlugin,
   type ItemMention,
   keyboardFocusPlugin,
   mediaPlugin,
@@ -57,6 +58,8 @@ import { FloatingLinkMenu } from '../menu/FloatingLinkMenu';
 import { MentionsMenu } from '../menu/MentionsMenu';
 import { DecoratorRenderer } from './DecoratorRenderer';
 import { NodeAccessoryRenderer } from './NodeAccessoryRenderer';
+import { isIOS } from '@solid-primitives/platform';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 
 /**
  * @param editable - A signal that indicates whether the textarea is editable
@@ -96,6 +99,7 @@ export interface MarkdownTextareaProps {
   formatState?: SelectionData;
   setFormatState?: SetStoreFunction<SelectionData>;
   domRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
+  scrollRef?: Accessor<HTMLElement | undefined>;
   onPasteFilesAndDirs?: (
     files: FileSystemFileEntry[],
     directories: FileSystemDirectoryEntry[]
@@ -104,6 +108,7 @@ export interface MarkdownTextareaProps {
 
 export function MarkdownTextarea(props: MarkdownTextareaProps) {
   let mountRef!: HTMLDivElement;
+  let scrollContainerRef: HTMLDivElement | undefined;
   const lexicalWrapper = createLexicalWrapper({
     type: props.type ?? 'markdown',
     namespace: 'markdown-textarea',
@@ -212,6 +217,14 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     );
   }
 
+  if (isIOS || isNativeMobilePlatform()) {
+    plugins.use(
+      iosCursorScrollPlugin({
+        scrollContainer: props.scrollRef ?? (() => scrollContainerRef),
+      })
+    );
+  }
+
   const [accessoryStore, setAccessoryStore] = createAccessoryStore();
   plugins.use(
     codePlugin({
@@ -293,6 +306,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
   return (
     <LexicalWrapperContext.Provider value={lexicalWrapper}>
       <div
+        ref={scrollContainerRef}
         class={cn('relative w-full h-full overflow-auto min-h-8', props.class)}
         on:keydown={(e) => {
           e.stopPropagation();
