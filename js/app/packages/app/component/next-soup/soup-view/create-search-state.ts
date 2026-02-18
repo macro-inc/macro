@@ -32,7 +32,8 @@ import {
   onCleanup,
 } from 'solid-js';
 import { match } from 'ts-pattern';
-import { DEV_MODE_ENV } from '@core/constant/featureFlags';
+import type { FilterConfig } from '../filters';
+import type { SoupEntity } from './soup-view-context';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 300;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
@@ -60,21 +61,63 @@ const ITEM_PRELOAD_ARGS: SoupItemsQueryArgs = {
   },
 };
 
+// we drop explicit noise because it's essentially an identity filter for search results
+const getValidSearchFilters = (
+  filters: readonly FilterConfig<SoupEntity>[]
+) => {
+  return filters.filter((f) => f.id !== 'explicit-noise');
+};
+
+/** Merges entity pools into a single list, (optionally) deduplicating by id */
 function mergeEntityPools(
-  items: EntityData[],
-  extra: EntityData[],
+  pools: readonly EntityData[][],
   options?: {
     noDeduplicate?: boolean;
   }
 ): EntityData[] {
-  if (extra.length === 0) return items;
+  const flat = pools.flat();
   if (options?.noDeduplicate) {
-    return [...items, ...extra];
+    return flat;
   }
-  const existingIds = new Set(items.map((e) => e.id));
-  const newItems = extra.filter((e) => !existingIds.has(e.id));
-  if (newItems.length === 0) return items;
-  return [...items, ...newItems];
+  const seen = new Set<string>();
+  const deduplicated: EntityData[] = [];
+  for (const item of flat) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    deduplicated.push(item);
+  }
+  return deduplicated;
+}
+
+/** Takes a list of entity pools and returns a list of unique entities that are present in all pools, deduplicating by id */
+function intersectEntityPools(pools: readonly EntityData[][]): EntityData[] {
+  if (pools.length === 0) return [];
+  if (pools.length === 1) return pools[0];
+
+  const idCounts = new Map<string, number>();
+  const entityById = new Map<string, EntityData>();
+
+  for (const pool of pools) {
+    const seen = new Set<string>();
+    for (const entity of pool) {
+      if (!seen.has(entity.id)) {
+        seen.add(entity.id);
+        idCounts.set(entity.id, (idCounts.get(entity.id) ?? 0) + 1);
+        if (!entityById.has(entity.id)) {
+          entityById.set(entity.id, entity);
+        }
+      }
+    }
+  }
+
+  const result: EntityData[] = [];
+  for (const [id, count] of idCounts) {
+    if (count === pools.length) {
+      result.push(entityById.get(id)!);
+    }
+  }
+
+  return result;
 }
 
 interface CreateSearchStateArgs {
@@ -241,6 +284,27 @@ export const createSearchState = ({
   const [localFuzzyResults, setLocalFuzzyResults] = createSignal<EntityData[]>(
     []
   );
+  const allFiltersResults = createMemo((): Map<string, EntityData[]> => {
+    if (!localFuzzyResults()) return new Map();
+    const allFilters = getValidSearchFilters(soup.filters.available);
+    const filterToResultMap = new Map<string, EntityData[]>();
+    for (const filter of allFilters) {
+      filterToResultMap.set(
+        filter.id,
+        localFuzzyResults().filter((e) => filter.predicate(e))
+      );
+    }
+    return filterToResultMap;
+  });
+  const filteredLocalFuzzyResults = createMemo(() => {
+    if (!localFuzzyResults()) return [];
+    const activeFilters = getValidSearchFilters(soup.filters.active());
+    if (activeFilters.length === 0)
+      return localFuzzyResults().slice(0, FEATURED_COUNT);
+    const pools = activeFilters.map((f) => allFiltersResults().get(f.id) ?? []);
+    const merged = intersectEntityPools(pools);
+    return merged.slice(0, FEATURED_COUNT);
+  });
 
   // NOTE: this will load the local fuzzy results in the background
   // we use the throttled signals to avoid calculating too often
@@ -251,8 +315,7 @@ export const createSearchState = ({
   );
   createDeferred(() => {
     const pool = mergeEntityPools(
-      itemsQueryData(),
-      channelItemsQueryData(),
+      [itemsQueryData(), channelItemsQueryData()],
       // these data sources are already deduplicated so we can avoid recalculating
       { noDeduplicate: true }
     );
@@ -262,18 +325,30 @@ export const createSearchState = ({
   const nameFuzzySearchFilter = (items: EntityData[], query: string) => {
     if (!query || query.length === 0) return items;
 
-    const matchResults = fuzzyMatch(query, items, (item) => item.name);
-
-    return matchResults.map((result) => {
-      return {
-        ...result.item,
-        search: {
-          nameHighlight: mergeAdjacentMacroEmTags(result.nameHighlight),
-          contentHitData: null,
-          source: 'local',
-        },
-      } as WithSearch<EntityData>;
+    const matchResults = fuzzyMatch(query, items, (item) => item.name, {
+      noSort: true,
     });
+
+    //  we need to return the original items in the same order
+    const resultMap = new Map(
+      matchResults.map((r) => [
+        r.item.id,
+        { nameHighlight: r.nameHighlight, score: r.score },
+      ])
+    );
+    return items
+      .filter((item) => resultMap.has(item.id))
+      .map((item) => {
+        const matchResult = resultMap.get(item.id)!;
+        return {
+          ...item,
+          search: {
+            nameHighlight: mergeAdjacentMacroEmTags(matchResult.nameHighlight),
+            contentHitData: null,
+            source: 'local',
+          },
+        } as WithSearch<EntityData>;
+      });
   };
 
   const freshSearch = createFreshSearch<EntityData>(
@@ -291,7 +366,7 @@ export const createSearchState = ({
   );
 
   createRenderEffect(
-    on(debouncedSearchForLocal, (query) => {
+    on([debouncedSearchForLocal], ([query]) => {
       if (!query || query.length === 0) {
         setLocalFuzzyResults([]);
         return;
@@ -300,25 +375,13 @@ export const createSearchState = ({
       // TODO: we can optimize fresh search for small feature counts since we
       // don't need to sort everything, we just need the featured results
       const freshSearchResults = freshSearch(pool, query);
-      const freshSearchResultsFeatured = freshSearchResults.slice(
-        0,
-        FEATURED_COUNT
-      );
       // NOTE: this is a temporary hack because the fresh search fuzzy library
       // does not give us the highlighted matches
       const results = nameFuzzySearchFilter(
-        freshSearchResultsFeatured.map((r) => r.item),
+        freshSearchResults.map((r) => r.item),
         query
       );
-      if (
-        DEV_MODE_ENV &&
-        freshSearchResultsFeatured.length !== results.length
-      ) {
-        console.warn('local fuzzy search mismatch', {
-          freshSearch: freshSearchResultsFeatured,
-          nameFuzzy: results,
-        });
-      }
+
       setLocalFuzzyResults(results);
     })
   );
@@ -331,14 +394,15 @@ export const createSearchState = ({
   });
 
   const featuredIds = createMemo(() => {
-    return localFuzzyResults().map((r) => r.id);
+    const ids = filteredLocalFuzzyResults().map((r) => r.id);
+    return ids;
   });
 
   return {
     searchText,
     setSearchText,
     isSearching,
-    localFuzzyResults,
+    localFuzzyResults: filteredLocalFuzzyResults,
     serviceSearchResults,
     featuredIds,
     searchQuery,

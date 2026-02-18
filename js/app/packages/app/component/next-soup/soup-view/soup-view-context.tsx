@@ -57,7 +57,7 @@ interface SoupViewContextValues {
   source: DataSource<EntityData>;
   searchText: Accessor<string>;
   setSearchText: (value: string) => void;
-  featuredCount: Accessor<number>;
+  featuredIds: Accessor<string[]>;
   rows: Accessor<SoupRow[]>;
   queryFilters: Accessor<SoupItemsQueryFilters>;
   setQueryFilters: Setter<SoupItemsQueryFilters>;
@@ -237,7 +237,7 @@ export const SoupViewContextProvider: FlowComponent<
     //   transformed.sort(sortEntitiesForSearch);
     // }
 
-    // NOTE: this is the search api response default sort
+    // NOTE: this is the search api response default sort so no need to sort again in this case
     if (
       search.isSearching() &&
       sorts.length === 1 &&
@@ -276,12 +276,6 @@ export const SoupViewContextProvider: FlowComponent<
     return [...featured, ...rest];
   };
 
-  const featuredCount = createMemo(() => {
-    if (!ENABLE_FEATURED_SEARCH_RESULTS) return 0;
-    if (!search.isSearching()) return 0;
-    return search.featuredIds().length;
-  });
-
   const rows = createMemo(() => {
     return entities().map((e) => attachMethods(e));
   });
@@ -318,7 +312,7 @@ export const SoupViewContextProvider: FlowComponent<
     rows,
     searchText: search.searchText,
     setSearchText: search.setSearchText,
-    featuredCount,
+    featuredIds: search.featuredIds,
     queryFilters,
     setQueryFilters,
   };
