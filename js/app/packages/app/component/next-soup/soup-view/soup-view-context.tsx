@@ -231,13 +231,21 @@ export const SoupViewContextProvider: FlowComponent<
 
     transformed = deduplicateEntities(next);
 
+    const sorts = soup.sort.active();
+
     // NOTE: we only need this if we're including local fuzzy results in the more data section
     // otherwise the backend will return results in the correct order
     // if (search.isSearching()) {
     //   transformed.sort(sortEntitiesForSearch);
     // }
 
-    const sorts = soup.sort.active();
+    // NOTE: this is the search api response default sort
+    if (
+      search.isSearching() &&
+      sorts.length === 1 &&
+      sorts[0].id === 'updated_at'
+    )
+      return transformed;
 
     if (sorts.length > 0) {
       transformed.sort((a, b) => {

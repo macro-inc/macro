@@ -28,6 +28,8 @@ import {
   createSignal,
   on,
   createDeferred,
+  onMount,
+  onCleanup,
 } from 'solid-js';
 import { match } from 'ts-pattern';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
@@ -212,15 +214,19 @@ export const createSearchState = ({
   // NOTE: this is effectively the same as useHistory but with soup
   const itemsQuery = useSoupItemsQuery(() => ITEM_PRELOAD_ARGS);
 
-  // NOTE: we may have a lot of items so we use a deferred fetch
-  createDeferred(() => {
-    if (itemsQuery.hasNextPage && !itemsQuery.isFetchingNextPage) {
-      itemsQuery.fetchNextPage();
-    }
+  // NOTE: we may have a lot of items so we load in batches
+  onMount(() => {
+    const interval = setInterval(() => {
+      if (!itemsQuery.hasNextPage) clearInterval(interval);
+      if (itemsQuery.hasNextPage && !itemsQuery.isFetchingNextPage) {
+        itemsQuery.fetchNextPage();
+      }
+    }, 2000);
+    onCleanup(() => clearInterval(interval));
   });
 
   const channelItemsQuery = useSoupItemsQuery(() => CHANNEL_PRELOAD_ARGS);
-  createRenderEffect(() => {
+  createDeferred(() => {
     if (
       channelItemsQuery.hasNextPage &&
       !channelItemsQuery.isFetchingNextPage
