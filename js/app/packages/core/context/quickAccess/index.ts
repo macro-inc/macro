@@ -1,8 +1,4 @@
 export { QuickAccessProvider, useQuickAccess } from './QuickAccessProvider';
-export {
-  useQuickAccessWithCommands,
-  type CommandsOptions,
-} from './useQuickAccessWithCommands';
 export type {
   Bucket,
   EntityBucket,
@@ -26,7 +22,4 @@ export {
   isCommandItem,
   isEntityOfType,
   isFromBucket,
-  getItemSearchText,
-  getItemTimestamps,
-  isChannelItem,
 } from './types';

@@ -1,5 +1,5 @@
 import type { Accessor } from 'solid-js';
-import { createEffect, createMemo, createSignal } from 'solid-js';
+import { createEffect, createSignal } from 'solid-js';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { useChannelsContext } from '@core/context/channels';
 import {
@@ -26,8 +26,7 @@ import type {
 import { BUCKET_COMBINATIONS } from './types';
 
 /**
- * Lightweight index entry for sorted arrays.
- * Contains only what's needed for sorting and lookup - not the full transformed data.
+ * index entry for sorted lists.
  */
 type IndexEntry = {
   id: string;
@@ -36,8 +35,7 @@ type IndexEntry = {
 };
 
 /**
- * Cache entry for a fully transformed QuickAccessItem.
- * Includes a version hash to detect changes.
+ * full item and version hash.
  */
 type CacheEntry = {
   item: QuickAccessItem;
@@ -91,9 +89,6 @@ function historyItemToEntity(item: HistoryItem): QuickAccessEntity {
   }
 }
 
-/**
- * Maps an ApiChannelWithLatest to ChannelEntity.
- */
 function channelToEntity(channel: ApiChannelWithLatest): ChannelEntity {
   return {
     type: 'channel',
@@ -138,31 +133,22 @@ function getEntitySearchText(entity: QuickAccessEntity): string {
   return entity.name;
 }
 
-/**
- * Converts a DateValue to a timestamp number for sorting.
- */
 function toTimestamp(value: DateValue | null | undefined): number {
   if (value == null) return 0;
   return toDate(value).getTime();
 }
 
-/**
- * Create a version string for a history item to detect changes.
- */
+/** dumb history item hash */
 function getHistoryItemVersion(item: HistoryItem): string {
   return `${item.name}|${item.updatedAt}|${item.viewedAt}|${item.deletedAt}`;
 }
 
-/**
- * Create a version string for a channel to detect changes.
- */
+/** dumb channel hash */
 function getChannelVersion(channel: ApiChannelWithLatest): string {
   return `${channel.name}|${channel.updated_at}|${channel.viewed_at}`;
 }
 
-/**
- * Create a version string for a user to detect changes.
- */
+/** dumb use hash */
 function getUserVersion(user: IUser): string {
   return `${user.name}|${user.email}|${user.lastInteraction}`;
 }
@@ -210,15 +196,16 @@ export const [QuickAccessProvider, useQuickAccess] =
   createAssertedContextProvider(
     'QuickAccessContext',
     (): QuickAccessContextValue => {
+      // queries
       const historyQuery = useHistoryQuery();
       const { channels, isLoading: channelsLoading } = useChannelsContext();
       const contacts = useContacts();
       const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
+      const instructionsIdQuery = useInstructionsMdIdQuery();
 
-      // Reactive set of IDs to hide from quick access
+      // globally hidden ids
       const [hiddenIds, setHiddenIds] = createSignal<Set<string>>(new Set());
 
-      // Add an ID to the hidden set
       const hideId = (id: string) => {
         setHiddenIds((prev) => {
           const next = new Set(prev);
@@ -227,8 +214,7 @@ export const [QuickAccessProvider, useQuickAccess] =
         });
       };
 
-      // Fetch instructions MD id and hide it when available
-      const instructionsIdQuery = useInstructionsMdIdQuery();
+      // instructions.md effect
       createEffect(() => {
         const instructionsReady = queryReadyGate(instructionsIdQuery);
         if (!instructionsReady) return;
@@ -237,8 +223,7 @@ export const [QuickAccessProvider, useQuickAccess] =
         hideId(instructionsId);
       });
 
-      // Stable cache for transformed items - persists across reactive updates
-      // This is a mutable Map outside the reactive system to avoid circular dependencies
+      // stable cache for transformed items
       const itemCache = new Map<string, CacheEntry>();
 
       /**
@@ -247,10 +232,14 @@ export const [QuickAccessProvider, useQuickAccess] =
        */
       const processedData = createLazyMemo(() => {
         const startTime = performance.now();
+
         const seenIds = new Set<string>();
+
         const allEntries: IndexEntry[] = [];
+
         let transformCount = 0;
         let cacheHitCount = 0;
+
         const transformedItems: Array<{
           id: string;
           name: string;
@@ -259,8 +248,7 @@ export const [QuickAccessProvider, useQuickAccess] =
         }> = [];
 
         // Process history items
-        // const historyData = historyQuery.data ?? [];
-        const historyData = [];
+        const historyData = historyQuery.data ?? [];
         const hidden = hiddenIds();
         for (const item of historyData) {
           if (item.deletedAt) continue;
@@ -446,18 +434,10 @@ export const [QuickAccessProvider, useQuickAccess] =
         return deduplicatedEntries;
       });
 
-      /**
-       * Get a QuickAccessItem by ID from the cache.
-       * This is the lazy lookup function for accessing full data when needed.
-       */
       const getById = (id: string): QuickAccessItem | undefined => {
         return itemCache.get(id)?.item;
       };
 
-      /**
-       * Resolve index entries to full QuickAccessItems.
-       * This is called lazily when components actually need the data.
-       */
       const resolveEntries = (entries: IndexEntry[]): QuickAccessItem[] => {
         const result: QuickAccessItem[] = [];
         for (const entry of entries) {
@@ -483,7 +463,6 @@ export const [QuickAccessProvider, useQuickAccess] =
         return map;
       });
 
-      // Pre-bake common bucket combinations for O(1) index access
       const preBakedIndices = createLazyMemo<
         Record<BucketCombination, IndexEntry[]>
       >(() => {
@@ -501,15 +480,10 @@ export const [QuickAccessProvider, useQuickAccess] =
             indices.get('chat') ?? [],
             indices.get('project') ?? [],
           ]),
-          messaging: mergeMultipleSortedIndices([
-            indices.get('dm') ?? [],
-            indices.get('channel') ?? [],
-            indices.get('person') ?? [],
-          ]),
         };
       });
 
-      // Helper to get a pre-baked index list if the bucket combination matches
+      // helper to get a pre-baked index list if the bucket combination matches
       const getPreBakedIndices = (
         buckets: Bucket[]
       ): IndexEntry[] | undefined => {
@@ -529,14 +503,14 @@ export const [QuickAccessProvider, useQuickAccess] =
 
       // API: useList
       // Optimized for common cases:
-      // 1. No buckets = return pre-sorted all items list (O(1))
-      // 2. Single bucket = return pre-computed bucket list (O(1))
-      // 3. Pre-baked combination = return pre-merged list (O(1))
-      // 4. Other combinations = merge-sort bucket lists (O(n+m))
+      // 1. No buckets = return pre-sorted all items list
+      // 2. Single bucket = return pre-computed bucket list
+      // 3. Pre-baked combination = return pre-merged list
+      // 4. Other combinations = merge-sort bucket lists
       //
-      // Items are resolved lazily from the cache when the memo is accessed.
+      // Items are resolved lazily
       const useList = <B extends Bucket>(...buckets: B[]): Accessor<any> => {
-        return createMemo(() => {
+        return createLazyMemo(() => {
           let indices: IndexEntry[];
 
           if (buckets.length === 0) {
@@ -559,7 +533,6 @@ export const [QuickAccessProvider, useQuickAccess] =
             }
           }
 
-          // Resolve indices to full items (lazy lookup from cache)
           return resolveEntries(indices);
         });
       };
@@ -574,7 +547,6 @@ export const [QuickAccessProvider, useQuickAccess] =
         useList,
         isLoading,
         refresh,
-        // Expose getById for components that need to look up a single item
         getById,
       };
     }

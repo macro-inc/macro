@@ -9,7 +9,7 @@ import {
   type QueryClient,
   type Updater,
 } from '@tanstack/solid-query';
-import { type Accessor, type Setter } from 'solid-js';
+import type { Accessor, Setter } from 'solid-js';
 import { queryClient } from '../client';
 import { historyKeys } from './keys';
 import {

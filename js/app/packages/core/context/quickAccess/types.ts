@@ -142,14 +142,8 @@ export type BucketItemMap = {
   command: CommandItem;
 };
 
-/**
- * Helper type to get the QuickAccessItem type(s) for given bucket(s)
- */
 export type ItemForBucket<B extends Bucket> = BucketItemMap[B];
 
-/**
- * Union type of all items for the given buckets
- */
 export type ItemsForBuckets<Buckets extends Bucket[]> = Buckets extends [
   infer First extends Bucket,
   ...infer Rest extends Bucket[],
@@ -184,12 +178,6 @@ export type QuickAccessContextValue = {
   /**
    * Get items from specific buckets, cached and reactive.
    * Returns all items if no buckets specified.
-   *
-   * Performance:
-   * - No buckets: O(1) - returns pre-sorted all items
-   * - Single bucket: O(1) - returns pre-computed bucket list
-   * - Pre-baked combo (channels, documents, messaging): O(1)
-   * - Other combos: O(n+m) merge-sort of pre-sorted arrays
    *
    * @example
    * const channels = quickAccess.useList('channel', 'dm');
@@ -227,15 +215,3 @@ export type QuickAccessContextValue = {
    */
   getById: (id: string) => QuickAccessItem | undefined;
 };
-
-export function getItemSearchText(item: QuickAccessItem): string {
-  return item.searchText;
-}
-
-export function getItemTimestamps(item: QuickAccessItem): ItemTimestamps {
-  return item.timestamps;
-}
-
-export function isChannelItem(item: QuickAccessItem): boolean {
-  return item.bucket === 'channel' || item.bucket === 'dm';
-}

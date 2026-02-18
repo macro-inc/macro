@@ -7,8 +7,9 @@ import type { QuickAccessItem } from '../types';
 
 export default function QuickAccessAll() {
   const { useList } = useQuickAccess();
+
   // const entities = useList('task', 'note', 'document', 'project');
-  const entities = useList('person');
+  const entities = useList();
 
   const renderItem = (item: QuickAccessItem) => {
     if (item.kind === 'entity') {
