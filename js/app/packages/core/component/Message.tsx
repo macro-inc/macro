@@ -345,7 +345,13 @@ const Root: Component<MessageRootProps> = (props) => {
             </div>
           </div>
         </BozzyBracket>
-        <Show when={props.hoverActions && !isTouchDevice() && hover()}>
+        <Show
+          when={
+            props.hoverActions &&
+            !isTouchDevice() &&
+            (hover() || !!props.shouldHover)
+          }
+        >
           <div
             class="absolute right-0 -top-4 flex flex-col items-end z-tool-tip"
             classList={{

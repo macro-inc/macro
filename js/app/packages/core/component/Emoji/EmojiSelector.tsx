@@ -114,7 +114,7 @@ export function EmojiSelector(props: EmojiPickerProps): JSX.Element {
         const nextIndex = prev - EMOJIS_PER_ROW;
         return nextIndex < 0 ? prev : nextIndex;
       });
-    } else if (e.key === 'Enter' || e.key === ' ') {
+    } else if (e.key === 'Enter') {
       e.preventDefault();
       e.stopPropagation();
       if (selectedIndex() !== -1) {
