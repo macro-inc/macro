@@ -2,6 +2,7 @@ import type { SoupState } from '@app/component/next-soup/create-soup-state';
 import {
   type FilterID,
   getFileAssociations,
+  EXCLUDE,
 } from '@app/component/next-soup/filters/filters';
 import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
@@ -33,15 +34,13 @@ const SEARCH_SERVICE_DEBOUNCE_MS = 300;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
 const FEATURED_COUNT = 3;
 
-const NIL_UUID = '00000000-0000-0000-0000-000000000000';
-
 const CHANNEL_PRELOAD_ARGS: SoupItemsQueryArgs = {
   params: { limit: 500, sort_method: 'updated_at' },
   body: {
-    chat_filters: { chat_ids: [NIL_UUID] },
-    document_filters: { document_ids: [NIL_UUID] },
-    email_filters: { recipients: [NIL_UUID] },
-    project_filters: { project_ids: [NIL_UUID] },
+    chat_filters: { chat_ids: EXCLUDE },
+    document_filters: { document_ids: EXCLUDE },
+    email_filters: { recipients: EXCLUDE },
+    project_filters: { project_ids: EXCLUDE },
     channel_filters: {
       channel_types: [],
     },
@@ -179,7 +178,7 @@ export const createSearchState = ({
     return {
       ...queryFilters(),
       email_filters: {
-        recipients: [NIL_UUID],
+        recipients: EXCLUDE,
       },
     };
   });
