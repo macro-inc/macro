@@ -108,6 +108,7 @@ export const createSearchState = ({
             'explicit-noise',
             'unread',
             'not-done',
+            'project-content',
             () => {}
           )
           .exhaustive();
