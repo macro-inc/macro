@@ -172,7 +172,6 @@ function ToastContent(props: {
   const [progress, setProgress] = createSignal(1);
   const [isHovered, setIsHovered] = createSignal(false);
 
-  // Use a ref object so the animation loop can see resets
   let elapsed = 0;
 
   onMount(() => {
