@@ -84,6 +84,8 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
   const { isKeypressActive } = useIsKeyPressActive();
 
+  const blockId = useMaybeBlockId();
+
   const { usersAndGroups } = useUsersMention({
     users: props.users,
     searchTerm,
@@ -209,6 +211,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   });
 
   const controller = useMentionsMenuController(bucketConfigs, {
+    ignoredIds: () => (blockId ? [blockId] : []),
     maxItems: MAX_ITEMS,
   });
 
@@ -358,7 +361,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
   const visibleBuckets = () => {
     const currentBins = controller.bins();
-    const seenIds = new Set<string>();
+    const seenIds = new Set<string>(blockId ? [blockId] : []);
     let cumulativeIndex = 0;
 
     return bucketConfigs()

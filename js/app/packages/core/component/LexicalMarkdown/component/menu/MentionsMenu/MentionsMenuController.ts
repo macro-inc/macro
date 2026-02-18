@@ -26,6 +26,7 @@ export type MentionBins = Record<string, number>;
 export class MentionsMenuController {
   private buckets: Accessor<BucketConfig[]>;
   private maxItems: number;
+  private ignoredIds: Accessor<string[]> = () => [];
   private selectedIndexSignal: Signal<number>;
   private viewAllModeSignal: Signal<ViewAllMode>;
 
@@ -33,10 +34,12 @@ export class MentionsMenuController {
     buckets: Accessor<BucketConfig[]>,
     options: {
       maxItems?: number;
+      ignoredIds?: Accessor<string[]>;
     } = {}
   ) {
     this.buckets = buckets;
     this.maxItems = options.maxItems ?? 8;
+    this.ignoredIds = options.ignoredIds ?? (() => []);
 
     this.selectedIndexSignal = createSignal(0);
     this.viewAllModeSignal = createSignal<ViewAllMode>(null);
@@ -63,7 +66,7 @@ export class MentionsMenuController {
     if (!buckets) return {};
 
     const bins: MentionBins = {};
-    const seenIds = new Set<string>();
+    const seenIds = new Set<string>(this.ignoredIds());
 
     // Count items per bucket, excluding items already seen in earlier buckets
     buckets.forEach((config) => {
@@ -89,23 +92,14 @@ export class MentionsMenuController {
     if (!buckets) return [];
 
     const currentViewAllMode = this.viewAllMode();
-    const seenIds = new Set<string>();
+    const seenIds = new Set<string>(this.ignoredIds());
 
     if (currentViewAllMode) {
       const bucket = buckets.find((b) => b.id === currentViewAllMode);
       if (!bucket) return [];
 
-      // In view-all mode, still dedupe against items from earlier buckets
-      const bucketIndex = buckets.indexOf(bucket);
-      for (let i = 0; i < bucketIndex; i++) {
-        for (const item of buckets[i].getData()) {
-          seenIds.add(item.id);
-        }
-      }
-
       return bucket.getData().filter((item) => {
         if (seenIds.has(item.id)) return false;
-        seenIds.add(item.id);
         return true;
       });
     }
@@ -398,9 +392,11 @@ export function useMentionsMenuController(
   buckets: Accessor<BucketConfig[]>,
   options: {
     maxItems?: number;
+    ignoredIds?: Accessor<string[]>;
   } = {}
 ): MentionsMenuController {
   return new MentionsMenuController(buckets, {
     maxItems: options.maxItems,
+    ignoredIds: options.ignoredIds,
   });
 }
