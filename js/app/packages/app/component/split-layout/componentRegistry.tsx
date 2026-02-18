@@ -58,7 +58,9 @@ export function resolveComponent(
 registerComponent('unified-list', () => <SoupView />);
 registerComponent('loading', () => <LoadingBlock />);
 registerComponent('channel-compose', () => <ChannelCompose />);
-registerComponent('email-compose', () => <EmailCompose />);
+registerComponent('email-compose', (params) => (
+  <EmailCompose draftID={params?.draftID} />
+));
 registerComponent('task-compose', () => <ComposeTask />);
 registerComponent(
   'import-linear',
