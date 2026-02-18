@@ -2,7 +2,6 @@
 mod test;
 
 use crate::parse::db_to_service::map_db_contact_to_service;
-use anyhow::Context;
 use chrono::{DateTime, Utc};
 use email_utils::{dedupe_emails, is_generic_email};
 use models_email::service::address;
@@ -120,7 +119,7 @@ pub async fn fetch_db_recipients(
     })
     .fetch_all(pool)
     .await
-    .context("Failed to fetch recipients")
+    .map_err(Into::into)
 }
 
 /// Fetches all recipients for a given list of message IDs in a single query
@@ -160,8 +159,7 @@ where
         message_ids
     )
     .fetch_all(executor)
-    .await
-    .context("Failed to fetch recipients in bulk")?;
+    .await?;
 
     let mut recipients_map = HashMap::new();
     for row in results {
@@ -203,12 +201,7 @@ pub async fn fetch_id_by_email(
     )
     .fetch_optional(pool)
     .await
-    .with_context(|| {
-        format!(
-            "Failed to fetch contact ID for email address {}",
-            email_address
-        )
-    })
+    .map_err(Into::into)
 }
 
 /// Fetch contact for a given email address
@@ -229,13 +222,7 @@ pub async fn fetch_contact_by_email(
         link_id
     )
         .fetch_optional(pool)
-        .await
-        .with_context(|| {
-            format!(
-                "Failed to fetch contact for email address {}",
-                email_address
-            )
-        })?;
+        .await?;
 
     Ok(contact.and_then(|c| map_db_contact_to_service(Some(c))))
 }
@@ -295,12 +282,7 @@ where
     )
     .fetch_all(executor)
     .await
-    .with_context(|| {
-        format!(
-            "Failed to fetch email addresses with IDs: {:?}",
-            unique_ids_vec
-        )
-    })
+    .map_err(Into::into)
 }
 
 /// Fetches sender contacts for multiple messages and returns a map keyed by message_id
@@ -350,8 +332,7 @@ where
         message_ids
     )
     .fetch_all(executor)
-    .await
-    .context("Failed to fetch senders by message IDs")?;
+    .await?;
 
     let mut senders_map = HashMap::new();
     for row in results {
@@ -403,8 +384,7 @@ pub async fn fetch_contacts_by_thread_ids(
         thread_ids
     )
     .fetch_all(pool)
-    .await
-    .context("Failed to fetch contacts by thread IDs")?;
+    .await?;
 
     let mut result: ThreadContactsMap = HashMap::new();
     for row in rows {
@@ -476,8 +456,7 @@ pub async fn fetch_contacts_by_link_id(
         link_id
     )
     .fetch_all(pool)
-    .await
-    .context("Failed to fetch contacts for link ID")?;
+    .await?;
 
     Ok(db_contacts.into_iter().map(Into::into).collect())
 }
@@ -508,8 +487,7 @@ pub async fn fetch_contacts_emails_by_link_id(
         link_id
     )
     .fetch_all(pool)
-    .await
-    .context("Failed to fetch contacts for link ID")?;
+    .await?;
 
     let deduped = dedupe_emails(rows.into_iter().map(|row| row.email_address).collect());
     Ok(deduped

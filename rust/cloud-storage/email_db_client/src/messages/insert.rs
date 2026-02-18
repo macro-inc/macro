@@ -149,13 +149,7 @@ async fn insert_db_message(
         db_message.headers_jsonb
     )
         .fetch_one(&mut *tx)
-        .await
-        .with_context(|| {
-            format!(
-                "Failed to insert/update message with thread_id {} and provider_id {}",
-                thread_id, db_message.provider_id.unwrap_or_default()
-            )
-        })?;
+        .await?;
 
     Ok(result.id)
 }
@@ -178,10 +172,7 @@ pub async fn insert_message(
             .await
             .context("Failed to insert address ids")?;
 
-    let mut tx = pool
-        .begin()
-        .await
-        .context("Failed to begin transaction for message")?;
+    let mut tx = pool.begin().await?;
 
     match insert_message_with_tx(
         &mut tx,
@@ -194,9 +185,7 @@ pub async fn insert_message(
     .await
     {
         Ok(_) => {
-            tx.commit()
-                .await
-                .context("Failed to commit transaction for message")?;
+            tx.commit().await?;
             Ok(())
         }
         Err(e) => {

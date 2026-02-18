@@ -1,4 +1,3 @@
-use anyhow::Context;
 use sqlx::PgPool;
 use std::collections::{HashMap, HashSet};
 
@@ -14,8 +13,7 @@ pub async fn fetch_sfs_mapping(pool: &PgPool, source: &str) -> anyhow::Result<Op
         source
     )
     .fetch_optional(pool)
-    .await
-    .with_context(|| format!("Failed to fetch SFS mapping for source: {}", source))?;
+    .await?;
 
     Ok(record.map(|r| r.destination))
 }
@@ -42,8 +40,7 @@ pub async fn fetch_sfs_mappings(
         &sources_vec
     )
     .fetch_all(pool)
-    .await
-    .with_context(|| format!("Failed to fetch SFS mappings for sources: {:?}", sources))?;
+    .await?;
 
     let mappings: HashMap<String, String> = records
         .into_iter()
@@ -86,13 +83,7 @@ pub async fn insert_sfs_mappings(
         &destinations
     )
     .execute(pool)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to insert SFS mappings for {} source/destination pairs",
-            mappings.len()
-        )
-    })?;
+    .await?;
 
     Ok(result.rows_affected())
 }

@@ -1,4 +1,3 @@
-use anyhow::Context;
 use models_email::email::db;
 use models_email::email::service;
 use sqlx::PgPool;
@@ -35,13 +34,7 @@ pub async fn create_backfill_job(
         num_threads
     )
     .fetch_one(pool)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to create backfill job for link_id {} with num_threads {:?}",
-            link_id, num_threads
-        )
-    })?;
+    .await?;
 
     Ok(record.into())
 }

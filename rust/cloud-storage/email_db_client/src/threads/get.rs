@@ -1,6 +1,6 @@
 use crate::messages::get::{convert_db_messages_to_service_concurrent, get_messages_by_thread_id};
 use crate::parse::db_to_service;
-use anyhow::{Context, anyhow};
+use anyhow::anyhow;
 use models_email::email::db;
 use models_email::email::service::thread;
 use models_email::email::service::thread::{
@@ -30,8 +30,7 @@ pub async fn get_paginated_thread_ids_with_macro_user_id(
     )
     .map(|row| (row.id, row.macro_id))
     .fetch_all(pool)
-    .await
-    .context("Failed to fetch thread ids with macro user id")?;
+    .await?;
 
     Ok(result)
 }
@@ -60,8 +59,7 @@ pub async fn fetch_thread_with_messages_paginated(
         thread_db_id,
     )
     .fetch_optional(pool)
-    .await
-    .with_context(|| format!("Failed to fetch thread with DB ID {}", thread_db_id))?;
+    .await?;
 
     let Some(db_thread) = db_thread else {
         return Ok(None);
@@ -103,14 +101,8 @@ pub async fn get_latest_thread_ids_paginated(
         limit,
         offset
     )
-        .fetch_all(pool)
-        .await
-        .with_context(|| {
-            format!(
-                "Failed to fetch latest thread IDs for links associated with user {} with limit {} offset {}",
-                fusionauth_user_id, limit, offset
-            )
-        })?;
+    .fetch_all(pool)
+    .await?;
 
     Ok(thread_ids)
 }
@@ -139,13 +131,7 @@ pub async fn get_threads_by_link_id_and_provider_ids(
         &provider_ids_vec
     )
     .fetch_all(pool)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to fetch threads by link_id {} and provider_ids {:?}",
-            link_id, provider_ids_vec
-        )
-    })?;
+    .await?;
 
     // Build the result map
     let thread_map = rows
@@ -157,6 +143,7 @@ pub async fn get_threads_by_link_id_and_provider_ids(
 }
 
 /// For a user, get threads where user has sent a message, paginated.
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_threads_by_user_with_outbound(
     pool: &PgPool,
     macro_user_id: &str,
@@ -194,6 +181,7 @@ pub async fn get_threads_by_user_with_outbound(
 }
 
 /// For a list of user to thread IDs, filter out threads where user has not sent a message
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_outbound_threads_by_thread_ids(
     pool: &PgPool,
     user_thread_ids: Vec<UserThreadIds>,
@@ -275,13 +263,7 @@ pub async fn get_provider_id_by_link_and_thread_id(
         thread_db_id
     )
     .fetch_optional(pool)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to fetch provider_id for thread ID {} with link_id {}",
-            thread_db_id, link_id
-        )
-    })?
+    .await?
     .flatten();
 
     Ok(provider_id)
@@ -302,8 +284,7 @@ pub async fn get_macro_id_from_thread_id(
         thread_id
     )
     .fetch_optional(pool)
-    .await
-    .with_context(|| format!("Failed to fetch macro_id for thread ID {}", thread_id))?;
+    .await?;
 
     Ok(macro_id)
 }
@@ -329,13 +310,7 @@ pub async fn get_thread_by_id_and_link_id(
         link_id,
     )
     .fetch_optional(pool)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to fetch thread with ID {} and link_id {}",
-            thread_id, link_id
-        )
-    })?;
+    .await?;
 
     // If no thread found, return None
     if let Some(db_thread) = db_thread {

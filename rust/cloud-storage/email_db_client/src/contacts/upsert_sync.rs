@@ -1,9 +1,7 @@
 use crate::parse::service_to_db::map_new_contact_to_db;
-use anyhow::Context;
 use models_email::db;
 use models_email::service::contact::Contact;
 use sqlx::PgPool;
-use sqlx::types::Uuid;
 
 /// Upsert methods used by contact sync process, triggered by initial backfill and daily cron.
 /// Upserts multiple contacts into the contacts table
@@ -62,15 +60,7 @@ pub async fn upsert_contacts(pool: &PgPool, contacts: &[Contact]) -> anyhow::Res
     &sfs_photo_urls as &[Option<String>]
 )
 .execute(pool)
-.await
-.with_context(|| {
-    format!(
-        "Failed to insert {} contacts for link_id {}",
-        link_ids.len(),
-        // all contacts should have the same link_id
-        link_ids.first().unwrap_or(&Uuid::default())
-    )
-})?;
+.await?;
 
     Ok(result.rows_affected())
 }
