@@ -178,7 +178,7 @@ export const createSearchState = ({
   const itemsQuery = useSoupItemsQuery(
     () => ({
       params: {
-        limit: 100,
+        limit: 50,
         sort_method: soup.sort.active()[0]?.id ?? 'updated_at',
       },
       body: { ...emailExcludedQueryFilters() },
