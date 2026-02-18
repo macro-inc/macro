@@ -1,4 +1,9 @@
-import { type Component, Show } from 'solid-js';
+import {
+  type Accessor,
+  type Component,
+  type ParentProps,
+  Show,
+} from 'solid-js';
 import { Popover } from '@kobalte/core/popover';
 import { TASK_STATUS_OPTIONS } from '@entity';
 import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
@@ -23,6 +28,26 @@ const statusOptions: SelectableOption[] = TASK_STATUS_OPTIONS.map((o) => ({
   id: o.value,
   label: o.label,
 }));
+
+function FilterTrigger<T>(
+  props: ParentProps<{
+    filter: Accessor<T>;
+  }>
+) {
+  return (
+    <Popover.Trigger
+      as="button"
+      type="button"
+      class="flex items-center gap-1 h-[22px] touch:mobile-width:h-9 px-2.5 shrink-0 rounded-full active:bg-accent/20 text-xs"
+      classList={{
+        'bg-accent/20 text-accent': !!props.filter(),
+        'text-ink-muted hover:text-accent hover:bg-accent/20': !props.filter(),
+      }}
+    >
+      {props.children}
+    </Popover.Trigger>
+  );
+}
 
 export const TaskStatusDropdown: Component<DropdownProps> = (props) => {
   const { statusFilter, setStatusFilter } = useSoupView();
@@ -51,16 +76,7 @@ export const TaskStatusDropdown: Component<DropdownProps> = (props) => {
       placement="bottom-start"
       gutter={4}
     >
-      <Popover.Trigger
-        as="button"
-        type="button"
-        class="flex items-center gap-1 h-[22px] touch:mobile-width:h-9 px-2.5 shrink-0 rounded-full active:bg-accent active:text-panel text-xs"
-        classList={{
-          'bg-accent/20 text-accent': !!statusFilter(),
-          'text-ink-muted hover:text-accent hover:bg-accent/20':
-            !statusFilter(),
-        }}
-      >
+      <FilterTrigger filter={statusFilter}>
         <Show
           when={statusFilter()}
           fallback={<CircleDashedIcon class="size-3.5" />}
@@ -83,7 +99,7 @@ export const TaskStatusDropdown: Component<DropdownProps> = (props) => {
             <XIcon class="size-3" />
           </span>
         </Show>
-      </Popover.Trigger>
+      </FilterTrigger>
       <Popover.Portal>
         <Popover.Content class="z-50 bg-panel border border-edge-muted shadow-lg w-[300px]">
           <PropertyOptionSelector
@@ -127,16 +143,7 @@ export const TaskAssigneeDropdown: Component<DropdownProps> = (props) => {
       placement="bottom-start"
       gutter={4}
     >
-      <Popover.Trigger
-        as="button"
-        type="button"
-        class="flex items-center gap-1 h-[22px] touch:mobile-width:h-9 px-2.5 shrink-0 rounded-full active:bg-accent active:text-panel text-xs"
-        classList={{
-          'bg-accent/20 text-accent': !!assigneeFilter(),
-          'text-ink-muted hover:text-accent hover:bg-accent/20':
-            !assigneeFilter(),
-        }}
-      >
+      <FilterTrigger filter={assigneeFilter}>
         <Show
           when={assigneeFilter()}
           fallback={<UserCircleIcon class="size-3.5" />}
@@ -164,7 +171,7 @@ export const TaskAssigneeDropdown: Component<DropdownProps> = (props) => {
             <XIcon class="size-3" />
           </span>
         </Show>
-      </Popover.Trigger>
+      </FilterTrigger>
       <Popover.Portal>
         <Popover.Content class="z-50 bg-panel border border-edge-muted shadow-lg w-[300px]">
           <PropertyEntitySelector
