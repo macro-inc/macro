@@ -568,9 +568,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
                       }
                     };
 
-                    if (i() === Math.floor(rows().length * 0.8)) {
-                      debouncedFetchMore();
-                    }
+                    createEffect(() => {
+                      if (i() === Math.floor(rows().length * 0.8)) {
+                        debouncedFetchMore();
+                      }
+                    });
 
                     return (
                       <>
