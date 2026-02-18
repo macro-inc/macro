@@ -27,6 +27,7 @@ impl SeedS3 {
     }
 
     /// Upload a file to s3
+    #[tracing::instrument(skip(self), err)]
     pub async fn upload_file(&self, key: &str, local_file_path: &str) -> anyhow::Result<()> {
         let bytes = std::fs::read(local_file_path).context("read file")?;
         let body = aws_sdk_s3::primitives::ByteStream::from(bytes);
