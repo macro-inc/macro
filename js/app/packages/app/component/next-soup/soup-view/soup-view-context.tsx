@@ -4,7 +4,6 @@ import {
   type SoupState,
 } from '@app/component/next-soup/create-soup-state';
 import { createSearchState } from '@app/component/next-soup/soup-view/create-search-state';
-import { sortEntitiesForSearch } from '@app/component/next-soup/soup-view/sort-options';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
 import { ENABLE_FEATURED_SEARCH_RESULTS } from '@core/constant/featureFlags';
 import type { EntityData, WithNotification, WithSearch } from '@entity';
