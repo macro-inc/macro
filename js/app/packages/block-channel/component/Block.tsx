@@ -3,7 +3,8 @@ import { useChannelName } from '@core/context/channels';
 import { EntityPermissionsGate } from '@core/component/EntityPermissionsGate';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { type JSXElement, onMount, Suspense } from 'solid-js';
-import { Channel } from './Channel';
+// import { Channel } from './Channel';
+import { Channel as NewChannel } from '@channel/Channel';
 import { URL_PARAMS } from '@block-channel/constants';
 import type { TargetMessageInfo } from '@block-channel/component/MessageList/MessageList';
 import { useChannelQuery } from '@queries/channel/channel';
@@ -27,29 +28,31 @@ export type BlockChannelProps = IncomingParams & {};
 
 export default function BlockChannel(props: BlockChannelProps) {
   const channelId = useBlockId();
-  const channelName = useChannelName(channelId);
-  const channelQuery = useChannelQuery(() => channelId);
 
-  const targetMessage = () => {
-    const messageID = props[URL_PARAMS.message];
-    if (!messageID) return;
-    const threadID = props[URL_PARAMS.thread];
+  return <NewChannel channelId={channelId} />;
+  // const channelName = useChannelName(channelId);
+  // const channelQuery = useChannelQuery(() => channelId);
 
-    return {
-      messageId: messageID,
-      threadId: threadID,
-    } satisfies TargetMessageInfo;
-  };
+  // const targetMessage = () => {
+  //   const messageID = props[URL_PARAMS.message];
+  //   if (!messageID) return;
+  //   const threadID = props[URL_PARAMS.thread];
 
-  return (
-    <EntityPermissionsGate entityType="channel" entityId={channelId}>
-      <Suspense fallback={<ChannelBlockSuspenseFallback />}>
-        <DocumentBlockContainer title={channelName() ?? 'Channel'}>
-          <ChannelContextProvider query={channelQuery}>
-            <Channel channelId={channelId} target={targetMessage()} />
-          </ChannelContextProvider>
-        </DocumentBlockContainer>
-      </Suspense>
-    </EntityPermissionsGate>
-  );
+  //   return {
+  //     messageId: messageID,
+  //     threadId: threadID,
+  //   } satisfies TargetMessageInfo;
+  // };
+
+  // return (
+  //   <EntityPermissionsGate entityType="channel" entityId={channelId}>
+  //     <Suspense fallback={<ChannelBlockSuspenseFallback />}>
+  //       <DocumentBlockContainer title={channelName() ?? 'Channel'}>
+  //         <ChannelContextProvider query={channelQuery}>
+  //           <Channel channelId={channelId} target={targetMessage()} />
+  //         </ChannelContextProvider>
+  //       </DocumentBlockContainer>
+  //     </Suspense>
+  //   </EntityPermissionsGate>
+  // );
 }

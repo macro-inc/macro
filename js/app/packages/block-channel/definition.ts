@@ -10,7 +10,7 @@ export const definition = defineBlock({
   liveTrackingEnabled: true,
   async load(source, _intent) {
     if (source.type === 'dss') {
-      await fetchAndCacheChannel(source.id);
+      // await fetchAndCacheChannel(source.id);
       return ok({ id: source.id });
     }
     return LoadErrors.MISSING;
