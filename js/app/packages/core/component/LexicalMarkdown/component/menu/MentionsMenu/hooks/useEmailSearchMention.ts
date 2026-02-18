@@ -65,20 +65,17 @@ export function useEmailSearchMention(
     }
   });
 
-  // Create search function for local emails
-  const emailSearch = createLazyMemo(() =>
-    createFreshSearch<EntityItem>(
-      { timeWeight: 0, brevityWeight: 0.3 },
-      (item) => item.searchText,
-      (_item) => false,
-      (item) => item.timestamps
-    )
+  const emailSearch = createFreshSearch<EntityItem>(
+    { timeWeight: 0, brevityWeight: 0.3 },
+    (item) => item.searchText,
+    (_item) => false,
+    (item) => item.timestamps
   );
 
   const emails = createLazyMemo((): EntityItem[] => {
     const term = searchTerm();
     if (!term) return emailList();
-    return emailSearch()(emailList(), term).map(({ item }) => item);
+    return emailSearch(emailList(), term).map(({ item }) => item);
   });
 
   return {

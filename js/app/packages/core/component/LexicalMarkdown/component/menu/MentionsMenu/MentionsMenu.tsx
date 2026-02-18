@@ -557,26 +557,30 @@ function VirtualizedItemList(props: {
           {(virtualRow) => {
             const item = () => props.items[virtualRow.index];
             return (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: `${virtualRow.size}px`,
-                  transform: `translateY(${virtualRow.start}px)`,
-                }}
-              >
-                <MentionsMenuItem
-                  item={item()}
-                  index={virtualRow.index}
-                  selected={virtualRow.index === props.selectedIndex}
-                  itemAction={props.itemAction}
-                  setIndex={props.setIndex}
-                  setOpen={props.setOpen}
-                  disableScrollIntoView
-                />
-              </div>
+              <Show when={item()}>
+                {(currentItem) => (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: `${virtualRow.size}px`,
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  >
+                    <MentionsMenuItem
+                      item={currentItem()}
+                      index={virtualRow.index}
+                      selected={virtualRow.index === props.selectedIndex}
+                      itemAction={props.itemAction}
+                      setIndex={props.setIndex}
+                      setOpen={props.setOpen}
+                      disableScrollIntoView
+                    />
+                  </div>
+                )}
+              </Show>
             );
           }}
         </For>
