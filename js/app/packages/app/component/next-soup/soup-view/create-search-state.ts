@@ -11,7 +11,7 @@ import { mergeAdjacentMacroEmTags } from '@core/util/searchHighlight';
 import { createFreshSearch } from '@core/util/freshSort';
 import type { EntityData, WithSearch } from '@entity';
 import { isChannelEntity } from '@entity';
-import { type SoupItemsQueryFilters } from '@queries/soup/items';
+import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import type {
   UnifiedSearchIndex,
