@@ -30,7 +30,7 @@ fn test_apns_targets_deserializes_old_format_without_bulk_digest_state_machine()
     );
 
     let targets = result.unwrap();
-    assert!(targets.bulk_digest_state_machine.is_none());
+    assert!(targets.bulk_digest_state_machine.is_empty());
     assert_eq!(targets.ios_device_endpoints.len(), 2);
     assert_eq!(targets.attributes.collapse_key, "test-collapse-key");
 }

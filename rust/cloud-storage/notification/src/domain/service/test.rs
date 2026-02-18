@@ -4,7 +4,7 @@ use crate::domain::models::apple::APNSPushNotification;
 use crate::domain::models::email_notification_digest::BulkDigestStateMachine;
 use crate::domain::models::mobile::NotifCollapseKey;
 use crate::domain::models::queue_message::{
-    ConnGatewayInnerNotif, ConnGatewayNotification, EmailContent, Node, NotificationChannel,
+    ConnGatewayInnerNotif, ConnGatewayNotification, EmailContent, NotificationChannel,
     QueueMessage, RawQueueMessage,
 };
 use crate::domain::models::request::{NotificationStatus, UpdateNotificationsRequest};
@@ -606,7 +606,7 @@ async fn test_queue_message_conn_gateway_only() {
 
     let msg = &published[0];
     assert_eq!(msg["message_type"], "test_notification");
-    assert!(msg["content"]["notif"]["ConnGateway"].is_object());
+    assert!(msg["content"]["ConnGateway"].is_object());
 }
 
 #[tokio::test]
@@ -638,7 +638,7 @@ async fn test_queue_message_email_per_recipient() {
 
     for msg in &published {
         assert_eq!(msg["message_type"], "test_notification");
-        assert!(msg["content"]["notif"]["Email"].is_object());
+        assert!(msg["content"]["Email"].is_object());
     }
 }
 
@@ -675,13 +675,13 @@ async fn test_queue_message_multiple_channels() {
 
     let has_conn_gateway = published
         .iter()
-        .any(|m| m["content"]["notif"]["ConnGateway"].is_object());
+        .any(|m| m["content"]["ConnGateway"].is_object());
     let has_ios = published
         .iter()
-        .any(|m| m["content"]["notif"]["Ios"].is_object());
+        .any(|m| m["content"]["Ios"].is_object());
     let has_email = published
         .iter()
-        .any(|m| m["content"]["notif"]["Email"].is_object());
+        .any(|m| m["content"]["Email"].is_object());
 
     assert!(has_conn_gateway, "Should have ConnGateway message");
     assert!(has_ios, "Should have iOS message");
@@ -749,7 +749,7 @@ async fn test_apns_enqueues_correct_data_for_multiple_users() {
     assert_eq!(msg["message_type"], "test_notification");
 
     // The message should be an Ios variant
-    let ios = &msg["content"]["notif"]["Ios"];
+    let ios = &msg["content"]["Ios"];
     assert!(ios.is_object(), "Expected Ios notification channel");
 
     // Verify the APNS notification payload contains the notification data
@@ -1000,18 +1000,15 @@ async fn test_egress_rate_limit_exceeded() {
             RateLimitKey::from_str_hashed("test"),
             RateLimitConfig::new(10, Duration::from_secs(3600)),
         )),
-        content: Node {
-            notif: NotificationChannel::ConnGateway(
-                ConnGatewayNotification {
-                    notif: create_mock_notif(TestNotification {
-                        message: "Hello".to_string(),
-                    }),
-                    recipients: vec![recipient],
-                }
-                .testing_to_value(),
-            ),
-            on_failure: None,
-        },
+        content: NotificationChannel::ConnGateway(
+            ConnGatewayNotification {
+                notif: create_mock_notif(TestNotification {
+                    message: "Hello".to_string(),
+                }),
+                recipients: vec![recipient],
+            }
+            .testing_to_value(),
+        ),
     };
 
     let results = service.deliver_notification(message).await;
@@ -1039,19 +1036,16 @@ async fn test_egress_rate_limit_allowed() {
             RateLimitKey::from_str_hashed("test"),
             RateLimitConfig::new(10, Duration::from_secs(3600)),
         )),
-        content: Node {
-            notif: NotificationChannel::ConnGateway(
-                ConnGatewayNotification {
-                    notif: create_mock_notif(TestNotification {
-                        message: "Hello".to_string(),
-                    }),
+        content: NotificationChannel::ConnGateway(
+            ConnGatewayNotification {
+                notif: create_mock_notif(TestNotification {
+                    message: "Hello".to_string(),
+                }),
 
-                    recipients: vec![recipient],
-                }
-                .testing_to_value(),
-            ),
-            on_failure: None,
-        },
+                recipients: vec![recipient],
+            }
+            .testing_to_value(),
+        ),
     };
 
     let results = service.deliver_notification(message).await;
@@ -1069,18 +1063,15 @@ async fn test_egress_no_rate_limit_configured() {
     let message = QueueMessage {
         message_type: "test_notification".to_string(),
         rate_limit: None, // No rate limit configured
-        content: Node {
-            notif: NotificationChannel::ConnGateway(
-                ConnGatewayNotification {
-                    notif: create_mock_notif(TestNotification {
-                        message: "Hello".to_string(),
-                    }),
-                    recipients: vec![recipient],
-                }
-                .testing_to_value(),
-            ),
-            on_failure: None,
-        },
+        content: NotificationChannel::ConnGateway(
+            ConnGatewayNotification {
+                notif: create_mock_notif(TestNotification {
+                    message: "Hello".to_string(),
+                }),
+                recipients: vec![recipient],
+            }
+            .testing_to_value(),
+        ),
     };
 
     let results = service.deliver_notification(message).await;
@@ -1137,7 +1128,7 @@ async fn test_mark_seen_publishes_ios_clear_message() {
     assert_eq!(msg["message_type"], "clear_push_notification");
 
     // Should be an Ios variant with background push
-    let ios = &msg["content"]["notif"]["Ios"];
+    let ios = &msg["content"]["Ios"];
     assert!(ios.is_object(), "Expected Ios notification channel");
 
     // Verify silent background push payload
@@ -1402,26 +1393,23 @@ async fn test_egress_ios_attempts_all_endpoints_even_if_some_fail() {
     let message = QueueMessage {
         message_type: "test_notification".to_string(),
         rate_limit: None,
-        content: Node {
-            notif: NotificationChannel::Ios(Box::new(APNSTargets {
-                notif: APNSPushNotification {
-                    aps: Aps::default(),
-                    push_notification_data: json!({"message": "Hello"}),
-                },
-                attributes: MessageAttributes {
-                    push_type: PushType::Alert,
-                    collapse_key: "test_collapse".to_string(),
-                },
-                ios_device_endpoints: vec![
-                    endpoint1.to_string(),
-                    endpoint2.to_string(),
-                    endpoint3.to_string(),
-                    endpoint4.to_string(),
-                ],
-                bulk_digest_state_machine: None,
-            })),
-            on_failure: None,
-        },
+        content: NotificationChannel::Ios(Box::new(APNSTargets {
+            notif: APNSPushNotification {
+                aps: Aps::default(),
+                push_notification_data: json!({"message": "Hello"}),
+            },
+            attributes: MessageAttributes {
+                push_type: PushType::Alert,
+                collapse_key: "test_collapse".to_string(),
+            },
+            ios_device_endpoints: vec![
+                endpoint1.to_string(),
+                endpoint2.to_string(),
+                endpoint3.to_string(),
+                endpoint4.to_string(),
+            ],
+            bulk_digest_state_machine: vec![],
+        })),
     };
 
     let results = service.deliver_notification(message).await;

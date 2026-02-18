@@ -132,11 +132,11 @@ async fn test_create_notification(pool: Pool<Postgres>) {
     };
 
     let result = pool
-        .create_notification(&request, notification_id, "test_service", None)
+        .create_notification(request, notification_id, "test_service", None)
         .await
         .unwrap();
 
-    assert_eq!(result, Some(notification_id));
+    assert!(result.is_some());
 
     // Verify notification was inserted
     let row = sqlx::query!("SELECT id FROM notification WHERE id = $1", notification_id)
@@ -328,18 +328,27 @@ async fn test_create_notification_returns_none_on_conflict(pool: Pool<Postgres>)
     };
 
     // First creation should succeed
+    let request2 = SendNotificationRequestBuilder {
+        notification_entity: EntityType::Document.with_entity_str("doc-1"),
+        notification: TestNotification {
+            message: "hello".to_string(),
+        },
+        sender_id: None,
+        recipient_ids: std::collections::HashSet::from([recipient.clone()]),
+    };
+
     let result = pool
-        .create_notification(&request, notification_id, "test_service", None)
+        .create_notification(request, notification_id, "test_service", None)
         .await
         .unwrap();
-    assert_eq!(result, Some(notification_id));
+    assert!(result.is_some());
 
     // Second creation with same ID should return None
     let result = pool
-        .create_notification(&request, notification_id, "test_service", None)
+        .create_notification(request2, notification_id, "test_service", None)
         .await
         .unwrap();
-    assert_eq!(result, None);
+    assert!(result.is_none());
 
     // Verify only one notification exists
     let count: i64 = sqlx::query_scalar!(
