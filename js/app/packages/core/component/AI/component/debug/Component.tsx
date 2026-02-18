@@ -1,5 +1,5 @@
-import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
+import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import type { ChatMessageStream, Model } from '@core/component/AI/types';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { isErr } from '@core/util/maybeResult';
@@ -29,6 +29,7 @@ function toChat(stream: MessageStream): ChatMessageStream {
     streamId: stream.request.stream_id,
   };
 }
+
 import {
   blockDone,
   createStream,
@@ -165,7 +166,6 @@ function ChatInputBoxConnectedInner() {
       return;
     }
     const [, { stream_id, chat_id }] = response;
-    console.log('created chat', chat_id);
     const connectionStream = subscribe('chat', chat_id, stream_id);
     if (!connectionStream) {
       console.log('no connection stream');

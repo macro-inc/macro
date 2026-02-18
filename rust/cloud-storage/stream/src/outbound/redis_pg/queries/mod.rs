@@ -1,19 +1,19 @@
 #[cfg(test)]
 mod test;
+use crate::domain::StreamId;
 
 use sqlx::PgPool;
 
 /// Insert a new active stream entry, ignoring conflicts.
 pub(crate) async fn insert_active_stream(
     pool: &PgPool,
-    entity_id: &str,
-    stream_key: &str,
+    stream_id: &StreamId,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
         "INSERT INTO active_streams (entity_id, stream_key) VALUES ($1, $2) ON CONFLICT DO NOTHING",
     )
-    .bind(entity_id)
-    .bind(stream_key)
+    .bind(&stream_id.entity_id)
+    .bind(stream_id.to_string())
     .execute(pool)
     .await?;
     Ok(())
@@ -22,12 +22,11 @@ pub(crate) async fn insert_active_stream(
 /// Delete an active stream entry.
 pub(crate) async fn delete_active_stream(
     pool: &PgPool,
-    entity_id: &str,
-    stream_key: &str,
+    stream_id: &StreamId,
 ) -> Result<(), sqlx::Error> {
     sqlx::query("DELETE FROM active_streams WHERE entity_id = $1 AND stream_key = $2")
-        .bind(entity_id)
-        .bind(stream_key)
+        .bind(&stream_id.entity_id)
+        .bind(stream_id.to_string())
         .execute(pool)
         .await?;
     Ok(())

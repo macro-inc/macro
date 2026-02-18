@@ -2,7 +2,9 @@ use crate::domain::*;
 use async_stream::stream;
 use async_trait::async_trait;
 use futures::StreamExt;
-use redis::{AsyncCommands, Client, RedisResult, Value, streams::StreamReadReply};
+use redis::{
+    AsyncCommands, AsyncConnectionConfig, Client, RedisResult, Value, streams::StreamReadReply,
+};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::OnceCell;
@@ -125,7 +127,7 @@ impl RedisPostgresStreamRepo {
             .map_err(|e| StreamServiceError::StorageError(e.to_string()))?;
 
         // Also clean up PostgreSQL entry
-        let _ = super::queries::delete_active_stream(&self.pg_pool, &id.entity_id, &id.to_string())
+        let _ = super::queries::delete_active_stream(&self.pg_pool, id)
             .await
             .inspect_err(|e| tracing::error!(error=?e, "failed to clean stream from postgres"));
 
@@ -172,19 +174,22 @@ impl StreamRepo for RedisPostgresStreamRepo {
                 .inspect_err(|e| tracing::error!(error=?e, "failed to publish new channel"));
 
             // Track in PostgreSQL
-            let _ =
-                super::queries::insert_active_stream(&self.pg_pool, &id.entity_id, &id.to_string())
-                    .await
-                    .inspect_err(
-                        |e| tracing::error!(error=?e, "failed to track stream in postgres"),
-                    );
+            let _ = super::queries::insert_active_stream(&self.pg_pool, id)
+                .await
+                .inspect_err(|e| tracing::error!(error=?e, "failed to track stream in postgres"));
         }
 
         Ok(item_id)
     }
 
     async fn stream_from_beginning(&self, id: &StreamId) -> Result<ItemStream> {
-        let mut connection = self.redis_client.get_multiplexed_async_connection().await?;
+        // Use no response timeout for blocking XREAD — the default 500ms from redis 1.0
+        // kills the connection before the block period expires.
+        let config = AsyncConnectionConfig::new().set_response_timeout(None);
+        let mut connection = self
+            .redis_client
+            .get_multiplexed_async_connection_with_config(&config)
+            .await?;
         let stream_key = id.to_string();
         let stream_id_for_item = id.clone();
 
@@ -253,7 +258,7 @@ impl StreamRepo for RedisPostgresStreamRepo {
             .inspect_err(|e| tracing::error!(error=?e, "failed to set closed stream TTL"));
 
         // Remove from PostgreSQL tracking
-        let _ = super::queries::delete_active_stream(&self.pg_pool, &id.entity_id, &id.to_string())
+        let _ = super::queries::delete_active_stream(&self.pg_pool, id)
             .await
             .inspect_err(|e| tracing::error!(error=?e, "failed to remove stream from postgres"));
 
