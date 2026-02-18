@@ -264,8 +264,8 @@ const Root: Component<MessageRootProps> = (props) => {
                   props.isFirstMessage ||
                   props.isFirstInThread
                 ) && 'pt-4',
-                props.hasThreadChildren && 'pb-4',
-                props.isLastMessage && 'pb-4'
+                props.isLastMessage && 'pb-4',
+                props.hasThreadChildren && 'pb-4'
               )}
             >
               {/* User Icon */}

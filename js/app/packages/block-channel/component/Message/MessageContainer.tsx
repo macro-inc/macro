@@ -501,6 +501,11 @@ export function MessageContainer(props: MessageProps) {
       }}
       data-message-id={message.id}
     >
+      {/* New message indicator */}
+      <Show when={props.listContext.isFirstNewMessage}>
+        <NewMessageIndicator onClick={props.onDismissNewMessages} />
+      </Show>
+
       {/* Date separator */}
       <Show
         when={
@@ -511,14 +516,13 @@ export function MessageContainer(props: MessageProps) {
               newDayPreviousNonThreadMessage()))
         }
       >
-        <MessageFlag text={formatRelativeDate(message.created_at)} />
+        <MessageFlag
+          text={formatRelativeDate(message.created_at)}
+          highlight={isNewMessage()}
+        />
       </Show>
-      {/* New message indicator */}
-      <Show when={props.listContext.isFirstNewMessage}>
-        <NewMessageIndicator onClick={props.onDismissNewMessages} />
-      </Show>
-      {/* Message item */}
 
+      {/* Message item */}
       <ContextMenu
         onOpenChange={(isOpen) => {
           setContextMenuOpen(isOpen);
