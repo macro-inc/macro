@@ -342,7 +342,6 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
           onDocumentMention={props.onDocumentMention}
           useBlockBoundary={props.useBlockBoundary}
           portalScope={props.portalScope}
-          emails={() => []}
         />
         <EmojiMenu
           editor={editor}

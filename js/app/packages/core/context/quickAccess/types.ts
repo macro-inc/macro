@@ -211,6 +211,21 @@ export type QuickAccessContextValue = {
    * Force refresh of all data sources.
    */
   refresh: () => void;
+
+  /**
+   * Get a single item by ID from the cache.
+   * Returns undefined if the item is not found.
+   *
+   * Use this for lazy lookup of full item data when you only have an ID.
+   * This is more efficient than searching through lists.
+   *
+   * @example
+   * const item = quickAccess.getById(someId);
+   * if (item) {
+   *   console.log(item.data);
+   * }
+   */
+  getById: (id: string) => QuickAccessItem | undefined;
 };
 
 export function getItemSearchText(item: QuickAccessItem): string {

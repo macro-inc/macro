@@ -22,6 +22,7 @@ import {
   untrack,
 } from 'solid-js';
 import { createLazyMemo } from '@solid-primitives/memo';
+import { createVirtualizer } from '@tanstack/solid-virtual';
 import { floatWithElement } from '../../../directive/floatWithElement';
 import { floatWithSelection } from '../../../directive/floatWithSelection';
 import { CLOSE_INLINE_SEARCH_COMMAND } from '../../../plugins';
@@ -35,6 +36,7 @@ import { ClippedPanel } from '@core/component/ClippedPanel';
 import { debouncedDependent } from '@core/util/debounce';
 import type { BucketConfig } from './MentionsMenuController';
 import { useMentionsMenuController } from './MentionsMenuController';
+import type { MentionItem } from '../../../utils/mentionsUtils';
 import { ItemBin } from './components/ItemBin';
 import { MentionsMenuItem } from './components/MentionsMenuItem';
 import { createItemHandler } from './utils/mentionHandlers';
@@ -44,6 +46,7 @@ import { useEntityMention } from './hooks/useEntityMention';
 import { useEmailSearchMention } from './hooks/useEmailSearchMention';
 
 const MAX_ITEMS = 8;
+const VIRTUAL_ITEM_HEIGHT = 36;
 
 export type MentionsMenuProps = {
   editor: LexicalEditor;
@@ -73,6 +76,8 @@ export function MentionsMenu(props: MentionsMenuProps) {
 }
 
 function MentionsMenuInner(props: MentionsMenuProps) {
+  const componentStart = performance.now();
+
   const searchTerm = debouncedDependent(props.menu.searchTerm, 60);
 
   const quickAccess = useQuickAccess();
@@ -315,6 +320,9 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   };
 
   onMount(() => {
+    console.log(
+      `MentionsMenu: component start to onMount: ${(performance.now() - componentStart).toFixed(2)}ms`
+    );
     document.addEventListener('focusout', focusOut);
     onCleanup(() => {
       document.removeEventListener('focusout', focusOut);
@@ -400,6 +408,10 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         }
       : undefined;
 
+  console.log(
+    `MentionsMenu: component start to end of JS logic: ${(performance.now() - componentStart).toFixed(2)}ms`
+  );
+
   return (
     <Show when={menuOpen()}>
       <ScopedPortal scope={props.portalScope}>
@@ -483,25 +495,92 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                     </button>
                   </div>
                 </div>
-                <div class="max-h-64 overflow-y-auto scrollbar-hidden">
-                  <For each={controller.combinedItems()}>
-                    {(item, i) => (
-                      <MentionsMenuItem
-                        item={item}
-                        index={i()}
-                        selected={i() === controller.selectedIndex()}
-                        itemAction={itemAction}
-                        setIndex={setSelectedIndexFromMouse}
-                        setOpen={setMenuOpen}
-                      />
-                    )}
-                  </For>
-                </div>
+                <VirtualizedItemList
+                  items={controller.combinedItems()}
+                  selectedIndex={controller.selectedIndex()}
+                  itemAction={itemAction}
+                  setIndex={setSelectedIndexFromMouse}
+                  setOpen={setMenuOpen}
+                />
               </Show>
             </Show>
           </ClippedPanel>
         </div>
       </ScopedPortal>
     </Show>
+  );
+}
+
+function VirtualizedItemList(props: {
+  items: ReturnType<
+    typeof useMentionsMenuController
+  >['combinedItems'] extends () => infer T
+    ? T
+    : never;
+  selectedIndex: number;
+  itemAction: (item: MentionItem) => void;
+  setIndex: (index: number) => void;
+  setOpen: (open: boolean) => void;
+}) {
+  let scrollContainerRef: HTMLDivElement | undefined;
+
+  const virtualizer = createVirtualizer({
+    get count() {
+      return props.items.length;
+    },
+    getScrollElement: () => scrollContainerRef ?? null,
+    estimateSize: () => VIRTUAL_ITEM_HEIGHT,
+    overscan: 5,
+  });
+
+  // Scroll selected item into view
+  createEffect(() => {
+    const index = props.selectedIndex;
+    if (index >= 0 && index < props.items.length) {
+      virtualizer.scrollToIndex(index, { align: 'auto' });
+    }
+  });
+
+  return (
+    <div
+      ref={scrollContainerRef}
+      class="max-h-64 overflow-y-auto scrollbar-hidden"
+    >
+      <div
+        style={{
+          height: `${virtualizer.getTotalSize()}px`,
+          width: '100%',
+          position: 'relative',
+        }}
+      >
+        <For each={virtualizer.getVirtualItems()}>
+          {(virtualRow) => {
+            const item = () => props.items[virtualRow.index];
+            return (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: `${virtualRow.size}px`,
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+              >
+                <MentionsMenuItem
+                  item={item()}
+                  index={virtualRow.index}
+                  selected={virtualRow.index === props.selectedIndex}
+                  itemAction={props.itemAction}
+                  setIndex={props.setIndex}
+                  setOpen={props.setOpen}
+                  disableScrollIntoView
+                />
+              </div>
+            );
+          }}
+        </For>
+      </div>
+    </div>
   );
 }

@@ -1,5 +1,5 @@
 import type { Accessor } from 'solid-js';
-import { createMemo } from 'solid-js';
+import { createEffect, createMemo, createSignal } from 'solid-js';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { useChannelsContext } from '@core/context/channels';
 import {
@@ -10,6 +10,8 @@ import {
 import type { ApiChannelWithLatest } from '@service-comms/generated/models';
 import type { ChannelEntity } from '@entity';
 import { useHistoryQuery, type HistoryItem } from '@queries/history/history';
+import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
+import { queryReadyGate } from '@queries/gate';
 import type { DateValue } from '@core/util/date';
 import { toDate } from 'date-fns';
 import { createAssertedContextProvider } from '../createContext';
@@ -22,6 +24,25 @@ import type {
   QuickAccessEntity,
 } from './types';
 import { BUCKET_COMBINATIONS } from './types';
+
+/**
+ * Lightweight index entry for sorted arrays.
+ * Contains only what's needed for sorting and lookup - not the full transformed data.
+ */
+type IndexEntry = {
+  id: string;
+  bucket: Bucket;
+  sortTimestamp: number;
+};
+
+/**
+ * Cache entry for a fully transformed QuickAccessItem.
+ * Includes a version hash to detect changes.
+ */
+type CacheEntry = {
+  item: QuickAccessItem;
+  version: string;
+};
 
 function historyItemToEntity(item: HistoryItem): QuickAccessEntity {
   const base = {
@@ -126,13 +147,31 @@ function toTimestamp(value: DateValue | null | undefined): number {
 }
 
 /**
- * Merge two *already* sorted arrays into a single sorted array.
+ * Create a version string for a history item to detect changes.
  */
-function mergeSorted(
-  a: QuickAccessItem[],
-  b: QuickAccessItem[]
-): QuickAccessItem[] {
-  const result: QuickAccessItem[] = [];
+function getHistoryItemVersion(item: HistoryItem): string {
+  return `${item.name}|${item.updatedAt}|${item.viewedAt}|${item.deletedAt}`;
+}
+
+/**
+ * Create a version string for a channel to detect changes.
+ */
+function getChannelVersion(channel: ApiChannelWithLatest): string {
+  return `${channel.name}|${channel.updated_at}|${channel.viewed_at}`;
+}
+
+/**
+ * Create a version string for a user to detect changes.
+ */
+function getUserVersion(user: IUser): string {
+  return `${user.name}|${user.email}|${user.lastInteraction}`;
+}
+
+/**
+ * Merge two *already* sorted index arrays into a single sorted array.
+ */
+function mergeSortedIndices(a: IndexEntry[], b: IndexEntry[]): IndexEntry[] {
+  const result: IndexEntry[] = [];
   let i = 0;
   let j = 0;
 
@@ -159,12 +198,12 @@ function mergeSorted(
 }
 
 /**
- * Merge multiple *already* sorted arrays into a single sorted array.
+ * Merge multiple *already* sorted index arrays into a single sorted array.
  */
-function mergeMultipleSorted(arrays: QuickAccessItem[][]): QuickAccessItem[] {
+function mergeMultipleSortedIndices(arrays: IndexEntry[][]): IndexEntry[] {
   if (arrays.length === 0) return [];
   if (arrays.length === 1) return arrays[0];
-  return arrays.reduce((acc, arr) => mergeSorted(acc, arr));
+  return arrays.reduce((acc, arr) => mergeSortedIndices(acc, arr));
 }
 
 export const [QuickAccessProvider, useQuickAccess] =
@@ -176,145 +215,305 @@ export const [QuickAccessProvider, useQuickAccess] =
       const contacts = useContacts();
       const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
 
-      const allItemsSorted = createLazyMemo<QuickAccessItem[]>(() => {
-        const startAllItems = performance.now();
-        const items: QuickAccessItem[] = [];
+      // Reactive set of IDs to hide from quick access
+      const [hiddenIds, setHiddenIds] = createSignal<Set<string>>(new Set());
+
+      // Add an ID to the hidden set
+      const hideId = (id: string) => {
+        setHiddenIds((prev) => {
+          const next = new Set(prev);
+          next.add(id);
+          return next;
+        });
+      };
+
+      // Fetch instructions MD id and hide it when available
+      const instructionsIdQuery = useInstructionsMdIdQuery();
+      createEffect(() => {
+        const instructionsReady = queryReadyGate(instructionsIdQuery);
+        if (!instructionsReady) return;
+        const instructionsId = instructionsIdQuery.data;
+        if (!instructionsId) return;
+        hideId(instructionsId);
+      });
+
+      // Stable cache for transformed items - persists across reactive updates
+      // This is a mutable Map outside the reactive system to avoid circular dependencies
+      const itemCache = new Map<string, CacheEntry>();
+
+      /**
+       * Process all data sources and update the cache incrementally.
+       * Returns the sorted index entries (lightweight id+timestamp arrays).
+       */
+      const processedData = createLazyMemo(() => {
+        const startTime = performance.now();
+        const seenIds = new Set<string>();
+        const allEntries: IndexEntry[] = [];
+        let transformCount = 0;
+        let cacheHitCount = 0;
+        const transformedItems: Array<{
+          id: string;
+          name: string;
+          type: string;
+          reason: string;
+        }> = [];
 
         // Process history items
-        // Sort by: viewedAt ?? updatedAt (when you last interacted with it)
-        const historyData = historyQuery.data ?? [];
+        // const historyData = historyQuery.data ?? [];
+        const historyData = [];
+        const hidden = hiddenIds();
         for (const item of historyData) {
-          // no deleted items
           if (item.deletedAt) continue;
+          if (hidden.has(item.id)) continue;
+          seenIds.add(item.id);
 
-          const bucket = getBucketForHistoryItem(item);
-          const entity = historyItemToEntity(item);
-          const viewedAtMs = toTimestamp(item.viewedAt);
-          const updatedAtMs = toTimestamp(item.updatedAt);
+          const version = getHistoryItemVersion(item);
+          const cached = itemCache.get(item.id);
 
-          items.push({
-            kind: 'entity',
-            id: item.id,
-            bucket,
-            searchText: getEntitySearchText(entity),
-            sortTimestamp: viewedAtMs || updatedAtMs,
-            timestamps: {
-              viewedAt: item.viewedAt,
-              updatedAt: item.updatedAt,
-              createdAt: item.createdAt,
-            },
-            data: entity,
-          });
+          // Only transform if not cached or version changed
+          if (!cached || cached.version !== version) {
+            transformCount++;
+            const reason = !cached
+              ? 'new'
+              : `changed (${cached.version} -> ${version})`;
+            transformedItems.push({
+              id: item.id,
+              name: item.name,
+              type: `history:${item.type}`,
+              reason,
+            });
+            const bucket = getBucketForHistoryItem(item);
+            const entity = historyItemToEntity(item);
+            const viewedAtMs = toTimestamp(item.viewedAt);
+            const updatedAtMs = toTimestamp(item.updatedAt);
+            const sortTimestamp = viewedAtMs || updatedAtMs;
+
+            const quickAccessItem: QuickAccessItem = {
+              kind: 'entity',
+              id: item.id,
+              bucket,
+              searchText: getEntitySearchText(entity),
+              sortTimestamp,
+              timestamps: {
+                viewedAt: item.viewedAt,
+                updatedAt: item.updatedAt,
+                createdAt: item.createdAt,
+              },
+              data: entity,
+            };
+
+            itemCache.set(item.id, { item: quickAccessItem, version });
+            allEntries.push({ id: item.id, bucket, sortTimestamp });
+          } else {
+            cacheHitCount++;
+            allEntries.push({
+              id: item.id,
+              bucket: cached.item.bucket,
+              sortTimestamp: cached.item.sortTimestamp,
+            });
+          }
         }
 
         // Process channels
-        // Sort by: updatedAt (most recent message)
         const channelData = channels();
         for (const channel of channelData) {
-          const isDm = channel.channel_type === 'direct_message';
-          const bucket: Bucket = isDm ? 'dm' : 'channel';
-          const entity = channelToEntity(channel);
-          const updatedAtMs = toTimestamp(channel.updated_at);
+          seenIds.add(channel.id);
 
-          items.push({
-            kind: 'entity',
-            id: channel.id,
-            bucket,
-            searchText: channel.name ?? '',
-            sortTimestamp: updatedAtMs,
-            timestamps: {
-              viewedAt: channel.viewed_at,
-              updatedAt: channel.updated_at,
-              createdAt: channel.created_at,
-            },
-            data: entity,
-          });
+          const version = getChannelVersion(channel);
+          const cached = itemCache.get(channel.id);
+
+          if (!cached || cached.version !== version) {
+            transformCount++;
+            const reason = !cached
+              ? 'new'
+              : `changed (${cached.version} -> ${version})`;
+            transformedItems.push({
+              id: channel.id,
+              name: channel.name ?? '',
+              type: `channel:${channel.channel_type}`,
+              reason,
+            });
+            const isDm = channel.channel_type === 'direct_message';
+            const bucket: Bucket = isDm ? 'dm' : 'channel';
+            const entity = channelToEntity(channel);
+            const sortTimestamp = toTimestamp(channel.updated_at);
+
+            const quickAccessItem: QuickAccessItem = {
+              kind: 'entity',
+              id: channel.id,
+              bucket,
+              searchText: channel.name ?? '',
+              sortTimestamp,
+              timestamps: {
+                viewedAt: channel.viewed_at,
+                updatedAt: channel.updated_at,
+                createdAt: channel.created_at,
+              },
+              data: entity,
+            };
+
+            itemCache.set(channel.id, { item: quickAccessItem, version });
+            allEntries.push({ id: channel.id, bucket, sortTimestamp });
+          } else {
+            cacheHitCount++;
+            allEntries.push({
+              id: channel.id,
+              bucket: cached.item.bucket,
+              sortTimestamp: cached.item.sortTimestamp,
+            });
+          }
         }
 
         // Process contacts (users)
-        // Sort by: lastInteraction (when you last interacted with them)
         const contactData = contacts();
         for (const contact of contactData) {
           const augmentedUser = augmentUserWithDmActivity(contact);
-          const lastInteractionMs = toTimestamp(augmentedUser.lastInteraction);
+          seenIds.add(augmentedUser.id);
 
-          items.push({
-            kind: 'user',
-            id: augmentedUser.id,
-            bucket: 'person',
-            searchText: getUserSearchText(augmentedUser),
-            sortTimestamp: lastInteractionMs,
-            timestamps: {
-              lastInteraction: augmentedUser.lastInteraction,
-            },
-            data: augmentedUser,
-          });
+          const version = getUserVersion(augmentedUser);
+          const cached = itemCache.get(augmentedUser.id);
+
+          if (!cached || cached.version !== version) {
+            transformCount++;
+            const reason = !cached
+              ? 'new'
+              : `changed (${cached.version} -> ${version})`;
+            transformedItems.push({
+              id: augmentedUser.id,
+              name: augmentedUser.name,
+              type: 'user',
+              reason,
+            });
+            const sortTimestamp = toTimestamp(augmentedUser.lastInteraction);
+
+            const quickAccessItem: QuickAccessItem = {
+              kind: 'user',
+              id: augmentedUser.id,
+              bucket: 'person',
+              searchText: getUserSearchText(augmentedUser),
+              sortTimestamp,
+              timestamps: {
+                lastInteraction: augmentedUser.lastInteraction,
+              },
+              data: augmentedUser,
+            };
+
+            itemCache.set(augmentedUser.id, { item: quickAccessItem, version });
+            allEntries.push({
+              id: augmentedUser.id,
+              bucket: 'person',
+              sortTimestamp,
+            });
+          } else {
+            cacheHitCount++;
+            allEntries.push({
+              id: augmentedUser.id,
+              bucket: cached.item.bucket,
+              sortTimestamp: cached.item.sortTimestamp,
+            });
+          }
         }
 
-        // Sort once by sortTimestamp descending (most recent first)
-        items.sort((a, b) => b.sortTimestamp - a.sortTimestamp);
+        // Clean up stale cache entries (items that no longer exist)
+        for (const id of itemCache.keys()) {
+          if (!seenIds.has(id)) {
+            itemCache.delete(id);
+          }
+        }
+
+        // Sort all entries by timestamp descending
+        allEntries.sort((a, b) => b.sortTimestamp - a.sortTimestamp);
 
         // Deduplicate by id - keep the first occurrence (most recent timestamp)
-        const seenIds = new Set<string>();
-        const deduplicated: QuickAccessItem[] = [];
-        for (const item of items) {
-          if (!seenIds.has(item.id)) {
-            seenIds.add(item.id);
-            deduplicated.push(item);
+        const deduplicatedEntries: IndexEntry[] = [];
+        const dedupeSet = new Set<string>();
+        for (const entry of allEntries) {
+          if (!dedupeSet.has(entry.id)) {
+            dedupeSet.add(entry.id);
+            deduplicatedEntries.push(entry);
           }
         }
 
         console.log(
-          `All items sorted and deduplicated in ${performance.now() - startAllItems}ms (${items.length} -> ${deduplicated.length} items)`
+          `QuickAccess processed in ${(performance.now() - startTime).toFixed(1)}ms ` +
+            `(${transformCount} transforms, ${cacheHitCount} cache hits, ` +
+            `${deduplicatedEntries.length} items)`
         );
-        return deduplicated;
+        if (transformedItems.length > 0) {
+          console.log('Transformed items:', transformedItems);
+        }
+
+        return deduplicatedEntries;
       });
 
-      // Pre-compute individual bucket lists (each already sorted since we iterate in order)
-      const bucketLists = createLazyMemo<Map<Bucket, QuickAccessItem[]>>(() => {
-        const map = new Map<Bucket, QuickAccessItem[]>();
-        for (const item of allItemsSorted()) {
-          const list = map.get(item.bucket);
+      /**
+       * Get a QuickAccessItem by ID from the cache.
+       * This is the lazy lookup function for accessing full data when needed.
+       */
+      const getById = (id: string): QuickAccessItem | undefined => {
+        return itemCache.get(id)?.item;
+      };
+
+      /**
+       * Resolve index entries to full QuickAccessItems.
+       * This is called lazily when components actually need the data.
+       */
+      const resolveEntries = (entries: IndexEntry[]): QuickAccessItem[] => {
+        const result: QuickAccessItem[] = [];
+        for (const entry of entries) {
+          const cached = itemCache.get(entry.id);
+          if (cached) {
+            result.push(cached.item);
+          }
+        }
+        return result;
+      };
+
+      // Pre-compute individual bucket index lists (each already sorted)
+      const bucketIndices = createLazyMemo<Map<Bucket, IndexEntry[]>>(() => {
+        const map = new Map<Bucket, IndexEntry[]>();
+        for (const entry of processedData()) {
+          const list = map.get(entry.bucket);
           if (list) {
-            list.push(item);
+            list.push(entry);
           } else {
-            map.set(item.bucket, [item]);
+            map.set(entry.bucket, [entry]);
           }
         }
         return map;
       });
 
-      // Pre-bake common bucket combinations for O(1) access
-      const preBakedLists = createLazyMemo<
-        Record<BucketCombination, QuickAccessItem[]>
+      // Pre-bake common bucket combinations for O(1) index access
+      const preBakedIndices = createLazyMemo<
+        Record<BucketCombination, IndexEntry[]>
       >(() => {
-        const lists = bucketLists();
+        const indices = bucketIndices();
         return {
-          all: allItemsSorted(),
-          channels: mergeMultipleSorted([
-            lists.get('dm') ?? [],
-            lists.get('channel') ?? [],
+          all: processedData(),
+          channels: mergeMultipleSortedIndices([
+            indices.get('dm') ?? [],
+            indices.get('channel') ?? [],
           ]),
-          documents: mergeMultipleSorted([
-            lists.get('document') ?? [],
-            lists.get('note') ?? [],
-            lists.get('task') ?? [],
-            lists.get('chat') ?? [],
-            lists.get('project') ?? [],
+          documents: mergeMultipleSortedIndices([
+            indices.get('document') ?? [],
+            indices.get('note') ?? [],
+            indices.get('task') ?? [],
+            indices.get('chat') ?? [],
+            indices.get('project') ?? [],
           ]),
-          messaging: mergeMultipleSorted([
-            lists.get('dm') ?? [],
-            lists.get('channel') ?? [],
-            lists.get('person') ?? [],
+          messaging: mergeMultipleSortedIndices([
+            indices.get('dm') ?? [],
+            indices.get('channel') ?? [],
+            indices.get('person') ?? [],
           ]),
         };
       });
 
-      // Helper to get a pre-baked list if the bucket combination matches
-      const getPreBakedList = (
+      // Helper to get a pre-baked index list if the bucket combination matches
+      const getPreBakedIndices = (
         buckets: Bucket[]
-      ): QuickAccessItem[] | undefined => {
-        const baked = preBakedLists();
+      ): IndexEntry[] | undefined => {
+        const baked = preBakedIndices();
         const bucketSet = new Set(buckets);
 
         for (const [name, combo] of Object.entries(BUCKET_COMBINATIONS)) {
@@ -334,29 +533,34 @@ export const [QuickAccessProvider, useQuickAccess] =
       // 2. Single bucket = return pre-computed bucket list (O(1))
       // 3. Pre-baked combination = return pre-merged list (O(1))
       // 4. Other combinations = merge-sort bucket lists (O(n+m))
+      //
+      // Items are resolved lazily from the cache when the memo is accessed.
       const useList = <B extends Bucket>(...buckets: B[]): Accessor<any> => {
         return createMemo(() => {
+          let indices: IndexEntry[];
+
           if (buckets.length === 0) {
-            return preBakedLists().all;
+            indices = preBakedIndices().all;
+          } else if (buckets.length === 1) {
+            // Single bucket = return pre-computed bucket list
+            indices = bucketIndices().get(buckets[0]) ?? [];
+          } else {
+            // Check for pre-baked combination
+            const preBaked = getPreBakedIndices(buckets);
+            if (preBaked) {
+              indices = preBaked;
+            } else {
+              // Fallback: merge-sort the requested bucket index lists
+              const allIndices = bucketIndices();
+              const indicesToMerge = buckets
+                .map((b) => allIndices.get(b) ?? [])
+                .filter((arr) => arr.length > 0);
+              indices = mergeMultipleSortedIndices(indicesToMerge);
+            }
           }
 
-          // Single bucket = return pre-computed bucket list
-          if (buckets.length === 1) {
-            return bucketLists().get(buckets[0]) ?? [];
-          }
-
-          // Check for pre-baked combination
-          const preBaked = getPreBakedList(buckets);
-          if (preBaked) {
-            return preBaked;
-          }
-
-          // Fallback: merge-sort the requested bucket lists
-          const lists = bucketLists();
-          const bucketsToMerge = buckets
-            .map((b) => lists.get(b) ?? [])
-            .filter((arr) => arr.length > 0);
-          return mergeMultipleSorted(bucketsToMerge);
+          // Resolve indices to full items (lazy lookup from cache)
+          return resolveEntries(indices);
         });
       };
 
@@ -370,6 +574,8 @@ export const [QuickAccessProvider, useQuickAccess] =
         useList,
         isLoading,
         refresh,
+        // Expose getById for components that need to look up a single item
+        getById,
       };
     }
   );

@@ -18,11 +18,13 @@ export function MentionsMenuItem(props: {
   itemAction: (item: MentionItem) => void;
   setIndex: (index: number) => void;
   setOpen: (open: boolean) => void;
+  /** When true, disables the internal scrollIntoView behavior (used when list is virtualized) */
+  disableScrollIntoView?: boolean;
 }) {
   let itemRef: HTMLDivElement | undefined;
 
   createEffect(() => {
-    if (props.selected && itemRef) {
+    if (props.selected && itemRef && !props.disableScrollIntoView) {
       itemRef.scrollIntoView({ block: 'nearest' });
     }
   });

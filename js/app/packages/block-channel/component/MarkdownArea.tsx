@@ -372,11 +372,9 @@ function MarkdownArea(props: MarkdownAreaProps & ConsumableMarkdownAreaProps) {
             editor={editor}
             menu={mentionsMenuOperations}
             users={props.users}
-            history={props.history}
             block={'channel'}
             useBlockBoundary={props.useBlockBoundary}
             portalScope={props.portalScope}
-            emails={() => []}
           />
         </Show>
         <FloatingLinkMenu />
