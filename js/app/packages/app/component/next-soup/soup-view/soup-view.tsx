@@ -431,6 +431,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
     }
   );
 
+  const isProjectList = panel.handle.content().type === 'project';
+
   const getCacheKey = () => {
     let key = `soup-view-${panel.handle.id}`;
 
@@ -443,6 +445,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   onCleanup(() => {
     const virtualHandle = virtualizerHandle();
+
+    if (isProjectList) return;
 
     stateCache.set(getCacheKey(), {
       soup: {
@@ -459,7 +463,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   let restored = false;
   const restoreState = () => {
-    if (restored) return;
+    if (restored || isProjectList) return;
 
     restored = true;
 
