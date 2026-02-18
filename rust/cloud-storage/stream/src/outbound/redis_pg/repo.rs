@@ -261,35 +261,13 @@ impl StreamRepo for RedisPostgresStreamRepo {
     }
 
     async fn active_streams(&self, entity_id: &str) -> Result<Vec<StreamId>> {
-        // Query PostgreSQL for all streams with this entity_id
-        let stream_keys = super::queries::get_active_stream_keys(&self.pg_pool, entity_id)
+        super::queries::get_active_stream_keys(&self.pg_pool, entity_id)
             .await
-            .map_err(|e| StreamServiceError::StorageError(e.to_string()))?;
-
-        // Validate each stream is still active in Redis
-        let mut conn = self.redis_client.get_multiplexed_async_connection().await?;
-        let mut active = Vec::new();
-
-        for stream_key in stream_keys {
-            let exists: bool = conn
-                .exists(stream_key.clone())
-                .await
-                .map_err(|e| StreamServiceError::StorageError(e.to_string()))?;
-
-            if exists {
-                let stream_id = StreamId::try_from(stream_key)?;
-                active.push(stream_id);
-            } else {
-                // Stream expired in Redis — clean up PostgreSQL entry
-                let _ = super::queries::delete_active_stream(&self.pg_pool, entity_id, &stream_key)
-                    .await
-                    .inspect_err(
-                        |e| tracing::error!(error=?e, "failed to clean stale stream from postgres"),
-                    );
-            }
-        }
-
-        Ok(active)
+            .map_err(|e| StreamServiceError::StorageError(e.to_string()))?
+            .into_iter()
+            .map(StreamId::try_from)
+            .collect::<Result<Vec<_>>>()
+            .map_err(|e| StreamServiceError::StorageError(e.to_string()))
     }
 
     async fn notify(&self) -> Receiver<StreamId> {
