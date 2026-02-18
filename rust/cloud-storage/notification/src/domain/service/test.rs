@@ -1,6 +1,7 @@
 //! Unit tests for the notification services.
 
 use crate::domain::models::apple::APNSPushNotification;
+use crate::domain::models::email_notification_digest::BulkDigestStateMachine;
 use crate::domain::models::mobile::NotifCollapseKey;
 use crate::domain::models::queue_message::{
     ConnGatewayInnerNotif, ConnGatewayNotification, EmailContent, Node, NotificationChannel,
@@ -19,14 +20,15 @@ use crate::domain::ports::{
 use crate::domain::service::{
     NotificationEgressService, NotificationIngress, NotificationIngressService,
 };
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
-use rootcause::Report;
+use rootcause::{Report, report};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -139,6 +141,22 @@ impl MockRepository {
     }
 }
 
+struct MockStateMachine;
+
+impl BulkDigestStateMachine for MockStateMachine {
+    fn ingest<T: Notification>(
+        &self,
+        _notif: UserNotificationRow<Arc<T>>,
+    ) -> impl Future<
+        Output = Result<
+            crate::domain::models::email_notification_digest::StateMachineDecisionA<T>,
+            Report,
+        >,
+    > + Send {
+        async move { Err(report!("not implemented")) }
+    }
+}
+
 impl NotificationRepository for MockRepository {
     async fn get_muted_users<'a>(
         &self,
@@ -157,11 +175,11 @@ impl NotificationRepository for MockRepository {
 
     async fn create_notification<'a, T: Notification + Send + Sync>(
         &self,
-        _request: &SendNotificationRequestBuilder<'a, T>,
+        request: SendNotificationRequestBuilder<'a, T>,
         notification_id: Uuid,
         _service_sender: &str,
         apns_collapse_key: Option<&str>,
-    ) -> Result<Option<Uuid>, Report> {
+    ) -> Result<Option<Vec<UserNotificationRow<Arc<T>>>>, Report> {
         self.created_notifications
             .lock()
             .unwrap()
@@ -170,7 +188,28 @@ impl NotificationRepository for MockRepository {
             .lock()
             .unwrap()
             .push((notification_id, apns_collapse_key.map(String::from)));
-        Ok(Some(notification_id))
+        let entity = request.notification_entity.clone().into_owned();
+        let sender_id = request.sender_id.as_ref().map(|id| id.clone().into_owned());
+        let notification_metadata = Arc::new(request.notification);
+        let rows = request
+            .recipient_ids
+            .iter()
+            .map(|recipient| UserNotificationRow {
+                owner_id: recipient.clone().into_owned(),
+                notification_id,
+                notification_event_type: T::TYPE_NAME.to_string(),
+                entity: entity.clone(),
+                sent: false,
+                done: false,
+                created_at: None,
+                viewed_at: None,
+                updated_at: None,
+                deleted_at: None,
+                notification_metadata: notification_metadata.clone(),
+                sender_id: sender_id.clone(),
+            })
+            .collect();
+        Ok(Some(rows))
     }
 
     async fn update_sent_status<'a>(
@@ -283,11 +322,11 @@ impl NotificationRepository for std::sync::Arc<MockRepository> {
 
     async fn create_notification<'a, T: Notification + Send + Sync>(
         &self,
-        request: &SendNotificationRequestBuilder<'a, T>,
+        request: SendNotificationRequestBuilder<'a, T>,
         notification_id: Uuid,
         service_sender: &str,
         apns_collapse_key: Option<&str>,
-    ) -> Result<Option<Uuid>, Report> {
+    ) -> Result<Option<Vec<UserNotificationRow<Arc<T>>>>, Report> {
         (**self)
             .create_notification(request, notification_id, service_sender, apns_collapse_key)
             .await
@@ -447,17 +486,10 @@ impl NotificationQueue for std::sync::Arc<MockQueue> {
     }
 }
 
-fn create_service<N, Q>(repository: N, queue: Q) -> NotificationIngressService<N, Q>
-where
-    N: NotificationRepository,
-    Q: NotificationQueue,
-{
-    NotificationIngressService::new(repository, queue)
-}
-
 #[tokio::test]
 async fn test_send_notification_success() {
-    let service = create_service(MockRepository::new(), MockQueue::new());
+    let service =
+        NotificationIngressService::new(MockRepository::new(), MockQueue::new(), MockStateMachine);
 
     let recipient = test_user_id("user@example.com");
     let request = SendNotificationRequestBuilder {
@@ -477,7 +509,8 @@ async fn test_send_notification_success() {
 
 #[tokio::test]
 async fn test_sender_excluded_from_recipients() {
-    let service = create_service(MockRepository::new(), MockQueue::new());
+    let service =
+        NotificationIngressService::new(MockRepository::new(), MockQueue::new(), MockStateMachine);
 
     let sender = test_user_id("sender@example.com");
     let request = SendNotificationRequestBuilder {
@@ -499,9 +532,10 @@ async fn test_sender_excluded_from_recipients() {
 #[tokio::test]
 async fn test_muted_user_excluded() {
     let muted_user = test_user_id("muted@example.com");
-    let service = create_service(
+    let service = NotificationIngressService::new(
         MockRepository::new().with_muted_user(muted_user.clone()),
         MockQueue::new(),
+        MockStateMachine,
     );
 
     let request = SendNotificationRequestBuilder {
@@ -523,9 +557,10 @@ async fn test_muted_user_excluded() {
 #[tokio::test]
 async fn test_unsubscribed_user_excluded() {
     let unsubscribed_user = test_user_id("unsubscribed@example.com");
-    let service = create_service(
+    let service = NotificationIngressService::new(
         MockRepository::new().with_unsubscribed_user(unsubscribed_user.clone()),
         MockQueue::new(),
+        MockStateMachine,
     );
 
     let request = SendNotificationRequestBuilder {
@@ -549,7 +584,8 @@ async fn test_queue_message_conn_gateway_only() {
     use std::sync::Arc;
 
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationIngressService::new(MockRepository::new(), queue.clone());
+    let service =
+        NotificationIngressService::new(MockRepository::new(), queue.clone(), MockStateMachine);
 
     let recipient = test_user_id("user@example.com");
     let request = SendNotificationRequestBuilder {
@@ -578,7 +614,8 @@ async fn test_queue_message_email_per_recipient() {
     use std::sync::Arc;
 
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationIngressService::new(MockRepository::new(), queue.clone());
+    let service =
+        NotificationIngressService::new(MockRepository::new(), queue.clone(), MockStateMachine);
 
     let recipient1 = test_user_id("user1@example.com");
     let recipient2 = test_user_id("user2@example.com");
@@ -615,7 +652,7 @@ async fn test_queue_message_multiple_channels() {
         recipient.clone(),
         DeviceEndpoint::Ios("arn:aws:sns:test".to_string()),
     );
-    let service = NotificationIngressService::new(repo, queue.clone());
+    let service = NotificationIngressService::new(repo, queue.clone(), MockStateMachine);
 
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("entity_1"),
@@ -686,7 +723,7 @@ async fn test_apns_enqueues_correct_data_for_multiple_users() {
             ),
         );
 
-    let service = NotificationIngressService::new(repo, queue.clone());
+    let service = NotificationIngressService::new(repo, queue.clone(), MockStateMachine);
 
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("doc_123"),
@@ -771,7 +808,7 @@ async fn test_apns_collapse_key_stored_on_create() {
         DeviceEndpoint::Ios("arn:aws:sns:us-east-1:111:endpoint/APNS/app/alice".to_string()),
     ));
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationIngressService::new(repo.clone(), queue);
+    let service = NotificationIngressService::new(repo.clone(), queue, MockStateMachine);
 
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("doc_1"),
@@ -803,7 +840,7 @@ async fn test_no_apns_collapse_key_when_apns_not_enabled() {
 
     let repo = Arc::new(MockRepository::new());
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationIngressService::new(repo.clone(), queue);
+    let service = NotificationIngressService::new(repo.clone(), queue, MockStateMachine);
 
     let request = SendNotificationRequestBuilder {
         notification_entity: EntityType::Document.with_entity_str("doc_1"),
@@ -1075,7 +1112,7 @@ async fn test_mark_seen_publishes_ios_clear_message() {
             ),
     );
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationIngressService::new(repo.clone(), queue.clone());
+    let service = NotificationIngressService::new(repo.clone(), queue.clone(), MockStateMachine);
 
     let notification_ids = [notif_id];
     service
@@ -1138,7 +1175,7 @@ async fn test_mark_seen_skips_push_when_no_collapse_key() {
         DeviceEndpoint::Ios("arn:aws:sns:us-east-1:111:endpoint/APNS/app/bob".to_string()),
     ));
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationIngressService::new(repo.clone(), queue.clone());
+    let service = NotificationIngressService::new(repo.clone(), queue.clone(), MockStateMachine);
 
     let notification_ids = [notif_id];
     service
@@ -1174,7 +1211,7 @@ async fn test_mark_seen_skips_push_when_no_device_endpoints() {
         // No device endpoints registered
     );
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationIngressService::new(repo.clone(), queue.clone());
+    let service = NotificationIngressService::new(repo.clone(), queue.clone(), MockStateMachine);
 
     let notification_ids = [notif_id];
     service
@@ -1216,7 +1253,7 @@ async fn test_mark_done_updates_db_and_clears_push() {
             ),
     );
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationIngressService::new(repo.clone(), queue.clone());
+    let service = NotificationIngressService::new(repo.clone(), queue.clone(), MockStateMachine);
 
     let notification_ids = [notif_id];
     service
@@ -1261,7 +1298,7 @@ async fn test_mark_undone_updates_db_no_push_clear() {
             ),
     );
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationIngressService::new(repo.clone(), queue.clone());
+    let service = NotificationIngressService::new(repo.clone(), queue.clone(), MockStateMachine);
 
     let notification_ids = [notif_id];
     service

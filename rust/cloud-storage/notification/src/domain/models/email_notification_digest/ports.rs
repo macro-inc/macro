@@ -46,7 +46,7 @@ pub trait DigestBatcher: Send + Sync + 'static {
     /// to be sent after `send_after` duration.
     fn add_to_digest(
         &self,
-        notification: &UserNotificationRow<TaggedContent<serde_json::Value>>,
+        notification: &UserNotificationRow<serde_json::Value>,
         send_after: Duration,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 

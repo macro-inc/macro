@@ -6,7 +6,7 @@ mod test;
 use crate::domain::models::email_notification_digest::ports::{
     ClaimResult, DigestBatch, DigestBatcher,
 };
-use crate::domain::models::{TaggedContent, UserNotificationRow};
+use crate::domain::models::UserNotificationRow;
 use chrono::Utc;
 use macro_user_id::user_id::MacroUserIdStr;
 use redis::aio::MultiplexedConnection;
@@ -53,7 +53,7 @@ impl RedisDigestBatcher {
 impl DigestBatcher for RedisDigestBatcher {
     async fn add_to_digest(
         &self,
-        notification: &UserNotificationRow<TaggedContent<serde_json::Value>>,
+        notification: &UserNotificationRow<serde_json::Value>,
         send_after: Duration,
     ) -> Result<(), Report> {
         let mut conn = self.conn.clone();

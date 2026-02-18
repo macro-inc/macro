@@ -30,6 +30,7 @@ axum = { workspace = true, optional = true }
 chrono = { workspace = true }
 cowlike = { path = "../cowlike" }
 either = { workspace = true }
+futures = { workspace = true }
 hex = { workspace = true }
 itertools = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }

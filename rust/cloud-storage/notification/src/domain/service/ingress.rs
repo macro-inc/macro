@@ -4,9 +4,10 @@
 //! filtering recipients, persisting to DB, and publishing to the queue.
 
 use crate::domain::models::apple::{APNSPushNotification, Aps};
+use crate::domain::models::email_notification_digest::BulkDigestStateMachine;
 use crate::domain::models::mobile::{MessageAttributes, PushType};
 use crate::domain::models::queue_message::{
-    APNSTargets, ClearPushIdentifier, ConnGatewayNotification, EmailNotification, Node,
+    APNSTargets, ClearPushIdentifier, ConnGatewayNotification, EmailNotification,
     NotificationChannel, QueueMessage, QueueMessageNeedsStateMachine,
 };
 use crate::domain::models::request::{
@@ -17,6 +18,7 @@ use crate::domain::models::{
 };
 use crate::domain::ports::{NotificationQueue, NotificationRepository};
 use crate::domain::service::SendNotificationError;
+use ::futures::future::join_all;
 use macro_user_id::cowlike::CowLike;
 use models_pagination::{CreatedAt, PaginateOn, Paginated, Query, TypeEraseCursor};
 use rootcause::Report;
@@ -83,16 +85,18 @@ pub trait NotificationIngress: Send + Sync + 'static {
 ///
 /// Handles recipient filtering, DB persistence, and queue publishing.
 /// Does NOT handle delivery - that's done by [`super::NotificationEgressService`].
-pub struct NotificationIngressService<N, Q> {
+pub struct NotificationIngressService<N, Q, S> {
     repository: N,
     queue: Q,
+    state_machine_driver: S,
     service_name: &'static str,
 }
 
-impl<N, Q> NotificationIngress for NotificationIngressService<N, Q>
+impl<N, Q, S> NotificationIngress for NotificationIngressService<N, Q, S>
 where
     N: NotificationRepository,
     Q: NotificationQueue,
+    S: BulkDigestStateMachine,
 {
     /// Update notification status for a user and optionally enqueue push notification clearing.
     ///
@@ -159,27 +163,24 @@ where
                     QueueMessage {
                         message_type: "clear_push_notification".to_string(),
                         rate_limit: None,
-                        content: Node {
-                            notif: NotificationChannel::Ios(Box::new(APNSTargets {
-                                notif: APNSPushNotification {
-                                    aps: Aps {
-                                        content_available: Some(1),
-                                        sound: None,
-                                        ..Default::default()
-                                    },
-                                    push_notification_data: ClearPushIdentifier {
-                                        identifier: collapse_key.clone(),
-                                    },
+                        content: NotificationChannel::Ios(Box::new(APNSTargets {
+                            notif: APNSPushNotification {
+                                aps: Aps {
+                                    content_available: Some(1),
+                                    sound: None,
+                                    ..Default::default()
                                 },
-                                attributes: MessageAttributes {
-                                    push_type: PushType::Background,
-                                    collapse_key,
+                                push_notification_data: ClearPushIdentifier {
+                                    identifier: collapse_key.clone(),
                                 },
-                                ios_device_endpoints: ios_endpoints.clone(),
-                                bulk_digest_state_machine: None,
-                            })),
-                            on_failure: None,
-                        },
+                            },
+                            attributes: MessageAttributes {
+                                push_type: PushType::Background,
+                                collapse_key,
+                            },
+                            ios_device_endpoints: ios_endpoints.clone(),
+                            bulk_digest_state_machine: Default::default(),
+                        })),
                     }
                 })
                 .collect();
@@ -214,11 +215,13 @@ where
             .build_queue_message(notification_id, &mut request)
             .await?;
 
+        let notified_recipients = request.req.recipient_ids.clone();
+
         // Create notification in DB (with collapse key if APNS was built)
         let created = self
             .repository
             .create_notification(
-                &request.req,
+                request.req,
                 notification_id,
                 self.service_name,
                 apns_collapse_key.as_deref(),
@@ -227,22 +230,28 @@ where
             .context(SendNotificationError::Other)?;
 
         // If notification already exists (idempotent), return early
-        let Some(notification_id) = created else {
+        let Some(n) = created else {
             return Ok(Some(NotificationResult {
                 notification_id,
                 notified_recipients: HashSet::new(),
             }));
         };
 
+        let results = join_all(
+            n.into_iter()
+                .map(|user_notif| self.state_machine_driver.ingest(user_notif)),
+        )
+        .await;
+
         self.queue
-            .publish(queue_messages.into_iter())
+            .publish(queue_messages.with_state_decisions(results))
             .await
             .context(SendNotificationError::Other)?;
 
         // Return result (delivery happens async)
         Ok(Some(NotificationResult {
             notification_id,
-            notified_recipients: request.req.recipient_ids,
+            notified_recipients,
         }))
     }
 
@@ -329,16 +338,18 @@ where
     }
 }
 
-impl<N, Q> NotificationIngressService<N, Q>
+impl<N, Q, S> NotificationIngressService<N, Q, S>
 where
     N: NotificationRepository,
     Q: NotificationQueue,
+    S: BulkDigestStateMachine,
 {
     /// Create a new ingress service.
-    pub fn new(repository: N, queue: Q) -> Self {
+    pub fn new(repository: N, queue: Q, state_machine_driver: S) -> Self {
         Self {
             repository,
             queue,
+            state_machine_driver,
             service_name: std::env!("CARGO_PKG_NAME"),
         }
     }
@@ -375,7 +386,7 @@ where
         notification_id: Uuid,
         notification: &mut SendNotificationRequest<'a, T, U>,
     ) -> Result<
-        (Vec<QueueMessageNeedsStateMachine<'a, T, U>>, Option<String>),
+        (QueueMessageNeedsStateMachine<'a, T, U>, Option<String>),
         Report<SendNotificationError>,
     > {
         let rate_limit = notification.req.get_rate_limit()?;
@@ -388,12 +399,9 @@ where
             messages.push(QueueMessage {
                 message_type: message_type.clone(),
                 rate_limit: rate_limit.clone(),
-                content: Node {
-                    notif: NotificationChannel::ConnGateway(
-                        ConnGatewayNotification::clone_from_request(notification_id, notification),
-                    ),
-                    on_failure: None,
-                },
+                content: NotificationChannel::ConnGateway(
+                    ConnGatewayNotification::clone_from_request(notification_id, notification),
+                ),
             });
         }
 
@@ -423,15 +431,12 @@ where
                 messages.push(QueueMessage {
                     message_type: message_type.clone(),
                     rate_limit: rate_limit.clone(),
-                    content: Node {
-                        notif: NotificationChannel::Ios(Box::new(APNSTargets {
-                            notif: apns_notif,
-                            attributes,
-                            ios_device_endpoints: ios_endpoints,
-                            bulk_digest_state_machine: None,
-                        })),
-                        on_failure: None,
-                    },
+                    content: NotificationChannel::Ios(Box::new(APNSTargets {
+                        notif: apns_notif,
+                        attributes,
+                        ios_device_endpoints: ios_endpoints,
+                        bulk_digest_state_machine: Default::default(),
+                    })),
                 });
             }
         }
@@ -443,22 +448,16 @@ where
                 messages.push(QueueMessage {
                     message_type: message_type.clone(),
                     rate_limit: rate_limit.clone(),
-                    content: Node {
-                        notif: NotificationChannel::Email(EmailNotification {
-                            to: recipient.clone(),
-                            content: email_content,
-                        }),
-                        on_failure: None,
-                    },
+                    content: NotificationChannel::Email(EmailNotification {
+                        to: recipient.clone(),
+                        content: email_content,
+                    }),
                 });
             }
         }
 
         Ok((
-            messages
-                .into_iter()
-                .map(QueueMessageNeedsStateMachine::new)
-                .collect(),
+            QueueMessageNeedsStateMachine::new(messages),
             apns_collapse_key,
         ))
     }
