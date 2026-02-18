@@ -1,6 +1,5 @@
 import PlusIcon from '@icon/regular/plus.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
-import type * as schemas from '@service-properties/generated/zod';
 import {
   createMemo,
   createSignal,
@@ -9,21 +8,18 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import type { z } from 'zod';
-import type { Property } from '../../../types';
-import { formatOptionValue, useSearchInputFocus } from '../../../utils';
+import { useSearchInputFocus } from '../../../utils';
 import { ERROR_MESSAGES } from '../../../utils/errorHandling';
 import { PropertyValueIcon } from '../../propertyValue';
 import { OptionCheckBox } from './OptionCheckBox';
 import { useDropdownSearch } from '@core/util/useDropdownSearch';
 import { DropdownSearchInput } from './DropdownSearchInput';
 import { DropdownSelectableRow } from './DropdownSelectableRow';
-
-type PropertyOption = z.infer<typeof schemas.getPropertyOptionsResponseItem>;
+import type { SelectableOption, OptionSelectorConfig } from './types';
 
 type SelectOptionsProps = {
-  property: Property;
-  options: PropertyOption[];
+  config: OptionSelectorConfig;
+  options: SelectableOption[];
   isLoading: boolean;
   error: string | null;
   selectedOptions: () => Set<string>;
@@ -64,7 +60,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
       handleAddOption();
     } else if (item?.type === 'option' && item.option) {
       props.onToggleOption(item.option.id);
-      if (!props.property.isMultiSelect && props.onClose) {
+      if (!props.config.isMultiSelect && props.onClose) {
         props.onClose();
       }
     }
@@ -82,10 +78,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
     const query = dropdown.searchQuery().trim();
     if (!query) return false;
 
-    return props.options.some((option) => {
-      const displayValue = formatOptionValue(option);
-      return displayValue === query;
-    });
+    return props.options.some((option) => option.label === query);
   });
 
   const isValidNewOption = createMemo(() => {
@@ -95,16 +88,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
 
     if (hasExactMatch()) return false;
 
-    if (props.property.valueType === 'SELECT_STRING') {
-      return true;
-    }
-
-    if (props.property.valueType === 'SELECT_NUMBER') {
-      const num = parseFloat(query);
-      return !isNaN(num) && Number.isFinite(num);
-    }
-
-    return false;
+    return props.config.canAddOption?.(query) ?? false;
   });
 
   // Filter options based on search query and sort selected first, then alphabetically
@@ -115,15 +99,14 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
     const availableOptions = !query
       ? props.options
       : props.options.filter((option) => {
-          const displayValue = formatOptionValue(option).toLowerCase();
-          return displayValue.includes(query);
+          return option.label.toLowerCase().includes(query);
         });
 
     // Only include missing selected options when there's no search query
     let allOptions = availableOptions;
     if (!query) {
       const availableOptionIds = new Set(availableOptions.map((opt) => opt.id));
-      const missingSelectedOptions: PropertyOption[] = [];
+      const missingSelectedOptions: SelectableOption[] = [];
 
       for (const selectedId of selectedIds) {
         if (!availableOptionIds.has(selectedId)) {
@@ -146,7 +129,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
   // Get selectable items (filtered options + add option if available)
   const selectableItems = createMemo(() => {
     const options = filteredOptions();
-    const items: Array<{ type: 'option' | 'add'; option?: PropertyOption }> =
+    const items: Array<{ type: 'option' | 'add'; option?: SelectableOption }> =
       [];
 
     options.forEach((option) => {
@@ -221,11 +204,9 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
               inputRef={(element) => {
                 searchInputRef = element;
               }}
-              inputType={
-                props.property.valueType === 'SELECT_NUMBER' ? 'number' : 'text'
-              }
+              inputType={props.config.inputType ?? 'text'}
               onInput={dropdown.setSearchQuery}
-              placeholder={`${props.property.isMultiSelect ? 'Add' : 'Change'} ${props.property.displayName.toLowerCase()}...`}
+              placeholder={props.config.placeholder}
             />
           </div>
 
@@ -274,7 +255,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                                 props.onToggleOption(item.option.id);
                                 // If not multi-select, close the modal after selection
                                 if (
-                                  !props.property.isMultiSelect &&
+                                  !props.config.isMultiSelect &&
                                   props.onClose
                                 ) {
                                   props.onClose();
@@ -291,10 +272,10 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                             }
                             hotkeyShortcut={`${index() + 1}`}
                             rightContent={
-                              <Show when={props.property.isMultiSelect}>
+                              <Show when={props.config.isMultiSelect}>
                                 <OptionCheckBox
                                   checked={isOptionSelected(item.option!.id)}
-                                  multiselect={props.property.isMultiSelect}
+                                  multiselect={props.config.isMultiSelect}
                                 />
                               </Show>
                             }
@@ -302,7 +283,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                             <PropertyValueIcon optionId={item.option!.id} />
                             <div class="flex-1 min-w-0 text-left">
                               <p class="text-sm font-medium truncate">
-                                {formatOptionValue(item.option!)}
+                                {item.option!.label}
                               </p>
                             </div>
                           </DropdownSelectableRow>

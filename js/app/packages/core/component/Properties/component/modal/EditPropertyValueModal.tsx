@@ -1,3 +1,4 @@
+import { useMaybeBlockId } from '@core/block';
 import { floatWithElement } from '@core/component/LexicalMarkdown/directive/floatWithElement';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -6,6 +7,7 @@ import { mergeRefs } from '@solid-primitives/refs';
 import { createSignal, onMount, Show } from 'solid-js';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import { usePropertyEditor } from '../../hooks/usePropertyEditor';
+import { formatOptionValue } from '../../utils';
 import type { PropertyApiValues, PropertyEditorProps } from '../../types';
 
 false && floatWithElement;
@@ -46,7 +48,8 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
   const isLoading = () =>
     propertyOptionsQuery.isLoading || addPropertyOptionMutation.isPending;
 
-  const { saveHandler } = usePropertiesContext();
+  const { saveHandler, entityType: currentEntityType } = usePropertiesContext();
+  const blockId = useMaybeBlockId();
 
   let modalRef!: HTMLDivElement;
 
@@ -236,7 +239,15 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
                       }
                     >
                       <PropertyEntitySelector
-                        property={props.property}
+                        config={{
+                          isMultiSelect: props.property.isMultiSelect,
+                          placeholder: `${props.property.isMultiSelect ? 'Add' : 'Change'} ${props.property.displayName.toLowerCase()}...`,
+                          specificEntityType: props.property.specificEntityType,
+                          selfFilter: {
+                            entityType: currentEntityType,
+                            blockId,
+                          },
+                        }}
                         selectedOptions={() => {
                           const refs = selectedEntityRefs();
                           return entityReferencesToIdSet(refs);
@@ -250,15 +261,35 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
                           );
                           setSelectedEntityRefs(updatedRefs);
                         }}
-                        setHasChanges={() => {}} // Not needed with new hook
                         onClose={handleClose}
                       />
                     </Show>
                   }
                 >
                   <PropertyOptionSelector
-                    property={props.property}
-                    options={propertyOptions()}
+                    config={{
+                      isMultiSelect: props.property.isMultiSelect,
+                      placeholder: `${props.property.isMultiSelect ? 'Add' : 'Change'} ${props.property.displayName.toLowerCase()}...`,
+                      inputType:
+                        props.property.valueType === 'SELECT_NUMBER'
+                          ? 'number'
+                          : 'text',
+                      canAddOption: props.property.isSystemProperty
+                        ? undefined
+                        : (query) => {
+                            if (props.property.valueType === 'SELECT_STRING')
+                              return true;
+                            if (props.property.valueType === 'SELECT_NUMBER') {
+                              const n = parseFloat(query);
+                              return !isNaN(n) && Number.isFinite(n);
+                            }
+                            return false;
+                          },
+                    }}
+                    options={propertyOptions().map((opt) => ({
+                      id: opt.id,
+                      label: formatOptionValue(opt),
+                    }))}
                     isLoading={false}
                     error={null}
                     selectedOptions={selectedOptions}

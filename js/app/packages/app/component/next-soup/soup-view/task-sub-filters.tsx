@@ -1,15 +1,14 @@
-import { type Component, createEffect, createMemo, For, Show } from 'solid-js';
+import { type Component, Show } from 'solid-js';
 import { Popover } from '@kobalte/core/popover';
-import { DropdownSearchInput } from '@core/component/Properties/component/modal/shared/DropdownSearchInput';
-import { DropdownSelectableRow } from '@core/component/Properties/component/modal/shared/DropdownSelectableRow';
 import { TASK_STATUS_OPTIONS } from '@entity';
 import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
-import { useContacts } from '@queries/contacts/contacts';
+import { PropertyOptionSelector } from '@core/component/Properties/component/modal/shared/PropertyOptionSelector';
+import { PropertyEntitySelector } from '@core/component/Properties/component/modal/shared/PropertyEntitySelector';
+import type { SelectableOption } from '@core/component/Properties/component/modal/shared/types';
 import { UserIcon } from '@core/component/UserIcon';
-import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
-import { useDropdownSearch } from '@core/util/useDropdownSearch';
+import { useContacts } from '@queries/contacts/contacts';
 import { useUserId } from '@core/context/user';
-import { getVisibleAssigneeOptions } from './task-sub-filter-options';
+import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-context';
 import UserCircleIcon from '@icon/regular/user-circle.svg';
 import CaretDownIcon from '@icon/regular/caret-down.svg';
 import XIcon from '@icon/regular/x.svg?component-solid';
@@ -20,25 +19,15 @@ type DropdownProps = {
   onOpenChange: (isOpen: boolean) => void;
 };
 
-const scrollSelectedItemIntoView = (
-  listRef: HTMLDivElement | undefined,
-  selectedIndex: number
-) => {
-  queueMicrotask(() => {
-    const selectedItem = listRef?.querySelector<HTMLElement>(
-      `[data-dropdown-index="${selectedIndex}"]`
-    );
-    selectedItem?.scrollIntoView({ block: 'nearest' });
-  });
-};
+const statusOptions: SelectableOption[] = TASK_STATUS_OPTIONS.map((o) => ({
+  id: o.value,
+  label: o.label,
+}));
 
 export const TaskStatusDropdown: Component<DropdownProps> = (props) => {
   const { statusFilter, setStatusFilter } = useSoupView();
   const open = () => props.open();
   const setOpen = (v: boolean) => props.onOpenChange(v);
-
-  let searchInputRef!: HTMLInputElement;
-  let optionsListRef: HTMLDivElement | undefined;
 
   const activeLabel = () => {
     if (!statusFilter()) return 'Status';
@@ -48,44 +37,16 @@ export const TaskStatusDropdown: Component<DropdownProps> = (props) => {
     );
   };
 
-  const selectOption = (value: string | undefined) => {
-    setStatusFilter(statusFilter() === value ? undefined : value);
+  const selectOption = (id: string) => {
+    setStatusFilter(statusFilter() === id ? undefined : id);
     setOpen(false);
-    dropdown.reset();
   };
-
-  const dropdown = useDropdownSearch({
-    itemCount: () => filteredOptions().length,
-    onSelect: (idx) => selectOption(filteredOptions()[idx].value),
-    onClose: () => {
-      setOpen(false);
-      dropdown.reset();
-    },
-  });
-
-  const filteredOptions = createMemo(() => {
-    const query = dropdown.searchQuery().toLowerCase().trim();
-    if (!query) return [...TASK_STATUS_OPTIONS];
-    return TASK_STATUS_OPTIONS.filter((o) =>
-      o.label.toLowerCase().includes(query)
-    );
-  });
-
-  createEffect(() => {
-    if (!open()) return;
-    filteredOptions().length;
-    scrollSelectedItemIntoView(optionsListRef, dropdown.selectedIndex());
-  });
 
   return (
     <Popover
       open={open()}
       onOpenChange={(isOpen) => {
         setOpen(isOpen);
-        if (isOpen) {
-          dropdown.reset();
-          setTimeout(() => searchInputRef?.focus(), 0);
-        }
       }}
       placement="bottom-start"
       gutter={4}
@@ -125,62 +86,17 @@ export const TaskStatusDropdown: Component<DropdownProps> = (props) => {
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content class="z-50 bg-panel border border-edge-muted shadow-lg w-[300px]">
-          <div>
-            <DropdownSearchInput
-              value={dropdown.searchQuery()}
-              inputRef={(element) => {
-                searchInputRef = element;
-              }}
-              onInput={dropdown.setSearchQuery}
-              onKeyDown={dropdown.handleKeyDown}
-              placeholder="Filter status..."
-            />
-            <div class="p-1">
-              <div
-                ref={(el) => {
-                  optionsListRef = el;
-                }}
-                class="max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden"
-              >
-                <Show
-                  when={filteredOptions().length > 0}
-                  fallback={
-                    <div class="text-center py-4 text-ink-muted text-sm">
-                      No options match your search
-                    </div>
-                  }
-                >
-                  <For each={filteredOptions()}>
-                    {(option, index) => (
-                      <DropdownSelectableRow
-                        dataIndex={index()}
-                        isSelected={index() === dropdown.selectedIndex()}
-                        onClick={() => selectOption(option.value)}
-                        onMouseEnter={() => {
-                          if (!dropdown.keyboardMode())
-                            dropdown.setSelectedIndex(index());
-                        }}
-                        showHotkey={dropdown.shouldShowHotkeys() && index() < 9}
-                        hotkeyShortcut={`${index() + 1}`}
-                        rightContent={
-                          <Show when={statusFilter() === option.value}>
-                            <span class="text-accent text-sm">✓</span>
-                          </Show>
-                        }
-                      >
-                        <PropertyValueIcon optionId={option.value} />
-                        <div class="flex-1 min-w-0 text-left">
-                          <p class="text-sm font-medium truncate">
-                            {option.label}
-                          </p>
-                        </div>
-                      </DropdownSelectableRow>
-                    )}
-                  </For>
-                </Show>
-              </div>
-            </div>
-          </div>
+          <PropertyOptionSelector
+            config={{ isMultiSelect: false, placeholder: 'Filter status...' }}
+            options={statusOptions}
+            isLoading={false}
+            error={null}
+            selectedOptions={() =>
+              statusFilter() ? new Set([statusFilter()!]) : new Set()
+            }
+            onToggleOption={(id) => selectOption(id)}
+            onClose={() => setOpen(false)}
+          />
         </Popover.Content>
       </Popover.Portal>
     </Popover>
@@ -193,50 +109,6 @@ export const TaskAssigneeDropdown: Component<DropdownProps> = (props) => {
   const setOpen = (v: boolean) => props.onOpenChange(v);
   const contacts = useContacts();
   const userId = useUserId();
-
-  let searchInputRef!: HTMLInputElement;
-  let contactsListRef: HTMLDivElement | undefined;
-
-  const sortedContacts = createMemo(() => {
-    const list = contacts();
-    const me = userId();
-    if (!me) return list;
-    const myIndex = list.findIndex((c) => c.id === me);
-    if (myIndex <= 0) return list;
-    const sorted = [...list];
-    const [myContact] = sorted.splice(myIndex, 1);
-    sorted.unshift(myContact);
-    return sorted;
-  });
-
-  const selectContact = (id: string) => {
-    setAssigneeFilter(assigneeFilter() === id ? undefined : id);
-    setOpen(false);
-    dropdown.reset();
-  };
-
-  const dropdown = useDropdownSearch({
-    itemCount: () => filteredContacts().length,
-    onSelect: (idx) => selectContact(filteredContacts()[idx].id),
-    onClose: () => {
-      setOpen(false);
-      dropdown.reset();
-    },
-  });
-
-  const filteredContacts = createMemo(() => {
-    return getVisibleAssigneeOptions({
-      contacts: sortedContacts(),
-      query: dropdown.searchQuery(),
-      selectedAssigneeId: assigneeFilter(),
-    });
-  });
-
-  createEffect(() => {
-    if (!open()) return;
-    filteredContacts().length;
-    scrollSelectedItemIntoView(contactsListRef, dropdown.selectedIndex());
-  });
 
   const activeAssigneeLabel = () => {
     if (!assigneeFilter()) return 'Assignee';
@@ -251,10 +123,6 @@ export const TaskAssigneeDropdown: Component<DropdownProps> = (props) => {
       open={open()}
       onOpenChange={(isOpen) => {
         setOpen(isOpen);
-        if (isOpen) {
-          dropdown.reset();
-          setTimeout(() => searchInputRef?.focus(), 0);
-        }
       }}
       placement="bottom-start"
       gutter={4}
@@ -299,70 +167,21 @@ export const TaskAssigneeDropdown: Component<DropdownProps> = (props) => {
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content class="z-50 bg-panel border border-edge-muted shadow-lg w-[300px]">
-          <div>
-            <DropdownSearchInput
-              value={dropdown.searchQuery()}
-              inputRef={(element) => {
-                searchInputRef = element;
-              }}
-              onInput={dropdown.setSearchQuery}
-              onKeyDown={dropdown.handleKeyDown}
-              placeholder="Filter assignee..."
-            />
-            <div class="p-1">
-              <div
-                ref={(el) => {
-                  contactsListRef = el;
-                }}
-                class="max-h-[200px] overflow-y-auto overflow-x-hidden scrollbar-hidden"
-              >
-                <Show
-                  when={filteredContacts().length > 0}
-                  fallback={
-                    <div class="text-center py-4 text-ink-muted text-sm">
-                      No members match your search
-                    </div>
-                  }
-                >
-                  <For each={filteredContacts()}>
-                    {(contact, index) => (
-                      <DropdownSelectableRow
-                        dataIndex={index()}
-                        isSelected={index() === dropdown.selectedIndex()}
-                        onClick={() => selectContact(contact.id)}
-                        onMouseEnter={() => {
-                          if (!dropdown.keyboardMode())
-                            dropdown.setSelectedIndex(index());
-                        }}
-                        showHotkey={dropdown.shouldShowHotkeys() && index() < 9}
-                        hotkeyShortcut={`${index() + 1}`}
-                        rightContent={
-                          <Show when={assigneeFilter() === contact.id}>
-                            <span class="text-accent text-sm">✓</span>
-                          </Show>
-                        }
-                      >
-                        <UserIcon
-                          id={contact.id}
-                          size="xs"
-                          suppressClick
-                          showTooltip={false}
-                        />
-                        <div class="flex-1 min-w-0 text-left">
-                          <p class="text-sm font-medium truncate">
-                            {contact.name || contact.id}
-                            <Show when={contact.id === userId()}>
-                              <span class="text-ink-muted ml-1">(me)</span>
-                            </Show>
-                          </p>
-                        </div>
-                      </DropdownSelectableRow>
-                    )}
-                  </For>
-                </Show>
-              </div>
-            </div>
-          </div>
+          <PropertyEntitySelector
+            config={{
+              isMultiSelect: false,
+              placeholder: 'Filter assignee...',
+              specificEntityType: 'USER',
+            }}
+            selectedOptions={() =>
+              assigneeFilter() ? new Set([assigneeFilter()!]) : new Set()
+            }
+            setSelectedOptions={(ids) => {
+              const newId = [...ids][0];
+              setAssigneeFilter(newId === assigneeFilter() ? undefined : newId);
+            }}
+            onClose={() => setOpen(false)}
+          />
         </Popover.Content>
       </Popover.Portal>
     </Popover>

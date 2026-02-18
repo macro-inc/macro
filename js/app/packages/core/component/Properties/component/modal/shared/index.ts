@@ -13,3 +13,8 @@ export {
 } from './entityUtils';
 export { PropertyEntitySelector } from './PropertyEntitySelector';
 export { PropertyOptionSelector } from './PropertyOptionSelector';
+export type {
+  SelectableOption,
+  OptionSelectorConfig,
+  EntitySelectorConfig,
+} from './types';
