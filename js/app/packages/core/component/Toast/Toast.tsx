@@ -39,11 +39,8 @@ interface ToastStyle {
     hover: string;
     text: string;
   };
-  /** Close button hover styles */
-  closeButton: {
-    hoverBg: string;
-    hoverText: string;
-  };
+  /** Close button hover text color */
+  closeButtonHover: string;
 }
 
 const TOAST_STYLES: Record<ToastType, ToastStyle> = {
@@ -59,10 +56,7 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
       hover: 'hover:bg-success/80',
       text: 'text-success-ink',
     },
-    closeButton: {
-      hoverBg: 'bg-success/10',
-      hoverText: 'text-success-ink',
-    },
+    closeButtonHover: 'hover:text-success-ink',
   },
   [ToastType.FAILURE]: {
     background: 'bg-failure/10',
@@ -76,10 +70,7 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
       hover: 'hover:bg-failure/80',
       text: 'text-failure-ink',
     },
-    closeButton: {
-      hoverBg: 'bg-failure/10',
-      hoverText: 'text-failure-ink',
-    },
+    closeButtonHover: 'hover:text-failure-ink',
   },
   [ToastType.ALERT]: {
     background: 'bg-alert/10',
@@ -93,10 +84,7 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
       hover: 'hover:bg-alert/80',
       text: 'text-alert-ink',
     },
-    closeButton: {
-      hoverBg: 'bg-alert/10',
-      hoverText: 'text-alert-ink',
-    },
+    closeButtonHover: 'hover:text-alert-ink',
   },
   [ToastType.LOADING]: {
     background: 'bg-accent/10',
@@ -110,10 +98,7 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
       hover: 'hover:bg-accent/80',
       text: 'text-panel',
     },
-    closeButton: {
-      hoverBg: 'bg-accent/10',
-      hoverText: 'text-accent',
-    },
+    closeButtonHover: 'hover:text-accent',
   },
 };
 
@@ -186,7 +171,6 @@ function ToastContent(props: {
   // Track progress for animated border (1 = full, 0 = empty)
   const [progress, setProgress] = createSignal(1);
   const [isHovered, setIsHovered] = createSignal(false);
-  const [isCloseHovered, setIsCloseHovered] = createSignal(false);
 
   // Use a ref object so the animation loop can see resets
   const timerState = { elapsed: 0 };
@@ -300,13 +284,9 @@ function ToastContent(props: {
         </div>
 
         {/* Close button */}
-        <Toast.CloseButton
-          class={`absolute top-2 right-2 p-1 rounded transition-colors ${isCloseHovered() ? styles().closeButton.hoverBg : ''}`}
-          onMouseEnter={() => setIsCloseHovered(true)}
-          onMouseLeave={() => setIsCloseHovered(false)}
-        >
+        <Toast.CloseButton class="absolute top-2 right-2 p-1 rounded">
           <XIcon
-            class={`size-4 transition-colors ${isCloseHovered() ? styles().closeButton.hoverText : 'text-ink-extra-muted'}`}
+            class={`size-4 text-ink-extra-muted transition-colors ${styles().closeButtonHover}`}
           />
         </Toast.CloseButton>
       </div>
