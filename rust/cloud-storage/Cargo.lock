@@ -1986,6 +1986,7 @@ dependencies = [
  "axum",
  "chrono",
  "cool_asserts",
+ "cowlike",
  "dashmap",
  "ensure_exists",
  "frecency",
@@ -2211,6 +2212,10 @@ checksum = "b49ba7ef1ad6107f8824dbe97de947cbaac53c44e7f9756a1fba0d37c1eec505"
 dependencies = [
  "memchr",
 ]
+
+[[package]]
+name = "cowlike"
+version = "0.1.0"
 
 [[package]]
 name = "cpufeatures"
@@ -2771,6 +2776,7 @@ dependencies = [
  "comms_service",
  "connection_gateway",
  "cool_asserts",
+ "cowlike",
  "document_sub_type",
  "documents",
  "dynamodb_client",
@@ -3666,6 +3672,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "cool_asserts",
+ "cowlike",
  "filter_ast",
  "item_filters",
  "macro_db_migrator",
@@ -3680,6 +3687,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sqlx",
+ "strum",
  "thiserror 2.0.17",
  "tokio",
  "tower 0.5.2",
@@ -5307,6 +5315,7 @@ dependencies = [
 name = "macro_user_id"
 version = "0.1.0"
 dependencies = [
+ "cowlike",
  "doppleganger",
  "nom 8.0.0",
  "serde",
@@ -5619,6 +5628,7 @@ name = "model-entity"
 version = "0.1.0"
 dependencies = [
  "cool_asserts",
+ "cowlike",
  "serde",
  "serde_json",
  "strum",
@@ -6018,6 +6028,7 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "chrono",
+ "cowlike",
  "either",
  "hex",
  "itertools 0.14.0",
@@ -8556,6 +8567,7 @@ dependencies = [
  "chrono",
  "comms",
  "cool_asserts",
+ "cowlike",
  "document_sub_type",
  "doppleganger",
  "either",

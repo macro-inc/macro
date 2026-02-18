@@ -9,7 +9,7 @@ import { onCleanup, onMount } from 'solid-js';
  */
 export function useAppSquishHandlers() {
   if (isIOS) {
-    // We are tracking viewport height, and using that to set a CSS variable and the viewport offset,
+    // We are tracking viewport height, and using that to set a CSS variable,
     // so that we can properly constrain the viewport-height for mobile in response to changes such as
     // the virtual keyboard appearing.
     let previousViewportHeight = window.visualViewport?.height || 0;

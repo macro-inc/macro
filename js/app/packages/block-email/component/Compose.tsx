@@ -31,6 +31,7 @@ import {
 import {
   createMemo,
   createSignal,
+  type JSX,
   Match,
   onMount,
   Show,
@@ -69,6 +70,8 @@ import { useMaybeEmailContext } from '@block-email/component/EmailContext';
 import { decodeBase64Utf8 } from '@block-email/util/decodeBase64';
 import { stickyGate } from '@core/util/debounce';
 import { invalidateSoupEntity } from '@queries/soup/cache';
+import { WrapUnlessMobile } from '@core/mobile/WrapUnlessMobile';
+import { isMobile } from '@core/mobile/isMobile';
 
 const DRAFT_DEBOUNCE_MS = 1000;
 
@@ -98,6 +101,17 @@ type EmailComposeProps = {
   draftID?: string;
 };
 
+function ComposeFieldRow(props: { label: string; children: JSX.Element }) {
+  return (
+    <div class="flex items-baseline gap-2 border-b border-edge-muted focus-within:border-accent">
+      <div class="text-sm w-4 shrink-0 text-ink-placeholder/70">
+        {props.label}
+      </div>
+      <div class="flex-1">{props.children}</div>
+    </div>
+  );
+}
+
 export function EmailCompose(props: EmailComposeProps) {
   const hasPaidAccess = useHasPaidAccess();
   const { showPaywall } = usePaywallState();
@@ -112,6 +126,8 @@ export function EmailCompose(props: EmailComposeProps) {
     subjectInput: undefined,
     messageInput: undefined,
   });
+
+  let mobileScrollRef: HTMLDivElement | undefined;
 
   const registerRef = (name: keyof EmailComposeElementRefs) => {
     return (el: HTMLElement) => {
@@ -321,6 +337,9 @@ export function EmailCompose(props: EmailComposeProps) {
 
   const [showCc, setShowCc] = createSignal(false);
   const [showBcc, setShowBcc] = createSignal(false);
+
+  const isCcVisible = () => showCc() || form.recipients().cc.length > 0;
+  const isBccVisible = () => showBcc() || form.recipients().bcc.length > 0;
 
   onMount(() => {
     const container = refs().containerRef;
@@ -657,18 +676,27 @@ export function EmailCompose(props: EmailComposeProps) {
 
   return (
     <>
-      <SplitHeaderLeft>
-        <StaticSplitLabel
-          label={form.subject() || previewName()}
-          iconType="email"
-          badges={[
-            <SplitHeaderBadge text="draft" tooltip="This is a Draft Email" />,
-          ]}
-        />
-      </SplitHeaderLeft>
+      <Show when={!isMobile()}>
+        <SplitHeaderLeft>
+          <StaticSplitLabel
+            label={form.subject() || previewName()}
+            iconType={isMobile() ? undefined : 'email'}
+            badges={
+              isMobile()
+                ? []
+                : [
+                    <SplitHeaderBadge
+                      text="draft"
+                      tooltip="This is a Draft Email"
+                    />,
+                  ]
+            }
+          />
+        </SplitHeaderLeft>
+      </Show>
       <div
         ref={registerRef('containerRef')}
-        class="relative flex flex-col w-full h-full panel min-h-0 overflow-hidden"
+        class="relative flex flex-col w-full h-full min-h-0 overflow-hidden text-sm"
       >
         <Switch>
           <Match when={hasLinkError()}>
@@ -691,7 +719,7 @@ export function EmailCompose(props: EmailComposeProps) {
             <div class="w-full bg-alert-bg border-b border-t border-alert/20 text-alert-ink p-2">
               <div class="flex items-center justify-between gap-2">
                 <Caution class="size-4" />
-                <span class="text-sm">You must upgrade to send email.</span>
+                <span>You must upgrade to send email.</span>
                 <span class="grow" />
                 <DeprecatedTextButton
                   theme="base"
@@ -706,14 +734,19 @@ export function EmailCompose(props: EmailComposeProps) {
         </Switch>
 
         <div
-          class="macro-message-width macro-message-padding mx-auto w-full max-h-full my-12 overflow-hidden"
+          ref={mobileScrollRef}
+          class="macro-message-width sm:macro-message-padding mx-auto w-full max-h-full my-2 sm:my-12 mobile:my-0 px-2 sm:px-4 mobile:px-0 overflow-hidden mobile:overflow-y-auto mobile:hide-scrollbar mobile:min-h-full"
           classList={{
             'pointer-events-none opacity-50': hasLinkError(),
           }}
         >
-          <ClippedPanel tl={!beveledCorners()}>
+          <WrapUnlessMobile
+            wrapper={(children) => (
+              <ClippedPanel tl={!beveledCorners()}>{children}</ClippedPanel>
+            )}
+          >
             <div
-              class="w-full p-4 bg-input max-h-full overflow-hidden flex flex-col min-h-0"
+              class="w-full p-4 bg-input max-h-full mobile:max-h-none overflow-y-auto flex flex-col min-h-0 mobile:min-h-full"
               classList={{
                 'pointer-events-none opacity-50': hasLinkError(),
               }}
@@ -740,7 +773,7 @@ export function EmailCompose(props: EmailComposeProps) {
                   </Suspense>
                   <div class="flex gap-2 ml-auto">
                     <Show when={debouncedIsDraftSaving()}>
-                      <div class="flex gap-1 items-center text-sm text-ink-muted">
+                      <div class="flex gap-1 items-center text-ink-muted">
                         <Show
                           when={laggedIsDraftSaving()}
                           fallback={<span>Draft saved</span>}
@@ -750,20 +783,20 @@ export function EmailCompose(props: EmailComposeProps) {
                         </Show>
                       </div>
                     </Show>
-                    <Show when={!showCc()}>
+                    <Show when={!isCcVisible()}>
                       <button
                         type="button"
-                        class="text-sm text-secondary-text hover:text-primary-text hover:bg-hover"
+                        class="text-ink-muted hover:text-ink hover:bg-hover"
                         onClick={() => setShowCc(true)}
                         disabled={hasLinkError()}
                       >
                         + Cc
                       </button>
                     </Show>
-                    <Show when={!showBcc()}>
+                    <Show when={!isBccVisible()}>
                       <button
                         type="button"
-                        class="text-sm text-secondary-text hover:text-primary-text hover:bg-hover"
+                        class="text-ink-muted hover:text-ink hover:bg-hover"
                         onClick={() => setShowBcc(true)}
                         disabled={hasLinkError()}
                       >
@@ -774,25 +807,20 @@ export function EmailCompose(props: EmailComposeProps) {
                 </div>
 
                 <div class="flex flex-col gap-2">
-                  <div class="flex items-center gap-2 border-b border-edge-muted focus-within:border-accent">
-                    <div class="text-base w-4 shrink-0 text-ink-placeholder/70">
-                      To
-                    </div>
-                    <div class="flex-1">
-                      <RecipientSelector
-                        inputRef={registerRef('directRecipientsSelector')}
-                        options={getRecipientOptions}
-                        selectedOptions={form.recipients().to}
-                        setSelectedOptions={(next) =>
-                          form.setRecipients('to', next)
-                        }
-                        placeholder="Macro users or email addresses"
-                        focusOnMount={!hasLinkError()}
-                        hideBorder
-                        noBrackets
-                        disabled={hasLinkError()}
-                      />
-                    </div>
+                  <ComposeFieldRow label="To">
+                    <RecipientSelector
+                      inputRef={registerRef('directRecipientsSelector')}
+                      options={getRecipientOptions}
+                      selectedOptions={form.recipients().to}
+                      setSelectedOptions={(next) =>
+                        form.setRecipients('to', next)
+                      }
+                      placeholder="Macro users or email addresses"
+                      focusOnMount={!hasLinkError()}
+                      hideBorder
+                      noBrackets
+                      disabled={hasLinkError()}
+                    />
                     <Show when={withValidationError('no_recipient')}>
                       {(err) => (
                         <div class="text-failure-ink text-sm mt-1">
@@ -800,56 +828,44 @@ export function EmailCompose(props: EmailComposeProps) {
                         </div>
                       )}
                     </Show>
-                  </div>
+                  </ComposeFieldRow>
 
-                  <Show when={showCc()}>
-                    <div class="flex items-center gap-2 border-b border-edge-muted focus-within:border-accent">
-                      <div class="text-sm w-4 shrink-0 text-ink-placeholder/70">
-                        Cc
-                      </div>
-                      <div class="flex-1">
-                        <RecipientSelector
-                          inputRef={registerRef('ccRecipientsSelector')}
-                          options={getRecipientOptions}
-                          selectedOptions={form.recipients().cc}
-                          setSelectedOptions={(next) =>
-                            form.setRecipients('cc', next)
-                          }
-                          placeholder="Macro users or email addresses"
-                          hideBorder
-                          noBrackets
-                          disabled={hasLinkError()}
-                        />
-                      </div>
-                    </div>
+                  <Show when={isCcVisible()}>
+                    <ComposeFieldRow label="Cc">
+                      <RecipientSelector
+                        inputRef={registerRef('ccRecipientsSelector')}
+                        options={getRecipientOptions}
+                        selectedOptions={form.recipients().cc}
+                        setSelectedOptions={(next) =>
+                          form.setRecipients('cc', next)
+                        }
+                        placeholder="Macro users or email addresses"
+                        hideBorder
+                        noBrackets
+                        disabled={hasLinkError()}
+                      />
+                    </ComposeFieldRow>
                   </Show>
 
-                  <Show when={showBcc()}>
-                    <div class="flex items-center gap-2 border-b border-edge-muted focus-within:border-accent">
-                      <div class="text-sm w-4 shrink-0 text-ink-placeholder/70">
-                        Bcc
-                      </div>
-                      <div class="flex-1">
-                        <RecipientSelector
-                          inputRef={registerRef('bccRecipientsSelector')}
-                          options={getRecipientOptions}
-                          selectedOptions={form.recipients().bcc}
-                          setSelectedOptions={(next) =>
-                            form.setRecipients('bcc', next)
-                          }
-                          placeholder="Macro users or email addresses"
-                          hideBorder
-                          noBrackets
-                          disabled={hasLinkError()}
-                        />
-                      </div>
-                    </div>
+                  <Show when={isBccVisible()}>
+                    <ComposeFieldRow label="Bcc">
+                      <RecipientSelector
+                        inputRef={registerRef('bccRecipientsSelector')}
+                        options={getRecipientOptions}
+                        selectedOptions={form.recipients().bcc}
+                        setSelectedOptions={(next) =>
+                          form.setRecipients('bcc', next)
+                        }
+                        placeholder="Macro users or email addresses"
+                        hideBorder
+                        noBrackets
+                        disabled={hasLinkError()}
+                      />
+                    </ComposeFieldRow>
                   </Show>
 
                   <div class="w-full flex items-center gap-2 border-b border-edge-muted focus-within:border-accent py-2">
-                    <div class="text-base shrink-0 text-ink-placeholder/70">
-                      Subject
-                    </div>
+                    <div class="shrink-0 text-ink-placeholder/70">Subject</div>
 
                     <div class="flex-1">
                       <input
@@ -857,7 +873,7 @@ export function EmailCompose(props: EmailComposeProps) {
                         type="text"
                         value={form.subject()}
                         placeholder="Subject"
-                        class="w-full text-base resize-none placeholder:text-ink-placeholder p-1 ml-1"
+                        class="w-full resize-none placeholder:text-ink-placeholder p-1 ml-1"
                         onInput={(e) => {
                           form.setSubject(e.currentTarget.value);
                           scheduleDraftSave();
@@ -886,6 +902,7 @@ export function EmailCompose(props: EmailComposeProps) {
                 <ComposeEmailInput
                   captureEditor={setEditor}
                   inputRef={registerRef('messageInput')}
+                  mobileScrollRef={() => mobileScrollRef}
                   initialHtml={initialHtml()}
                   onContentChange={onContentChange}
                   onAddAttachments={onAddAttachments}
@@ -901,14 +918,12 @@ export function EmailCompose(props: EmailComposeProps) {
                 />
                 <Show when={withValidationError('no_message')}>
                   {(err) => (
-                    <div class="text-failure-ink text-sm mt-1">
-                      {err().message}
-                    </div>
+                    <div class="text-failure-ink mt-1">{err().message}</div>
                   )}
                 </Show>
               </div>
             </div>
-          </ClippedPanel>
+          </WrapUnlessMobile>
         </div>
       </div>
     </>

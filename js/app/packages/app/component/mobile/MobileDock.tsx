@@ -5,6 +5,7 @@ import WidePlus from '@macro-icons/wide/plus.svg';
 import WideTask from '@macro-icons/wide/task.svg';
 import { impactFeedback } from '@tauri-apps/plugin-haptics';
 import { batch, type Component, type JSX } from 'solid-js';
+import { cn } from '@ui/utils/classname';
 import { setCreateMenuOpen } from '../Launcher';
 import { useSplitPanelOrThrow } from '../split-layout/layoutUtils';
 import { useSoup } from '@app/component/next-soup/soup-context';
@@ -25,11 +26,10 @@ function MobileDockButton(props: MobileDockButtonProps) {
         impactFeedback('light');
         props.onClick();
       }}
-      class="flex flex-col items-center justify-center w-[20%] py-4"
-      classList={{
-        'text-ink-muted': !props.active,
-        'text-ink bg-panel': props.active,
-      }}
+      class={cn(
+        'flex flex-col items-center justify-center w-[20%] pt-3',
+        props.active && 'text-accent'
+      )}
     >
       <props.icon class="w-6 h-6" />
       <span class="text-xs">{props.label}</span>

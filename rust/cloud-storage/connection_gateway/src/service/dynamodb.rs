@@ -1,4 +1,5 @@
 use crate::model::connection::StoredConnectionEntity;
+use crate::model::tracking::{EntityConnection, UserEntityConnection};
 use crate::service::connection::{ConnectionGatewayPersistence, ConnectionManager};
 use anyhow::{Context, Result};
 use aws_sdk_dynamodb::error::ProvideErrorMetadata;
@@ -7,7 +8,7 @@ use axum::async_trait;
 use ensure_exists::dynamodb::{CreateTableErr, DefineTable, DynamoClientWrapper};
 use ensure_exists::{DoesExist, EnsureExists};
 use macro_env_var::env_var;
-use model_entity::{Entity, EntityConnection, EntityType, UserEntityConnection};
+use model_entity::{Entity, EntityType};
 use std::collections::HashMap;
 
 env_var! {

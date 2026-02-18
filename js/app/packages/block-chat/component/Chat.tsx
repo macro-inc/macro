@@ -2,6 +2,7 @@ import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import type { SendBuilder } from '@block-chat/blockClient';
 import { TopBar } from '@block-chat/component/TopBar';
 import type { ChatData } from '@block-chat/definition';
+import { pendingLocationParamsSignal } from '@block-chat/signal/pendingLocationParams';
 import { useBlockId } from '@core/block';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
@@ -23,6 +24,7 @@ import {
   storeChatState,
 } from '@core/component/AI/util/storage';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
@@ -37,9 +39,7 @@ import { invalidateUserQuota } from '@queries/auth';
 import { createCallback } from '@solid-primitives/rootless';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import type { LexicalEditor } from 'lexical';
-import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { createEffect, createSignal, Show } from 'solid-js';
-import { pendingLocationParamsSignal } from '../signal/pendingLocationParams';
 
 export function Chat(props: { data: ChatData }) {
   const loadedState = getChatInputStoredState(props.data.chat.id);
@@ -73,7 +73,6 @@ function ChatInner(props: {
   const [chatEditor, setChatEditor] = createSignal<LexicalEditor>();
   const [scrollRef, setScrollRef] = createSignal<HTMLElement>();
   const [showStreamDebug, setShowStreamDebug] = createSignal(false);
-
   const chatMarkdownArea = useChatMarkdownArea({
     initialValue: props.loadedInputText,
     addAttachment: (a) => input.attachments.addAttachment(a),

@@ -10,7 +10,8 @@ import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import { commsServiceClient } from '@service-comms/client';
 import { useUserId } from '@core/context/user';
 import { Button } from '@ui/components/Button';
-import { Match, Show, Switch } from 'solid-js';
+import { createSignal, Match, Show, Switch } from 'solid-js';
+import { debounce } from '@solid-primitives/scheduled';
 import { ProfilePicture } from './ProfilePicture';
 
 export type UserTooltipProps = {
@@ -18,11 +19,21 @@ export type UserTooltipProps = {
   email?: string;
   id?: string;
   isDeleted?: boolean;
-  copied: boolean;
-  onCopyEmail: (e: MouseEvent) => void;
 };
 
 export function UserTooltip(props: UserTooltipProps) {
+  const [copied, setCopied] = createSignal(false);
+  const resetCopied = debounce(() => setCopied(false), 800);
+
+  function handleCopyEmail(e: MouseEvent) {
+    e.stopPropagation();
+    const email = props.email;
+    if (!email) return;
+    setCopied(true);
+    navigator.clipboard.writeText(email);
+    toast.success('Email copied');
+    resetCopied();
+  }
   const currentUserId = useUserId();
   const { openWithSplit } = useSplitLayout();
 
@@ -101,8 +112,8 @@ export function UserTooltip(props: UserTooltipProps) {
           <div class="border-t border-edge/20"></div>
           <div class="py-2 flex flex-col gap-0">
             <Show when={props.email}>
-              <Button onClick={props.onCopyEmail} class={buttonStyle}>
-                {props.copied ? (
+              <Button onClick={handleCopyEmail} class={buttonStyle}>
+                {copied() ? (
                   <IconCheck class="w-3.5 h-3.5" />
                 ) : (
                   <WideCopy class="w-3.5 h-3.5" />

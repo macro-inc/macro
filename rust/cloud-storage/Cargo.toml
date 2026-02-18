@@ -17,6 +17,7 @@ members = [
   "contacts_db_client",
   "contacts_service",
   "convert_service",
+  "cowlike",
   "dataloss_prevention_handler",
   "delete_chat_handler",
   "delete_document_worker",

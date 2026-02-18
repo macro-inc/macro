@@ -1,15 +1,11 @@
-import {
-  SUPPORTED_ATTACHMENT_EXTENSIONS,
-  SUPPORTED_CHAT_ATTACHMENT_BLOCKS,
-} from '@core/component/AI/constant';
+import { SUPPORTED_ATTACHMENT_EXTENSIONS } from '@core/component/AI/constant';
+import { globalAttachableHistory } from '@core/component/AI/signal/globalAttachments';
 import type { Attachment, Attachments } from '@core/component/AI/types';
 import { asFileType } from '@core/component/AI/util';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins/mentions';
 import { ENABLE_CHAT_CHANNEL_ATTACHMENT } from '@core/constant/featureFlags';
 import { useChannelsContext } from '@core/context/channels';
-import { getItemBlockName } from '@core/util/getItemBlockName';
-import { useHistoryQuery } from '@queries/history/history';
-import { createMemo, createSignal } from 'solid-js';
+import { createSignal } from 'solid-js';
 
 export function useAttachments(initial?: Attachment[]): Attachments {
   const [attachments, setAttachments] = createSignal<Attachment[]>(
@@ -42,14 +38,7 @@ export function useAttachments(initial?: Attachment[]): Attachments {
 }
 
 export const useChatAttachableHistory = () => {
-  const historyQuery = useHistoryQuery();
-
-  return createMemo(() => {
-    return (historyQuery.data ?? []).filter((item) => {
-      const blockName = getItemBlockName(item, true);
-      return SUPPORTED_CHAT_ATTACHMENT_BLOCKS.includes(blockName);
-    });
-  });
+  return globalAttachableHistory;
 };
 
 export const useGetChatAttachmentInfo = () => {
