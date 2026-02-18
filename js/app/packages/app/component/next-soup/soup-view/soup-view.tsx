@@ -152,9 +152,11 @@ export const SoupView = () => {
             <SoupViewList />
           </SoupViewFileDropzone>
         </div>
-        <Show when={ENABLE_UNIFIED_LIST_AI_INPUT && !isMobile()}>
-          <SoupChatInput />
-        </Show>
+        <Suspense>
+          <Show when={ENABLE_UNIFIED_LIST_AI_INPUT && !isMobile()}>
+            <SoupChatInput />
+          </Show>
+        </Suspense>
       </SoupViewContextProvider>
     </SplitPanelContext.Provider>
   );
