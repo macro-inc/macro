@@ -49,6 +49,7 @@ const mergeSearchEntities = <T extends EntityData>(
   }
 
   return {
+    ...localEntity,
     ...serviceEntity,
     search: {
       ...serviceEntity.search,
