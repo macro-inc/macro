@@ -19,6 +19,7 @@ export function SettingsButton() {
     <Show when={isSingleSplit()}>
       <Button
         suppressInteractionStyling
+        class="px-0"
         tooltip={
           <LabelAndHotKey
             label={settingsOpen() ? 'Close Settings' : 'Open Settings'}

@@ -26,6 +26,7 @@ import {
   type LexicalEditor,
   type TextFormatType,
 } from 'lexical';
+import PaperPlane from '@macro-icons/wide/paper-plane-cutout.svg';
 import { createSignal, For, Match, onMount, Show, Switch } from 'solid-js';
 import { type FocusableElement, tabbable } from 'tabbable';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
@@ -37,6 +38,8 @@ import type { DraftFormAttachment } from '@block-email/component/createEmailForm
 import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
 import { EmailDateSelector } from '@block-email/component/email-date-selector';
 import { ENABLE_EMAIL_SCHEDULED_SEND } from '@core/constant/featureFlags';
+import { SplitHeaderRight } from '@app/component/split-layout/components/SplitHeader';
+import { isMobile } from '@core/mobile/isMobile';
 
 false && fileFolderDrop;
 
@@ -296,63 +299,97 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
         </div>
       </div>
       <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 allow-css-brackets mt-2">
-        <div class="flex flex-row items-center gap-2">
-          <div class="relative" ref={attachButtonRef}>
-            <Button
-              ref={(el) =>
-                fileSelector(el, () => ({
-                  multiple: true,
-                  onSelect: handleAddAttachments,
-                }))
-              }
-              tooltip="Attach"
-              class="aspect-square p-1"
+        <Show
+          when={!isMobile()}
+          fallback={
+            <SplitHeaderRight>
+              <div class="flex items-center pl-2">
+                <div class="relative" ref={attachButtonRef}>
+                  <Button
+                    ref={(el) =>
+                      fileSelector(el, () => ({
+                        multiple: true,
+                        onSelect: handleAddAttachments,
+                      }))
+                    }
+                    tooltip="Attach"
+                    class="aspect-square p-1"
+                    disabled={props.disabled}
+                  >
+                    <PaperclipIcon class="h-5" />
+                  </Button>
+                </div>
+                <Button
+                  disabled={props.isSubmitting || props.disabled}
+                  onClick={() => {
+                    // handleSend();
+                  }}
+                >
+                  <PaperPlane class="size-4.5 text-accent" />
+                </Button>
+              </div>
+            </SplitHeaderRight>
+          }
+        >
+          <div class="flex flex-row items-center gap-2">
+            <div class="relative" ref={attachButtonRef}>
+              <Button
+                ref={(el) =>
+                  fileSelector(el, () => ({
+                    multiple: true,
+                    onSelect: handleAddAttachments,
+                  }))
+                }
+                tooltip="Attach"
+                class="aspect-square p-1"
+                disabled={props.disabled}
+              >
+                <PaperclipIcon class="h-5" />
+              </Button>
+            </div>
+            <DeprecatedIconButton
+              theme="base"
+              icon={TextAa}
               disabled={props.disabled}
+              onclick={() => {
+                setShowFormatRibbon(!showFormatRibbon());
+              }}
+            />
+            <Show when={ENABLE_EMAIL_SCHEDULED_SEND}>
+              <EmailDateSelector
+                sendTime={props.sendTime}
+                onSendTimeChange={props.onSendTimeChange}
+              />
+            </Show>
+            <Show when={props.hasDraft}>
+              <Button
+                onclick={props.onDraftDeletePress}
+                tooltip="Delete draft"
+                class="aspect-square *:h-5 p-1"
+              >
+                <Trash />
+              </Button>
+            </Show>
+            <Button
+              disabled={props.isSubmitting || props.disabled}
+              onClick={() => {
+                handleSend();
+              }}
+              class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent disabled:opacity-30"
             >
-              <PaperclipIcon class="h-5" />
+              <Show
+                when={!props.isSubmitting}
+                fallback={
+                  <Spinner class="size-6 animate-spin cursor-disabled" />
+                }
+              >
+                <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
+                  <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
+                </div>
+              </Show>
             </Button>
           </div>
-          <DeprecatedIconButton
-            theme="base"
-            icon={TextAa}
-            disabled={props.disabled}
-            onclick={() => {
-              setShowFormatRibbon(!showFormatRibbon());
-            }}
-          />
-          <Show when={ENABLE_EMAIL_SCHEDULED_SEND}>
-            <EmailDateSelector
-              sendTime={props.sendTime}
-              onSendTimeChange={props.onSendTimeChange}
-            />
-          </Show>
-          <Show when={props.hasDraft}>
-            <Button
-              onclick={props.onDraftDeletePress}
-              tooltip="Delete draft"
-              class="aspect-square *:h-5 p-1"
-            >
-              <Trash />
-            </Button>
-          </Show>
-        </div>
-
-        <Button
-          disabled={props.isSubmitting || props.disabled}
-          onClick={() => {
-            handleSend();
-          }}
-          class="text-ink-muted hover:scale-115 transition ease-in-out flex-col items-center rounded-full p-[0.25lh] hover:bg-transparent disabled:opacity-30"
-        >
-          <Show
-            when={!props.isSubmitting}
-            fallback={<Spinner class="size-6 animate-spin cursor-disabled" />}
-          >
-            <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center p-0">
-              <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
-            </div>
-          </Show>
-        </Button>
+        </Show>
       </div>
     </div>
   );

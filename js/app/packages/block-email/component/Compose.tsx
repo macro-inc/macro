@@ -72,6 +72,7 @@ import { stickyGate } from '@core/util/debounce';
 import { invalidateSoupEntity } from '@queries/soup/cache';
 import { WrapUnlessMobile } from '@core/mobile/WrapUnlessMobile';
 import { isMobile } from '@core/mobile/isMobile';
+import { SplitToolbarRight } from '@app/component/split-layout/components/SplitToolbar';
 
 const DRAFT_DEBOUNCE_MS = 1000;
 
@@ -674,22 +675,24 @@ export function EmailCompose(props: EmailComposeProps) {
 
   return (
     <>
-      <SplitHeaderLeft>
-        <StaticSplitLabel
-          label={form.subject() || previewName()}
-          iconType="email"
-          badges={
-            isMobile()
-              ? []
-              : [
-                  <SplitHeaderBadge
-                    text="draft"
-                    tooltip="This is a Draft Email"
-                  />,
-                ]
-          }
-        />
-      </SplitHeaderLeft>
+      <Show when={!isMobile()}>
+        <SplitHeaderLeft>
+          <StaticSplitLabel
+            label={form.subject() || previewName()}
+            iconType={isMobile() ? undefined : 'email'}
+            badges={
+              isMobile()
+                ? []
+                : [
+                    <SplitHeaderBadge
+                      text="draft"
+                      tooltip="This is a Draft Email"
+                    />,
+                  ]
+            }
+          />
+        </SplitHeaderLeft>
+      </Show>
       <div
         ref={registerRef('containerRef')}
         class="relative flex flex-col w-full h-full min-h-0 overflow-hidden text-sm"

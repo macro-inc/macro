@@ -28,6 +28,7 @@ import { Portal } from 'solid-js/web';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import { canSpotlight } from '../utils/canSpotlight';
 import { useSettingsState } from '@core/constant/SettingsState';
+import { cn } from '@ui/utils/classname';
 
 function SplitBackButton() {
   const context = useContext(SplitPanelContext);
@@ -51,7 +52,6 @@ function SplitForwardButton() {
   if (!context) return '';
   return (
     <Button
-      class="p-1"
       tooltip={
         <LabelAndHotKey
           label="Go Forward"
@@ -60,6 +60,10 @@ function SplitForwardButton() {
       }
       disabled={!context.handle.canGoForward()}
       onClick={context.handle.goForward}
+      class={cn(
+        'p-1',
+        isMobile() && !context.handle.canGoForward() && 'hidden'
+      )}
     >
       <CaretRight class="h-4" />
     </Button>
@@ -181,7 +185,7 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
       ref={props.ref}
     >
       <div class="absolute inset-0 flex justify-start items-center bg-panel">
-        <div class="z-2 relative flex items-center bg-panel pl-2 h-full">
+        <div class="z-2 relative flex items-center bg-panel pl-2 mobile:pl-0 h-full">
           <div class="mobile:hidden">
             <SplitCloseButton />
           </div>
