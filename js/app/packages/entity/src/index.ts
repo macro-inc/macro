@@ -24,5 +24,12 @@ export {
 } from './utils/notification';
 
 export { unreadFilterFn } from './utils/filter';
+export {
+  TASK_STATUS_OPTIONS,
+  getTaskAssigneeIds,
+  getTaskStatusOptionId,
+  isTaskClosed,
+  isCurrentUserAssigned,
+} from './utils/task-properties';
 
 export { default as DebugEntityView } from './debug/DebugEntityView';

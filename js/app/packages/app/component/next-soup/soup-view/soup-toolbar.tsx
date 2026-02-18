@@ -1,4 +1,6 @@
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
+import IconGear from '@macro-icons/macro-gear.svg';
+import BackspaceIcon from '@icon/regular/backspace.svg?component-solid';
 import XIcon from '@icon/regular/x.svg?component-solid';
 import PreviewIcon from '@macro-icons/wide/preview.svg';
 import NoiseIcon from '@macro-icons/wide/noise.svg';
@@ -40,6 +42,10 @@ import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-o
 import { Dynamic } from 'solid-js/web';
 import { SortDropdown } from '@app/component/next-soup/soup-view/sort-dropdown';
 import { SettingsButton } from '@app/component/settings/SettingsButton';
+import {
+  TaskStatusDropdown,
+  TaskAssigneeDropdown,
+} from '@app/component/next-soup/soup-view/task-sub-filters';
 
 /**
  * Keyboard shortcuts for entity type filters.
@@ -97,14 +103,10 @@ export const SoupToolbar = () => {
           >
             <button
               type="button"
-              class="flex items-center gap-1.5 px-2.5 rounded-full text-ink-muted hover:text-accent hover:bg-accent/20 active:bg-accent active:text-panel"
+              class="flex items-center justify-center size-[22px] rounded-full text-ink-muted hover:text-accent hover:bg-accent/20 active:bg-accent active:text-panel"
               onClick={handleClear}
             >
-              <XIcon class="size-4.5" />
-              <span class="text-xs leading-none">
-                Clear
-                <span class="ml-1 font-mono opacity-70">/</span>
-              </span>
+              <BackspaceIcon class="size-4.5" />
             </button>
           </Tooltip>
           <div class="mx-0.5 w-px h-5 bg-edge-muted/50 shrink-0" />
@@ -124,12 +126,13 @@ type EntityTypeFilterId =
   | 'file';
 
 const SoupFilters = () => {
-  const { soup, setSearchText, isSearchDisabled, setQueryFilters } =
-    useSoupView();
+  const { soup, setSearchText, setQueryFilters } = useSoupView();
   const panel = useSplitPanelOrThrow();
   const emailActive = useEmailLinksStatus();
 
   const [sortDropdownOpen, setSortDropdownOpen] = createSignal(false);
+  const [statusDropdownOpen, setStatusDropdownOpen] = createSignal(false);
+  const [assigneeDropdownOpen, setAssigneeDropdownOpen] = createSignal(false);
 
   const toggleFocus = (id: 'signal' | 'noise') => {
     if (soup.filters.isActive(id)) {
@@ -159,7 +162,7 @@ const SoupFilters = () => {
     batch(() => {
       soup.filters.toggle('email');
       if (willBeActive) {
-        const shouldIncludeEmails = emailActive() && isSearchDisabled();
+        const shouldIncludeEmails = emailActive();
         setQueryFilters({
           ...QUERY_FILTERS.email,
           email_filters: {
@@ -296,6 +299,31 @@ const SoupFilters = () => {
     hotkeyDisposers.forEach((d) => d.dispose());
   });
 
+  const taskSubFilterHotkeyDisposers = [
+    registerHotkey({
+      hotkey: ['shift+s'],
+      scopeId: panel.splitHotkeyScope,
+      condition: () => soup.filters.isActive('task'),
+      description: 'Open status filter',
+      keyDownHandler: () => {
+        setStatusDropdownOpen((prev) => !prev);
+        return true;
+      },
+    }),
+    registerHotkey({
+      hotkey: ['shift+a'],
+      scopeId: panel.splitHotkeyScope,
+      condition: () => soup.filters.isActive('task'),
+      description: 'Open assignee filter',
+      keyDownHandler: () => {
+        setAssigneeDropdownOpen((prev) => !prev);
+        return true;
+      },
+    }),
+  ];
+
+  onCleanup(() => taskSubFilterHotkeyDisposers.forEach((d) => d.dispose()));
+
   return (
     <>
       {/* Inbox toggle */}
@@ -368,6 +396,19 @@ const SoupFilters = () => {
           }}
         </For>
       </div>
+      <Show when={soup.filters.isActive('task')}>
+        <FilterDivider />
+        <div class="flex items-center gap-1 shrink-0">
+          <TaskStatusDropdown
+            open={statusDropdownOpen}
+            onOpenChange={setStatusDropdownOpen}
+          />
+          <TaskAssigneeDropdown
+            open={assigneeDropdownOpen}
+            onOpenChange={setAssigneeDropdownOpen}
+          />
+        </div>
+      </Show>
       <div class="mx-0.5 w-px h-5 bg-edge-muted/50 shrink-0" />
       {/* Preview toggle */}
       <Tooltip
@@ -517,7 +558,22 @@ const SearchBar = () => {
             }
           }}
         >
-          <SearchIcon class="size-4.5 shrink-0" />
+          <Show
+            when={searchText()}
+            fallback={<SearchIcon class="size-4.5 shrink-0" />}
+          >
+            <button
+              type="button"
+              class="size-4.5 shrink-0 hover:opacity-60"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setSearchText('');
+              }}
+            >
+              <XIcon class="size-4.5" />
+            </button>
+          </Show>
           <span
             ref={(el) => {
               measureSpan = el;

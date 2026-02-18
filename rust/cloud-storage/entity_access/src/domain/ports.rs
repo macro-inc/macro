@@ -3,7 +3,9 @@
 //! These traits define the contracts that adapters must implement.
 
 use super::models::EntityType;
-use crate::domain::models::{AccessError, AccessLevel, ChannelRoleResult, EntityPermission};
+use crate::domain::models::{
+    AccessError, AccessLevel, ChannelRoleResult, EntityAccessReceipt, EntityPermission,
+};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use std::future::Future;
 use uuid::Uuid;
@@ -80,6 +82,16 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
 ///
 /// This service orchestrates access checks using the repository.
 pub trait EntityAccessService: Clone + Send + Sync + 'static {
+    /// Generates an *EntityAccessReceipt* for a given entity and user
+    /// If the user does not have access it will throw an error
+    fn generate_entity_access_receipt(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        user_org_id: Option<i64>,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<EntityAccessReceipt, AccessError>> + Send;
+
     /// Get the access level a user has for an entity.
     ///
     /// Returns `None` if the user has no access to the entity.

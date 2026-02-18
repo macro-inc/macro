@@ -281,15 +281,16 @@ export const getFilterWithID = (filterID: FilterID) => {
   return found;
 };
 
-export const FOLDER_DOCUMENT_TYPES = [
+export const FILE_ASSOCIATION_TYPES = [
   'code',
   'image',
   'pdf',
   'unknown',
 ] as const;
 
-export const getFolderFileTypes = (type: 'soup' | 'search') => {
-  return FOLDER_DOCUMENT_TYPES.flatMap((fileType) => {
+/** Expands file association types to file extensions for soup or search */
+export const getFileAssociations = (type: 'soup' | 'search') => {
+  return FILE_ASSOCIATION_TYPES.flatMap((fileType) => {
     if (fileType === 'code')
       return type === 'soup' ? ['assoc:code'] : codeFileExtensions;
     if (fileType === 'image')
@@ -366,7 +367,7 @@ export const QUERY_FILTERS = {
     channel_filters: { channel_ids: EXCLUDE },
     chat_filters: { chat_ids: EXCLUDE },
     email_filters: { recipients: EXCLUDE },
-    document_filters: { file_types: getFolderFileTypes('soup') },
+    document_filters: { file_types: getFileAssociations('soup') },
   },
 
   /** Channels filter - all channels (teams and people) */

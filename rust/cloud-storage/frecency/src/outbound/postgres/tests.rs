@@ -1,11 +1,13 @@
-use crate::domain::models::{AggregateId, FrecencyData};
+use crate::domain::models::{
+    AggregateId, FrecencyAction, FrecencyData, FrecencyEntity, FrecencyEvent,
+};
 
 use super::*;
 use chrono::Utc;
 use item_filters::ChatFilters;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use model_entity::{EntityType, TrackAction};
+use model_entity::EntityType;
 use std::collections::VecDeque;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -15,12 +17,12 @@ async fn test_set_event(pool: PgPool) {
 
     // Create a test event record
     let event = EventRecord {
-        event: TrackingData {
-            entity: EntityType::Document
-                .with_entity_str("doc123")
-                .with_connection_str("conn456")
-                .with_user_str(test_user_id),
-            action: TrackAction::Open,
+        event: FrecencyEvent {
+            entity: FrecencyEntity {
+                user_id: Cow::Borrowed(test_user_id),
+                entity: EntityType::Document.with_entity_str("doc123"),
+            },
+            action: FrecencyAction::Open,
         },
         timestamp: Utc::now(),
     };
@@ -32,7 +34,7 @@ async fn test_set_event(pool: PgPool) {
     // Verify the event was inserted
     let row = sqlx::query!(
         r#"
-        SELECT user_id, entity_type, event_type, entity_id, connection_id, was_processed
+        SELECT user_id, entity_type, event_type, entity_id, was_processed
         FROM frecency_events
         WHERE user_id = $1 AND entity_id = $2
         "#,
@@ -47,7 +49,6 @@ async fn test_set_event(pool: PgPool) {
     assert_eq!(row.entity_type, "document");
     assert_eq!(row.event_type, "open");
     assert_eq!(row.entity_id, "doc123");
-    assert_eq!(row.connection_id, "conn456");
     assert!(!row.was_processed);
 }
 
@@ -485,8 +486,7 @@ async fn test_processor_get_unprocessed_events(pool: PgPool) {
                 .event_record
                 .event
                 .entity
-                .extra
-                .extra
+                .entity
                 .entity_id
                 .starts_with("doc_")
         );

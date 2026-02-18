@@ -4,6 +4,7 @@ pub mod response;
 mod test;
 use document_sub_type::DocumentSubType;
 use macro_user_id::user_id::MacroUserIdStr;
+use schemars::JsonSchema;
 use utoipa::ToSchema;
 
 mod file_type;
@@ -142,7 +143,15 @@ pub struct BackfillSearchDocumentInformation {
     pub file_type: FileType,
 }
 #[derive(
-    sqlx::FromRow, serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone, ToSchema,
+    sqlx::FromRow,
+    serde::Serialize,
+    serde::Deserialize,
+    Eq,
+    PartialEq,
+    Debug,
+    Clone,
+    ToSchema,
+    JsonSchema,
 )]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentMetadata {
@@ -155,6 +164,7 @@ pub struct DocumentMetadata {
     /// The owner of the document
     #[schema(value_type = String)]
     #[sqlx(try_from = "String")]
+    #[schemars(with = "String")]
     pub owner: MacroUserIdStr<'static>,
     /// The name of the document
     pub document_name: String,

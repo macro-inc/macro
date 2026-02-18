@@ -351,4 +351,23 @@ impl DocumentRepo for PgDocumentRepo {
         .fetch_all(&self.pool)
         .await
     }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_document_text(&self, document_id: &str) -> Result<String, Self::Err> {
+        let content = sqlx::query!(
+            r#"
+            SELECT
+                d.content
+            FROM
+                "DocumentText" d
+            WHERE
+                d."documentId" = $1
+            "#,
+            document_id
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(content.content)
+    }
 }

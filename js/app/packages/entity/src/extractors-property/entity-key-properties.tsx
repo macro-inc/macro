@@ -8,7 +8,6 @@ import type {
   Property,
   PropertyApiValues,
 } from '@core/component/Properties/types';
-import { SYSTEM_PROPERTY_IDS } from '@core/component/Properties/constants';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { For, Show, createMemo } from 'solid-js';
 import { useSaveEntityPropertyMutation } from '@queries/properties/entity';
@@ -18,16 +17,10 @@ import {
   type EntityWithProperties,
   isTaskEntity,
 } from '../types/entity';
-import { soupPropertyToProperty } from './property-helpers';
-
-/**
- * Key property definition IDs in display order: Status, Priority, Assignees
- */
-const KEY_PROPERTY_ORDER = [
-  SYSTEM_PROPERTY_IDS.STATUS,
-  SYSTEM_PROPERTY_IDS.PRIORITY,
-  SYSTEM_PROPERTY_IDS.ASSIGNEES,
-] as const;
+import {
+  getSortedKeyProperties,
+  soupPropertyToProperty,
+} from './property-helpers';
 
 function getEntityType(entity: EntityData): EntityType {
   return match(entity)
@@ -67,24 +60,7 @@ export function EntityKeyProperties(props: EntityKeyPropertiesProps) {
 
   const keyProperties = createMemo((): Property[] => {
     const soupProperties = props.entity.properties ?? [];
-
-    const converted = soupProperties
-      .map(soupPropertyToProperty)
-      .filter((prop) =>
-        KEY_PROPERTY_ORDER.includes(
-          prop.propertyDefinitionId as (typeof KEY_PROPERTY_ORDER)[number]
-        )
-      );
-
-    return converted.sort((a, b) => {
-      const aIndex = KEY_PROPERTY_ORDER.indexOf(
-        a.propertyDefinitionId as (typeof KEY_PROPERTY_ORDER)[number]
-      );
-      const bIndex = KEY_PROPERTY_ORDER.indexOf(
-        b.propertyDefinitionId as (typeof KEY_PROPERTY_ORDER)[number]
-      );
-      return aIndex - bIndex;
-    });
+    return getSortedKeyProperties(soupProperties.map(soupPropertyToProperty));
   });
 
   const saveMutation = useSaveEntityPropertyMutation();

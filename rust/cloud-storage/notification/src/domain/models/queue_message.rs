@@ -5,8 +5,9 @@ use crate::domain::models::{
     apple::APNSPushNotification, mobile::MessageAttributes,
 };
 use chrono::{DateTime, Utc};
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use model_entity::{Entity, as_owned::IntoOwned};
+use cowlike::CowLike;
+use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::Entity;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;

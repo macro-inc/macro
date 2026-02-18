@@ -1,15 +1,15 @@
 //! This module provides the implementation for storing frecency data in postgres
 use crate::domain::{
     models::{
-        AggregateFrecency, AggregateId, EventRecord, EventRecordWithId, FrecencyData,
-        FrecencyPageRequest, TimestampWeight,
+        AggregateFrecency, AggregateId, EventRecord, EventRecordWithId, FrecencyAction,
+        FrecencyData, FrecencyEntity, FrecencyEvent, FrecencyPageRequest, TimestampWeight,
     },
     ports::{AggregateFrecencyStorage, EventRecordStorage, UnprocessedEventsRepo},
 };
 use chrono::{DateTime, Utc};
 use item_filters::ast::EntityFilterAst;
 use macro_user_id::{cowlike::CowLike, error::ParseErr, user_id::MacroUserIdStr};
-use model_entity::{Entity, EntityType, TrackAction, TrackingData};
+use model_entity::{Entity, EntityType};
 use sqlx::{PgPool, Postgres, QueryBuilder, Row, Transaction, prelude::FromRow};
 use std::{borrow::Cow, collections::VecDeque, str::FromStr};
 use thiserror::Error;
@@ -119,13 +119,12 @@ impl<'a> EventRow<'a, ()> {
         EventRow {
             id: (),
             user_id: event.event.entity.user_id,
-            entity_type: Cow::Borrowed(<&'static str>::from(
-                event.event.entity.extra.extra.entity_type,
-            )),
+            entity_type: Cow::Borrowed(<&'static str>::from(event.event.entity.entity.entity_type)),
             event_type: Cow::Borrowed(<&'static str>::from(event.event.action)),
             timestamp: event.timestamp,
-            connection_id: event.event.entity.extra.connection_id,
-            entity_id: event.event.entity.extra.extra.entity_id,
+            // connection_id is no longer in FrecencyEvent, use empty string for backwards compatibility
+            connection_id: Cow::Borrowed(""),
+            entity_id: event.event.entity.entity.entity_id,
             was_processed: false,
         }
     }
@@ -139,19 +138,20 @@ impl<'a> EventRow<'a, i64> {
             entity_type,
             event_type,
             timestamp,
-            connection_id,
+            connection_id: _, // connection_id is no longer needed
             entity_id,
             was_processed: _,
         } = self;
 
         Ok(EventRecordWithId {
             event_record: EventRecord {
-                event: TrackingData {
-                    entity: EntityType::from_str(&entity_type)?
-                        .with_entity_string(entity_id.into_owned())
-                        .with_connection_string(connection_id.into_owned())
-                        .with_user_string(user_id.into_owned()),
-                    action: TrackAction::from_str(&event_type)?,
+                event: FrecencyEvent {
+                    entity: FrecencyEntity {
+                        user_id,
+                        entity: EntityType::from_str(&entity_type)?
+                            .with_entity_string(entity_id.into_owned()),
+                    },
+                    action: FrecencyAction::from_str(&event_type)?,
                 },
                 timestamp,
             },

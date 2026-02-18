@@ -1,16 +1,49 @@
 //! This crate provides the utilities to compute aggregate frecency scores from some input event
 use chrono::{DateTime, Utc};
+use cowlike::CowLike;
 use item_filters::ast::EntityFilterAst;
-use macro_user_id::{cowlike::CowLike, error::ParseErr, user_id::MacroUserIdStr};
-use model_entity::{
-    Entity, TrackAction, TrackingData,
-    as_owned::{IntoOwned, ShallowClone},
-};
+use macro_user_id::{error::ParseErr, user_id::MacroUserIdStr};
+use model_entity::Entity;
 use num_traits::ToPrimitive;
 use ordered_float::OrderedFloat;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::collections::{HashMap, VecDeque};
+use strum::{Display, EnumString, IntoStaticStr};
 use thiserror::Error;
+
+/// Action types for frecency weight calculation
+#[derive(Debug, Clone, Copy, Display, EnumString, IntoStaticStr, Serialize, Deserialize)]
+#[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum FrecencyAction {
+    /// the entity was opened
+    Open,
+    /// the entity was pinged
+    Ping,
+    /// the entity was closed
+    Close,
+}
+
+/// Entity reference with user for frecency tracking
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FrecencyEntity<'a> {
+    /// The user id that triggered this event
+    pub user_id: Cow<'a, str>,
+    /// the entity being tracked
+    #[serde(flatten)]
+    pub entity: Entity<'a>,
+    // connection_id is intentionally omitted - serde will ignore it during deserialization
+}
+
+/// Event data for frecency tracking (replaces TrackingData)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FrecencyEvent<'a> {
+    /// the entity and user context for this event
+    pub entity: FrecencyEntity<'a>,
+    /// the action that occurred
+    pub action: FrecencyAction,
+}
 
 #[cfg(test)]
 mod tests;
@@ -20,7 +53,7 @@ mod tests;
 #[non_exhaustive]
 pub struct EventRecord<'a> {
     /// the entity on which the event occured + the user that triggered it
-    pub event: TrackingData<'a>,
+    pub event: FrecencyEvent<'a>,
     /// the timestamp of the event
     pub timestamp: chrono::DateTime<Utc>,
 }
@@ -38,15 +71,15 @@ pub struct EventRecordWithId<'a, T> {
 }
 
 impl EventRecord<'_> {
-    /// grants a caller read only access to the [TrackingData]
-    pub fn event(&self) -> &TrackingData<'_> {
+    /// grants a caller read only access to the [FrecencyEvent]
+    pub fn event(&self) -> &FrecencyEvent<'_> {
         &self.event
     }
 }
 
 impl<'a> EventRecord<'a> {
     /// create a new [EventRecord] using the current UTC time as the timestamp
-    pub fn new(event: TrackingData<'a>) -> Self {
+    pub fn new(event: FrecencyEvent<'a>) -> Self {
         EventRecord {
             event,
             timestamp: Utc::now(),
@@ -76,7 +109,7 @@ impl<'a> AggregateId<'a> {
     pub(crate) fn from_event_record<T>(r: &'a EventRecordWithId<'a, T>) -> Result<Self, ParseErr> {
         Ok(AggregateId {
             user_id: MacroUserIdStr::parse_from_str(r.event_record.event.entity.user_id.as_ref())?,
-            entity: r.event_record.event.entity.extra.extra.shallow_clone(),
+            entity: r.event_record.event.entity.entity.copied(),
         })
     }
 
@@ -151,12 +184,12 @@ trait WeightForAction {
     fn get_weight(&self) -> f64;
 }
 
-impl WeightForAction for TrackAction {
+impl WeightForAction for FrecencyAction {
     fn get_weight(&self) -> f64 {
         match self {
-            TrackAction::Open => 2.0,
-            TrackAction::Ping => 0.0,
-            TrackAction::Close => -1.0,
+            FrecencyAction::Open => 2.0,
+            FrecencyAction::Ping => 0.0,
+            FrecencyAction::Close => -1.0,
         }
     }
 }
@@ -171,7 +204,7 @@ const RECENCY_DECAY_RATE: f64 = 0.1;
 const FREQUENCY_PERCENT: f64 = 0.7;
 
 impl AggregateFrecency {
-    /// Create a new inital record from a given [TrackingData] event
+    /// Create a new inital record from a given [FrecencyEvent] event
     /// This should only be called if there is not yet an aggregate record for
     /// this user/this entity
     pub fn new_from_initial_action(
@@ -181,7 +214,7 @@ impl AggregateFrecency {
         let mut out = Self {
             id: AggregateId {
                 user_id: MacroUserIdStr::parse_from_str(&event.event.entity.user_id)?.into_owned(),
-                entity: event.event.entity.extra.extra.into_owned(),
+                entity: event.event.entity.entity.into_owned(),
             },
             data: FrecencyData {
                 event_count: 0,
@@ -210,7 +243,7 @@ impl AggregateFrecency {
         let mut out = Self {
             id: AggregateId {
                 user_id,
-                entity: event.event.entity.extra.extra.into_owned(),
+                entity: event.event.entity.entity.into_owned(),
             },
             data: FrecencyData {
                 event_count: 0,

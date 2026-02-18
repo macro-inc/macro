@@ -2,6 +2,7 @@ import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import type { SendBuilder } from '@block-chat/blockClient';
 import { TopBar } from '@block-chat/component/TopBar';
 import type { ChatData } from '@block-chat/definition';
+import { pendingLocationParamsSignal } from '@block-chat/signal/pendingLocationParams';
 import { useBlockId } from '@core/block';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
@@ -23,6 +24,7 @@ import {
   storeChatState,
 } from '@core/component/AI/util/storage';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
@@ -38,7 +40,6 @@ import { createCallback } from '@solid-primitives/rootless';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
 import type { LexicalEditor } from 'lexical';
 import { createEffect, createSignal, Show } from 'solid-js';
-import { pendingLocationParamsSignal } from '../signal/pendingLocationParams';
 
 export function Chat(props: { data: ChatData }) {
   const loadedState = getChatInputStoredState(props.data.chat.id);
@@ -71,7 +72,7 @@ function ChatInner(props: {
   const { navigatedFromJK } = useNavigatedFromJK();
   const [chatEditor, setChatEditor] = createSignal<LexicalEditor>();
   const [scrollRef, setScrollRef] = createSignal<HTMLElement>();
-
+  const [showStreamDebug, setShowStreamDebug] = createSignal(false);
   const chatMarkdownArea = useChatMarkdownArea({
     initialValue: props.loadedInputText,
     addAttachment: (a) => input.attachments.addAttachment(a),
@@ -203,6 +204,28 @@ function ChatInner(props: {
       isEntityDraggingOver={isDraggingOver}
     >
       <TopBar />
+      <Show when={DEV_MODE_ENV}>
+        <button
+          class="text-xs px-2 py-0.5 text-secondary hover:text-ink"
+          onClick={() => setShowStreamDebug((p) => !p)}
+        >
+          {showStreamDebug() ? 'Hide' : 'Show'} Stream Debug
+        </button>
+      </Show>
+      <Show when={showStreamDebug()}>
+        <div class="px-2 py-1 bg-menu border-b border-edge text-ink font-mono text-sm">
+          <Show when={chat.stream()} fallback={<div>No active stream</div>}>
+            {(stream) => (
+              <div class="flex gap-x-4">
+                <span>chunks: {stream().data().length}</span>
+                <span>isDone: {String(stream().isDone())}</span>
+                <span>model: {stream().model}</span>
+                <span>streamId: {stream().streamId ?? 'none'}</span>
+              </div>
+            )}
+          </Show>
+        </div>
+      </Show>
       <div class="size-full flex-1 min-h-0 p-2 relative">
         <div class="absolute inset-0 pointer-events-none" use:droppable />
         <div

@@ -1,6 +1,6 @@
 import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import { useAttachments } from '@core/component/AI/signal/attachment';
-import { useTabAttachments } from '@core/component/AI/signal/tabAttachments';
+import { globalTabAttachments } from '@core/component/AI/signal/globalAttachments';
 import type {
   Attachment,
   Attachments,
@@ -53,10 +53,9 @@ export function ChatInputProvider(
   const attachments = useAttachments(props.initialAttachments);
   const uploadQueue = useUploadAttachment();
 
-  const tabAttachments = useTabAttachments();
   if (ENABLE_AI_AUTO_TAB_ATTACHMENTS && props.autoAttach !== false) {
     createEffect(
-      on(tabAttachments, (tabs, p) => {
+      on(globalTabAttachments, (tabs, p) => {
         for (const prev of p ?? []) {
           if (!tabs.find((t) => t.attachmentId === prev.attachmentId)) {
             attachments.removeAttachment(prev.attachmentId);
@@ -164,13 +163,24 @@ export function ChatProvider(
   // Uses untrack for stream/messages to only fire on new WS streams or chatId change.
   createEffect(() => {
     const activeStreams = getEntityStreams('chat', props.chatId)();
+    const currentStream = untrack(stream);
 
     for (const s of activeStreams) {
       const sid = s.id()?.stream_id;
-      if (!sid || s.isDone()) continue;
+      if (!sid) {
+        console.warn('reject chat stream: no id');
+        continue;
+      }
+      if (currentStream?.isDone() && currentStream?.streamId === sid) {
+        console.warn('reject chat stream: duplicate stream');
+        continue;
+      }
 
       const isInMessages = untrack(() => messages().some((m) => m.id === sid));
-      if (isInMessages) continue;
+      if (isInMessages) {
+        console.warn('reject chat stream: already has message');
+        continue;
+      }
 
       setStream({
         data: s.data,

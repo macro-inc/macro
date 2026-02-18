@@ -4,3 +4,6 @@ mod sqlx '../sqlx.just'
 
 prepare_db:
     just sqlx::prepare_db {{ DATABASE_URL }}
+
+check:
+  cargo check --all-features

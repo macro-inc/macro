@@ -324,7 +324,7 @@ const documentCognitionService = new DocumentCognitionService(
         value: AUTHENTICATION_SERVICE_INTERNAL_API_KEY_SECRET_NAME,
       },
       {
-        name: 'REDIS_URL',
+        name: 'REDIS_HOST',
         value: pulumi.interpolate`redis://${connectionGatewayRedisUrl}`,
       },
       // OpenTelemetry / Datadog tracing configuration

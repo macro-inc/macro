@@ -1,0 +1,649 @@
+{
+  "user_id": "019c59e0-6267-7732-abe7-b2fd0daa2234",
+  "email_address": "you@example.com",
+  "provider": "Gmail",
+  "labels": [
+    {
+      "provider_label_id": "INBOX",
+      "name": "INBOX",
+      "label_type": "System"
+    },
+    {
+      "provider_label_id": "SPAM",
+      "name": "SPAM",
+      "label_type": "System"
+    },
+    {
+      "provider_label_id": "TRASH",
+      "name": "TRASH",
+      "label_type": "System"
+    },
+    {
+      "provider_label_id": "UNREAD",
+      "name": "UNREAD",
+      "label_type": "System"
+    },
+    {
+      "provider_label_id": "STARRED",
+      "name": "STARRED",
+      "label_type": "System"
+    },
+    {
+      "provider_label_id": "IMPORTANT",
+      "name": "IMPORTANT",
+      "label_type": "System"
+    },
+    {
+      "provider_label_id": "SENT",
+      "name": "SENT",
+      "label_type": "System"
+    },
+    {
+      "provider_label_id": "DRAFT",
+      "name": "DRAFT",
+      "label_type": "System"
+    },
+    {
+      "provider_label_id": "CATEGORY_PERSONAL",
+      "name": "CATEGORY_PERSONAL",
+      "label_type": "System"
+    },
+    {
+      "provider_label_id": "CATEGORY_SOCIAL",
+      "name": "CATEGORY_SOCIAL",
+      "label_type": "System"
+    },
+    {
+      "provider_label_id": "CATEGORY_PROMOTIONS",
+      "name": "CATEGORY_PROMOTIONS",
+      "label_type": "System"
+    },
+    {
+      "provider_label_id": "CATEGORY_UPDATES",
+      "name": "CATEGORY_UPDATES",
+      "label_type": "System"
+    },
+    {
+      "provider_label_id": "CATEGORY_FORUMS",
+      "name": "CATEGORY_FORUMS",
+      "label_type": "System"
+    }
+  ],
+  "threads": [
+    {
+      "provider_id": "cc2018b20b64c8f9",
+      "inbox_visible": true,
+      "is_read": true,
+      "messages": [
+        {
+          "provider_id": "44f57eda86ef48ac",
+          "subject": "Project Update",
+          "snippet": null,
+          "sent_at": "2020-07-27T18:24:46Z",
+          "is_read": true,
+          "is_starred": false,
+          "is_sent": false,
+          "from": {
+            "email": "fakecontact9@gmail.com",
+            "name": "Irene Taylor",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "you@example.com",
+              "name": "Me",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "invoice",
+          "label_ids": [
+            "INBOX"
+          ]
+        },
+        {
+          "provider_id": "be809cbc9d65a2f4",
+          "subject": "Project Update",
+          "snippet": null,
+          "sent_at": "2020-07-27T19:38:46Z",
+          "is_read": true,
+          "is_starred": false,
+          "is_sent": true,
+          "from": {
+            "email": "you@example.com",
+            "name": "Me",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "fakecontact8@gmail.com",
+              "name": "Henry Moore",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "quick_question",
+          "label_ids": [
+            "SENT",
+            "CATEGORY_UPDATES"
+          ]
+        }
+      ]
+    },
+    {
+      "provider_id": "989c182333a03676",
+      "inbox_visible": true,
+      "is_read": false,
+      "messages": [
+        {
+          "provider_id": "c4442d22af6618db",
+          "subject": "Feedback on the proposal",
+          "snippet": null,
+          "sent_at": "2020-10-01T18:05:15Z",
+          "is_read": true,
+          "is_starred": false,
+          "is_sent": false,
+          "from": {
+            "email": "fakecontact7@gmail.com",
+            "name": "Grace Wilson",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "you@example.com",
+              "name": "Me",
+              "photo_url": null
+            },
+            {
+              "email": "fakecontact7@gmail.com",
+              "name": "Grace Wilson",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "welcome",
+          "label_ids": [
+            "INBOX",
+            "UNREAD"
+          ]
+        },
+        {
+          "provider_id": "e7794d3cf427d8c0",
+          "subject": "Feedback on the proposal",
+          "snippet": null,
+          "sent_at": "2020-10-01T19:35:15Z",
+          "is_read": false,
+          "is_starred": false,
+          "is_sent": false,
+          "from": {
+            "email": "fakecontact6@gmail.com",
+            "name": "Frank Miller",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "you@example.com",
+              "name": "Me",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "invoice",
+          "label_ids": [
+            "INBOX",
+            "UNREAD"
+          ]
+        }
+      ]
+    },
+    {
+      "provider_id": "5d3fec426eac63be",
+      "inbox_visible": true,
+      "is_read": false,
+      "messages": [
+        {
+          "provider_id": "e5a6c88fc03f3f5e",
+          "subject": "Bug report: search not working",
+          "snippet": null,
+          "sent_at": "2021-05-07T05:16:46Z",
+          "is_read": true,
+          "is_starred": false,
+          "is_sent": true,
+          "from": {
+            "email": "you@example.com",
+            "name": "Me",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "fakecontact1@gmail.com",
+              "name": "Alice Johnson",
+              "photo_url": null
+            },
+            {
+              "email": "fakecontact8@gmail.com",
+              "name": "Henry Moore",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "welcome",
+          "label_ids": [
+            "SENT",
+            "UNREAD"
+          ]
+        },
+        {
+          "provider_id": "eff5ab05b66b7921",
+          "subject": "Bug report: search not working",
+          "snippet": null,
+          "sent_at": "2021-05-07T05:53:46Z",
+          "is_read": false,
+          "is_starred": false,
+          "is_sent": false,
+          "from": {
+            "email": "fakecontact5@gmail.com",
+            "name": "Eve Davis",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "you@example.com",
+              "name": "Me",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "project_update",
+          "label_ids": [
+            "INBOX",
+            "UNREAD"
+          ]
+        }
+      ]
+    },
+    {
+      "provider_id": "d0d787c7c8f4795b",
+      "inbox_visible": true,
+      "is_read": false,
+      "messages": [
+        {
+          "provider_id": "21cf47bd267dbd39",
+          "subject": "Bug report: search not working",
+          "snippet": null,
+          "sent_at": "2022-03-09T13:47:11Z",
+          "is_read": false,
+          "is_starred": false,
+          "is_sent": false,
+          "from": {
+            "email": "fakecontact3@gmail.com",
+            "name": "Carol Williams",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "you@example.com",
+              "name": "Me",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "meeting_followup",
+          "label_ids": [
+            "INBOX",
+            "UNREAD",
+            "CATEGORY_FORUMS"
+          ]
+        }
+      ]
+    },
+    {
+      "provider_id": "739b695aa411d84b",
+      "inbox_visible": true,
+      "is_read": false,
+      "messages": [
+        {
+          "provider_id": "f250c7a2959135ad",
+          "subject": "Project Update",
+          "snippet": null,
+          "sent_at": "2022-09-19T06:58:35Z",
+          "is_read": true,
+          "is_starred": true,
+          "is_sent": false,
+          "from": {
+            "email": "fakecontact7@gmail.com",
+            "name": "Grace Wilson",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "you@example.com",
+              "name": "Me",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "quick_question",
+          "label_ids": [
+            "INBOX",
+            "UNREAD"
+          ]
+        },
+        {
+          "provider_id": "90462477be6d1e9d",
+          "subject": "Project Update",
+          "snippet": null,
+          "sent_at": "2022-09-19T07:33:35Z",
+          "is_read": false,
+          "is_starred": false,
+          "is_sent": false,
+          "from": {
+            "email": "fakecontact4@gmail.com",
+            "name": "David Brown",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "you@example.com",
+              "name": "Me",
+              "photo_url": null
+            }
+          ],
+          "cc": [
+            {
+              "email": "fakecontact9@gmail.com",
+              "name": "Irene Taylor",
+              "photo_url": null
+            },
+            {
+              "email": "fakecontact7@gmail.com",
+              "name": "Grace Wilson",
+              "photo_url": null
+            }
+          ],
+          "body_template": "welcome",
+          "label_ids": [
+            "INBOX",
+            "UNREAD"
+          ]
+        }
+      ]
+    },
+    {
+      "provider_id": "a66c3ab4b00b2085",
+      "inbox_visible": true,
+      "is_read": true,
+      "messages": [
+        {
+          "provider_id": "e3d99a6c34b8f647",
+          "subject": "Action Required: Q3 Planning",
+          "snippet": null,
+          "sent_at": "2023-06-23T12:32:36Z",
+          "is_read": true,
+          "is_starred": false,
+          "is_sent": false,
+          "from": {
+            "email": "fakecontact8@gmail.com",
+            "name": "Henry Moore",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "you@example.com",
+              "name": "Me",
+              "photo_url": null
+            }
+          ],
+          "cc": [
+            {
+              "email": "fakecontact8@gmail.com",
+              "name": "Henry Moore",
+              "photo_url": null
+            }
+          ],
+          "body_template": "meeting_followup",
+          "label_ids": [
+            "INBOX",
+            "CATEGORY_FORUMS"
+          ]
+        },
+        {
+          "provider_id": "a183b1eb3ddcfd4c",
+          "subject": "Action Required: Q3 Planning",
+          "snippet": null,
+          "sent_at": "2023-06-23T14:06:36Z",
+          "is_read": true,
+          "is_starred": false,
+          "is_sent": false,
+          "from": {
+            "email": "fakecontact5@gmail.com",
+            "name": "Eve Davis",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "you@example.com",
+              "name": "Me",
+              "photo_url": null
+            }
+          ],
+          "cc": [
+            {
+              "email": "fakecontact7@gmail.com",
+              "name": "Grace Wilson",
+              "photo_url": null
+            }
+          ],
+          "body_template": "invoice",
+          "label_ids": [
+            "INBOX"
+          ]
+        }
+      ]
+    },
+    {
+      "provider_id": "30027e5e0d946b70",
+      "inbox_visible": true,
+      "is_read": true,
+      "messages": [
+        {
+          "provider_id": "6915ba8642f7f8e0",
+          "subject": "Meeting Follow-up",
+          "snippet": null,
+          "sent_at": "2024-01-21T01:06:54Z",
+          "is_read": true,
+          "is_starred": true,
+          "is_sent": false,
+          "from": {
+            "email": "fakecontact3@gmail.com",
+            "name": "Carol Williams",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "you@example.com",
+              "name": "Me",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "meeting_followup",
+          "label_ids": [
+            "INBOX",
+            "CATEGORY_SOCIAL"
+          ]
+        }
+      ]
+    },
+    {
+      "provider_id": "d4ba3bb4f026c4f2",
+      "inbox_visible": true,
+      "is_read": false,
+      "messages": [
+        {
+          "provider_id": "be8f186b8bf0836d",
+          "subject": "Quick Question",
+          "snippet": null,
+          "sent_at": "2024-09-14T18:32:32Z",
+          "is_read": true,
+          "is_starred": false,
+          "is_sent": true,
+          "from": {
+            "email": "you@example.com",
+            "name": "Me",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "fakecontact5@gmail.com",
+              "name": "Eve Davis",
+              "photo_url": null
+            },
+            {
+              "email": "fakecontact7@gmail.com",
+              "name": "Grace Wilson",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "meeting_followup",
+          "label_ids": [
+            "SENT",
+            "UNREAD"
+          ]
+        },
+        {
+          "provider_id": "1d50b112994dae44",
+          "subject": "Quick Question",
+          "snippet": null,
+          "sent_at": "2024-09-14T19:31:32Z",
+          "is_read": false,
+          "is_starred": true,
+          "is_sent": false,
+          "from": {
+            "email": "fakecontact9@gmail.com",
+            "name": "Irene Taylor",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "you@example.com",
+              "name": "Me",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "meeting_followup",
+          "label_ids": [
+            "INBOX",
+            "UNREAD"
+          ]
+        }
+      ]
+    },
+    {
+      "provider_id": "6765f4c498a6599e",
+      "inbox_visible": true,
+      "is_read": false,
+      "messages": [
+        {
+          "provider_id": "e2dea21810af096b",
+          "subject": "Lunch tomorrow?",
+          "snippet": null,
+          "sent_at": "2025-02-06T17:03:31Z",
+          "is_read": false,
+          "is_starred": true,
+          "is_sent": false,
+          "from": {
+            "email": "fakecontact3@gmail.com",
+            "name": "Carol Williams",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "you@example.com",
+              "name": "Me",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "meeting_followup",
+          "label_ids": [
+            "INBOX",
+            "UNREAD"
+          ]
+        }
+      ]
+    },
+    {
+      "provider_id": "5163cddad13a0c26",
+      "inbox_visible": true,
+      "is_read": true,
+      "messages": [
+        {
+          "provider_id": "92c00fff21d4db8a",
+          "subject": "Meeting Follow-up",
+          "snippet": null,
+          "sent_at": "2025-09-12T01:21:42Z",
+          "is_read": true,
+          "is_starred": false,
+          "is_sent": false,
+          "from": {
+            "email": "fakecontact4@gmail.com",
+            "name": "David Brown",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "you@example.com",
+              "name": "Me",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "welcome",
+          "label_ids": [
+            "INBOX"
+          ]
+        },
+        {
+          "provider_id": "170713b2648daf53",
+          "subject": "Meeting Follow-up",
+          "snippet": null,
+          "sent_at": "2025-09-12T02:21:42Z",
+          "is_read": true,
+          "is_starred": false,
+          "is_sent": true,
+          "from": {
+            "email": "you@example.com",
+            "name": "Me",
+            "photo_url": null
+          },
+          "to": [
+            {
+              "email": "fakecontact1@gmail.com",
+              "name": "Alice Johnson",
+              "photo_url": null
+            },
+            {
+              "email": "fakecontact7@gmail.com",
+              "name": "Grace Wilson",
+              "photo_url": null
+            },
+            {
+              "email": "fakecontact9@gmail.com",
+              "name": "Irene Taylor",
+              "photo_url": null
+            }
+          ],
+          "cc": [],
+          "body_template": "invoice",
+          "label_ids": [
+            "SENT",
+            "CATEGORY_PERSONAL"
+          ]
+        }
+      ]
+    }
+  ]
+}

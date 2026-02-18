@@ -1,4 +1,3 @@
-import { useMaybeBlockId } from '@core/block';
 import { useChannelsContext } from '@core/context/channels';
 import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
@@ -30,8 +29,6 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import { usePropertiesContext } from '../../../context/PropertiesContext';
-import type { Property } from '../../../types';
 import { useSearchInputFocus } from '../../../utils';
 import {
   type CombinedEntity,
@@ -46,15 +43,15 @@ import {
 } from './entityUtils';
 import { OptionCheckBox } from './OptionCheckBox';
 import { useKeyPressed } from '@core/util/useKeyPressed';
+import type { EntitySelectorConfig } from './types';
 
 type EntityInputProps = {
-  property: Property;
+  config: EntitySelectorConfig;
   selectedOptions: () => Set<string>;
   setSelectedOptions: (
     options: Set<string>,
     entityInfo?: { id: string; entity_type: string }[]
   ) => void;
-  setHasChanges: (hasChanges: boolean) => void;
   onClose?: () => void;
 };
 
@@ -135,9 +132,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
   let searchInputRef!: HTMLInputElement;
 
-  // Get current entity context for self-filtering
-  const blockId = useMaybeBlockId();
-  const { entityType: currentEntityType } = usePropertiesContext();
+  // Get self-filter context from config
+  const selfFilterEntityType = () => props.config.selfFilter?.entityType;
+  const selfFilterBlockId = () => props.config.selfFilter?.blockId;
 
   const historyQuery = useHistoryQuery();
   const contacts = useContacts();
@@ -175,8 +172,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   // Fetch emails for browsing (only when THREAD type)
   // Email queries for THREAD type or generic ENTITY (no specific type)
   const needsEmailSearch = () =>
-    props.property.specificEntityType === 'THREAD' ||
-    !props.property.specificEntityType;
+    props.config.specificEntityType === 'THREAD' ||
+    !props.config.specificEntityType;
 
   const emailsQuery = createEmailsInfiniteQuery(() => ({ view: 'all' }), {
     disabled: () => !needsEmailSearch(),
@@ -231,7 +228,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
   // Local entities (always available, used for instant results)
   const entities = createMemo(() => {
-    const { specificEntityType } = props.property;
+    const specificEntityType = props.config.specificEntityType;
 
     if (!specificEntityType) {
       return [
@@ -312,6 +309,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     const MAX_SEARCH_RESULTS = 20;
 
     // Filter out the current entity when selecting same entity type (e.g., parent task on a task)
+    const blockId = selfFilterBlockId();
+    const currentEntityType = selfFilterEntityType();
     const excludeFilter = blockId
       ? (e: CombinedEntity) =>
           !(getEntityType(e) === currentEntityType && e.id === blockId)
@@ -367,24 +366,15 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         }
       }
 
-      // Add missing selected entities from property value (handles pagination)
-      if (
-        props.property.valueType === 'ENTITY' &&
-        props.property.value != null
-      ) {
-        const allAvailableEntities = entities();
-
-        for (const ref of props.property.value) {
-          if (
-            selectedIds.has(ref.entity_id) &&
-            !entityIdsInResults.has(ref.entity_id)
-          ) {
-            const actualEntity = allAvailableEntities.find(
-              (e) => e.id === ref.entity_id
-            );
-            if (actualEntity) {
-              selected.push(actualEntity);
-            }
+      // Add missing selected entities that aren't in the visible results (handles pagination)
+      const allAvailableEntities = entities();
+      for (const selectedId of selectedIds) {
+        if (!entityIdsInResults.has(selectedId)) {
+          const actualEntity = allAvailableEntities.find(
+            (e) => e.id === selectedId
+          );
+          if (actualEntity) {
+            selected.push(actualEntity);
           }
         }
       }
@@ -397,7 +387,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     const newSelected = new Set(props.selectedOptions());
     const isCurrentlySelected = newSelected.has(entity.id);
 
-    if (props.property.isMultiSelect) {
+    if (props.config.isMultiSelect) {
       if (isCurrentlySelected) {
         newSelected.delete(entity.id);
       } else {
@@ -414,11 +404,10 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         entity_type: getEntityType(entity),
       },
     ]);
-    props.setHasChanges(true);
 
-    if (!props.property.isMultiSelect && props.onClose) {
+    if (!props.config.isMultiSelect && props.onClose) {
       props.onClose();
-    } else if (props.property.isMultiSelect && searchInputRef) {
+    } else if (props.config.isMultiSelect && searchInputRef) {
       // Keep input focused when multiselect is enabled
       setTimeout(() => searchInputRef.focus(), 0);
     }
@@ -500,7 +489,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                 }
               }
             }}
-            placeholder={`${props.property.isMultiSelect ? 'Add' : 'Change'} ${props.property.displayName.toLowerCase()}...`}
+            placeholder={props.config.placeholder}
           />
         </div>
       </div>
@@ -538,7 +527,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                     <div class="flex-shrink-0">
                       <OptionCheckBox
                         checked={isSelected()}
-                        multiselect={props.property.isMultiSelect}
+                        multiselect={props.config.isMultiSelect}
                       />
                     </div>
                   </div>
@@ -552,8 +541,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       <Show when={sortedEntities().length === 0}>
         <div class="text-center py-4 text-ink-muted text-sm">
           <Show when={!isLoadingEntities()} fallback={<span>Loading...</span>}>
-            No {getEntityTypePluralLabel(props.property.specificEntityType)}{' '}
-            found
+            No {getEntityTypePluralLabel(props.config.specificEntityType)} found
           </Show>
         </div>
       </Show>

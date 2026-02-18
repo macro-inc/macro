@@ -4,6 +4,8 @@ import { useChannelsContext } from '@core/context/channels';
 import type { ChannelWithParticipants } from '@core/user';
 import { isOk } from '@core/util/maybeResult';
 import type { EmailEntity } from '@entity';
+import type { HistoryItem } from '@queries/history/history';
+import { useHistoryQuery } from '@queries/history/history';
 import type {
   AttachmentType,
   ChannelType,
@@ -11,16 +13,14 @@ import type {
   FileType,
 } from '@service-cognition/generated/schemas';
 import { emailClient } from '@service-email/client';
-import { useHistoryQuery } from '@queries/history/history';
 import { useQuery } from '@tanstack/solid-query';
 import type { SplitContent } from 'app/component/split-layout/layoutManager';
 import {
-  globalSplitManager,
   globalPreviewEntities,
+  globalSplitManager,
 } from 'app/signal/splitLayout';
 import type { Accessor } from 'solid-js';
 import { createMemo } from 'solid-js';
-import type { HistoryItem } from '@queries/history/history';
 
 type Item = HistoryItem | null;
 
@@ -34,7 +34,7 @@ function convertSplitToAttachment(
   let attachmentType: AttachmentType;
 
   switch (split.type) {
-    case 'image':
+    case 'image': {
       if (!item || item.type !== 'document') return null;
       const imageName = item.name || 'Image';
       const imageExtension = (item.fileType || 'png') as FileType;
@@ -46,7 +46,8 @@ function convertSplitToAttachment(
       };
       attachmentType = 'document';
       break;
-    case 'channel':
+    }
+    case 'channel': {
       if (!channel) return null;
       const channelName = channel.name || 'Channel';
       const channelType: ChannelType = channel.channel_type || 'public';
@@ -57,7 +58,8 @@ function convertSplitToAttachment(
       };
       attachmentType = 'channel';
       break;
-    case 'email':
+    }
+    case 'email': {
       if (!email) return null;
       const emailSubject = email.name || 'No Subject';
       metadata = {
@@ -66,6 +68,7 @@ function convertSplitToAttachment(
       };
       attachmentType = 'email';
       break;
+    }
     case 'project':
       if (!item || item.type !== 'project') return null;
       metadata = {
@@ -74,7 +77,7 @@ function convertSplitToAttachment(
       };
       attachmentType = 'project';
       break;
-    default:
+    default: {
       if (!item || item.type !== 'document') return null;
       const documentName = item.name || 'Document';
       const documentType = (item.fileType || 'txt') as FileType;
@@ -85,6 +88,7 @@ function convertSplitToAttachment(
       };
       attachmentType = 'document';
       break;
+    }
   }
 
   return {

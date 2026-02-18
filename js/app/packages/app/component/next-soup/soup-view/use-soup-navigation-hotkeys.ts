@@ -171,12 +171,28 @@ export const useSoupNavigationHotkeys = (
 
   const previewPanel = useMaybePreviewPanel();
 
+  const getCollapsibleToggle = () => {
+    const focusedId = soup.focus.id();
+    if (!focusedId) return undefined;
+    const entityEl = document.querySelector(`[data-entity-id="${focusedId}"]`);
+    if (!entityEl) return undefined;
+    return entityEl.querySelector(
+      'button[data-collapsible-toggle]'
+    ) as HTMLButtonElement | null;
+  };
+
   registerHotkey({
     hotkey: ['h', 'arrowleft'],
     scopeId,
     description: 'Navigate to parent context',
     hotkeyToken: TOKENS.unifiedList.navigation.parent,
     keyDownHandler: () => {
+      const toggle = getCollapsibleToggle();
+      if (toggle?.dataset.collapsibleState === 'expanded') {
+        toggle.click();
+        return true;
+      }
+
       if (!previewPanel) return false;
 
       previewPanel.onFocusOut();
@@ -194,6 +210,12 @@ export const useSoupNavigationHotkeys = (
     description: 'Navigate to child context',
     hotkeyToken: TOKENS.unifiedList.navigation.child,
     keyDownHandler: () => {
+      const toggle = getCollapsibleToggle();
+      if (toggle?.dataset.collapsibleState === 'collapsed') {
+        toggle.click();
+        return true;
+      }
+
       const previewPanelContent = options.previewPanelRef();
       // If there is no preview or the preview already contains focus, skip
       if (

@@ -69,6 +69,12 @@ pub trait DocumentRepo: Send + Sync + 'static {
         &self,
         document_id: &str,
     ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
+
+    /// Get document text by document ID
+    fn get_document_text(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<String, Self::Err>> + Send;
 }
 
 /// Service interface for document operations.
@@ -101,4 +107,10 @@ pub trait DocumentService: Send + Sync + 'static {
         entity_access_receipt: EntityAccessReceipt,
         project_id: Option<String>,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+
+    /// Get the document text for a given document
+    fn get_document_text(
+        &self,
+        entity_access_receipt: EntityAccessReceipt,
+    ) -> impl Future<Output = Result<String, DocumentError>> + Send;
 }

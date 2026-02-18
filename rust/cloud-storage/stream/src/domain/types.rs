@@ -36,3 +36,9 @@ impl From<serde_json::error::Error> for StreamServiceError {
         Self::SerdeError(value)
     }
 }
+
+impl From<sqlx::Error> for StreamServiceError {
+    fn from(value: sqlx::Error) -> Self {
+        Self::StorageError(value.to_string())
+    }
+}

@@ -454,7 +454,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
   createEffect(() => {
     const highlightNodeId_ = highlightNodeId();
-    if (highlightNodeId_ && editorReady()) {
+    if (highlightNodeId_ && locationReady()) {
       setHighlightNodeId(undefined);
       const found = editor.dispatchCommand(
         GO_TO_NODE_ID_COMMAND,
