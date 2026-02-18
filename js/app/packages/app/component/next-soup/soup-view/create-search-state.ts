@@ -67,7 +67,11 @@ const getValidSearchFilters = (
   return filters.filter((f) => f.id !== 'explicit-noise');
 };
 
-const nameFuzzySearchFilter = (items: EntityData[], query: string) => {
+/** adds name highlight to item list based on fuzzy match */
+const nameFuzzySearchFilter = (
+  items: EntityData[],
+  query: string
+): EntityData[] | WithSearch<EntityData>[] => {
   if (!query || query.length === 0) return items;
 
   const matchResults = fuzzyMatch(query, items, (item) => item.name, {
