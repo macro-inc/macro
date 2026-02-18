@@ -7,6 +7,7 @@ use model_entity::EntityType;
 use rootcause::Report;
 use serde::{Deserialize, Serialize};
 use std::future::Future;
+use std::sync::Arc;
 use std::time::Duration;
 
 // ============================================================================
@@ -224,7 +225,7 @@ fn test_user_id() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("test@example.com").unwrap()
 }
 
-fn create_test_notification_row<T>(metadata: T) -> UserNotificationRow<T> {
+fn create_test_notification_row<T>(metadata: T) -> UserNotificationRow<Arc<T>> {
     UserNotificationRow {
         owner_id: test_user_id(),
         notification_id: uuid::Uuid::now_v7(),
@@ -236,7 +237,7 @@ fn create_test_notification_row<T>(metadata: T) -> UserNotificationRow<T> {
         viewed_at: None,
         updated_at: None,
         deleted_at: None,
-        notification_metadata: metadata,
+        notification_metadata: Arc::new(metadata),
         sender_id: None,
     }
 }
