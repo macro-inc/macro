@@ -95,7 +95,11 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     );
   };
 
-  const executeWithSoup = async (entities: EntityData[], soup: SoupState) => {
+  const executeWithSoup = async (
+    entities: EntityData[],
+    soup: SoupState,
+    onNavigate?: (entity: EntityData) => void
+  ) => {
     const currentIndex = soup.focus.index();
     const nextEntity =
       soup.items.at(currentIndex + 1) ?? soup.items.at(currentIndex - 1);
@@ -113,6 +117,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     soup.selection.clear();
     if (nextEntity) {
       soup.focus.set(nextEntity.id);
+      onNavigate?.(nextEntity);
     }
   };
 

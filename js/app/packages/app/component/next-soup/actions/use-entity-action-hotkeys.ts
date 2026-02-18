@@ -12,17 +12,20 @@ import {
 } from './index';
 import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
+import type { SplitHandle } from '@app/component/split-layout/layoutManager';
+import { openEntityInSplitFromUnifiedList } from '@app/component/next-soup/utils';
 
 type UseEntityActionHotkeysOptions = {
   scopeId: string;
   soup: SoupState;
+  splitHandle?: SplitHandle;
   condition?: () => boolean;
 };
 
 export const useEntityActionHotkeys = (
   options: UseEntityActionHotkeysOptions
 ) => {
-  const { scopeId, soup, condition } = options;
+  const { scopeId, soup, splitHandle, condition } = options;
 
   const userId = useUserId();
   const notificationSource = useGlobalNotificationSource();
@@ -52,6 +55,13 @@ export const useEntityActionHotkeys = (
     return focused ? [focused] : [];
   };
 
+  const openNextEntity = (entity: EntityData) => {
+    if (!splitHandle) return;
+    const handleContent = splitHandle.content().type;
+    if (handleContent === 'component' || handleContent === 'project') return;
+    openEntityInSplitFromUnifiedList(entity, { splitHandle });
+  };
+
   // Mark Done - 'e'
   registerHotkey({
     hotkey: ['e'],
@@ -63,7 +73,7 @@ export const useEntityActionHotkeys = (
       if (entities.length === 0) return false;
       if (!entities.some(markDone.canExecute)) return false;
 
-      markDone.executeWithSoup(entities, soup);
+      markDone.executeWithSoup(entities, soup, openNextEntity);
       return true;
     },
     condition: () => {
