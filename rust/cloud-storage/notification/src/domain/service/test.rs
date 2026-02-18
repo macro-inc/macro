@@ -409,13 +409,13 @@ impl MockQueue {
 }
 
 impl NotificationQueue for MockQueue {
-    async fn publish<T: serde::Serialize + Send + Sync, U: serde::Serialize + Send + Sync>(
+    async fn publish<'a, T: serde::Serialize + Send + Sync, U: serde::Serialize + Send + Sync>(
         &self,
-        messages: &[QueueMessage<'_, T, U>],
+        messages: impl Iterator<Item = QueueMessage<'a, T, U>> + Send,
     ) -> Result<(), Report> {
         let mut published = self.published.lock().unwrap();
         for message in messages {
-            let json = serde_json::to_value(message).unwrap();
+            let json = serde_json::to_value(&message).unwrap();
             published.push(json);
         }
         Ok(())
@@ -431,9 +431,9 @@ impl NotificationQueue for MockQueue {
 }
 
 impl NotificationQueue for std::sync::Arc<MockQueue> {
-    async fn publish<T: serde::Serialize + Send + Sync, U: serde::Serialize + Send + Sync>(
+    async fn publish<'a, T: serde::Serialize + Send + Sync, U: serde::Serialize + Send + Sync>(
         &self,
-        messages: &[QueueMessage<'_, T, U>],
+        messages: impl Iterator<Item = QueueMessage<'a, T, U>> + Send,
     ) -> Result<(), Report> {
         (**self).publish(messages).await
     }

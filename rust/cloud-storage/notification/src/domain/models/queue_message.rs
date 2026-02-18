@@ -1,9 +1,11 @@
 //! Queue message models for notification delivery via SQS.
 
+use std::sync::Arc;
+
 use crate::domain::models::{
     Notification, RateLimitConfig, RateLimitKey, SendNotificationRequest, TaggedContent,
     apple::APNSPushNotification,
-    email_notification_digest::{BatchSend, PushNotificationsEnabled},
+    email_notification_digest::{BatchSend, PushNotificationsEnabled, StateMachineDecisionA},
     mobile::MessageAttributes,
 };
 use chrono::{DateTime, Utc};
@@ -30,7 +32,7 @@ pub struct APNSTargets<T> {
     /// then we pass the state of the machine into the queue such that it
     /// can be resumed on the egress side.
     #[serde(default)]
-    pub bulk_digest_state_machine: Option<BatchSend<PushNotificationsEnabled>>,
+    pub bulk_digest_state_machine: Option<Arc<BatchSend<PushNotificationsEnabled>>>,
 }
 
 /// Email notification payload.
@@ -174,6 +176,26 @@ pub struct Node<'a, T, U> {
     pub on_failure: Option<Box<Node<'a, T, U>>>,
 }
 
+impl<'a, T, U> Node<'a, T, U> {
+    // applies an in place mapping of the node structure recursively
+    fn map_mut_inner<F>(&mut self, mut f: F)
+    where
+        F: FnMut(&mut NotificationChannel<'a, T, U>),
+    {
+        f(&mut self.notif);
+        self.on_failure.as_deref_mut().map(|p| f(&mut p.notif));
+    }
+
+    /// functional wrapper around [Self::map_mut_inner]
+    pub(crate) fn map_mut<F>(mut self, f: F) -> Self
+    where
+        F: FnMut(&mut NotificationChannel<'a, T, U>),
+    {
+        self.map_mut_inner(f);
+        self
+    }
+}
+
 /// Message published to SQS after DB persistence.
 /// Contains everything needed for delivery.
 #[derive(Debug, Serialize, Deserialize)]
@@ -186,6 +208,46 @@ pub struct QueueMessage<'a, T, U> {
     /// The methods on which we will attempt to deliver.
     /// This is an ALL relationship.
     pub content: Node<'a, T, U>,
+}
+
+/// a wrapper type over [QueueMessage] which can only be opened by providing the decision from the bulk digest state machine
+pub(crate) struct QueueMessageNeedsStateMachine<'a, T, U>(QueueMessage<'a, T, U>);
+
+impl<'a, T, U> QueueMessageNeedsStateMachine<'a, T, U> {
+    pub fn new(inner: QueueMessage<'a, T, U>) -> Self {
+        QueueMessageNeedsStateMachine(inner)
+    }
+
+    /// open the inner container by applying the state machine output to the necessary fields
+    pub fn with_state(self, state: StateMachineDecisionA<T>) -> QueueMessage<'a, T, U> {
+        let val = match state {
+            StateMachineDecisionA::Indeterminate(batch_send) => Some(Arc::new(batch_send)),
+            StateMachineDecisionA::SendImmediate(_)
+            | StateMachineDecisionA::DontSend(_)
+            | StateMachineDecisionA::BatchWasQueued(_) => None,
+        };
+
+        let QueueMessage {
+            message_type,
+            rate_limit,
+            content,
+        } = self.0;
+
+        let content = match val {
+            Some(v) => content.map_mut(move |notif| {
+                if let NotificationChannel::Ios(ios) = notif {
+                    ios.bulk_digest_state_machine.insert(v.clone());
+                }
+            }),
+            None => content,
+        };
+
+        QueueMessage {
+            message_type,
+            rate_limit,
+            content,
+        }
+    }
 }
 
 /// Custom data payload for a silent background push that clears a previously
