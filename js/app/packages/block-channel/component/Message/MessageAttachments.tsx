@@ -22,12 +22,13 @@ export function MessageAttachments(props: MessageAttachmentsProps) {
     <div
       class={cn(
         'allow-css-brackets mb-2',
-        !(
+        (!(
           props.documentAttachments()?.length > 0 ||
           props.imageAttachments()?.length > 0 ||
           props.videoAttachments()?.length > 0
         ) ||
-          (props.isDeleted() && 'hidden')
+          props.isDeleted()) &&
+          'hidden'
       )}
     >
       {/* Video attachments */}

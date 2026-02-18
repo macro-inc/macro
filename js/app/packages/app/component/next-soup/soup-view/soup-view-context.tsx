@@ -4,7 +4,6 @@ import {
   type SoupState,
 } from '@app/component/next-soup/create-soup-state';
 import { createSearchState } from '@app/component/next-soup/soup-view/create-search-state';
-import { sortEntitiesForSearch } from '@app/component/next-soup/soup-view/sort-options';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
 import {
   isTaskEntity,
@@ -16,7 +15,12 @@ import {
 } from '@entity';
 import { ENABLE_FEATURED_SEARCH_RESULTS } from '@core/constant/featureFlags';
 import { useNotificationsForEntity } from '@notifications';
-import type { SoupItemsQueryFilters } from '@queries/soup/items';
+import {
+  type SoupParams,
+  useSoupItemsQuery,
+  type SoupItemsQueryFilters,
+  type SoupBody,
+} from '@queries/soup/items';
 import {
   type Accessor,
   createContext,
@@ -61,8 +65,7 @@ interface SoupViewContextValues {
   source: DataSource<EntityData>;
   searchText: Accessor<string>;
   setSearchText: (value: string) => void;
-  isSearchDisabled: Accessor<boolean>;
-  featuredCount: Accessor<number>;
+  featuredIds: Accessor<string[]>;
   rows: Accessor<SoupRow[]>;
   queryFilters: Accessor<SoupItemsQueryFilters>;
   setQueryFilters: Setter<SoupItemsQueryFilters>;
@@ -98,6 +101,13 @@ export const SoupViewContextProvider: FlowComponent<
 > = (props) => {
   const soup = props.soup ?? createSoupState();
 
+  const soupParams = createMemo(
+    (): SoupParams => ({
+      limit: 100,
+      sort_method: soup.sort.active()[0]?.id ?? 'updated_at',
+    })
+  );
+
   const [internalQueryFilters, setQueryFilters] =
     createSignal<SoupItemsQueryFilters>({});
 
@@ -114,7 +124,7 @@ export const SoupViewContextProvider: FlowComponent<
     }
   });
 
-  const queryFilters = createMemo(() => {
+  const queryFilters = createMemo((): SoupItemsQueryFilters => {
     const base = internalQueryFilters();
 
     return {
@@ -142,6 +152,13 @@ export const SoupViewContextProvider: FlowComponent<
       },
     };
   });
+
+  const soupBody = createMemo(
+    (): SoupBody => ({
+      ...queryFilters(),
+      emailView: 'all',
+    })
+  );
 
   const search = createSearchState({ soup, queryFilters });
 
@@ -180,12 +197,22 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
+  const itemsQuery = useSoupItemsQuery(
+    () => ({
+      params: soupParams(),
+      body: soupBody(),
+    }),
+    () => ({
+      enabled: !search.isSearching(),
+    })
+  );
+
   const items = createMemo<SoupEntity[]>(
     (prev) => {
       const searching = search.isSearching();
 
       if (!searching) {
-        const data = search.itemsQuery.data;
+        const data = itemsQuery.data;
         if (!data) return prev;
         return data.map((e) =>
           isWithNotification(e) ? e : attachNotifications(e)
@@ -193,7 +220,7 @@ export const SoupViewContextProvider: FlowComponent<
       }
 
       const local = search.localFuzzyResults();
-      const service = search.freshSearchResults();
+      const service = search.serviceSearchResults();
 
       const merged: SoupEntity[] = [...service, ...local];
 
@@ -246,12 +273,7 @@ export const SoupViewContextProvider: FlowComponent<
 
     transformed = deduplicateEntities(next);
 
-    if (search.isSearching()) {
-      transformed.sort(sortEntitiesForSearch);
-    }
-
     const sorts = soup.sort.active();
-
     if (sorts.length > 0) {
       transformed.sort((a, b) => {
         for (const sort of sorts) {
@@ -265,13 +287,11 @@ export const SoupViewContextProvider: FlowComponent<
     return transformed;
   };
 
-  const frozenFeaturedIds = search.createFeaturedIds(baseEntities);
-
   const entities = () => {
     const base = baseEntities();
     if (!ENABLE_FEATURED_SEARCH_RESULTS || !search.isSearching()) return base;
 
-    const featuredIds = frozenFeaturedIds();
+    const featuredIds = search.featuredIds();
     if (featuredIds.length === 0) return base;
 
     const entityMap = new Map(base.map((e) => [e.id, e]));
@@ -285,23 +305,11 @@ export const SoupViewContextProvider: FlowComponent<
     return [...featured, ...rest];
   };
 
-  const featuredCount = createMemo(() => {
-    if (!ENABLE_FEATURED_SEARCH_RESULTS) return 0;
-    if (!search.isSearching()) return 0;
-    const featuredIdSet = new Set(frozenFeaturedIds());
-    let count = 0;
-    for (const e of entities()) {
-      if (!featuredIdSet.has(e.id)) break;
-      count++;
-    }
-    return count;
-  });
-
   const rows = createMemo(() => {
     return entities().map((e) => attachMethods(e));
   });
 
-  const { itemsQuery, searchQuery } = search;
+  const { searchQuery } = search;
 
   const context = {
     soup,
@@ -309,33 +317,31 @@ export const SoupViewContextProvider: FlowComponent<
       data: entities,
       isLoading: () => {
         if (itemsQuery.isLoading) return true;
-        if (searchQuery.isLoading && !itemsQuery.data) return true;
+        if (searchQuery.isLoading) return true;
         return false;
       },
-      isFetching: () => searchQuery.isFetching || itemsQuery.isFetching,
+      isFetching: () => itemsQuery.isFetching || searchQuery.isFetching,
       isFetchingNextPage: () =>
-        searchQuery.isFetchingNextPage || itemsQuery.isFetchingNextPage,
+        itemsQuery.isFetchingNextPage || searchQuery.isFetchingNextPage,
       hasNextPage: () => {
         return (
-          (searchQuery.isEnabled && searchQuery.hasNextPage) ||
-          (itemsQuery.isEnabled && itemsQuery.hasNextPage)
+          (itemsQuery.isEnabled && itemsQuery.hasNextPage) ||
+          (searchQuery.isEnabled && searchQuery.hasNextPage)
         );
       },
       fetchNextPage: () => {
-        if (searchQuery.isEnabled) {
-          searchQuery.fetchNextPage();
-        }
-
         if (itemsQuery.isEnabled) {
           itemsQuery.fetchNextPage();
+        }
+        if (searchQuery.isEnabled) {
+          searchQuery.fetchNextPage();
         }
       },
     },
     rows,
     searchText: search.searchText,
     setSearchText: search.setSearchText,
-    isSearchDisabled: search.isSearchDisabled,
-    featuredCount,
+    featuredIds: search.featuredIds,
     queryFilters,
     setQueryFilters,
     statusFilter,

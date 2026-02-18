@@ -255,19 +255,18 @@ const Root: Component<MessageRootProps> = (props) => {
             data-message-body-id={props.id}
           >
             <div
-              class="relative flex flex-col pl-[calc(var(--user-icon-width)/2+var(--body-padding))] ml-[var(--left-of-connector)]"
-              classList={{
-                'border-l': !props.hideConnectors,
-                'border-accent': props.isNewMessage,
-                'border-edge-muted': !props.isNewMessage,
-                'pt-1.5': !(
+              class={cn(
+                'relative flex flex-col pl-[calc(var(--user-icon-width)/2+var(--body-padding))] ml-[var(--left-of-connector)]',
+                !props.hideConnectors && 'border-l',
+                props.isNewMessage ? 'border-accent' : 'border-edge-muted',
+                !(
                   props.isConsecutive ||
                   props.isFirstMessage ||
                   props.isFirstInThread
-                ),
-                'pb-2': !props.isLastMessage,
-                'pb-4': props.hasThreadChildren ?? false,
-              }}
+                ) && 'pt-4',
+                props.isLastMessage && 'pb-4',
+                props.hasThreadChildren && 'pb-4'
+              )}
             >
               {/* User Icon */}
               <div class="absolute left-0 -translate-x-1/2">
@@ -392,7 +391,7 @@ const Root: Component<MessageRootProps> = (props) => {
                   <Button
                     onClick={props.onThreadAppend}
                     tabIndex={0}
-                    class="text-ink-muted flex flex-row justify-center items-center relative px-0 py-0 mb-3 hover:bg-transparent active:border-transparent active:bg-transparent active:text-inherit hover:opacity-100"
+                    class="text-ink-muted flex flex-row justify-center items-center relative px-0 py-0 hover:bg-transparent active:border-transparent active:bg-transparent active:text-inherit hover:opacity-100"
                   >
                     <div class="border border-edge-muted bg-menu hover:bg-hover hover-transition-bg flex flex-row justify-center items-center ml-2 mr-2 mb-2 size-[var(--user-icon-width)] touch:min-h-[var(--user-icon-width)] touch:min-w-[var(--user-icon-width)]">
                       <IconPlus class="size-1/2" />

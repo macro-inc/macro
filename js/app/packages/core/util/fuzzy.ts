@@ -73,7 +73,10 @@ export function highlightCommaSpaceSeparatedMatches(
 export function fuzzyMatch<T>(
   query: string,
   items: T[],
-  extract: (item: T) => string
+  extract: (item: T) => string,
+  options?: {
+    noSort?: boolean;
+  }
 ): FuzzyNameMatchResultWithItem<T>[] {
   if (!query)
     return items.map((item) => ({
@@ -143,8 +146,10 @@ export function fuzzyMatch<T>(
     }
   }
 
-  // Sort by score (higher is better for both channels and non-channels)
-  results.sort((a, b) => b.score - a.score);
+  if (!options?.noSort) {
+    // Sort by score (higher is better for both channels and non-channels)
+    results.sort((a, b) => b.score - a.score);
+  }
 
   return results;
 }

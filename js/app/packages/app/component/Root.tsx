@@ -72,6 +72,7 @@ import { Login } from './auth/Login';
 import { setCookie } from './auth/Shared';
 import { makeEmailAuthComponents } from './EmailAuth';
 import { GlobalAppStateProvider } from './GlobalAppState';
+import { SearchProvider } from './next-soup/search-context';
 import { Layout } from './Layout';
 import MacroJump from './MacroJump';
 import Onboarding from './Onboarding';
@@ -408,6 +409,7 @@ export function Root() {
             <ConfiguredGlobalAppStateProvider>
               <ChannelsContextProvider>
                 <QuickAccessProvider>
+                <SearchProvider>
                   <TabAttachmentsInit />
                   <ReactiveFavicon />
                   <Title>{tabTitle()}</Title>
@@ -431,6 +433,7 @@ export function Root() {
                   <Show when={ENABLE_WEBSOCKET_DEBUGGER}>
                     <WebsocketDebugger />
                   </Show>
+                </SearchProvider>
                 </QuickAccessProvider>
               </ChannelsContextProvider>
             </ConfiguredGlobalAppStateProvider>
