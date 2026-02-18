@@ -152,9 +152,11 @@ export const SoupView = () => {
             <SoupViewList />
           </SoupViewFileDropzone>
         </div>
-        <Show when={ENABLE_UNIFIED_LIST_AI_INPUT && !isMobile()}>
-          <SoupChatInput />
-        </Show>
+        <Suspense>
+          <Show when={ENABLE_UNIFIED_LIST_AI_INPUT && !isMobile()}>
+            <SoupChatInput />
+          </Show>
+        </Suspense>
       </SoupViewContextProvider>
     </SplitPanelContext.Provider>
   );
@@ -252,6 +254,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
   useEntityActionHotkeys({
     scopeId: scopeId(),
     soup,
+    splitHandle: panel.handle,
   });
 
   // Property editor
@@ -430,6 +433,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
     }
   );
 
+  const isProjectList = panel.handle.content().type === 'project';
+
   const getCacheKey = () => {
     let key = `soup-view-${panel.handle.id}`;
 
@@ -442,6 +447,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   onCleanup(() => {
     const virtualHandle = virtualizerHandle();
+
+    if (isProjectList) return;
 
     stateCache.set(getCacheKey(), {
       soup: {
@@ -458,7 +465,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
 
   let restored = false;
   const restoreState = () => {
-    if (restored) return;
+    if (restored || isProjectList) return;
 
     restored = true;
 

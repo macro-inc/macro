@@ -1,4 +1,4 @@
-use anyhow::{Context, anyhow};
+use anyhow::anyhow;
 use doppleganger::Mirror;
 use models_email::gmail::history::{GmailHistory, GmailHistoryDb};
 use sqlx::PgPool;
@@ -30,14 +30,7 @@ pub async fn fetch_history_id_for_link(
         db_provider as _
     )
     .fetch_optional(pool)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to fetch history_id for email {} and provider {}",
-            email_address,
-            db_provider.as_str()
-        )
-    })?;
+    .await?;
 
     // Extract the history_id field from the result
     Ok(result.map(|r| r.history_id))
@@ -71,13 +64,7 @@ pub async fn upsert_gmail_history(
         db_history.history_id
     )
     .execute(pool)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to upsert gmail_history for link_id {} with history_id {}",
-            db_history.link_id, db_history.history_id
-        )
-    })?;
+    .await?;
 
     Ok(())
 }

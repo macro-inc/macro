@@ -164,13 +164,24 @@ export function ChatProvider(
   // Uses untrack for stream/messages to only fire on new WS streams or chatId change.
   createEffect(() => {
     const activeStreams = getEntityStreams('chat', props.chatId)();
+    const currentStream = untrack(stream);
 
     for (const s of activeStreams) {
       const sid = s.id()?.stream_id;
-      if (!sid || s.isDone()) continue;
+      if (!sid) {
+        console.warn('reject chat stream: no id');
+        continue;
+      }
+      if (currentStream?.isDone() && currentStream?.streamId === sid) {
+        console.warn('reject chat stream: duplicate stream');
+        continue;
+      }
 
       const isInMessages = untrack(() => messages().some((m) => m.id === sid));
-      if (isInMessages) continue;
+      if (isInMessages) {
+        console.warn('reject chat stream: already has message');
+        continue;
+      }
 
       setStream({
         data: s.data,

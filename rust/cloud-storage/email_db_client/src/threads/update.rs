@@ -42,11 +42,7 @@ async fn update_db_thread_metadata(
         link_id,
     )
     .execute(tx)
-    .await
-    .context(format!(
-        "Failed to update timestamps for thread ID {} with link_id {}",
-        thread_id, link_id
-    ))?;
+    .await?;
 
     Ok(())
 }
@@ -74,11 +70,7 @@ pub async fn update_inbox_visible_status(
         link_id,
     )
     .execute(conn)
-    .await
-    .context(format!(
-        "Failed to update archived status to {} for thread ID {} with link_id {}",
-        inbox_visible, thread_id, link_id
-    ))?;
+    .await?;
 
     Ok(())
 }
@@ -136,11 +128,7 @@ pub async fn update_thread_provider_id(
         link_id,
     )
     .execute(conn)
-    .await
-    .context(format!(
-        "Failed to update provider_id to '{}' for thread ID {} with link_id {}",
-        provider_id, thread_id, link_id
-    ))?;
+    .await?;
 
     Ok(())
 }

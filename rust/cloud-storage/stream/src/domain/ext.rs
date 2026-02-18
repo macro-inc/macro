@@ -43,7 +43,7 @@ where
                     while let Some(payload) = stream.next().await {
                         if let Err(e) = writer.append(&writer_id, payload).await {
                             tracing::error!(error=?e, "failed to append to stream");
-                            return;
+                            break;
                         }
                     }
                 })

@@ -43,6 +43,10 @@ import { IS_MAC } from '@core/constant/isMac';
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { Dynamic } from 'solid-js/web';
 import { SortDropdown } from '@app/component/next-soup/soup-view/sort-dropdown';
+import {
+  TaskStatusDropdown,
+  TaskAssigneeDropdown,
+} from '@app/component/next-soup/soup-view/task-sub-filters';
 
 /**
  * Keyboard shortcuts for entity type filters.
@@ -128,6 +132,8 @@ const SoupFilters = () => {
   const emailActive = useEmailLinksStatus();
 
   const [sortDropdownOpen, setSortDropdownOpen] = createSignal(false);
+  const [statusDropdownOpen, setStatusDropdownOpen] = createSignal(false);
+  const [assigneeDropdownOpen, setAssigneeDropdownOpen] = createSignal(false);
 
   const toggleFocus = (id: 'signal' | 'noise') => {
     if (soup.filters.isActive(id)) {
@@ -294,6 +300,31 @@ const SoupFilters = () => {
     hotkeyDisposers.forEach((d) => d.dispose());
   });
 
+  const taskSubFilterHotkeyDisposers = [
+    registerHotkey({
+      hotkey: ['shift+s'],
+      scopeId: panel.splitHotkeyScope,
+      condition: () => soup.filters.isActive('task'),
+      description: 'Open status filter',
+      keyDownHandler: () => {
+        setStatusDropdownOpen((prev) => !prev);
+        return true;
+      },
+    }),
+    registerHotkey({
+      hotkey: ['shift+a'],
+      scopeId: panel.splitHotkeyScope,
+      condition: () => soup.filters.isActive('task'),
+      description: 'Open assignee filter',
+      keyDownHandler: () => {
+        setAssigneeDropdownOpen((prev) => !prev);
+        return true;
+      },
+    }),
+  ];
+
+  onCleanup(() => taskSubFilterHotkeyDisposers.forEach((d) => d.dispose()));
+
   return (
     <>
       {/* Inbox toggle */}
@@ -366,6 +397,19 @@ const SoupFilters = () => {
           }}
         </For>
       </div>
+      <Show when={soup.filters.isActive('task')}>
+        <FilterDivider />
+        <div class="flex items-center gap-1 shrink-0">
+          <TaskStatusDropdown
+            open={statusDropdownOpen}
+            onOpenChange={setStatusDropdownOpen}
+          />
+          <TaskAssigneeDropdown
+            open={assigneeDropdownOpen}
+            onOpenChange={setAssigneeDropdownOpen}
+          />
+        </div>
+      </Show>
       <div class="mx-0.5 w-px h-5 bg-edge-muted/50 shrink-0" />
       {/* Preview toggle */}
       <Tooltip

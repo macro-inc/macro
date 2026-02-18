@@ -167,15 +167,7 @@ export const createSearchState = ({
           .with('email', () => {
             includeArray.push('emails');
           })
-          .with(
-            'signal',
-            'noise',
-            'explicit-noise',
-            'unread',
-            'not-done',
-            () => {}
-          )
-          .exhaustive();
+          .otherwise(() => {});
       }
       return Array.from(new Set(includeArray));
     },

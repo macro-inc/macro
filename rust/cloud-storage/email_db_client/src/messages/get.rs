@@ -41,8 +41,7 @@ pub async fn get_message_sender_and_pretty_sender(
         link_id
     )
     .fetch_all(pool)
-    .await
-    .context("Failed to fetch message senders")?;
+    .await?;
 
     let mut result = HashMap::new();
     for row in rows {
@@ -160,13 +159,7 @@ pub async fn fetch_messages_metadata(
         thread_db_id
     )
     .fetch_all(&mut *conn)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to fetch message previews for thread {}",
-            thread_db_id
-        )
-    })?;
+    .await?;
 
     if db_messages.is_empty() {
         return Ok(Vec::new());
@@ -174,17 +167,12 @@ pub async fn fetch_messages_metadata(
 
     let message_ids: Vec<Uuid> = db_messages.iter().map(|m| m.id).collect();
 
-    let senders_map = contacts::get::get_senders_contacts_map(&mut *conn, &message_ids)
-        .await
-        .context("Failed to fetch senders in bulk")?;
+    let senders_map = contacts::get::get_senders_contacts_map(&mut *conn, &message_ids).await?;
 
-    let recipients_map = contacts::get::fetch_db_recipients_in_bulk(&mut *conn, &message_ids)
-        .await
-        .context("Failed to fetch recipients in bulk")?;
+    let recipients_map =
+        contacts::get::fetch_db_recipients_in_bulk(&mut *conn, &message_ids).await?;
 
-    let labels_map = get::fetch_message_labels_in_bulk(&mut *conn, &message_ids)
-        .await
-        .context("Failed to fetch message labels in bulk")?;
+    let labels_map = get::fetch_message_labels_in_bulk(&mut *conn, &message_ids).await?;
 
     let mut processed_messages = Vec::with_capacity(db_messages.len());
     for message in db_messages {
@@ -248,13 +236,7 @@ pub async fn fetch_messages_with_labels(
         link_id
     )
     .fetch_all(conn)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to fetch message previews for thread {}",
-            thread_db_id
-        )
-    })?;
+    .await?;
 
     if db_messages.is_empty() {
         return Ok(Vec::new());
@@ -262,9 +244,7 @@ pub async fn fetch_messages_with_labels(
 
     let message_ids: Vec<Uuid> = db_messages.iter().map(|m| m.id).collect();
 
-    let labels_map = get::fetch_message_labels_in_bulk(conn, &message_ids)
-        .await
-        .context("Failed to fetch message labels in bulk")?;
+    let labels_map = get::fetch_message_labels_in_bulk(conn, &message_ids).await?;
 
     let mut processed_messages = Vec::with_capacity(db_messages.len());
     for message in db_messages {
@@ -283,6 +263,7 @@ pub async fn fetch_messages_with_labels(
 }
 
 // gets the headers we need for threading messages correctly
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_message_threading_headers(
     pool: &PgPool,
     message_id: Uuid,
@@ -302,13 +283,7 @@ pub async fn get_message_threading_headers(
         link_id
     )
         .fetch_optional(pool)
-        .await
-        .with_context(|| {
-            format!(
-                "Failed to fetch threading headers for message {} with link_id {}",
-                message_id, link_id
-            )
-        })?;
+        .await?;
 
     match row_option {
         Some(row) => Ok((row.message_id, row.references)),
@@ -317,7 +292,7 @@ pub async fn get_message_threading_headers(
 }
 
 /// Retrieves the ID of a message based on link_id and global_id, if exists
-#[tracing::instrument(skip(executor), level = "debug")]
+#[tracing::instrument(skip(executor), err)]
 pub async fn get_message_id_by_global_id<'e, E>(
     executor: E,
     link_id: Uuid,
@@ -336,13 +311,7 @@ where
         global_id
     )
     .fetch_optional(executor)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to fetch message ID for link_id {} and global_id {}",
-            link_id, global_id
-        )
-    })?;
+    .await?;
 
     Ok(message_id)
 }
@@ -391,13 +360,7 @@ pub async fn get_message_to_send(
         link_id
     )
     .fetch_one(pool)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to fetch paginated messages for message DB ID {}",
-            message_id
-        )
-    })?;
+    .await?;
 
     // fetch data from each table concurrently
     let (sender_res, recipients_res) = tokio::try_join!(
@@ -494,13 +457,7 @@ pub async fn get_messages_by_thread_id(
         offset
     )
     .fetch_all(pool)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to fetch paginated messages for thread DB ID {}",
-            thread_db_id
-        )
-    })?;
+    .await?;
 
     Ok(db_messages)
 }

@@ -5,9 +5,15 @@ import {
 } from '@app/component/next-soup/create-soup-state';
 import { createSearchState } from '@app/component/next-soup/soup-view/create-search-state';
 import { deduplicateEntities } from '@app/component/next-soup/utils';
+import {
+  isTaskEntity,
+  isWithNotification,
+  type EntityData,
+  type TaskEntityWithProperties,
+  type WithNotification,
+  type WithSearch,
+} from '@entity';
 import { ENABLE_FEATURED_SEARCH_RESULTS } from '@core/constant/featureFlags';
-import type { EntityData, WithNotification, WithSearch } from '@entity';
-import { isWithNotification } from '@entity';
 import { useNotificationsForEntity } from '@notifications';
 import {
   type SoupParams,
@@ -18,6 +24,7 @@ import {
 import {
   type Accessor,
   createContext,
+  createEffect,
   createMemo,
   createRenderEffect,
   createSignal,
@@ -27,6 +34,7 @@ import {
   Suspense,
   useContext,
 } from 'solid-js';
+import { matchesTaskSubFilters } from './task-sub-filter-matcher';
 
 type Row<T> = {
   original: T;
@@ -61,6 +69,10 @@ interface SoupViewContextValues {
   rows: Accessor<SoupRow[]>;
   queryFilters: Accessor<SoupItemsQueryFilters>;
   setQueryFilters: Setter<SoupItemsQueryFilters>;
+  statusFilter: Accessor<string | undefined>;
+  setStatusFilter: Setter<string | undefined>;
+  assigneeFilter: Accessor<string | undefined>;
+  setAssigneeFilter: Setter<string | undefined>;
 }
 
 export const SoupViewContext = createContext<SoupViewContextValues>();
@@ -98,6 +110,19 @@ export const SoupViewContextProvider: FlowComponent<
 
   const [internalQueryFilters, setQueryFilters] =
     createSignal<SoupItemsQueryFilters>({});
+
+  const [statusFilter, setStatusFilter] = createSignal<string | undefined>();
+  const [assigneeFilter, setAssigneeFilter] = createSignal<
+    string | undefined
+  >();
+
+  // Clear sub-filters when task filter is deactivated
+  createEffect(() => {
+    if (!soup.filters.isActive('task')) {
+      setStatusFilter(undefined);
+      setAssigneeFilter(undefined);
+    }
+  });
 
   const queryFilters = createMemo((): SoupItemsQueryFilters => {
     const base = internalQueryFilters();
@@ -219,9 +244,28 @@ export const SoupViewContextProvider: FlowComponent<
 
     const next = [];
 
+    const currentStatusFilter = statusFilter();
+    const currentAssigneeFilter = assigneeFilter();
+
     for (const entity of transformed) {
       if (!filters.every((f) => f.predicate(entity))) {
         continue;
+      }
+
+      // Apply task sub-filters
+      if (
+        (currentStatusFilter || currentAssigneeFilter) &&
+        isTaskEntity(entity)
+      ) {
+        const taskEntity = entity as unknown as TaskEntityWithProperties;
+        if (
+          !matchesTaskSubFilters(taskEntity, {
+            statusFilter: currentStatusFilter,
+            assigneeFilter: currentAssigneeFilter,
+          })
+        ) {
+          continue;
+        }
       }
 
       next.push(entity);
@@ -315,6 +359,10 @@ export const SoupViewContextProvider: FlowComponent<
     featuredIds: search.featuredIds,
     queryFilters,
     setQueryFilters,
+    statusFilter,
+    setStatusFilter,
+    assigneeFilter,
+    setAssigneeFilter,
   };
 
   return (

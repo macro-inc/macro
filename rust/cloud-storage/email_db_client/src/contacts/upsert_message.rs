@@ -2,7 +2,6 @@
 mod tests;
 
 use crate::contacts::normalize;
-use anyhow::Context;
 use models_email::db;
 use models_email::db::contact::ContactPhotoless;
 use models_email::db::{address, message};
@@ -85,7 +84,7 @@ pub async fn parse_and_upsert_message_contacts(
             results.recipients = db_recipients;
         }
         Err(e) => {
-            return Err(e).context("Failed during batch upsert of email addresses");
+            return Err(e);
         }
     }
 
@@ -296,12 +295,8 @@ pub async fn upsert_message_recipients(
         &contact_ids_to_insert,
         &recipient_types_to_insert as &[db::address::EmailRecipientType]
     )
-        .execute(&mut *tx)
-        .await
-        .with_context(|| format!(
-            "Failed to delete old message recipients. message_id: {}, contact_ids_to_insert: {:?}, recipient_types_to_insert: {:?}",
-            message_id, contact_ids_to_insert, recipient_types_to_insert
-        ))?;
+    .execute(&mut *tx)
+    .await?;
 
     sqlx::query!(
         r#"
@@ -314,12 +309,8 @@ pub async fn upsert_message_recipients(
         &names_to_insert as &[Option<String>],
         &recipient_types_to_insert as &[db::address::EmailRecipientType]
     )
-        .execute(&mut *tx)
-        .await
-        .with_context(|| format!(
-            "Failed to batch insert message recipients. message_ids_to_insert: {:?}, contact_ids_to_insert: {:?}, recipient_types_to_insert: {:?}",
-            message_ids_to_insert, contact_ids_to_insert, recipient_types_to_insert
-        ))?;
+    .execute(&mut *tx)
+    .await?;
 
     Ok(())
 }
