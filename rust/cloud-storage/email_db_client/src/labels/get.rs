@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod test;
 
-use anyhow::{Context, anyhow};
+use anyhow::anyhow;
 use models_email::db;
 use models_email::email::service::label;
 use sqlx::PgPool;
@@ -34,14 +34,8 @@ pub async fn fetch_message_label(
         provider_label_id,
         link_id
     )
-        .fetch_optional(pool)
-        .await
-        .with_context(|| {
-            format!(
-                "Failed to fetch message_label for message_id {} with provider_label_id {} and link_id {}",
-                message_id, provider_label_id, link_id
-            )
-        })?;
+    .fetch_optional(pool)
+    .await?;
 
     Ok(record.map(Into::into))
 }
@@ -51,14 +45,14 @@ pub async fn fetch_message_labels(
     pool: &PgPool,
     message_db_id: Uuid,
 ) -> anyhow::Result<Vec<db::label::Label>> {
-    sqlx::query_as!(
+    let labels = sqlx::query_as!(
         db::label::Label,
         r#"
-        SELECT 
-            l.id, 
-            l.link_id, 
-            l.provider_label_id, 
-            l.name, 
+        SELECT
+            l.id,
+            l.link_id,
+            l.provider_label_id,
+            l.name,
             l.created_at,
             l.message_list_visibility as "message_list_visibility: _",
             l.label_list_visibility as "label_list_visibility: _",
@@ -71,8 +65,9 @@ pub async fn fetch_message_labels(
         message_db_id
     )
     .fetch_all(pool)
-    .await
-    .context("Failed to fetch labels")
+    .await?;
+
+    Ok(labels)
 }
 
 #[tracing::instrument(skip(executor), err)]
@@ -121,8 +116,7 @@ where
         message_ids
     )
     .fetch_all(executor)
-    .await
-    .context("Failed to fetch message labels in bulk")?;
+    .await?;
 
     let mut labels_map = HashMap::new();
     for row in results {
@@ -147,7 +141,7 @@ where
     Ok(labels_map)
 }
 
-#[tracing::instrument(skip(pool), level = "debug")]
+#[tracing::instrument(skip(pool), err)]
 pub async fn find_missing_provider_labels(
     pool: &PgPool,
     link_id: Uuid,
@@ -171,13 +165,7 @@ pub async fn find_missing_provider_labels(
         &provider_label_ids_vec
     )
     .fetch_all(pool)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to check for existing labels. link_id: {}, provider_label_ids: {:?}",
-            link_id, provider_label_ids_vec
-        )
-    })?;
+    .await?;
 
     // Create a set of existing provider label IDs for efficient lookup
     let existing_provider_label_ids: std::collections::HashSet<String> = existing_labels
@@ -218,8 +206,7 @@ pub async fn fetch_labels_by_link_id(
         link_id
     )
     .fetch_all(pool)
-    .await
-    .with_context(|| format!("Failed to fetch labels for link_id {}", link_id))?;
+    .await?;
 
     // Convert db::label::Label to service::label::Label
     let service_labels: Vec<label::Label> = db_labels.into_iter().map(Into::into).collect();
@@ -252,13 +239,7 @@ pub async fn fetch_label_by_id(
         link_id
     )
     .fetch_optional(pool)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to fetch label with id {} and link_id {}",
-            label_id, link_id
-        )
-    })?;
+    .await?;
 
     // Convert db::label::Label to service::label::Label if found
     let service_label = db_label.map(Into::into);

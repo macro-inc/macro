@@ -1,5 +1,4 @@
 use crate::threads;
-use anyhow::Context;
 use models_email::email::service::message;
 use sqlx::types::Uuid;
 use sqlx::{Executor, Postgres};
@@ -14,19 +13,15 @@ pub async fn delete_message_with_tx(
     update_thread_metadata: bool,
 ) -> anyhow::Result<Option<Uuid>> {
     // delete the message itself
-    delete_db_message(&mut *tx, message.db_id)
-        .await
-        .context("Failed to delete db message")?;
+    delete_db_message(&mut *tx, message.db_id).await?;
 
     // if it was the only message in the thread, delete the thread too
-    let deleted_thread = threads::delete::delete_thread_if_empty(&mut *tx, message.thread_db_id)
-        .await
-        .context("Failed to attempt thread deletion")?;
+    let deleted_thread =
+        threads::delete::delete_thread_if_empty(&mut *tx, message.thread_db_id).await?;
 
     if !deleted_thread && update_thread_metadata {
         threads::update::update_thread_metadata(&mut *tx, message.thread_db_id, message.link_id)
-            .await
-            .context("Failed to update thread metadata")?;
+            .await?;
     }
 
     if deleted_thread {
@@ -44,8 +39,7 @@ where
     // Delete the message
     let result = sqlx::query!(r#"DELETE FROM email_messages WHERE id = $1"#, message_id)
         .execute(executor)
-        .await
-        .with_context(|| format!("Failed to delete message with id {}", message_id))?;
+        .await?;
 
     // Check if any rows were affected
     if result.rows_affected() == 0 {

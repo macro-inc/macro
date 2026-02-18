@@ -1,6 +1,6 @@
 use super::util::StreamGuard;
-use crate::domain::{StreamId, StreamManager, StreamManagerExt};
-use crate::outbound::redis::*;
+use crate::domain::{StreamId, StreamManager, StreamRepoExt};
+use crate::outbound::redis_pg::*;
 use futures::StreamExt;
 use serial_test::serial;
 use std::sync::Arc;
@@ -11,7 +11,7 @@ use std::time::Duration;
 #[ignore = "Redis doesn't exist in CI"]
 async fn test_no_streams() {
     let (service, _stream_id, _guard) = StreamGuard::new("manager_no_streams").await;
-    let manager = RedisStreamManager::new(service);
+    let manager = RedisPostgresStreamManager::new(service);
 
     let mut stream = manager
         .subscribe("sender_1".into(), "entity_1".into())
@@ -29,7 +29,7 @@ async fn test_no_streams() {
 async fn test_sub_then_start_related() {
     let entity_id = "manager_sub_then_start";
     let (service, stream_id, _guard) = StreamGuard::new(entity_id).await;
-    let manager = RedisStreamManager::new(service.clone());
+    let manager = RedisPostgresStreamManager::new(service.clone());
 
     let mut stream = manager
         .subscribe("sender_1".into(), entity_id.into())
@@ -57,7 +57,7 @@ async fn test_sub_then_start_related() {
 #[ignore = "Redis doesn't exist in CI"]
 async fn test_sub_then_start_unrelated() {
     let (service, stream_id, _guard) = StreamGuard::new("manager_unrelated_entity").await;
-    let manager = RedisStreamManager::new(service.clone());
+    let manager = RedisPostgresStreamManager::new(service.clone());
 
     let mut stream = manager
         .subscribe("sender_1".into(), "different_entity".into())
@@ -102,7 +102,7 @@ async fn test_start_then_sub() {
         .expect("append should succeed");
 
     // Now create manager and subscribe
-    let manager = RedisStreamManager::new(service.clone());
+    let manager = RedisPostgresStreamManager::new(service.clone());
 
     let mut stream = manager
         .subscribe("sender_1".into(), entity_id.into())
@@ -163,7 +163,7 @@ async fn test_late_join_multiple_streams_same_entity() {
         .expect("append should succeed");
 
     // Late join - subscribe after both streams have data
-    let manager = RedisStreamManager::new(service.clone());
+    let manager = RedisPostgresStreamManager::new(service.clone());
 
     let mut stream = manager
         .subscribe("sender_1".into(), entity_id.into())
@@ -209,7 +209,7 @@ async fn test_late_join_during_active_streaming() {
         .await
         .expect("append should succeed");
 
-    let manager = RedisStreamManager::new(service.clone());
+    let manager = RedisPostgresStreamManager::new(service.clone());
 
     // First subscriber joins
     let mut stream1 = manager
@@ -287,7 +287,7 @@ async fn test_unsub_during_stream() {
     let entity_id = "manager_unsub_during";
     let sender_id = "sender_unsub";
     let (service, stream_id, _guard) = StreamGuard::new(entity_id).await;
-    let manager = RedisStreamManager::new(service.clone());
+    let manager = RedisPostgresStreamManager::new(service.clone());
 
     // Create stream with initial item
     let item1 = serde_json::json!({"seq": 1});
@@ -335,7 +335,7 @@ async fn test_unsub_no_items_after() {
     let entity_id = "manager_unsub_no_items_after";
     let sender_id = "sender_unsub_no_items";
     let (service, stream_id, _guard) = StreamGuard::new(entity_id).await;
-    let manager = RedisStreamManager::new(service.clone());
+    let manager = RedisPostgresStreamManager::new(service.clone());
 
     service
         .append(&stream_id, serde_json::json!({"seq": 1}))
@@ -394,7 +394,7 @@ async fn test_connection_closed() {
 
     let entity_id = "manager_connection_closed";
     let (service, stream_id, _guard) = StreamGuard::new(entity_id).await;
-    let manager = RedisStreamManager::new(service.clone());
+    let manager = RedisPostgresStreamManager::new(service.clone());
 
     // Subscribe and immediately unsubscribe
     let _stream = manager
@@ -444,7 +444,7 @@ async fn test_stream_ends_close() {
         .await
         .expect("append should succeed");
 
-    let manager = RedisStreamManager::new(service.clone());
+    let manager = RedisPostgresStreamManager::new(service.clone());
 
     let mut stream = manager
         .subscribe("sender_1".into(), entity_id.into())
@@ -482,7 +482,7 @@ async fn util_test_stream_exhausted(
 ) {
     let entity_id = stream_id.entity_id.clone();
 
-    let manager = RedisStreamManager::new(service.clone());
+    let manager = RedisPostgresStreamManager::new(service.clone());
 
     let mut stream = manager
         .subscribe(entity_id.clone(), entity_id.clone())
@@ -493,7 +493,7 @@ async fn util_test_stream_exhausted(
     let items: Vec<serde_json::Value> = (1..=3).map(|i| serde_json::json!({"seq": i})).collect();
     let input_stream = futures::stream::iter(items.clone());
 
-    service.from_async_stream(stream_id.clone(), Box::pin(input_stream), None);
+    service.from_async_stream(stream_id.clone(), Box::pin(input_stream), None, None);
 
     let mut count = 0;
     while let Ok(Some(_)) = tokio::time::timeout(Duration::from_millis(1000), stream.next()).await {

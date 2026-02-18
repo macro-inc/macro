@@ -1,5 +1,6 @@
 use anyhow::Context;
 pub use macro_env::Environment;
+use macro_env_var::env_var;
 
 use crate::core::constants::DEFAULT_DOCUMENT_BATCH_LIMIT;
 /// The configuration parameters for the application.
@@ -9,7 +10,6 @@ use crate::core::constants::DEFAULT_DOCUMENT_BATCH_LIMIT;
 /// populate the Docker container
 ///
 /// See `.env.sample` in cognitive-workspace root for details.
-#[derive(Debug)]
 pub struct Config {
     /// The connection URL for the Postgres database this application should use.
     pub database_url: String,
@@ -42,13 +42,19 @@ pub struct Config {
     pub authentication_service_url: String,
     /// authentication service secret key (for soup service)
     pub authentication_service_secret_key: String,
-    /// Redis URL for stream service
-    pub redis_url: String,
+    /// Redis host for stream service
+    pub redis_host: RedisHost,
 }
 
+env_var!(
+    pub struct EnvVars {
+        pub RedisHost,
+    }
+);
+
 impl Config {
-    #[tracing::instrument(err)]
-    pub fn from_env() -> anyhow::Result<Self> {
+    #[tracing::instrument(err, skip_all)]
+    pub fn from_env(env_vars: EnvVars) -> anyhow::Result<Self> {
         let database_url =
             std::env::var("DATABASE_URL").context("DATABASE_URL must be provided")?;
         let port: usize = std::env::var("PORT")
@@ -103,7 +109,7 @@ impl Config {
         let authentication_service_secret_key = std::env::var("AUTHENTICATION_SERVICE_SECRET_KEY")
             .context("AUTHENTICATION_SERVICE_SECRET_KEY must be provided")?;
 
-        let redis_url = std::env::var("REDIS_URL").context("REDIS_URL must be provided")?;
+        let EnvVars { redis_host } = env_vars;
 
         Ok(Config {
             database_url,
@@ -124,7 +130,7 @@ impl Config {
             static_file_service_url,
             authentication_service_url,
             authentication_service_secret_key,
-            redis_url,
+            redis_host,
         })
     }
 
@@ -149,7 +155,7 @@ impl Config {
             static_file_service_url: Default::default(),
             authentication_service_url: Default::default(),
             authentication_service_secret_key: Default::default(),
-            redis_url: Default::default(),
+            redis_host: RedisHost::Comptime("redis://localhost:6379"),
         }
     }
 }

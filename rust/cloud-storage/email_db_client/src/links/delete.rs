@@ -1,4 +1,3 @@
-use anyhow::Context;
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 
@@ -15,8 +14,7 @@ pub async fn delete_link_by_id(pool: &PgPool, link_id: Uuid) -> anyhow::Result<u
         link_id
     )
     .execute(pool)
-    .await
-    .with_context(|| format!("Failed to delete link with ID {}", link_id))?;
+    .await?;
 
     Ok(result.rows_affected())
 }

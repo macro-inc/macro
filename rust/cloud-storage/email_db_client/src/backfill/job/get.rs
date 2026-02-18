@@ -1,4 +1,3 @@
-use anyhow::Context;
 use models_email::email::db;
 use models_email::email::service;
 use sqlx::PgPool;
@@ -28,8 +27,7 @@ pub async fn get_backfill_job(
         job_id
     )
     .fetch_optional(pool)
-    .await
-    .with_context(|| format!("Failed to query backfill job with ID: {}", job_id))?;
+    .await?;
 
     Ok(record.map(Into::into))
 }
@@ -61,8 +59,7 @@ pub async fn get_backfill_job_with_link_id(
         link_id
     )
     .fetch_optional(pool)
-    .await
-    .with_context(|| format!("Failed to query backfill job with ID: {}", job_id))?;
+    .await?;
 
     Ok(record.map(Into::into))
 }
@@ -91,8 +88,7 @@ pub async fn get_active_backfill_job(
         link_id
     )
     .fetch_optional(pool)
-    .await
-    .with_context(|| "Failed to query for active backfill job".to_string())?;
+    .await?;
 
     Ok(record.map(Into::into))
 }
@@ -125,13 +121,7 @@ pub async fn get_recent_jobs_by_fusionauth_user_id(
         fusionauth_user_id
     )
     .fetch_all(pool)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to fetch recent backfill jobs for fusionauth_user_id: {}",
-            fusionauth_user_id
-        )
-    })?;
+    .await?;
 
     // Convert all database records to service models
     let jobs = records.into_iter().map(Into::into).collect();

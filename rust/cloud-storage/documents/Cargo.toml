@@ -5,10 +5,20 @@ publish = false
 version = "0.1.0"
 
 [features]
-default = ["ports", "inbound", "outbound", "axum"]
+default = ["ports", "inbound", "outbound", "axum", "ai_tools"]
 ports = ["dep:tokio"]
 inbound = ["axum", "ports"]
 outbound = ["ports"]
+ai_tools = [
+    "dep:ai",
+    "dep:async-trait",
+    "dep:schemars",
+    "dep:lexical_client",
+    "dep:model_file_type",
+    "dep:reqwest",
+    "ports",
+    "outbound"
+]
 axum = [
     "dep:axum",
     "dep:axum-extra",
@@ -53,6 +63,14 @@ sqlx = { workspace = true }
 sync_service_client = { path = "../sync_service_client" }
 urlencoding = { workspace = true }
 
+# AI Tool dependencies
+ai = { path = "../ai", optional = true }
+async-trait = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
+lexical_client = { path = "../lexical_client", optional = true }
+model_file_type = { path = "../model_file_type", optional = true }
+reqwest = { workspace = true, optional = true }
+
 [dev-dependencies]
 http-body-util = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
@@ -60,3 +78,4 @@ mockall = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tower = { workspace = true }
+dotenvy = { workspace = true }

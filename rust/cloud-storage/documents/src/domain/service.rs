@@ -362,7 +362,7 @@ impl<R: DocumentRepo> DocumentService for DocumentServiceImpl<R> {
         project_id: Option<String>,
     ) -> Result<(), DocumentError> {
         self.repo
-            .soft_delete_document(&entity_access_receipt.entity().entity_id)
+            .soft_delete_document(&entity_access_receipt.entity().entity_id.clone())
             .await
             .map_err(|e| DocumentError::Internal(e.into()))?;
 
@@ -401,5 +401,15 @@ impl<R: DocumentRepo> DocumentService for DocumentServiceImpl<R> {
                     DocumentError::Internal(err)
                 }
             })
+    }
+
+    async fn get_document_text(
+        &self,
+        entity_access_receipt: EntityAccessReceipt,
+    ) -> Result<String, DocumentError> {
+        self.repo
+            .get_document_text(&entity_access_receipt.entity().entity_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))
     }
 }

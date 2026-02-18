@@ -30,7 +30,7 @@ use secretsmanager_client::LocalOrRemoteSecret;
 use service::dynamodb::create_dynamo_db_connection_manager;
 use service::redis::poll_messages;
 use sqlx::postgres::PgPoolOptions;
-use stream::outbound::redis::{RedisStreamManager, RedisStreamRepo};
+use stream::outbound::redis_pg::{RedisPostgresStreamManager, RedisPostgresStreamRepo};
 use tower_http::cors::CorsLayer;
 
 env_var!(
@@ -86,11 +86,6 @@ async fn main() -> Result<()> {
 
     let connection_manager = create_dynamo_db_connection_manager(dynamodb_client.clone()).await?;
 
-    let stream_service = RedisStreamRepo::new((*redis_client).clone())
-        .await
-        .context("failed to create stream service")?;
-    let stream_manager = RedisStreamManager::new(stream_service.obj());
-
     let pgpool = PgPoolOptions::new()
         .min_connections(3)
         .max_connections(20)
@@ -103,6 +98,9 @@ async fn main() -> Result<()> {
             .as_ref(),
         )
         .await?;
+
+    let stream_service = RedisPostgresStreamRepo::new((*redis_client).clone(), pgpool.clone());
+    let stream_manager = RedisPostgresStreamManager::new(stream_service.obj());
 
     let context = context::ApiContext {
         connection_manager,

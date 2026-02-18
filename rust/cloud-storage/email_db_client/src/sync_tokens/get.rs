@@ -1,9 +1,9 @@
-use anyhow::Context;
 use models_email::{db, service};
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 
 /// fetches the contacts sync tokens for a given link id
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_sync_tokens_by_link_id(
     pool: &PgPool,
     link_id: Uuid,
@@ -18,8 +18,7 @@ pub async fn get_sync_tokens_by_link_id(
         link_id
     )
     .fetch_optional(pool)
-    .await
-    .with_context(|| format!("Failed to fetch sync token for link_id {}", link_id))?;
+    .await?;
 
     Ok(db_sync_tokens.map(Into::into))
 }

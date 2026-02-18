@@ -7,7 +7,9 @@ import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
 import { fuzzyMatch } from '@core/util/fuzzy';
 import { mergeAdjacentMacroEmTags } from '@core/util/searchHighlight';
+import { createFreshSearch } from '@core/util/freshSort';
 import type { EntityData, WithSearch } from '@entity';
+import { isChannelEntity } from '@entity';
 import {
   type SoupItemsQueryFilters,
   type SoupItemsQueryArgs,
@@ -23,11 +25,13 @@ import {
   createMemo,
   createRenderEffect,
   createSignal,
+  on,
 } from 'solid-js';
 import { match } from 'ts-pattern';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 300;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
+const FEATURED_COUNT = 3;
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
@@ -98,15 +102,7 @@ export const createSearchState = ({
           .with('email', () => {
             includeArray.push('emails');
           })
-          .with(
-            'signal',
-            'noise',
-            'explicit-noise',
-            'unread',
-            'not-done',
-            () => {}
-          )
-          .exhaustive();
+          .otherwise(() => {});
       }
       return Array.from(new Set(includeArray));
     },
@@ -171,13 +167,21 @@ export const createSearchState = ({
     }
   );
 
+  const emailExcludedQueryFilters = createMemo((): SoupItemsQueryFilters => {
+    return {
+      ...queryFilters(),
+      email_filters: {
+        recipients: [NIL_UUID],
+      },
+    };
+  });
   const itemsQuery = useSoupItemsQuery(
     () => ({
       params: {
         limit: 100,
         sort_method: soup.sort.active()[0]?.id ?? 'updated_at',
       },
-      body: { ...queryFilters(), emailView: 'all' },
+      body: { ...emailExcludedQueryFilters() },
     }),
     () => ({
       enabled: isSearchDisabled(),
@@ -243,13 +247,48 @@ export const createSearchState = ({
     return searchQuery.data ?? [];
   });
 
+  const freshSearch = createFreshSearch<EntityData>(
+    {
+      useViewedAt: true,
+      channelBoost: 3,
+      fuzzyWeight: 0.7,
+      timeWeight: 0.3,
+      minFuzzyThreshold: 0.1,
+      commaSeparatedChannelMatch: true,
+    },
+    (item) => item.name,
+    (item) => isChannelEntity(item),
+    (item) => item
+  );
+
+  const createFeaturedIds = (pool: Accessor<EntityData[]>) => {
+    const [frozen, setFrozen] = createSignal<string[]>([]);
+    createRenderEffect(
+      on(
+        () =>
+          [isSearching(), debouncedSearchForLocal(), queryFilters()] as const,
+        ([searching, query]) => {
+          if (!searching || !query) {
+            setFrozen([]);
+            return;
+          }
+          const results = freshSearch(pool(), query);
+          setFrozen(results.slice(0, FEATURED_COUNT).map((r) => r.item.id));
+        }
+      )
+    );
+    return frozen;
+  };
+
   return {
     searchText,
     setSearchText,
     isSearching,
     isSearchDisabled,
+    debouncedSearchForLocal,
     localFuzzyResults,
     freshSearchResults,
+    createFeaturedIds,
     itemsQuery,
     searchQuery,
   };

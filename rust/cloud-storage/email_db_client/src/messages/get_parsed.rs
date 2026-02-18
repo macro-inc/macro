@@ -36,13 +36,7 @@ pub async fn get_parsed_message_by_id(
         message_id,
     )
         .fetch_optional(&mut *conn)
-        .await
-        .with_context(|| {
-            format!(
-                "Failed to fetch message {}",
-                message_id
-            )
-        })?;
+        .await?;
 
     let db_message: db::message::Message = if let Some(db_message) = db_message {
         db_message
@@ -165,10 +159,7 @@ pub async fn get_paginated_parsed_messages_by_thread_id(
     offset: i64,
     limit: i64,
 ) -> anyhow::Result<Vec<message::ParsedMessage>> {
-    let mut conn = pool
-        .acquire()
-        .await
-        .context("failed to acquire connection")?;
+    let mut conn = pool.acquire().await?;
 
     // Get messages for thread
     let db_messages: Vec<db::message::Message> = sqlx::query_as!(

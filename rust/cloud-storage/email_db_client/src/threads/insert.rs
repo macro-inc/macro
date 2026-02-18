@@ -39,7 +39,7 @@ pub async fn insert_thread_and_messages(
         recipient_map.insert(message.provider_id.clone().unwrap(), recipients);
     }
 
-    let mut tx = pool.begin().await.context("Failed to begin transaction")?;
+    let mut tx = pool.begin().await?;
 
     let result = async {
         // Insert thread
@@ -87,7 +87,7 @@ pub async fn insert_thread_and_messages(
         return Err(err);
     }
 
-    tx.commit().await.context("Failed to commit transaction")?;
+    tx.commit().await?;
 
     Ok(result.unwrap())
 }
@@ -125,11 +125,7 @@ where
         db_thread.latest_non_spam_message_ts,
     )
         .fetch_one(executor)
-        .await
-        .context(format!(
-            "Failed to upsert thread with provider id {} for link_id {}",
-            db_thread.provider_id.unwrap_or_default(), db_thread.link_id
-        ))?;
+        .await?;
 
     Ok(result.id)
 }

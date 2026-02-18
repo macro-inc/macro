@@ -1,10 +1,13 @@
 //! Entity access service implementation.
 
 use crate::domain::{
-    models::{AccessError, AccessLevel, ChannelRoleResult, EntityPermission, EntityType},
+    models::{
+        AccessError, AccessLevel, ChannelRoleResult, Entity, EntityAccessAuth, EntityAccessReceipt,
+        EntityPermission, EntityType,
+    },
     ports::{AccessRepository, EntityAccessService},
 };
-use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+use macro_user_id::{cowlike::CowLike, lowercased::Lowercase, user_id::MacroUserId};
 use std::str::FromStr;
 use uuid::Uuid;
 
@@ -73,6 +76,28 @@ impl<R> EntityAccessService for EntityAccessServiceImpl<R>
 where
     R: AccessRepository,
 {
+    #[tracing::instrument(err, skip(self))]
+    async fn generate_entity_access_receipt(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        user_org_id: Option<i64>,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<EntityAccessReceipt, AccessError> {
+        let entity_permission = self
+            .get_entity_permission(Some(user_id), entity_id, entity_type, user_org_id)
+            .await?;
+
+        Ok(EntityAccessReceipt {
+            auth: EntityAccessAuth::Authenticated(user_id.clone().into_owned()),
+            entity: Entity {
+                entity_id: entity_id.to_string(),
+                entity_type,
+            },
+            entity_permission,
+        })
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn get_access_level(
         &self,

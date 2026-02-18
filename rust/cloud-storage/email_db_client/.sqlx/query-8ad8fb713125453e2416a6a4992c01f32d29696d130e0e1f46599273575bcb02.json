@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT \n            l.id, \n            l.link_id, \n            l.provider_label_id, \n            l.name, \n            l.created_at,\n            l.message_list_visibility as \"message_list_visibility: _\",\n            l.label_list_visibility as \"label_list_visibility: _\",\n            l.type as \"type_: _\"\n        FROM email_message_labels ml\n        JOIN email_labels l ON ml.label_id = l.id\n        WHERE ml.message_id = $1\n        ORDER BY l.name\n        ",
+  "query": "\n        SELECT\n            l.id,\n            l.link_id,\n            l.provider_label_id,\n            l.name,\n            l.created_at,\n            l.message_list_visibility as \"message_list_visibility: _\",\n            l.label_list_visibility as \"label_list_visibility: _\",\n            l.type as \"type_: _\"\n        FROM email_message_labels ml\n        JOIN email_labels l ON ml.label_id = l.id\n        WHERE ml.message_id = $1\n        ORDER BY l.name\n        ",
   "describe": {
     "columns": [
       {
@@ -91,5 +91,5 @@
       false
     ]
   },
-  "hash": "59703c07f7d64f1f958f7255a0924c5b15e327756371063442762797bc3e42f3"
+  "hash": "8ad8fb713125453e2416a6a4992c01f32d29696d130e0e1f46599273575bcb02"
 }

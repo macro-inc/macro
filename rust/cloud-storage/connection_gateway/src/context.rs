@@ -22,10 +22,10 @@ pub struct ApiContext {
 
 impl ApiContext {
     #[tracing::instrument(err, skip(self))]
-    pub async fn get_multiplexed_tokio_connection(
+    pub async fn get_multiplexed_async_connection(
         &self,
     ) -> Result<MultiplexedConnection, RedisError> {
-        self.redis_client.get_multiplexed_tokio_connection().await
+        self.redis_client.get_multiplexed_async_connection().await
     }
 }
 
