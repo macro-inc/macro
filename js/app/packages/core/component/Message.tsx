@@ -260,12 +260,11 @@ const Root: Component<MessageRootProps> = (props) => {
                 'border-l': !props.hideConnectors,
                 'border-accent': props.isNewMessage,
                 'border-edge-muted': !props.isNewMessage,
-                'pt-1.5': !(
+                'pt-2': !(
                   props.isConsecutive ||
                   props.isFirstMessage ||
                   props.isFirstInThread
                 ),
-                'pb-2': !props.isLastMessage,
                 'pb-4': props.hasThreadChildren ?? false,
               }}
             >
