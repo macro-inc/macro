@@ -8,7 +8,7 @@ export const SettingsWrapper = () => {
   const isAuthenticated = useIsAuthenticated();
 
   return (
-    <Show when={isAuthenticated()}>
+    <Show when={isAuthenticated() && isSettingsPanelOpen()}>
       <Resize.Panel
         id="settings-panel"
         minSize={440}

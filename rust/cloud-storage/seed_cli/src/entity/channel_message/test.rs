@@ -11,6 +11,21 @@ use crate::service::db::Db;
 
 use super::*;
 
+// ── Parsing tests (seed) ──────────────────────────────────
+
+#[test]
+fn parse_channel_message_seed() {
+    let cli = Cli::try_parse_from(["seed_cli", "channel-message", "seed"]).unwrap();
+
+    match cli.command {
+        crate::entity::EntityCommand::ChannelMessage(args) => match args.command {
+            ChannelMessageCommand::Seed => {}
+            other => panic!("expected Seed, got {other:?}"),
+        },
+        other => panic!("expected ChannelMessage, got {other:?}"),
+    }
+}
+
 // ── Parsing tests ──────────────────────────────────────────
 
 #[test]
@@ -390,4 +405,110 @@ async fn bulk_create_invalid_csv_fails() {
 
     let result = args.execute(mock_ctx(mock_db)).await;
     assert!(result.is_err());
+}
+
+// ── Seed CSV tests ────────────────────────────────────────
+
+#[tokio::test]
+async fn seed_creates_all_messages() {
+    let msg1 = Uuid::new_v4();
+    let msg2 = Uuid::new_v4();
+    let channel_id = Uuid::new_v4();
+    let csv = format!(
+        "message_id,channel_id,sender_id,content,thread_id\n\
+         {msg1},{channel_id},macro|alice@example.com,Hello world,\n\
+         {msg2},{channel_id},macro|bob@example.com,Hi there,\n"
+    );
+    let file = write_temp_csv(&csv);
+
+    let mut mock_db = Db::default();
+    mock_db
+        .expect_seed_message()
+        .times(2)
+        .returning(|opts| Ok(opts.message_id));
+
+    let result = seed_from_file(mock_ctx(mock_db), file.path()).await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn seed_uses_provided_message_id() {
+    let msg_id = Uuid::new_v4();
+    let channel_id = Uuid::new_v4();
+    let csv = format!(
+        "message_id,channel_id,sender_id,content,thread_id\n\
+         {msg_id},{channel_id},macro|alice@example.com,Test message,\n"
+    );
+    let file = write_temp_csv(&csv);
+
+    let mut mock_db = Db::default();
+    mock_db
+        .expect_seed_message()
+        .times(1)
+        .withf(move |opts| opts.message_id == msg_id && opts.channel_id == channel_id)
+        .returning(|opts| Ok(opts.message_id));
+
+    let result = seed_from_file(mock_ctx(mock_db), file.path()).await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn seed_with_thread_id() {
+    let msg_id = Uuid::new_v4();
+    let channel_id = Uuid::new_v4();
+    let thread_id = Uuid::new_v4();
+    let csv = format!(
+        "message_id,channel_id,sender_id,content,thread_id\n\
+         {msg_id},{channel_id},macro|alice@example.com,Thread reply,{thread_id}\n"
+    );
+    let file = write_temp_csv(&csv);
+
+    let mut mock_db = Db::default();
+    mock_db
+        .expect_seed_message()
+        .times(1)
+        .withf(move |opts| opts.thread_id == Some(thread_id))
+        .returning(|opts| Ok(opts.message_id));
+
+    let result = seed_from_file(mock_ctx(mock_db), file.path()).await;
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn seed_empty_csv_fails() {
+    let csv = "message_id,channel_id,sender_id,content,thread_id\n";
+    let file = write_temp_csv(csv);
+
+    let mock_db = Db::default();
+
+    let result = seed_from_file(mock_ctx(mock_db), file.path()).await;
+    let err = result.unwrap_err();
+    assert!(err.to_string().contains("no messages found"));
+}
+
+#[tokio::test]
+async fn seed_continues_on_failure() {
+    let msg1 = Uuid::new_v4();
+    let msg2 = Uuid::new_v4();
+    let msg3 = Uuid::new_v4();
+    let channel_id = Uuid::new_v4();
+    let csv = format!(
+        "message_id,channel_id,sender_id,content,thread_id\n\
+         {msg1},{channel_id},macro|alice@example.com,Good 1,\n\
+         {msg2},{channel_id},macro|bad@example.com,Bad,\n\
+         {msg3},{channel_id},macro|bob@example.com,Good 2,\n"
+    );
+    let file = write_temp_csv(&csv);
+
+    let mut mock_db = Db::default();
+    mock_db.expect_seed_message().times(3).returning(|opts| {
+        if opts.sender_id == "macro|bad@example.com" {
+            Err(anyhow::anyhow!("db error"))
+        } else {
+            Ok(opts.message_id)
+        }
+    });
+
+    let result = seed_from_file(mock_ctx(mock_db), file.path()).await;
+    assert!(result.is_ok());
 }

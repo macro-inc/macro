@@ -1,4 +1,6 @@
 import {
+  isCurrentUserAssigned,
+  isTaskClosed,
   isTaskEntity,
   type TaskEntityWithProperties,
   type EntityData,
@@ -9,10 +11,6 @@ import {
   DEPRIORITY_LABEL_SIGNAL_TOGGLES,
   PRIORITY_LABEL_SIGNAL_TOGGLES,
 } from '@app/component/next-soup/filters/signal-configs';
-import {
-  isCurrentUserAssigned,
-  isTaskClosed,
-} from '@app/component/next-soup/utils';
 
 /** Labels that indicate priority emails (signal) */
 const PRIORITY_LABELS = createMemo(

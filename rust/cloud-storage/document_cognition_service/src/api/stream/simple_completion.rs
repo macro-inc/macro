@@ -18,7 +18,7 @@ use model_entity::EntityType;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::sync::Arc;
-use stream::domain::{StreamId, StreamManagerExt};
+use stream::domain::{StreamId, StreamRepoExt};
 use utoipa::ToSchema;
 
 const SIMPLE_COMPLETION_DEFAULT_MODEL: Model = Model::Claude45Haiku;
@@ -220,9 +220,12 @@ pub async fn simple_completion(
     };
 
     // Use the extension trait to handle spawning and stream management
-    ctx.stream_repo
-        .clone()
-        .from_async_stream(durable_stream_id, Box::pin(payload_stream), None);
+    ctx.stream_repo.clone().from_async_stream(
+        durable_stream_id,
+        Box::pin(payload_stream),
+        None,
+        None,
+    );
 
     Ok(Json(SimpleCompletionResponse { completion_id }))
 }

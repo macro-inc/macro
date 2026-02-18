@@ -1,4 +1,3 @@
-use anyhow::Context;
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 
@@ -20,13 +19,7 @@ pub async fn update_link_sync_status(
         is_sync_active
     )
     .execute(pool)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to update sync status to {} for link with ID {}",
-            is_sync_active, link_id
-        )
-    })?;
+    .await?;
 
     Ok(())
 }

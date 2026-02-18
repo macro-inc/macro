@@ -10,6 +10,7 @@ import {
   NUMBER_DECIMAL_PLACES,
 } from '@core/component/Properties/constants';
 import { nanoid } from 'nanoid';
+import { TASK_STATUS_OPTIONS } from '../utils/task-properties';
 
 const EPOCH_ZERO = new Date(0);
 
@@ -28,49 +29,17 @@ export const PROPERTY_SORT_ORDER = [
  * human-readable values without fetching options from the API.
  */
 const SYSTEM_PROPERTY_OPTIONS: Record<string, PropertyOption[]> = {
-  [SYSTEM_PROPERTY_IDS.STATUS]: [
-    {
-      id: PROPERTY_OPTION_IDS.STATUS.NOT_STARTED,
+  [SYSTEM_PROPERTY_IDS.STATUS]: TASK_STATUS_OPTIONS.map(
+    ({ value, label }, displayOrder) => ({
+      id: value,
       property_definition_id: SYSTEM_PROPERTY_IDS.STATUS,
-      value: { type: 'string', value: 'Not Started' },
-      display_order: 0,
+      value: { type: 'string', value: label },
+      display_order: displayOrder,
       // TODO: need to properly handle dates. does not seem like these are even used/upserted anywhere?
       created_at: EPOCH_ZERO.toISOString(),
       updated_at: EPOCH_ZERO.toISOString(),
-    },
-    {
-      id: PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS,
-      property_definition_id: SYSTEM_PROPERTY_IDS.STATUS,
-      value: { type: 'string', value: 'In Progress' },
-      display_order: 1,
-      created_at: EPOCH_ZERO.toISOString(),
-      updated_at: EPOCH_ZERO.toISOString(),
-    },
-    {
-      id: PROPERTY_OPTION_IDS.STATUS.IN_REVIEW,
-      property_definition_id: SYSTEM_PROPERTY_IDS.STATUS,
-      value: { type: 'string', value: 'In Review' },
-      display_order: 2,
-      created_at: EPOCH_ZERO.toISOString(),
-      updated_at: EPOCH_ZERO.toISOString(),
-    },
-    {
-      id: PROPERTY_OPTION_IDS.STATUS.COMPLETED,
-      property_definition_id: SYSTEM_PROPERTY_IDS.STATUS,
-      value: { type: 'string', value: 'Completed' },
-      display_order: 3,
-      created_at: EPOCH_ZERO.toISOString(),
-      updated_at: EPOCH_ZERO.toISOString(),
-    },
-    {
-      id: PROPERTY_OPTION_IDS.STATUS.CANCELED,
-      property_definition_id: SYSTEM_PROPERTY_IDS.STATUS,
-      value: { type: 'string', value: 'Canceled' },
-      display_order: 4,
-      created_at: EPOCH_ZERO.toISOString(),
-      updated_at: EPOCH_ZERO.toISOString(),
-    },
-  ],
+    })
+  ),
   [SYSTEM_PROPERTY_IDS.PRIORITY]: [
     {
       id: PROPERTY_OPTION_IDS.PRIORITY.LOW,

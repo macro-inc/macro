@@ -5,7 +5,6 @@ pub mod upload_filters;
 
 use crate::parse::db_to_service::map_db_attachment_to_service;
 use crate::parse::service_to_db::map_service_attachments_to_db;
-use anyhow::Context;
 use models_email::db::attachment;
 use models_email::{db, service};
 use sqlx::types::Uuid;
@@ -33,12 +32,7 @@ pub async fn insert_attachments(
         WHERE message_id = $1
         "#,
         message_id
-    ).fetch_all(&mut *tx).await.with_context(|| {
-        format!(
-            "Failed to fetch attachments for message_id {}",
-            message_id
-        )
-    })?;
+    ).fetch_all(&mut *tx).await?;
 
     // Filter to find attachments that exist in the database but don't match any in db_attachments.
     // we compare using filename, mime_type, size_bytes, and content_id as we don't get a concrete ID from gmail that
@@ -86,13 +80,7 @@ pub async fn insert_attachments(
             &orphaned_ids
         )
         .execute(&mut *tx)
-        .await
-        .with_context(|| {
-            format!(
-                "Failed to delete orphaned attachments with ids {:?} for message_id {}",
-                orphaned_ids, message_id
-            )
-        })?;
+        .await?;
     }
 
     if new_attachments.is_empty() {
@@ -145,13 +133,7 @@ pub async fn insert_attachments(
         .bind(&size_bytes_vec)
         .bind(&content_ids)
         .execute(&mut *tx)
-        .await
-        .with_context(|| {
-            format!(
-                "Failed to batch insert/update attachment metadata for message_id {} and provider_attachment_ids {:?}",
-                message_id, provider_attachment_ids
-            )
-        })?;
+        .await?;
 
     Ok(())
 }
@@ -178,8 +160,7 @@ pub async fn fetch_db_attachments_in_bulk(
         message_ids
     )
     .fetch_all(pool)
-    .await
-    .context("Failed to fetch attachments in bulk")?;
+    .await?;
 
     let mut attachments_map: HashMap<Uuid, Vec<attachment::Attachment>> = HashMap::new();
     for attachment in results {
@@ -203,8 +184,7 @@ where
         message_id
     )
     .execute(executor)
-    .await
-    .with_context(|| format!("Failed to delete attachments for message_id {}", message_id))?;
+    .await?;
 
     Ok(())
 }
@@ -231,13 +211,7 @@ pub async fn fetch_attachment_by_id(
         link_id
     )
     .fetch_optional(pool)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to fetch attachment with id {} for link_id {}",
-            attachment_id, link_id
-        )
-    })?;
+    .await?;
 
     match result {
         Some(record) => {
@@ -300,8 +274,7 @@ pub async fn get_attachments_by_thread_ids(
         thread_ids
     )
     .fetch_all(db)
-    .await
-    .context("Failed to fetch attachments for threads")?;
+    .await?;
 
     // Group attachments by thread_id
     let mut result: HashMap<Uuid, Vec<service::attachment::Attachment>> = HashMap::new();
@@ -398,8 +371,7 @@ pub async fn get_thread_id_for_attachment(
         attachment_id,
     )
     .fetch_optional(db)
-    .await
-    .with_context(|| format!("Failed to fetch thread_id for attachment {}", attachment_id))?;
+    .await?;
 
     Ok(result.map(|record| (record.thread_id, record.link_id)))
 }

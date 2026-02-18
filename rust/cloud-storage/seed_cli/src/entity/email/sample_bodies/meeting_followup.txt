@@ -1,0 +1,16 @@
+Hi team,
+
+Thanks for joining the meeting earlier today. Here's a quick summary of what we discussed:
+
+1. Q3 roadmap priorities have been finalized
+2. The new design system rollout is on track for next month
+3. We need to finalize the API migration plan by end of week
+
+Action items:
+- Sarah: Share the updated timeline document
+- Mike: Set up the staging environment for testing
+- Everyone: Review the RFC and leave comments by Friday
+
+Let me know if I missed anything. Looking forward to making progress on these items!
+
+Best,

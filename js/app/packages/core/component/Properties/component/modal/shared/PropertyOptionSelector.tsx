@@ -1,9 +1,10 @@
 import { Hotkey } from '@core/component/Hotkey';
-import SearchIcon from '@icon/regular/magnifying-glass.svg';
+import { useKeyPressed } from '@core/util/useKeyPressed';
 import PlusIcon from '@icon/regular/plus.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
-import type * as schemas from '@service-properties/generated/zod';
+import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import {
+  type Accessor,
   createEffect,
   createMemo,
   createSignal,
@@ -12,19 +13,138 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import type { z } from 'zod';
-import type { Property } from '../../../types';
-import { formatOptionValue, useSearchInputFocus } from '../../../utils';
+import type { JSX, ParentComponent } from 'solid-js';
+import { useSearchInputFocus } from '../../../utils';
 import { ERROR_MESSAGES } from '../../../utils/errorHandling';
 import { PropertyValueIcon } from '../../propertyValue';
 import { OptionCheckBox } from './OptionCheckBox';
-import { useKeyPressed } from '@core/util/useKeyPressed';
+import type { SelectableOption, OptionSelectorConfig } from './types';
 
-type PropertyOption = z.infer<typeof schemas.getPropertyOptionsResponseItem>;
+type UseDropdownSearchOptions = {
+  itemCount: Accessor<number>;
+  onSelect: (index: number) => void;
+  onClose: () => void;
+};
+
+const useDropdownSearch = (options: UseDropdownSearchOptions) => {
+  const [searchQuery, setSearchQuery] = createSignal('');
+  const [selectedIndex, setSelectedIndex] = createSignal(0);
+  const keyboardMode = useKeyPressed(100);
+
+  createEffect(() => {
+    const count = options.itemCount();
+    if (count === 0) {
+      setSelectedIndex(0);
+    } else {
+      setSelectedIndex((prev) => Math.min(prev, count - 1));
+    }
+  });
+
+  const shouldShowHotkeys = () =>
+    !searchQuery().trim() && options.itemCount() <= 9;
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      options.onClose();
+      return;
+    }
+
+    const count = options.itemCount();
+    if (count === 0) return;
+
+    if (shouldShowHotkeys() && /^[1-9]$/.test(e.key)) {
+      e.preventDefault();
+      const idx = parseInt(e.key) - 1;
+      if (idx < count) options.onSelect(idx);
+      return;
+    }
+
+    if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'j')) {
+      e.preventDefault();
+      setSelectedIndex((prev) => (prev + 1) % count);
+    } else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'k')) {
+      e.preventDefault();
+      setSelectedIndex((prev) => (prev - 1 + count) % count);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      options.onSelect(selectedIndex());
+    }
+  };
+
+  return {
+    searchQuery,
+    setSearchQuery,
+    selectedIndex,
+    setSelectedIndex,
+    keyboardMode,
+    shouldShowHotkeys,
+    handleKeyDown,
+  };
+};
+
+type DropdownSearchInputProps = {
+  value: string;
+  placeholder: string;
+  onInput: (value: string) => void;
+  inputType?: string;
+  inputRef?: (element: HTMLInputElement) => void;
+};
+
+const DropdownSearchInput = (props: DropdownSearchInputProps) => {
+  return (
+    <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
+      <SearchIcon class="h-4 w-4 text-ink-muted" />
+      <input
+        class="w-full caret-accent"
+        ref={props.inputRef}
+        type={props.inputType ?? 'text'}
+        value={props.value}
+        onInput={(event) => props.onInput(event.currentTarget.value)}
+        placeholder={props.placeholder}
+      />
+    </div>
+  );
+};
+
+type DropdownSelectableRowProps = {
+  isSelected: boolean;
+  showHotkey?: boolean;
+  hotkeyShortcut?: string;
+  rightContent?: JSX.Element;
+  onClick?: JSX.EventHandlerUnion<HTMLDivElement, MouseEvent>;
+  onMouseEnter?: JSX.EventHandlerUnion<HTMLDivElement, MouseEvent>;
+};
+
+const DropdownSelectableRow: ParentComponent<DropdownSelectableRowProps> = (
+  props
+) => {
+  return (
+    <div
+      class="flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2"
+      classList={{
+        'bg-hover': props.isSelected,
+      }}
+      onClick={props.onClick}
+      onMouseEnter={props.onMouseEnter}
+    >
+      <div class="flex items-center gap-2 flex-1 min-w-0">{props.children}</div>
+      <div class="flex items-center gap-2 flex-shrink-0">
+        <Show when={props.showHotkey && props.hotkeyShortcut}>
+          <div class="text-[0.625rem] px-1.5 py-0.5 border border-edge-muted text-ink-muted font-mono rounded-xs">
+            <Hotkey shortcut={props.hotkeyShortcut!} />
+          </div>
+        </Show>
+        {props.rightContent}
+      </div>
+    </div>
+  );
+};
 
 type SelectOptionsProps = {
-  property: Property;
-  options: PropertyOption[];
+  config: OptionSelectorConfig;
+  options: SelectableOption[];
   isLoading: boolean;
   error: string | null;
   selectedOptions: () => Set<string>;
@@ -34,53 +154,20 @@ type SelectOptionsProps = {
 };
 
 export const PropertyOptionSelector = (props: SelectOptionsProps) => {
-  const [searchQuery, setSearchQuery] = createSignal('');
   const [isAddingOption, setIsAddingOption] = createSignal(false);
-  const [selectedIndex, setSelectedIndex] = createSignal(0);
-
-  const keyboardMode = useKeyPressed(100);
 
   let searchInputRef!: HTMLInputElement;
 
   const isOptionSelected = (value: string) =>
     props.selectedOptions().has(value);
 
-  const hasExactMatch = createMemo(() => {
-    const query = searchQuery().trim();
-    if (!query) return false;
-
-    return props.options.some((option) => {
-      const displayValue = formatOptionValue(option);
-      return displayValue === query;
-    });
-  });
-
-  const isValidNewOption = createMemo(() => {
-    const query = searchQuery().trim();
-
-    if (!query) return false;
-
-    if (hasExactMatch()) return false;
-
-    if (props.property.valueType === 'SELECT_STRING') {
-      return true;
-    }
-
-    if (props.property.valueType === 'SELECT_NUMBER') {
-      const num = parseFloat(query);
-      return !isNaN(num) && Number.isFinite(num);
-    }
-
-    return false;
-  });
-
   const handleAddOption = async () => {
     if (!props.onAddOption || !isValidNewOption()) return;
 
     setIsAddingOption(true);
     try {
-      await props.onAddOption(searchQuery().trim());
-      setSearchQuery('');
+      await props.onAddOption(dropdown.searchQuery().trim());
+      dropdown.setSearchQuery('');
     } catch (error) {
       console.error(
         'PropertyOptionsList.handleAddOption:',
@@ -92,27 +179,62 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
     }
   };
 
+  const handleSelectableItem = (idx: number) => {
+    const item = selectableItems()[idx];
+    if (item?.type === 'add') {
+      handleAddOption();
+    } else if (item?.type === 'option' && item.option) {
+      props.onToggleOption(item.option.id);
+      if (!props.config.isMultiSelect && props.onClose) {
+        props.onClose();
+      }
+    }
+  };
+
+  const dropdown = useDropdownSearch({
+    itemCount: () => selectableItems().length,
+    onSelect: handleSelectableItem,
+    onClose: () => {
+      if (props.onClose) props.onClose();
+    },
+  });
+
+  const hasExactMatch = createMemo(() => {
+    const query = dropdown.searchQuery().trim();
+    if (!query) return false;
+
+    return props.options.some((option) => option.label === query);
+  });
+
+  const isValidNewOption = createMemo(() => {
+    const query = dropdown.searchQuery().trim();
+
+    if (!query) return false;
+
+    if (hasExactMatch()) return false;
+
+    return props.config.canAddOption?.(query) ?? false;
+  });
+
   // Filter options based on search query and sort selected first, then alphabetically
   const filteredOptions = createMemo(() => {
-    const query = searchQuery().toLowerCase().trim();
+    const query = dropdown.searchQuery().toLowerCase().trim();
     const selectedIds = props.selectedOptions();
 
     const availableOptions = !query
       ? props.options
       : props.options.filter((option) => {
-          const displayValue = formatOptionValue(option).toLowerCase();
-          return displayValue.includes(query);
+          return option.label.toLowerCase().includes(query);
         });
 
     // Only include missing selected options when there's no search query
     let allOptions = availableOptions;
     if (!query) {
       const availableOptionIds = new Set(availableOptions.map((opt) => opt.id));
-      const missingSelectedOptions: PropertyOption[] = [];
+      const missingSelectedOptions: SelectableOption[] = [];
 
       for (const selectedId of selectedIds) {
         if (!availableOptionIds.has(selectedId)) {
-          // Find the actual option from props.options to get its value
           const actualOption = props.options.find(
             (opt) => opt.id === selectedId
           );
@@ -131,7 +253,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
   // Get selectable items (filtered options + add option if available)
   const selectableItems = createMemo(() => {
     const options = filteredOptions();
-    const items: Array<{ type: 'option' | 'add'; option?: PropertyOption }> =
+    const items: Array<{ type: 'option' | 'add'; option?: SelectableOption }> =
       [];
 
     options.forEach((option) => {
@@ -145,73 +267,12 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
     return items;
   });
 
-  // Reset selected index when filteredOptions change
-  createEffect(() => {
-    const items = selectableItems();
-    if (items.length === 0) {
-      setSelectedIndex(0);
-    } else {
-      setSelectedIndex(Math.min(selectedIndex(), items.length - 1));
-    }
-  });
-
-  const shouldShowHotkeys = createMemo(() => {
-    return !searchQuery().trim() && selectableItems().length <= 9;
-  });
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    const items = selectableItems();
-    if (items.length === 0) return;
-
-    // Handle number keys (1-9) when no search term and 9 or fewer options
-    if (shouldShowHotkeys() && /^[1-9]$/.test(e.key)) {
-      e.preventDefault();
-      const index = parseInt(e.key) - 1;
-      if (index < items.length) {
-        const selectedItem = items[index];
-        if (selectedItem?.type === 'add') {
-          handleAddOption();
-        } else if (selectedItem?.type === 'option' && selectedItem.option) {
-          props.onToggleOption(selectedItem.option.id);
-
-          // If not multi-select, close the modal after selection
-          if (!props.property.isMultiSelect && props.onClose) {
-            props.onClose();
-          }
-        }
-      }
-      return;
-    }
-
-    if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'j')) {
-      e.preventDefault();
-      setSelectedIndex((prev) => (prev + 1) % items.length);
-    } else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'k')) {
-      e.preventDefault();
-      setSelectedIndex((prev) => (prev - 1 + items.length) % items.length);
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      const selectedItem = items[selectedIndex()];
-
-      if (selectedItem?.type === 'add') {
-        handleAddOption();
-      } else if (selectedItem?.type === 'option' && selectedItem.option) {
-        props.onToggleOption(selectedItem.option.id);
-
-        // If not multi-select, close the modal after selection
-        if (!props.property.isMultiSelect && props.onClose) {
-          props.onClose();
-        }
-      }
-    }
-  };
-
   onMount(() => {
-    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keydown', dropdown.handleKeyDown);
   });
 
   onCleanup(() => {
-    document.removeEventListener('keydown', handleKeyDown);
+    document.removeEventListener('keydown', dropdown.handleKeyDown);
   });
 
   useSearchInputFocus(
@@ -219,10 +280,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
     () => !props.isLoading && !props.error
   );
 
-  const AddOptionButton = (props: {
-    isSelected: boolean;
-    hotkeyNumber?: number;
-  }) => (
+  const AddOptionButton = (props: { isSelected: boolean }) => (
     <div
       onClick={handleAddOption}
       class={`flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 ${
@@ -242,7 +300,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
             <PlusIcon class="size-3" />
           </Show>
         </div>
-        <p class="text-sm font-medium">Add "{searchQuery().trim()}"</p>
+        <p class="text-sm font-medium">Add "{dropdown.searchQuery().trim()}"</p>
       </div>
     </div>
   );
@@ -262,30 +320,15 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
       <Show when={!props.error}>
         <div>
           <div class="relative">
-            <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
-              <SearchIcon class="h-4 w-4 text-ink-muted" />
-              <input
-                class="w-full caret-accent"
-                ref={searchInputRef}
-                type={
-                  props.property.valueType === 'SELECT_NUMBER'
-                    ? 'number'
-                    : 'text'
-                }
-                value={searchQuery()}
-                onInput={(e) => setSearchQuery(e.currentTarget.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (props.onClose) {
-                      props.onClose();
-                    }
-                  }
-                }}
-                placeholder={`${props.property.isMultiSelect ? 'Add' : 'Change'} ${props.property.displayName.toLowerCase()}...`}
-              />
-            </div>
+            <DropdownSearchInput
+              value={dropdown.searchQuery()}
+              inputRef={(element) => {
+                searchInputRef = element;
+              }}
+              inputType={props.config.inputType ?? 'text'}
+              onInput={dropdown.setSearchQuery}
+              placeholder={props.config.placeholder}
+            />
           </div>
 
           <Show
@@ -302,7 +345,9 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                 >
                   <div class="p-1">
                     <AddOptionButton
-                      isSelected={selectedIndex() === filteredOptions().length}
+                      isSelected={
+                        dropdown.selectedIndex() === filteredOptions().length
+                      }
                     />
                   </div>
                 </Show>
@@ -324,16 +369,13 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                       <Show
                         when={item.type === 'add'}
                         fallback={
-                          <div
-                            class={`flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 ${
-                              index() === selectedIndex() ? 'bg-hover' : ''
-                            }`}
+                          <DropdownSelectableRow
+                            isSelected={index() === dropdown.selectedIndex()}
                             onClick={() => {
                               if (item.option) {
                                 props.onToggleOption(item.option.id);
-                                // If not multi-select, close the modal after selection
                                 if (
-                                  !props.property.isMultiSelect &&
+                                  !props.config.isMultiSelect &&
                                   props.onClose
                                 ) {
                                   props.onClose();
@@ -341,42 +383,41 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                               }
                             }}
                             onMouseEnter={() => {
-                              if (!keyboardMode()) {
-                                setSelectedIndex(index());
+                              if (!dropdown.keyboardMode()) {
+                                dropdown.setSelectedIndex(index());
                               }
                             }}
-                          >
-                            <PropertyValueIcon optionId={item.option!.id} />
-                            <div class="flex-1 text-left">
-                              <p class="text-sm font-medium">
-                                {formatOptionValue(item.option!)}
-                              </p>
-                            </div>
-                            <div class="flex items-center gap-2 flex-shrink-0">
-                              <Show when={shouldShowHotkeys() && index() < 9}>
-                                <div class="text-[0.625rem] px-1.5 py-0.5 border border-edge-muted text-ink-muted font-mono rounded-xs">
-                                  <Hotkey shortcut={`${index() + 1}`} />
-                                </div>
-                              </Show>
-                              <Show when={props.property.isMultiSelect}>
+                            showHotkey={
+                              dropdown.shouldShowHotkeys() && index() < 9
+                            }
+                            hotkeyShortcut={`${index() + 1}`}
+                            rightContent={
+                              <Show when={props.config.isMultiSelect}>
                                 <OptionCheckBox
                                   checked={isOptionSelected(item.option!.id)}
-                                  multiselect={props.property.isMultiSelect}
+                                  multiselect={props.config.isMultiSelect}
                                 />
                               </Show>
+                            }
+                          >
+                            <PropertyValueIcon optionId={item.option!.id} />
+                            <div class="flex-1 min-w-0 text-left">
+                              <p class="text-sm font-medium truncate">
+                                {item.option!.label}
+                              </p>
                             </div>
-                          </div>
+                          </DropdownSelectableRow>
                         }
                       >
                         <div
                           onMouseEnter={() => {
-                            if (!keyboardMode()) {
-                              setSelectedIndex(index());
+                            if (!dropdown.keyboardMode()) {
+                              dropdown.setSelectedIndex(index());
                             }
                           }}
                         >
                           <AddOptionButton
-                            isSelected={index() === selectedIndex()}
+                            isSelected={index() === dropdown.selectedIndex()}
                           />
                         </div>
                       </Show>
