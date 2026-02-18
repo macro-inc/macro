@@ -115,7 +115,9 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     await execute(entities);
 
     soup.selection.clear();
-    if (nextEntity) {
+    const shouldNavigate =
+      soup.filters.isActive('signal') || soup.filters.isActive('noise');
+    if (nextEntity && shouldNavigate) {
       soup.focus.set(nextEntity.id);
       onNavigate?.(nextEntity);
     }
