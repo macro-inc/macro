@@ -282,7 +282,7 @@ export const createSearchState = ({
     })
   );
 
-  const freshSearchResults = createMemo<EntityData[]>(() => {
+  const serviceSearchResults = createMemo<EntityData[]>(() => {
     if (isSearchServiceDisabled()) return [];
     if (!isSearchServiceDebounceSettled()) return [];
     if (searchQuery.isFetching && !searchQuery.isFetchingNextPage) return [];
@@ -329,7 +329,7 @@ export const createSearchState = ({
     isSearchDisabled: isSearchServiceDisabled,
     debouncedSearchForLocal,
     localFuzzyResults,
-    freshSearchResults,
+    serviceSearchResults,
     createFeaturedIds,
     itemsQuery,
     searchQuery,

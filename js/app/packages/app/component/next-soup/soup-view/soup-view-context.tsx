@@ -197,7 +197,7 @@ export const SoupViewContextProvider: FlowComponent<
       }
 
       const local = search.localFuzzyResults();
-      const service = search.freshSearchResults();
+      const service = search.serviceSearchResults();
 
       const merged: SoupEntity[] = [...service, ...local];
 
