@@ -69,11 +69,9 @@ import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
 import { useMaybeEmailContext } from '@block-email/component/EmailContext';
 import { decodeBase64Utf8 } from '@block-email/util/decodeBase64';
 import { stickyGate } from '@core/util/debounce';
-import { queryClient } from '@queries/client';
-import { soupKeys } from '@queries/soup/keys';
-import { isMobile } from '@core/mobile/isMobile';
 import { invalidateSoupEntity } from '@queries/soup/cache';
-import { WrapUnlessMobile } from '@core/mobile/MobileUnwrap';
+import { WrapUnlessMobile } from '@core/mobile/WrapUnlessMobile';
+import { isMobile } from '@core/mobile/isMobile';
 
 const DRAFT_DEBOUNCE_MS = 1000;
 
@@ -680,9 +678,16 @@ export function EmailCompose(props: EmailComposeProps) {
         <StaticSplitLabel
           label={form.subject() || previewName()}
           iconType="email"
-          badges={[
-            <SplitHeaderBadge text="draft" tooltip="This is a Draft Email" />,
-          ]}
+          badges={
+            isMobile()
+              ? []
+              : [
+                  <SplitHeaderBadge
+                    text="draft"
+                    tooltip="This is a Draft Email"
+                  />,
+                ]
+          }
         />
       </SplitHeaderLeft>
       <div
@@ -725,7 +730,7 @@ export function EmailCompose(props: EmailComposeProps) {
         </Switch>
 
         <div
-          class="macro-message-width @small:macro-message-padding mx-auto w-full max-h-full my-2 @small:my-12 mobile:my-0 px-2 @small:px-4 overflow-hidden"
+          class="macro-message-width @small:macro-message-padding mx-auto w-full max-h-full my-2 @small:my-12 mobile:my-0 px-2 @small:px-4 mobile:px-0 overflow-hidden"
           classList={{
             'pointer-events-none opacity-50': hasLinkError(),
           }}

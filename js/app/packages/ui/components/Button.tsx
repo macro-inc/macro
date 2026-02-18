@@ -7,6 +7,7 @@ type ButtonProps = JSX.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'secondary' | 'tertiary' | 'destructive';
   tooltip?: JSX.Element;
   showChevron?: boolean;
+  suppressInteractionStyling?: boolean;
 };
 
 /**
@@ -16,6 +17,7 @@ type ButtonProps = JSX.ButtonHTMLAttributes<HTMLButtonElement> & {
  * @param props.tooltip - Optional tooltip content to display when hovering over the button.
  * @param props.class - Use for custom styling. Tailwind will be merged automatically, be granular as you like.
  * @param props.showChevron - Show an indicator
+ * @param props.suppressInteractionStyling - Override the default interaction styling, e.g. hover bg changes
  * @param props.children - Labels, icons, hotkey hints, etc. The body of the button.
  *
  * @example
@@ -41,6 +43,7 @@ export const Button: ParentComponent<ButtonProps> = (props) => {
     'children',
     'tooltip',
     'showChevron',
+    'suppressInteractionStyling',
     'type',
   ]);
 
@@ -57,10 +60,8 @@ export const Button: ParentComponent<ButtonProps> = (props) => {
         class={cn(
           'relative flex items-center justify-center gap-[1ch] px-[1ch] py-[0.25lh] border border-transparent',
           'font-mono font-medium uppercase leading-none',
-          'hover:bg-surface-4',
-          'focus:[--focus-border-inset:-4px]',
-          'active:border-accent active:bg-accent active:text-panel',
-          'disabled:opacity-50 disabled:cursor-not-allowed',
+          !local.suppressInteractionStyling &&
+            'hover:bg-surface-4 focus:[--focus-border-inset:-4px] active:border-accent active:bg-accent active:text-panel disabled:opacity-50 disabled:cursor-not-allowed',
           'touch:min-h-11 touch:min-w-11 touch:[&_svg]:size-6',
 
           {

@@ -1,5 +1,4 @@
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
-import IconGear from '@macro-icons/macro-gear.svg';
 import XIcon from '@icon/regular/x.svg?component-solid';
 import PreviewIcon from '@macro-icons/wide/preview.svg';
 import NoiseIcon from '@macro-icons/wide/noise.svg';
@@ -10,10 +9,8 @@ import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
-import { useSplitLayout } from '@app/component/split-layout/layout';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
-import { useSettingsState } from '@core/constant/SettingsState';
-import { TOKENS } from '@core/hotkey/tokens';
+
 import {
   For,
   Show,
@@ -42,6 +39,7 @@ import { IS_MAC } from '@core/constant/isMac';
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { Dynamic } from 'solid-js/web';
 import { SortDropdown } from '@app/component/next-soup/soup-view/sort-dropdown';
+import { SettingsButton } from '@app/component/settings/SettingsButton';
 
 /**
  * Keyboard shortcuts for entity type filters.
@@ -409,40 +407,6 @@ const SoupFilters = () => {
     </>
   );
 };
-
-function SettingsButton() {
-  const { settingsOpen, toggleSettings } = useSettingsState();
-  const { getSplitCount } = useSplitLayout();
-
-  // Hide settings button when there are multiple splits
-  const isSingleSplit = () => getSplitCount() <= 1;
-
-  return (
-    <Show when={isSingleSplit()}>
-      <Tooltip
-        tooltip={
-          <LabelAndHotKey
-            label={settingsOpen() ? 'Close Settings' : 'Open Settings'}
-            hotkeyToken={TOKENS.global.toggleSettings}
-          />
-        }
-      >
-        <button
-          type="button"
-          class="relative flex items-center justify-center size-[22px] rounded-full active:bg-accent active:text-panel"
-          classList={{
-            'bg-hover text-ink': settingsOpen(),
-            'text-ink-muted hover:text-accent hover:bg-accent/20':
-              !settingsOpen(),
-          }}
-          onClick={() => toggleSettings()}
-        >
-          <IconGear class="size-4.5" />
-        </button>
-      </Tooltip>
-    </Show>
-  );
-}
 
 const ScrollIndicators = (props: { scrollRef: HTMLElement | undefined }) => {
   const [leftOpacity, setLeftOpacity] = createSignal(0);

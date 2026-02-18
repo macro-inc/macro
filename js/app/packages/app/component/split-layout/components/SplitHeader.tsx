@@ -169,28 +169,6 @@ function _SplitControlButtons() {
   );
 }
 
-function SplitSettingsButton() {
-  const { settingsOpen, toggleSettings } = useSettingsState();
-
-  return (
-    <Button
-      class="p-1"
-      classList={{
-        'bg-accent/20 text-accent': settingsOpen(),
-      }}
-      tooltip={
-        <LabelAndHotKey
-          label={settingsOpen() ? 'Close Settings' : 'Open Settings'}
-          hotkeyToken={TOKENS.global.toggleSettings}
-        />
-      }
-      onClick={toggleSettings}
-    >
-      <IconGear class="h-4" />
-    </Button>
-  );
-}
-
 export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
   const ctx = useContext(SplitPanelContext);
   if (!ctx)
@@ -217,21 +195,16 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
           }}
         />
 
-        <Show when={!isMobile()}>
-          <div
-            class="min-w-4 h-full shrink-0"
-            ref={(ref) => {
-              ctx.layoutRefs.headerRight = ref;
-            }}
-          />
+        <div
+          class="min-w-4 h-full shrink-0"
+          ref={(ref) => {
+            ctx.layoutRefs.headerRight = ref;
+          }}
+        />
+        <Show when={!isTouchDevice()}>
           <div class="z-2 relative flex items-center bg-panel pr-2 h-full">
             <EntityNavigationIndicator />
             <SplitSpotlightButton />
-          </div>
-        </Show>
-        <Show when={isTouchDevice()}>
-          <div class="z-2 relative flex items-center bg-panel pr-2 h-full">
-            <SplitSettingsButton />
           </div>
         </Show>
       </div>
