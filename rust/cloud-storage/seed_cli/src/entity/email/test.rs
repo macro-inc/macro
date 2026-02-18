@@ -7,6 +7,7 @@ use crate::Cli;
 use crate::config::SeedCliContext;
 use crate::service::auth::Auth;
 use crate::service::db::Db;
+use crate::service::s3::S3;
 
 use super::*;
 
@@ -156,6 +157,7 @@ fn mock_ctx(db: Db) -> SeedCliContext {
     SeedCliContext {
         db,
         fusionauth_client: Auth::default(),
+        s3: S3::default(),
     }
 }
 
