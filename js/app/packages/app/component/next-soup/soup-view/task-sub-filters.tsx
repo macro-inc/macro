@@ -1,6 +1,7 @@
 import { type Component, createEffect, createMemo, For, Show } from 'solid-js';
 import { Popover } from '@kobalte/core/popover';
-import { Hotkey } from '@core/component/Hotkey';
+import { DropdownSearchInput } from '@core/component/Properties/component/modal/shared/DropdownSearchInput';
+import { DropdownSelectableRow } from '@core/component/Properties/component/modal/shared/DropdownSelectableRow';
 import { TASK_STATUS_OPTIONS } from '@entity';
 import { PropertyValueIcon } from '@core/component/Properties/component/propertyValue/PropertyValueIcon';
 import { useContacts } from '@queries/contacts/contacts';
@@ -9,7 +10,6 @@ import { useSoupView } from '@app/component/next-soup/soup-view/soup-view-contex
 import { useDropdownSearch } from '@core/util/useDropdownSearch';
 import { useUserId } from '@core/context/user';
 import { getVisibleAssigneeOptions } from './task-sub-filter-options';
-import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import UserCircleIcon from '@icon/regular/user-circle.svg';
 import CaretDownIcon from '@icon/regular/caret-down.svg';
 import XIcon from '@icon/regular/x.svg?component-solid';
@@ -126,18 +126,15 @@ export const TaskStatusDropdown: Component<DropdownProps> = (props) => {
       <Popover.Portal>
         <Popover.Content class="z-50 bg-panel border border-edge-muted shadow-lg w-[300px]">
           <div>
-            <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
-              <SearchIcon class="h-4 w-4 text-ink-muted" />
-              <input
-                class="w-full caret-accent"
-                ref={searchInputRef}
-                type="text"
-                value={dropdown.searchQuery()}
-                onInput={(e) => dropdown.setSearchQuery(e.currentTarget.value)}
-                onKeyDown={dropdown.handleKeyDown}
-                placeholder="Filter status..."
-              />
-            </div>
+            <DropdownSearchInput
+              value={dropdown.searchQuery()}
+              inputRef={(element) => {
+                searchInputRef = element;
+              }}
+              onInput={dropdown.setSearchQuery}
+              onKeyDown={dropdown.handleKeyDown}
+              placeholder="Filter status..."
+            />
             <div class="p-1">
               <div
                 ref={(el) => {
@@ -155,16 +152,21 @@ export const TaskStatusDropdown: Component<DropdownProps> = (props) => {
                 >
                   <For each={filteredOptions()}>
                     {(option, index) => (
-                      <div
-                        data-dropdown-index={index()}
-                        class={`flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 ${
-                          index() === dropdown.selectedIndex() ? 'bg-hover' : ''
-                        }`}
+                      <DropdownSelectableRow
+                        dataIndex={index()}
+                        isSelected={index() === dropdown.selectedIndex()}
                         onClick={() => selectOption(option.value)}
                         onMouseEnter={() => {
                           if (!dropdown.keyboardMode())
                             dropdown.setSelectedIndex(index());
                         }}
+                        showHotkey={dropdown.shouldShowHotkeys() && index() < 9}
+                        hotkeyShortcut={`${index() + 1}`}
+                        rightContent={
+                          <Show when={statusFilter() === option.value}>
+                            <span class="text-accent text-sm">✓</span>
+                          </Show>
+                        }
                       >
                         <PropertyValueIcon optionId={option.value} />
                         <div class="flex-1 min-w-0 text-left">
@@ -172,19 +174,7 @@ export const TaskStatusDropdown: Component<DropdownProps> = (props) => {
                             {option.label}
                           </p>
                         </div>
-                        <div class="flex items-center gap-2 flex-shrink-0">
-                          <Show
-                            when={dropdown.shouldShowHotkeys() && index() < 9}
-                          >
-                            <div class="text-[0.625rem] px-1.5 py-0.5 border border-edge-muted text-ink-muted font-mono rounded-xs">
-                              <Hotkey shortcut={`${index() + 1}`} />
-                            </div>
-                          </Show>
-                          <Show when={statusFilter() === option.value}>
-                            <span class="text-accent text-sm">✓</span>
-                          </Show>
-                        </div>
-                      </div>
+                      </DropdownSelectableRow>
                     )}
                   </For>
                 </Show>
@@ -310,18 +300,15 @@ export const TaskAssigneeDropdown: Component<DropdownProps> = (props) => {
       <Popover.Portal>
         <Popover.Content class="z-50 bg-panel border border-edge-muted shadow-lg w-[300px]">
           <div>
-            <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
-              <SearchIcon class="h-4 w-4 text-ink-muted" />
-              <input
-                class="w-full caret-accent"
-                ref={searchInputRef}
-                type="text"
-                value={dropdown.searchQuery()}
-                onInput={(e) => dropdown.setSearchQuery(e.currentTarget.value)}
-                onKeyDown={dropdown.handleKeyDown}
-                placeholder="Filter assignee..."
-              />
-            </div>
+            <DropdownSearchInput
+              value={dropdown.searchQuery()}
+              inputRef={(element) => {
+                searchInputRef = element;
+              }}
+              onInput={dropdown.setSearchQuery}
+              onKeyDown={dropdown.handleKeyDown}
+              placeholder="Filter assignee..."
+            />
             <div class="p-1">
               <div
                 ref={(el) => {
@@ -339,16 +326,21 @@ export const TaskAssigneeDropdown: Component<DropdownProps> = (props) => {
                 >
                   <For each={filteredContacts()}>
                     {(contact, index) => (
-                      <div
-                        data-dropdown-index={index()}
-                        class={`flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 ${
-                          index() === dropdown.selectedIndex() ? 'bg-hover' : ''
-                        }`}
+                      <DropdownSelectableRow
+                        dataIndex={index()}
+                        isSelected={index() === dropdown.selectedIndex()}
                         onClick={() => selectContact(contact.id)}
                         onMouseEnter={() => {
                           if (!dropdown.keyboardMode())
                             dropdown.setSelectedIndex(index());
                         }}
+                        showHotkey={dropdown.shouldShowHotkeys() && index() < 9}
+                        hotkeyShortcut={`${index() + 1}`}
+                        rightContent={
+                          <Show when={assigneeFilter() === contact.id}>
+                            <span class="text-accent text-sm">✓</span>
+                          </Show>
+                        }
                       >
                         <UserIcon
                           id={contact.id}
@@ -364,19 +356,7 @@ export const TaskAssigneeDropdown: Component<DropdownProps> = (props) => {
                             </Show>
                           </p>
                         </div>
-                        <div class="flex items-center gap-2 flex-shrink-0">
-                          <Show
-                            when={dropdown.shouldShowHotkeys() && index() < 9}
-                          >
-                            <div class="text-[0.625rem] px-1.5 py-0.5 border border-edge-muted text-ink-muted font-mono rounded-xs">
-                              <Hotkey shortcut={`${index() + 1}`} />
-                            </div>
-                          </Show>
-                          <Show when={assigneeFilter() === contact.id}>
-                            <span class="text-accent text-sm">✓</span>
-                          </Show>
-                        </div>
-                      </div>
+                      </DropdownSelectableRow>
                     )}
                   </For>
                 </Show>

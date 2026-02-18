@@ -1,5 +1,3 @@
-import { Hotkey } from '@core/component/Hotkey';
-import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import PlusIcon from '@icon/regular/plus.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import type * as schemas from '@service-properties/generated/zod';
@@ -18,6 +16,8 @@ import { ERROR_MESSAGES } from '../../../utils/errorHandling';
 import { PropertyValueIcon } from '../../propertyValue';
 import { OptionCheckBox } from './OptionCheckBox';
 import { useDropdownSearch } from '@core/util/useDropdownSearch';
+import { DropdownSearchInput } from './DropdownSearchInput';
+import { DropdownSelectableRow } from './DropdownSelectableRow';
 
 type PropertyOption = z.infer<typeof schemas.getPropertyOptionsResponseItem>;
 
@@ -216,21 +216,17 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
       <Show when={!props.error}>
         <div>
           <div class="relative">
-            <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
-              <SearchIcon class="h-4 w-4 text-ink-muted" />
-              <input
-                class="w-full caret-accent"
-                ref={searchInputRef}
-                type={
-                  props.property.valueType === 'SELECT_NUMBER'
-                    ? 'number'
-                    : 'text'
-                }
-                value={dropdown.searchQuery()}
-                onInput={(e) => dropdown.setSearchQuery(e.currentTarget.value)}
-                placeholder={`${props.property.isMultiSelect ? 'Add' : 'Change'} ${props.property.displayName.toLowerCase()}...`}
-              />
-            </div>
+            <DropdownSearchInput
+              value={dropdown.searchQuery()}
+              inputRef={(element) => {
+                searchInputRef = element;
+              }}
+              inputType={
+                props.property.valueType === 'SELECT_NUMBER' ? 'number' : 'text'
+              }
+              onInput={dropdown.setSearchQuery}
+              placeholder={`${props.property.isMultiSelect ? 'Add' : 'Change'} ${props.property.displayName.toLowerCase()}...`}
+            />
           </div>
 
           <Show
@@ -271,12 +267,8 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                       <Show
                         when={item.type === 'add'}
                         fallback={
-                          <div
-                            class={`flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 ${
-                              index() === dropdown.selectedIndex()
-                                ? 'bg-hover'
-                                : ''
-                            }`}
+                          <DropdownSelectableRow
+                            isSelected={index() === dropdown.selectedIndex()}
                             onClick={() => {
                               if (item.option) {
                                 props.onToggleOption(item.option.id);
@@ -294,31 +286,26 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                                 dropdown.setSelectedIndex(index());
                               }
                             }}
-                          >
-                            <PropertyValueIcon optionId={item.option!.id} />
-                            <div class="flex-1 text-left">
-                              <p class="text-sm font-medium">
-                                {formatOptionValue(item.option!)}
-                              </p>
-                            </div>
-                            <div class="flex items-center gap-2 flex-shrink-0">
-                              <Show
-                                when={
-                                  dropdown.shouldShowHotkeys() && index() < 9
-                                }
-                              >
-                                <div class="text-[0.625rem] px-1.5 py-0.5 border border-edge-muted text-ink-muted font-mono rounded-xs">
-                                  <Hotkey shortcut={`${index() + 1}`} />
-                                </div>
-                              </Show>
+                            showHotkey={
+                              dropdown.shouldShowHotkeys() && index() < 9
+                            }
+                            hotkeyShortcut={`${index() + 1}`}
+                            rightContent={
                               <Show when={props.property.isMultiSelect}>
                                 <OptionCheckBox
                                   checked={isOptionSelected(item.option!.id)}
                                   multiselect={props.property.isMultiSelect}
                                 />
                               </Show>
+                            }
+                          >
+                            <PropertyValueIcon optionId={item.option!.id} />
+                            <div class="flex-1 min-w-0 text-left">
+                              <p class="text-sm font-medium truncate">
+                                {formatOptionValue(item.option!)}
+                              </p>
                             </div>
-                          </div>
+                          </DropdownSelectableRow>
                         }
                       >
                         <div
