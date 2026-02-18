@@ -27,12 +27,11 @@ import {
   createSignal,
   on,
   createDeferred,
-  onMount,
-  onCleanup,
 } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { FilterConfig } from '../filters';
 import type { SoupEntity } from './soup-view-context';
+import { throttle } from '@solid-primitives/scheduled';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 300;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
@@ -273,25 +272,24 @@ export const createSearchState = ({
 
   // NOTE: this is effectively the same as useHistory but with soup
   const itemsQuery = useSoupItemsQuery(() => ITEM_PRELOAD_ARGS);
-
-  // NOTE: we may have a lot of items so we load in batches
-  onMount(() => {
-    const interval = setInterval(() => {
-      if (!itemsQuery.hasNextPage) clearInterval(interval);
-      if (itemsQuery.hasNextPage && !itemsQuery.isFetchingNextPage) {
-        itemsQuery.fetchNextPage();
-      }
-    }, 2000);
-    onCleanup(() => clearInterval(interval));
+  const itemsFetchNextPage = throttle(() => itemsQuery.fetchNextPage(), 2000);
+  createDeferred(() => {
+    if (itemsQuery.hasNextPage && !itemsQuery.isFetchingNextPage) {
+      itemsFetchNextPage();
+    }
   });
 
   const channelItemsQuery = useSoupItemsQuery(() => CHANNEL_PRELOAD_ARGS);
+  const channelItemsFetchNextPage = throttle(
+    () => channelItemsQuery.fetchNextPage(),
+    2000
+  );
   createDeferred(() => {
     if (
       channelItemsQuery.hasNextPage &&
       !channelItemsQuery.isFetchingNextPage
     ) {
-      channelItemsQuery.fetchNextPage();
+      channelItemsFetchNextPage();
     }
   });
 
