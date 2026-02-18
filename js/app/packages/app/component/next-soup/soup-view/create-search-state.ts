@@ -21,7 +21,7 @@ import { type Accessor, createMemo, createSignal, on } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { FilterConfig } from '../filters';
 import type { SoupEntity } from './soup-view-context';
-import { intersectEntityPools } from '../utils';
+import { intersectEntityPools } from '../search-utils';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 300;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
