@@ -21,7 +21,7 @@ use crate::domain::{
             GetNotificationsByEventItemIdsRequest, NotificationStatus, UpdateNotificationsRequest,
         },
     },
-    service::NotificationIngress,
+    service::NotificationReader,
 };
 
 /// Path parameter for a single event item ID.
@@ -51,7 +51,7 @@ impl<S> Clone for NotificationRouterState<S> {
     }
 }
 
-impl<S: NotificationIngress> NotificationRouterState<S> {
+impl<S: NotificationReader> NotificationRouterState<S> {
     /// create a new instance of self
     pub fn new(val: S) -> Self {
         NotificationRouterState {
@@ -61,7 +61,7 @@ impl<S: NotificationIngress> NotificationRouterState<S> {
 }
 
 /// construct the router
-pub fn router<S: NotificationIngress, T: Serialize + DeserializeOwned + Send + 'static>()
+pub fn router<S: NotificationReader, T: Serialize + DeserializeOwned + Send + 'static>()
 -> Router<NotificationRouterState<S>> {
     Router::new()
         .route("/bulk/seen", patch(bulk_mark_seen))
@@ -87,7 +87,7 @@ pub struct GetAllUserNotificationsResponse<T> {
 
 /// List user notifications with generic metadata type `T`.
 pub async fn list_user_notifications<
-    S: NotificationIngress,
+    S: NotificationReader,
     T: Serialize + DeserializeOwned + Send,
 >(
     State(service): State<NotificationRouterState<S>>,
@@ -142,7 +142,7 @@ pub struct BulkGetByEventItemIdsRequest {
     )
 )]
 pub async fn bulk_get_by_event_item_ids<
-    S: NotificationIngress,
+    S: NotificationReader,
     T: Serialize + DeserializeOwned + Send,
 >(
     State(service): State<NotificationRouterState<S>>,
@@ -197,7 +197,7 @@ pub struct NotificationBulkRequest {
         (status = 500, body = ErrorResponse),
     )
 )]
-pub async fn bulk_mark_seen<S: NotificationIngress>(
+pub async fn bulk_mark_seen<S: NotificationReader>(
     State(service): State<NotificationRouterState<S>>,
     macro_user: MacroUserExtractor,
     Json(req): Json<NotificationBulkRequest>,
@@ -218,7 +218,7 @@ pub async fn bulk_mark_seen<S: NotificationIngress>(
         (status = 500, body = ErrorResponse),
     )
 )]
-pub async fn bulk_mark_done<S: NotificationIngress>(
+pub async fn bulk_mark_done<S: NotificationReader>(
     State(service): State<NotificationRouterState<S>>,
     macro_user: MacroUserExtractor,
     Json(req): Json<NotificationBulkRequest>,
@@ -239,7 +239,7 @@ pub async fn bulk_mark_done<S: NotificationIngress>(
         (status = 500, body = ErrorResponse),
     )
 )]
-pub async fn bulk_mark_undone<S: NotificationIngress>(
+pub async fn bulk_mark_undone<S: NotificationReader>(
     State(service): State<NotificationRouterState<S>>,
     macro_user: MacroUserExtractor,
     Json(req): Json<NotificationBulkRequest>,
@@ -247,7 +247,7 @@ pub async fn bulk_mark_undone<S: NotificationIngress>(
     bulk_update(&service, &macro_user, &req, NotificationStatus::Done(false)).await
 }
 
-async fn bulk_update<S: NotificationIngress>(
+async fn bulk_update<S: NotificationReader>(
     service: &NotificationRouterState<S>,
     macro_user: &MacroUserExtractor,
     req: &NotificationBulkRequest,
@@ -291,10 +291,7 @@ async fn bulk_update<S: NotificationIngress>(
         (status = 500, body = ErrorResponse),
     )
 )]
-pub async fn get_by_event_item_id<
-    S: NotificationIngress,
-    T: Serialize + DeserializeOwned + Send,
->(
+pub async fn get_by_event_item_id<S: NotificationReader, T: Serialize + DeserializeOwned + Send>(
     State(service): State<NotificationRouterState<S>>,
     macro_user: MacroUserExtractor,
     Path(EventItemIdPath { event_item_id }): Path<EventItemIdPath>,
@@ -343,7 +340,7 @@ pub async fn get_by_event_item_id<
     )
 )]
 pub async fn get_notification_by_id<
-    S: NotificationIngress,
+    S: NotificationReader,
     T: Serialize + DeserializeOwned + Send,
 >(
     State(service): State<NotificationRouterState<S>>,
@@ -391,7 +388,7 @@ pub async fn get_notification_by_id<
         (status = 500, body = ErrorResponse),
     )
 )]
-pub async fn delete_notification<S: NotificationIngress>(
+pub async fn delete_notification<S: NotificationReader>(
     State(service): State<NotificationRouterState<S>>,
     macro_user: MacroUserExtractor,
     Path(NotificationIdPath { notification_id }): Path<NotificationIdPath>,
@@ -426,7 +423,7 @@ pub async fn delete_notification<S: NotificationIngress>(
         (status = 500, body = ErrorResponse),
     )
 )]
-pub async fn bulk_delete_notifications<S: NotificationIngress>(
+pub async fn bulk_delete_notifications<S: NotificationReader>(
     State(service): State<NotificationRouterState<S>>,
     macro_user: MacroUserExtractor,
     Json(req): Json<NotificationBulkRequest>,

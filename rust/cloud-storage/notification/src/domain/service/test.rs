@@ -18,7 +18,8 @@ use crate::domain::ports::{
     WebSocketSender,
 };
 use crate::domain::service::{
-    NotificationEgressService, NotificationIngress, NotificationIngressService,
+    NotificationEgressService, NotificationIngress, NotificationIngressService, NotificationReader,
+    NotificationReaderService,
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -144,16 +145,12 @@ impl MockRepository {
 struct MockStateMachine;
 
 impl BulkDigestStateMachine for MockStateMachine {
-    fn ingest<T: Notification>(
+    async fn ingest<T: Notification + 'static>(
         &self,
         _notif: UserNotificationRow<Arc<T>>,
-    ) -> impl Future<
-        Output = Result<
-            crate::domain::models::email_notification_digest::StateMachineDecisionA<T>,
-            Report,
-        >,
-    > + Send {
-        async move { Err(report!("not implemented")) }
+    ) -> Result<crate::domain::models::email_notification_digest::StateMachineDecisionA<T>, Report>
+    {
+        Err(report!("not implemented"))
     }
 }
 
@@ -676,12 +673,8 @@ async fn test_queue_message_multiple_channels() {
     let has_conn_gateway = published
         .iter()
         .any(|m| m["content"]["ConnGateway"].is_object());
-    let has_ios = published
-        .iter()
-        .any(|m| m["content"]["Ios"].is_object());
-    let has_email = published
-        .iter()
-        .any(|m| m["content"]["Email"].is_object());
+    let has_ios = published.iter().any(|m| m["content"]["Ios"].is_object());
+    let has_email = published.iter().any(|m| m["content"]["Email"].is_object());
 
     assert!(has_conn_gateway, "Should have ConnGateway message");
     assert!(has_ios, "Should have iOS message");
@@ -1103,7 +1096,7 @@ async fn test_mark_seen_publishes_ios_clear_message() {
             ),
     );
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationIngressService::new(repo.clone(), queue.clone(), MockStateMachine);
+    let service = NotificationReaderService::new(repo.clone(), queue.clone());
 
     let notification_ids = [notif_id];
     service
@@ -1166,7 +1159,7 @@ async fn test_mark_seen_skips_push_when_no_collapse_key() {
         DeviceEndpoint::Ios("arn:aws:sns:us-east-1:111:endpoint/APNS/app/bob".to_string()),
     ));
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationIngressService::new(repo.clone(), queue.clone(), MockStateMachine);
+    let service = NotificationReaderService::new(repo.clone(), queue.clone());
 
     let notification_ids = [notif_id];
     service
@@ -1202,7 +1195,7 @@ async fn test_mark_seen_skips_push_when_no_device_endpoints() {
         // No device endpoints registered
     );
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationIngressService::new(repo.clone(), queue.clone(), MockStateMachine);
+    let service = NotificationReaderService::new(repo.clone(), queue.clone());
 
     let notification_ids = [notif_id];
     service
@@ -1244,7 +1237,7 @@ async fn test_mark_done_updates_db_and_clears_push() {
             ),
     );
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationIngressService::new(repo.clone(), queue.clone(), MockStateMachine);
+    let service = NotificationReaderService::new(repo.clone(), queue.clone());
 
     let notification_ids = [notif_id];
     service
@@ -1289,7 +1282,7 @@ async fn test_mark_undone_updates_db_no_push_clear() {
             ),
     );
     let queue = Arc::new(MockQueue::new());
-    let service = NotificationIngressService::new(repo.clone(), queue.clone(), MockStateMachine);
+    let service = NotificationReaderService::new(repo.clone(), queue.clone());
 
     let notification_ids = [notif_id];
     service

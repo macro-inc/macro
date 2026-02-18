@@ -58,6 +58,7 @@ macro_db_client = { path = "../macro_db_client", default-features = false, featu
   "account_merge_request",
   "team",
 ] }
+last_online_tracker = { path = "../last_online_tracker" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env", features = ["frontend_url"] }
 macro_env_var = { path = "../macro_env_var" }
@@ -81,6 +82,7 @@ notification = { path = "../notification" }
 notification_service_client = { path = "../notification_service_client" }
 openssl = { workspace = true }
 rand = { workspace = true }
+redis = { workspace = true }
 remote_env_var = { path = "../remote_env_var" }
 reqwest = { workspace = true }
 roles_and_permissions = { path = "../roles_and_permissions" }

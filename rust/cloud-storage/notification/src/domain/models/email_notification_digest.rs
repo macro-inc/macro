@@ -297,7 +297,7 @@ pub trait BulkDigestStateMachine: Send + Sync + 'static {
     /// Given an input notification, drive the state machine to an initial decision.
     ///
     /// See [`StateMachineDecisionA`] for the possible outcomes.
-    fn ingest<T: Notification>(
+    fn ingest<T: Notification + 'static>(
         &self,
         notif: UserNotificationRow<Arc<T>>,
     ) -> impl Future<Output = Result<StateMachineDecisionA<T>, Report>> + Send;
@@ -422,7 +422,7 @@ where
     O: LastOnlineChecker,
     B: DigestBatcher,
 {
-    fn ingest<T: Notification>(
+    fn ingest<T: Notification + 'static>(
         &self,
         notif: UserNotificationRow<Arc<T>>,
     ) -> impl Future<Output = Result<StateMachineDecisionA<T>, Report>> + Send {

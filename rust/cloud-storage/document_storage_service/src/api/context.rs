@@ -22,8 +22,13 @@ use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::F
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_env_var::env_var;
 use macro_sha_count_client::Redis;
+use notification::domain::models::email_notification_digest::StateMachineDriverA;
 use notification::domain::service::NotificationIngressService;
-use notification::outbound::{queue::SqsNotificationQueue, repository::DbNotificationRepository};
+use notification::outbound::{
+    digest_batcher::RedisDigestBatcher, last_online_checker::LastOnlineCheckerImpl,
+    push_notification_checker::PushNotificationCheckerImpl, queue::SqsNotificationQueue,
+    repository::DbNotificationRepository, user_existence_checker::DbUserExistenceChecker,
+};
 use opensearch_client::OpensearchClient;
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
@@ -56,8 +61,20 @@ type DssSoupState = SoupRouterState<
 >;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
-type NotificationIngressType =
-    NotificationIngressService<DbNotificationRepository<PgPool>, SqsNotificationQueue>;
+type StateMachine = StateMachineDriverA<
+    DbUserExistenceChecker,
+    PushNotificationCheckerImpl<DbNotificationRepository<PgPool>>,
+    LastOnlineCheckerImpl<
+        last_online_tracker::outbound::time::DefaultTime,
+        last_online_tracker::outbound::redis::RedisLastOnlineRepo,
+    >,
+    RedisDigestBatcher,
+>;
+pub(crate) type NotificationIngressType = NotificationIngressService<
+    DbNotificationRepository<PgPool>,
+    SqsNotificationQueue,
+    StateMachine,
+>;
 type PropertiesService = PropertiesServiceImpl<
     PropertiesPgRepo,
     PermissionServiceImpl,

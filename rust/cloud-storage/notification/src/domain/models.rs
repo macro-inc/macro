@@ -136,6 +136,26 @@ impl<T: Notification> TaggedContent<T> {
 }
 
 impl UserNotificationRow<serde_json::Value> {
+    /// Wrap the raw JSON metadata in a [`TaggedContent`] using the row's
+    /// `notification_event_type` as the tag. This produces the adjacently-tagged
+    /// shape produced by [`UserNotificationRow::into_tagged`] +
+    /// [`UserNotificationRow::into_json`].
+    pub fn into_tagged(self) -> UserNotificationRow<TaggedContent<serde_json::Value>> {
+        let tag = self.notification_event_type.clone();
+        self.map(|v| TaggedContent { tag, content: v })
+    }
+}
+
+impl<T: Serialize> UserNotificationRow<TaggedContent<T>> {
+    /// Serialize the [`TaggedContent`] wrapper back into a single JSON value,
+    /// producing `{ "tag": "...", "content": ... }`.
+    pub fn into_json(self) -> Result<UserNotificationRow<serde_json::Value>, serde_json::Error> {
+        let val = serde_json::to_value(&self.notification_metadata)?;
+        Ok(self.map(|_| val))
+    }
+}
+
+impl UserNotificationRow<serde_json::Value> {
     /// Deserialize the JSON metadata into a concrete type `T`.
     pub fn deserialize_json<T: DeserializeOwned>(
         self,
