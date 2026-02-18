@@ -2,62 +2,29 @@ import type { SoupState } from '@app/component/next-soup/create-soup-state';
 import {
   type FilterID,
   getFileAssociations,
-  EXCLUDE,
 } from '@app/component/next-soup/filters/filters';
+import { useSearchContext } from '@app/component/next-soup/search-context';
 import { arrayEquals } from '@core/util/compareUtils';
-import { debouncedDependent, throttledDependent } from '@core/util/debounce';
+import { debouncedDependent } from '@core/util/debounce';
 import { fuzzyMatch } from '@core/util/fuzzy';
 import { mergeAdjacentMacroEmTags } from '@core/util/searchHighlight';
 import { createFreshSearch } from '@core/util/freshSort';
 import type { EntityData, WithSearch } from '@entity';
 import { isChannelEntity } from '@entity';
-import {
-  type SoupItemsQueryFilters,
-  type SoupItemsQueryArgs,
-  useSoupItemsQuery,
-} from '@queries/soup/items';
+import { type SoupItemsQueryFilters } from '@queries/soup/items';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import type {
   UnifiedSearchIndex,
   UnifiedSearchRequest,
 } from '@service-search/generated/models';
-import {
-  type Accessor,
-  createMemo,
-  createSignal,
-  on,
-  createDeferred,
-} from 'solid-js';
+import { type Accessor, createMemo, createSignal, on } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { FilterConfig } from '../filters';
 import type { SoupEntity } from './soup-view-context';
-import { throttle } from '@solid-primitives/scheduled';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 300;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
 const FEATURED_COUNT = 3;
-
-const CHANNEL_PRELOAD_ARGS: SoupItemsQueryArgs = {
-  params: { limit: 500, sort_method: 'updated_at' },
-  body: {
-    chat_filters: { chat_ids: EXCLUDE },
-    document_filters: { document_ids: EXCLUDE },
-    email_filters: { recipients: EXCLUDE },
-    project_filters: { project_ids: EXCLUDE },
-    channel_filters: { channel_ids: [] },
-  },
-};
-
-const ITEM_PRELOAD_ARGS: SoupItemsQueryArgs = {
-  params: { limit: 500, sort_method: 'updated_at' },
-  body: {
-    chat_filters: { chat_ids: [] },
-    document_filters: { document_ids: [] },
-    email_filters: { recipients: EXCLUDE },
-    project_filters: { project_ids: [] },
-    channel_filters: { channel_ids: EXCLUDE },
-  },
-};
 
 // we drop explicit noise because it's essentially an identity filter for search results
 const getValidSearchFilters = (
@@ -270,47 +237,12 @@ export const createSearchState = ({
     })
   );
 
-  // NOTE: this is effectively the same as useHistory but with soup
-  const itemsQuery = useSoupItemsQuery(() => ITEM_PRELOAD_ARGS);
-  const itemsFetchNextPage = throttle(() => itemsQuery.fetchNextPage(), 2000);
-  createDeferred(() => {
-    if (itemsQuery.hasNextPage && !itemsQuery.isFetchingNextPage) {
-      itemsFetchNextPage();
-    }
-  });
-
-  const channelItemsQuery = useSoupItemsQuery(() => CHANNEL_PRELOAD_ARGS);
-  const channelItemsFetchNextPage = throttle(
-    () => channelItemsQuery.fetchNextPage(),
-    2000
-  );
-  createDeferred(() => {
-    if (
-      channelItemsQuery.hasNextPage &&
-      !channelItemsQuery.isFetchingNextPage
-    ) {
-      channelItemsFetchNextPage();
-    }
-  });
-
-  const [localFuzzyEntityPool, setLocalFuzzyEntityPool] = createSignal<
-    EntityData[]
-  >([]);
-  // NOTE: this will load the local fuzzy results in the background
-  // we use the throttled signals to avoid calculating too often
-  const itemsQueryData = throttledDependent(() => itemsQuery.data ?? [], 5000);
-  const channelItemsQueryData = throttledDependent(
-    () => channelItemsQuery.data ?? [],
-    5000
-  );
-  createDeferred(() => {
-    setLocalFuzzyEntityPool([...itemsQueryData(), ...channelItemsQueryData()]);
-  });
+  const { entityPool } = useSearchContext();
 
   const localFuzzyResults = createMemo(
     on(debouncedSearchForLocal, (query) => {
       if (!query || query.length === 0) return [];
-      const pool = localFuzzyEntityPool();
+      const pool = entityPool();
       // TODO: we can optimize fresh search for small feature counts since we
       // don't need to sort everything, we just need the featured results
       const freshSearchResults = freshSearch(pool, query);
