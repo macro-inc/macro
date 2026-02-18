@@ -100,6 +100,7 @@ export const SoupViewContextProvider: FlowComponent<
 
   const [internalQueryFilters, setQueryFilters] =
     createSignal<SoupItemsQueryFilters>({});
+
   const [statusFilter, setStatusFilter] = createSignal<string | undefined>();
   const [assigneeFilter, setAssigneeFilter] = createSignal<
     string | undefined

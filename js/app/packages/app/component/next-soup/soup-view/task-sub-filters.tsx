@@ -146,14 +146,12 @@ export const TaskAssigneeDropdown: Component<DropdownProps> = (props) => {
       <FilterTrigger filter={assigneeFilter}>
         <Show
           when={assigneeFilter()}
+          keyed
           fallback={<UserCircleIcon class="size-3.5" />}
         >
-          <UserIcon
-            id={assigneeFilter()!}
-            size="xs"
-            suppressClick
-            showTooltip={false}
-          />
+          {(id) => (
+            <UserIcon id={id} size="xs" suppressClick showTooltip={false} />
+          )}
         </Show>
         <span class="leading-none">{activeAssigneeLabel()}</span>
         <Show
