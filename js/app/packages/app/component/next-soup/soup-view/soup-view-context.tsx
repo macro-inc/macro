@@ -58,7 +58,6 @@ interface SoupViewContextValues {
   source: DataSource<EntityData>;
   searchText: Accessor<string>;
   setSearchText: (value: string) => void;
-  isSearchDisabled: Accessor<boolean>;
   featuredCount: Accessor<number>;
   rows: Accessor<SoupRow[]>;
   queryFilters: Accessor<SoupItemsQueryFilters>;
@@ -288,7 +287,7 @@ export const SoupViewContextProvider: FlowComponent<
     return entities().map((e) => attachMethods(e));
   });
 
-  const { itemsQuery: searchItemsQuery, searchQuery } = search;
+  const { searchQuery } = search;
 
   const context = {
     soup,
@@ -296,7 +295,7 @@ export const SoupViewContextProvider: FlowComponent<
       data: entities,
       isLoading: () => {
         if (itemsQuery.isLoading) return true;
-        if (searchQuery.isLoading && !searchItemsQuery.data) return true;
+        if (searchQuery.isLoading) return true;
         return false;
       },
       isFetching: () => itemsQuery.isFetching || searchQuery.isFetching,
@@ -320,7 +319,6 @@ export const SoupViewContextProvider: FlowComponent<
     rows,
     searchText: search.searchText,
     setSearchText: search.setSearchText,
-    isSearchDisabled: search.isSearchDisabled,
     featuredCount,
     queryFilters,
     setQueryFilters,

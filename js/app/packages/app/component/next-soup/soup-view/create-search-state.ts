@@ -338,12 +338,9 @@ export const createSearchState = ({
     searchText,
     setSearchText,
     isSearching,
-    isSearchDisabled: isSearchServiceDisabled,
-    debouncedSearchForLocal,
     localFuzzyResults,
     serviceSearchResults,
     featuredIds,
-    itemsQuery,
     searchQuery,
   };
 };
