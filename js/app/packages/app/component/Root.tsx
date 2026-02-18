@@ -409,31 +409,31 @@ export function Root() {
             <ConfiguredGlobalAppStateProvider>
               <ChannelsContextProvider>
                 <QuickAccessProvider>
-                <SearchProvider>
-                  <TabAttachmentsInit />
-                  <ReactiveFavicon />
-                  <Title>{tabTitle()}</Title>
-                  <MacroJump />
-                  <Visor />
-                  <SuspenseContextComp fallback={<RootSuspenseFallback />}>
-                    <IsomorphicRouter
-                      transformUrl={transformShortIdInUrlPathname}
-                      root={Layout}
-                      rootPreload={rootPreload}
-                      base={ROUTER_BASE}
-                    >
-                      {{
-                        path: '/',
-                        component: TauriRouteListener,
-                        children: ROUTES,
-                      }}
-                    </IsomorphicRouter>
-                  </SuspenseContextComp>
-                  <ToastRegion />
-                  <Show when={ENABLE_WEBSOCKET_DEBUGGER}>
-                    <WebsocketDebugger />
-                  </Show>
-                </SearchProvider>
+                  <SearchProvider>
+                    <TabAttachmentsInit />
+                    <ReactiveFavicon />
+                    <Title>{tabTitle()}</Title>
+                    <MacroJump />
+                    <Visor />
+                    <SuspenseContextComp fallback={<RootSuspenseFallback />}>
+                      <IsomorphicRouter
+                        transformUrl={transformShortIdInUrlPathname}
+                        root={Layout}
+                        rootPreload={rootPreload}
+                        base={ROUTER_BASE}
+                      >
+                        {{
+                          path: '/',
+                          component: TauriRouteListener,
+                          children: ROUTES,
+                        }}
+                      </IsomorphicRouter>
+                    </SuspenseContextComp>
+                    <ToastRegion />
+                    <Show when={ENABLE_WEBSOCKET_DEBUGGER}>
+                      <WebsocketDebugger />
+                    </Show>
+                  </SearchProvider>
                 </QuickAccessProvider>
               </ChannelsContextProvider>
             </ConfiguredGlobalAppStateProvider>
