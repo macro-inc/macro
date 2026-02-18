@@ -148,11 +148,6 @@ if (LOCAL_ONLY) {
   );
 
   registerComponent(
-    'quick-access',
-    lazy(() => import('@core/context/quickAccess/debug/QuickAccessDemo'))
-  );
-
-  registerComponent(
     'quick-access-list',
     lazy(() => import('@core/context/quickAccess/debug/QuickAccessAll'))
   );
