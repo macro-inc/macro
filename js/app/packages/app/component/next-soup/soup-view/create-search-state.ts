@@ -46,7 +46,7 @@ const CHANNEL_PRELOAD_ARGS: SoupItemsQueryArgs = {
     document_filters: { document_ids: EXCLUDE },
     email_filters: { recipients: EXCLUDE },
     project_filters: { project_ids: EXCLUDE },
-    channel_filters: { channel_types: [] },
+    channel_filters: { channel_ids: [] },
   },
 };
 
@@ -67,27 +67,6 @@ const getValidSearchFilters = (
 ) => {
   return filters.filter((f) => f.id !== 'explicit-noise');
 };
-
-/** Merges entity pools into a single list, (optionally) deduplicating by id */
-function mergeEntityPools(
-  pools: readonly EntityData[][],
-  options?: {
-    noDeduplicate?: boolean;
-  }
-): EntityData[] {
-  const flat = pools.flat();
-  if (options?.noDeduplicate) {
-    return flat;
-  }
-  const seen = new Set<string>();
-  const deduplicated: EntityData[] = [];
-  for (const item of flat) {
-    if (seen.has(item.id)) continue;
-    seen.add(item.id);
-    deduplicated.push(item);
-  }
-  return deduplicated;
-}
 
 /** Takes a list of entity pools and returns a list of unique entities that are present in all pools, deduplicating by id */
 function intersectEntityPools(pools: readonly EntityData[][]): EntityData[] {
@@ -306,12 +285,7 @@ export const createSearchState = ({
     5000
   );
   createDeferred(() => {
-    const pool = mergeEntityPools(
-      [itemsQueryData(), channelItemsQueryData()],
-      // these data sources are already deduplicated so we can avoid recalculating
-      { noDeduplicate: true }
-    );
-    setLocalFuzzyEntityPool(pool);
+    setLocalFuzzyEntityPool([...itemsQueryData(), ...channelItemsQueryData()]);
   });
 
   const nameFuzzySearchFilter = (items: EntityData[], query: string) => {
