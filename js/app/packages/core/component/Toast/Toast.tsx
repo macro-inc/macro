@@ -56,7 +56,7 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
       hover: 'hover:bg-success/80',
       text: 'text-success-ink',
     },
-    closeButtonHover: 'hover:text-success-ink',
+    closeButtonHover: 'hover:text-success-ink hover:bg-success/10',
   },
   [ToastType.FAILURE]: {
     background: 'bg-failure/10',
@@ -70,7 +70,7 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
       hover: 'hover:bg-failure/80',
       text: 'text-failure-ink',
     },
-    closeButtonHover: 'hover:text-failure-ink',
+    closeButtonHover: 'hover:text-failure-ink hover:bg-failure/10',
   },
   [ToastType.ALERT]: {
     background: 'bg-alert/10',
@@ -84,7 +84,7 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
       hover: 'hover:bg-alert/80',
       text: 'text-alert-ink',
     },
-    closeButtonHover: 'hover:text-alert-ink',
+    closeButtonHover: 'hover:text-alert-ink hover:bg-alert/10',
   },
   [ToastType.LOADING]: {
     background: 'bg-accent/10',
@@ -98,7 +98,7 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
       hover: 'hover:bg-accent/80',
       text: 'text-panel',
     },
-    closeButtonHover: 'hover:text-accent',
+    closeButtonHover: 'hover:text-accent hover:bg-accent/10',
   },
 };
 
