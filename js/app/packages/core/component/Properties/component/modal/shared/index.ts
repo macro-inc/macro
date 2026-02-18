@@ -1,7 +1,5 @@
 export type { DropdownOption } from './Dropdown';
 export { Dropdown } from './Dropdown';
-export { DropdownSearchInput } from './DropdownSearchInput';
-export { DropdownSelectableRow } from './DropdownSelectableRow';
 export {
   type CombinedEntity,
   createEntitySearchConfig,

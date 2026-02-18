@@ -1,6 +1,11 @@
+import { Hotkey } from '@core/component/Hotkey';
+import { useKeyPressed } from '@core/util/useKeyPressed';
 import PlusIcon from '@icon/regular/plus.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
+import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import {
+  type Accessor,
+  createEffect,
   createMemo,
   createSignal,
   For,
@@ -8,14 +13,144 @@ import {
   onMount,
   Show,
 } from 'solid-js';
+import type { JSX, ParentComponent } from 'solid-js';
 import { useSearchInputFocus } from '../../../utils';
 import { ERROR_MESSAGES } from '../../../utils/errorHandling';
 import { PropertyValueIcon } from '../../propertyValue';
 import { OptionCheckBox } from './OptionCheckBox';
-import { useDropdownSearch } from '@core/util/useDropdownSearch';
-import { DropdownSearchInput } from './DropdownSearchInput';
-import { DropdownSelectableRow } from './DropdownSelectableRow';
 import type { SelectableOption, OptionSelectorConfig } from './types';
+
+type UseDropdownSearchOptions = {
+  itemCount: Accessor<number>;
+  onSelect: (index: number) => void;
+  onClose: () => void;
+};
+
+const useDropdownSearch = (options: UseDropdownSearchOptions) => {
+  const [searchQuery, setSearchQuery] = createSignal('');
+  const [selectedIndex, setSelectedIndex] = createSignal(0);
+  const keyboardMode = useKeyPressed(100);
+
+  createEffect(() => {
+    const count = options.itemCount();
+    if (count === 0) {
+      setSelectedIndex(0);
+    } else {
+      setSelectedIndex((prev) => Math.min(prev, count - 1));
+    }
+  });
+
+  const shouldShowHotkeys = () =>
+    !searchQuery().trim() && options.itemCount() <= 9;
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      options.onClose();
+      return;
+    }
+
+    const count = options.itemCount();
+    if (count === 0) return;
+
+    if (shouldShowHotkeys() && /^[1-9]$/.test(e.key)) {
+      e.preventDefault();
+      const idx = parseInt(e.key) - 1;
+      if (idx < count) options.onSelect(idx);
+      return;
+    }
+
+    if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'j')) {
+      e.preventDefault();
+      setSelectedIndex((prev) => (prev + 1) % count);
+    } else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'k')) {
+      e.preventDefault();
+      setSelectedIndex((prev) => (prev - 1 + count) % count);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      options.onSelect(selectedIndex());
+    }
+  };
+
+  const reset = () => {
+    setSelectedIndex(0);
+    setSearchQuery('');
+  };
+
+  return {
+    searchQuery,
+    setSearchQuery,
+    selectedIndex,
+    setSelectedIndex,
+    keyboardMode,
+    shouldShowHotkeys,
+    handleKeyDown,
+    reset,
+  };
+};
+
+type DropdownSearchInputProps = {
+  value: string;
+  placeholder: string;
+  onInput: (value: string) => void;
+  onKeyDown?: JSX.EventHandlerUnion<HTMLInputElement, KeyboardEvent>;
+  inputType?: string;
+  inputRef?: (element: HTMLInputElement) => void;
+};
+
+const DropdownSearchInput = (props: DropdownSearchInputProps) => {
+  return (
+    <div class="flex w-full items-center py-1 gap-2 px-2 border-b border-edge-muted">
+      <SearchIcon class="h-4 w-4 text-ink-muted" />
+      <input
+        class="w-full caret-accent"
+        ref={props.inputRef}
+        type={props.inputType ?? 'text'}
+        value={props.value}
+        onInput={(event) => props.onInput(event.currentTarget.value)}
+        onKeyDown={props.onKeyDown}
+        placeholder={props.placeholder}
+      />
+    </div>
+  );
+};
+
+type DropdownSelectableRowProps = {
+  isSelected: boolean;
+  dataIndex?: number;
+  showHotkey?: boolean;
+  hotkeyShortcut?: string;
+  rightContent?: JSX.Element;
+  onClick?: JSX.EventHandlerUnion<HTMLDivElement, MouseEvent>;
+  onMouseEnter?: JSX.EventHandlerUnion<HTMLDivElement, MouseEvent>;
+};
+
+const DropdownSelectableRow: ParentComponent<DropdownSelectableRowProps> = (
+  props
+) => {
+  return (
+    <div
+      data-dropdown-index={props.dataIndex}
+      class="flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2"
+      classList={{
+        'bg-hover': props.isSelected,
+      }}
+      onClick={props.onClick}
+      onMouseEnter={props.onMouseEnter}
+    >
+      <div class="flex items-center gap-2 flex-1 min-w-0">{props.children}</div>
+      <div class="flex items-center gap-2 flex-shrink-0">
+        <Show when={props.showHotkey && props.hotkeyShortcut}>
+          <div class="text-[0.625rem] px-1.5 py-0.5 border border-edge-muted text-ink-muted font-mono rounded-xs">
+            <Hotkey shortcut={props.hotkeyShortcut!} />
+          </div>
+        </Show>
+        {props.rightContent}
+      </div>
+    </div>
+  );
+};
 
 type SelectOptionsProps = {
   config: OptionSelectorConfig;
@@ -110,7 +245,6 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
 
       for (const selectedId of selectedIds) {
         if (!availableOptionIds.has(selectedId)) {
-          // Find the actual option from props.options to get its value
           const actualOption = props.options.find(
             (opt) => opt.id === selectedId
           );
@@ -253,7 +387,6 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                             onClick={() => {
                               if (item.option) {
                                 props.onToggleOption(item.option.id);
-                                // If not multi-select, close the modal after selection
                                 if (
                                   !props.config.isMultiSelect &&
                                   props.onClose
