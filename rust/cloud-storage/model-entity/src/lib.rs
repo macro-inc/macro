@@ -89,7 +89,6 @@ pub struct Entity<'a> {
     pub entity_id: Cow<'a, str>,
 }
 
-
 impl<'a> CowLike<'a> for Entity<'a> {
     type Owned<'b> = Entity<'b>;
 

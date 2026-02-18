@@ -1,4 +1,6 @@
-use crate::domain::models::{AggregateId, FrecencyAction, FrecencyData, FrecencyEntity, FrecencyEvent};
+use crate::domain::models::{
+    AggregateId, FrecencyAction, FrecencyData, FrecencyEntity, FrecencyEvent,
+};
 
 use super::*;
 use chrono::Utc;

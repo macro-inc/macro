@@ -74,8 +74,6 @@ pub struct TrackingData<'a> {
 pub trait EntityConnectionExt<'a> {
     /// provide a connection_id string slice to upgrade this type into an [EntityConnection]
     fn with_connection_str(self, connection_id: &'a str) -> EntityConnection<'a>;
-    /// provide a connection_id string to upgrade this type into an [EntityConnection]
-    fn with_connection_string(self, connection_id: String) -> EntityConnection<'a>;
 }
 
 impl<'a> EntityConnectionExt<'a> for Entity<'a> {
@@ -83,13 +81,6 @@ impl<'a> EntityConnectionExt<'a> for Entity<'a> {
         EntityConnection {
             extra: self,
             connection_id: Cow::Borrowed(connection_id),
-        }
-    }
-
-    fn with_connection_string(self, connection_id: String) -> EntityConnection<'a> {
-        EntityConnection {
-            extra: self,
-            connection_id: Cow::Owned(connection_id),
         }
     }
 }

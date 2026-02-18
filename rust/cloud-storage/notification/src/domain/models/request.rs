@@ -8,8 +8,8 @@ use crate::domain::{
     },
     service::SendNotificationError,
 };
-use itertools::Itertools;
 use cowlike::CowLike;
+use itertools::Itertools;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use rootcause::{Report, report};

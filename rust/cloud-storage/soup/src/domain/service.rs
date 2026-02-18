@@ -6,6 +6,7 @@ use crate::domain::{
     ports::{SoupOutput, SoupRepo, SoupService},
 };
 use comms::domain::{models::GetChannelsRequest, ports::ChannelsService};
+use cowlike::CowLike;
 use doppleganger::Mirror;
 use either::Either;
 use email::domain::{
@@ -17,7 +18,6 @@ use frecency::domain::{
     ports::FrecencyQueryService,
 };
 use item_filters::{EntityFilters, ast::EntityFilterAst};
-use cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{
     Cursor, CursorVal, Frecency, FrecencyValue, PaginateOn, Query, SimpleSortMethod,

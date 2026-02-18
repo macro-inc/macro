@@ -1,6 +1,7 @@
 use crate::{
     model::{
-        connection::ConnectionContext, message::OutgoingMessage,
+        connection::ConnectionContext,
+        message::OutgoingMessage,
         tracking::{EntityConnectionExt, TrackingData},
         websocket::ToWebsocketMessage,
     },
