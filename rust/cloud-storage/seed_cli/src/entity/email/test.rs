@@ -97,7 +97,23 @@ fn parse_email_bulk_generate_missing_email_fails() {
 }
 
 #[test]
-fn parse_email_seed_minimal() {
+fn parse_email_seed_defaults() {
+    let cli = Cli::try_parse_from(["seed_cli", "email", "seed"]).unwrap();
+
+    match cli.command {
+        crate::entity::EntityCommand::Email(args) => match args.command {
+            EmailCommand::Seed(create) => {
+                assert_eq!(create.file_path, None);
+                assert_eq!(create.concurrency, 95);
+            }
+            other => panic!("expected Seed, got {other:?}"),
+        },
+        other => panic!("expected Email, got {other:?}"),
+    }
+}
+
+#[test]
+fn parse_email_seed_with_file_path_override() {
     let cli = Cli::try_parse_from([
         "seed_cli",
         "email",
@@ -110,7 +126,7 @@ fn parse_email_seed_minimal() {
     match cli.command {
         crate::entity::EntityCommand::Email(args) => match args.command {
             EmailCommand::Seed(create) => {
-                assert_eq!(create.file_path, "/tmp/emails.json");
+                assert_eq!(create.file_path, Some("/tmp/emails.json".to_string()));
                 assert_eq!(create.concurrency, 95);
             }
             other => panic!("expected Seed, got {other:?}"),
@@ -125,8 +141,6 @@ fn parse_email_seed_with_concurrency() {
         "seed_cli",
         "email",
         "seed",
-        "--file-path",
-        "/tmp/emails.json",
         "--concurrency",
         "10",
     ])
@@ -141,12 +155,6 @@ fn parse_email_seed_with_concurrency() {
         },
         other => panic!("expected Email, got {other:?}"),
     }
-}
-
-#[test]
-fn parse_email_seed_missing_file_path_fails() {
-    let result = Cli::try_parse_from(["seed_cli", "email", "seed"]);
-    assert!(result.is_err());
 }
 
 // ── Helpers ────────────────────────────────────────────────
@@ -225,7 +233,7 @@ async fn seed_inserts_link_labels_and_threads() {
 
     let args = EmailArgs {
         command: EmailCommand::Seed(SeedArgs {
-            file_path: file.path().to_str().unwrap().to_string(),
+            file_path: Some(file.path().to_str().unwrap().to_string()),
             concurrency: 95,
         }),
     };
@@ -255,7 +263,7 @@ async fn seed_single_thread() {
 
     let args = EmailArgs {
         command: EmailCommand::Seed(SeedArgs {
-            file_path: file.path().to_str().unwrap().to_string(),
+            file_path: Some(file.path().to_str().unwrap().to_string()),
             concurrency: 95,
         }),
     };
@@ -270,7 +278,7 @@ async fn seed_missing_file_fails() {
 
     let args = EmailArgs {
         command: EmailCommand::Seed(SeedArgs {
-            file_path: "/nonexistent/path.json".to_string(),
+            file_path: Some("/nonexistent/path.json".to_string()),
             concurrency: 95,
         }),
     };
@@ -288,7 +296,7 @@ async fn seed_invalid_json_fails() {
 
     let args = EmailArgs {
         command: EmailCommand::Seed(SeedArgs {
-            file_path: file.path().to_str().unwrap().to_string(),
+            file_path: Some(file.path().to_str().unwrap().to_string()),
             concurrency: 95,
         }),
     };
@@ -329,7 +337,7 @@ async fn seed_continues_on_thread_failure() {
 
     let args = EmailArgs {
         command: EmailCommand::Seed(SeedArgs {
-            file_path: file.path().to_str().unwrap().to_string(),
+            file_path: Some(file.path().to_str().unwrap().to_string()),
             concurrency: 1, // sequential so ordering is predictable
         }),
     };
@@ -351,7 +359,7 @@ async fn seed_link_failure_propagates() {
 
     let args = EmailArgs {
         command: EmailCommand::Seed(SeedArgs {
-            file_path: file.path().to_str().unwrap().to_string(),
+            file_path: Some(file.path().to_str().unwrap().to_string()),
             concurrency: 95,
         }),
     };
@@ -378,7 +386,7 @@ async fn seed_label_failure_propagates() {
 
     let args = EmailArgs {
         command: EmailCommand::Seed(SeedArgs {
-            file_path: file.path().to_str().unwrap().to_string(),
+            file_path: Some(file.path().to_str().unwrap().to_string()),
             concurrency: 95,
         }),
     };

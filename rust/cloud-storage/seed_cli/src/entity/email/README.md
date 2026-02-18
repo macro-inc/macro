@@ -43,17 +43,16 @@ Output is written to `seed_cli/seed/emails.json`.
 Reads the generated JSON and inserts everything into the database.
 
 ```bash
-cargo run -- email seed \
-  --file-path /absolute/path/to/seed_cli/seed/emails.json
+cargo run -- email seed
 ```
 
-Use the absolute path printed by the bulk-generate command.
+By default reads from `seed/emails.json`. Use `--file-path` to override.
 
 ### Options
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--file-path` | required | Path to the JSON file |
+| `--file-path` | `seed/emails.json` | Path to the JSON file |
 | `--concurrency` | 95 | Max concurrent database insertions |
 
 ### What gets inserted

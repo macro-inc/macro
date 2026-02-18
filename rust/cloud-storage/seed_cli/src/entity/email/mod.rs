@@ -72,9 +72,9 @@ pub struct BulkGenerateArgs {
 /// Arguments for importing email data from a file.
 #[derive(Debug, Args)]
 pub struct SeedArgs {
-    /// Path to the JSON file containing email data to import
+    /// Path to the JSON file containing email data to import (defaults to seed/emails.json)
     #[arg(long)]
-    pub file_path: String,
+    pub file_path: Option<String>,
     /// Max concurrent database insertions
     #[arg(long, default_value = "95")]
     pub concurrency: usize,
@@ -374,8 +374,16 @@ async fn bulk_generate(args: BulkGenerateArgs) -> anyhow::Result<()> {
 async fn seed(args: SeedArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
     tracing::info!("importing email seed data");
 
-    let content = std::fs::read_to_string(Path::new(&args.file_path))
-        .with_context(|| format!("failed to read json file: {}", args.file_path))?;
+    let default_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("seed")
+        .join("emails.json");
+    let file_path = args
+        .file_path
+        .map(std::path::PathBuf::from)
+        .unwrap_or(default_path);
+
+    let content = std::fs::read_to_string(&file_path)
+        .with_context(|| format!("failed to read json file: {}", file_path.display()))?;
 
     let seed_data: SeedEmailData =
         serde_json::from_str(&content).context("failed to parse seed data json")?;
