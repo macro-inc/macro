@@ -35,6 +35,7 @@ import {
   useContext,
 } from 'solid-js';
 import { matchesTaskSubFilters } from './task-sub-filter-matcher';
+import { DEFAULT_SEARCH_SORT } from '../search-context';
 
 type Row<T> = {
   original: T;
@@ -275,30 +276,23 @@ export const SoupViewContextProvider: FlowComponent<
 
     const sorts = soup.sort.active();
 
-    // NOTE: we only need this if we're including local fuzzy results in the more data section
-    // otherwise the backend will return results in the correct order
-    // if (search.isSearching()) {
-    //   transformed.sort(sortEntitiesForSearch);
-    // }
+    if (sorts.length === 0) return transformed;
 
-    // NOTE: this is the search api response default sort so no need to sort again in this case
-    if (
-      search.isSearching() &&
-      sorts.length === 1 &&
-      sorts[0].id === 'updated_at'
-    )
-      return transformed;
-
-    if (sorts.length > 0) {
-      transformed.sort((a, b) => {
-        for (const sort of sorts) {
-          const result = sort.fn(a, b);
-          if (result !== 0) return result;
-        }
-        return 0;
-      });
+    if (sorts.length === 1) {
+      const sort = sorts[0];
+      // // NOTE: this is the search api response default sort so no need to re-sort
+      // if (search.isSearching() && sort.id === DEFAULT_SEARCH_SORT)
+      //   return transformed;
+      return transformed.sort((a, b) => sort.fn(a, b));
     }
 
+    transformed.sort((a, b) => {
+      for (const sort of sorts) {
+        const result = sort.fn(a, b);
+        if (result !== 0) return result;
+      }
+      return 0;
+    });
     return transformed;
   };
 

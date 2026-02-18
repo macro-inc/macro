@@ -15,8 +15,10 @@ import {
 } from 'solid-js';
 import { throttle } from '@solid-primitives/scheduled';
 
+export const DEFAULT_SEARCH_SORT = 'updated_at';
+
 const CHANNEL_PRELOAD_ARGS: SoupItemsQueryArgs = {
-  params: { limit: 500, sort_method: 'updated_at' },
+  params: { limit: 500, sort_method: DEFAULT_SEARCH_SORT },
   body: {
     chat_filters: { chat_ids: EXCLUDE },
     document_filters: { document_ids: EXCLUDE },
@@ -27,7 +29,7 @@ const CHANNEL_PRELOAD_ARGS: SoupItemsQueryArgs = {
 };
 
 const ITEM_PRELOAD_ARGS: SoupItemsQueryArgs = {
-  params: { limit: 500, sort_method: 'updated_at' },
+  params: { limit: 500, sort_method: DEFAULT_SEARCH_SORT },
   body: {
     chat_filters: { chat_ids: [] },
     document_filters: { document_ids: [] },
