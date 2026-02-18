@@ -427,19 +427,17 @@ function MarkdownArea(
           useBlockBoundary={true}
           portalScope={props.portalScope}
         />
-        <Show when={globalAttachmentsReady()}>
-          <MentionsMenu
-            editor={editor}
-            menu={mentionsMenuOperations}
-            users={() => []}
-            // NOTE: we use default channel history
-            history={props.history}
-            block={'chat'}
-            useBlockBoundary={true}
-            portalScope={props.portalScope}
-            useSnapshotForDocuments={ENABLE_SNAPSHOT_NODE}
-          />
-        </Show>
+        <MentionsMenu
+          editor={editor}
+          menu={mentionsMenuOperations}
+          users={() => []}
+          // NOTE: we use default channel history
+          history={props.history}
+          block={'chat'}
+          useBlockBoundary={true}
+          portalScope={props.portalScope}
+          useSnapshotForDocuments={ENABLE_SNAPSHOT_NODE}
+        />
         <FloatingMenuGroup>
           <FloatingLinkMenu />
         </FloatingMenuGroup>
