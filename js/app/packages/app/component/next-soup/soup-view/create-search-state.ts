@@ -27,6 +27,7 @@ import {
   createRenderEffect,
   createSignal,
   on,
+  createDeferred,
 } from 'solid-js';
 import { match } from 'ts-pattern';
 
@@ -203,7 +204,7 @@ export const createSearchState = ({
 
   // NOTE: this is effectively the same as useHistory but with soup
   const itemsQuery = useSoupItemsQuery(() => ITEM_PRELOAD_ARGS);
-  createRenderEffect(() => {
+  createDeferred(() => {
     if (itemsQuery.hasNextPage && !itemsQuery.isFetchingNextPage) {
       itemsQuery.fetchNextPage();
     }
