@@ -73,11 +73,6 @@ const useDropdownSearch = (options: UseDropdownSearchOptions) => {
     }
   };
 
-  const reset = () => {
-    setSelectedIndex(0);
-    setSearchQuery('');
-  };
-
   return {
     searchQuery,
     setSearchQuery,
@@ -86,7 +81,6 @@ const useDropdownSearch = (options: UseDropdownSearchOptions) => {
     keyboardMode,
     shouldShowHotkeys,
     handleKeyDown,
-    reset,
   };
 };
 
@@ -94,7 +88,6 @@ type DropdownSearchInputProps = {
   value: string;
   placeholder: string;
   onInput: (value: string) => void;
-  onKeyDown?: JSX.EventHandlerUnion<HTMLInputElement, KeyboardEvent>;
   inputType?: string;
   inputRef?: (element: HTMLInputElement) => void;
 };
@@ -109,7 +102,6 @@ const DropdownSearchInput = (props: DropdownSearchInputProps) => {
         type={props.inputType ?? 'text'}
         value={props.value}
         onInput={(event) => props.onInput(event.currentTarget.value)}
-        onKeyDown={props.onKeyDown}
         placeholder={props.placeholder}
       />
     </div>
@@ -118,7 +110,6 @@ const DropdownSearchInput = (props: DropdownSearchInputProps) => {
 
 type DropdownSelectableRowProps = {
   isSelected: boolean;
-  dataIndex?: number;
   showHotkey?: boolean;
   hotkeyShortcut?: string;
   rightContent?: JSX.Element;
@@ -131,7 +122,6 @@ const DropdownSelectableRow: ParentComponent<DropdownSelectableRowProps> = (
 ) => {
   return (
     <div
-      data-dropdown-index={props.dataIndex}
       class="flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2"
       classList={{
         'bg-hover': props.isSelected,
@@ -290,10 +280,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
     () => !props.isLoading && !props.error
   );
 
-  const AddOptionButton = (props: {
-    isSelected: boolean;
-    hotkeyNumber?: number;
-  }) => (
+  const AddOptionButton = (props: { isSelected: boolean }) => (
     <div
       onClick={handleAddOption}
       class={`flex flex-row w-full justify-between items-center gap-2 py-1.5 px-2 ${
