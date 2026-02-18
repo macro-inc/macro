@@ -4,13 +4,15 @@ import {
   getFileAssociations,
 } from '@app/component/next-soup/filters/filters';
 import { useSearchContext } from '@app/component/next-soup/search-context';
+import {
+  createSoupFreshSearch,
+  getValidSearchFilters,
+  intersectEntityPools,
+  nameFuzzySearchFilter,
+} from '@app/component/next-soup/search-utils';
 import { arrayEquals } from '@core/util/compareUtils';
 import { debouncedDependent } from '@core/util/debounce';
-import { fuzzyMatch } from '@core/util/fuzzy';
-import { mergeAdjacentMacroEmTags } from '@core/util/searchHighlight';
-import { createFreshSearch } from '@core/util/freshSort';
-import type { EntityData, WithSearch } from '@entity';
-import { isChannelEntity } from '@entity';
+import type { EntityData } from '@entity';
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import type {
@@ -19,67 +21,12 @@ import type {
 } from '@service-search/generated/models';
 import { type Accessor, createMemo, createSignal, on } from 'solid-js';
 import { match } from 'ts-pattern';
-import type { FilterConfig } from '../filters';
-import type { SoupEntity } from './soup-view-context';
-import { intersectEntityPools } from '../search-utils';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 300;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
 const FEATURED_COUNT = 3;
 
-// we drop explicit noise because it's essentially an identity filter for search results
-const getValidSearchFilters = (
-  filters: readonly FilterConfig<SoupEntity>[]
-) => {
-  return filters.filter((f) => f.id !== 'explicit-noise');
-};
-
-/** adds name highlight to item list based on fuzzy match */
-const nameFuzzySearchFilter = (
-  items: EntityData[],
-  query: string
-): EntityData[] | WithSearch<EntityData>[] => {
-  if (!query || query.length === 0) return items;
-
-  const matchResults = fuzzyMatch(query, items, (item) => item.name, {
-    noSort: true,
-  });
-
-  //  we need to return the original items in the same order
-  const resultMap = new Map(
-    matchResults.map((r) => [
-      r.item.id,
-      { nameHighlight: r.nameHighlight, score: r.score },
-    ])
-  );
-  return items
-    .filter((item) => resultMap.has(item.id))
-    .map((item) => {
-      const matchResult = resultMap.get(item.id)!;
-      return {
-        ...item,
-        search: {
-          nameHighlight: mergeAdjacentMacroEmTags(matchResult.nameHighlight),
-          contentHitData: null,
-          source: 'local',
-        },
-      } as WithSearch<EntityData>;
-    });
-};
-
-const freshSearch = createFreshSearch<EntityData>(
-  {
-    useViewedAt: true,
-    channelBoost: 3,
-    fuzzyWeight: 0.7,
-    timeWeight: 0.3,
-    minFuzzyThreshold: 0.1,
-    commaSeparatedChannelMatch: true,
-  },
-  (item) => item.name,
-  (item) => isChannelEntity(item),
-  (item) => item
-);
+const freshSearch = createSoupFreshSearch();
 
 interface CreateSearchStateArgs {
   soup: SoupState;
