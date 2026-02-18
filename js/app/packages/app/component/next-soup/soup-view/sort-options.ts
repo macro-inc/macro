@@ -77,18 +77,19 @@ export const sortEntitiesForSearch = <T extends EntityData>(
     return 0;
   }
 
-  const channelsWithNameMatchesFirst = (a: WithSearch<T>, b: WithSearch<T>) => {
-    if (a.type === 'channel' && b.type !== 'channel' && a.search.nameHighlight)
-      return -1;
-    if (a.type !== 'channel' && b.type === 'channel' && b.search.nameHighlight)
-      return 1;
-    return 0;
-  };
+  // TODO: we may want to sort exact name matches first for other items too
+  // const channelsWithNameMatchesFirst = (a: WithSearch<T>, b: WithSearch<T>) => {
+  //   if (a.type === 'channel' && b.type !== 'channel' && a.search.nameHighlight)
+  //     return -1;
+  //   if (a.type !== 'channel' && b.type === 'channel' && b.search.nameHighlight)
+  //     return 1;
+  //   return 0;
+  // };
 
   // NOTE: backend returns items in descending order of updatedAt so we match that here
   const updatedAtDesc = (a: WithSearch<T>, b: WithSearch<T>) =>
     compareDateDesc(a.updatedAt, b.updatedAt);
 
-  // TODO: we may want to sort exact name matches first for other items too
-  return channelsWithNameMatchesFirst(a, b) || updatedAtDesc(a, b);
+  // return channelsWithNameMatchesFirst(a, b) || updatedAtDesc(a, b);
+  return updatedAtDesc(a, b);
 };
