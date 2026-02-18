@@ -44,7 +44,7 @@ type ThreadListProps<T extends { id: string }> = {
   isPrepending?: Accessor<boolean>;
 };
 
-const NEAR_TOP_THRESHOLD = 300;
+const NEAR_TOP_THRESHOLD = 600;
 const NEAR_BOTTOM_THRESHOLD = 1.5;
 const BASE_ITEM_SIZE = 50;
 export const DEFAULT_INITIAL_SCROLL_TARGET: ThreadListScrollTarget = {
@@ -73,7 +73,6 @@ export function ThreadList<T extends { id: string }>(
   props: ThreadListProps<T>
 ) {
   const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
-  const [isNearTop, setIsNearTop] = createSignal(false);
   const [isNearBottom, setIsNearBottom] = createSignal(false);
 
   const resolveTargetIndex = (target: ThreadListScrollTarget): number => {
@@ -179,7 +178,7 @@ export function ThreadList<T extends { id: string }>(
       handle.scrollSize - handle.viewportSize - handle.scrollOffset <=
       NEAR_BOTTOM_THRESHOLD;
 
-    if (nearTop && !nearBottom && !isNearTop()) {
+    if (nearTop && !nearBottom) {
       props.onScrollNearTop?.();
     }
 
@@ -187,7 +186,6 @@ export function ThreadList<T extends { id: string }>(
       props.onScrollNearBottom?.();
     }
 
-    setIsNearTop(nearTop);
     setIsNearBottom(nearBottom);
   };
 

@@ -41,8 +41,8 @@ export function flattenMessages(
 export function Channel(props: ChannelProps) {
   const messagesQuery = useChannelMessagesQuery(() => props.channelId);
   const [isPrepending, setIsPrepending] = createSignal(false);
-  const [threadListNavigation, setThreadListNavigation] =
-    createSignal<ThreadListNavigation>();
+  const [pendingTopFetch, setPendingTopFetch] = createSignal(false);
+  const [, setThreadListNavigation] = createSignal<ThreadListNavigation>();
 
   const threadListInitialScrollTarget = (): ThreadListScrollTarget => {
     if (props.targetMessageId) {
@@ -61,13 +61,20 @@ export function Channel(props: ChannelProps) {
 
   const fetchMoreNearTop = async () => {
     if (!messagesQuery.hasNextPage) return;
-    if (messagesQuery.isFetchingNextPage || isPrepending()) return;
+    if (messagesQuery.isFetchingNextPage || isPrepending()) {
+      setPendingTopFetch(true);
+      return;
+    }
 
     setIsPrepending(true);
     try {
-      await messagesQuery.fetchNextPage();
+      do {
+        setPendingTopFetch(false);
+        await messagesQuery.fetchNextPage();
+      } while (messagesQuery.hasNextPage && pendingTopFetch());
     } finally {
       setIsPrepending(false);
+      setPendingTopFetch(false);
     }
   };
 
