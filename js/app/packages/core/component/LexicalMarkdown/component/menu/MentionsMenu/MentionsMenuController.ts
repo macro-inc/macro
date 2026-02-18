@@ -20,9 +20,7 @@ export type ViewAllMode = string | null;
 /** the currently selected category id, or null if in view-all mode */
 export type SelectedCategory = string | null;
 
-/**
- * Result of bin computation - how many items to show per bucket
- */
+/** result of bin computation - how many items to show per bucket */
 export type MentionBins = Record<string, number>;
 
 export class MentionsMenuController {

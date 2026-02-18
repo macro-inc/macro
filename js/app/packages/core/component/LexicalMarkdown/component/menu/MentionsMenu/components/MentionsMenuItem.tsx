@@ -32,7 +32,7 @@ export function MentionsMenuItem(props: {
   const icon = () => {
     switch (props.item.kind) {
       case 'user':
-        return <UserIcon id={props.item.id} size="sm" isDeleted={false} />;
+        return <UserIcon id={props.item.id} size="xs" isDeleted={false} />;
 
       case 'group':
         return <UsersIcon class="size-4 text-ink-muted" />;
@@ -61,7 +61,6 @@ export function MentionsMenuItem(props: {
         );
 
       case 'command':
-        // Commands shouldn't appear in mentions menu, but handle gracefully
         return null;
     }
   };

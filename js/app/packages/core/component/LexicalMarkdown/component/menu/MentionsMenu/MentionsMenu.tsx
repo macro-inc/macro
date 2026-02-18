@@ -1,7 +1,6 @@
 import type { BlockName } from '@core/block';
 import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
 import { SUPPORTED_CHAT_ATTACHMENT_BLOCKS } from '@core/component/AI/constant/fileType';
-
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import { useQuickAccess, type EntityItem } from '@core/context/quickAccess';
 import clickOutside from '@core/directive/clickOutside';
@@ -23,7 +22,6 @@ import {
   untrack,
 } from 'solid-js';
 import { createLazyMemo } from '@solid-primitives/memo';
-
 import { floatWithElement } from '../../../directive/floatWithElement';
 import { floatWithSelection } from '../../../directive/floatWithSelection';
 import { CLOSE_INLINE_SEARCH_COMMAND } from '../../../plugins';
@@ -37,14 +35,13 @@ import { ClippedPanel } from '@core/component/ClippedPanel';
 import { debouncedDependent } from '@core/util/debounce';
 import type { BucketConfig } from './MentionsMenuController';
 import { useMentionsMenuController } from './MentionsMenuController';
-import { ItemBin, MentionsMenuItem } from './components/index';
-import { createItemHandler } from './utils';
-import {
-  useUsersMention,
-  useEntityMention,
-  useEmailSearchMention,
-} from './hooks';
+import { ItemBin } from './components/ItemBin';
+import { MentionsMenuItem } from './components/MentionsMenuItem';
+import { createItemHandler } from './utils/mentionHandlers';
 import { useMenuKeyboardNavigation } from '../useMenuKeyboardNavigation';
+import { useUsersMention } from './hooks/useUsersMention';
+import { useEntityMention } from './hooks/useEntityMention';
+import { useEmailSearchMention } from './hooks/useEmailSearchMention';
 
 const MAX_ITEMS = 8;
 
@@ -117,7 +114,8 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     );
   });
 
-  // Get open tabs from split manager
+  const currentBlockId = useMaybeBlockId();
+
   const openTabs = createLazyMemo(() => {
     const splitManager = globalSplitManager();
     if (!splitManager) return [];
@@ -136,6 +134,8 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       ) {
         continue;
       }
+
+      if (split.content.id === currentBlockId) continue;
 
       const key = `${split.content.type}:${split.content.id}`;
       if (seenKeys.has(key)) continue;
@@ -346,8 +346,6 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     controller.exitViewAll();
   };
 
-  const hasOnlyOneCategory = controller.hasOnlyOneCategory;
-
   const viewAllCategoryLabel = () => {
     const mode = controller.viewAllMode();
     if (!mode) return 'Items';
@@ -467,7 +465,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                     </span>
                     <button
                       type="button"
-                      class="text-xs font-medium text-ink-muted hover:text-ink hover:underline"
+                      class="text-xs font-medium text-ink-muted hover:text-ink hover:underline flex items-center gap-1"
                       onMouseDown={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -478,10 +476,10 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                         handleBackToAll();
                       }}
                     >
-                      ←{' '}
-                      {hasOnlyOneCategory()
-                        ? 'Back to summary'
-                        : 'Back to everything'}
+                      <div class="p-0.5 px-1 -my-2 bg-panel text-ink border border-edge-muted rounded-xs text-xs">
+                        ←
+                      </div>
+                      Back to everything
                     </button>
                   </div>
                 </div>

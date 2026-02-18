@@ -44,14 +44,11 @@ export function ItemBin(
           props.isSelected ? 'text-ink-muted' : 'text-ink-extra-muted'
         )}
       >
-        <span class="flex items-center gap-1.5">
-          {props.label}
-          <Show when={props.isSelected && showViewAllButton()}> →</Show>
-        </span>
+        <span class="flex items-center gap-1.5">{props.label}</span>
         <Show when={showViewAllButton()}>
           <button
             type="button"
-            class="text-xs font-medium hover:text-ink hover:underline"
+            class="text-xs font-medium hover:text-ink hover:underline flex items-center gap-1"
             onMouseDown={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -62,6 +59,11 @@ export function ItemBin(
               props.onViewAll?.(props.binType);
             }}
           >
+            <Show when={props.isSelected && showViewAllButton()}>
+              <div class="p-0.5 px-1 -my-2 bg-panel text-ink border border-edge-muted rounded-xs text-xs">
+                →
+              </div>
+            </Show>
             {viewAllText()}
           </button>
         </Show>
