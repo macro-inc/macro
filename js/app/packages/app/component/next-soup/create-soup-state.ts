@@ -26,7 +26,6 @@ export type GroupConfig<T> = {
 export type SortConfig<T> = {
   id: string;
   fn: (a: T, b: T) => number;
-  desc?: boolean;
 };
 
 interface SoupContextOptions<
