@@ -84,9 +84,7 @@ where
             NotificationChannel::ConnGateway(conn) => {
                 Either::Left([self.deliver_conn_gateway(conn).await])
             }
-            NotificationChannel::Email(email) => {
-                Either::Left([self.deliver_email(email).await])
-            }
+            NotificationChannel::Email(email) => Either::Left([self.deliver_email(email).await]),
             NotificationChannel::Ios(apns) => Either::Right(self.deliver_ios(apns).await),
         };
 

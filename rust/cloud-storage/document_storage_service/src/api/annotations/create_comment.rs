@@ -21,8 +21,7 @@ use model::{
     response::ErrorResponse,
     user::UserContext,
 };
-use notification::domain::service::{NotificationIngress, NotificationIngressService};
-use notification::outbound::{queue::SqsNotificationQueue, repository::DbNotificationRepository};
+use notification::domain::service::NotificationIngress;
 use sqlx::PgPool;
 
 use super::comment_error_response;
@@ -50,9 +49,7 @@ pub struct Params {
     )]
 #[axum::debug_handler(state = ApiContext)]
 pub async fn create_comment_handler(
-    State(notification_ingress_service): State<
-        Arc<NotificationIngressService<DbNotificationRepository<PgPool>, SqsNotificationQueue>>,
-    >,
+    State(notification_ingress_service): State<Arc<crate::api::context::NotificationIngressType>>,
     State(db): State<PgPool>,
     State(conn_gateway_client): State<Arc<ConnectionGatewayClient>>,
     Extension(UserContext { user_id, .. }): Extension<UserContext>,

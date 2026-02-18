@@ -92,7 +92,10 @@ async fn test_get_unsubscribed_users_different_item(pool: Pool<Postgres>) {
 async fn test_get_device_endpoints(pool: Pool<Postgres>) {
     let user = test_user("user1@test.com");
 
-    let result = pool.get_device_endpoints(&[user.clone()]).await.unwrap();
+    let result = pool
+        .get_device_endpoints(std::slice::from_ref(&user))
+        .await
+        .unwrap();
 
     let endpoints = result.get(&user).expect("user should have endpoints");
     assert_eq!(endpoints.len(), 2);

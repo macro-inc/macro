@@ -32,7 +32,7 @@ async fn get_redis_connection() -> MultiplexedConnection {
 }
 
 /// Mutex to serialize Redis digest tests since they share global state (`digest_pending_users`).
-static TEST_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+static TEST_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 async fn cleanup_redis(conn: &mut MultiplexedConnection) {
     let keys: Vec<String> = redis::cmd("KEYS")
@@ -83,14 +83,15 @@ fn create_test_notification(
         viewed_at: None,
         updated_at: Some(Utc::now()),
         deleted_at: None,
-        notification_metadata: serde_json::to_value(TaggedContent::new(notification)).expect("serialize cannot fail"),
+        notification_metadata: serde_json::to_value(TaggedContent::new(notification))
+            .expect("serialize cannot fail"),
         sender_id: None,
     }
 }
 
 #[tokio::test]
 async fn test_add_to_digest_creates_pending_entry() {
-    let _guard = TEST_MUTEX.lock().unwrap();
+    let _guard = TEST_MUTEX.lock().await;
     let mut conn = get_redis_connection().await;
     cleanup_redis(&mut conn).await;
 
@@ -120,7 +121,7 @@ async fn test_add_to_digest_creates_pending_entry() {
 
 #[tokio::test]
 async fn test_add_multiple_notifications_same_user() {
-    let _guard = TEST_MUTEX.lock().unwrap();
+    let _guard = TEST_MUTEX.lock().await;
     let mut conn = get_redis_connection().await;
     cleanup_redis(&mut conn).await;
 
@@ -158,7 +159,7 @@ async fn test_add_multiple_notifications_same_user() {
 
 #[tokio::test]
 async fn test_claim_ready_digest_returns_empty_when_none_pending() {
-    let _guard = TEST_MUTEX.lock().unwrap();
+    let _guard = TEST_MUTEX.lock().await;
     let mut conn = get_redis_connection().await;
     cleanup_redis(&mut conn).await;
 
@@ -172,7 +173,7 @@ async fn test_claim_ready_digest_returns_empty_when_none_pending() {
 
 #[tokio::test]
 async fn test_claim_ready_digest_returns_wait_when_not_ready() {
-    let _guard = TEST_MUTEX.lock().unwrap();
+    let _guard = TEST_MUTEX.lock().await;
     let mut conn = get_redis_connection().await;
     cleanup_redis(&mut conn).await;
 
@@ -201,7 +202,7 @@ async fn test_claim_ready_digest_returns_wait_when_not_ready() {
 
 #[tokio::test]
 async fn test_claim_ready_digest_returns_batch_when_ready() {
-    let _guard = TEST_MUTEX.lock().unwrap();
+    let _guard = TEST_MUTEX.lock().await;
     let mut conn = get_redis_connection().await;
     cleanup_redis(&mut conn).await;
 
@@ -245,7 +246,7 @@ async fn test_claim_ready_digest_returns_batch_when_ready() {
 
 #[tokio::test]
 async fn test_new_notifications_during_processing_not_lost() {
-    let _guard = TEST_MUTEX.lock().unwrap();
+    let _guard = TEST_MUTEX.lock().await;
     let mut conn = get_redis_connection().await;
     cleanup_redis(&mut conn).await;
 
@@ -288,7 +289,7 @@ async fn test_new_notifications_during_processing_not_lost() {
 
 #[tokio::test]
 async fn test_multiple_users_independent() {
-    let _guard = TEST_MUTEX.lock().unwrap();
+    let _guard = TEST_MUTEX.lock().await;
     let mut conn = get_redis_connection().await;
     cleanup_redis(&mut conn).await;
 

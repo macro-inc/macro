@@ -31,11 +31,21 @@ use uuid::Uuid;
 /// Trait for sending notifications through the ingress service.
 pub trait NotificationIngress: Send + Sync + 'static {
     /// Send a notification to the specified recipients.
-    fn send_notification<'a, T: Notification + Clone, U: Serialize + Send + Sync>(
-        &self,
+    fn send_notification<
+        'a,
+        T: Notification + Clone + 'static,
+        U: Serialize + Send + Sync + 'static,
+    >(
+        &'a self,
         req: SendNotificationRequest<'a, T, U>,
     ) -> impl Future<Output = Result<Option<NotificationResult<'a>>, Report<SendNotificationError>>> + Send;
+}
 
+/// Trait for reading and updating notifications.
+///
+/// This is separated from [`NotificationIngress`] because these operations
+/// do not require the bulk-digest state machine.
+pub trait NotificationReader: Send + Sync + 'static {
     /// Mark notifications as seen for a user and enqueue push notification clearing.
     fn update_notifications(
         &self,
@@ -98,98 +108,6 @@ where
     Q: NotificationQueue,
     S: BulkDigestStateMachine,
 {
-    /// Update notification status for a user and optionally enqueue push notification clearing.
-    ///
-    /// This method performs the following steps:
-    /// 1. Update the notification status in the database (seen/done/undone)
-    /// 2. If the status change should clear push notifications:
-    ///    a. Look up collapse keys for the given notifications
-    ///    b. Look up the user's iOS device endpoints
-    ///    c. Publish silent background push messages to clear badges on devices
-    #[tracing::instrument(err, skip(self))]
-    async fn update_notifications(
-        &self,
-        req: UpdateNotificationsRequest<'_>,
-    ) -> Result<(), Report> {
-        match &req.status {
-            NotificationStatus::Seen => {
-                self.repository
-                    .mark_notifications_seen(&req.user_id, req.notification_ids)
-                    .await?;
-            }
-            NotificationStatus::Done(done) => {
-                self.repository
-                    .mark_notifications_done(&req.user_id, req.notification_ids, *done)
-                    .await?;
-            }
-        }
-
-        if !req.status.should_clear_push_notifs() {
-            return Ok(());
-        }
-
-        let notifications_with_keys = self
-            .repository
-            .get_basic_notifications(req.notification_ids)
-            .await?;
-
-        if notifications_with_keys.is_empty() {
-            return Ok(());
-        }
-
-        let device_endpoints = self
-            .repository
-            .get_device_endpoints(&[req.user_id.copied()])
-            .await?;
-
-        let ios_endpoints: Vec<String> = device_endpoints
-            .values()
-            .flatten()
-            .filter_map(|e| match e {
-                DeviceEndpoint::Ios(arn) => Some(arn.clone()),
-                DeviceEndpoint::Android(_) => None,
-            })
-            .collect();
-
-        if ios_endpoints.is_empty() {
-            return Ok(());
-        }
-
-        let messages: Vec<QueueMessage<'_, ClearPushIdentifier, ClearPushIdentifier>> =
-            notifications_with_keys
-                .into_iter()
-                .map(|n| {
-                    let collapse_key = n.apns_collapse_key;
-                    QueueMessage {
-                        message_type: "clear_push_notification".to_string(),
-                        rate_limit: None,
-                        content: NotificationChannel::Ios(Box::new(APNSTargets {
-                            notif: APNSPushNotification {
-                                aps: Aps {
-                                    content_available: Some(1),
-                                    sound: None,
-                                    ..Default::default()
-                                },
-                                push_notification_data: ClearPushIdentifier {
-                                    identifier: collapse_key.clone(),
-                                },
-                            },
-                            attributes: MessageAttributes {
-                                push_type: PushType::Background,
-                                collapse_key,
-                            },
-                            ios_device_endpoints: ios_endpoints.clone(),
-                            bulk_digest_state_machine: Default::default(),
-                        })),
-                    }
-                })
-                .collect();
-
-        self.queue.publish(messages.into_iter()).await?;
-
-        Ok(())
-    }
-
     /// Send a notification to the specified recipients.
     ///
     /// This method performs the following steps:
@@ -197,144 +115,69 @@ where
     /// 2. Create notification in the database
     /// 3. Build and publish QueueMessage to SQS
     /// 4. Return result (delivery happens async via worker)
-    async fn send_notification<'a, T: Notification + Clone, U: Serialize + Send + Sync>(
-        &self,
+    fn send_notification<
+        'a,
+        T: Notification + Clone + 'static,
+        U: Serialize + Send + Sync + 'static,
+    >(
+        &'a self,
         request: SendNotificationRequest<'a, T, U>,
-    ) -> Result<Option<NotificationResult<'a>>, Report<SendNotificationError>> {
-        let mut request = self
-            .filter_recipients(request)
-            .await
-            .context(SendNotificationError::Other)?;
+    ) -> impl Future<Output = Result<Option<NotificationResult<'a>>, Report<SendNotificationError>>> + Send
+    {
+        Box::pin(async move {
+            let mut request = self
+                .filter_recipients(request)
+                .await
+                .context(SendNotificationError::Other)?;
 
-        if request.req.recipient_ids.is_empty() {
-            return Ok(None);
-        }
+            if request.req.recipient_ids.is_empty() {
+                return Ok(None);
+            }
 
-        let notification_id = Uuid::now_v7();
-        let (queue_messages, apns_collapse_key) = self
-            .build_queue_message(notification_id, &mut request)
-            .await?;
+            let notification_id = Uuid::now_v7();
+            let (queue_messages, apns_collapse_key) = self
+                .build_queue_message(notification_id, &mut request)
+                .await?;
 
-        let notified_recipients = request.req.recipient_ids.clone();
+            let notified_recipients = request.req.recipient_ids.clone();
 
-        // Create notification in DB (with collapse key if APNS was built)
-        let created = self
-            .repository
-            .create_notification(
-                request.req,
-                notification_id,
-                self.service_name,
-                apns_collapse_key.as_deref(),
+            // Create notification in DB (with collapse key if APNS was built)
+            let created = self
+                .repository
+                .create_notification(
+                    request.req,
+                    notification_id,
+                    self.service_name,
+                    apns_collapse_key.as_deref(),
+                )
+                .await
+                .context(SendNotificationError::Other)?;
+
+            // If notification already exists (idempotent), return early
+            let Some(n) = created else {
+                return Ok(Some(NotificationResult {
+                    notification_id,
+                    notified_recipients: HashSet::new(),
+                }));
+            };
+
+            let results = join_all(
+                n.into_iter()
+                    .map(|user_notif| self.state_machine_driver.ingest(user_notif)),
             )
-            .await
-            .context(SendNotificationError::Other)?;
+            .await;
 
-        // If notification already exists (idempotent), return early
-        let Some(n) = created else {
-            return Ok(Some(NotificationResult {
+            self.queue
+                .publish(queue_messages.with_state_decisions(results))
+                .await
+                .context(SendNotificationError::Other)?;
+
+            // Return result (delivery happens async)
+            Ok(Some(NotificationResult {
                 notification_id,
-                notified_recipients: HashSet::new(),
-            }));
-        };
-
-        let results = join_all(
-            n.into_iter()
-                .map(|user_notif| self.state_machine_driver.ingest(user_notif)),
-        )
-        .await;
-
-        self.queue
-            .publish(queue_messages.with_state_decisions(results))
-            .await
-            .context(SendNotificationError::Other)?;
-
-        // Return result (delivery happens async)
-        Ok(Some(NotificationResult {
-            notification_id,
-            notified_recipients,
-        }))
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn get_user_notifications<T: DeserializeOwned + Send>(
-        &self,
-        user_id: &str,
-        limit: Option<u32>,
-        cursor: Query<Uuid, CreatedAt, ()>,
-    ) -> Result<Paginated<UserNotificationRow<T>, String>, Report> {
-        let limit = limit.unwrap_or(20).min(500);
-
-        let rows = self
-            .repository
-            .get_user_notifications::<T>(user_id, limit, cursor)
-            .await?;
-
-        let paginated = rows
-            .into_iter()
-            .paginate_on(limit as usize, CreatedAt)
-            .into_page()
-            .type_erase();
-
-        Ok(paginated)
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn get_user_notifications_by_event_item_ids<T: DeserializeOwned + Send>(
-        &self,
-        req: GetNotificationsByEventItemIdsRequest<'_>,
-    ) -> Result<Paginated<UserNotificationRow<T>, String>, Report> {
-        let limit = req.limit.unwrap_or(20).min(500);
-
-        let rows = self
-            .repository
-            .get_user_notifications_by_event_item_ids::<T>(
-                req.user_id,
-                req.event_item_ids,
-                limit,
-                req.cursor,
-            )
-            .await?;
-
-        let paginated = rows
-            .into_iter()
-            .paginate_on(limit as usize, CreatedAt)
-            .into_page()
-            .type_erase();
-
-        Ok(paginated)
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn get_user_notification_by_id<T: DeserializeOwned + Send>(
-        &self,
-        user_id: &str,
-        notification_id: Uuid,
-    ) -> Result<Option<UserNotificationRow<T>>, Report> {
-        self.repository
-            .get_user_notification_by_id::<T>(user_id, notification_id)
-            .await
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn delete_user_notification(
-        &self,
-        user_id: &str,
-        notification_id: Uuid,
-    ) -> Result<(), Report> {
-        self.repository
-            .delete_user_notification(user_id, notification_id)
-            .await
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn bulk_delete_user_notifications(
-        &self,
-        user_id: &str,
-        notification_ids: &[Uuid],
-    ) -> Result<(), Report> {
-        self.repository
-            .bulk_delete_user_notifications(user_id, notification_ids)
-            .await
+                notified_recipients,
+            }))
+        })
     }
 }
 
@@ -460,5 +303,205 @@ where
             QueueMessageNeedsStateMachine::new(messages),
             apns_collapse_key,
         ))
+    }
+}
+
+/// Service for reading and updating notifications.
+///
+/// Handles notification queries, status updates, and deletion.
+/// Does not require a bulk-digest state machine.
+pub struct NotificationReaderService<N, Q> {
+    repository: N,
+    queue: Q,
+}
+
+impl<N, Q> NotificationReaderService<N, Q>
+where
+    N: NotificationRepository,
+    Q: NotificationQueue,
+{
+    /// Create a new reader service.
+    pub fn new(repository: N, queue: Q) -> Self {
+        Self { repository, queue }
+    }
+}
+
+impl<N, Q> NotificationReader for NotificationReaderService<N, Q>
+where
+    N: NotificationRepository,
+    Q: NotificationQueue,
+{
+    /// Update notification status for a user and optionally enqueue push notification clearing.
+    ///
+    /// This method performs the following steps:
+    /// 1. Update the notification status in the database (seen/done/undone)
+    /// 2. If the status change should clear push notifications:
+    ///    a. Look up collapse keys for the given notifications
+    ///    b. Look up the user's iOS device endpoints
+    ///    c. Publish silent background push messages to clear badges on devices
+    #[tracing::instrument(err, skip(self))]
+    async fn update_notifications(
+        &self,
+        req: UpdateNotificationsRequest<'_>,
+    ) -> Result<(), Report> {
+        match &req.status {
+            NotificationStatus::Seen => {
+                self.repository
+                    .mark_notifications_seen(&req.user_id, req.notification_ids)
+                    .await?;
+            }
+            NotificationStatus::Done(done) => {
+                self.repository
+                    .mark_notifications_done(&req.user_id, req.notification_ids, *done)
+                    .await?;
+            }
+        }
+
+        if !req.status.should_clear_push_notifs() {
+            return Ok(());
+        }
+
+        let notifications_with_keys = self
+            .repository
+            .get_basic_notifications(req.notification_ids)
+            .await?;
+
+        if notifications_with_keys.is_empty() {
+            return Ok(());
+        }
+
+        let device_endpoints = self
+            .repository
+            .get_device_endpoints(&[req.user_id.copied()])
+            .await?;
+
+        let ios_endpoints: Vec<String> = device_endpoints
+            .values()
+            .flatten()
+            .filter_map(|e| match e {
+                DeviceEndpoint::Ios(arn) => Some(arn.clone()),
+                DeviceEndpoint::Android(_) => None,
+            })
+            .collect();
+
+        if ios_endpoints.is_empty() {
+            return Ok(());
+        }
+
+        let messages: Vec<QueueMessage<'_, ClearPushIdentifier, ClearPushIdentifier>> =
+            notifications_with_keys
+                .into_iter()
+                .map(|n| {
+                    let collapse_key = n.apns_collapse_key;
+                    QueueMessage {
+                        message_type: "clear_push_notification".to_string(),
+                        rate_limit: None,
+                        content: NotificationChannel::Ios(Box::new(APNSTargets {
+                            notif: APNSPushNotification {
+                                aps: Aps {
+                                    content_available: Some(1),
+                                    sound: None,
+                                    ..Default::default()
+                                },
+                                push_notification_data: ClearPushIdentifier {
+                                    identifier: collapse_key.clone(),
+                                },
+                            },
+                            attributes: MessageAttributes {
+                                push_type: PushType::Background,
+                                collapse_key,
+                            },
+                            ios_device_endpoints: ios_endpoints.clone(),
+                            bulk_digest_state_machine: Default::default(),
+                        })),
+                    }
+                })
+                .collect();
+
+        self.queue.publish(messages.into_iter()).await?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_user_notifications<T: DeserializeOwned + Send>(
+        &self,
+        user_id: &str,
+        limit: Option<u32>,
+        cursor: Query<Uuid, CreatedAt, ()>,
+    ) -> Result<Paginated<UserNotificationRow<T>, String>, Report> {
+        let limit = limit.unwrap_or(20).min(500);
+
+        let rows = self
+            .repository
+            .get_user_notifications::<T>(user_id, limit, cursor)
+            .await?;
+
+        let paginated = rows
+            .into_iter()
+            .paginate_on(limit as usize, CreatedAt)
+            .into_page()
+            .type_erase();
+
+        Ok(paginated)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_user_notifications_by_event_item_ids<T: DeserializeOwned + Send>(
+        &self,
+        req: GetNotificationsByEventItemIdsRequest<'_>,
+    ) -> Result<Paginated<UserNotificationRow<T>, String>, Report> {
+        let limit = req.limit.unwrap_or(20).min(500);
+
+        let rows = self
+            .repository
+            .get_user_notifications_by_event_item_ids::<T>(
+                req.user_id,
+                req.event_item_ids,
+                limit,
+                req.cursor,
+            )
+            .await?;
+
+        let paginated = rows
+            .into_iter()
+            .paginate_on(limit as usize, CreatedAt)
+            .into_page()
+            .type_erase();
+
+        Ok(paginated)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_user_notification_by_id<T: DeserializeOwned + Send>(
+        &self,
+        user_id: &str,
+        notification_id: Uuid,
+    ) -> Result<Option<UserNotificationRow<T>>, Report> {
+        self.repository
+            .get_user_notification_by_id::<T>(user_id, notification_id)
+            .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn delete_user_notification(
+        &self,
+        user_id: &str,
+        notification_id: Uuid,
+    ) -> Result<(), Report> {
+        self.repository
+            .delete_user_notification(user_id, notification_id)
+            .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn bulk_delete_user_notifications(
+        &self,
+        user_id: &str,
+        notification_ids: &[Uuid],
+    ) -> Result<(), Report> {
+        self.repository
+            .bulk_delete_user_notifications(user_id, notification_ids)
+            .await
     }
 }

@@ -5,6 +5,7 @@
 
 pub mod digest_batcher;
 pub mod email;
+pub mod last_online_checker;
 pub mod message_receipt_repository;
 pub mod mobile;
 pub mod push_notification_checker;

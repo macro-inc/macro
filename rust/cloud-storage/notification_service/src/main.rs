@@ -100,12 +100,11 @@ pub async fn main() -> anyhow::Result<()> {
         aws_sdk_sqs::Client::new(&aws_config),
         vars.notification_queue.as_ref().to_string(),
     );
-    let ingress_service = ::notification::domain::service::NotificationIngressService::new(
+    let reader_service = ::notification::domain::service::NotificationReaderService::new(
         notification_repository,
         notification_queue.clone(),
     );
-    let ingress_state =
-        ::notification::inbound::http::NotificationRouterState::new(ingress_service);
+    let ingress_state = ::notification::inbound::http::NotificationRouterState::new(reader_service);
 
     // Set up egress worker for delivering notifications from the queue
     let egress_repository =

@@ -3,10 +3,10 @@
 #[cfg(all(test, feature = "redis-tests"))]
 mod test;
 
+use crate::domain::models::UserNotificationRow;
 use crate::domain::models::email_notification_digest::ports::{
     ClaimResult, DigestBatch, DigestBatcher,
 };
-use crate::domain::models::UserNotificationRow;
 use chrono::Utc;
 use macro_user_id::user_id::MacroUserIdStr;
 use redis::aio::MultiplexedConnection;
