@@ -24,7 +24,6 @@ import type {
 import {
   type Accessor,
   createMemo,
-  createRenderEffect,
   createSignal,
   on,
   createDeferred,
@@ -67,6 +66,49 @@ const getValidSearchFilters = (
 ) => {
   return filters.filter((f) => f.id !== 'explicit-noise');
 };
+
+const nameFuzzySearchFilter = (items: EntityData[], query: string) => {
+  if (!query || query.length === 0) return items;
+
+  const matchResults = fuzzyMatch(query, items, (item) => item.name, {
+    noSort: true,
+  });
+
+  //  we need to return the original items in the same order
+  const resultMap = new Map(
+    matchResults.map((r) => [
+      r.item.id,
+      { nameHighlight: r.nameHighlight, score: r.score },
+    ])
+  );
+  return items
+    .filter((item) => resultMap.has(item.id))
+    .map((item) => {
+      const matchResult = resultMap.get(item.id)!;
+      return {
+        ...item,
+        search: {
+          nameHighlight: mergeAdjacentMacroEmTags(matchResult.nameHighlight),
+          contentHitData: null,
+          source: 'local',
+        },
+      } as WithSearch<EntityData>;
+    });
+};
+
+const freshSearch = createFreshSearch<EntityData>(
+  {
+    useViewedAt: true,
+    channelBoost: 3,
+    fuzzyWeight: 0.7,
+    timeWeight: 0.3,
+    minFuzzyThreshold: 0.1,
+    commaSeparatedChannelMatch: true,
+  },
+  (item) => item.name,
+  (item) => isChannelEntity(item),
+  (item) => item
+);
 
 /** Takes a list of entity pools and returns a list of unique entities that are present in all pools, deduplicating by id */
 function intersectEntityPools(pools: readonly EntityData[][]): EntityData[] {
@@ -252,9 +294,34 @@ export const createSearchState = ({
   const [localFuzzyEntityPool, setLocalFuzzyEntityPool] = createSignal<
     EntityData[]
   >([]);
-  const [localFuzzyResults, setLocalFuzzyResults] = createSignal<EntityData[]>(
-    []
+  // NOTE: this will load the local fuzzy results in the background
+  // we use the throttled signals to avoid calculating too often
+  const itemsQueryData = throttledDependent(() => itemsQuery.data ?? [], 5000);
+  const channelItemsQueryData = throttledDependent(
+    () => channelItemsQuery.data ?? [],
+    5000
   );
+  createDeferred(() => {
+    setLocalFuzzyEntityPool([...itemsQueryData(), ...channelItemsQueryData()]);
+  });
+
+  const localFuzzyResults = createMemo(
+    on(debouncedSearchForLocal, (query) => {
+      if (!query || query.length === 0) return [];
+      const pool = localFuzzyEntityPool();
+      // TODO: we can optimize fresh search for small feature counts since we
+      // don't need to sort everything, we just need the featured results
+      const freshSearchResults = freshSearch(pool, query);
+      // NOTE: this is a temporary hack because the fresh search fuzzy library
+      // does not give us the highlighted matches
+      const results = nameFuzzySearchFilter(
+        freshSearchResults.map((r) => r.item),
+        query
+      );
+      return results;
+    })
+  );
+
   const allFiltersResults = createMemo((): Map<string, EntityData[]> => {
     if (!localFuzzyResults()) return new Map();
     const allFilters = getValidSearchFilters(soup.filters.available);
@@ -267,6 +334,7 @@ export const createSearchState = ({
     }
     return filterToResultMap;
   });
+
   const filteredLocalFuzzyResults = createMemo(() => {
     if (!localFuzzyResults()) return [];
     const activeFilters = getValidSearchFilters(soup.filters.active());
@@ -276,81 +344,6 @@ export const createSearchState = ({
     const merged = intersectEntityPools(pools);
     return merged.slice(0, FEATURED_COUNT);
   });
-
-  // NOTE: this will load the local fuzzy results in the background
-  // we use the throttled signals to avoid calculating too often
-  const itemsQueryData = throttledDependent(() => itemsQuery.data ?? [], 5000);
-  const channelItemsQueryData = throttledDependent(
-    () => channelItemsQuery.data ?? [],
-    5000
-  );
-  createDeferred(() => {
-    setLocalFuzzyEntityPool([...itemsQueryData(), ...channelItemsQueryData()]);
-  });
-
-  const nameFuzzySearchFilter = (items: EntityData[], query: string) => {
-    if (!query || query.length === 0) return items;
-
-    const matchResults = fuzzyMatch(query, items, (item) => item.name, {
-      noSort: true,
-    });
-
-    //  we need to return the original items in the same order
-    const resultMap = new Map(
-      matchResults.map((r) => [
-        r.item.id,
-        { nameHighlight: r.nameHighlight, score: r.score },
-      ])
-    );
-    return items
-      .filter((item) => resultMap.has(item.id))
-      .map((item) => {
-        const matchResult = resultMap.get(item.id)!;
-        return {
-          ...item,
-          search: {
-            nameHighlight: mergeAdjacentMacroEmTags(matchResult.nameHighlight),
-            contentHitData: null,
-            source: 'local',
-          },
-        } as WithSearch<EntityData>;
-      });
-  };
-
-  const freshSearch = createFreshSearch<EntityData>(
-    {
-      useViewedAt: true,
-      channelBoost: 3,
-      fuzzyWeight: 0.7,
-      timeWeight: 0.3,
-      minFuzzyThreshold: 0.1,
-      commaSeparatedChannelMatch: true,
-    },
-    (item) => item.name,
-    (item) => isChannelEntity(item),
-    (item) => item
-  );
-
-  createRenderEffect(
-    on([debouncedSearchForLocal], ([query]) => {
-      if (!query || query.length === 0) {
-        setLocalFuzzyResults([]);
-        return;
-      }
-      const pool = localFuzzyEntityPool();
-      // TODO: we can optimize fresh search for small feature counts since we
-      // don't need to sort everything, we just need the featured results
-      const freshSearchResults = freshSearch(pool, query);
-      // NOTE: this is a temporary hack because the fresh search fuzzy library
-      // does not give us the highlighted matches
-      const results = nameFuzzySearchFilter(
-        freshSearchResults.map((r) => r.item),
-        query
-      );
-
-      setLocalFuzzyResults(results);
-    })
-  );
 
   const serviceSearchResults = createMemo<EntityData[]>(() => {
     if (isSearchServiceDisabled()) return [];
