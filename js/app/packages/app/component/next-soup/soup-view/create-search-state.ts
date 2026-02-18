@@ -59,9 +59,15 @@ const ITEM_PRELOAD_ARGS: SoupItemsQueryArgs = {
 
 function mergeEntityPools(
   items: EntityData[],
-  extra: EntityData[]
+  extra: EntityData[],
+  options?: {
+    noDeduplicate?: boolean;
+  }
 ): EntityData[] {
   if (extra.length === 0) return items;
+  if (options?.noDeduplicate) {
+    return [...items, ...extra];
+  }
   const existingIds = new Set(items.map((e) => e.id));
   const newItems = extra.filter((e) => !existingIds.has(e.id));
   if (newItems.length === 0) return items;
@@ -241,7 +247,8 @@ export const createSearchState = ({
   const localFuzzyResults = createMemo(() => {
     const pool = mergeEntityPools(
       itemsQuery.data ?? [],
-      channelItemsQuery.data ?? []
+      channelItemsQuery.data ?? [],
+      { noDeduplicate: true }
     );
     return nameFuzzySearchFilter(pool);
   });
