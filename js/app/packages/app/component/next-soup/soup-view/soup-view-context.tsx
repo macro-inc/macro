@@ -35,7 +35,6 @@ import {
   useContext,
 } from 'solid-js';
 import { matchesTaskSubFilters } from './task-sub-filter-matcher';
-import { DEFAULT_SEARCH_SORT } from '../search-context';
 
 type Row<T> = {
   original: T;
@@ -275,24 +274,16 @@ export const SoupViewContextProvider: FlowComponent<
     transformed = deduplicateEntities(next);
 
     const sorts = soup.sort.active();
-
-    if (sorts.length === 0) return transformed;
-
-    if (sorts.length === 1) {
-      const sort = sorts[0];
-      // // NOTE: this is the search api response default sort so no need to re-sort
-      // if (search.isSearching() && sort.id === DEFAULT_SEARCH_SORT)
-      //   return transformed;
-      return transformed.sort((a, b) => sort.fn(a, b));
+    if (sorts.length > 0) {
+      transformed.sort((a, b) => {
+        for (const sort of sorts) {
+          const result = sort.fn(a, b);
+          if (result !== 0) return result;
+        }
+        return 0;
+      });
     }
 
-    transformed.sort((a, b) => {
-      for (const sort of sorts) {
-        const result = sort.fn(a, b);
-        if (result !== 0) return result;
-      }
-      return 0;
-    });
     return transformed;
   };
 
