@@ -5,7 +5,7 @@ import {
   EXCLUDE,
 } from '@app/component/next-soup/filters/filters';
 import { arrayEquals } from '@core/util/compareUtils';
-import { debouncedDependent } from '@core/util/debounce';
+import { debouncedDependent, throttledDependent } from '@core/util/debounce';
 import { fuzzyMatch } from '@core/util/fuzzy';
 import { mergeAdjacentMacroEmTags } from '@core/util/searchHighlight';
 import { createFreshSearch } from '@core/util/freshSort';
@@ -28,6 +28,7 @@ import {
   createSignal,
   on,
   createDeferred,
+  createEffect,
 } from 'solid-js';
 import { match } from 'ts-pattern';
 
@@ -210,6 +211,8 @@ export const createSearchState = ({
 
   // NOTE: this is effectively the same as useHistory but with soup
   const itemsQuery = useSoupItemsQuery(() => ITEM_PRELOAD_ARGS);
+
+  // NOTE: we may have a lot of items so we use a deferred fetch
   createDeferred(() => {
     if (itemsQuery.hasNextPage && !itemsQuery.isFetchingNextPage) {
       itemsQuery.fetchNextPage();
@@ -226,8 +229,31 @@ export const createSearchState = ({
     }
   });
 
-  const nameFuzzySearchFilter = (items: EntityData[]) => {
-    const query = debouncedSearchForLocal();
+  const [localFuzzyEntityPool, setLocalFuzzyEntityPool] = createSignal<
+    EntityData[]
+  >([]);
+  const [localFuzzyResults, setLocalFuzzyResults] = createSignal<EntityData[]>(
+    []
+  );
+
+  // NOTE: this will load the local fuzzy results in the background
+  // we use the throttled signals to avoid calculating too often
+  const itemsQueryData = throttledDependent(() => itemsQuery.data ?? [], 5000);
+  const channelItemsQueryData = throttledDependent(
+    () => channelItemsQuery.data ?? [],
+    5000
+  );
+  createDeferred(() => {
+    const pool = mergeEntityPools(
+      itemsQueryData(),
+      channelItemsQueryData(),
+      // these data sources are already deduplicated so we can avoid recalculating
+      { noDeduplicate: true }
+    );
+    setLocalFuzzyEntityPool(pool);
+  });
+
+  const nameFuzzySearchFilter = (query: string, items: EntityData[]) => {
     if (!query || query.length === 0) return items;
 
     const matchResults = fuzzyMatch(query, items, (item) => item.name);
@@ -244,14 +270,17 @@ export const createSearchState = ({
     });
   };
 
-  const localFuzzyResults = createMemo(() => {
-    const pool = mergeEntityPools(
-      itemsQuery.data ?? [],
-      channelItemsQuery.data ?? [],
-      { noDeduplicate: true }
-    );
-    return nameFuzzySearchFilter(pool);
-  });
+  createRenderEffect(
+    on(debouncedSearchForLocal, (query) => {
+      if (!query || query.length === 0) {
+        setLocalFuzzyResults([]);
+        return;
+      }
+      const pool = localFuzzyEntityPool();
+      const results = nameFuzzySearchFilter(query, pool);
+      setLocalFuzzyResults(results);
+    })
+  );
 
   const freshSearchResults = createMemo<EntityData[]>(() => {
     if (isSearchServiceDisabled()) return [];
