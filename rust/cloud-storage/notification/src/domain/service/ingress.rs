@@ -7,7 +7,7 @@ use crate::domain::models::apple::{APNSPushNotification, Aps};
 use crate::domain::models::mobile::{MessageAttributes, PushType};
 use crate::domain::models::queue_message::{
     APNSTargets, ClearPushIdentifier, ConnGatewayNotification, EmailNotification, Node,
-    NotificationChannel, QueueMessage,
+    NotificationChannel, QueueMessage, QueueMessageNeedsStateMachine,
 };
 use crate::domain::models::request::{
     GetNotificationsByEventItemIdsRequest, NotificationStatus, UpdateNotificationsRequest,
@@ -184,7 +184,7 @@ where
                 })
                 .collect();
 
-        self.queue.publish(&messages).await?;
+        self.queue.publish(messages.into_iter()).await?;
 
         Ok(())
     }
@@ -235,7 +235,7 @@ where
         };
 
         self.queue
-            .publish(&queue_messages)
+            .publish(queue_messages.into_iter())
             .await
             .context(SendNotificationError::Other)?;
 
@@ -374,7 +374,10 @@ where
         &self,
         notification_id: Uuid,
         notification: &mut SendNotificationRequest<'a, T, U>,
-    ) -> Result<(Vec<QueueMessage<'a, T, U>>, Option<String>), Report<SendNotificationError>> {
+    ) -> Result<
+        (Vec<QueueMessageNeedsStateMachine<'a, T, U>>, Option<String>),
+        Report<SendNotificationError>,
+    > {
         let rate_limit = notification.req.get_rate_limit()?;
         let message_type = T::TYPE_NAME.to_string();
         let mut messages = Vec::new();
@@ -451,6 +454,12 @@ where
             }
         }
 
-        Ok((messages, apns_collapse_key))
+        Ok((
+            messages
+                .into_iter()
+                .map(QueueMessageNeedsStateMachine::new)
+                .collect(),
+            apns_collapse_key,
+        ))
     }
 }
