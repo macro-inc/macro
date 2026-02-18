@@ -424,7 +424,9 @@ export function MentionsMenuItem(props: {
 export function MentionsMenu(props: Parameters<typeof MentionsMenuInner>[0]) {
   return (
     <Suspense>
-      <MentionsMenuInner {...props} />
+      <Show when={props.menu.isOpen()}>
+        <MentionsMenuInner {...props} />
+      </Show>
     </Suspense>
   );
 }
