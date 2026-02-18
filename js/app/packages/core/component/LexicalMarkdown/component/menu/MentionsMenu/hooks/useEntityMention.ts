@@ -13,8 +13,8 @@ export type UseEntityMentionOptions = {
 };
 
 export type UseEntityMentionResult = {
-  entities: Accessor<EntityItem[]>;
-  entitiesList: Accessor<EntityItem[]>;
+  searchedEntities: Accessor<EntityItem[]>;
+  allEntities: Accessor<EntityItem[]>;
 };
 
 /**
@@ -45,7 +45,7 @@ export function useEntityMention(
   });
 
   return {
-    entities,
-    entitiesList,
+    searchedEntities: entities,
+    allEntities: entitiesList,
   };
 }

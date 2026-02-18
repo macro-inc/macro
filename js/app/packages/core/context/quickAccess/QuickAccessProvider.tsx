@@ -231,14 +231,8 @@ export const [QuickAccessProvider, useQuickAccess] =
        * Returns the sorted index entries (lightweight id+timestamp arrays).
        */
       const processedData = createLazyMemo(() => {
-        const startTime = performance.now();
-
         const seenIds = new Set<string>();
-
         const allEntries: IndexEntry[] = [];
-
-        let transformCount = 0;
-        let cacheHitCount = 0;
 
         const transformedItems: Array<{
           id: string;
@@ -260,7 +254,6 @@ export const [QuickAccessProvider, useQuickAccess] =
 
           // Only transform if not cached or version changed
           if (!cached || cached.version !== version) {
-            transformCount++;
             const reason = !cached
               ? 'new'
               : `changed (${cached.version} -> ${version})`;
@@ -293,7 +286,6 @@ export const [QuickAccessProvider, useQuickAccess] =
             itemCache.set(item.id, { item: quickAccessItem, version });
             allEntries.push({ id: item.id, bucket, sortTimestamp });
           } else {
-            cacheHitCount++;
             allEntries.push({
               id: item.id,
               bucket: cached.item.bucket,
@@ -311,7 +303,6 @@ export const [QuickAccessProvider, useQuickAccess] =
           const cached = itemCache.get(channel.id);
 
           if (!cached || cached.version !== version) {
-            transformCount++;
             const reason = !cached
               ? 'new'
               : `changed (${cached.version} -> ${version})`;
@@ -343,7 +334,6 @@ export const [QuickAccessProvider, useQuickAccess] =
             itemCache.set(channel.id, { item: quickAccessItem, version });
             allEntries.push({ id: channel.id, bucket, sortTimestamp });
           } else {
-            cacheHitCount++;
             allEntries.push({
               id: channel.id,
               bucket: cached.item.bucket,
@@ -362,7 +352,6 @@ export const [QuickAccessProvider, useQuickAccess] =
           const cached = itemCache.get(augmentedUser.id);
 
           if (!cached || cached.version !== version) {
-            transformCount++;
             const reason = !cached
               ? 'new'
               : `changed (${cached.version} -> ${version})`;
@@ -393,7 +382,6 @@ export const [QuickAccessProvider, useQuickAccess] =
               sortTimestamp,
             });
           } else {
-            cacheHitCount++;
             allEntries.push({
               id: augmentedUser.id,
               bucket: cached.item.bucket,
@@ -421,12 +409,6 @@ export const [QuickAccessProvider, useQuickAccess] =
             deduplicatedEntries.push(entry);
           }
         }
-
-        console.log(
-          `QuickAccess processed in ${(performance.now() - startTime).toFixed(1)}ms ` +
-            `(${transformCount} transforms, ${cacheHitCount} cache hits, ` +
-            `${deduplicatedEntries.length} items)`
-        );
 
         return deduplicatedEntries;
       });

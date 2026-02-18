@@ -76,8 +76,6 @@ export function MentionsMenu(props: MentionsMenuProps) {
 }
 
 function MentionsMenuInner(props: MentionsMenuProps) {
-  const componentStart = performance.now();
-
   const searchTerm = debouncedDependent(props.menu.searchTerm, 60);
 
   const quickAccess = useQuickAccess();
@@ -93,12 +91,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     blockId: useMaybeBlockId(),
   });
 
-  const { entities: docs } = useEntityMention({
+  const { searchedEntities: docs } = useEntityMention({
     buckets: ['note', 'task', 'document', 'project'],
     searchTerm,
   });
 
-  const { entities: channels } = useEntityMention({
+  const { searchedEntities: channels } = useEntityMention({
     buckets: ['channel'],
     searchTerm,
   });
@@ -320,9 +318,6 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   };
 
   onMount(() => {
-    console.log(
-      `MentionsMenu: component start to onMount: ${(performance.now() - componentStart).toFixed(2)}ms`
-    );
     document.addEventListener('focusout', focusOut);
     onCleanup(() => {
       document.removeEventListener('focusout', focusOut);
@@ -407,10 +402,6 @@ function MentionsMenuInner(props: MentionsMenuProps) {
           useBlockBoundary: props.useBlockBoundary,
         }
       : undefined;
-
-  console.log(
-    `MentionsMenu: component start to end of JS logic: ${(performance.now() - componentStart).toFixed(2)}ms`
-  );
 
   return (
     <Show when={menuOpen()}>
@@ -512,11 +503,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 }
 
 function VirtualizedItemList(props: {
-  items: ReturnType<
-    typeof useMentionsMenuController
-  >['combinedItems'] extends () => infer T
-    ? T
-    : never;
+  items: MentionItem[];
   selectedIndex: number;
   itemAction: (item: MentionItem) => void;
   setIndex: (index: number) => void;
