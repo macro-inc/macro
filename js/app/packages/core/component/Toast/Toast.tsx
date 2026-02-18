@@ -168,12 +168,12 @@ function ToastContent(props: {
 }) {
   const styles = () => TOAST_STYLES[props.toastType];
 
-  // Track progress for animated border (1 = full, 0 = empty)
+  // Track progress until disappearance (1 = full duration remaining, 0 = time to disappear)
   const [progress, setProgress] = createSignal(1);
   const [isHovered, setIsHovered] = createSignal(false);
 
   // Use a ref object so the animation loop can see resets
-  const timerState = { elapsed: 0 };
+  let elapsed = 0;
 
   onMount(() => {
     // Skip countdown for persistent toasts
@@ -193,12 +193,11 @@ function ToastContent(props: {
 
       // Only accumulate time when not hovered
       if (!isHovered()) {
-        const delta = currentTime - lastTime;
-        timerState.elapsed += delta;
+        elapsed += currentTime - lastTime;
       }
       lastTime = currentTime;
 
-      const remaining = Math.max(0, 1 - timerState.elapsed / duration);
+      const remaining = Math.max(0, 1 - elapsed / duration);
       setProgress(remaining);
 
       if (remaining > 0) {
@@ -219,7 +218,7 @@ function ToastContent(props: {
     on(isHovered, (hovered) => {
       if (hovered && !props.persistent) {
         // User started hovering - reset timer and progress immediately
-        timerState.elapsed = 0;
+        elapsed = 0;
         setProgress(1);
       }
     })
