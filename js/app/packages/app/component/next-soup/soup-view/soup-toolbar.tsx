@@ -536,7 +536,7 @@ const SearchBar = () => {
   };
 
   return (
-    <div class="flex items-center grow min-w-0 mobile:-order-2">
+    <div class="flex items-center shrink-0 grow min-w-0 mobile:-order-2">
       <Tooltip
         class="w-fit"
         placement="bottom-start"
