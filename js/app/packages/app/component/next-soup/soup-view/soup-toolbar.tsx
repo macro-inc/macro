@@ -1,5 +1,4 @@
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
-import IconGear from '@macro-icons/macro-gear.svg';
 import BackspaceIcon from '@icon/regular/backspace.svg?component-solid';
 import XIcon from '@icon/regular/x.svg?component-solid';
 import PreviewIcon from '@macro-icons/wide/preview.svg';
@@ -11,10 +10,8 @@ import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
-import { useSplitLayout } from '@app/component/split-layout/layout';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
-import { useSettingsState } from '@core/constant/SettingsState';
-import { TOKENS } from '@core/hotkey/tokens';
+
 import {
   For,
   Show,
@@ -43,6 +40,7 @@ import { IS_MAC } from '@core/constant/isMac';
 import type { SystemSortOption } from '@app/component/next-soup/soup-view/sort-options';
 import { Dynamic } from 'solid-js/web';
 import { SortDropdown } from '@app/component/next-soup/soup-view/sort-dropdown';
+import { SettingsButton } from '@app/component/settings/SettingsButton';
 import {
   TaskStatusDropdown,
   TaskAssigneeDropdown,
@@ -89,7 +87,7 @@ export const SoupToolbar = () => {
 
           <div
             ref={setScrollContainerRef}
-            class="flex items-center h-full w-full overflow-x-auto scrollbar-hidden overscroll-none text-xs touch:mobile-width:text-sm"
+            class="flex items-center h-full w-full overflow-x-auto scrollbar-hidden overscroll-none text-xs mobile:text-sm"
           >
             <SoupFilters />
             <SearchBar />
@@ -351,7 +349,7 @@ const SoupFilters = () => {
         <Tooltip tooltip={<LabelAndHotKey label="Unread Only" shortcut="u" />}>
           <button
             type="button"
-            class="flex items-center gap-1 h-[22px] touch:mobile-width:h-9 pr-2.5 pl-1 active:bg-accent active:text-panel rounded-full"
+            class="flex items-center gap-1 h-[22px] mobile:h-9 pr-2.5 pl-1 active:bg-accent active:text-panel rounded-full"
             classList={{
               'bg-accent text-panel': soup.filters.isActive('unread'),
               'text-ink-muted hover:text-accent hover:bg-accent/20':
@@ -417,7 +415,7 @@ const SoupFilters = () => {
       >
         <button
           type="button"
-          class="flex items-center gap-1.5 h-[22px] touch:mobile-width:h-9 px-2.5 active:bg-accent active:text-panel rounded-full"
+          class="flex items-center gap-1.5 h-[22px] mobile:h-9 px-2.5 active:bg-accent active:text-panel rounded-full"
           classList={{
             'bg-accent text-panel': !!soup.previewEntity(),
             'text-ink-muted hover:text-accent hover:bg-accent/20':
@@ -442,47 +440,13 @@ const SoupFilters = () => {
           soup.sort.setAll([value]);
         }}
       />
-      <div class="touch:mobile-width:-order-1">
+      <div class="mobile:-order-1">
         <FilterDivider />
       </div>
       {/* Filter search bar */}
     </>
   );
 };
-
-function SettingsButton() {
-  const { settingsOpen, toggleSettings } = useSettingsState();
-  const { getSplitCount } = useSplitLayout();
-
-  // Hide settings button when there are multiple splits
-  const isSingleSplit = () => getSplitCount() <= 1;
-
-  return (
-    <Show when={isSingleSplit()}>
-      <Tooltip
-        tooltip={
-          <LabelAndHotKey
-            label={settingsOpen() ? 'Close Settings' : 'Open Settings'}
-            hotkeyToken={TOKENS.global.toggleSettings}
-          />
-        }
-      >
-        <button
-          type="button"
-          class="relative flex items-center justify-center size-[22px] rounded-full active:bg-accent active:text-panel"
-          classList={{
-            'bg-hover text-ink': settingsOpen(),
-            'text-ink-muted hover:text-accent hover:bg-accent/20':
-              !settingsOpen(),
-          }}
-          onClick={() => toggleSettings()}
-        >
-          <IconGear class="size-4.5" />
-        </button>
-      </Tooltip>
-    </Show>
-  );
-}
 
 const ScrollIndicators = (props: { scrollRef: HTMLElement | undefined }) => {
   const [leftOpacity, setLeftOpacity] = createSignal(0);
@@ -572,14 +536,14 @@ const SearchBar = () => {
   };
 
   return (
-    <div class="flex items-center grow min-w-0 touch:mobile-width:-order-2">
+    <div class="flex items-center grow min-w-0 mobile:-order-2">
       <Tooltip
         class="w-fit"
         placement="bottom-start"
         tooltip={<LabelAndHotKey label="Filter" shortcut="⌘F" />}
       >
         <div
-          class="relative flex items-center gap-1.5 h-[22px] touch:mobile-width:h-9 px-2.5 rounded-full touch:mobile-width:min-w-35"
+          class="relative flex items-center gap-1.5 h-[22px] mobile:h-9 px-2.5 rounded-full mobile:min-w-35"
           classList={{
             'bg-accent text-panel': !!searchText() && !searchFocused(),
             'text-ink-muted hover:text-accent hover:bg-accent/20':
@@ -707,7 +671,7 @@ export const FilterButton: Component<FilterButtonProps> = (props) => {
       >
         <button
           type="button"
-          class={`flex items-center gap-1 h-[22px] touch:mobile-width:h-9 ${props.paddingClass ?? 'pl-2 pr-2.5'} active:bg-accent active:text-panel rounded-full`}
+          class={`flex items-center gap-1 h-[22px] mobile:h-9 ${props.paddingClass ?? 'pl-2 pr-2.5'} active:bg-accent active:text-panel rounded-full`}
           classList={{
             'bg-accent text-panel': isActive(),
             'text-ink-muted hover:text-accent hover:bg-accent/20': !isActive(),

@@ -116,12 +116,12 @@ const TopBar: Component<MessageTopBarProps> = (props) => {
     <Show when={!context.isConsecutive()}>
       <div class="font-mono flex flex-row items-center justify-between">
         {/*  Name */}
-        <div class="shrink-1 min-w-0 text-sm touch:mobile-width:text-base truncate text-ink-muted">
+        <div class="shrink-1 min-w-0 text-sm truncate text-ink-muted">
           {local.name}
         </div>
         {/* Tag */}
         <Show when={local.tagLabel}>
-          <div class="inline-flex items-center ml-2 px-0.5 text-xs touch:mobile-width:text-sm bg-edge/15 text-ink border-1 border-edge/30 max-w-[240px] min-w-0">
+          <div class="inline-flex items-center ml-2 px-0.5 text-xs bg-edge/15 text-ink border-1 border-edge/30 max-w-[240px] min-w-0">
             <div class="flex-shrink-0 px-0.5">
               <Show when={local.tagIcon}>
                 <CustomEntityIcon icon={local.tagIcon!} size="xs" />
@@ -132,7 +132,7 @@ const TopBar: Component<MessageTopBarProps> = (props) => {
         </Show>
         {/* Date - hidden when hovering since it shows above hover actions */}
         <Show when={local.timestamp && !context.hover()}>
-          <div class="text-xs touch:mobile-width:text-sm text-ink-muted min-w-0 shrink-2 truncate">
+          <div class="text-xs mobile:text-sm text-ink-muted min-w-0 shrink-2 truncate">
             {local.timestamp && formatDate(local.timestamp)}
           </div>
         </Show>
@@ -153,14 +153,10 @@ const Body: Component<MessageBodyProps> = (props) => {
     <Show
       when={!props.isDeleted}
       fallback={
-        <div class="text-xs touch:mobile-width:text-sm text-ink-muted font-mono">
-          Message Deleted
-        </div>
+        <div class="text-xs text-ink-muted font-mono">Message Deleted</div>
       }
     >
-      <div class="text-sm touch:mobile-width:text-base text-ink pr-4">
-        {props.children}
-      </div>
+      <div class="text-sm text-ink pr-4">{props.children}</div>
     </Show>
   );
 };

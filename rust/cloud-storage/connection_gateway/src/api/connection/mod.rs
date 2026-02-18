@@ -1,7 +1,9 @@
 use crate::{
     config::Config,
     context::{ApiContext, AppState},
-    model::{connection::ConnectionContext, message::OutgoingMessage},
+    model::{
+        connection::ConnectionContext, message::OutgoingMessage, tracking::EntityConnectionExt,
+    },
 };
 use anyhow::Result;
 use axum::{

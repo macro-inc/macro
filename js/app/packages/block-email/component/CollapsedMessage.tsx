@@ -115,7 +115,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
               <span class="text-ink truncate">{snippet()}</span>
             </div>
             {/* Date */}
-            <div class="text-xs touch:mobile-width:text-sm text-ink shrink-0 ml-4 pr-2">
+            <div class="text-xs text-ink shrink-0 ml-4 pr-2">
               {props.message.internal_date_ts &&
                 formatShortDate(props.message.internal_date_ts)}
             </div>
