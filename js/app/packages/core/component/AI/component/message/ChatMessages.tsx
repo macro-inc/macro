@@ -7,20 +7,20 @@ import type {
   ChatMessageWithAttachments,
 } from '@core/component/AI/types';
 import { asChatMessage } from '@core/component/AI/util/message';
-import { getMacroApiToken } from '@service-auth/fetch';
-import { cognitionWebsocketServiceClient } from '@service-cognition/client';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { aiChatTheme } from '@core/component/LexicalMarkdown/theme';
+import { getMacroApiToken } from '@service-auth/fetch';
+import { cognitionWebsocketServiceClient } from '@service-cognition/client';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import type { Accessor, JSXElement, Setter } from 'solid-js';
 import {
-  on,
   createEffect,
   createMemo,
   createSelector,
   createSignal,
   For,
   Match,
+  on,
   onMount,
   Show,
   Switch,

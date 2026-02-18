@@ -1,10 +1,9 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
+import { ROUTER_BASE } from '@app/constants/routerBase';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { withAnalytics } from '@coparse/analytics';
-import { ChannelsContextProvider } from '@core/context/channels';
-import { UserContextProvider, useUserId } from '@core/context/user';
-import { QuerySyncProvider } from '@queries/sync/SyncProvider';
+import { TabAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
@@ -13,9 +12,12 @@ import {
   ENABLE_WEBSOCKET_DEBUGGER,
   PROD_MODE_ENV,
 } from '@core/constant/featureFlags';
+import { ChannelsContextProvider } from '@core/context/channels';
+import { UserContextProvider, useUserId } from '@core/context/user';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createBlockOrchestrator } from '@core/orchestrator';
 import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
+import { getLoginCookieOptions, updateCookie } from '@core/util/cookies';
 import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
@@ -28,14 +30,15 @@ import {
 } from '@notifications';
 import { maybeHandlePlatformNotification } from '@notifications/notification-platform';
 import { setUser, useObserveRouting } from '@observability';
-import { prefetchHistory } from '@queries/history/history';
-import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
 import {
   invalidateUserInfo,
   prefetchUserInfo,
   useUserInfoQuery,
 } from '@queries/auth/user-info';
+import { prefetchHistory } from '@queries/history/history';
 import { invalidateUserNotifications } from '@queries/notification/user-notifications';
+import { QuerySyncProvider } from '@queries/sync/SyncProvider';
+import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
 import { MetaProvider, Title } from '@solidjs/meta';
 import {
   HashRouter,
@@ -65,7 +68,6 @@ import {
   systemThemeEffect,
 } from '../../block-theme/utils/themeUtils';
 import { TauriRouteListener } from '../../tauri/src/TauriProvider';
-import { getLoginCookieOptions, updateCookie } from '@core/util/cookies';
 import { Login } from './auth/Login';
 import { setCookie } from './auth/Shared';
 import { makeEmailAuthComponents } from './EmailAuth';
@@ -73,11 +75,10 @@ import { GlobalAppStateProvider } from './GlobalAppState';
 import { Layout } from './Layout';
 import MacroJump from './MacroJump';
 import Onboarding from './Onboarding';
+import { ReactiveFavicon } from './ReactiveFavicon';
 import { SuspenseContextComp } from './SuspenseContext';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 import Visor from './Visor';
-import { ReactiveFavicon } from './ReactiveFavicon';
-import { ROUTER_BASE } from '@app/constants/routerBase';
 
 const { track, identify, TrackingEvents } = withAnalytics();
 
@@ -405,6 +406,7 @@ export function Root() {
             <UserInfoSideEffects />
             <ConfiguredGlobalAppStateProvider>
               <ChannelsContextProvider>
+                <TabAttachmentsInit />
                 <ReactiveFavicon />
                 <Title>{tabTitle()}</Title>
                 <MacroJump />

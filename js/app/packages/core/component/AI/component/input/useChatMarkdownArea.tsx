@@ -1,5 +1,6 @@
 import { withAnalytics } from '@coparse/analytics';
 import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
+import { globalAttachmentsReady } from '@core/component/AI/signal/globalAttachments';
 import type { Attachment } from '@core/component/AI/types';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { NodeAccessoryRenderer } from '@core/component/LexicalMarkdown/component/core/NodeAccessoryRenderer';
@@ -426,17 +427,19 @@ function MarkdownArea(
           useBlockBoundary={true}
           portalScope={props.portalScope}
         />
-        <MentionsMenu
-          editor={editor}
-          menu={mentionsMenuOperations}
-          users={() => []}
-          // NOTE: we use default channel history
-          history={props.history}
-          block={'chat'}
-          useBlockBoundary={true}
-          portalScope={props.portalScope}
-          useSnapshotForDocuments={ENABLE_SNAPSHOT_NODE}
-        />
+        <Show when={globalAttachmentsReady()}>
+          <MentionsMenu
+            editor={editor}
+            menu={mentionsMenuOperations}
+            users={() => []}
+            // NOTE: we use default channel history
+            history={props.history}
+            block={'chat'}
+            useBlockBoundary={true}
+            portalScope={props.portalScope}
+            useSnapshotForDocuments={ENABLE_SNAPSHOT_NODE}
+          />
+        </Show>
         <FloatingMenuGroup>
           <FloatingLinkMenu />
         </FloatingMenuGroup>
