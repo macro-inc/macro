@@ -1,5 +1,4 @@
 import SearchIcon from '@macro-icons/macro-magnifying-glass.svg';
-import IconGear from '@macro-icons/macro-gear.svg';
 import BackspaceIcon from '@icon/regular/backspace.svg?component-solid';
 import XIcon from '@icon/regular/x.svg?component-solid';
 import PreviewIcon from '@macro-icons/wide/preview.svg';

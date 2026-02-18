@@ -72,7 +72,6 @@ import { stickyGate } from '@core/util/debounce';
 import { invalidateSoupEntity } from '@queries/soup/cache';
 import { WrapUnlessMobile } from '@core/mobile/WrapUnlessMobile';
 import { isMobile } from '@core/mobile/isMobile';
-import { SplitToolbarRight } from '@app/component/split-layout/components/SplitToolbar';
 
 const DRAFT_DEBOUNCE_MS = 1000;
 

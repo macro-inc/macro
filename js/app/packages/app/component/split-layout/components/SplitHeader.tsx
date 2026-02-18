@@ -13,7 +13,6 @@ import CaretLeft from '@icon/regular/caret-left.svg';
 import CaretRight from '@icon/regular/caret-right.svg';
 import SplitIcon from '@icon/regular/square-half.svg';
 import CloseIcon from '@icon/regular/x.svg';
-import IconGear from '@macro-icons/macro-gear.svg';
 import { Button } from '@ui/components/Button';
 import {
   createEffect,
@@ -27,7 +26,6 @@ import {
 import { Portal } from 'solid-js/web';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import { canSpotlight } from '../utils/canSpotlight';
-import { useSettingsState } from '@core/constant/SettingsState';
 import { cn } from '@ui/utils/classname';
 
 function SplitBackButton() {
