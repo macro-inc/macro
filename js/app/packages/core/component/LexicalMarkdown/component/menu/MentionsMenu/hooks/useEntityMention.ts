@@ -20,7 +20,6 @@ export type UseEntityMentionResult = {
 /**
  * Generic hook for managing entity mentions in the mentions menu.
  * Can be used for documents, channels, or any combination of entity buckets.
- *
  */
 export function useEntityMention(
   options: UseEntityMentionOptions

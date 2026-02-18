@@ -427,9 +427,6 @@ export const [QuickAccessProvider, useQuickAccess] =
             `(${transformCount} transforms, ${cacheHitCount} cache hits, ` +
             `${deduplicatedEntries.length} items)`
         );
-        if (transformedItems.length > 0) {
-          console.log('Transformed items:', transformedItems);
-        }
 
         return deduplicatedEntries;
       });
