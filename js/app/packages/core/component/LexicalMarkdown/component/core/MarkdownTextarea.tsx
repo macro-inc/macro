@@ -1,3 +1,4 @@
+import { cn } from '@ui/utils/classname';
 import type { PortalScope } from '@core/component/ScopedPortal';
 import type { EditorType } from '@lexical-core';
 import type { HistoryItem } from '@queries/history/types';
@@ -292,7 +293,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
   return (
     <LexicalWrapperContext.Provider value={lexicalWrapper}>
       <div
-        class={`${props.class ?? ''} relative w-full h-full overflow-auto min-h-8`}
+        class={cn('relative w-full h-full overflow-auto min-h-8', props.class)}
         on:keydown={(e) => {
           e.stopPropagation();
         }}

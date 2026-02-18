@@ -201,7 +201,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
       ref={setComposeContainerRef}
       class="relative flex flex-col flex-1 items-center justify-between min-h-0"
     >
-      <div class="w-full h-full min-h-60 max-h-full flex flex-col">
+      <div class="w-full h-full min-h-60 sm:max-h-full mobile:flex-1 flex flex-col">
         <Show when={showFormatRibbon()}>
           <FormatRibbon
             class="-ml-3"
@@ -238,7 +238,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
             domRef={props.inputRef}
             captureEditor={captureEditor}
             initialHtml={props.initialHtml}
-            class="text-sm break-words text-ink"
+            class="text-sm break-words text-ink mobile:overflow-auto h-auto"
             editable={() => !props.disabled}
             placeholder="Use `@` to reference files"
             watermark={!hasPaidAccess() ? <MacroSignatureButton /> : undefined}

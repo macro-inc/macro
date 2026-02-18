@@ -733,7 +733,7 @@ export function EmailCompose(props: EmailComposeProps) {
         </Switch>
 
         <div
-          class="macro-message-width @small:macro-message-padding mx-auto w-full max-h-full my-2 @small:my-12 mobile:my-0 px-2 @small:px-4 mobile:px-0 overflow-hidden"
+          class="macro-message-width sm:macro-message-padding mx-auto w-full max-h-full my-2 sm:my-12 mobile:my-0 px-2 sm:px-4 mobile:px-0 overflow-hidden mobile:overflow-y-auto mobile:hide-scrollbar mobile:min-h-full"
           classList={{
             'pointer-events-none opacity-50': hasLinkError(),
           }}
@@ -744,7 +744,7 @@ export function EmailCompose(props: EmailComposeProps) {
             )}
           >
             <div
-              class="w-full p-4 bg-input max-h-full overflow-y-auto flex flex-col min-h-0"
+              class="w-full p-4 bg-input max-h-full mobile:max-h-none overflow-y-auto flex flex-col min-h-0 mobile:min-h-full"
               classList={{
                 'pointer-events-none opacity-50': hasLinkError(),
               }}
