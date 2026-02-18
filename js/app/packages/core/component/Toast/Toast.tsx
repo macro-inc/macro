@@ -4,7 +4,14 @@ import Spinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
 import { Toast, toaster } from '@kobalte/core/toast';
 import type { Component } from 'solid-js';
-import { Show, createSignal, onMount, onCleanup } from 'solid-js';
+import {
+  Show,
+  createSignal,
+  onMount,
+  onCleanup,
+  createEffect,
+  on,
+} from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
 export enum ToastType {
@@ -32,6 +39,11 @@ interface ToastStyle {
     hover: string;
     text: string;
   };
+  /** Close button hover styles */
+  closeButton: {
+    hoverBg: string;
+    hoverText: string;
+  };
 }
 
 const TOAST_STYLES: Record<ToastType, ToastStyle> = {
@@ -47,6 +59,10 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
       hover: 'hover:bg-success/80',
       text: 'text-success-ink',
     },
+    closeButton: {
+      hoverBg: 'bg-success/10',
+      hoverText: 'text-success-ink',
+    },
   },
   [ToastType.FAILURE]: {
     background: 'bg-failure/10',
@@ -59,6 +75,10 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
       background: 'bg-failure',
       hover: 'hover:bg-failure/80',
       text: 'text-failure-ink',
+    },
+    closeButton: {
+      hoverBg: 'bg-failure/10',
+      hoverText: 'text-failure-ink',
     },
   },
   [ToastType.ALERT]: {
@@ -73,6 +93,10 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
       hover: 'hover:bg-alert/80',
       text: 'text-alert-ink',
     },
+    closeButton: {
+      hoverBg: 'bg-alert/10',
+      hoverText: 'text-alert-ink',
+    },
   },
   [ToastType.LOADING]: {
     background: 'bg-accent/10',
@@ -85,6 +109,10 @@ const TOAST_STYLES: Record<ToastType, ToastStyle> = {
       background: 'bg-accent',
       hover: 'hover:bg-accent/80',
       text: 'text-panel',
+    },
+    closeButton: {
+      hoverBg: 'bg-accent/10',
+      hoverText: 'text-accent',
     },
   },
 };
@@ -157,27 +185,43 @@ function ToastContent(props: {
 
   // Track progress for animated border (1 = full, 0 = empty)
   const [progress, setProgress] = createSignal(1);
-  const [isPaused, setIsPaused] = createSignal(false);
+  const [isHovered, setIsHovered] = createSignal(false);
+  const [isCloseHovered, setIsCloseHovered] = createSignal(false);
+
+  // Use a ref object so the animation loop can see resets
+  const timerState = { elapsed: 0 };
 
   onMount(() => {
+    // Skip countdown for persistent toasts
     if (props.persistent) return;
 
     const duration = props.duration ?? 3000;
-    let elapsed = 0;
-    let lastTime = performance.now();
+    let lastTime: number | null = null;
     let rafId: number;
 
-    const update = (currentTime: number) => {
-      if (!isPaused()) {
-        elapsed += currentTime - lastTime;
+    const update = () => {
+      const currentTime = performance.now();
+
+      // Initialize lastTime on first frame
+      if (lastTime === null) {
+        lastTime = currentTime;
+      }
+
+      // Only accumulate time when not hovered
+      if (!isHovered()) {
+        const delta = currentTime - lastTime;
+        timerState.elapsed += delta;
       }
       lastTime = currentTime;
 
-      const remaining = Math.max(0, 1 - elapsed / duration);
+      const remaining = Math.max(0, 1 - timerState.elapsed / duration);
       setProgress(remaining);
 
       if (remaining > 0) {
         rafId = requestAnimationFrame(update);
+      } else {
+        // Dismiss the toast when countdown completes
+        toaster.dismiss(props.toastId);
       }
     };
 
@@ -186,6 +230,17 @@ function ToastContent(props: {
     onCleanup(() => cancelAnimationFrame(rafId));
   });
 
+  // Reset timer immediately when user starts hovering
+  createEffect(
+    on(isHovered, (hovered) => {
+      if (hovered && !props.persistent) {
+        // User started hovering - reset timer and progress immediately
+        timerState.elapsed = 0;
+        setProgress(1);
+      }
+    })
+  );
+
   return (
     <Toast
       toastId={props.toastId}
@@ -193,10 +248,9 @@ function ToastContent(props: {
         bg-panel
         data-opened:animate-slide-in data-closed:animate-hide transition-transform data-[swipe=move]:translate-x-[var(--kb-toast-swipe-move-x)]
         data-[swipe=cancel]:translate-x-0 data-[swipe=cancel]:ease-out data-[swipe=cancel]:duration-200 data-[swipe=end]:animate-swipe-out`}
-      duration={props.duration}
-      persistent={props.persistent}
-      onMouseEnter={() => setIsPaused(true)}
-      onMouseLeave={() => setIsPaused(false)}
+      persistent={true}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
       {/* Animated border that fades from opacity 1 to 0 */}
       <Show when={!props.persistent}>
@@ -246,8 +300,14 @@ function ToastContent(props: {
         </div>
 
         {/* Close button */}
-        <Toast.CloseButton class="absolute top-2 right-2 p-1 rounded hover:bg-black/10">
-          <XIcon class={`size-4 text-ink-extra-muted`} />
+        <Toast.CloseButton
+          class={`absolute top-2 right-2 p-1 rounded transition-colors ${isCloseHovered() ? styles().closeButton.hoverBg : ''}`}
+          onMouseEnter={() => setIsCloseHovered(true)}
+          onMouseLeave={() => setIsCloseHovered(false)}
+        >
+          <XIcon
+            class={`size-4 transition-colors ${isCloseHovered() ? styles().closeButton.hoverText : 'text-ink-extra-muted'}`}
+          />
         </Toast.CloseButton>
       </div>
     </Toast>
