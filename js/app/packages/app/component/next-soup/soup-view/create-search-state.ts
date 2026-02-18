@@ -28,9 +28,9 @@ import {
   createSignal,
   on,
   createDeferred,
-  createEffect,
 } from 'solid-js';
 import { match } from 'ts-pattern';
+import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 300;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
@@ -253,7 +253,7 @@ export const createSearchState = ({
     setLocalFuzzyEntityPool(pool);
   });
 
-  const nameFuzzySearchFilter = (query: string, items: EntityData[]) => {
+  const nameFuzzySearchFilter = (items: EntityData[], query: string) => {
     if (!query || query.length === 0) return items;
 
     const matchResults = fuzzyMatch(query, items, (item) => item.name);
@@ -270,25 +270,6 @@ export const createSearchState = ({
     });
   };
 
-  createRenderEffect(
-    on(debouncedSearchForLocal, (query) => {
-      if (!query || query.length === 0) {
-        setLocalFuzzyResults([]);
-        return;
-      }
-      const pool = localFuzzyEntityPool();
-      const results = nameFuzzySearchFilter(query, pool);
-      setLocalFuzzyResults(results);
-    })
-  );
-
-  const serviceSearchResults = createMemo<EntityData[]>(() => {
-    if (isSearchServiceDisabled()) return [];
-    if (!isSearchServiceDebounceSettled()) return [];
-    if (searchQuery.isFetching && !searchQuery.isFetchingNextPage) return [];
-    return searchQuery.data ?? [];
-  });
-
   const freshSearch = createFreshSearch<EntityData>(
     {
       useViewedAt: true,
@@ -303,24 +284,49 @@ export const createSearchState = ({
     (item) => item
   );
 
-  const createFeaturedIds = (pool: Accessor<EntityData[]>) => {
-    const [frozen, setFrozen] = createSignal<string[]>([]);
-    createRenderEffect(
-      on(
-        () =>
-          [isSearching(), debouncedSearchForLocal(), queryFilters()] as const,
-        ([searching, query]) => {
-          if (!searching || !query) {
-            setFrozen([]);
-            return;
-          }
-          const results = freshSearch(pool(), query);
-          setFrozen(results.slice(0, FEATURED_COUNT).map((r) => r.item.id));
-        }
-      )
-    );
-    return frozen;
-  };
+  createRenderEffect(
+    on(debouncedSearchForLocal, (query) => {
+      if (!query || query.length === 0) {
+        setLocalFuzzyResults([]);
+        return;
+      }
+      const pool = localFuzzyEntityPool();
+      // TODO: we can optimize fresh search for small feature counts since we
+      // don't need to sort everything, we just need the featured results
+      const freshSearchResults = freshSearch(pool, query);
+      const freshSearchResultsFeatured = freshSearchResults.slice(
+        0,
+        FEATURED_COUNT
+      );
+      // NOTE: this is a temporary hack because the fresh search fuzzy library
+      // does not give us the highlighted matches
+      const results = nameFuzzySearchFilter(
+        freshSearchResultsFeatured.map((r) => r.item),
+        query
+      );
+      if (
+        DEV_MODE_ENV &&
+        freshSearchResultsFeatured.length !== results.length
+      ) {
+        console.warn('local fuzzy search mismatch', {
+          freshSearch: freshSearchResultsFeatured,
+          nameFuzzy: results,
+        });
+      }
+      setLocalFuzzyResults(results);
+    })
+  );
+
+  const serviceSearchResults = createMemo<EntityData[]>(() => {
+    if (isSearchServiceDisabled()) return [];
+    if (!isSearchServiceDebounceSettled()) return [];
+    if (searchQuery.isFetching && !searchQuery.isFetchingNextPage) return [];
+    return searchQuery.data ?? [];
+  });
+
+  const featuredIds = createMemo(() => {
+    return localFuzzyResults().map((r) => r.id);
+  });
 
   return {
     searchText,
@@ -330,7 +336,7 @@ export const createSearchState = ({
     debouncedSearchForLocal,
     localFuzzyResults,
     serviceSearchResults,
-    createFeaturedIds,
+    featuredIds,
     itemsQuery,
     searchQuery,
   };

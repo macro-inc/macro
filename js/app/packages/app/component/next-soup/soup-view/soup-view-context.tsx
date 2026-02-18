@@ -250,13 +250,11 @@ export const SoupViewContextProvider: FlowComponent<
     return transformed;
   };
 
-  const frozenFeaturedIds = search.createFeaturedIds(baseEntities);
-
   const entities = () => {
     const base = baseEntities();
     if (!ENABLE_FEATURED_SEARCH_RESULTS || !search.isSearching()) return base;
 
-    const featuredIds = frozenFeaturedIds();
+    const featuredIds = search.featuredIds();
     if (featuredIds.length === 0) return base;
 
     const entityMap = new Map(base.map((e) => [e.id, e]));
@@ -273,13 +271,7 @@ export const SoupViewContextProvider: FlowComponent<
   const featuredCount = createMemo(() => {
     if (!ENABLE_FEATURED_SEARCH_RESULTS) return 0;
     if (!search.isSearching()) return 0;
-    const featuredIdSet = new Set(frozenFeaturedIds());
-    let count = 0;
-    for (const e of entities()) {
-      if (!featuredIdSet.has(e.id)) break;
-      count++;
-    }
-    return count;
+    return search.featuredIds().length;
   });
 
   const rows = createMemo(() => {
