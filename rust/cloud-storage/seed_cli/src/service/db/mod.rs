@@ -12,6 +12,7 @@ use comms_db_client::channels::create_channel::CreateChannelOptions;
 use comms_db_client::channels::seed_channel::SeedChannelOptions;
 use comms_db_client::messages::create_message::CreateMessageOptions;
 use comms_db_client::messages::seed_message::SeedMessageOptions;
+use model::document::DocumentMetadata;
 use models_email::email::service;
 
 /// Wrapper around the database connection pool.
@@ -25,6 +26,15 @@ impl SeedDb {
     /// Create a new database wrapper.
     pub fn new(inner: sqlx::PgPool) -> Self {
         Self { inner }
+    }
+
+    /// Create a document in the database.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn create_document<'a>(
+        &self,
+        args: macro_db_client::document::v2::create::CreateDocumentArgs<'a>,
+    ) -> anyhow::Result<DocumentMetadata> {
+        macro_db_client::document::v2::create::create_document(&self.inner, args).await
     }
 
     /// Create a channel in the database.

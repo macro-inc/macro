@@ -28,6 +28,10 @@ models_email = { path = "../models_email" }
 chrono = { workspace = true }
 rand = { workspace = true }
 futures = { workspace = true }
+macro_db_client = { path = "../macro_db_client" }
+macro_aws_config = {path = "../macro_aws_config" }
+aws-sdk-s3 = { workspace = true }
+models_permissions = { path = "../models_permissions" }
 
 [dev-dependencies]
 tempfile = "3"
