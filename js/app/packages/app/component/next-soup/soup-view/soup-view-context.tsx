@@ -10,7 +10,12 @@ import { ENABLE_FEATURED_SEARCH_RESULTS } from '@core/constant/featureFlags';
 import type { EntityData, WithNotification, WithSearch } from '@entity';
 import { isWithNotification } from '@entity';
 import { useNotificationsForEntity } from '@notifications';
-import type { SoupItemsQueryFilters } from '@queries/soup/items';
+import {
+  type SoupParams,
+  useSoupItemsQuery,
+  type SoupItemsQueryFilters,
+  type SoupBody,
+} from '@queries/soup/items';
 import {
   type Accessor,
   createContext,
@@ -86,10 +91,17 @@ export const SoupViewContextProvider: FlowComponent<
 > = (props) => {
   const soup = props.soup ?? createSoupState();
 
+  const soupParams = createMemo(
+    (): SoupParams => ({
+      limit: 100,
+      sort_method: soup.sort.active()[0]?.id ?? 'updated_at',
+    })
+  );
+
   const [internalQueryFilters, setQueryFilters] =
     createSignal<SoupItemsQueryFilters>({});
 
-  const queryFilters = createMemo(() => {
+  const queryFilters = createMemo((): SoupItemsQueryFilters => {
     const base = internalQueryFilters();
 
     return {
@@ -117,6 +129,13 @@ export const SoupViewContextProvider: FlowComponent<
       },
     };
   });
+
+  const soupBody = createMemo(
+    (): SoupBody => ({
+      ...queryFilters(),
+      emailView: 'all',
+    })
+  );
 
   const search = createSearchState({ soup, queryFilters });
 
@@ -155,12 +174,22 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
+  const itemsQuery = useSoupItemsQuery(
+    () => ({
+      params: soupParams(),
+      body: soupBody(),
+    }),
+    () => ({
+      enabled: !search.isSearching(),
+    })
+  );
+
   const items = createMemo<SoupEntity[]>(
     (prev) => {
       const searching = search.isSearching();
 
       if (!searching) {
-        const data = search.itemsQuery.data;
+        const data = itemsQuery.data;
         if (!data) return prev;
         return data.map((e) =>
           isWithNotification(e) ? e : attachNotifications(e)
@@ -257,7 +286,7 @@ export const SoupViewContextProvider: FlowComponent<
     return entities().map((e) => attachMethods(e));
   });
 
-  const { itemsQuery, searchQuery } = search;
+  const { itemsQuery: searchItemsQuery, searchQuery } = search;
 
   const context = {
     soup,
@@ -265,25 +294,24 @@ export const SoupViewContextProvider: FlowComponent<
       data: entities,
       isLoading: () => {
         if (itemsQuery.isLoading) return true;
-        if (searchQuery.isLoading && !itemsQuery.data) return true;
+        if (searchQuery.isLoading && !searchItemsQuery.data) return true;
         return false;
       },
-      isFetching: () => searchQuery.isFetching || itemsQuery.isFetching,
+      isFetching: () => itemsQuery.isFetching || searchQuery.isFetching,
       isFetchingNextPage: () =>
-        searchQuery.isFetchingNextPage || itemsQuery.isFetchingNextPage,
+        itemsQuery.isFetchingNextPage || searchQuery.isFetchingNextPage,
       hasNextPage: () => {
         return (
-          (searchQuery.isEnabled && searchQuery.hasNextPage) ||
-          (itemsQuery.isEnabled && itemsQuery.hasNextPage)
+          (itemsQuery.isEnabled && itemsQuery.hasNextPage) ||
+          (searchQuery.isEnabled && searchQuery.hasNextPage)
         );
       },
       fetchNextPage: () => {
-        if (searchQuery.isEnabled) {
-          searchQuery.fetchNextPage();
-        }
-
         if (itemsQuery.isEnabled) {
           itemsQuery.fetchNextPage();
+        }
+        if (searchQuery.isEnabled) {
+          searchQuery.fetchNextPage();
         }
       },
     },

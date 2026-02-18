@@ -41,9 +41,18 @@ const CHANNEL_PRELOAD_ARGS: SoupItemsQueryArgs = {
     document_filters: { document_ids: EXCLUDE },
     email_filters: { recipients: EXCLUDE },
     project_filters: { project_ids: EXCLUDE },
-    channel_filters: {
-      channel_types: [],
-    },
+    channel_filters: { channel_types: [] },
+  },
+};
+
+const ITEM_PRELOAD_ARGS: SoupItemsQueryArgs = {
+  params: { limit: 500, sort_method: 'updated_at' },
+  body: {
+    chat_filters: { chat_ids: [] },
+    document_filters: { document_ids: [] },
+    email_filters: { recipients: EXCLUDE },
+    project_filters: { project_ids: [] },
+    channel_filters: { channel_ids: EXCLUDE },
   },
 };
 
@@ -83,6 +92,10 @@ export const createSearchState = ({
 
   const isSearching = createMemo(() => trimmedSearchText().length > 0);
 
+  const isSearchServiceDebounceSettled = createMemo(
+    () => trimmedSearchText() === debouncedSearchForService()
+  );
+
   const unifiedSearchIncludeArray = createMemo<UnifiedSearchIndex[]>(
     () => {
       const types = soup.filters.activeIds() as FilterID[];
@@ -120,7 +133,7 @@ export const createSearchState = ({
   const validSearchTerms = createMemo(
     () => debouncedSearchForService().length >= 3
   );
-  const isSearchDisabled = createMemo(() => !validSearchTerms());
+  const isSearchServiceDisabled = createMemo(() => !validSearchTerms());
 
   const searchFilters = createMemo(() => {
     const {
@@ -174,27 +187,6 @@ export const createSearchState = ({
     }
   );
 
-  const emailExcludedQueryFilters = createMemo((): SoupItemsQueryFilters => {
-    return {
-      ...queryFilters(),
-      email_filters: {
-        recipients: EXCLUDE,
-      },
-    };
-  });
-  const itemsQuery = useSoupItemsQuery(
-    () => ({
-      params: {
-        limit: 100,
-        sort_method: soup.sort.active()[0]?.id ?? 'updated_at',
-      },
-      body: { ...emailExcludedQueryFilters() },
-    }),
-    () => ({
-      enabled: isSearchDisabled(),
-    })
-  );
-
   const searchQuery = useSearchSoupQuery(
     () => ({
       params: {
@@ -205,11 +197,17 @@ export const createSearchState = ({
       },
     }),
     () => ({
-      enabled:
-        !isSearchDisabled() &&
-        trimmedSearchText() === debouncedSearchForService(),
+      enabled: !isSearchServiceDisabled() && isSearchServiceDebounceSettled(),
     })
   );
+
+  // NOTE: this is effectively the same as useHistory but with soup
+  const itemsQuery = useSoupItemsQuery(() => ITEM_PRELOAD_ARGS);
+  createRenderEffect(() => {
+    if (itemsQuery.hasNextPage && !itemsQuery.isFetchingNextPage) {
+      itemsQuery.fetchNextPage();
+    }
+  });
 
   const channelItemsQuery = useSoupItemsQuery(() => CHANNEL_PRELOAD_ARGS);
   createRenderEffect(() => {
@@ -248,8 +246,8 @@ export const createSearchState = ({
   });
 
   const freshSearchResults = createMemo<EntityData[]>(() => {
-    if (isSearchDisabled()) return [];
-    if (trimmedSearchText() !== debouncedSearchForService()) return [];
+    if (isSearchServiceDisabled()) return [];
+    if (!isSearchServiceDebounceSettled()) return [];
     if (searchQuery.isFetching && !searchQuery.isFetchingNextPage) return [];
     return searchQuery.data ?? [];
   });
@@ -291,7 +289,7 @@ export const createSearchState = ({
     searchText,
     setSearchText,
     isSearching,
-    isSearchDisabled,
+    isSearchDisabled: isSearchServiceDisabled,
     debouncedSearchForLocal,
     localFuzzyResults,
     freshSearchResults,
