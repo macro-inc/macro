@@ -111,7 +111,7 @@ async fn create(args: CreateArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
     let file_type = args
         .file_path
         .split('.')
-        .last()
+        .next_back()
         .context("expected to have a file extension")?;
 
     let file_type = FileType::from_str(file_type).context("valid file type")?;
@@ -189,7 +189,7 @@ async fn seed_from_file(args: SeedArgs, ctx: SeedCliContext, path: &Path) -> any
         let file_type = row
             .file_name
             .split('.')
-            .last()
+            .next_back()
             .context("expected file to have an extension")?;
         let file_type = FileType::from_str(file_type).context("valid file type")?;
         let doc_id = row.document_id.to_string();
