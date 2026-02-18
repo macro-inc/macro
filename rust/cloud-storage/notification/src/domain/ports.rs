@@ -5,6 +5,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
+use std::sync::Arc;
 
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
@@ -73,11 +74,11 @@ pub trait NotificationRepository: Send + Sync + 'static {
     /// (idempotent operation).
     fn create_notification<'a, T: Notification + Send + Sync>(
         &self,
-        request: &SendNotificationRequestBuilder<'a, T>,
+        request: SendNotificationRequestBuilder<'a, T>,
         notification_id: Uuid,
         service_sender: &str,
         apns_collapse_key: Option<&str>,
-    ) -> impl Future<Output = Result<Option<Uuid>, Report>> + Send;
+    ) -> impl Future<Output = Result<Option<Vec<UserNotificationRow<Arc<T>>>>, Report>> + Send;
 
     /// Update the sent status for users who received the notification.
     fn update_sent_status<'a>(

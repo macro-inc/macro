@@ -6049,6 +6049,7 @@ dependencies = [
  "chrono",
  "cowlike",
  "either",
+ "futures",
  "hex",
  "itertools 0.14.0",
  "macro_db_migrator",

@@ -5,7 +5,7 @@
 
 use crate::domain::models::RateLimitResult;
 use crate::domain::models::queue_message::{
-    ConnGatewayNotification, DeliveryFailure, DeliverySuccess, EmailNotification, Node,
+    ConnGatewayNotification, DeliveryFailure, DeliverySuccess, EmailNotification,
     NotificationChannel, QueueMessage,
 };
 use crate::domain::ports::{
@@ -80,37 +80,20 @@ where
             }
         }
 
-        self.deliver_notification_inner(&message.message_type, message.content, Vec::new())
-            .await
-            .into_iter()
-            .map(|r| r.context(DeliveryFailure::Other))
-            .collect()
-    }
-
-    /// Deliver a single node, with fallback on failure.
-    async fn deliver_notification_inner(
-        &self,
-        message_type: &str,
-        node: Node<'static, serde_json::Value, serde_json::Value>,
-        mut recursion_tail: Vec<Result<DeliverySuccess, Report>>,
-    ) -> Vec<Result<DeliverySuccess, Report>> {
-        let result = match &node.notif {
+        let results = match &message.content {
             NotificationChannel::ConnGateway(conn) => {
                 Either::Left([self.deliver_conn_gateway(conn).await])
             }
-            NotificationChannel::Email(email) => Either::Left([self.deliver_email(email).await]),
+            NotificationChannel::Email(email) => {
+                Either::Left([self.deliver_email(email).await])
+            }
             NotificationChannel::Ios(apns) => Either::Right(self.deliver_ios(apns).await),
         };
-        let all_failed = result.iter().all(Result::is_err);
-        recursion_tail.extend(result.into_iter());
 
-        match (all_failed, node.on_failure) {
-            (false, _) | (true, None) => recursion_tail,
-            (true, Some(fallback)) => {
-                Box::pin(self.deliver_notification_inner(message_type, *fallback, recursion_tail))
-                    .await
-            }
-        }
+        results
+            .into_iter()
+            .map(|r| r.context(DeliveryFailure::Other))
+            .collect()
     }
 
     /// Deliver via connection gateway (WebSocket).

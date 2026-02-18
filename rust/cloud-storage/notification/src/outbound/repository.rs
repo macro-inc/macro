@@ -17,6 +17,7 @@ use serde::de::DeserializeOwned;
 use sqlx::PgPool;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
+use std::sync::Arc;
 use uuid::Uuid;
 
 /// Local representation of the `notification_device_type_option` Postgres enum
@@ -76,11 +77,11 @@ pub trait NotificationDbOps: Send + Sync + 'static {
     /// Returns `Some(notification_id)` if created, `None` if it already exists (idempotent).
     fn create_notification<'a, T: Notification + Send + Sync>(
         &self,
-        request: &SendNotificationRequestBuilder<'a, T>,
+        request: SendNotificationRequestBuilder<'a, T>,
         notification_id: Uuid,
         service_name: &str,
         apns_collapse_key: Option<&str>,
-    ) -> impl std::future::Future<Output = Result<Option<Uuid>, Report>> + Send;
+    ) -> impl std::future::Future<Output = Result<Option<Vec<UserNotificationRow<Arc<T>>>>, Report>> + Send;
 
     /// Update the sent status for recipients who received the notification.
     fn update_sent_status<'a>(
@@ -252,13 +253,13 @@ impl NotificationDbOps for PgPool {
 
     async fn create_notification<'a, T: Notification + Send + Sync>(
         &self,
-        request: &SendNotificationRequestBuilder<'a, T>,
+        request: SendNotificationRequestBuilder<'a, T>,
         notification_id: Uuid,
         service_name: &str,
         apns_collapse_key: Option<&str>,
-    ) -> Result<Option<Uuid>, Report> {
+    ) -> Result<Option<Vec<UserNotificationRow<Arc<T>>>>, Report> {
         let entity_type: &str = request.notification_entity.entity_type.into();
-        let metadata = serde_json::to_value(&request.notification).ok();
+        let metadata = serde_json::to_value(&request.notification)?;
 
         let mut tx = self.begin().await?;
 
@@ -276,7 +277,7 @@ impl NotificationDbOps for PgPool {
             request.notification_entity.entity_id.as_ref(),
             entity_type,
             service_name,
-            metadata as Option<serde_json::Value>,
+            metadata as serde_json::Value,
             sender_id,
             apns_collapse_key
         )
@@ -309,7 +310,31 @@ impl NotificationDbOps for PgPool {
 
         tx.commit().await?;
 
-        Ok(Some(notification_id))
+        let entity = request.notification_entity.clone().into_owned();
+        let sender_id = request.sender_id.as_ref().map(|id| id.clone().into_owned());
+
+        let n = Arc::new(request.notification);
+
+        let rows = request
+            .recipient_ids
+            .iter()
+            .map(|recipient| UserNotificationRow {
+                owner_id: recipient.clone().into_owned(),
+                notification_id,
+                notification_event_type: T::TYPE_NAME.to_string(),
+                entity: entity.clone(),
+                sent: false,
+                done: false,
+                created_at: None,
+                viewed_at: None,
+                updated_at: None,
+                deleted_at: None,
+                notification_metadata: n.clone(),
+                sender_id: sender_id.clone(),
+            })
+            .collect();
+
+        Ok(Some(rows))
     }
 
     async fn update_sent_status<'a>(
@@ -706,11 +731,11 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
 
     async fn create_notification<'a, T: Notification + Send + Sync>(
         &self,
-        request: &SendNotificationRequestBuilder<'a, T>,
+        request: SendNotificationRequestBuilder<'a, T>,
         notification_id: Uuid,
         service_name: &str,
         apns_collapse_key: Option<&str>,
-    ) -> Result<Option<Uuid>, Report> {
+    ) -> Result<Option<Vec<UserNotificationRow<Arc<T>>>>, Report> {
         self.db
             .create_notification(request, notification_id, service_name, apns_collapse_key)
             .await

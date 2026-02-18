@@ -1,7 +1,5 @@
 //! Queue message models for notification delivery via SQS.
 
-use std::sync::Arc;
-
 use crate::domain::models::{
     Notification, RateLimitConfig, RateLimitKey, SendNotificationRequest, TaggedContent,
     apple::APNSPushNotification,
@@ -12,6 +10,7 @@ use chrono::{DateTime, Utc};
 use cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
+use rootcause::Report;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
@@ -32,7 +31,7 @@ pub struct APNSTargets<T> {
     /// then we pass the state of the machine into the queue such that it
     /// can be resumed on the egress side.
     #[serde(default)]
-    pub bulk_digest_state_machine: Option<Arc<BatchSend<PushNotificationsEnabled>>>,
+    pub bulk_digest_state_machine: Vec<BatchSend<PushNotificationsEnabled>>,
 }
 
 /// Email notification payload.
@@ -167,35 +166,6 @@ pub enum NotificationChannel<'a, T, U> {
     ConnGateway(ConnGatewayNotification<'a, T>),
 }
 
-/// A delivery node with optional fallback on failure.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Node<'a, T, U> {
-    /// The channel of notification we are delivering on.
-    pub notif: NotificationChannel<'a, T, U>,
-    /// The optional next channel we will attempt to deliver on if this method fails.
-    pub on_failure: Option<Box<Node<'a, T, U>>>,
-}
-
-impl<'a, T, U> Node<'a, T, U> {
-    // applies an in place mapping of the node structure recursively
-    fn map_mut_inner<F>(&mut self, mut f: F)
-    where
-        F: FnMut(&mut NotificationChannel<'a, T, U>),
-    {
-        f(&mut self.notif);
-        self.on_failure.as_deref_mut().map(|p| f(&mut p.notif));
-    }
-
-    /// functional wrapper around [Self::map_mut_inner]
-    pub(crate) fn map_mut<F>(mut self, f: F) -> Self
-    where
-        F: FnMut(&mut NotificationChannel<'a, T, U>),
-    {
-        self.map_mut_inner(f);
-        self
-    }
-}
-
 /// Message published to SQS after DB persistence.
 /// Contains everything needed for delivery.
 #[derive(Debug, Serialize, Deserialize)]
@@ -207,46 +177,54 @@ pub struct QueueMessage<'a, T, U> {
     pub rate_limit: Option<(RateLimitKey, RateLimitConfig)>,
     /// The methods on which we will attempt to deliver.
     /// This is an ALL relationship.
-    pub content: Node<'a, T, U>,
+    pub content: NotificationChannel<'a, T, U>,
 }
 
 /// a wrapper type over [QueueMessage] which can only be opened by providing the decision from the bulk digest state machine
-pub(crate) struct QueueMessageNeedsStateMachine<'a, T, U>(QueueMessage<'a, T, U>);
+pub(crate) struct QueueMessageNeedsStateMachine<'a, T, U>(Vec<QueueMessage<'a, T, U>>);
 
 impl<'a, T, U> QueueMessageNeedsStateMachine<'a, T, U> {
-    pub fn new(inner: QueueMessage<'a, T, U>) -> Self {
-        QueueMessageNeedsStateMachine(inner)
+    pub fn new(messages: Vec<QueueMessage<'a, T, U>>) -> Self {
+        Self(messages)
     }
 
     /// open the inner container by applying the state machine output to the necessary fields
-    pub fn with_state(self, state: StateMachineDecisionA<T>) -> QueueMessage<'a, T, U> {
-        let val = match state {
-            StateMachineDecisionA::Indeterminate(batch_send) => Some(Arc::new(batch_send)),
-            StateMachineDecisionA::SendImmediate(_)
-            | StateMachineDecisionA::DontSend(_)
-            | StateMachineDecisionA::BatchWasQueued(_) => None,
+    pub fn with_state_decisions(
+        self,
+        states: Vec<Result<StateMachineDecisionA<T>, Report>>,
+    ) -> impl Iterator<Item = QueueMessage<'a, T, U>> {
+        let val: Vec<_> = states
+            .into_iter()
+            .filter_map(|v| match v {
+                Ok(StateMachineDecisionA::Indeterminate(indeterminate)) => Some(indeterminate),
+                Err(_)
+                | Ok(StateMachineDecisionA::DontSend(_))
+                | Ok(StateMachineDecisionA::BatchWasQueued(_))
+                | Ok(StateMachineDecisionA::SendImmediate(_)) => None,
+            })
+            .collect();
+
+        let mut val = Some(val);
+
+        let map_msg = move |msg: QueueMessage<'a, T, U>| {
+            let QueueMessage {
+                message_type,
+                rate_limit,
+                mut content,
+            } = msg;
+
+            if let NotificationChannel::Ios(ios) = &mut content {
+                ios.bulk_digest_state_machine = val.take().unwrap_or_default();
+            }
+
+            QueueMessage {
+                message_type,
+                rate_limit,
+                content,
+            }
         };
 
-        let QueueMessage {
-            message_type,
-            rate_limit,
-            content,
-        } = self.0;
-
-        let content = match val {
-            Some(v) => content.map_mut(move |notif| {
-                if let NotificationChannel::Ios(ios) = notif {
-                    ios.bulk_digest_state_machine.insert(v.clone());
-                }
-            }),
-            None => content,
-        };
-
-        QueueMessage {
-            message_type,
-            rate_limit,
-            content,
-        }
+        self.0.into_iter().map(map_msg)
     }
 }
 
