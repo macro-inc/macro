@@ -24,7 +24,7 @@ export type SoupItemsQueryArgs = {
   body: SoupBody;
 };
 
-export type UseSoupQueyResult = UseInfiniteQueryResult<EntityData[], Error>;
+export type UseSoupQueryResult = UseInfiniteQueryResult<EntityData[], Error>;
 
 interface SoupItemsQueryOptions {
   enabled: boolean;
