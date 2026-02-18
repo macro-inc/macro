@@ -21,6 +21,7 @@ import { type Accessor, createMemo, createSignal, on } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { FilterConfig } from '../filters';
 import type { SoupEntity } from './soup-view-context';
+import { intersectEntityPools } from '../utils';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 300;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
@@ -79,37 +80,6 @@ const freshSearch = createFreshSearch<EntityData>(
   (item) => isChannelEntity(item),
   (item) => item
 );
-
-/** Takes a list of entity pools and returns a list of unique entities that are present in all pools, deduplicating by id */
-function intersectEntityPools(pools: readonly EntityData[][]): EntityData[] {
-  if (pools.length === 0) return [];
-  if (pools.length === 1) return pools[0];
-
-  const idCounts = new Map<string, number>();
-  const entityById = new Map<string, EntityData>();
-
-  for (const pool of pools) {
-    const seen = new Set<string>();
-    for (const entity of pool) {
-      if (!seen.has(entity.id)) {
-        seen.add(entity.id);
-        idCounts.set(entity.id, (idCounts.get(entity.id) ?? 0) + 1);
-        if (!entityById.has(entity.id)) {
-          entityById.set(entity.id, entity);
-        }
-      }
-    }
-  }
-
-  const result: EntityData[] = [];
-  for (const [id, count] of idCounts) {
-    if (count === pools.length) {
-      result.push(entityById.get(id)!);
-    }
-  }
-
-  return result;
-}
 
 interface CreateSearchStateArgs {
   soup: SoupState;
