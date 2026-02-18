@@ -72,13 +72,6 @@ export default defineConfig({
           name: 'notifications',
         },
       },
-      {
-        extends: './packages/app/vitest.config.ts',
-        test: {
-          include: ['packages/app/**/*.{test,spec}.{ts,tsx}'],
-          name: 'app',
-        },
-      },
     ],
   },
 });
