@@ -40,13 +40,11 @@ export function Channel(props: ChannelProps) {
       ? flattenMessages(messagesQuery.data as ChannelMessagesData)
       : [];
 
-  const fetchMoreNearTop = () => {
+  const fetchMoreNearTop = async () => {
     if (messagesQuery.hasNextPage) {
       setIsPrepending(true);
-      const result = messagesQuery.fetchNextPage();
-      result.finally(() => {
-        setIsPrepending(false);
-      });
+      await messagesQuery.fetchNextPage();
+      setIsPrepending(false);
     }
   };
 
