@@ -124,15 +124,13 @@ fn center_window(
         return vec![anchor];
     }
 
-    let slots = limit - 1; // slots available for before + after
+    let slots = limit - 1;
     let half = slots / 2;
 
-    // Two-pass min: try balanced split, then redistribute surplus.
     let before_take = half.min(before.len());
     let after_take = (slots - before_take).min(after.len());
     let before_take = (slots - after_take).min(before.len());
 
-    // Consume the vecs — truncate to the portions we need.
     let mut before = before;
     before.truncate(before_take);
 
@@ -140,7 +138,6 @@ fn center_window(
     after.truncate(after_take);
     after.reverse();
 
-    // Build result in DESC order: after (reversed) + anchor + before.
     let mut result = after;
     result.reserve(1 + before.len());
     result.push(anchor);
