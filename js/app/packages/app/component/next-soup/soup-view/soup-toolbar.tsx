@@ -96,21 +96,19 @@ export const SoupToolbar = () => {
       </SplitHeaderLeft>
 
       <SplitHeaderRight>
-        <div class="flex items-center h-full gap-0.5">
-          <Tooltip
-            tooltip={<LabelAndHotKey label="Clear filters" shortcut="/" />}
+        <Tooltip
+          tooltip={<LabelAndHotKey label="Clear filters" shortcut="/" />}
+        >
+          <button
+            type="button"
+            class="flex items-center justify-center size-[22px] rounded-full text-ink-muted hover:text-accent hover:bg-accent/20 active:bg-accent active:text-panel"
+            onClick={handleClear}
           >
-            <button
-              type="button"
-              class="flex items-center justify-center size-[22px] rounded-full text-ink-muted hover:text-accent hover:bg-accent/20 active:bg-accent active:text-panel"
-              onClick={handleClear}
-            >
-              <BackspaceIcon class="size-4.5" />
-            </button>
-          </Tooltip>
-          <div class="mx-0.5 w-px h-5 bg-edge-muted/50 shrink-0" />
-          <SettingsButton />
-        </div>
+            <BackspaceIcon class="size-4.5" />
+          </button>
+        </Tooltip>
+        <div class="mx-0.5 w-px h-5 bg-edge-muted/50 shrink-0" />
+        <SettingsButton />
       </SplitHeaderRight>
     </>
   );

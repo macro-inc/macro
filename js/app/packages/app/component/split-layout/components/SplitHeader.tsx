@@ -198,17 +198,18 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
         />
 
         <div
-          class="min-w-4 h-full shrink-0"
+          class="min-w-4 h-full shrink-0 flex items-center gap-0.5 px-2"
           ref={(ref) => {
             ctx.layoutRefs.headerRight = ref;
           }}
-        />
-        <Show when={!isTouchDevice()}>
-          <div class="z-2 relative flex items-center bg-panel pr-2 h-full">
-            <EntityNavigationIndicator />
-            <SplitSpotlightButton />
-          </div>
-        </Show>
+        >
+          <Show when={!isTouchDevice()}>
+            <div class="z-2 relative flex items-center gap-0.5 h-full order-last">
+              <EntityNavigationIndicator />
+              <SplitSpotlightButton />
+            </div>
+          </Show>
+        </div>
       </div>
     </div>
   );
