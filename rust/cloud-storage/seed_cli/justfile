@@ -6,3 +6,6 @@ get_environment:
   just ../../../infra/stacks/fusionauth-instance/insert_local_fusionauth_variables
   @echo "Copying env file"
   cp ../../../.env ./
+
+seed *ARGS:
+  cargo r {{ ARGS }}

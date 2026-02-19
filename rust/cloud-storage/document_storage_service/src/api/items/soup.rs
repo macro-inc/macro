@@ -12,12 +12,12 @@ use frecency::domain::models::JoinFrecency;
 use frecency::domain::ports::FrecencyQueryService;
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
-use macro_user_id::cowlike::CowLike;
+use cowlike::CowLike;
+use macro_user_id::cowlike::CowLike as _;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::response::ErrorResponse;
 use model::response::GenericErrorResponse;
 use model::user::UserContext;
-use model_entity::as_owned::ShallowClone;
 use models_pagination::CursorExtractor;
 use models_pagination::CursorVal;
 use models_pagination::CursorWithVal;
@@ -209,7 +209,7 @@ where
             })
             .await?;
 
-        let entities: Vec<_> = res.ids().map(|f| f.entity.shallow_clone()).collect();
+        let entities: Vec<_> = res.ids().map(|f| f.entity.copied()).collect();
 
         let res: Vec<_> = self
             .soup_storage

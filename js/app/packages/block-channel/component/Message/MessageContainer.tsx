@@ -185,15 +185,21 @@ export function MessageContainer(props: MessageProps) {
     return !isSameDay(new Date(message.created_at), new Date(prev.created_at));
   };
 
-  // We consider a message consecutive if it's from the same user and the same day and has the same thread id.
+  // We consider a message consecutive if it's from the same user, within 10 minutes, and has the same thread id.
   const isConsecutive = () => {
     const prevMessage_ = previousMessage();
     if (!prevMessage_) return false;
     const prevSenderId = prevMessage_?.sender_id;
+    const withinTimeWindow =
+      Math.abs(
+        new Date(message.created_at).getTime() -
+          new Date(prevMessage_.created_at).getTime()
+      ) <
+      10 * 60 * 1000;
     return (
       (prevMessage_.thread_id ?? '') === (message.thread_id ?? '') &&
       prevSenderId === message.sender_id &&
-      isSameDay(new Date(prevMessage_.created_at), new Date(message.created_at))
+      withinTimeWindow
     );
   };
 
@@ -495,6 +501,11 @@ export function MessageContainer(props: MessageProps) {
       }}
       data-message-id={message.id}
     >
+      {/* New message indicator */}
+      <Show when={props.listContext.isFirstNewMessage}>
+        <NewMessageIndicator onClick={props.onDismissNewMessages} />
+      </Show>
+
       {/* Date separator */}
       <Show
         when={
@@ -505,14 +516,13 @@ export function MessageContainer(props: MessageProps) {
               newDayPreviousNonThreadMessage()))
         }
       >
-        <MessageFlag text={formatRelativeDate(message.created_at)} />
+        <MessageFlag
+          text={formatRelativeDate(message.created_at)}
+          highlight={isNewMessage()}
+        />
       </Show>
-      {/* New message indicator */}
-      <Show when={props.listContext.isFirstNewMessage}>
-        <NewMessageIndicator onClick={props.onDismissNewMessages} />
-      </Show>
-      {/* Message item */}
 
+      {/* Message item */}
       <ContextMenu
         onOpenChange={(isOpen) => {
           setContextMenuOpen(isOpen);

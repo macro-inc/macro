@@ -251,7 +251,6 @@ function TextBoxEditor(props: {
           editor={editor}
           menu={mentionsMenuOperations}
           useBlockBoundary={true}
-          emails={() => []}
         />
       </ScopedPortal>
       <DecoratorRenderer editor={editor} />

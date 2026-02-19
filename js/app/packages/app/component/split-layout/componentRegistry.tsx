@@ -5,7 +5,7 @@ import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
 import type { ViewId } from '@core/types/view';
 import { type JSXElement, lazy } from 'solid-js';
 import { EmailCompose } from '../../../block-email/component/Compose';
-import { SettingsPanel } from '../settings/Settings';
+import { SettingsPanelComponentWrapper } from '../settings/Settings';
 import NotificationRoute from '@notifications/components/NotificationRoute';
 import { SoupView } from '@app/component/next-soup/soup-view/soup-view';
 
@@ -64,7 +64,7 @@ registerComponent(
   'import-linear',
   lazy(() => import('@app/component/import-linear/ImportLinear'))
 );
-registerComponent('settings', () => <SettingsPanel />);
+registerComponent('settings', () => <SettingsPanelComponentWrapper />);
 registerComponent('notification', () => <NotificationRoute />);
 
 if (LOCAL_ONLY) {
@@ -145,6 +145,11 @@ if (LOCAL_ONLY) {
   registerComponent(
     'entity-debug',
     lazy(() => import('@entity/debug/DebugEntityView'))
+  );
+
+  registerComponent(
+    'quick-access-list',
+    lazy(() => import('@core/context/quickAccess/debug/QuickAccessAll'))
   );
 }
 

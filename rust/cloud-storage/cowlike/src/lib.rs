@@ -1,4 +1,6 @@
-//! This module exposes the [CowLike] trait
+#![deny(missing_docs)]
+//! This crate exposes the [CowLike] trait
+//! And the ArcCowStr
 
 use std::sync::Arc;
 

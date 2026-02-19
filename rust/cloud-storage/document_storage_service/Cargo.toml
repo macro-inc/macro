@@ -31,6 +31,7 @@ location_check = []
 [dependencies]
 anyhow = { workspace = true }
 aws-sdk-dynamodb = { workspace = true }
+cowlike = { path = "../cowlike" }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }

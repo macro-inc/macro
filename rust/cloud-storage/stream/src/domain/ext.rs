@@ -18,7 +18,7 @@ pub trait StreamRepoExt: StreamRepo {
         stream: PayloadStream,
         timeout: Option<Duration>,
         close_delay: Option<Duration>,
-    ) -> tokio::task::JoinHandle<()>;
+    );
 }
 
 impl<S> StreamRepoExt for S
@@ -34,7 +34,7 @@ where
         mut stream: PayloadStream,
         timeout: Option<Duration>,
         close_delay: Option<Duration>,
-    ) -> tokio::task::JoinHandle<()> {
+    ) {
         let writer = self.clone();
         let writer_id = id.clone();
         tokio::spawn(async move {
@@ -59,6 +59,6 @@ where
                 .close(&id)
                 .await
                 .inspect_err(|e| tracing::error!(error=?e, "failed to mark stream as closed"));
-        })
+        });
     }
 }

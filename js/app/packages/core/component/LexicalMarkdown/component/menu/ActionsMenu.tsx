@@ -25,6 +25,7 @@ import {
 import { ACTIONS, type Action } from '../../plugins/actions/actions';
 import type { MenuOperations } from '../../shared/inlineMenu';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
+import { useMenuKeyboardNavigation } from './useMenuKeyboardNavigation';
 
 false && clickOutside;
 false && floatWithSelection;
@@ -143,91 +144,58 @@ export function ActionMenu(props: {
     }
   });
 
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (!isOpen()) return;
-
-    const items = filteredItems();
-    const selectedItem = items[selectedIndex()];
-
-    switch (e.key) {
-      case ' ':
-        switch (escapeSpaceState()) {
-          case 'double':
-          case 'start':
-            props.editor.dispatchCommand(
-              CLOSE_ACTION_SEARCH_COMMAND,
-              undefined
-            );
-            setIsOpen(false);
-            break;
-          case 'single':
-            setEscapeSpaceState('double');
-            break;
-          case null:
-            setEscapeSpaceState('single');
-            break;
-        }
-        break;
-
-      case 'Escape':
-        e.preventDefault();
-        e.stopPropagation();
-        props.editor.dispatchCommand(CLOSE_ACTION_SEARCH_COMMAND, undefined);
-        setIsOpen(false);
-        break;
-
-      case 'ArrowDown':
-        e.preventDefault();
-        e.stopPropagation();
-        setSelectedIndex((prev) => (prev + 1) % items.length);
-        break;
-
-      case 'ArrowUp':
-        e.preventDefault();
-        e.stopPropagation();
-        setSelectedIndex((prev) => (prev - 1 + items.length) % items.length);
-        break;
-
-      case 'ArrowLeft':
-      case 'ArrowRight':
-        e.preventDefault();
-        break;
-
-      case 'Tab':
-        e.preventDefault();
-        e.stopPropagation();
-        if (e.shiftKey) {
-          setSelectedIndex((prev) => (prev - 1 + items.length) % items.length);
-        } else {
-          setSelectedIndex((prev) => (prev + 1) % items.length);
-        }
-        break;
-
-      case 'Enter':
-        e.preventDefault();
-        e.stopPropagation();
-        props.editor.dispatchCommand(REMOVE_ACTION_SEARCH_COMMAND, undefined);
-        if (selectedItem) {
-          selectedItem.action(props.editor);
-        }
-        setIsOpen(false);
-        break;
-
-      default:
-        setEscapeSpaceState(null);
-        break;
-    }
+  const closeMenu = () => {
+    props.editor.dispatchCommand(CLOSE_ACTION_SEARCH_COMMAND, undefined);
+    setIsOpen(false);
   };
 
-  onMount(() => {
-    document.addEventListener('keydown', handleKeyDown, { capture: true });
-    onCleanup(() => {
-      document.removeEventListener('keydown', handleKeyDown, { capture: true });
-    });
+  const selectCurrentItem = () => {
+    const items = filteredItems();
+    const selectedItem = items[selectedIndex()];
+    props.editor.dispatchCommand(REMOVE_ACTION_SEARCH_COMMAND, undefined);
+    if (selectedItem) {
+      selectedItem.action(props.editor);
+    }
+    setIsOpen(false);
+  };
 
+  useMenuKeyboardNavigation({
+    isActive: isOpen,
+    onUp: () => {
+      const items = filteredItems();
+      setSelectedIndex((prev) => (prev - 1 + items.length) % items.length);
+    },
+    onDown: () => {
+      const items = filteredItems();
+      setSelectedIndex((prev) => (prev + 1) % items.length);
+    },
+    onLeft: () => {},
+    onRight: () => {},
+    onSelect: selectCurrentItem,
+    onClose: closeMenu,
+    onSpace: () => {
+      switch (escapeSpaceState()) {
+        case 'double':
+        case 'start':
+          closeMenu();
+          return true;
+        case 'single':
+          setEscapeSpaceState('double');
+          return false;
+        case null:
+          setEscapeSpaceState('single');
+          return false;
+      }
+      return false;
+    },
+    onOtherKey: () => {
+      setEscapeSpaceState(null);
+    },
+  });
+
+  onMount(() => {
     const focusOut = () => {
-      props.editor.dispatchCommand(CLOSE_ACTION_SEARCH_COMMAND, undefined);
-      setIsOpen(false);
+      closeMenu();
     };
     document.addEventListener('focusout', focusOut);
     onCleanup(() => {
@@ -268,8 +236,7 @@ export function ActionMenu(props: {
   });
 
   const clickOutsideHandler = () => {
-    props.editor.dispatchCommand(CLOSE_ACTION_SEARCH_COMMAND, undefined);
-    setIsOpen(false);
+    closeMenu();
   };
 
   const floatWithElementProps = () =>

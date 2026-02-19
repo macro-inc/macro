@@ -14,7 +14,10 @@ use macro_env::Environment;
 use service::{auth::Auth, db::Db};
 use sqlx::postgres::PgPoolOptions;
 
-use crate::config::{EnvVars, SeedCliContext};
+use crate::{
+    config::{EnvVars, SeedCliContext},
+    service::s3::S3,
+};
 
 /// The Seed CLI for populating Macro with seed data.
 #[derive(Debug, Parser)]
@@ -57,9 +60,18 @@ pub async fn main() -> anyhow::Result<()> {
     );
     tracing::trace!("initialized fusionauth client");
 
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
+    let s3_config = aws_sdk_s3::config::Builder::from(&aws_config)
+        .force_path_style(macro_aws_config::is_local_aws())
+        .build();
+
     let context = SeedCliContext {
         db: Db::new(db),
         fusionauth_client: Auth::new(fusionauth_client),
+        s3: S3::new(
+            &env_vars.document_storage_bucket,
+            aws_sdk_s3::Client::from_conf(s3_config),
+        ),
     };
 
     let cli = Cli::parse();

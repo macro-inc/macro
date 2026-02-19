@@ -116,12 +116,12 @@ const TopBar: Component<MessageTopBarProps> = (props) => {
     <Show when={!context.isConsecutive()}>
       <div class="font-mono flex flex-row items-center justify-between">
         {/*  Name */}
-        <div class="shrink-1 min-w-0 text-sm touch:mobile-width:text-base truncate text-ink-muted">
+        <div class="shrink-1 min-w-0 text-sm truncate text-ink-muted">
           {local.name}
         </div>
         {/* Tag */}
         <Show when={local.tagLabel}>
-          <div class="inline-flex items-center ml-2 px-0.5 text-xs touch:mobile-width:text-sm bg-edge/15 text-ink border-1 border-edge/30 max-w-[240px] min-w-0">
+          <div class="inline-flex items-center ml-2 px-0.5 text-xs bg-edge/15 text-ink border-1 border-edge/30 max-w-[240px] min-w-0">
             <div class="flex-shrink-0 px-0.5">
               <Show when={local.tagIcon}>
                 <CustomEntityIcon icon={local.tagIcon!} size="xs" />
@@ -132,7 +132,7 @@ const TopBar: Component<MessageTopBarProps> = (props) => {
         </Show>
         {/* Date - hidden when hovering since it shows above hover actions */}
         <Show when={local.timestamp && !context.hover()}>
-          <div class="text-xs touch:mobile-width:text-sm text-ink-muted min-w-0 shrink-2 truncate">
+          <div class="text-xs mobile:text-sm text-ink-muted min-w-0 shrink-2 truncate">
             {local.timestamp && formatDate(local.timestamp)}
           </div>
         </Show>
@@ -153,14 +153,10 @@ const Body: Component<MessageBodyProps> = (props) => {
     <Show
       when={!props.isDeleted}
       fallback={
-        <div class="text-xs touch:mobile-width:text-sm text-ink-muted font-mono">
-          Message Deleted
-        </div>
+        <div class="text-xs text-ink-muted font-mono">Message Deleted</div>
       }
     >
-      <div class="text-sm touch:mobile-width:text-base text-ink pr-4">
-        {props.children}
-      </div>
+      <div class="text-sm text-ink pr-4">{props.children}</div>
     </Show>
   );
 };
@@ -259,19 +255,18 @@ const Root: Component<MessageRootProps> = (props) => {
             data-message-body-id={props.id}
           >
             <div
-              class="relative flex flex-col pl-[calc(var(--user-icon-width)/2+var(--body-padding))] ml-[var(--left-of-connector)]"
-              classList={{
-                'border-l': !props.hideConnectors,
-                'border-accent': props.isNewMessage,
-                'border-edge-muted': !props.isNewMessage,
-                'pt-1.5': !(
+              class={cn(
+                'relative flex flex-col pl-[calc(var(--user-icon-width)/2+var(--body-padding))] ml-[var(--left-of-connector)]',
+                !props.hideConnectors && 'border-l',
+                props.isNewMessage ? 'border-accent' : 'border-edge-muted',
+                !(
                   props.isConsecutive ||
                   props.isFirstMessage ||
                   props.isFirstInThread
-                ),
-                'pb-2': !props.isLastMessage,
-                'pb-4': props.hasThreadChildren ?? false,
-              }}
+                ) && 'pt-4',
+                props.isLastMessage && 'pb-4',
+                props.hasThreadChildren && 'pb-4'
+              )}
             >
               {/* User Icon */}
               <div class="absolute left-0 -translate-x-1/2">
@@ -396,7 +391,7 @@ const Root: Component<MessageRootProps> = (props) => {
                   <Button
                     onClick={props.onThreadAppend}
                     tabIndex={0}
-                    class="text-ink-muted flex flex-row justify-center items-center relative px-0 py-0 mb-3 hover:bg-transparent active:border-transparent active:bg-transparent active:text-inherit hover:opacity-100"
+                    class="text-ink-muted flex flex-row justify-center items-center relative px-0 py-0 hover:bg-transparent active:border-transparent active:bg-transparent active:text-inherit hover:opacity-100"
                   >
                     <div class="border border-edge-muted bg-menu hover:bg-hover hover-transition-bg flex flex-row justify-center items-center ml-2 mr-2 mb-2 size-[var(--user-icon-width)] touch:min-h-[var(--user-icon-width)] touch:min-w-[var(--user-icon-width)]">
                       <IconPlus class="size-1/2" />

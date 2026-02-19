@@ -1,13 +1,15 @@
 use crate::{
     model::{
-        connection::ConnectionContext, message::OutgoingMessage, websocket::ToWebsocketMessage,
+        connection::ConnectionContext,
+        message::OutgoingMessage,
+        tracking::{EntityConnectionExt, TrackingData},
+        websocket::ToWebsocketMessage,
     },
     service::tracker,
 };
 use anyhow::{Context, Result};
 use axum::extract::ws::{Message, WebSocket};
 use futures::{StreamExt, stream::SplitStream};
-use model_entity::TrackingData;
 use std::error::Error;
 use tokio::sync::mpsc::Sender;
 use tungstenite::error::{Error as TungsteniteError, ProtocolError};
