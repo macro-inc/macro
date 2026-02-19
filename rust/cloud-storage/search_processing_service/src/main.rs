@@ -62,7 +62,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let (min_connections, max_connections): (u32, u32) = match config.environment {
-        Environment::Production => (3, 25),
+        Environment::Production => (5, 50),
         Environment::Develop => (1, 25),
         Environment::Local => (1, 10),
     };
