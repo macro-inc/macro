@@ -49,6 +49,19 @@ impl ChannelMessagesService for MockService {
     ) -> Result<Vec<ChannelParticipant>, ChannelMessagesErr> {
         Ok(vec![])
     }
+
+    async fn get_channel_messages_around(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+        _limit: u16,
+    ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
+        Ok(Vec::<ChannelMessage>::new()
+            .into_iter()
+            .paginate_on(50, CreatedAt)
+            .filter_on(())
+            .into_page())
+    }
 }
 
 struct ErrorService;
@@ -76,6 +89,15 @@ impl ChannelMessagesService for ErrorService {
         &self,
         _channel_id: Uuid,
     ) -> Result<Vec<ChannelParticipant>, ChannelMessagesErr> {
+        Err(ChannelMessagesErr::Repo(anyhow::anyhow!("database error")))
+    }
+
+    async fn get_channel_messages_around(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+        _limit: u16,
+    ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
         Err(ChannelMessagesErr::Repo(anyhow::anyhow!("database error")))
     }
 }
@@ -129,6 +151,19 @@ impl ChannelMessagesService for ParticipantsService {
                 left_at: None,
             },
         ])
+    }
+
+    async fn get_channel_messages_around(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+        _limit: u16,
+    ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
+        Ok(Vec::<ChannelMessage>::new()
+            .into_iter()
+            .paginate_on(50, CreatedAt)
+            .filter_on(())
+            .into_page())
     }
 }
 
@@ -269,4 +304,90 @@ async fn participants_returns_500_on_service_error() {
     let bytes = res.into_body().collect().await.unwrap().to_bytes();
     let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(json["message"], "An internal server error occurred");
+}
+
+struct NotFoundService;
+
+impl ChannelMessagesService for NotFoundService {
+    async fn get_channel_messages(
+        &self,
+        _channel_id: Uuid,
+        _query: Query<Uuid, CreatedAt, ()>,
+        _limit: u16,
+    ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
+        Ok(Vec::<ChannelMessage>::new()
+            .into_iter()
+            .paginate_on(50, CreatedAt)
+            .filter_on(())
+            .into_page())
+    }
+
+    async fn get_channel_attachments(
+        &self,
+        _channel_id: Uuid,
+        _query: Query<Uuid, CreatedAt, ()>,
+        _limit: u16,
+    ) -> Result<ChannelAttachmentsPage, ChannelMessagesErr> {
+        Ok(Vec::<ChannelAttachment>::new()
+            .into_iter()
+            .paginate_on(50, CreatedAt)
+            .filter_on(())
+            .into_page())
+    }
+
+    async fn get_channel_participants(
+        &self,
+        _channel_id: Uuid,
+    ) -> Result<Vec<ChannelParticipant>, ChannelMessagesErr> {
+        Ok(vec![])
+    }
+
+    async fn get_channel_messages_around(
+        &self,
+        _channel_id: Uuid,
+        message_id: Uuid,
+        _limit: u16,
+    ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
+        Err(ChannelMessagesErr::MessageNotFound(message_id))
+    }
+}
+
+#[tokio::test]
+async fn messages_around_returns_empty_page() {
+    let router = mock_router();
+    let channel_id = Uuid::new_v4();
+    let message_id = Uuid::new_v4();
+    let request = Request::builder()
+        .uri(format!(
+            "/{channel_id}/messages?load_around_message_id={message_id}"
+        ))
+        .body(axum::body::Body::empty())
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(json["items"], serde_json::json!([]));
+}
+
+#[tokio::test]
+async fn messages_around_returns_404_when_not_found() {
+    let router = channels_router(ChannelsRouterState::new(NotFoundService)).layer(user_extension());
+    let channel_id = Uuid::new_v4();
+    let message_id = Uuid::new_v4();
+    let request = Request::builder()
+        .uri(format!(
+            "/{channel_id}/messages?load_around_message_id={message_id}"
+        ))
+        .body(axum::body::Body::empty())
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(json["message"], "Message not found");
 }

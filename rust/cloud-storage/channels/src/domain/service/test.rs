@@ -34,6 +34,10 @@ fn empty_repo() -> MockChannelMessagesRepo {
         .returning(|_, _, _| Box::pin(async { Ok(vec![]) }));
     repo.expect_get_channel_participants()
         .returning(|_| Box::pin(async { Ok(vec![]) }));
+    repo.expect_resolve_top_level_parent()
+        .returning(|_, _| Box::pin(async { Ok(None) }));
+    repo.expect_get_top_level_messages_around()
+        .returning(|_, _, _, _| Box::pin(async { Ok((vec![], vec![])) }));
     repo
 }
 
@@ -168,4 +172,145 @@ async fn returns_empty_participants_list() {
     let participants = svc.get_channel_participants(Uuid::nil()).await.unwrap();
 
     assert!(participants.is_empty());
+}
+
+// --- center_window tests ---
+
+#[test]
+fn center_window_balanced() {
+    // 5 before, anchor, 5 after, limit=7 → half=3 before, 3 after
+    let before: Vec<_> = (1..=5).map(|i| make_row(Uuid::new_v4(), i)).collect();
+    let anchor = make_row(Uuid::new_v4(), 0);
+    let after: Vec<_> = (1..=5).map(|i| make_row(Uuid::new_v4(), -i)).collect();
+
+    let result = center_window(before.clone(), anchor.clone(), after.clone(), 7);
+    assert_eq!(result.len(), 7);
+    // First 3 are from after (reversed = newest-first), then anchor, then 3 from before
+    assert_eq!(result[0].id, after[2].id);
+    assert_eq!(result[1].id, after[1].id);
+    assert_eq!(result[2].id, after[0].id);
+    assert_eq!(result[3].id, anchor.id);
+    assert_eq!(result[4].id, before[0].id);
+    assert_eq!(result[5].id, before[1].id);
+    assert_eq!(result[6].id, before[2].id);
+}
+
+#[test]
+fn center_window_near_oldest_edge() {
+    // Only 1 before, anchor, 10 after, limit=7 → 1 before, 5 after
+    let before = vec![make_row(Uuid::new_v4(), 1)];
+    let anchor = make_row(Uuid::new_v4(), 0);
+    let after: Vec<_> = (1..=10).map(|i| make_row(Uuid::new_v4(), -i)).collect();
+
+    let result = center_window(before.clone(), anchor.clone(), after.clone(), 7);
+    assert_eq!(result.len(), 7);
+    assert_eq!(result[5].id, anchor.id);
+    assert_eq!(result[6].id, before[0].id);
+    // First 5 are after (reversed)
+    for i in 0..5 {
+        assert_eq!(result[i].id, after[4 - i].id);
+    }
+}
+
+#[test]
+fn center_window_near_newest_edge() {
+    // 10 before, anchor, only 1 after, limit=7 → 5 before, 1 after
+    let before: Vec<_> = (1..=10).map(|i| make_row(Uuid::new_v4(), i)).collect();
+    let anchor = make_row(Uuid::new_v4(), 0);
+    let after = vec![make_row(Uuid::new_v4(), -1)];
+
+    let result = center_window(before.clone(), anchor.clone(), after.clone(), 7);
+    assert_eq!(result.len(), 7);
+    assert_eq!(result[0].id, after[0].id);
+    assert_eq!(result[1].id, anchor.id);
+    for i in 0..5 {
+        assert_eq!(result[2 + i].id, before[i].id);
+    }
+}
+
+#[test]
+fn center_window_small_channel() {
+    // 2 before, anchor, 1 after, limit=10 → returns all 4
+    let before: Vec<_> = (1..=2).map(|i| make_row(Uuid::new_v4(), i)).collect();
+    let anchor = make_row(Uuid::new_v4(), 0);
+    let after = vec![make_row(Uuid::new_v4(), -1)];
+
+    let result = center_window(before.clone(), anchor.clone(), after.clone(), 10);
+    assert_eq!(result.len(), 4);
+    assert_eq!(result[0].id, after[0].id);
+    assert_eq!(result[1].id, anchor.id);
+    assert_eq!(result[2].id, before[0].id);
+    assert_eq!(result[3].id, before[1].id);
+}
+
+#[test]
+fn center_window_limit_one() {
+    let before: Vec<_> = (1..=5).map(|i| make_row(Uuid::new_v4(), i)).collect();
+    let anchor = make_row(Uuid::new_v4(), 0);
+    let after: Vec<_> = (1..=5).map(|i| make_row(Uuid::new_v4(), -i)).collect();
+
+    let result = center_window(before, anchor.clone(), after, 1);
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].id, anchor.id);
+}
+
+// --- get_channel_messages_around tests ---
+
+#[tokio::test]
+async fn around_message_not_found() {
+    let svc = ChannelMessagesServiceImpl::new(empty_repo());
+    let message_id = Uuid::new_v4();
+
+    let err = svc
+        .get_channel_messages_around(Uuid::nil(), message_id, 50)
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(err, ChannelMessagesErr::MessageNotFound(id) if id == message_id),
+        "expected MessageNotFound, got {err:?}"
+    );
+}
+
+#[tokio::test]
+async fn around_resolves_and_hydrates() {
+    let anchor = make_row(Uuid::new_v4(), 0);
+    let before_row = make_row(Uuid::new_v4(), 1);
+    let after_row = make_row(Uuid::new_v4(), -1);
+
+    let anchor_clone = anchor.clone();
+    let before_clone = before_row.clone();
+    let after_clone = after_row.clone();
+
+    let mut repo = MockChannelMessagesRepo::new();
+
+    repo.expect_resolve_top_level_parent()
+        .returning(move |_, _| {
+            let a = anchor_clone.clone();
+            Box::pin(async move { Ok(Some(a)) })
+        });
+    repo.expect_get_top_level_messages_around()
+        .returning(move |_, _, _, _| {
+            let b = vec![before_clone.clone()];
+            let a = vec![after_clone.clone()];
+            Box::pin(async move { Ok((b, a)) })
+        });
+    repo.expect_get_thread_data()
+        .returning(|_, _| Box::pin(async { Ok(HashMap::new()) }));
+    repo.expect_get_reactions_batch()
+        .returning(|_| Box::pin(async { Ok(HashMap::new()) }));
+    repo.expect_get_attachments_batch()
+        .returning(|_| Box::pin(async { Ok(HashMap::new()) }));
+
+    let svc = ChannelMessagesServiceImpl::new(repo);
+    let page = svc
+        .get_channel_messages_around(Uuid::nil(), anchor.id, 50)
+        .await
+        .unwrap();
+
+    assert_eq!(page.items.len(), 3);
+    // DESC order: after, anchor, before
+    assert_eq!(page.items[0].id, after_row.id);
+    assert_eq!(page.items[1].id, anchor.id);
+    assert_eq!(page.items[2].id, before_row.id);
 }

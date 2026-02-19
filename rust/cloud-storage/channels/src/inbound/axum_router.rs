@@ -49,6 +49,10 @@ pub struct Params {
     /// Page size. Clamped to [1, 100], defaults to 50.
     #[serde(default)]
     limit: Option<u16>,
+    /// When set, return a centered window of messages around this message id
+    /// instead of cursor-paginated results.
+    #[serde(default)]
+    load_around_message_id: Option<Uuid>,
 }
 
 /// Create the channels router.
@@ -82,9 +86,11 @@ where
         ("channel_id" = Uuid, Path, description = "Channel ID"),
         ("limit" = Option<u16>, Query, description = "Page size (1-100, default 50)"),
         ("cursor" = Option<String>, Query, description = "Base64 encoded cursor value"),
+        ("load_around_message_id" = Option<Uuid>, Query, description = "Return a centered window around this message ID"),
     ),
     responses(
         (status = 200, body = ApiChannelMessagesPage),
+        (status = 404, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
@@ -97,12 +103,22 @@ pub async fn get_channel_messages_handler<S: ChannelMessagesService>(
     cursor: CursorExtractor<Uuid, CreatedAt, ()>,
 ) -> Result<Json<PaginatedOpaqueCursor<ApiChannelMessage>>, ChannelsHandlerErr> {
     let limit = params.limit.unwrap_or(50);
-    let query = cursor.into_query(CreatedAt, ());
 
-    let page = state
-        .service
-        .get_channel_messages(channel_id, query, limit)
-        .await?;
+    let page = match params.load_around_message_id {
+        Some(message_id) => {
+            state
+                .service
+                .get_channel_messages_around(channel_id, message_id, limit)
+                .await?
+        }
+        None => {
+            let query = cursor.into_query(CreatedAt, ());
+            state
+                .service
+                .get_channel_messages(channel_id, query, limit)
+                .await?
+        }
+    };
 
     Ok(Json(page.type_erase().map(ApiChannelMessage::from)))
 }
@@ -440,13 +456,28 @@ pub enum ChannelsHandlerErr {
 
 impl IntoResponse for ChannelsHandlerErr {
     fn into_response(self) -> axum::response::Response {
-        tracing::error!(error=?self, "channels handler error");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                message: "An internal server error occurred",
-            }),
-        )
-            .into_response()
+        let ChannelsHandlerErr::Internal(ref err) = self;
+        match err {
+            ChannelMessagesErr::MessageNotFound(id) => {
+                tracing::warn!(message_id=?id, "message not found");
+                (
+                    StatusCode::NOT_FOUND,
+                    Json(ErrorResponse {
+                        message: "Message not found",
+                    }),
+                )
+                    .into_response()
+            }
+            ChannelMessagesErr::Repo(_) => {
+                tracing::error!(error=?self, "channels handler error");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        message: "An internal server error occurred",
+                    }),
+                )
+                    .into_response()
+            }
+        }
     }
 }
