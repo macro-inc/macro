@@ -19,7 +19,7 @@ axum = { workspace = true }
 futures = { workspace = true }
 http-body-util = { workspace = true }
 lambda_client = { path = "../lambda_client" }
-macro_aws_config = { path = "../macro_aws_config" }
+macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 macro_cors = { path = "../macro_cors" }
 macro_db_client = { path = "../macro_db_client" }
 macro_entrypoint = { path = "../macro_entrypoint" }

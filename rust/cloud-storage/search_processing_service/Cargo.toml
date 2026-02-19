@@ -32,7 +32,7 @@ email_db_client = { path = "../email_db_client" }
 futures = { workspace = true }
 http-body-util = { workspace = true }
 lexical_client = { path = "../lexical_client" }
-macro_aws_config = { path = "../macro_aws_config" }
+macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 macro_cors = { path = "../macro_cors" }
 macro_db_client = { path = "../macro_db_client", optional = true } # Make this optional
 macro_entrypoint = { path = "../macro_entrypoint" }
