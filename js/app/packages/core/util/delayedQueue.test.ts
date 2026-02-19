@@ -1,11 +1,11 @@
 import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { delayedQueue } from './lazy-throttle';
+import { delayedQueue } from './delayedQueue';
 
 const flushEffects = () =>
   new Promise((r) => queueMicrotask(r as VoidFunction));
 
-describe('queueAfterFirstNonEmpty', () => {
+describe('delayedQueue', () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });

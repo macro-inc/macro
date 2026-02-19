@@ -14,7 +14,7 @@ import {
   createEffect,
 } from 'solid-js';
 import { throttle } from '@solid-primitives/scheduled';
-import { lazyThrottle, delayedQueue } from './lazy-throttle';
+import { delayedQueue } from '@core/util/delayedQueue';
 
 export const DEFAULT_SEARCH_SORT = 'updated_at';
 
