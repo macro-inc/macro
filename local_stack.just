@@ -1,4 +1,5 @@
 # LocalStack recipes for local AWS emulation
+export AWS_PAGER := ""
 
 # Start LocalStack for local AWS emulation
 start_localstack:
