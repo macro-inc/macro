@@ -7,8 +7,6 @@ version = "0.1.0"
 [features]
 s3 = ["dep:aws-sdk-s3"]
 
-# documents requires s3 feature -> dss now dss when importing macro_aws_config will auto get the s3 feature
-
 [dependencies]
 aws-config = { workspace = true }
 macro_env = { path = "../macro_env" }
