@@ -15,16 +15,12 @@ import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { getIsSpecialProject } from '@block-project/isSpecial';
 import { projectBlockDataSignal } from '@block-project/signal/projectBlockData';
 import { useBlockId } from '@core/block';
-import { ShareButton } from '@core/component/TopBar/ShareButton';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import {
   ENABLE_PROJECT_SHARING,
   ENABLE_PROJECT_VIEW_PREVIEW,
 } from '@core/constant/featureFlags';
-import {
-  useCanEdit,
-  useGetPermissions,
-  useIsDocumentOwner,
-} from '@core/signal/permissions';
+import { useCanEdit, useIsDocumentOwner } from '@core/signal/permissions';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { toast } from 'core/component/Toast/Toast';
 import { createMemo, Show } from 'solid-js';
@@ -39,14 +35,10 @@ export function TopBar() {
   const [preview] = splitPanelContext.previewState;
   const id = useBlockId();
   const isSpecialProject = getIsSpecialProject(id);
-  const permissions = useGetPermissions();
   const isOwner = useIsDocumentOwner();
   const canEdit = useCanEdit();
   const name = createMemo(
     () => projectBlockDataSignal()?.projectMetadata.name ?? ''
-  );
-  const owner = createMemo(
-    () => projectBlockDataSignal()?.projectMetadata.userId
   );
 
   function handleCopyLink() {
@@ -105,14 +97,7 @@ export function TopBar() {
             </Show>
             <SplitPermissionsBadge />
             <Show when={ENABLE_PROJECT_SHARING && !isSpecialProject}>
-              <ShareButton
-                id={id}
-                name={name()}
-                userPermissions={permissions()}
-                copyLink={handleCopyLink}
-                itemType="project"
-                owner={owner()}
-              />
+              <ShareTrigger copyLink={handleCopyLink} />
             </Show>
           </div>
         </SplitToolbarRight>

@@ -26,12 +26,12 @@ import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { NotificationsButton } from '@core/component/NotificationsModal';
 import { ReferencesButton } from '@core/component/ReferencesModal';
-import { ShareButton } from '@core/component/TopBar/ShareButton';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import {
   ENABLE_HISTORY_COMPONENT,
   ENABLE_MARKDOWN_LIVE_COLLABORATION,
 } from '@core/constant/featureFlags';
-import { useCanEdit, useGetPermissions } from '@core/signal/permissions';
+import { useCanEdit } from '@core/signal/permissions';
 import type { EntityType } from '@core/types';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import ShowComments from '@icon/regular/chat-circle-dots.svg';
@@ -49,7 +49,6 @@ export function TopBar() {
   const canEdit = useCanEdit();
   const blockName = useBlockName();
   const blockId = useBlockId();
-  const permissions = useGetPermissions();
   const name = useBlockDocumentName();
   const notificationSource = useGlobalNotificationSource();
   const itemType = blockNameToItemType(blockName);
@@ -119,12 +118,7 @@ export function TopBar() {
         <MarkdownPropertiesButton buttonSize="sm" />
         <div class="flex items-center">
           <SplitPermissionsBadge />
-          <ShareButton
-            id={blockId}
-            name={name()}
-            userPermissions={permissions()}
-            itemType={itemType}
-          />
+          <ShareTrigger />
         </div>
       </SplitToolbarRight>
     </>

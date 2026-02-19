@@ -36,7 +36,7 @@ import { CanvasController } from './CanvasController';
 import { CanvasRenderer } from './CanvasRenderer';
 import { Loading } from './Loading';
 import { LoadingMindMap } from './LoadingMindMap';
-import { ModalsMounter } from './ModalsMounter';
+import { ModalsProvider } from './ModalsProvider';
 import { ToolBar } from './ToolBar';
 import { TopBar } from './TopBar';
 
@@ -288,7 +288,7 @@ export default function BlockCanvas(props: BlockCanvasProps) {
 
   return (
     <DocumentBlockContainer>
-      <ModalsMounter>
+      <ModalsProvider>
         <div
           class="w-full h-full select-none flex flex-col bg-panel"
           // TODO: we need a more robust solution for preventing parent blocks from stealing clicks
@@ -312,7 +312,7 @@ export default function BlockCanvas(props: BlockCanvasProps) {
           </Show>
           <LoadingMindMap />
         </div>
-      </ModalsMounter>
+      </ModalsProvider>
     </DocumentBlockContainer>
   );
 }

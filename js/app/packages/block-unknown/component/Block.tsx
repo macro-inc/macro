@@ -1,8 +1,6 @@
-import { useBlockAliasedName, useBlockId } from '@core/block';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
-import { getPermissions, Permissions } from '@core/component/SharePermissions';
-import { ShareModal } from '@core/component/TopBar/ShareButton';
+import { useShareDialogContext } from '@core/component/TopBar/ShareButton';
 import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
@@ -12,15 +10,14 @@ import DownloadSimple from '@icon/regular/download-simple.svg';
 import ShareFat from '@icon/regular/share-fat.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { toast } from 'core/component/Toast/Toast';
-import { createSignal } from 'solid-js';
-import { blockData, useGetFileBlob } from '../signal/blockData';
-import { ModalsMounter } from './ModalsMounter';
+import { useGetFileBlob } from '../signal/blockData';
+import { ModalsProvider } from './ModalsProvider';
 import { TopBar } from './TopBar';
 
 export default function BlockUnknown() {
   return (
     <DocumentBlockContainer>
-      <ModalsMounter>
+      <ModalsProvider>
         <div class="w-full h-full bg-panel select-none overscroll-none overflow-hidden flex flex-col relative">
           <div class="relative">
             <TopBar />
@@ -29,25 +26,16 @@ export default function BlockUnknown() {
             <Unknown />
           </div>
         </div>
-      </ModalsMounter>
+      </ModalsProvider>
     </DocumentBlockContainer>
   );
 }
 
 const Unknown = () => {
-  const documentId = useBlockId();
   const fileName = useBlockDocumentName();
   const downloadName = useBlockDocumentDownloadName();
-  const blockAlias = useBlockAliasedName();
-  const [isSharePermOpen, setIsSharePermOpen] = createSignal(false);
+  const shareCtx = useShareDialogContext();
   const getBlob = useGetFileBlob();
-
-  const userPermissions = () => {
-    const accessLevel = blockData()?.userAccessLevel;
-    if (!accessLevel) return Permissions.NO_ACCESS;
-
-    return getPermissions(accessLevel);
-  };
 
   const downloadDocument = createCallback(async () => {
     try {
@@ -72,7 +60,7 @@ const Unknown = () => {
             text="Share"
             theme="accent"
             icon={ShareFat}
-            onClick={() => setIsSharePermOpen(true)}
+            onClick={shareCtx.open}
           />
 
           <DeprecatedTextButton
@@ -83,15 +71,6 @@ const Unknown = () => {
           />
         </div>
       </div>
-      <ShareModal
-        id={documentId}
-        name={fileName()}
-        userPermissions={userPermissions()}
-        itemType="document"
-        isSharePermOpen={isSharePermOpen()}
-        blockAlias={blockAlias}
-        setIsSharePermOpen={setIsSharePermOpen}
-      />
     </div>
   );
 };

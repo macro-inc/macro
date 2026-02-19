@@ -8,7 +8,7 @@ import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { createEffect, createSignal, onMount, Show, Suspense } from 'solid-js';
 import { mdStore } from '../signal/markdownBlockData';
 import { FindAndReplace } from './FindAndReplace';
-import { ModalsMounter } from './ModalsMounter';
+import { ModalsProvider } from './ModalsProvider';
 import { InstructionsNotebook, Notebook } from './Notebook';
 import { InstructionsTopBar, TopBar } from './TopBar';
 
@@ -37,7 +37,7 @@ export default function BlockMarkdown() {
 
   return (
     <DocumentBlockContainer>
-      <ModalsMounter>
+      <ModalsProvider>
         <div
           class="w-full h-full select-none overscroll-none overflow-hidden flex flex-col relative bracket-never"
           tabIndex={-1}
@@ -81,7 +81,7 @@ export default function BlockMarkdown() {
             <CustomScrollbar scrollContainer={scrollRef} />
           </div>
         </div>
-      </ModalsMounter>
+      </ModalsProvider>
     </DocumentBlockContainer>
   );
 }

@@ -19,10 +19,9 @@ import { createBlockSignal, useBlockId } from '@core/block';
 import { DocumentPropertiesButton } from '@core/component/DocumentPropertiesModal';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { ReferencesButton } from '@core/component/ReferencesModal';
-import { ShareButton } from '@core/component/TopBar/ShareButton';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { ENABLE_REFERENCES_MODAL } from '@core/constant/featureFlags';
-import { blockFileSignal, blockMetadataSignal } from '@core/signal/load';
-import { useGetPermissions } from '@core/signal/permissions';
+import { blockFileSignal } from '@core/signal/load';
 import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
@@ -50,7 +49,6 @@ export function TopBar() {
   const fileName = useBlockDocumentName('Unknown Filename');
   const downloadName = useBlockDocumentDownloadName('Unknown Filename');
   const canvasFile = blockFileSignal.get;
-  const userPermissions = useGetPermissions();
 
   let ref!: HTMLDivElement;
   onMount(() => {
@@ -130,14 +128,7 @@ export function TopBar() {
         <DocumentPropertiesButton buttonSize="sm" />
         <SplitPermissionsBadge />
         <Show when={canvasFile()} keyed>
-          <ShareButton
-            id={documentId}
-            name={fileName()}
-            userPermissions={userPermissions()}
-            copyLink={copyLink}
-            itemType="document"
-            owner={blockMetadataSignal()?.owner}
-          />
+          <ShareTrigger copyLink={copyLink} />
         </Show>
       </SplitToolbarRight>
     </div>

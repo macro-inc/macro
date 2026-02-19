@@ -29,7 +29,7 @@ import { registerEmailHotkeys } from '../util/emailHotkeys';
 import { scrollToMessage } from '../util/scrollToMessage';
 import { EmailFormContextProvider } from './EmailFormContext';
 import { MessageList } from './MessageList';
-import { ModalsMounter } from './ModalsMounter';
+import { ModalsProvider } from './ModalsProvider';
 import { TopBar } from './TopBar';
 import { EmailCompose } from '@block-email/component/Compose';
 import { EmailInput } from '@block-email/component/EmailInput';
@@ -436,7 +436,7 @@ function EmailContent(props: EmailViewProps) {
   });
 
   return (
-    <ModalsMounter subject={props.title}>
+    <ModalsProvider subject={props.title}>
       <Show when={!isUserLoading()}>
         <Switch>
           <Match
@@ -528,6 +528,6 @@ function EmailContent(props: EmailViewProps) {
           </Match>
         </Switch>
       </Show>
-    </ModalsMounter>
+    </ModalsProvider>
   );
 }

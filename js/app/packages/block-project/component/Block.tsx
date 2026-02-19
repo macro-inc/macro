@@ -19,7 +19,7 @@ import { refetchSoupEntity } from '@queries/soup/cache';
 import { refetchResources } from '@service-storage/util/refetchResources';
 import { toast } from 'core/component/Toast/Toast';
 import { type Component, createSignal, Show } from 'solid-js';
-import { ModalsMounter } from './ModalsMounter';
+import { ModalsProvider } from './ModalsProvider';
 import { TopBar } from './TopBar';
 import { SoupContextProvider } from '@app/component/next-soup/soup-context';
 import {
@@ -123,7 +123,7 @@ const Block: Component = () => {
 
   return (
     <DocumentBlockContainer>
-      <ModalsMounter>
+      <ModalsProvider>
         <div
           ref={attachHotkeys}
           class="w-full h-full bg-panel flex flex-col relative"
@@ -171,7 +171,7 @@ const Block: Component = () => {
             </div>
           </Show>
         </div>
-      </ModalsMounter>
+      </ModalsProvider>
     </DocumentBlockContainer>
   );
 };

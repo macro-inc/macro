@@ -5,7 +5,7 @@ import { blockAcceptedFileExtensionToMimeType } from '@core/constant/allBlocks';
 import { blockFileSignal, blockMetadataSignal } from '@core/signal/load';
 import { setCopiedItem } from '@core/state/clipboard';
 import { createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
-import { ModalsMounter } from './ModalsMounter';
+import { ModalsProvider } from './ModalsProvider';
 import { TopBar } from './TopBar';
 
 const { track, TrackingEvents } = withAnalytics();
@@ -64,7 +64,7 @@ export default function BlockImage() {
 
   return (
     <DocumentBlockContainer>
-      <ModalsMounter>
+      <ModalsProvider>
         <div class="w-full h-full bg-panel select-none overscroll-none overflow-hidden flex flex-col">
           <TopBar />
           <Show
@@ -84,7 +84,7 @@ export default function BlockImage() {
             </div>
           </Show>
         </div>
-      </ModalsMounter>
+      </ModalsProvider>
     </DocumentBlockContainer>
   );
 }

@@ -4,10 +4,9 @@ import {
   StaticSplitLabel,
 } from '@app/component/split-layout/components/SplitLabel';
 import { SplitToolbarRight } from '@app/component/split-layout/components/SplitToolbar';
-import { ShareButton } from '@core/component/TopBar/ShareButton';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
 import { Show } from 'solid-js';
-import { useEmailContext } from './EmailContext';
 import { EmailPropertiesButton } from './EmailPropertiesModal';
 
 export function TopBar(props: {
@@ -15,8 +14,6 @@ export function TopBar(props: {
   title: string;
   isDraft?: boolean;
 }) {
-  const email = useEmailContext();
-
   return (
     <>
       <SplitHeaderLeft>
@@ -39,12 +36,7 @@ export function TopBar(props: {
       <SplitToolbarRight>
         <EmailPropertiesButton buttonSize="sm" />
         <Show when={ENABLE_EMAIL_SHARING}>
-          <ShareButton
-            id={props.id}
-            name={props.title}
-            itemType="email"
-            userPermissions={email.permissions().type}
-          />
+          <ShareTrigger />
         </Show>
       </SplitToolbarRight>
     </>

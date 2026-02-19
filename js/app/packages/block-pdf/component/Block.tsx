@@ -44,7 +44,7 @@ import {
 } from '../type/coParse';
 import { preprocess } from '../websocket/preprocess';
 import { Document } from './Document';
-import { ModalsMounter } from './ModalsMounter';
+import { ModalsProvider } from './ModalsProvider';
 import { Tabs } from './Tabs';
 import { TopBar } from './TopBar';
 
@@ -190,7 +190,7 @@ export default function BlockPdf() {
 
   return (
     <DocumentBlockContainer>
-      <ModalsMounter>
+      <ModalsProvider>
         <div
           class="w-full h-full bg-panel select-none overscroll-none overflow-hidden flex flex-col"
           onContextMenu={(e) => e.preventDefault()}
@@ -217,7 +217,7 @@ export default function BlockPdf() {
             {/* <CustomCursor /> */}
           </div>
         </div>
-      </ModalsMounter>
+      </ModalsProvider>
     </DocumentBlockContainer>
   );
 }

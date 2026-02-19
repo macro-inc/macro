@@ -15,9 +15,8 @@ import { withAnalytics } from '@coparse/analytics';
 import { useBlockId } from '@core/block';
 import { DocumentPropertiesButton } from '@core/component/DocumentPropertiesModal';
 import { ReferencesButton } from '@core/component/ReferencesModal';
-import { ShareButton } from '@core/component/TopBar/ShareButton';
-import { blockMetadataSignal, blockTextSignal } from '@core/signal/load';
-import { useGetPermissions } from '@core/signal/permissions';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import { blockTextSignal } from '@core/signal/load';
 import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
@@ -34,7 +33,6 @@ export const TopBar: Component = () => {
   const text = blockTextSignal.get;
   const name = useBlockDocumentName();
   const downloadName = useBlockDocumentDownloadName();
-  const userPermissions = useGetPermissions();
 
   const downloadDocument = createCallback(() => {
     const content = text();
@@ -81,13 +79,7 @@ export const TopBar: Component = () => {
         <DocumentPropertiesButton buttonSize="sm" />
         <div class="flex items-center">
           <SplitPermissionsBadge />
-          <ShareButton
-            id={blockId}
-            name={name()}
-            userPermissions={userPermissions()}
-            itemType="document"
-            owner={blockMetadataSignal()?.owner}
-          />
+          <ShareTrigger />
         </div>
       </SplitToolbarRight>
     </>

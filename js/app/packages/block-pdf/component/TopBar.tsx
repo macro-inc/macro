@@ -24,13 +24,12 @@ import { DocumentPropertiesButton } from '@core/component/DocumentPropertiesModa
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { ReferencesButton } from '@core/component/ReferencesModal';
 import { openLoginModal } from '@core/component/TopBar/LoginButton';
-import { ShareButton } from '@core/component/TopBar/ShareButton';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import {
   ENABLE_PDF_MARKUP,
   ENABLE_REFERENCES_MODAL,
 } from '@core/constant/featureFlags';
 import { blockMetadataSignal } from '@core/signal/load';
-import { useGetPermissions } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import DownloadIcon from '@icon/regular/download-simple.svg';
@@ -51,7 +50,6 @@ export function TopBar() {
   const hasModificationData = useHasModificationData();
   const hasComments = useHasComments();
   const fileName = useBlockDocumentName('Unknown Filename');
-  const userPermissions = useGetPermissions();
 
   const fileType = blockMetadataSignal()?.fileType;
 
@@ -201,14 +199,7 @@ export function TopBar() {
         <DocumentPropertiesButton buttonSize="sm" />
         <div class="flex items-center">
           <SplitPermissionsBadge />
-          <ShareButton
-            id={documentId}
-            name={fileName()}
-            userPermissions={userPermissions()}
-            copyLink={copyLink}
-            itemType="document"
-            owner={blockMetadataSignal()?.owner}
-          />
+          <ShareTrigger copyLink={copyLink} />
         </div>
       </SplitToolbarRight>
     </>

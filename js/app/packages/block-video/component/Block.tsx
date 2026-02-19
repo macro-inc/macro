@@ -3,7 +3,7 @@ import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { toast } from 'core/component/Toast/Toast';
 import { createEffect, createSignal, Show } from 'solid-js';
 import { blockData } from '../signal/blockData';
-import { ModalsMounter } from './ModalsMounter';
+import { ModalsProvider } from './ModalsProvider';
 import { TopBar } from './TopBar';
 
 const { track, TrackingEvents } = withAnalytics();
@@ -11,7 +11,7 @@ const { track, TrackingEvents } = withAnalytics();
 export default function BlockVideo() {
   return (
     <DocumentBlockContainer>
-      <ModalsMounter>
+      <ModalsProvider>
         <div class="w-full h-full bg-panel select-none overscroll-none overflow-hidden flex flex-col relative">
           <div class="relative">
             <TopBar />
@@ -20,7 +20,7 @@ export default function BlockVideo() {
             <Video />
           </div>
         </div>
-      </ModalsMounter>
+      </ModalsProvider>
     </DocumentBlockContainer>
   );
 }

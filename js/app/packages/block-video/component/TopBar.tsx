@@ -13,9 +13,7 @@ import {
 } from '@app/component/split-layout/components/SplitToolbar';
 import { useBlockId } from '@core/block';
 import { ReferencesButton } from '@core/component/ReferencesModal';
-import { ShareButton } from '@core/component/TopBar/ShareButton';
-import { blockMetadataSignal } from '@core/signal/load';
-import { useGetPermissions } from '@core/signal/permissions';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
@@ -31,7 +29,6 @@ export function TopBar() {
   const name = useBlockDocumentName();
   const downloadName = useBlockDocumentDownloadName();
   const getBlob = useGetFileBlob();
-  const userPermissions = useGetPermissions();
 
   const downloadDocument = createCallback(async () => {
     try {
@@ -79,13 +76,7 @@ export function TopBar() {
         />
         <div class="flex items-center">
           <SplitPermissionsBadge />
-          <ShareButton
-            id={blockId}
-            name={name()}
-            userPermissions={userPermissions()}
-            itemType="document"
-            owner={blockMetadataSignal()?.owner}
-          />
+          <ShareTrigger />
         </div>
       </SplitToolbarRight>
     </>

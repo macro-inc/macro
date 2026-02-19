@@ -15,8 +15,7 @@ import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import { useBlockId } from '@core/block';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { ReferencesButton } from '@core/component/ReferencesModal';
-import { ShareButton } from '@core/component/TopBar/ShareButton';
-import { useGetPermissions } from '@core/signal/permissions';
+import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import Notepad from '@icon/regular/notepad.svg';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
@@ -39,7 +38,6 @@ export function TopBar() {
     }
   });
 
-  const userPermissions = useGetPermissions();
   const openInstructions = useOpenInstructionsMd();
 
   const ops: FileOperation[] = [
@@ -83,12 +81,7 @@ export function TopBar() {
         />
         <div class="flex items-center">
           <SplitPermissionsBadge />
-          <ShareButton
-            id={blockId}
-            name={chatName()}
-            userPermissions={userPermissions()}
-            itemType="chat"
-          />
+          <ShareTrigger />
         </div>
       </SplitToolbarRight>
     </>
