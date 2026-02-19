@@ -90,7 +90,7 @@ export function MobileDock() {
   };
 
   return (
-    <div class="flex flex-row justify-between bg-linear-to-t from-page to-panel border-t border-edge-muted">
+    <div class="flex flex-row justify-between bg-page border-t border-edge-muted">
       <MobileDockButton
         icon={WideFolder}
         label="All"
