@@ -2,15 +2,16 @@ import { type Accessor, createSignal, createEffect } from 'solid-js';
 import { Queuer } from '@tanstack/pacer/queuer';
 
 /**
- * Creates a derived signal that drops source values until `startFn` returns true,
- * then processes all subsequent updates through a FIFO queue with a fixed `delayMs` between each flush.
+ * Creates a derived signal that returns `null` until `startFn` returns true,
+ * then processes all subsequent source values through a FIFO queue with a
+ * fixed `delayMs` between each flush.
  */
-export function delayedQueue<T extends unknown[]>(
+export function delayedQueue<T>(
   source: Accessor<T>,
   delayMs: number,
-  startFn: (item: T) => boolean = (_item) => true
-): Accessor<T> {
-  const [value, setValue] = createSignal<T>(source());
+  startFn: (item: T) => boolean
+): Accessor<T | null> {
+  const [value, setValue] = createSignal<T | null>(null);
   let activated = false;
 
   const queuer = new Queuer<T>(

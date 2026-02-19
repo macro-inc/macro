@@ -78,19 +78,19 @@ export const SearchProvider: FlowComponent = (props) => {
   });
 
   const itemsQueryData = delayedQueue(
-    () => itemsQuery.data ?? [],
+    () => itemsQuery.data,
     5000,
-    (items) => items.length > 0
+    (items) => !!items && items.length > 0
   );
   const channelItemsQueryData = delayedQueue(
-    () => channelItemsQuery.data ?? [],
+    () => channelItemsQuery.data,
     5000,
-    (items) => items.length > 0
+    (items) => !!items && items.length > 0
   );
 
   const entityPool = createMemo<EntityData[]>(() => [
-    ...itemsQueryData(),
-    ...channelItemsQueryData(),
+    ...(itemsQueryData() ?? []),
+    ...(channelItemsQueryData() ?? []),
   ]);
 
   return (
