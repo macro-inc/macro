@@ -66,7 +66,13 @@ impl<R: DocumentRepo> DocumentServiceImpl<R> {
     fn make_presigned_url(&self, key: &str) -> anyhow::Result<String> {
         let constructed_url = format!("{}/{}", self.cloudfront_config.distribution_url, key);
         let options = self.get_signed_options();
-        let signed_url = get_signed_url(&constructed_url, &options)?;
+
+        let signed_url = if !macro_aws_config::is_local_aws() {
+            get_signed_url(&constructed_url, &options)?
+        } else {
+            constructed_url
+        };
+
         Ok(signed_url)
     }
 
