@@ -127,28 +127,24 @@ fn center_window(
     let slots = limit - 1; // slots available for before + after
     let half = slots / 2;
 
-    let (before_take, after_take) = if before.len() < half {
-        // Near the oldest edge: take all before, fill remainder from after.
-        let bt = before.len();
-        let at = (slots - bt).min(after.len());
-        (bt, at)
-    } else if after.len() < slots - half {
-        // Near the newest edge: take all after, fill remainder from before.
-        let at = after.len();
-        let bt = (slots - at).min(before.len());
-        (bt, at)
-    } else {
-        // Balanced: even split.
-        (half, (slots - half).min(after.len()))
-    };
+    // Two-pass min: try balanced split, then redistribute surplus.
+    let before_take = half.min(before.len());
+    let after_take = (slots - before_take).min(after.len());
+    let before_take = (slots - after_take).min(before.len());
+
+    // Consume the vecs — truncate to the portions we need.
+    let mut before = before;
+    before.truncate(before_take);
+
+    let mut after = after;
+    after.truncate(after_take);
+    after.reverse();
 
     // Build result in DESC order: after (reversed) + anchor + before.
-    let mut result = Vec::with_capacity(before_take + 1 + after_take);
-    for row in after[..after_take].iter().rev() {
-        result.push(row.clone());
-    }
+    let mut result = after;
+    result.reserve(1 + before.len());
     result.push(anchor);
-    result.extend_from_slice(&before[..before_take]);
+    result.append(&mut before);
 
     result
 }

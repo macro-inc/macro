@@ -433,7 +433,7 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
     ) -> Result<(Vec<TopLevelMessageRow>, Vec<TopLevelMessageRow>), Self::Err> {
         let limit_i64 = i64::from(limit);
 
-        let before_rows: Vec<TopLevelRow> = sqlx::query_as!(
+        let before_fut = sqlx::query_as!(
             TopLevelRow,
             r#"
             SELECT
@@ -461,10 +461,9 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
             anchor_id,
             limit_i64,
         )
-        .fetch_all(&self.pool)
-        .await?;
+        .fetch_all(&self.pool);
 
-        let after_rows: Vec<TopLevelRow> = sqlx::query_as!(
+        let after_fut = sqlx::query_as!(
             TopLevelRow,
             r#"
             SELECT
@@ -492,8 +491,10 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
             anchor_id,
             limit_i64,
         )
-        .fetch_all(&self.pool)
-        .await?;
+        .fetch_all(&self.pool);
+
+        let (before_rows, after_rows): (Vec<TopLevelRow>, Vec<TopLevelRow>) =
+            tokio::try_join!(before_fut, after_fut)?;
 
         let to_row = |r: TopLevelRow| TopLevelMessageRow {
             id: r.id,
