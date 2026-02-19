@@ -91,7 +91,7 @@ async fn main() -> Result<()> {
 
     let connection_manager = create_dynamo_db_connection_manager(dynamodb_client.clone()).await?;
 
-    let last_online_redis_conn = redis_client.get_multiplexed_tokio_connection().await?;
+    let last_online_redis_conn = redis_client.get_multiplexed_async_connection().await?;
     let last_online_worker = Arc::new(LastOnlineWorker::new(LastOnlineService::new(
         LastOnlineDefaultTime,
         RedisLastOnlineRepo::new(last_online_redis_conn),

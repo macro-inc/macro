@@ -3,8 +3,8 @@
 use crate::domain::ports::LastOnlineRepo;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
-use redis::aio::MultiplexedConnection;
 use redis::AsyncCommands;
+use redis::aio::MultiplexedConnection;
 use rootcause::Report;
 
 /// TTL for last_online keys: 30 days
