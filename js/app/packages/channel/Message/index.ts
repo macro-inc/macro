@@ -6,6 +6,7 @@ import { Timestamp } from './Timestamp';
 import { Content } from './Content';
 import { Reactions } from './Reactions';
 import { EditedIndicator } from './EditedIndicator';
+import { HoverActions } from './HoverActions';
 
 export const Message = {
   Root,
@@ -16,6 +17,7 @@ export const Message = {
   Content,
   Reactions,
   EditedIndicator,
+  HoverActions,
 };
 
 export { ChannelMessage } from './ChannelMessage';

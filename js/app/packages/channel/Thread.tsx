@@ -53,7 +53,7 @@ export function Thread(props: ThreadProps) {
     <div class="flex flex-col w-full">
       <ChannelMessage message={props.data()} />
       <Show when={hasReplies()}>
-        <div class="flex flex-col w-full pl-4">
+        <div class="flex flex-col w-full pl-5">
           <For each={previewReplies()}>
             {(reply) => <ChannelMessage message={reply} />}
           </For>
