@@ -694,6 +694,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "load_around_message_id",
+            "in": "query",
+            "description": "Return a centered window around this message ID",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -703,6 +713,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiChannelMessagesPage"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }

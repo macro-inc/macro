@@ -15,4 +15,8 @@ export type GetChannelMessagesParams = {
    * Base64 encoded cursor value
    */
   cursor?: string;
+  /**
+   * Return a centered window around this message ID
+   */
+  load_around_message_id?: string;
 };
