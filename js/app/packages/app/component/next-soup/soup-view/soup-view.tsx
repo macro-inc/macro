@@ -180,6 +180,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     queryFilters,
     featuredIds,
     isSearchServiceLoading,
+    isLocalSearchSettling,
   } = useSoupView();
   const { getSplitCount } = useSplitLayout();
 
@@ -535,7 +536,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
           <Switch>
             <Match
               when={
-                (source.isLoading() || isSearchServiceLoading()) &&
+                (source.isLoading() ||
+                  isSearchServiceLoading() ||
+                  isLocalSearchSettling()) &&
                 !rows().length
               }
             >

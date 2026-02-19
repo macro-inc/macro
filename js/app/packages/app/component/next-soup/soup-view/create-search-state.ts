@@ -210,6 +210,10 @@ export const createSearchState = ({
     return ids;
   });
 
+  const isLocalSearchSettling = createMemo(
+    () => isSearching() && trimmedSearchText() !== debouncedSearchForLocal()
+  );
+
   const isSearchServiceLoading = createMemo(() => {
     if (!isSearching()) return false;
     if (!validateSearchServiceText(trimmedSearchText())) return false;
@@ -227,6 +231,7 @@ export const createSearchState = ({
     featuredIds,
     searchQuery,
     isSearchServiceLoading,
+    isLocalSearchSettling,
   };
 };
 
