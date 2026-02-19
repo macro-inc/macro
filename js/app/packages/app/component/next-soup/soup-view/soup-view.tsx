@@ -534,17 +534,21 @@ export const SoupViewList = (props: SoupViewListProps) => {
       >
         <StaticMarkdownContext>
           <Switch>
+            <Match when={source.isLoading() && !rows().length}>
+              <LoadingBlock />
+            </Match>
             <Match
               when={
-                (source.isLoading() ||
-                  isSearchServiceLoading() ||
-                  isLocalSearchSettling()) &&
+                (isSearchServiceLoading() || isLocalSearchSettling()) &&
                 !rows().length
               }
             >
-              <LoadingBlock />
+              <div class="flex items-center justify-center gap-2 py-8 text-xs text-text-muted">
+                <Spinner class="size-3 animate-spin" />
+                Searching...
+              </div>
             </Match>
-            <Match when={!source.isLoading() && !rows().length}>
+            <Match when={!rows().length}>
               <EmptyState search={!!searchText()} />
             </Match>
             <Match when={rows().length}>

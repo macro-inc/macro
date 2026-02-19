@@ -226,6 +226,14 @@ export const SoupViewContextProvider: FlowComponent<
 
       const merged: SoupEntity[] = [...service, ...local];
 
+      if (
+        merged.length === 0 &&
+        prev.length > 0 &&
+        search.isLocalSearchSettling()
+      ) {
+        return prev;
+      }
+
       for (let i = 0; i < merged.length; i++) {
         const entity = merged[i];
         if (entity.notifications) continue;
@@ -317,11 +325,7 @@ export const SoupViewContextProvider: FlowComponent<
     soup,
     source: {
       data: entities,
-      isLoading: () => {
-        if (itemsQuery.isLoading) return true;
-        if (searchQuery.isLoading) return true;
-        return false;
-      },
+      isLoading: () => itemsQuery.isLoading,
       isFetching: () => itemsQuery.isFetching || searchQuery.isFetching,
       isFetchingNextPage: () =>
         itemsQuery.isFetchingNextPage || searchQuery.isFetchingNextPage,
