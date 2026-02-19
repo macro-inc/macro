@@ -41,9 +41,6 @@ import { blockNameToItemType } from '@service-storage/client';
 import { Show } from 'solid-js';
 import { HistoryButton } from './History';
 import { MarkdownPropertiesButton } from './MarkdownPropertiesModal';
-import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
-import { Button } from '@ui/components/Button';
-import { isMobile } from '@core/mobile/isMobile';
 
 export function TopBar() {
   const canEdit = useCanEdit();
