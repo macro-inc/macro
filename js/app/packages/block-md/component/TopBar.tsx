@@ -24,8 +24,8 @@ import { useDownloadDocumentAsMarkdownText } from '@block-md/signal/save';
 import { useBlockId, useBlockName } from '@core/block';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
-import { NotificationsModal } from '@core/component/NotificationsModal';
-import { ReferencesModal } from '@core/component/ReferencesModal';
+import { NotificationsButton } from '@core/component/NotificationsModal';
+import { ReferencesButton } from '@core/component/ReferencesModal';
 import { ShareButton } from '@core/component/TopBar/ShareButton';
 import {
   ENABLE_HISTORY_COMPONENT,
@@ -39,8 +39,11 @@ import HideComments from '@icon/regular/chat-circle-slash.svg';
 import Download from '@icon/regular/download.svg';
 import { blockNameToItemType } from '@service-storage/client';
 import { Show } from 'solid-js';
-import { HistoryModal } from './History';
-import { MarkdownPropertiesModal } from './MarkdownPropertiesModal';
+import { HistoryButton } from './History';
+import { MarkdownPropertiesButton } from './MarkdownPropertiesModal';
+import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
+import { Button } from '@ui/components/Button';
+import { isMobile } from '@core/mobile/isMobile';
 
 export function TopBar() {
   const canEdit = useCanEdit();
@@ -92,14 +95,14 @@ export function TopBar() {
             canEdit()
           }
         >
-          <HistoryModal documentId={blockId} />
+          <HistoryButton buttonSize="sm" />
         </Show>
-        <NotificationsModal
+        <NotificationsButton
           entity={{ id: blockId, type: itemType as EntityType }}
           notificationSource={notificationSource}
           buttonSize="sm"
         />
-        <ReferencesModal
+        <ReferencesButton
           documentId={blockId}
           documentName={name()}
           buttonSize="sm"
@@ -113,7 +116,7 @@ export function TopBar() {
             label: `${showCommentsPreference() ? 'Hide' : 'Show'} Comments`,
           }}
         />
-        <MarkdownPropertiesModal documentId={blockId} buttonSize="sm" />
+        <MarkdownPropertiesButton buttonSize="sm" />
         <div class="flex items-center">
           <SplitPermissionsBadge />
           <ShareButton
@@ -130,7 +133,6 @@ export function TopBar() {
 
 export function InstructionsTopBar() {
   const canEdit = useCanEdit();
-  const blockId = useBlockId();
   return (
     <>
       <SplitHeaderLeft>
@@ -144,7 +146,7 @@ export function InstructionsTopBar() {
             canEdit()
           }
         >
-          <HistoryModal documentId={blockId} />
+          <HistoryButton />
         </Show>
       </SplitToolbarRight>
     </>
