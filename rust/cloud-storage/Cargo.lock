@@ -7870,7 +7870,6 @@ dependencies = [
  "chrono",
  "comms_db_client",
  "email_db_client",
- "email_service_client",
  "futures",
  "http-body-util",
  "lexical_client",
