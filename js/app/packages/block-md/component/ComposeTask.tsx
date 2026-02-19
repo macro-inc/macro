@@ -383,7 +383,7 @@ export function ComposeTask(props: ComposeTaskProps) {
 
     const properties = structuredClone(Object.entries(unwrap(propertyValues)));
 
-    createTaskWithProperties(
+    const documentId = await createTaskWithProperties(
       taskTitle,
       taskContent,
       properties,
@@ -391,7 +391,12 @@ export function ComposeTask(props: ComposeTaskProps) {
       (params) => upsertToHistoryMutation.mutate(params)
     );
 
-    // Clear draft and reset form
+    if (!documentId) {
+      // Task creation failed — keep the draft so the user can retry
+      return;
+    }
+
+    // Clear draft and reset form only on success
     clearTaskComposerDraft();
     setTitle('');
     setContent('');
