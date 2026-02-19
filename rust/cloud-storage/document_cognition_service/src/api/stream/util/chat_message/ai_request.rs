@@ -1,6 +1,6 @@
 use crate::{
     api::context::ApiContext, core::constants::DEFAULT_MAX_TOKENS,
-    model::ws::SendChatMessagePayload, service::attachment::fetch,
+    model::stream::SendChatMessagePayload, service::attachment::fetch,
 };
 
 use crate::model::chats::ChatResponse;

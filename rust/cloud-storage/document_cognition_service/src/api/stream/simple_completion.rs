@@ -2,7 +2,7 @@
 
 use crate::api::context::ApiContext;
 use crate::core::constants::DEFAULT_MAX_TOKENS;
-use crate::model::ws::{ChatStream, GetSimpleCompletionStreamPayload};
+use crate::model::stream::{ChatStream, GetSimpleCompletionStreamPayload};
 use crate::service::attachment::document::get_document_plaintext_content;
 use ai::chat_stream::get_chat_stream;
 use ai::types::{ChatStreamCompletionResponse, MessageBuilder, Model, RequestBuilder};

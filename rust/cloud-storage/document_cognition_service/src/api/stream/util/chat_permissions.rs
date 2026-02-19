@@ -1,5 +1,4 @@
 use crate::api::context::ApiContext;
-use crate::model::ws::{StreamError, WebSocketError};
 use anyhow::Result;
 use macro_middleware::cloud_storage::ensure_access::get_users_access_level_v2;
 use model::user::UserContext;
@@ -19,25 +18,12 @@ pub async fn chat_access(
     user_ctx: &UserContext,
     chat_id: &str,
     stream_id: String,
-) -> Result<AccessLevel, WebSocketError> {
+) -> Result<AccessLevel> {
     get_users_access_level_v2(&ctx.db, &user_ctx.user_id, chat_id, "chat")
         .await
-        .map_err(|e| {
-            tracing::error!(
-                error = ?e,
-                "Failed to get user access level"
-            );
-            WebSocketError::StreamError(StreamError::Unauthorized {
-                stream_id: stream_id.clone(),
-            })
-        })
+        .map_err(|e| anyhow::anyhow!(e.1))
         .and_then(|access| match access {
             Some(access) => Ok(access),
-            None => {
-                tracing::error!("User has no access to chat");
-                Err(WebSocketError::StreamError(StreamError::Unauthorized {
-                    stream_id,
-                }))
-            }
+            None => Err(anyhow::anyhow!("No Access")),
         })
 }

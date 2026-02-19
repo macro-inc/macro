@@ -24,7 +24,6 @@ use crate::{
             self, ChatMessageError, HttpSendChatMessageRequest, SendChatMessageResponse,
         },
         stream::simple_completion::{self, SimpleCompletionError, SimpleCompletionResponse},
-        ws::{self},
     },
     model::{
         request::{
@@ -39,10 +38,9 @@ use crate::{
             chats::{GetChatPermissionsResponseV2, GetChatResponse, GetModelsResponse},
             models::AIModel,
         },
-        ws::{
-            ChatStream, ExtractionStatusPayload, GetSimpleCompletionStreamPayload,
-            SelectModelPayload, SendChatMessagePayload, SendCompletionPayload,
-            StopChatMessagePayload, StreamError, ToWebSocketMessage, ToolSet, WebSocketError,
+        stream::{
+            ChatStream, GetSimpleCompletionStreamPayload, SendChatMessagePayload, StreamError,
+            ToolSet,
         },
     },
 };
@@ -80,7 +78,6 @@ use utoipa::OpenApi;
         paths(
             health::health_handler,
             get_chat::get_chat_handler,
-            ws::connection::ws_handler,
             create_user_chat::create_chat_handler,
             copy_chat::copy_chat_handler,
             get_chat_permissions::get_chat_permissions_handler_v2,
@@ -157,15 +154,10 @@ use utoipa::OpenApi;
                 // Share Permission
                 UpdateOperation,
 
-                // WebSocket
-                ToWebSocketMessage,
+                //stream
                 ChatStream,
                 SendChatMessagePayload,
-                StopChatMessagePayload,
-                WebSocketError,
-                SelectModelPayload,
-                ExtractionStatusPayload,
-                SendCompletionPayload,
+                StreamError,
 
                 // Attachments
                 GetChatsForAttachmentResponse,

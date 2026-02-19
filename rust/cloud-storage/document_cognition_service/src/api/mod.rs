@@ -23,7 +23,6 @@ mod preview;
 pub mod stream;
 pub(crate) mod swagger;
 pub mod utils;
-mod ws;
 
 mod attachments;
 mod chats;
@@ -75,7 +74,6 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
 fn api_router(api_context: ApiContext) -> Router {
     let internal_router = Router::new()
         .nest("/chats", chats::router(api_context.clone()))
-        .nest("/", ws::router(api_context.clone()))
         .nest("/stream", stream::router(api_context.clone()))
         .nest(
             "/internal",

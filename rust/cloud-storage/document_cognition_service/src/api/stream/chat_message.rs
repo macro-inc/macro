@@ -1,15 +1,13 @@
 //! HTTP endpoint for sending chat messages with streaming responses.
-
+use super::util::chat_message::ai_request::build_chat_completion_request;
+use super::util::chat_message::toolset::choose_toolset;
+use super::util::chat_message::{store_conversation_messages, store_incoming_message};
+use super::util::chat_permissions;
 use crate::api::context::ApiContext;
 use crate::api::utils::log;
-use crate::api::ws::chat_message::ai_request::build_chat_completion_request;
-use crate::api::ws::chat_message::toolset::choose_toolset;
-use crate::api::ws::chat_message::{store_conversation_messages, store_incoming_message};
-use crate::api::ws::chat_permissions;
-use crate::api::ws::connection::MESSAGE_ABORT_MAP;
 use crate::core::constants::DEFAULT_CHAT_NAME;
 use crate::core::model::FALLBACK_MODEL;
-use crate::model::ws::{ChatStream, JwtPayload, SendChatMessagePayload, StreamError, ToolSet};
+use crate::model::stream::{ChatStream, JwtPayload, SendChatMessagePayload, StreamError, ToolSet};
 use crate::service::ai::name::maybe_rename_chat;
 use crate::service::get_chat::get_chat;
 use ai::tool::ToolLoop;
@@ -343,12 +341,6 @@ fn stream_and_save_message(
     durable_stream_id: StreamId,
     is_first_message: bool,
 ) {
-    // Check for abort before starting
-    if MESSAGE_ABORT_MAP.contains_key(&stream_id) {
-        MESSAGE_ABORT_MAP.remove(&stream_id);
-        return;
-    }
-
     tracing::trace!(request=?request, "streaming chat request");
 
     let tool_context = ToolServiceContext {
@@ -399,10 +391,7 @@ fn stream_and_save_message(
                         stream_id: stream_id.clone(),
                     },
                 };
-                let error_msg = ChatStream::Error(
-                    crate::model::ws::WebSocketError::StreamError(stream_error),
-                );
-                if let Ok(json) = serde_json::to_value(&error_msg) {
+                if let Ok(json) = serde_json::to_value(&stream_error) {
                     yield json;
                 }
                 return;
@@ -418,12 +407,6 @@ fn stream_and_save_message(
             if !is_first_token {
                 is_first_token = true;
                 log::log_timing(log::LatencyMetric::TimeToFirstToken, model, now.elapsed());
-            }
-
-            // Check for abort during streaming
-            if MESSAGE_ABORT_MAP.contains_key(&stream_id) {
-                MESSAGE_ABORT_MAP.remove(&stream_id);
-                return;
             }
 
             match response {
@@ -484,10 +467,7 @@ fn stream_and_save_message(
                             stream_id: stream_id.clone(),
                         },
                     };
-                    let error_msg = ChatStream::Error(
-                        crate::model::ws::WebSocketError::StreamError(stream_error),
-                    );
-                    if let Ok(json) = serde_json::to_value(&error_msg) {
+                    if let Ok(json) = serde_json::to_value(&stream_error) {
                         yield json;
                     }
                     return;

@@ -5,6 +5,7 @@
 
 pub mod chat_message;
 pub mod simple_completion;
+mod util;
 
 use axum::{Router, routing::post};
 use tower::ServiceBuilder;
