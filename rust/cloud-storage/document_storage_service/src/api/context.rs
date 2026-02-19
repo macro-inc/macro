@@ -1,8 +1,9 @@
 use crate::{config::Config, service::s3::S3};
 use axum::extract::FromRef;
 use channels::{
-    domain::service::ChannelMessagesServiceImpl, inbound::axum_router::ChannelsRouterState,
-    outbound::pg_channels_repo::PgChannelMessagesRepo,
+    domain::service::ChannelMessagesServiceImpl,
+    inbound::axum_router::ChannelsRouterState,
+    outbound::{pg_access_check::PgChannelAccessCheck, pg_channels_repo::PgChannelMessagesRepo},
 };
 use comms::{
     domain::service::ChannelServiceImpl,
@@ -79,7 +80,7 @@ pub(crate) type CommsState = CommsRouterState<CommsChannelService>;
 
 /// Type alias for the channels router state.
 pub(crate) type DssChannelsState =
-    ChannelsRouterState<ChannelMessagesServiceImpl<PgChannelMessagesRepo>>;
+    ChannelsRouterState<ChannelMessagesServiceImpl<PgChannelMessagesRepo>, PgChannelAccessCheck>;
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {

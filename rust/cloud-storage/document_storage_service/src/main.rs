@@ -7,8 +7,9 @@ use crate::{
 };
 use anyhow::Context;
 use channels::{
-    domain::service::ChannelMessagesServiceImpl, inbound::axum_router::ChannelsRouterState,
-    outbound::pg_channels_repo::PgChannelMessagesRepo,
+    domain::service::ChannelMessagesServiceImpl,
+    inbound::axum_router::ChannelsRouterState,
+    outbound::{pg_access_check::PgChannelAccessCheck, pg_channels_repo::PgChannelMessagesRepo},
 };
 use comms::{
     domain::service::ChannelServiceImpl,
@@ -321,9 +322,10 @@ async fn main() -> anyhow::Result<()> {
             access_service: entity_access_service,
             pool: db.clone(),
         },
-        channels_state: ChannelsRouterState::new(ChannelMessagesServiceImpl::new(
-            PgChannelMessagesRepo::new(db.clone()),
-        )),
+        channels_state: ChannelsRouterState::new(
+            ChannelMessagesServiceImpl::new(PgChannelMessagesRepo::new(db.clone())),
+            PgChannelAccessCheck::new(db.clone()),
+        ),
     };
 
     api::setup_and_serve(api_context).await?;
