@@ -72,8 +72,24 @@ import { stickyGate } from '@core/util/debounce';
 import { invalidateSoupEntity } from '@queries/soup/cache';
 import { WrapUnlessMobile } from '@core/mobile/WrapUnlessMobile';
 import { isMobile } from '@core/mobile/isMobile';
+import { $generateHtmlFromNodes } from '@lexical/html';
+import type { EmailFormRecipients } from '@block-email/component/createEmailFormState';
+import { unwrap } from 'solid-js/store';
+import { emailClient } from '@service-email/client';
+import { queryClient } from '@queries/client';
+import { emailKeys } from '@queries/email/keys';
 
 const DRAFT_DEBOUNCE_MS = 1000;
+
+type UndoComposeSnapshot = {
+  draftId: string;
+  recipients: EmailFormRecipients;
+  subject: string;
+  bodyHtml: string;
+  attachments: DraftFormAttachment[];
+};
+
+let undoComposeSnapshot: UndoComposeSnapshot | null = null;
 
 type EmailComposeErrors =
   | 'no_recipient'
@@ -181,6 +197,20 @@ export function EmailCompose(props: EmailComposeProps) {
   const [currentDraftID, setCurrentDraftID] = createSignal<string | undefined>(
     props.draftID
   );
+
+  // Restore form state from undo-send snapshot if available
+  const restoredSnapshot =
+    undoComposeSnapshot?.draftId === props.draftID ? undoComposeSnapshot : null;
+  if (restoredSnapshot) {
+    form.setRecipients('to', restoredSnapshot.recipients.to);
+    form.setRecipients('cc', restoredSnapshot.recipients.cc);
+    form.setRecipients('bcc', restoredSnapshot.recipients.bcc);
+    form.setSubject(restoredSnapshot.subject);
+    for (const attachment of restoredSnapshot.attachments) {
+      form.attachments.add(attachment);
+    }
+    undoComposeSnapshot = null;
+  }
 
   const uploadAttachmentMutation = useUploadDraftAttachmentsMutation();
   const saveDraftMutation = useSaveDraftMutation();
@@ -468,9 +498,43 @@ export function EmailCompose(props: EmailComposeProps) {
   const [validationError, setValidationError] =
     createSignal<EmailComposeError | null>(null);
 
+  const undoSend = async (draftId: string) => {
+    try {
+      await emailClient.unscheduleMessage({ draftID: draftId });
+      queryClient.invalidateQueries({
+        queryKey: emailKeys.previews._def,
+      });
+      replaceSplit({
+        content: {
+          type: 'component',
+          id: 'email-compose',
+          params: { draftID: draftId },
+        },
+      });
+      toast.success('Send cancelled');
+      invalidateSoupEntity(draftId);
+    } catch {
+      toast.failure('Failed to undo send');
+    }
+  };
+
   const sendMutation = useSendMessageMutation({
     onSuccess: (data) => {
-      toast.success('Email sent');
+      const draftId = data.message.db_id;
+      const toastId = toast.success(
+        'Email sent',
+        undefined,
+        draftId
+          ? {
+              text: 'Undo',
+              onClick: () => {
+                if (toastId != null) toast.dismiss(toastId);
+                void undoSend(draftId);
+              },
+            }
+          : undefined,
+        10_000
+      );
       if (data.message.thread_db_id) {
         replaceSplit({
           content: { type: 'email', id: data.message.thread_db_id },
@@ -501,6 +565,23 @@ export function EmailCompose(props: EmailComposeProps) {
     setValidationError(null);
 
     const currentEditor = editor();
+
+    // Snapshot editor state before watermark so undo-send can restore it
+    if (currentEditor) {
+      const snapshotHtml = currentEditor.read(() =>
+        $generateHtmlFromNodes(currentEditor)
+      );
+      const draftId = currentDraftID();
+      if (draftId) {
+        undoComposeSnapshot = {
+          draftId,
+          recipients: structuredClone(unwrap(form.recipients())),
+          subject: form.subject(),
+          bodyHtml: snapshotHtml,
+          attachments: [...form.attachments.list()],
+        };
+      }
+    }
 
     // We handle cleaning up the signature after we've sent the request because
     // otherwise the `bodyMacro` signal would update after the clean up call and
@@ -649,6 +730,10 @@ export function EmailCompose(props: EmailComposeProps) {
   };
 
   const initialHtml = () => {
+    if (restoredSnapshot) {
+      return restoredSnapshot.bodyHtml;
+    }
+
     const draft = form.draft;
     if (!draft || !draft.body_html_sanitized) return;
 

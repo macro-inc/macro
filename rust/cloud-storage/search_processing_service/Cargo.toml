@@ -28,12 +28,11 @@ aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
 comms_db_client = { path = "../comms_db_client" }
-email_db_client = { path = "../email_db_client", optional = true }
-email_service_client = { path = "../email_service_client" }
+email_db_client = { path = "../email_db_client" }
 futures = { workspace = true }
 http-body-util = { workspace = true }
 lexical_client = { path = "../lexical_client" }
-macro_aws_config = { path = "../macro_aws_config" }
+macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 macro_cors = { path = "../macro_cors" }
 macro_db_client = { path = "../macro_db_client", optional = true } # Make this optional
 macro_entrypoint = { path = "../macro_entrypoint" }

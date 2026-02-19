@@ -60,25 +60,40 @@ import { cn } from '@ui/utils/classname';
 
 type MessageFlagProps = {
   text: string;
-  highlight?: boolean;
+  highlightAbove?: boolean;
+  highlightBelow?: boolean;
 };
 
 export function MessageFlag(props: MessageFlagProps) {
   return (
     <div class="flex flex-row items-stretch justify-start ml-[var(--left-of-connector)]">
       <div class="flex flex-col items-center justify-center">
-        <div class="border-l border-edge-muted min-h-1/2" />
         <div
-          class={`border-l ${props.highlight ? 'border-accent' : 'border-edge-muted'} min-h-1/2 `}
+          class={cn(
+            'border-l border-edge-muted min-h-1/2',
+            props.highlightAbove && 'border-accent'
+          )}
+        />
+        <div
+          class={cn(
+            'border-l border-edge-muted min-h-1/2',
+            props.highlightBelow && 'border-accent'
+          )}
         />
       </div>
       <div class="flex flex-col items-center justify-center">
         <div
-          class={`w-7 border-b ${props.highlight ? 'border-accent' : 'border-edge-muted'}`}
+          class={cn(
+            'w-7 border-b border-edge-muted',
+            props.highlightBelow && 'border-accent'
+          )}
         />
       </div>
       <div
-        class={`text-xs text-panel uppercase font-mono p-1 my-6 mt ${props.highlight ? 'bg-accent' : 'bg-edge'}`}
+        class={cn(
+          'text-xs text-panel uppercase font-mono p-1 my-6 mt bg-edge',
+          props.highlightBelow && 'bg-accent'
+        )}
       >
         {props.text}
       </div>
@@ -89,7 +104,7 @@ export function MessageFlag(props: MessageFlagProps) {
 function NewMessageIndicator(props: { onClick?: () => void }) {
   return (
     <button type="button" class="w-full text-left" onClick={props.onClick}>
-      <MessageFlag text="New" highlight />
+      <MessageFlag text="New" highlightBelow />
     </button>
   );
 }
@@ -518,7 +533,8 @@ export function MessageContainer(props: MessageProps) {
       >
         <MessageFlag
           text={formatRelativeDate(message.created_at)}
-          highlight={isNewMessage()}
+          highlightAbove={isNewMessage()}
+          highlightBelow={isNewMessage()}
         />
       </Show>
 

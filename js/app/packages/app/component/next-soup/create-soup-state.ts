@@ -11,6 +11,7 @@ import {
 import { createSelectionState } from '@app/component/next-soup/selection-state';
 import { SORT_CONFIGS } from '@app/component/next-soup/soup-view/sort-options';
 import { isModality } from '@core/mobile/inputModality';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { EntityData, WithSearch } from '@entity';
 import { createMemo, createSignal } from 'solid-js';
 
@@ -117,6 +118,9 @@ export const createSoupState = <
 
   // Navigation implementation
   const setFocus = (index: number): NavigationResult<SoupEntity> => {
+    // On touch devices there is no concept of a "focused entity", return early
+    if (isTouchDevice()) return;
+
     const result = calculateFocusItem(index);
 
     if (result) {

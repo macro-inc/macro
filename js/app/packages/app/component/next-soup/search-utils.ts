@@ -3,7 +3,6 @@ import { mergeAdjacentMacroEmTags } from '@core/util/searchHighlight';
 import { createFreshSearch } from '@core/util/freshSort';
 import type { EntityData, WithSearch } from '@entity';
 import type { FilterConfig } from './filters/create-filter-state';
-
 /** Takes a list of entity pools and returns a list of unique entities that are present in all pools, deduplicating by id */
 export function intersectEntityPools(
   pools: readonly EntityData[][]

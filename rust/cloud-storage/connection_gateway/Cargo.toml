@@ -26,7 +26,6 @@ path = "src/openapi.rs"
 [dependencies]
 anyhow = { workspace = true }
 aws-sdk-dynamodb = { workspace = true }
-macro_aws_config = { path = "../macro_aws_config" }
 aws-sdk-secretsmanager = { workspace = true }
 axum = { workspace = true, features = ["macros", "tower-log", "ws"] }
 chrono = { workspace = true }
@@ -41,7 +40,10 @@ frecency = { path = "../frecency", features = [
 futures = { workspace = true }
 http-body-util = { workspace = true }
 itertools = { workspace = true }
+last_online_tracker = { path = "../last_online_tracker" }
 macro_auth = { path = "../macro_auth" }
+macro_user_id = { path = "../macro_user_id" }
+macro_aws_config = { path = "../macro_aws_config" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }

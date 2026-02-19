@@ -429,7 +429,12 @@ pub(in crate::api::documents) fn get_presigned_url(
 ) -> anyhow::Result<String> {
     let constructed_url = format!("{}/{}", cloudfront_distribution_url, key);
 
-    let signed_url = get_signed_url(&constructed_url, options)?;
+    let signed_url = if !macro_aws_config::is_local_aws() {
+        get_signed_url(&constructed_url, options)?
+    } else {
+        constructed_url
+    };
+
     Ok(signed_url)
 }
 

@@ -44,6 +44,7 @@ entity_access = { path = "../entity_access" }
 macro_user_id = { path = "../macro_user_id" }
 model = { path = "../model" }
 models_permissions = { path = "../models_permissions" }
+macro_aws_config = { path = "../macro_aws_config" }
 
 # Async runtime (for ports)
 tokio = { workspace = true, optional = true }

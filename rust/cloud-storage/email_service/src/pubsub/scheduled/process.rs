@@ -27,25 +27,27 @@ pub async fn process_message(
             error = ?e,
             message_id = %data.message_id,
             link_id = %data.link_id,
-            "Failed to process scheduled message - clearing processing flag"
+            "Failed to process scheduled message"
         );
-        if let Err(clear_err) =
-            email_db_client::messages::scheduled::upsert::clear_scheduled_message_processing(
-                &ctx.db,
-                data.link_id,
-                data.message_id,
-            )
-            .await
-        {
-            tracing::error!(
-                error = ?clear_err,
-                message_id = %data.message_id,
-                link_id = %data.link_id,
-                "Failed to clear processing flag"
-            );
-        }
-        return result;
     }
+
+    if let Err(clear_err) =
+        email_db_client::messages::scheduled::upsert::clear_scheduled_message_processing(
+            &ctx.db,
+            data.link_id,
+            data.message_id,
+        )
+        .await
+    {
+        tracing::error!(
+            error = ?clear_err,
+            message_id = %data.message_id,
+            link_id = %data.link_id,
+            "Failed to clear processing flag"
+        );
+    }
+
+    result?;
 
     cleanup_message(&ctx.sqs_worker, message).await?;
 

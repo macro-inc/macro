@@ -6,6 +6,9 @@ get_environment:
   just ../../../infra/stacks/fusionauth-instance/insert_local_fusionauth_variables
   @echo "Copying env file"
   cp ../../../.env ./
+  @echo "Overriding LOCAL_AWS_URL"
+  sed -i '' 's|^LOCAL_AWS_URL=.*|LOCAL_AWS_URL="http://localhost:4566"|' .env
 
+[positional-arguments]
 seed *ARGS:
-  cargo r {{ ARGS }}
+  cargo r "$@"

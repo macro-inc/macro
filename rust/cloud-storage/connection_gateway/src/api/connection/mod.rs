@@ -15,11 +15,13 @@ use axum::{
     response::IntoResponse,
     routing::get,
 };
+use cowlike::CowLike;
 use futures::{
     FutureExt,
     sink::SinkExt,
     stream::{SplitSink, StreamExt},
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use messages::handle_websocket_stream;
 use model::user::UserContext;
 use model_entity::EntityType;
@@ -59,7 +61,13 @@ async fn handle_websocket_connection(
     let (sink, stream) = socket.split();
     let (sender, receiver) = tokio::sync::mpsc::channel::<OutgoingMessage>(100);
     let connection_id = uuid::Uuid::new_v4().to_string();
-    let user_id = user_context.user_id.clone();
+    let Ok(user_id) = MacroUserIdStr::parse_from_str(&user_context.user_id) else {
+        return;
+    };
+    let user_id = user_id.into_owned();
+
+    // Create guard that records last online time when websocket connection closes
+    let last_online_guard = ctx.last_online_worker.new_guard(user_id.clone());
 
     let sender_task = tokio::spawn(async move { forwarder(sink, receiver).await });
 
@@ -67,9 +75,9 @@ async fn handle_websocket_connection(
         .connection_manager
         .add_connection(
             EntityType::User
-                .with_entity_str(&user_id)
+                .with_entity_str(user_id.as_ref())
                 .with_connection_str(&connection_id)
-                .with_user_str(&user_id),
+                .with_user_str(user_id.as_ref()),
             sender.clone(),
             sender_task.abort_handle(),
         )
@@ -116,6 +124,7 @@ async fn handle_websocket_connection(
             );
         })
         .ok();
+    drop(last_online_guard);
 }
 
 /// Forwards messages from a [Receiver] to a [SplitSink]

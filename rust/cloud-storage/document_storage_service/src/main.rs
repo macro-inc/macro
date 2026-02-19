@@ -112,7 +112,7 @@ async fn main() -> anyhow::Result<()> {
     );
     tracing::trace!("initialized dynamodb client");
 
-    let s3_client = aws_sdk_s3::Client::new(&aws_config);
+    let s3_client = macro_aws_config::s3_client().await;
 
     tracing::trace!("initialized s3 client");
 

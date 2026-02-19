@@ -4,6 +4,9 @@ name = "macro_aws_config"
 publish = false
 version = "0.1.0"
 
+[features]
+s3 = ["dep:aws-sdk-s3"]
+
 [dependencies]
 aws-config = { workspace = true }
 macro_env = { path = "../macro_env" }
@@ -11,3 +14,4 @@ macro_env_var = { path = "../macro_env_var" }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
+aws-sdk-s3 = { workspace = true, optional = true }

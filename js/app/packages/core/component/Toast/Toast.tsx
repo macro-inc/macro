@@ -109,10 +109,14 @@ function success(
   subtext?: string,
   action?: { text: string; onClick: () => void },
   duration?: number
-) {
+): number | undefined {
   if (!wasRecentlyShown(message, ToastType.SUCCESS)) {
-    createToast(message, ToastType.SUCCESS, subtext, action, duration);
+    return createToast(message, ToastType.SUCCESS, subtext, action, duration);
   }
+}
+
+function dismiss(toastId: number) {
+  toaster.dismiss(toastId);
 }
 
 // Tell users that an action has failed, because of us
@@ -352,4 +356,5 @@ export const toast = {
   alert,
   promise,
   embed,
+  dismiss,
 };

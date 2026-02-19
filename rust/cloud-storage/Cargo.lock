@@ -1993,12 +1993,14 @@ dependencies = [
  "futures",
  "http-body-util",
  "itertools 0.14.0",
+ "last_online_tracker",
  "macro_auth",
  "macro_aws_config",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
  "macro_middleware",
+ "macro_user_id",
  "mockall",
  "model",
  "model-entity",
@@ -2915,6 +2917,7 @@ dependencies = [
  "futures",
  "http-body-util",
  "lexical_client",
+ "macro_aws_config",
  "macro_db_migrator",
  "macro_project_utils",
  "macro_user_id",
@@ -4880,6 +4883,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "last_online_tracker"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "macro_user_id",
+ "redis",
+ "rootcause",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5104,6 +5119,7 @@ name = "macro_aws_config"
 version = "0.1.0"
 dependencies = [
  "aws-config",
+ "aws-sdk-s3",
  "macro_env",
  "macro_env_var",
  "thiserror 2.0.17",
@@ -7870,7 +7886,6 @@ dependencies = [
  "chrono",
  "comms_db_client",
  "email_db_client",
- "email_service_client",
  "futures",
  "http-body-util",
  "lexical_client",
