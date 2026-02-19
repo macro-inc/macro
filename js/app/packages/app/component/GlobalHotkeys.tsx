@@ -22,6 +22,7 @@ import {
   resetKonsoleMode,
   toggleKonsoleVisibility,
 } from './command/state';
+import { isOpen as commandNextOpen, toggleCommandMenu } from './command-next';
 import { CREATABLE_BLOCKS, setCreateMenuOpen } from './Launcher';
 import { useSplitLayout } from './split-layout/layout';
 
@@ -102,6 +103,22 @@ export default function GlobalShortcuts() {
       setBigChatOpen((v) => !v);
       return true;
     },
+    runWithInputFocused: true,
+  });
+
+  registerHotkey({
+    hotkeyToken: TOKENS.global.searchMenu,
+    hotkey: 'cmd+i',
+    scopeId: 'global',
+    description: () => {
+      return commandNextOpen() ? 'Close search menu' : 'Open search menu';
+    },
+    keyDownHandler: () => {
+      toggleCommandMenu();
+      return true;
+    },
+    displayPriority: 10,
+    hide: commandNextOpen,
     runWithInputFocused: true,
   });
 

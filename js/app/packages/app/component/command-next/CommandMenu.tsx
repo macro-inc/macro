@@ -1,7 +1,15 @@
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { DialogWrapper } from '@core/component/DialogWrapper';
+import {
+  type QuickAccessItem,
+  isEntityItem,
+  isCommandItem,
+} from '@core/context/quickAccess';
+import { runCommand } from '@core/hotkey/utils';
 import { Dialog } from '@kobalte/core/dialog';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
+import type { DocumentEntity } from '@entity';
+import type { BlockName, BlockAlias } from '@core/block';
 import {
   createEffect,
   createMemo,
@@ -26,10 +34,8 @@ import {
   onMenuClose,
   closeCommandMenu,
 } from './state';
-import { useCommandItems, useFilteredCommandItems } from './useCommandItems';
-import type { CommandItem, CategoryFilter } from './types';
-import { itemToBlockName } from '@core/constant/allBlocks';
-import { runCommand } from '@core/hotkey/utils';
+import { useFilteredItems } from './useCommandItems';
+import type { CategoryFilter } from './types';
 
 const MAX_VISIBLE_ITEMS = 12;
 
@@ -64,21 +70,42 @@ export function CommandMenu() {
   );
 }
 
+/** Get block name for opening an entity item */
+function getBlockNameForEntity(
+  item: QuickAccessItem
+): BlockName | BlockAlias | undefined {
+  if (!isEntityItem(item)) return undefined;
+
+  const data = item.data;
+
+  switch (data.type) {
+    case 'channel':
+      return 'channel';
+    case 'chat':
+      return 'chat';
+    case 'project':
+      return 'project';
+    case 'document': {
+      const doc = data as DocumentEntity;
+      if (doc.subType?.type === 'task') return 'task';
+      if (doc.fileType === 'md') return 'md';
+      if (doc.fileType === 'pdf') return 'pdf';
+      if (doc.fileType === 'canvas') return 'canvas';
+      return 'md';
+    }
+    default:
+      return undefined;
+  }
+}
+
 function CommandMenuInner(props: {
   commandMenuRef: () => HTMLDivElement | undefined;
 }) {
   const [attachHotkeys, hotkeyScope] = useHotkeyDOMScope('command-menu');
   const { openWithSplit } = useSplitLayout();
 
-  // Get all items
-  const { allItems } = useCommandItems();
-
-  // Get filtered items based on query and category
-  const filteredItems = useFilteredCommandItems(
-    allItems,
-    query,
-    categoryFilter
-  );
+  // Get filtered items based on query and category using QuickAccess
+  const filteredItems = useFilteredItems(query, categoryFilter);
 
   // Clamp selected index when items change
   createEffect(() => {
@@ -103,46 +130,38 @@ function CommandMenuInner(props: {
   });
 
   // Handle item selection/action
-  function handleItemAction(item: CommandItem, openInNewSplit = false) {
+  function handleItemAction(item: QuickAccessItem, openInNewSplit = false) {
     if (!item) return;
 
-    switch (item.type) {
-      case 'history': {
-        const blockName = itemToBlockName(item.data.historyItem);
-        if (blockName) {
-          openWithSplit(
-            { type: blockName, id: item.data.id },
-            {
-              referredFrom: 'kommand-menu',
-              preferNewSplit: openInNewSplit,
-            }
-          );
-        }
-        closeCommandMenu();
-        setQuery('');
-        break;
-      }
+    // Handle command items
+    if (isCommandItem(item)) {
+      closeCommandMenu();
+      setQuery('');
+      runCommand(item.data);
+      return;
+    }
 
-      case 'channel': {
+    // Handle entity items (documents, channels, chats, etc.)
+    if (isEntityItem(item)) {
+      const blockName = getBlockNameForEntity(item);
+      if (blockName) {
         openWithSplit(
-          { type: 'channel', id: item.data.id },
+          { type: blockName, id: item.id },
           {
             referredFrom: 'kommand-menu',
             preferNewSplit: openInNewSplit,
           }
         );
-        closeCommandMenu();
-        setQuery('');
-        break;
       }
-
-      case 'command': {
-        closeCommandMenu();
-        setQuery('');
-        runCommand(item.data.command);
-        break;
-      }
+      closeCommandMenu();
+      setQuery('');
+      return;
     }
+
+    // Handle user items - open DM or profile
+    // For now, just close the menu
+    closeCommandMenu();
+    setQuery('');
   }
 
   // Keyboard navigation
@@ -321,6 +340,7 @@ function CategoryFilterBar() {
     { id: 'documents', label: 'Docs' },
     { id: 'channels', label: 'Channels' },
     { id: 'chats', label: 'Chats' },
+    { id: 'people', label: 'People' },
     { id: 'commands', label: 'Commands' },
   ];
 

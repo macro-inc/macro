@@ -13,11 +13,15 @@ export {
   categoryFilter,
   setCategoryFilter,
 } from './state';
-export type {
-  CommandItem,
-  CategoryFilter,
-  CategoryOption,
-  HistoryItemData,
-  ChannelItemData,
-  CommandActionData,
-} from './types';
+export type { CategoryFilter, CategoryOption } from './types';
+export { CATEGORY_OPTIONS } from './types';
+
+// Re-export QuickAccess types for convenience
+export {
+  useCommandItems,
+  useFilteredItems,
+  isEntityItem,
+  isUserItem,
+  isCommandItem,
+} from './useCommandItems';
+export type { QuickAccessItem, Bucket } from './useCommandItems';
