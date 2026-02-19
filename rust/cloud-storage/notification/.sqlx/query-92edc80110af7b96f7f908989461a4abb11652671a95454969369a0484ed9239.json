@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO notification_message_receipt (message_id, user_id, notification_id)\n            VALUES ($1, $2, $3)\n            ON CONFLICT (message_id) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "92edc80110af7b96f7f908989461a4abb11652671a95454969369a0484ed9239"
+}

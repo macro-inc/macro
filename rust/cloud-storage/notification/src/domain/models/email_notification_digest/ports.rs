@@ -1,6 +1,4 @@
-use crate::domain::models::{
-    TaggedContent, UserNotificationRow, email_notification_digest::PushNotificationsEnabled,
-};
+use crate::domain::models::{TaggedContent, UserNotificationRow};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use std::time::Duration;
