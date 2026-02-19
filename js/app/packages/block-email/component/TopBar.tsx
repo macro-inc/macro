@@ -38,24 +38,22 @@ export function TopBar(props: {
       </SplitHeaderLeft>
 
       <SplitToolbarRight>
-        <div class="flex items-center gap-2">
-          <EmailPropertiesModal
-            buttonSize="sm"
-            subject={props.title}
-            canEdit={hasPermissions(
-              email.permissions().type,
-              Permissions.CAN_EDIT
-            )}
+        <EmailPropertiesModal
+          buttonSize="sm"
+          subject={props.title}
+          canEdit={hasPermissions(
+            email.permissions().type,
+            Permissions.CAN_EDIT
+          )}
+        />
+        <Show when={ENABLE_EMAIL_SHARING}>
+          <ShareButton
+            id={props.id}
+            name={props.title}
+            itemType="email"
+            userPermissions={email.permissions().type}
           />
-          <Show when={ENABLE_EMAIL_SHARING}>
-            <ShareButton
-              id={props.id}
-              name={props.title}
-              itemType="email"
-              userPermissions={email.permissions().type}
-            />
-          </Show>
-        </div>
+        </Show>
       </SplitToolbarRight>
     </>
   );

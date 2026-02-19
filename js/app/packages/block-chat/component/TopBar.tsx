@@ -68,29 +68,27 @@ export function TopBar() {
         </div>
       </SplitToolbarLeft>
       <SplitToolbarRight>
-        <div class="flex items-center p-1 h-full">
-          <DeprecatedIconButton
-            icon={Notepad}
-            size="sm"
-            theme="clear"
-            tooltip={{ label: 'Edit AI Instructions' }}
-            onClick={openInstructions}
+        <DeprecatedIconButton
+          icon={Notepad}
+          size="sm"
+          theme="clear"
+          tooltip={{ label: 'Edit AI Instructions' }}
+          onClick={openInstructions}
+        />
+        <ReferencesModal
+          documentId={blockId}
+          documentName={chatName()}
+          buttonSize="sm"
+          entityType="chat"
+        />
+        <div class="flex items-center">
+          <SplitPermissionsBadge />
+          <ShareButton
+            id={blockId}
+            name={chatName()}
+            userPermissions={userPermissions()}
+            itemType="chat"
           />
-          <ReferencesModal
-            documentId={blockId}
-            documentName={chatName()}
-            buttonSize="sm"
-            entityType="chat"
-          />
-          <div class="flex items-center">
-            <SplitPermissionsBadge />
-            <ShareButton
-              id={blockId}
-              name={chatName()}
-              userPermissions={userPermissions()}
-              itemType="chat"
-            />
-          </div>
         </div>
       </SplitToolbarRight>
     </>

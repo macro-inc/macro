@@ -110,31 +110,29 @@ export function Top(props: TopProps) {
         <BlockLiveIndicators />
       </SplitHeaderRight>
       <SplitToolbarRight>
-        <div class="p-1 flex flex-row gap-1 items-center h-full">
-          <Show when={props.channelType === ChannelTypeEnum.Public}>
-            <DeprecatedIconButton
-              theme="clear"
-              size="sm"
-              tooltip={{ label: 'Copy Link to Public Channel' }}
-              icon={LinkIcon}
-              onClick={handleCopyLink}
-            />
-          </Show>
-          <NotificationsModal
-            entity={{ id: blockId, type: 'channel' }}
-            notificationSource={notificationSource}
-            buttonSize="sm"
+        <Show when={props.channelType === ChannelTypeEnum.Public}>
+          <DeprecatedIconButton
+            theme="clear"
+            size="sm"
+            tooltip={{ label: 'Copy Link to Public Channel' }}
+            icon={LinkIcon}
+            onClick={handleCopyLink}
           />
-          <AttachmentsModal />
-          <Show when={props.channelType !== ChannelTypeEnum.DirectMessage}>
-            <ParticipantManager
-              channelId={props.channelId}
-              channelType={props.channelType}
-              participants={props.participants}
-              participantCount={participantCount()}
-            />
-          </Show>
-        </div>
+        </Show>
+        <NotificationsModal
+          entity={{ id: blockId, type: 'channel' }}
+          notificationSource={notificationSource}
+          buttonSize="sm"
+        />
+        <AttachmentsModal />
+        <Show when={props.channelType !== ChannelTypeEnum.DirectMessage}>
+          <ParticipantManager
+            channelId={props.channelId}
+            channelType={props.channelType}
+            participants={props.participants}
+            participantCount={participantCount()}
+          />
+        </Show>
       </SplitToolbarRight>
     </>
   );

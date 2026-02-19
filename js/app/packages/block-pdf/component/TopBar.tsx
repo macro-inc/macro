@@ -191,30 +191,28 @@ export function TopBar() {
         </Show>
       </SplitToolbarLeft>
       <SplitToolbarRight>
-        <div class="flex items-center p-1">
-          <Show when={ENABLE_REFERENCES_MODAL}>
-            <ReferencesModal
-              documentId={documentId}
-              documentName={fileName()}
-              buttonSize="sm"
-            />
-          </Show>
-          <DocumentPropertiesModal
+        <Show when={ENABLE_REFERENCES_MODAL}>
+          <ReferencesModal
             documentId={documentId}
-            blockType="pdf"
+            documentName={fileName()}
             buttonSize="sm"
           />
-          <div class="flex items-center">
-            <SplitPermissionsBadge />
-            <ShareButton
-              id={documentId}
-              name={fileName()}
-              userPermissions={userPermissions()}
-              copyLink={copyLink}
-              itemType="document"
-              owner={blockMetadataSignal()?.owner}
-            />
-          </div>
+        </Show>
+        <DocumentPropertiesModal
+          documentId={documentId}
+          blockType="pdf"
+          buttonSize="sm"
+        />
+        <div class="flex items-center">
+          <SplitPermissionsBadge />
+          <ShareButton
+            id={documentId}
+            name={fileName()}
+            userPermissions={userPermissions()}
+            copyLink={copyLink}
+            itemType="document"
+            owner={blockMetadataSignal()?.owner}
+          />
         </div>
       </SplitToolbarRight>
     </>

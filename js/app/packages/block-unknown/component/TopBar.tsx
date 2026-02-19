@@ -72,22 +72,20 @@ export function TopBar() {
         </div>
       </SplitToolbarLeft>
       <SplitToolbarRight>
-        <div class="flex items-center p-1">
-          <ReferencesModal
-            documentId={blockId}
-            documentName={fileName()}
-            buttonSize="sm"
+        <ReferencesModal
+          documentId={blockId}
+          documentName={fileName()}
+          buttonSize="sm"
+        />
+        <div class="flex items-center">
+          <SplitPermissionsBadge />
+          <ShareButton
+            id={blockId}
+            name={fileName()}
+            userPermissions={userPermissions()}
+            itemType="document"
+            owner={blockMetadataSignal()?.owner}
           />
-          <div class="flex items-center">
-            <SplitPermissionsBadge />
-            <ShareButton
-              id={blockId}
-              name={fileName()}
-              userPermissions={userPermissions()}
-              itemType="document"
-              owner={blockMetadataSignal()?.owner}
-            />
-          </div>
         </div>
       </SplitToolbarRight>
     </>

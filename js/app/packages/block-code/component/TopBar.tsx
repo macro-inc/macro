@@ -73,27 +73,25 @@ export const TopBar: Component = () => {
         </div>
       </SplitToolbarLeft>
       <SplitToolbarRight>
-        <div class="flex items-center p-1">
-          <ReferencesModal
-            documentId={blockId}
-            documentName={name()}
-            buttonSize="sm"
+        <ReferencesModal
+          documentId={blockId}
+          documentName={name()}
+          buttonSize="sm"
+        />
+        <DocumentPropertiesModal
+          documentId={blockId}
+          blockType="code"
+          buttonSize="sm"
+        />
+        <div class="flex items-center">
+          <SplitPermissionsBadge />
+          <ShareButton
+            id={blockId}
+            name={name()}
+            userPermissions={userPermissions()}
+            itemType="document"
+            owner={blockMetadataSignal()?.owner}
           />
-          <DocumentPropertiesModal
-            documentId={blockId}
-            blockType="code"
-            buttonSize="sm"
-          />
-          <div class="flex items-center">
-            <SplitPermissionsBadge />
-            <ShareButton
-              id={blockId}
-              name={name()}
-              userPermissions={userPermissions()}
-              itemType="document"
-              owner={blockMetadataSignal()?.owner}
-            />
-          </div>
         </div>
       </SplitToolbarRight>
     </>

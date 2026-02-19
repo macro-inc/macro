@@ -99,23 +99,21 @@ export function TopBar() {
       </SplitToolbarLeft>
       <Show when={showToolbarRight()}>
         <SplitToolbarRight>
-          <div class="flex items-center p-1">
-            <div class="flex items-center">
-              <Show when={!isSpecialProject}>
-                <ProjectPropertiesModal buttonSize="sm" name={name()} />
-              </Show>
-              <SplitPermissionsBadge />
-              <Show when={ENABLE_PROJECT_SHARING && !isSpecialProject}>
-                <ShareButton
-                  id={id}
-                  name={name()}
-                  userPermissions={permissions()}
-                  copyLink={handleCopyLink}
-                  itemType="project"
-                  owner={owner()}
-                />
-              </Show>
-            </div>
+          <div class="flex items-center">
+            <Show when={!isSpecialProject}>
+              <ProjectPropertiesModal buttonSize="sm" name={name()} />
+            </Show>
+            <SplitPermissionsBadge />
+            <Show when={ENABLE_PROJECT_SHARING && !isSpecialProject}>
+              <ShareButton
+                id={id}
+                name={name()}
+                userPermissions={permissions()}
+                copyLink={handleCopyLink}
+                itemType="project"
+                owner={owner()}
+              />
+            </Show>
           </div>
         </SplitToolbarRight>
       </Show>
