@@ -54,7 +54,6 @@ import NotepadIcon from '@icon/regular/notepad.svg';
 import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { useWaitChatRename } from '@macro-entity';
 import { invalidateUserQuota } from '@queries/auth';
 import { refetchHistory, useHistoryQuery } from '@queries/history/history';
 import { cognitionApiServiceClient } from '@service-cognition/client';

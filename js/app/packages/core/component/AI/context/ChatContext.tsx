@@ -171,7 +171,7 @@ export function ChatProvider(
         console.warn('reject chat stream: no id');
         continue;
       }
-      if (currentStream?.isDone() && currentStream?.streamId === sid) {
+      if (currentStream?.isDone() && currentStream?.id()?.stream_id === sid) {
         console.warn('reject chat stream: duplicate stream');
         continue;
       }

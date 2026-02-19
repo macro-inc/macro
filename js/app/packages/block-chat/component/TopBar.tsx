@@ -26,7 +26,6 @@ export function TopBar() {
   const name = useBlockDocumentName(DEFAULT_CHAT_NAME);
   const chatName = () => name();
 
-  const userPermissions = useGetPermissions();
   const openInstructions = useOpenInstructionsMd();
 
   const ops: FileOperation[] = [

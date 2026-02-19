@@ -219,8 +219,6 @@ function ChatInner(props: {
               <div class="flex gap-x-4">
                 <span>chunks: {stream().data().length}</span>
                 <span>isDone: {String(stream().isDone())}</span>
-                <span>model: {stream().model}</span>
-                <span>streamId: {stream().streamId ?? 'none'}</span>
               </div>
             )}
           </Show>
