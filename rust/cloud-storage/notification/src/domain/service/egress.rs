@@ -145,9 +145,10 @@ where
 
     /// Deliver via iOS push (APNS).
     ///
-    /// Iterates per-user. If a user has a digest state machine entry, each
-    /// endpoint delivery is routed through [`BulkDigestEgressStateMachine::continue_machine`]
-    /// which records the SNS message ID on success or queues for batch email on failure.
+    /// Iterates per-user. If a user has a digest state machine entry, all
+    /// endpoints are passed to [`BulkDigestEgressStateMachine::continue_machine`]
+    /// in a single call. The state machine records SNS message IDs for successes
+    /// and only queues a batch email if ALL endpoints fail.
     /// Users without a state machine entry are sent directly.
     async fn deliver_ios(
         &self,
@@ -162,29 +163,31 @@ where
 
         for user_apns in apns.ios_device_endpoints.values() {
             if let Some(ref entry) = user_apns.digest_state {
-                // User has a state machine entry — route each endpoint through continue_machine
-                for endpoint in &user_apns.endpoints {
-                    let checker = IosPushSend {
+                // Build all send checkers for this user's endpoints
+                let checkers: Vec<_> = user_apns
+                    .endpoints
+                    .iter()
+                    .map(|endpoint| IosPushSend {
                         mobile: &self.mobile,
                         endpoint_arn: endpoint,
                         notif: &apns.notif,
                         attributes: &apns.attributes,
-                    };
-                    let req = ResumeMachineBRequest {
-                        notification_enabled: entry.inner().clone(),
-                        send_notif: checker,
-                    };
-                    match self.state_machine.continue_machine(req).await {
-                        Ok((_msg_id, _dont_send)) => {
-                            out.push(Ok(DeliverySuccess::Ios));
-                        }
-                        Err((send_err, batch_result)) => {
-                            if let Err(ref batch_err) = batch_result {
-                                tracing::error!(error=?batch_err, "failed to queue digest batch after push failure");
-                            }
-                            out.push(Err(send_err));
-                        }
-                    }
+                    })
+                    .collect();
+
+                let req = ResumeMachineBRequest {
+                    notification_enabled: entry.inner().clone(),
+                    send_notifs: checkers,
+                };
+
+                let (results, batch_decision) = self.state_machine.continue_machine(req).await;
+
+                if let Either::Right(Err(ref batch_err)) = batch_decision {
+                    tracing::error!(error=?batch_err, "failed to queue digest batch after all pushes failed");
+                }
+
+                for result in results {
+                    out.push(result.map(|_| DeliverySuccess::Ios));
                 }
             } else {
                 // No state machine entry — send directly

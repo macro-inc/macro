@@ -966,26 +966,37 @@ impl crate::domain::models::email_notification_digest::BulkDigestEgressStateMach
     >(
         &self,
         req: crate::domain::models::email_notification_digest::ResumeMachineBRequest<N>,
-    ) -> Result<
-        (
-            N::Ok,
+    ) -> (
+        Vec<Result<N::Ok, N::Err>>,
+        either::Either<
             crate::domain::models::email_notification_digest::DontSend,
-        ),
-        (
-            N::Err,
             Result<crate::domain::models::email_notification_digest::BatchSend<()>, Report>,
-        ),
-    > {
-        match req.send_notif.send_notification().await {
-            Ok(ok) => Ok((
-                ok,
-                crate::domain::models::email_notification_digest::DontSend::new(),
-            )),
-            Err(err) => Err((
-                err,
-                Ok(crate::domain::models::email_notification_digest::BatchSend::from_inner(())),
-            )),
+        >,
+    ) {
+        let mut results = Vec::with_capacity(req.send_notifs.len());
+        let mut any_succeeded = false;
+
+        for send_notif in req.send_notifs {
+            match send_notif.send_notification().await {
+                Ok(ok) => {
+                    results.push(Ok(ok));
+                    any_succeeded = true;
+                }
+                Err(err) => {
+                    results.push(Err(err));
+                }
+            }
         }
+
+        let decision = if any_succeeded {
+            either::Either::Left(crate::domain::models::email_notification_digest::DontSend::new())
+        } else {
+            either::Either::Right(Ok(
+                crate::domain::models::email_notification_digest::BatchSend::from_inner(()),
+            ))
+        };
+
+        (results, decision)
     }
 }
 
