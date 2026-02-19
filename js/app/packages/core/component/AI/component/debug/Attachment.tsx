@@ -1,11 +1,8 @@
-import type {
-  Attachment,
-  ChatMessageStream,
-  Model,
-} from '@core/component/AI/types';
+import type { Attachment, Model } from '@core/component/AI/types';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { isErr } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
+import type { ChatMessageStream } from '@service-connection/stream';
 import { subscribe } from '@service-connection/stream';
 import type { Accessor, JSXElement } from 'solid-js';
 import { createEffect, createSignal, For, Match, Show, Switch } from 'solid-js';
@@ -105,7 +102,9 @@ export default function DebugAttachments() {
   }
 
   const sendAll = () => {
-    sends.forEach((send: () => void) => send());
+    sends.forEach((send: () => void) => {
+      send();
+    });
   };
 
   return (
@@ -155,9 +154,11 @@ async function sendRequest(simple: SimpleRequest): Promise<SendResult> {
     stream: {
       data: connectionStream.data,
       isDone: connectionStream.isDone,
-      model: simple.model,
-      attachments: simple.attachments,
-      streamId: stream_id,
+      id: () => ({
+        stream_id,
+        entity_id: chat_id,
+        entity_type: 'chat',
+      }),
     },
   };
 }

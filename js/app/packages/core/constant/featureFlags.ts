@@ -89,9 +89,6 @@ export const ENABLE_SEARCH_PAGINATION = true;
 
 export const ENABLE_CHAT_CHANNEL_ATTACHMENT = true;
 
-// NOTE: shows a websocket debug panel that lets you toggle state on dcs/connection websockets
-export const ENABLE_WEBSOCKET_DEBUGGER = false;
-
 export const ENABLE_SVG_PREVIEW = true;
 
 export const USE_WIDE_ICONS = true;

@@ -175,3 +175,5 @@ export function getEntityStreams<K extends keyof StreamType>(
       .map((s) => s.stream.stream as Stream<K>);
   };
 }
+
+export type ChatMessageStream = Stream<'chat'>;

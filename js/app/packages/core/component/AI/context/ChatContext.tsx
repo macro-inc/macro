@@ -4,13 +4,13 @@ import { globalTabAttachments } from '@core/component/AI/signal/globalAttachment
 import type {
   Attachment,
   Attachments,
-  ChatMessageStream,
   ChatMessageWithAttachments,
   Model,
   UploadQueue,
 } from '@core/component/AI/types';
 import { useUploadAttachment } from '@core/component/AI/util/uploadToChat';
 import { ENABLE_AI_AUTO_TAB_ATTACHMENTS } from '@core/constant/featureFlags';
+import type { ChatMessageStream } from '@service-connection/stream';
 import { getEntityStreams } from '@service-connection/stream';
 import type { Accessor, ParentProps, Setter } from 'solid-js';
 import {
@@ -182,13 +182,7 @@ export function ChatProvider(
         continue;
       }
 
-      setStream({
-        data: s.data,
-        isDone: s.isDone,
-        model: DEFAULT_MODEL,
-        attachments: [],
-        streamId: sid,
-      });
+      setStream(s);
       break;
     }
   });

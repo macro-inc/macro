@@ -14,8 +14,6 @@ import {
 } from '@core/util/maybeResult';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { DocumentTextPart } from '@service-cognition/generated/schemas/documentTextPart';
-import { uuid } from 'short-uuid';
-import { waitExtractionStatus } from './extraction';
 import type { CreateChatRequest } from './generated/schemas/createChatRequest';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
 import type { GetBatchPreviewRequest } from './generated/schemas/getBatchPreviewRequest';
@@ -26,22 +24,17 @@ import type { GetChatsForAttachmentResponse } from './generated/schemas/getChats
 import type { GetModelsForAttachmentsRequest } from './generated/schemas/getModelsForAttachmentsRequest';
 import type { GetModelsForAttachmentsResponse } from './generated/schemas/getModelsForAttachmentsResponse';
 import type { GetModelsResponse } from './generated/schemas/getModelsResponse';
+import type { GetSimpleCompletionStreamPayload } from './generated/schemas/getSimpleCompletionStreamPayload';
+import type { HttpSendChatMessageRequest } from './generated/schemas/httpSendChatMessageRequest';
 import type { PatchChatRequestV2 } from './generated/schemas/patchChatRequestV2';
+import type { SendChatMessageResponse } from './generated/schemas/sendChatMessageResponse';
+import type { SimpleCompletionResponse } from './generated/schemas/simpleCompletionResponse';
 import type { StringIDResponse } from './generated/schemas/stringIDResponse';
 import type { StructedOutputCompletionRequest } from './generated/schemas/structedOutputCompletionRequest';
 import type { StructedOutputCompletionResponse } from './generated/schemas/structedOutputCompletionResponse';
 import type { SuccessResponse } from './generated/schemas/successResponse';
-import type { GetSimpleCompletionStreamPayload } from './generated/schemas/getSimpleCompletionStreamPayload';
-import type { HttpSendChatMessageRequest } from './generated/schemas/httpSendChatMessageRequest';
-import type { SendChatMessageResponse } from './generated/schemas/sendChatMessageResponse';
-import type { SimpleCompletionResponse } from './generated/schemas/simpleCompletionResponse';
 import type { VerifyAttachmentsRequest } from './generated/schemas/verifyAttachmentsRequest';
 import type { VerifyAttachmentsResponse } from './generated/schemas/verifyAttachmentsResponse';
-import type { CognitionWebsocketService } from './service';
-import {
-  createMessageStream,
-  sendCognitionWebsocketMessage,
-} from './websocket';
 
 const dcsHost: string = SERVER_HOSTS['cognition-service'];
 
@@ -321,67 +314,5 @@ export const cognitionApiServiceClient = {
       }),
       (result) => result
     );
-  },
-};
-
-export const cognitionWebsocketServiceClient: CognitionWebsocketService = {
-  async stopChatMessage(args) {
-    sendCognitionWebsocketMessage({
-      ...args,
-      type: 'stop_chat_message',
-    });
-  },
-  async selectModel(args) {
-    sendCognitionWebsocketMessage({
-      ...args,
-      type: 'select_model_for_chat',
-    });
-  },
-  async extractionStatus(args) {
-    sendCognitionWebsocketMessage({
-      ...args,
-      type: 'extraction_status',
-    });
-  },
-  /// PDF completion
-  async sendCompletion(args) {
-    sendCognitionWebsocketMessage({
-      ...args,
-      type: 'send_completion',
-    });
-  },
-
-  async streamSimpleCompletion(args) {
-    sendCognitionWebsocketMessage({
-      ...args,
-      type: 'get_simple_completion_stream',
-    });
-  },
-
-  async editLastMessage(args) {
-    sendCognitionWebsocketMessage({
-      ...args,
-      type: 'edit_chat_message',
-      stream_id: uuid(),
-    });
-  },
-
-  sendStreamChatMessage(args) {
-    return createMessageStream({
-      ...args,
-      type: 'send_chat_message',
-      stream_id: uuid(),
-    });
-  },
-  streamEditMessage(args) {
-    return createMessageStream({
-      ...args,
-      type: 'edit_chat_message',
-      stream_id: uuid(),
-    });
-  },
-
-  extractionStatusSync(args) {
-    return waitExtractionStatus(args.attachment_id);
   },
 };

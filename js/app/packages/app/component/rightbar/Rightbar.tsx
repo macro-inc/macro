@@ -17,7 +17,6 @@ import { getPendingSend } from '@core/component/AI/signal/pendingSend';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
 import type {
   Attachment,
-  ChatMessageStream,
   ChatMessageWithAttachments,
   Model,
 } from '@core/component/AI/types';
@@ -61,6 +60,7 @@ import { refetchHistory, useHistoryQuery } from '@queries/history/history';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { AccessLevel } from '@service-cognition/generated/schemas/accessLevel';
 import { connectionGatewayClient } from '@service-connection/client';
+import type { ChatMessageStream } from '@service-connection/stream';
 import { state as connectionState } from '@service-connection/websocket';
 import { Button } from '@ui/components/Button';
 import { WebsocketConnectionState } from '@websocket';
@@ -582,7 +582,6 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
       setChatId(result.chat_id);
       setUserAccessLevel(AccessLevel.owner);
       refetchHistory();
-      useWaitChatRename(result.chat_id);
     }
 
     setStream(result.stream);

@@ -5,6 +5,4 @@ export type {
   ToolSet,
 } from '@service-cognition/generated/schemas';
 export { Model } from '@service-cognition/generated/schemas';
-export type { StreamItem } from '@service-cognition/websocket';
 export * from './attachment';
-export * from './service';

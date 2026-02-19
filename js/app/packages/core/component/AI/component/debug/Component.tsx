@@ -1,10 +1,9 @@
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
-import { DEFAULT_MODEL } from '@core/component/AI/constant';
-import type { ChatMessageStream, Model } from '@core/component/AI/types';
+import type { Model } from '@core/component/AI/types';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { isErr } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
-import type { MessageStream } from '@service-cognition/websocket';
+import type { ChatMessageStream } from '@service-connection/stream';
 import { subscribe } from '@service-connection/stream';
 import { createEffect, createSignal } from 'solid-js';
 import {
@@ -19,16 +18,6 @@ import { ChatInput } from '../input/ChatInput';
 import { ModelSelector } from '../input/ModelSelector';
 import { useChatMarkdownArea } from '../input/useChatMarkdownArea';
 import { ChatMessages } from '../message/ChatMessages';
-
-function toChat(stream: MessageStream): ChatMessageStream {
-  return {
-    data: stream.data,
-    isDone: stream.isDone,
-    model: DEFAULT_MODEL,
-    attachments: [],
-    streamId: stream.request.stream_id,
-  };
-}
 
 import {
   blockDone,
@@ -201,7 +190,7 @@ function StreamMessages() {
 
 function StreamMessagesInner() {
   const chat = useChatContext();
-  const [stream, setStream] = createSignal<MessageStream>();
+  const [stream, setStream] = createSignal<ChatMessageStream>();
   const makeStream = () => delayStream(poem(), slowFirst);
 
   return (
@@ -211,7 +200,7 @@ function StreamMessagesInner() {
         onClick={() => {
           const poemStream = makeStream();
           setStream(poemStream);
-          chat.setStream(toChat(poemStream));
+          chat.setStream(poemStream);
         }}
       >
         Stream
@@ -257,7 +246,7 @@ function FullChatInner() {
     addAttachment: (a) => input.attachments.addAttachment(a),
   });
   const [_isGen, setIsGen] = createSignal(false);
-  const [debugStream, _setDebugStream] = createSignal<MessageStream>();
+  const [debugStream, _setDebugStream] = createSignal<ChatMessageStream>();
 
   const onSend = async (input: ChatSendInput) => {
     chat.addMessage({
@@ -286,9 +275,7 @@ function FullChatInner() {
     const chatStream: ChatMessageStream = {
       data: connectionStream.data,
       isDone: connectionStream.isDone,
-      model: input.model,
-      attachments: input.attachments,
-      streamId: stream_id,
+      id: () => ({ stream_id, entity_id: chat_id, entity_type: 'chat' }),
     };
     console.log('set stream');
     chat.setStream(chatStream);
@@ -338,9 +325,9 @@ function ToolCallRender() {
   );
 }
 
-function ToolCallRenderInner(props: { stream: MessageStream }) {
+function ToolCallRenderInner(props: { stream: ChatMessageStream }) {
   const chat = useChatContext();
-  chat.setStream(toChat(props.stream));
+  chat.setStream(props.stream);
 
   return (
     <Item label="Tool call - static">
@@ -476,7 +463,7 @@ function TableStreamInner() {
   const [isPaused, setIsPaused] = createSignal(false);
   const [isSlow, setIsSlow] = createSignal(false);
   const [showRaw, setShowRaw] = createSignal(false);
-  const [stream, setStream] = createSignal<MessageStream>();
+  const [stream, setStream] = createSignal<ChatMessageStream>();
   const [rawText, setRawText] = createSignal('');
 
   const startStream = () => {
@@ -490,7 +477,7 @@ function TableStreamInner() {
       onChunk: (text) => setRawText((prev) => prev + text),
     });
     setStream(controlled);
-    chat.setStream(toChat(controlled));
+    chat.setStream(controlled);
   };
 
   return (

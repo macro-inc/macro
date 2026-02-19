@@ -19,8 +19,6 @@ import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import Notepad from '@icon/regular/notepad.svg';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
-import { onCleanup, onMount } from 'solid-js';
-import { useWaitChatRename } from '@macro-entity';
 
 export function TopBar() {
   const blockId = useBlockId();
@@ -28,16 +26,7 @@ export function TopBar() {
   const name = useBlockDocumentName(DEFAULT_CHAT_NAME);
   const chatName = () => name();
 
-  onMount(() => {
-    if (!name() || name() === DEFAULT_CHAT_NAME) {
-      const dispose = useWaitChatRename(blockId, true);
-
-      onCleanup(() => {
-        dispose();
-      });
-    }
-  });
-
+  const userPermissions = useGetPermissions();
   const openInstructions = useOpenInstructionsMd();
 
   const ops: FileOperation[] = [

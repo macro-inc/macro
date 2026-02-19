@@ -7,11 +7,7 @@ import { TabAttachmentsInit } from '@core/component/AI/signal/globalAttachments'
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
-import { WebsocketDebugger } from '@core/component/WebsocketDebugger';
-import {
-  ENABLE_WEBSOCKET_DEBUGGER,
-  PROD_MODE_ENV,
-} from '@core/constant/featureFlags';
+import { PROD_MODE_ENV } from '@core/constant/featureFlags';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { UserContextProvider, useUserId } from '@core/context/user';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
@@ -58,7 +54,6 @@ import {
   onCleanup,
   onMount,
   type ParentProps,
-  Show,
   Switch,
 } from 'solid-js';
 import { currentThemeId } from '../../block-theme/signals/themeSignals';
@@ -430,9 +425,6 @@ export function Root() {
                       </IsomorphicRouter>
                     </SuspenseContextComp>
                     <ToastRegion />
-                    <Show when={ENABLE_WEBSOCKET_DEBUGGER}>
-                      <WebsocketDebugger />
-                    </Show>
                   </SearchProvider>
                 </QuickAccessProvider>
               </ChannelsContextProvider>
