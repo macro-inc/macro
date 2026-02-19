@@ -543,7 +543,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
                 !rows().length
               }
             >
-              <div class="flex items-center justify-center gap-2 py-8 text-xs text-text-muted">
+              <div class="flex items-center gap-2 px-3 py-3 text-xs text-text-muted">
                 <Spinner class="size-3 animate-spin" />
                 Searching...
               </div>
