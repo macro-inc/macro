@@ -35,7 +35,6 @@ import { isAnimating, renderStateStore } from '../store/RenderState';
 import { CanvasController } from './CanvasController';
 import { CanvasRenderer } from './CanvasRenderer';
 import { Loading } from './Loading';
-import { LoadingMindMap } from './LoadingMindMap';
 import { ModalsProvider } from './ModalsProvider';
 import { ToolBar } from './ToolBar';
 import { TopBar } from './TopBar';
@@ -310,7 +309,6 @@ export default function BlockCanvas(props: BlockCanvasProps) {
               </Show>
             </CanvasController>
           </Show>
-          <LoadingMindMap />
         </div>
       </ModalsProvider>
     </DocumentBlockContainer>
