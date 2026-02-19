@@ -1,11 +1,12 @@
 use crate::model::{
     connection::{Connection, StoredConnectionEntity},
     message::{Message, OutgoingMessage},
+    tracking::{EntityConnection, UserEntityConnection},
 };
 use anyhow::Result;
 use axum::async_trait;
 use dashmap::DashMap;
-use model_entity::{Entity, EntityConnection, UserEntityConnection};
+use model_entity::Entity;
 use std::{
     sync::{Arc, atomic::AtomicUsize},
     time::{SystemTime, UNIX_EPOCH},

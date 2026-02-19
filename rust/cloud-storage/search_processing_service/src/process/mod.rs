@@ -47,23 +47,15 @@ pub async fn process_message(
                 .await?;
         }
         SearchQueueMessage::ExtractEmailThreadMessage(message) => {
-            email::upsert::process_upsert_thread_message(
-                &ctx.opensearch_client,
-                &ctx.email_client,
-                &message,
-            )
-            .await?;
+            email::upsert::process_upsert_thread_message(&ctx.opensearch_client, &ctx.db, &message)
+                .await?;
         }
         SearchQueueMessage::RemoveEmailMessage(message) => {
             email::remove::process_remove_message(&ctx.opensearch_client, &message).await?;
         }
         SearchQueueMessage::ExtractEmailMessage(message) => {
-            email::upsert::process_upsert_message(
-                &ctx.opensearch_client,
-                &ctx.email_client,
-                &message,
-            )
-            .await?;
+            email::upsert::process_upsert_message(&ctx.opensearch_client, &ctx.db, &message)
+                .await?;
         }
         SearchQueueMessage::RemoveDocument(message) => {
             document::process_remove_message(&ctx.opensearch_client, &message).await?;

@@ -3,28 +3,49 @@ use crate::{
     model::{
         connection::ConnectionContext,
         message::{Message, OutgoingMessage},
+        tracking::{TrackAction, TrackingData},
     },
 };
 use anyhow::Result;
-use frecency::domain::{models::EventRecord, ports::EventIngestorService};
+use frecency::domain::{
+    models::{EventRecord, FrecencyAction, FrecencyEntity, FrecencyEvent},
+    ports::EventIngestorService,
+};
 use futures::StreamExt;
 use futures::TryFutureExt;
 use itertools::Itertools;
-use model_entity::{Entity, EntityType, TrackAction, TrackingData};
+use model_entity::{Entity, EntityType};
 use tokio::sync::mpsc::Sender;
 use tracing::Level;
 
 use super::sender::send_message_to_entity;
+
+/// Convert TrackAction to FrecencyAction
+fn to_frecency_action(action: TrackAction) -> FrecencyAction {
+    match action {
+        TrackAction::Open => FrecencyAction::Open,
+        TrackAction::Ping => FrecencyAction::Ping,
+        TrackAction::Close => FrecencyAction::Close,
+    }
+}
 
 pub async fn track_entity(
     sender: &Sender<OutgoingMessage>,
     ctx: ConnectionContext<'_>,
     data: TrackingData<'_>,
 ) -> Result<()> {
+    // Convert TrackingData to FrecencyEvent for the frecency service
+    let frecency_event = FrecencyEvent {
+        entity: FrecencyEntity {
+            user_id: data.entity.user_id.clone(),
+            entity: data.entity.extra.extra.clone(),
+        },
+        action: to_frecency_action(data.action),
+    };
     let fut = ctx
         .api_context
         .frecency_ingestor_service
-        .track_event(EventRecord::new(data.clone()));
+        .track_event(EventRecord::new(frecency_event));
 
     match data.action {
         TrackAction::Open => {

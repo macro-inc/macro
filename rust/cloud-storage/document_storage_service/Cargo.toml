@@ -31,6 +31,7 @@ location_check = []
 [dependencies]
 anyhow = { workspace = true }
 aws-sdk-dynamodb = { workspace = true }
+cowlike = { path = "../cowlike" }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
@@ -59,7 +60,7 @@ http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }
 lazy_static = { workspace = true }
 macro_auth = { path = "../macro_auth" }
-macro_aws_config = { path = "../macro_aws_config" }
+macro_aws_config = { path = "../macro_aws_config", features=["s3"] }
 macro_axum_utils = { path = "../macro_axum_utils" }
 macro_cors = { path = "../macro_cors" }
 macro_db_client = { path = "../macro_db_client" }

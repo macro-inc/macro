@@ -1,18 +1,20 @@
 use crate::domain::models::{
-    AggregateFrecency, AggregateId, EventRecord, FrecencyData, MAX_RECENT_EVENTS, TimestampWeight,
+    AggregateFrecency, AggregateId, EventRecord, FrecencyAction, FrecencyData, FrecencyEntity,
+    FrecencyEvent, MAX_RECENT_EVENTS, TimestampWeight,
 };
 use chrono::DateTime;
 use cool_asserts::assert_matches;
-use model_entity::{Entity, EntityType, TrackAction, TrackingData};
+use model_entity::{Entity, EntityType};
+use std::borrow::Cow;
 
 fn create_event() -> EventRecord<'static> {
     EventRecord {
-        event: TrackingData {
-            entity: EntityType::Document
-                .with_entity_str("my_document_id")
-                .with_connection_str("my_connection")
-                .with_user_str("macro|my_user@example.com"),
-            action: TrackAction::Open,
+        event: FrecencyEvent {
+            entity: FrecencyEntity {
+                user_id: Cow::Borrowed("macro|my_user@example.com"),
+                entity: EntityType::Document.with_entity_str("my_document_id"),
+            },
+            action: FrecencyAction::Open,
         },
         timestamp: DateTime::UNIX_EPOCH,
     }
@@ -61,4 +63,54 @@ fn it_trims_above_max_events() {
         assert_eq!(recent_events.len(), MAX_RECENT_EVENTS);
         assert_eq!(event_count, create_events + 1); // plus 1 for the initial event
     })
+}
+
+#[test]
+fn old_tracking_data_deserializes_to_frecency_event() {
+    // Old TrackingData format: {"entity": {...nested UserEntityConnection...}, "action": "..."}
+    let old_json = serde_json::json!({
+        "entity": {
+            "user_id": "macro|test@example.com",
+            "entity_type": "document",
+            "entity_id": "doc-123",
+            "connection_id": "conn-456"  // This field will be ignored
+        },
+        "action": "open"
+    });
+
+    // Should deserialize successfully, ignoring connection_id
+    let event: FrecencyEvent<'static> = serde_json::from_value(old_json).unwrap();
+    assert_eq!(event.entity.user_id, "macro|test@example.com");
+    assert_eq!(event.entity.entity.entity_type, EntityType::Document);
+    assert_eq!(event.entity.entity.entity_id, "doc-123");
+    assert!(matches!(event.action, FrecencyAction::Open));
+}
+
+#[test]
+fn frecency_event_serializes_without_connection_id() {
+    let event = FrecencyEvent {
+        entity: FrecencyEntity {
+            user_id: Cow::Borrowed("macro|test@example.com"),
+            entity: EntityType::Document.with_entity_str("doc-123"),
+        },
+        action: FrecencyAction::Open,
+    };
+
+    let json = serde_json::to_value(&event).unwrap();
+
+    // Should NOT have connection_id in the output
+    assert!(json.get("entity").unwrap().get("connection_id").is_none());
+    assert_eq!(
+        json.get("entity").unwrap().get("user_id").unwrap(),
+        "macro|test@example.com"
+    );
+    assert_eq!(
+        json.get("entity").unwrap().get("entity_type").unwrap(),
+        "document"
+    );
+    assert_eq!(
+        json.get("entity").unwrap().get("entity_id").unwrap(),
+        "doc-123"
+    );
+    assert_eq!(json.get("action").unwrap(), "open");
 }

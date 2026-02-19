@@ -7,9 +7,12 @@ use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
 const CH1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c01);
+const CH2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c02);
 const MSG1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000001);
 const MSG2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000002);
 const MSG3: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000003);
+const REPLY1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_00000000b001);
+const REPLY5: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_00000000b005);
 
 fn repo(pool: Pool<Postgres>) -> PgChannelMessagesRepo {
     PgChannelMessagesRepo::new(pool)
@@ -105,9 +108,8 @@ async fn top_level_limit_is_respected(pool: Pool<Postgres>) -> anyhow::Result<()
 )]
 async fn top_level_scoped_to_channel(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool);
-    let ch2 = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c02);
     let rows = repo
-        .get_top_level_messages(ch2, &Query::Sort(CreatedAt, ()), 50)
+        .get_top_level_messages(CH2, &Query::Sort(CreatedAt, ()), 50)
         .await?;
 
     assert_eq!(rows.len(), 1);
@@ -312,5 +314,154 @@ async fn participants_roles_parsed_correctly(pool: Pool<Postgres>) -> anyhow::Re
         .find(|p| p.user_id == "macro|user-c@test.com")
         .unwrap();
     assert_eq!(member.role, ParticipantRole::Member);
+    Ok(())
+}
+
+// -- resolve_top_level_parent -------------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn resolve_top_level_parent_returns_self_for_top_level(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let row = repo.resolve_top_level_parent(CH1, MSG1).await?;
+
+    let row = row.expect("top-level message should resolve to itself");
+    assert_eq!(row.id, MSG1);
+    assert_eq!(row.content, "first message");
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn resolve_top_level_parent_follows_thread_id(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    // REPLY1 (b001) is a reply to MSG1
+    let row = repo.resolve_top_level_parent(CH1, REPLY1).await?;
+
+    let row = row.expect("thread reply should resolve to parent");
+    assert_eq!(row.id, MSG1);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn resolve_top_level_parent_follows_reply_to_deleted_parent(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    // REPLY5 (b005) is a reply to MSG2 (which is soft-deleted but has active reply)
+    let row = repo.resolve_top_level_parent(CH1, REPLY5).await?;
+
+    let row = row.expect("reply to deleted parent should still resolve");
+    assert_eq!(row.id, MSG2);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn resolve_top_level_parent_returns_none_for_nonexistent(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let missing = Uuid::from_u128(0xdeadbeef);
+    let row = repo.resolve_top_level_parent(CH1, missing).await?;
+
+    assert!(row.is_none(), "nonexistent message should return None");
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn resolve_top_level_parent_returns_none_for_wrong_channel(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    // MSG1 is in CH1, query it against CH2
+    let row = repo.resolve_top_level_parent(CH2, MSG1).await?;
+
+    assert!(
+        row.is_none(),
+        "message in different channel should return None"
+    );
+    Ok(())
+}
+
+// -- get_top_level_messages_around --------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn around_middle_message_returns_both_sides(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    // Anchor on MSG2 (11:00). Before should have MSG1, after should have MSG3.
+    let anchor = repo
+        .resolve_top_level_parent(CH1, MSG2)
+        .await?
+        .expect("msg2 exists");
+
+    let (before, after) = repo
+        .get_top_level_messages_around(CH1, anchor.created_at, anchor.id, 50)
+        .await?;
+
+    let before_ids: Vec<Uuid> = before.iter().map(|r| r.id).collect();
+    let after_ids: Vec<Uuid> = after.iter().map(|r| r.id).collect();
+
+    assert_eq!(before_ids, vec![MSG1], "MSG1 is older than anchor");
+    assert_eq!(after_ids, vec![MSG3], "MSG3 is newer than anchor");
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn around_oldest_message_has_no_before(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let anchor = repo
+        .resolve_top_level_parent(CH1, MSG1)
+        .await?
+        .expect("msg1 exists");
+
+    let (before, after) = repo
+        .get_top_level_messages_around(CH1, anchor.created_at, anchor.id, 50)
+        .await?;
+
+    assert!(before.is_empty(), "nothing older than MSG1");
+    let after_ids: Vec<Uuid> = after.iter().map(|r| r.id).collect();
+    assert_eq!(after_ids, vec![MSG2, MSG3]);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn around_newest_message_has_no_after(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let anchor = repo
+        .resolve_top_level_parent(CH1, MSG3)
+        .await?
+        .expect("msg3 exists");
+
+    let (before, after) = repo
+        .get_top_level_messages_around(CH1, anchor.created_at, anchor.id, 50)
+        .await?;
+
+    let before_ids: Vec<Uuid> = before.iter().map(|r| r.id).collect();
+    assert_eq!(before_ids, vec![MSG2, MSG1]);
+    assert!(after.is_empty(), "nothing newer than MSG3");
     Ok(())
 }

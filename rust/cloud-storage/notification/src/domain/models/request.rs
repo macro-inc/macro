@@ -8,9 +8,10 @@ use crate::domain::{
     },
     service::SendNotificationError,
 };
+use cowlike::CowLike;
 use itertools::Itertools;
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use model_entity::{Entity, as_owned::IntoOwned};
+use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::Entity;
 use rootcause::{Report, report};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;

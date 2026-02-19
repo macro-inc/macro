@@ -8,5 +8,4 @@ pub struct SearchProcessingContext {
     pub s3_client: Arc<s3_client::S3>,
     pub opensearch_client: Arc<opensearch_client::OpensearchClient>,
     pub lexical_client: Arc<lexical_client::LexicalClient>,
-    pub email_client: Arc<email_service_client::EmailServiceClient>,
 }

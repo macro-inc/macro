@@ -1,10 +1,9 @@
 import type { Meta, StoryObj } from 'storybook-solidjs-vite';
-import { DeprecatedTextButton } from '../DeprecatedTextButton';
-import { toast } from './Toast';
-import { ToastRegion } from './ToastRegion';
+import { toast } from '@core/component/Toast/Toast';
+import { ToastRegion } from '@core/component/Toast/ToastRegion';
 
 const meta = {
-  title: 'Toast',
+  title: 'Core/Toast',
   parameters: {
     docs: {
       description: {
@@ -24,46 +23,50 @@ export const Default: Story = {
       <>
         <ToastRegion />
         <div class="flex flex-col gap-2">
-          <DeprecatedTextButton
-            text="Show Success Toast"
-            theme="base"
+          <button
+            class="px-4 py-2 bg-success/20 text-success-ink rounded hover:bg-success/30"
             onClick={() =>
               toast.success(
                 'Action completed successfully',
                 'Your changes have been saved'
               )
             }
-          />
-          <DeprecatedTextButton
-            text="Show Failure Toast"
-            theme="base"
+          >
+            Show Success Toast
+          </button>
+          <button
+            class="px-4 py-2 bg-failure/20 text-failure-ink rounded hover:bg-failure/30"
             onClick={() =>
               toast.failure(
                 'Action failed',
                 'An error occurred while saving your changes'
               )
             }
-          />
-          <DeprecatedTextButton
-            text="Show Alert Toast"
-            theme="base"
+          >
+            Show Failure Toast
+          </button>
+          <button
+            class="px-4 py-2 bg-alert/20 text-alert-ink rounded hover:bg-alert/30"
             onClick={() =>
               toast.alert(
                 'Please check your input',
                 'Some fields are missing or invalid'
               )
             }
-          />
-          <DeprecatedTextButton
-            text="Show Success with Action"
-            theme="base"
+          >
+            Show Alert Toast
+          </button>
+          <button
+            class="px-4 py-2 bg-success/20 text-success-ink rounded hover:bg-success/30"
             onClick={() =>
               toast.success('File deleted', 'The file has been removed', {
                 text: 'Undo',
                 onClick: () => console.log('Undo clicked'),
               })
             }
-          />
+          >
+            Show Success with Action
+          </button>
         </div>
       </>
     );

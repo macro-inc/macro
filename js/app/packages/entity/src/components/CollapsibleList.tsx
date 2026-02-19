@@ -41,17 +41,29 @@ export function CollapsibleList<T>(props: CollapsibleListProps<T>) {
   const getExpandTextFn = () =>
     props.expandText ?? ((count: number) => `Show ${count} More`);
 
+  const getScrollParent = (el: Element | null): Element | null => {
+    let parent = el?.parentElement ?? null;
+    while (parent) {
+      const { overflow, overflowY } = getComputedStyle(parent);
+      if (/auto|scroll/.test(`${overflow}${overflowY}`)) return parent;
+      parent = parent.parentElement;
+    }
+    return null;
+  };
+
   const collapse = (e: MouseEvent) => {
     e.stopPropagation();
+
+    const entity = collapseButtonRef?.closest('[data-entity]');
+    const scrollContainer = entity ? getScrollParent(entity) : null;
+    const heightBefore = entity?.getBoundingClientRect().height ?? 0;
+
     setShowAll(false);
-    requestAnimationFrame(() => {
-      const scrollTarget =
-        collapseButtonRef?.closest('[data-entity]') ?? collapseButtonRef;
-      scrollTarget?.scrollIntoView({
-        block: 'nearest',
-        behavior: 'smooth',
-      });
-    });
+
+    if (entity && scrollContainer) {
+      const heightAfter = entity.getBoundingClientRect().height;
+      scrollContainer.scrollTop -= heightBefore - heightAfter;
+    }
   };
 
   const observeCollapseButton = (el: HTMLDivElement) => {

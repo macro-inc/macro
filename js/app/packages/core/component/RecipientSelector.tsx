@@ -1,6 +1,8 @@
 import { EntityIcon } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
+import { Tooltip } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
+import { UserTooltip } from '@core/component/UserTooltip';
 import {
   type CombinedRecipientItem,
   type CombinedRecipientKind,
@@ -9,6 +11,7 @@ import {
   recipientEntityMapper,
   type WithCustomUserInput,
 } from '@core/user';
+import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { matches } from '@core/util/match';
 import { clamp } from '@core/util/math';
 import { truncateString } from '@core/util/string';
@@ -34,10 +37,28 @@ import {
   type JSX,
   Match,
   onMount,
+  Show,
   Switch,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { useAugmentUserWithDmActivity } from '@core/user/dmActivity';
+
+function RecipientChip(props: {
+  icon?: JSX.Element;
+  label: string;
+  onRemove: () => void;
+}) {
+  return (
+    <div class="flex flex-row py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover">
+      <Show when={props.icon}>{props.icon}</Show>
+      <p class="text-sm">{truncateString(props.label, 20)}</p>
+      <XIcon
+        class="w-5 h-5 cursor-pointer hover:bg-hover hover-transition-bg p-1"
+        onClick={props.onRemove}
+      />
+    </div>
+  );
+}
 
 function getRecipientOptionEmail(
   option: CombinedRecipientItem
@@ -464,26 +485,36 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                           const name = getRecipientOptionName(opt);
                           const email = getRecipientOptionEmail(opt);
 
-                          const displayText =
-                            name && name !== email
-                              ? `${name} | ${email}`
-                              : email;
+                          const displayText = () => name || email;
 
                           return (
-                            <div class="flex flex-row ml-2 py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover">
-                              <UserIcon
-                                id={opt.id}
-                                size="xs"
-                                isDeleted={false}
+                            <Tooltip
+                              placement="bottom"
+                              unstyled
+                              tooltip={
+                                <UserTooltip
+                                  displayName={name || ''}
+                                  email={email}
+                                  id={opt.id}
+                                  isDeleted={false}
+                                />
+                              }
+                            >
+                              <RecipientChip
+                                icon={
+                                  !isMobileWidth() ? (
+                                    <UserIcon
+                                      id={opt.id}
+                                      size="xs"
+                                      isDeleted={false}
+                                      showTooltip={false}
+                                    />
+                                  ) : undefined
+                                }
+                                label={displayText() ?? ''}
+                                onRemove={() => state.remove(option)}
                               />
-                              <p class={'text-sm'}>
-                                {truncateString(displayText ?? '', 20)}
-                              </p>
-                              <XIcon
-                                class="w-5 h-5 hover:bg-hover hover-transition-bg p-1 "
-                                onClick={() => state.remove(option)}
-                              />
-                            </div>
+                            </Tooltip>
                           );
                         }}
                       </Match>
@@ -492,41 +523,47 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                       >
                         {(channelOption) => {
                           return (
-                            <div class="flex flex-row ml-2 py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover">
-                              <HashIcon class="w-4 h-4" />
-                              <p class={'text-sm'}>
-                                {truncateString(
-                                  channelOption().data.name ??
-                                    channelOption().id,
-                                  20
-                                )}
-                              </p>
-                              <XIcon
-                                class="w-5 h-5 hover:bg-hover hover-transition-bg p-1 "
-                                onClick={() => state.remove(option)}
-                              />
-                            </div>
+                            <RecipientChip
+                              icon={<HashIcon class="w-4 h-4" />}
+                              label={
+                                channelOption().data.name ?? channelOption().id
+                              }
+                              onRemove={() => state.remove(option)}
+                            />
                           );
                         }}
                       </Match>
                       <Match when={matches(option, (o) => o.kind === 'custom')}>
                         {(customOption) => {
                           const email = customOption().data.email;
+
                           return (
-                            <div class="flex flex-row ml-2 py-1 pl-2 gap-1 pr-0.5 overflow-hidden items-center bg-hover">
-                              <UserIcon
-                                id={email}
-                                size="xs"
-                                isDeleted={false}
+                            <Tooltip
+                              placement="bottom"
+                              unstyled
+                              tooltip={
+                                <UserTooltip
+                                  displayName={email}
+                                  email={email}
+                                  isDeleted={false}
+                                />
+                              }
+                            >
+                              <RecipientChip
+                                icon={
+                                  !isMobileWidth() ? (
+                                    <UserIcon
+                                      id={email}
+                                      size="xs"
+                                      isDeleted={false}
+                                      showTooltip={false}
+                                    />
+                                  ) : undefined
+                                }
+                                label={email}
+                                onRemove={() => state.remove(option)}
                               />
-                              <p class={'text-sm'}>
-                                {truncateString(email, 20)}
-                              </p>
-                              <XIcon
-                                class="w-5 h-5 hover:bg-hover hover-transition-bg p-1 "
-                                onClick={() => state.remove(option)}
-                              />
-                            </div>
+                            </Tooltip>
                           );
                         }}
                       </Match>

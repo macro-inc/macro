@@ -199,3 +199,15 @@ export const isProjectContainedEntity = <T extends EntityData>(
 ): entity is ProjectContainedEntity<T> => {
   return getEntityProjectId(entity) !== false;
 };
+
+/**
+ * Utility type that makes only specified fields required from an EntityData type,
+ * while all other fields become optional.
+ * @example
+ * type MinimalEntity = PartialEntity<'id' | 'name'>;
+ */
+export type PartialEntity<K extends keyof EntityData = keyof EntityData> = Pick<
+  EntityData,
+  K
+> &
+  Partial<Omit<EntityData, K>>;

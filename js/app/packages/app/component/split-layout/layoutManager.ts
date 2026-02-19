@@ -485,6 +485,13 @@ export function createSplitLayout(
 
     const splitIndex = state.splits.findIndex((s) => s.id === split.id);
     if (splitIndex >= 0 && !sameIdentity(split.content, content)) {
+      setSplitNamesById(
+        produce((map) => {
+          delete map[split.id];
+          return map;
+        })
+      );
+
       const payload: SplitEventPayload[SplitEvent.ContentChange] = {
         splitId: split.id,
         splitIndex,
@@ -587,13 +594,6 @@ export function createSplitLayout(
     const { next, mergeHistory, referredFrom } = options;
     const i = state.splits.findIndex((s) => s.id === id);
     if (i < 0) return console.error(`Split with id ${id} not found`);
-
-    setSplitNamesById(
-      produce((map) => {
-        delete map[id];
-        return map;
-      })
-    );
 
     const content = attachAliasContext(next);
 

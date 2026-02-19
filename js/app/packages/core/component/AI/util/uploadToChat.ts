@@ -180,7 +180,7 @@ export function useUploadAttachment(): UploadQueue {
 
           // Show error toast if the result indicates an error
           if (result.type === 'error') {
-            let filename = getUploadFilename(result);
+            const filename = getUploadFilename(result);
 
             const errorMessage =
               result.error === 'upload'
@@ -198,7 +198,7 @@ export function useUploadAttachment(): UploadQueue {
           // Remove from uploading on error
           setUploading((prev) => prev.filter((u) => u !== item));
 
-          let filename = getUploadFilename(item);
+          const filename = getUploadFilename(item);
 
           // Show error toast
           toast.failure(

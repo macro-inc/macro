@@ -69,3 +69,16 @@ setup_fusionauth:
 # Stop FusionAuth containers
 stop_fusionauth:
   docker compose -f infra/stacks/fusionauth-instance/docker-compose.yml down
+
+# Clear all BuildKit build cache (full cold rebuild next time)
+docker_cache_clear:
+  docker builder prune --all -f
+
+# Clear only the Rust target caches (keeps downloaded crates, forces recompilation)
+docker_cache_clear_targets:
+  docker builder prune --filter type=exec.cachemount --filter id=rust-target-dev-debug -f
+  docker builder prune --filter type=exec.cachemount --filter id=rust-target-dev-release -f
+
+# Show BuildKit cache disk usage
+docker_cache_usage:
+  docker builder du --verbose

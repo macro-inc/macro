@@ -1,7 +1,6 @@
-use std::time::Duration;
-
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
+use std::time::Duration;
 
 /// trait for checking whether or not a user exists
 pub trait UserExistenceChecker: Send + Sync + 'static {

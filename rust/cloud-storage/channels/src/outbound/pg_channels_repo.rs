@@ -8,6 +8,7 @@ use crate::domain::{
     },
     ports::ChannelMessagesRepo,
 };
+use chrono::{DateTime, Utc};
 use models_pagination::{CreatedAt, Query};
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -376,5 +377,139 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                 left_at: r.left_at,
             })
             .collect())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn resolve_top_level_parent(
+        &self,
+        channel_id: Uuid,
+        message_id: Uuid,
+    ) -> Result<Option<TopLevelMessageRow>, Self::Err> {
+        let row = sqlx::query_as!(
+            TopLevelRow,
+            r#"
+            SELECT
+                m.id,
+                m.channel_id,
+                m.sender_id,
+                m.content,
+                m.created_at,
+                m.updated_at,
+                m.edited_at::timestamptz AS "edited_at?",
+                m.deleted_at::timestamptz AS "deleted_at?"
+            FROM comms_messages m
+            WHERE m.id = COALESCE(
+                (SELECT thread_id FROM comms_messages WHERE id = $1 AND channel_id = $2),
+                $1
+            )
+            AND m.channel_id = $2
+            AND m.thread_id IS NULL
+            "#,
+            message_id,
+            channel_id,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|r| TopLevelMessageRow {
+            id: r.id,
+            channel_id: r.channel_id,
+            sender_id: r.sender_id,
+            content: r.content,
+            created_at: r.created_at,
+            updated_at: r.updated_at,
+            edited_at: r.edited_at,
+            deleted_at: r.deleted_at,
+        }))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_top_level_messages_around(
+        &self,
+        channel_id: Uuid,
+        anchor_created_at: DateTime<Utc>,
+        anchor_id: Uuid,
+        limit: u16,
+    ) -> Result<(Vec<TopLevelMessageRow>, Vec<TopLevelMessageRow>), Self::Err> {
+        let limit_i64 = i64::from(limit);
+
+        let before_fut = sqlx::query_as!(
+            TopLevelRow,
+            r#"
+            SELECT
+                m.id,
+                m.channel_id,
+                m.sender_id,
+                m.content,
+                m.created_at,
+                m.updated_at,
+                m.edited_at::timestamptz AS "edited_at?",
+                m.deleted_at::timestamptz AS "deleted_at?"
+            FROM comms_messages m
+            WHERE m.channel_id = $1
+              AND m.thread_id IS NULL
+              AND (m.deleted_at IS NULL OR EXISTS (
+                  SELECT 1 FROM comms_messages r
+                  WHERE r.thread_id = m.id AND r.deleted_at IS NULL
+              ))
+              AND (m.created_at, m.id) < ($2, $3)
+            ORDER BY m.created_at DESC, m.id DESC
+            LIMIT $4
+            "#,
+            channel_id,
+            anchor_created_at,
+            anchor_id,
+            limit_i64,
+        )
+        .fetch_all(&self.pool);
+
+        let after_fut = sqlx::query_as!(
+            TopLevelRow,
+            r#"
+            SELECT
+                m.id,
+                m.channel_id,
+                m.sender_id,
+                m.content,
+                m.created_at,
+                m.updated_at,
+                m.edited_at::timestamptz AS "edited_at?",
+                m.deleted_at::timestamptz AS "deleted_at?"
+            FROM comms_messages m
+            WHERE m.channel_id = $1
+              AND m.thread_id IS NULL
+              AND (m.deleted_at IS NULL OR EXISTS (
+                  SELECT 1 FROM comms_messages r
+                  WHERE r.thread_id = m.id AND r.deleted_at IS NULL
+              ))
+              AND (m.created_at, m.id) > ($2, $3)
+            ORDER BY m.created_at ASC, m.id ASC
+            LIMIT $4
+            "#,
+            channel_id,
+            anchor_created_at,
+            anchor_id,
+            limit_i64,
+        )
+        .fetch_all(&self.pool);
+
+        let (before_rows, after_rows): (Vec<TopLevelRow>, Vec<TopLevelRow>) =
+            tokio::try_join!(before_fut, after_fut)?;
+
+        let to_row = |r: TopLevelRow| TopLevelMessageRow {
+            id: r.id,
+            channel_id: r.channel_id,
+            sender_id: r.sender_id,
+            content: r.content,
+            created_at: r.created_at,
+            updated_at: r.updated_at,
+            edited_at: r.edited_at,
+            deleted_at: r.deleted_at,
+        };
+
+        let before: Vec<TopLevelMessageRow> = before_rows.into_iter().map(to_row).collect();
+        let after: Vec<TopLevelMessageRow> = after_rows.into_iter().map(to_row).collect();
+
+        Ok((before, after))
     }
 }

@@ -5,7 +5,6 @@ import { Show, type ParentProps } from 'solid-js';
 import { fetchApiToken } from '../queries/auth';
 import { queryClient } from '@queries/client';
 import { queryKeys } from '../queries/key';
-import { RemoveInstructionsMdFromHistorySideEffect } from '@queries/history/history';
 
 export function Provider(props: ParentProps) {
   queryClient.setQueryDefaults(queryKeys.all.auth, {
@@ -19,7 +18,6 @@ export function Provider(props: ParentProps) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <RemoveInstructionsMdFromHistorySideEffect />
       {props.children}
       <Show when={LOCAL_ONLY}>
         <SolidQueryDevtools initialIsOpen={false} />

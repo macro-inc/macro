@@ -2,6 +2,8 @@
 
 pub mod channel;
 pub mod channel_message;
+pub mod document;
+pub mod email;
 pub mod user;
 
 use clap::Subcommand;
@@ -17,6 +19,10 @@ pub enum EntityCommand {
     Channel(channel::ChannelArgs),
     /// Manage channel message seed data
     ChannelMessage(channel_message::ChannelMessageArgs),
+    /// Document commands
+    Document(document::DocumentArgs),
+    /// Manage email seed data
+    Email(email::EmailArgs),
 }
 
 impl EntityCommand {
@@ -26,6 +32,8 @@ impl EntityCommand {
             EntityCommand::User(args) => args.execute(ctx).await,
             EntityCommand::Channel(args) => args.execute(ctx).await,
             EntityCommand::ChannelMessage(args) => args.execute(ctx).await,
+            EntityCommand::Document(args) => args.execute(ctx).await,
+            EntityCommand::Email(args) => args.execute(ctx).await,
         }
     }
 }

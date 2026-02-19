@@ -24,7 +24,7 @@ impl From<&Env> for Secrets {
         let document_permissions_secret = env
             .var("DOCUMENT_PERMISSIONS_SECRET")
             .unwrap_or_else(|e| {
-                panic!("Couldn't get INTERNAL_API_SECRET_KEY environment variable: {e}")
+                panic!("Couldn't get DOCUMENT_PERMISSIONS_SECRET environment variable: {e}")
             })
             .to_string();
 

@@ -875,6 +875,11 @@ export const getChannelMessagesQueryParams = zod.object({
     .optional()
     .describe('Page size (1-100, default 50)'),
   cursor: zod.string().optional().describe('Base64 encoded cursor value'),
+  load_around_message_id: zod
+    .string()
+    .uuid()
+    .optional()
+    .describe('Return a centered window around this message ID'),
 });
 
 export const getChannelMessagesResponse = zod

@@ -67,7 +67,7 @@ sfs_delete = []
 ammonia = "4.1.0"
 anyhow = { workspace = true }
 authentication_service_client = { path = "../authentication_service_client" }
-macro_aws_config = { path = "../macro_aws_config" }
+macro_aws_config = { path = "../macro_aws_config", features = ["s3"] }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }

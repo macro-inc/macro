@@ -220,8 +220,8 @@ export class SearchProcessingService extends pulumi.ComponentResource {
               name: BASE_NAME,
               image: image.image.imageUri,
               stopTimeout: 10, // 10 seconds to force kill the task
-              cpu: stack === 'prod' ? 1024 : 512,
-              memory: stack === 'prod' ? 4096 : 1024,
+              cpu: stack === 'prod' ? 2048 : 512,
+              memory: stack === 'prod' ? 6000 : 1024,
               environment: containerEnvVars ?? [],
               logConfiguration: {
                 logDriver: 'awsfirelens',

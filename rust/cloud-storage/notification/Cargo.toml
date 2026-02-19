@@ -19,6 +19,7 @@ schema = ["dep:utoipa"]
 [dependencies]
 aquamarine = { version = "0.6", optional = true }
 aws-sdk-sesv2 = { workspace = true }
+cowlike = { path = "../cowlike" }
 aws-sdk-sns = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, optional = true }

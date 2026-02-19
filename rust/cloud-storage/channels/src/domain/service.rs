@@ -1,5 +1,5 @@
 use crate::domain::{
-    models::{ChannelMessage, ChannelParticipant, ThreadInfo, ThreadReply},
+    models::{ChannelMessage, ChannelParticipant, ThreadInfo, ThreadReply, TopLevelMessageRow},
     ports::{
         ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesPage, ChannelMessagesRepo,
         ChannelMessagesService,
@@ -28,28 +28,12 @@ where
     pub fn new(repo: R) -> Self {
         Self { repo }
     }
-}
 
-impl<R> ChannelMessagesService for ChannelMessagesServiceImpl<R>
-where
-    R: ChannelMessagesRepo,
-    anyhow::Error: From<R::Err>,
-{
-    #[tracing::instrument(err, skip(self))]
-    async fn get_channel_messages(
+    /// Hydrate top-level message rows with thread data, reactions, and attachments.
+    async fn hydrate_messages(
         &self,
-        channel_id: Uuid,
-        query: Query<Uuid, CreatedAt, ()>,
-        limit: u16,
-    ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
-        let limit = limit.clamp(1, 100);
-
-        let rows = self
-            .repo
-            .get_top_level_messages(channel_id, &query, limit)
-            .await
-            .map_err(anyhow::Error::from)?;
-
+        rows: Vec<TopLevelMessageRow>,
+    ) -> Result<Vec<ChannelMessage>, ChannelMessagesErr> {
         let parent_ids: Vec<Uuid> = rows.iter().map(|r| r.id).collect();
 
         let thread_data = self
@@ -115,7 +99,75 @@ where
             })
             .collect();
 
-        // 6. Paginate.
+        Ok(messages)
+    }
+}
+
+/// Build a centered window of messages around an anchor.
+///
+/// - `before`: older messages in DESC order (closest to anchor first).
+/// - `anchor`: the anchor message itself.
+/// - `after`: newer messages in ASC order (closest to anchor first).
+/// - `limit`: total number of messages to return (including the anchor).
+///
+/// Returns messages in DESC order (newest first).
+fn center_window(
+    before: Vec<TopLevelMessageRow>,
+    anchor: TopLevelMessageRow,
+    after: Vec<TopLevelMessageRow>,
+    limit: usize,
+) -> Vec<TopLevelMessageRow> {
+    if limit == 0 {
+        return vec![];
+    }
+    if limit == 1 {
+        return vec![anchor];
+    }
+
+    let slots = limit - 1;
+    let half = slots / 2;
+
+    let before_take = half.min(before.len());
+    let after_take = (slots - before_take).min(after.len());
+    let before_take = (slots - after_take).min(before.len());
+
+    let mut before = before;
+    before.truncate(before_take);
+
+    let mut after = after;
+    after.truncate(after_take);
+    after.reverse();
+
+    let mut result = after;
+    result.reserve(1 + before.len());
+    result.push(anchor);
+    result.append(&mut before);
+
+    result
+}
+
+impl<R> ChannelMessagesService for ChannelMessagesServiceImpl<R>
+where
+    R: ChannelMessagesRepo,
+    anyhow::Error: From<R::Err>,
+{
+    #[tracing::instrument(err, skip(self))]
+    async fn get_channel_messages(
+        &self,
+        channel_id: Uuid,
+        query: Query<Uuid, CreatedAt, ()>,
+        limit: u16,
+    ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
+        let limit = limit.clamp(1, 100);
+
+        let rows = self
+            .repo
+            .get_top_level_messages(channel_id, &query, limit)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        let messages = self.hydrate_messages(rows).await?;
+
         let page = messages
             .into_iter()
             .paginate_on(limit.into(), CreatedAt)
@@ -161,5 +213,39 @@ where
             .map_err(anyhow::Error::from)?;
 
         Ok(participants)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_channel_messages_around(
+        &self,
+        channel_id: Uuid,
+        message_id: Uuid,
+        limit: u16,
+    ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
+        let limit = limit.clamp(1, 100);
+
+        let anchor = self
+            .repo
+            .resolve_top_level_parent(channel_id, message_id)
+            .await
+            .map_err(anyhow::Error::from)?
+            .ok_or(ChannelMessagesErr::MessageNotFound(message_id))?;
+
+        let (before, after) = self
+            .repo
+            .get_top_level_messages_around(channel_id, anchor.created_at, anchor.id, limit)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        let rows = center_window(before, anchor, after, limit.into());
+        let messages = self.hydrate_messages(rows).await?;
+
+        let page = messages
+            .into_iter()
+            .paginate_on(limit.into(), CreatedAt)
+            .filter_on(())
+            .into_page();
+
+        Ok(page)
     }
 }

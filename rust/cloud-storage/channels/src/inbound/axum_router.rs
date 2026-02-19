@@ -5,11 +5,11 @@ use crate::domain::models::{
     ChannelAttachment, ChannelMessage, ChannelParticipant, CountedReaction, MessageAttachment,
     ParticipantRole, ThreadInfo, ThreadReply,
 };
-use crate::domain::ports::{ChannelMessagesErr, ChannelMessagesService};
+use crate::domain::ports::{ChannelAccessCheck, ChannelMessagesErr, ChannelMessagesService};
 use axum::{
     Json, Router,
-    extract::{Path, Query, State},
-    http::StatusCode,
+    extract::{FromRequestParts, Path, Query, State},
+    http::{StatusCode, request::Parts},
     response::IntoResponse,
     routing::get,
 };
@@ -22,24 +22,96 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 /// State for the channels router.
-pub struct ChannelsRouterState<S> {
+pub struct ChannelsRouterState<S, A> {
     service: Arc<S>,
+    access: Arc<A>,
 }
 
-impl<S> Clone for ChannelsRouterState<S> {
+impl<S, A> Clone for ChannelsRouterState<S, A> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
+            access: self.access.clone(),
         }
     }
 }
 
-impl<S: ChannelMessagesService> ChannelsRouterState<S> {
-    /// Create a new router state wrapping the service.
-    pub fn new(service: S) -> Self {
+impl<S: ChannelMessagesService, A: ChannelAccessCheck> ChannelsRouterState<S, A> {
+    /// Create a new router state wrapping the service and access checker.
+    pub fn new(service: S, access: A) -> Self {
         Self {
             service: Arc::new(service),
+            access: Arc::new(access),
         }
+    }
+}
+
+/// Verified channel member. Rejects the request if the authenticated user is not an active
+/// participant in the channel identified by the `:channel_id` path parameter.
+pub struct ChannelMember {
+    /// The channel id from the path.
+    pub channel_id: Uuid,
+}
+
+/// Rejection returned by the [`ChannelMember`] extractor.
+#[derive(Debug)]
+pub enum ChannelMemberRejection {
+    /// The user is not authenticated.
+    Unauthenticated,
+    /// The `:channel_id` path parameter is missing or invalid.
+    InvalidPath,
+    /// The user is not a member of the channel.
+    Forbidden,
+    /// A database or internal error occurred.
+    Internal,
+}
+
+impl IntoResponse for ChannelMemberRejection {
+    fn into_response(self) -> axum::response::Response {
+        let (status, message) = match self {
+            Self::Unauthenticated => (StatusCode::UNAUTHORIZED, "Unauthorized"),
+            Self::InvalidPath => (StatusCode::BAD_REQUEST, "Invalid channel_id"),
+            Self::Forbidden => (StatusCode::FORBIDDEN, "Not a channel member"),
+            Self::Internal => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "An internal server error occurred",
+            ),
+        };
+        (status, Json(ErrorResponse { message })).into_response()
+    }
+}
+
+#[axum::async_trait]
+impl<S, A> FromRequestParts<ChannelsRouterState<S, A>> for ChannelMember
+where
+    S: ChannelMessagesService,
+    A: ChannelAccessCheck,
+{
+    type Rejection = ChannelMemberRejection;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &ChannelsRouterState<S, A>,
+    ) -> Result<Self, Self::Rejection> {
+        let user = MacroUserExtractor::from_request_parts(parts, state)
+            .await
+            .map_err(|_| ChannelMemberRejection::Unauthenticated)?;
+
+        let Path(channel_id) = Path::<Uuid>::from_request_parts(parts, state)
+            .await
+            .map_err(|_| ChannelMemberRejection::InvalidPath)?;
+
+        let is_member = state
+            .access
+            .is_channel_member(channel_id, &user.user_context.user_id)
+            .await
+            .map_err(|_| ChannelMemberRejection::Internal)?;
+
+        if !is_member {
+            return Err(ChannelMemberRejection::Forbidden);
+        }
+
+        Ok(ChannelMember { channel_id })
     }
 }
 
@@ -49,26 +121,31 @@ pub struct Params {
     /// Page size. Clamped to [1, 100], defaults to 50.
     #[serde(default)]
     limit: Option<u16>,
+    /// When set, return a centered window of messages around this message id
+    /// instead of cursor-paginated results.
+    #[serde(default)]
+    load_around_message_id: Option<Uuid>,
 }
 
 /// Create the channels router.
-pub fn channels_router<S, T>(state: ChannelsRouterState<S>) -> Router<T>
+pub fn channels_router<S, A, T>(state: ChannelsRouterState<S, A>) -> Router<T>
 where
     S: ChannelMessagesService,
+    A: ChannelAccessCheck,
     T: Send + Sync,
 {
     Router::new()
         .route(
             "/:channel_id/messages",
-            get(get_channel_messages_handler::<S>),
+            get(get_channel_messages_handler::<S, A>),
         )
         .route(
             "/:channel_id/attachments",
-            get(get_channel_attachments_handler::<S>),
+            get(get_channel_attachments_handler::<S, A>),
         )
         .route(
             "/:channel_id/participants",
-            get(get_channel_participants_handler::<S>),
+            get(get_channel_participants_handler::<S, A>),
         )
         .with_state(state)
 }
@@ -82,27 +159,38 @@ where
         ("channel_id" = Uuid, Path, description = "Channel ID"),
         ("limit" = Option<u16>, Query, description = "Page size (1-100, default 50)"),
         ("cursor" = Option<String>, Query, description = "Base64 encoded cursor value"),
+        ("load_around_message_id" = Option<Uuid>, Query, description = "Return a centered window around this message ID"),
     ),
     responses(
         (status = 200, body = ApiChannelMessagesPage),
+        (status = 404, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn get_channel_messages_handler<S: ChannelMessagesService>(
-    State(state): State<ChannelsRouterState<S>>,
-    MacroUserExtractor { .. }: MacroUserExtractor,
-    Path(channel_id): Path<Uuid>,
+pub async fn get_channel_messages_handler<S: ChannelMessagesService, A: ChannelAccessCheck>(
+    State(state): State<ChannelsRouterState<S, A>>,
+    member: ChannelMember,
     Query(params): Query<Params>,
     cursor: CursorExtractor<Uuid, CreatedAt, ()>,
 ) -> Result<Json<PaginatedOpaqueCursor<ApiChannelMessage>>, ChannelsHandlerErr> {
     let limit = params.limit.unwrap_or(50);
-    let query = cursor.into_query(CreatedAt, ());
 
-    let page = state
-        .service
-        .get_channel_messages(channel_id, query, limit)
-        .await?;
+    let page = match params.load_around_message_id {
+        Some(message_id) => {
+            state
+                .service
+                .get_channel_messages_around(member.channel_id, message_id, limit)
+                .await?
+        }
+        None => {
+            let query = cursor.into_query(CreatedAt, ());
+            state
+                .service
+                .get_channel_messages(member.channel_id, query, limit)
+                .await?
+        }
+    };
 
     Ok(Json(page.type_erase().map(ApiChannelMessage::from)))
 }
@@ -123,10 +211,9 @@ pub async fn get_channel_messages_handler<S: ChannelMessagesService>(
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn get_channel_attachments_handler<S: ChannelMessagesService>(
-    State(state): State<ChannelsRouterState<S>>,
-    MacroUserExtractor { .. }: MacroUserExtractor,
-    Path(channel_id): Path<Uuid>,
+pub async fn get_channel_attachments_handler<S: ChannelMessagesService, A: ChannelAccessCheck>(
+    State(state): State<ChannelsRouterState<S, A>>,
+    member: ChannelMember,
     Query(params): Query<Params>,
     cursor: CursorExtractor<Uuid, CreatedAt, ()>,
 ) -> Result<Json<PaginatedOpaqueCursor<ApiChannelAttachment>>, ChannelsHandlerErr> {
@@ -135,7 +222,7 @@ pub async fn get_channel_attachments_handler<S: ChannelMessagesService>(
 
     let page = state
         .service
-        .get_channel_attachments(channel_id, query, limit)
+        .get_channel_attachments(member.channel_id, query, limit)
         .await?;
 
     Ok(Json(page.type_erase().map(ApiChannelAttachment::from)))
@@ -155,12 +242,14 @@ pub async fn get_channel_attachments_handler<S: ChannelMessagesService>(
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn get_channel_participants_handler<S: ChannelMessagesService>(
-    State(state): State<ChannelsRouterState<S>>,
-    MacroUserExtractor { .. }: MacroUserExtractor,
-    Path(channel_id): Path<Uuid>,
+pub async fn get_channel_participants_handler<S: ChannelMessagesService, A: ChannelAccessCheck>(
+    State(state): State<ChannelsRouterState<S, A>>,
+    member: ChannelMember,
 ) -> Result<Json<Vec<ApiChannelParticipant>>, ChannelsHandlerErr> {
-    let participants = state.service.get_channel_participants(channel_id).await?;
+    let participants = state
+        .service
+        .get_channel_participants(member.channel_id)
+        .await?;
 
     Ok(Json(
         participants
@@ -440,13 +529,28 @@ pub enum ChannelsHandlerErr {
 
 impl IntoResponse for ChannelsHandlerErr {
     fn into_response(self) -> axum::response::Response {
-        tracing::error!(error=?self, "channels handler error");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                message: "An internal server error occurred",
-            }),
-        )
-            .into_response()
+        let ChannelsHandlerErr::Internal(ref err) = self;
+        match err {
+            ChannelMessagesErr::MessageNotFound(id) => {
+                tracing::warn!(message_id=?id, "message not found");
+                (
+                    StatusCode::NOT_FOUND,
+                    Json(ErrorResponse {
+                        message: "Message not found",
+                    }),
+                )
+                    .into_response()
+            }
+            ChannelMessagesErr::Repo(_) => {
+                tracing::error!(error=?self, "channels handler error");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        message: "An internal server error occurred",
+                    }),
+                )
+                    .into_response()
+            }
+        }
     }
 }

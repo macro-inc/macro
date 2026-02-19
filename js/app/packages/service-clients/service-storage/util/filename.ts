@@ -1,6 +1,11 @@
+import type { BlockName, BlockAlias } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 
-const FULLY_QUALIFIED_DOCUMENT_NAME_BLOCKS = ['unknown', 'code'];
+const FULLY_QUALIFIED_DOCUMENT_NAME_BLOCKS: Array<BlockName | BlockAlias> = [
+  'unknown',
+  'code',
+  'image',
+];
 
 /**
  * Gets the filename without the extension.

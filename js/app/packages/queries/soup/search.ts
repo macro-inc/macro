@@ -20,6 +20,11 @@ interface SearchQueryOptions {
   enabled: boolean;
 }
 
+/** Search service won't accept text less than 3 characters */
+export const validateSearchServiceText = (text: string) => {
+  return text.length >= 3;
+};
+
 export const useSearchSoupQuery = (
   args: Accessor<SearchSoupQueryArgs>,
   options?: Accessor<SearchQueryOptions>
@@ -54,7 +59,7 @@ export const useSearchSoupQuery = (
   });
 
   const validSearchTerms = createMemo(() => {
-    return terms().length > 0 && terms().every((term) => term.length >= 3);
+    return terms().length > 0 && terms().every(validateSearchServiceText);
   });
 
   const enabled = createMemo(() => {

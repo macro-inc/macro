@@ -1,8 +1,10 @@
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import type { QuickAccessItem } from '@core/context/quickAccess';
 import { trackMention } from '@core/signal/mention';
 import type { ChannelWithParticipants, IUser } from '@core/user';
 import type { ParsedDate } from '@core/util/dateParser';
+import type { DateOption } from '@core/util/dateSearch/useDateSearch';
 import type { EmailEntity } from '@entity';
 import { waitBulkUploadStatus } from '@service-connection/bulkUpload';
 import type { DocumentMentionMetadata } from '@service-notification/client';
@@ -350,4 +352,53 @@ export async function handleChannelMention(
     mentionUuid: mentionId,
     channelType: channel.channel_type,
   });
+}
+
+// ============================================================================
+// MentionItem Types
+// ============================================================================
+// These types extend QuickAccessItem to support dates and groups in the
+// mentions menu, which aren't part of the standard quick access system.
+
+/**
+ * Date mention item using DateOption from useDateSearch.
+ */
+export type DateMentionItem = {
+  kind: 'date';
+  id: string;
+  data: DateOption;
+};
+
+/**
+ * Group mention item (e.g., @here).
+ */
+export type GroupMentionItem = {
+  kind: 'group';
+  id: string;
+  data: {
+    id: string;
+    groupAlias: string;
+  };
+};
+
+/**
+ * MentionItem = QuickAccessItem + Date + Group.
+ * Used in MentionsMenu to unify all mentionable item types.
+ */
+export type MentionItem = QuickAccessItem | DateMentionItem | GroupMentionItem;
+
+/**
+ * Type guard for DateMentionItem.
+ */
+export function isDateMentionItem(item: MentionItem): item is DateMentionItem {
+  return item.kind === 'date';
+}
+
+/**
+ * Type guard for GroupMentionItem.
+ */
+export function isGroupMentionItem(
+  item: MentionItem
+): item is GroupMentionItem {
+  return item.kind === 'group';
 }

@@ -9,7 +9,7 @@ import type {
   PropertyApiValues,
 } from '@core/component/Properties/types';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
-import { For, Show, createMemo } from 'solid-js';
+import { For, Show, Suspense, createMemo } from 'solid-js';
 import { useSaveEntityPropertyMutation } from '@queries/properties/entity';
 import { match } from 'ts-pattern';
 import {
@@ -110,7 +110,9 @@ export function EntityKeyProperties(props: EntityKeyPropertiesProps) {
             )}
           </For>
         </div>
-        <Modals />
+        <Suspense>
+          <Modals />
+        </Suspense>
       </PropertiesProvider>
     </Show>
   );

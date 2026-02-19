@@ -1,4 +1,5 @@
 import CheckIcon from '@icon/bold/check-bold.svg';
+import Spinner from '@icon/regular/spinner.svg';
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
@@ -152,9 +153,11 @@ export const SoupView = () => {
             <SoupViewList />
           </SoupViewFileDropzone>
         </div>
-        <Show when={ENABLE_UNIFIED_LIST_AI_INPUT && !isMobile()}>
-          <SoupChatInput />
-        </Show>
+        <Suspense>
+          <Show when={ENABLE_UNIFIED_LIST_AI_INPUT && !isMobile()}>
+            <SoupChatInput />
+          </Show>
+        </Suspense>
       </SoupViewContextProvider>
     </SplitPanelContext.Provider>
   );
@@ -175,7 +178,9 @@ export const SoupViewList = (props: SoupViewListProps) => {
     setSearchText,
     setQueryFilters,
     queryFilters,
-    featuredCount,
+    featuredIds,
+    isSearchServiceLoading,
+    isLocalSearchSettling,
   } = useSoupView();
   const { getSplitCount } = useSplitLayout();
 
@@ -198,29 +203,36 @@ export const SoupViewList = (props: SoupViewListProps) => {
     }
   };
 
+  const [focusEffectsEnabled, setFocusEffectsEnabled] = createSignal(false);
+  const [moveInitialFocus, setMoveInitialFocus] = createSignal(true);
+
   let initialLoad = true;
 
-  const registerFocusEffects = (moveInitialFocus = true) => {
-    if (moveInitialFocus) {
-      createEffect(
-        on(rows, () => {
-          if (!initialLoad || source.isLoading()) return;
-          focusFirstEntity();
-          initialLoad = false;
-        })
-      );
-    }
+  // Initial load: focus first entity once rows arrive
+  createEffect(
+    on(rows, () => {
+      if (!focusEffectsEnabled() || !moveInitialFocus()) return;
+      if (!initialLoad || source.isLoading()) return;
+      focusFirstEntity();
+      initialLoad = false;
+    })
+  );
 
-    createEffect(
-      on(
-        () =>
-          [soup.filters.activeIds(), searchText(), featuredCount()] as const,
-        () => {
-          focusFirstEntity();
-        },
-        { defer: true }
-      )
-    );
+  // Focus first entity on filter/search changes
+  createEffect(
+    on(
+      () => [soup.filters.activeIds(), searchText(), featuredIds()] as const,
+      () => {
+        if (!focusEffectsEnabled()) return;
+        focusFirstEntity();
+      },
+      { defer: true }
+    )
+  );
+
+  const registerFocusEffects = (shouldMoveInitialFocus = true) => {
+    setMoveInitialFocus(shouldMoveInitialFocus);
+    setFocusEffectsEnabled(true);
   };
 
   const previewPanel = useMaybePreviewPanel();
@@ -497,6 +509,8 @@ export const SoupViewList = (props: SoupViewListProps) => {
     restoreState();
   };
 
+  const featuredCount = createMemo(() => featuredIds().length);
+
   return (
     <div
       class="size-full flex bracket-never"
@@ -523,7 +537,18 @@ export const SoupViewList = (props: SoupViewListProps) => {
             <Match when={source.isLoading() && !rows().length}>
               <LoadingBlock />
             </Match>
-            <Match when={!source.isLoading() && !rows().length}>
+            <Match
+              when={
+                (isSearchServiceLoading() || isLocalSearchSettling()) &&
+                !rows().length
+              }
+            >
+              <div class="flex items-center gap-2 px-3 py-3 text-xs text-text-muted">
+                <Spinner class="size-3 animate-spin" />
+                Searching...
+              </div>
+            </Match>
+            <Match when={!rows().length}>
               <EmptyState search={!!searchText()} />
             </Match>
             <Match when={rows().length}>
@@ -565,9 +590,11 @@ export const SoupViewList = (props: SoupViewListProps) => {
                       }
                     };
 
-                    if (i() === Math.floor(rows().length * 0.8)) {
-                      debouncedFetchMore();
-                    }
+                    createEffect(() => {
+                      if (i() === Math.floor(rows().length * 0.8)) {
+                        debouncedFetchMore();
+                      }
+                    });
 
                     return (
                       <>
@@ -649,6 +676,17 @@ export const SoupViewList = (props: SoupViewListProps) => {
                             />
                           </SoupEntityContextMenu>
                         </EntityRow>
+                        <Show
+                          when={
+                            i() === rows().length - 1 &&
+                            isSearchServiceLoading()
+                          }
+                        >
+                          <div class="flex items-center gap-2 px-3 py-3 text-xs text-text-muted">
+                            <Spinner class="size-3 animate-spin" />
+                            Searching...
+                          </div>
+                        </Show>
                       </>
                     );
                   }}

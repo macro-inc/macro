@@ -37,7 +37,7 @@ async fn main() -> anyhow::Result<()> {
     let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
         .search_event_queue(&config.search_event_queue);
 
-    let s3_client = s3_client::S3::new(aws_sdk_s3::Client::new(&aws_config));
+    let s3_client = s3_client::S3::new(macro_aws_config::s3_client().await);
 
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
         aws_sdk_secretsmanager::Client::new(&aws_config),
@@ -62,7 +62,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let (min_connections, max_connections): (u32, u32) = match config.environment {
-        Environment::Production => (3, 25),
+        Environment::Production => (5, 50),
         Environment::Develop => (1, 25),
         Environment::Local => (1, 10),
     };
@@ -119,11 +119,6 @@ async fn main() -> anyhow::Result<()> {
             config.lexical_service_url.clone(),
         );
 
-        let email_service_client = email_service_client::EmailServiceClient::new(
-            internal_auth_key.as_ref().to_string(),
-            config.email_service_url.clone(),
-        );
-
         let worker = sqs_worker::SQSWorker::new(
             aws_sdk_sqs::Client::new(&aws_config),
             config.search_event_queue.clone(),
@@ -137,7 +132,6 @@ async fn main() -> anyhow::Result<()> {
             s3_client: Arc::new(s3_client),
             opensearch_client: Arc::new(opensearch_client.clone()),
             lexical_client: Arc::new(lexical_client),
-            email_client: email_service_client.into(),
         };
         run_search_processing_workers(ctx, config.worker_count);
     }

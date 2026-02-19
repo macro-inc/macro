@@ -1,10 +1,11 @@
 use crate::{config::Config, context::ApiContext};
 use model::user::UserContext;
-use model_entity::{EntityType, UserEntityConnection};
+use model_entity::EntityType;
 use std::time::{SystemTime, UNIX_EPOCH};
 use utoipa::ToSchema;
 
 use super::message::OutgoingMessage;
+use super::tracking::UserEntityConnection;
 use tokio::{sync::mpsc::Sender, task::AbortHandle};
 
 pub struct Connection {
