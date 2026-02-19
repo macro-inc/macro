@@ -38,6 +38,8 @@ const queue = new aws.sqs.Queue(
   'queue',
   {
     name: `${BASE_NAME}-${stack}`,
+    // Give each message up to 2 minutes to process before it's re-queued
+    visibilityTimeoutSeconds: 120,
     redrivePolicy: dlq.arn.apply((arn) =>
       JSON.stringify({
         deadLetterTargetArn: arn,

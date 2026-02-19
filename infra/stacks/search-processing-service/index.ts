@@ -134,12 +134,6 @@ const searchProcessingService = new SearchProcessingService(
         value: SYNC_SERVICE_AUTH_KEY,
       },
       {
-        name: 'EMAIL_SERVICE_URL',
-        value: `https://email-service${
-          stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
-      },
-      {
         name: 'WORKER_COUNT',
         value: '3', // 3 workers per instance
       },
