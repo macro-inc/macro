@@ -20,8 +20,12 @@ type ChannelProps = {
   targetMessageId: string;
 };
 
-function Row(props: ParentProps) {
-  return <div class="w-full flex justify-center">{props.children}</div>;
+function ThreadRow(props: ParentProps) {
+  return (
+    <div class="w-full flex justify-center ">
+      <div class="macro-message-width w-full">{props.children}</div>
+    </div>
+  );
 }
 
 export function flattenMessages(
@@ -74,16 +78,14 @@ export function Channel(props: ChannelProps) {
             {(item) => {
               const state = threadManager.getOrCreateThreadState(item.id);
               return (
-                <Row>
-                  <div class="macro-message-width w-full">
-                    <Thread
-                      data={() => item}
-                      channelId={() => props.channelId}
-                      isExpanded={state.isExpanded}
-                      setIsExpanded={state.setIsExpanded}
-                    />
-                  </div>
-                </Row>
+                <ThreadRow>
+                  <Thread
+                    data={() => item}
+                    channelId={() => props.channelId}
+                    isExpanded={state.isExpanded}
+                    setIsExpanded={state.setIsExpanded}
+                  />
+                </ThreadRow>
               );
             }}
           </ThreadList>
