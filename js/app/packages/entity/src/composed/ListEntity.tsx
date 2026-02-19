@@ -36,6 +36,11 @@ import { mergeRefs } from '@solid-primitives/refs';
 const hasSearchContentHits = (entity: EntityData) =>
   isSearchEntity(entity) && !!entity.search.contentHitData?.length;
 
+const getFirstContentHitContent = (entity: EntityData) => {
+  if (!isSearchEntity(entity)) return undefined;
+  return entity.search.contentHitData?.at(0)?.content;
+};
+
 interface ListEntityProps {
   entity: WithNotification<EntityData>;
   onClick?: (event: MouseEvent) => void;
@@ -147,8 +152,7 @@ function NarrowLayout(props: LayoutProps) {
       <Show
         when={
           (isEmailEntity(props.entity) || isChannelEntity(props.entity)) &&
-          !props.hasNotifications &&
-          !props.showContentHits
+          !props.hasNotifications
         }
       >
         <Entity.Slot placement="body" class="flex flex-col gap-1 pb-3 -mt-1">
@@ -161,8 +165,24 @@ function NarrowLayout(props: LayoutProps) {
                       <Entity.Title entity={entity()} />
                     </span>
                   </div>
-                  <div class="text-ink/50 font-medium w-full truncate">
-                    <span class="truncate">{entity().snippet}</span>
+                  <div class="text-ink/50 font-medium w-full truncate inline-flex items-center">
+                    <Show
+                      when={
+                        props.showContentHits &&
+                        getFirstContentHitContent(entity())
+                      }
+                      fallback={
+                        <span class="truncate">{entity().snippet}</span>
+                      }
+                    >
+                      {(content) => (
+                        <StaticMarkdown
+                          markdown={content()}
+                          theme={unifiedListMarkdownTheme}
+                          singleLine
+                        />
+                      )}
+                    </Show>
                   </div>
                 </>
               )}
@@ -254,19 +274,7 @@ function WideLayout(props: LayoutProps) {
           <Match when={isEmailEntity(props.entity) && props.entity}>
             {(entity) => (
               <>
-                <Show
-                  when={!props.showContentHits}
-                  fallback={
-                    <>
-                      <span class="truncate">
-                        <Entity.Title entity={entity()} />
-                      </span>
-                      <span class="text-ink/50 font-medium truncate flex-1">
-                        {entity().snippet}
-                      </span>
-                    </>
-                  }
-                >
+                <Show when={!props.showContentHits}>
                   <span class="w-(--title-width) truncate shrink-0 flex gap-2">
                     <Show
                       when={entity().isDraft}
@@ -282,13 +290,27 @@ function WideLayout(props: LayoutProps) {
                       <Entity.EmailParticipants entity={entity()} />
                     </span>
                   </span>
-                  <span class="truncate">
-                    <Entity.Title entity={entity()} />
-                  </span>
-                  <span class="text-ink/50 font-medium truncate flex-1">
-                    {entity().snippet}
-                  </span>
                 </Show>
+                <span class="truncate">
+                  <Entity.Title entity={entity()} />
+                </span>
+                <span class="text-ink/50 font-medium truncate flex-1 inline-flex items-center">
+                  <Show
+                    when={
+                      props.showContentHits &&
+                      getFirstContentHitContent(entity())
+                    }
+                    fallback={entity().snippet}
+                  >
+                    {(content) => (
+                      <StaticMarkdown
+                        markdown={content()}
+                        theme={unifiedListMarkdownTheme}
+                        singleLine
+                      />
+                    )}
+                  </Show>
+                </span>
               </>
             )}
           </Match>
