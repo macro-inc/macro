@@ -74,6 +74,7 @@
 		"@solidjs/router": "^0.15.3",
 		"@tailwindcss/vite": "^4.1.14",
 		"@tanstack/pacer": "^0.17.3",
+		"@tanstack/solid-pacer": "0.18.4",
 		"@tanstack/solid-query": "^5.90.3",
 		"@tanstack/solid-query-devtools": "^5.90.3",
 		"@tanstack/solid-query-persist-client": "^5.90.19",

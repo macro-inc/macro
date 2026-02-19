@@ -9,13 +9,12 @@ import {
   createContext,
   createDeferred,
   createMemo,
-  createSignal,
   type FlowComponent,
   useContext,
   createEffect,
-  onCleanup,
 } from 'solid-js';
 import { throttle } from '@solid-primitives/scheduled';
+import { lazyThrottle, delayedQueue } from './lazy-throttle';
 
 export const DEFAULT_SEARCH_SORT = 'updated_at';
 
@@ -55,35 +54,6 @@ export const useSearchContext = () => {
   return context;
 };
 
-/**
- * Create a throttled view of an array signal that passes through all values
- * immediately until the first non-empty array, then switches to a fixed
- * interval that flushes the latest value every `delay` ms.
- */
-function lazyThrottle<T extends unknown[]>(
-  source: () => T,
-  delay: number
-): Accessor<T> {
-  const [value, setValue] = createSignal<T>(source());
-  let received = false;
-  let latest: T;
-  let interval: ReturnType<typeof setInterval> | undefined;
-
-  createEffect(() => {
-    latest = source();
-    if (!received) {
-      setValue(() => latest);
-      if (latest.length > 0) {
-        received = true;
-        interval = setInterval(() => setValue(() => latest), delay);
-      }
-    }
-  });
-
-  onCleanup(() => clearInterval(interval));
-  return value;
-}
-
 export const SearchProvider: FlowComponent = (props) => {
   const itemsQuery = useSoupItemsQuery(() => ITEM_PRELOAD_ARGS);
   const itemsFetchNextPage = throttle(() => itemsQuery.fetchNextPage(), 2000);
@@ -107,10 +77,15 @@ export const SearchProvider: FlowComponent = (props) => {
     }
   });
 
-  const itemsQueryData = lazyThrottle(() => itemsQuery.data ?? [], 5000);
-  const channelItemsQueryData = lazyThrottle(
+  const itemsQueryData = delayedQueue(
+    () => itemsQuery.data ?? [],
+    5000,
+    (items) => items.length > 0
+  );
+  const channelItemsQueryData = delayedQueue(
     () => channelItemsQuery.data ?? [],
-    5000
+    5000,
+    (items) => items.length > 0
   );
 
   const entityPool = createMemo<EntityData[]>(() => [
