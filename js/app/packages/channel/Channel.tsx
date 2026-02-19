@@ -2,7 +2,14 @@ import {
   useChannelMessagesQuery,
   type ChannelMessagesData,
 } from '@queries/channel/channel-messages';
-import { createSignal, Show, Suspense, type ParentProps } from 'solid-js';
+import {
+  createSignal,
+  Show,
+  Suspense,
+  type ParentProps,
+  type Setter,
+} from 'solid-js';
+import { Thread } from './Thread';
 import {
   DEFAULT_INITIAL_SCROLL_TARGET,
   ThreadList,
@@ -11,18 +18,11 @@ import {
 } from './ThreadList';
 import type { ApiChannelMessage } from '@service-comms/client';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { createThreadManager } from './thread-manager';
 
 type ChannelProps = {
   channelId: string;
   targetMessageId: string;
-};
-
-export type ChannelNavigation = {
-  navigatePrevious: () => boolean;
-  navigateNext: () => boolean;
-  navigateToTop: () => boolean;
-  navigateToBottom: () => boolean;
-  navigateToMessage: (messageId: string) => boolean;
 };
 
 function Row(props: ParentProps) {
@@ -48,6 +48,7 @@ export function Channel(props: ChannelProps) {
   const [isPrepending, setIsPrepending] = createSignal(false);
   const [pendingTopFetch, setPendingTopFetch] = createSignal(false);
   const [, setThreadListNavigation] = createSignal<ThreadListNavigation>();
+  const threadManager = createThreadManager();
 
   const threadListInitialScrollTarget = (): ThreadListScrollTarget => {
     if (props.targetMessageId) {
@@ -95,9 +96,17 @@ export function Channel(props: ChannelProps) {
             onNavigationReady={setThreadListNavigation}
           >
             {(item) => {
+              const state = threadManager.getOrCreateThreadState(item.id);
               return (
                 <Row>
-                  <p class="macro-message-width">{item.content}</p>
+                  <div class="macro-message-width w-full">
+                    <Thread
+                      data={() => item}
+                      channelId={() => props.channelId}
+                      isExpanded={state.isExpanded}
+                      setIsExpanded={state.setIsExpanded}
+                    />
+                  </div>
                 </Row>
               );
             }}

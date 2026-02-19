@@ -43,12 +43,19 @@ import { ChannelType } from './generated/models/channelType';
 import type { ApiChannelMessagesPage } from '@service-storage/generated/schemas/apiChannelMessagesPage';
 import type { ApiChannelAttachmentsPage } from '@service-storage/generated/schemas/apiChannelAttachmentsPage';
 import type { ApiChannelParticipant } from '@service-storage/generated/schemas/apiChannelParticipant';
+import type { ApiThreadReply } from '@service-storage/generated/schemas/apiThreadReply';
 
 export type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
 export type { ApiChannelMessagesPage as ChannelMessagesPage } from '@service-storage/generated/schemas/apiChannelMessagesPage';
 export type { ApiChannelAttachment } from '@service-storage/generated/schemas/apiChannelAttachment';
 export type { ApiChannelAttachmentsPage as ChannelAttachmentsPage } from '@service-storage/generated/schemas/apiChannelAttachmentsPage';
 export type { ApiChannelParticipant } from '@service-storage/generated/schemas/apiChannelParticipant';
+export type { ApiThreadReply } from '@service-storage/generated/schemas/apiThreadReply';
+
+export type ApiThreadRepliesPage = {
+  items: ApiThreadReply[];
+  next_cursor: string | null;
+};
 
 const commsHost: string = SERVER_HOSTS['document-storage-service'];
 
@@ -395,6 +402,22 @@ export const commsServiceClient = {
     return mapOk(
       await commsFetch<ApiChannelAttachmentsPage>(
         `/channels/${channel_id}/attachments?${params.toString()}`,
+        { method: 'GET' }
+      ),
+      (result) => result
+    );
+  },
+  async getThreadReplies(
+    args: WithChannelId &
+      WithMessageId & { limit: number; cursor: string | null }
+  ) {
+    const { channel_id, message_id, limit, cursor } = args;
+    const params = new URLSearchParams();
+    params.append('limit', limit.toString());
+    if (cursor) params.append('cursor', cursor);
+    return mapOk(
+      await commsFetch<ApiThreadRepliesPage>(
+        `/channels/${channel_id}/messages/${message_id}/replies?${params.toString()}`,
         { method: 'GET' }
       ),
       (result) => result

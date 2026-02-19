@@ -206,8 +206,8 @@ export function ThreadList<T extends { id: string }>(
   return (
     <div
       ref={scrollRef}
-      class="flex items-center w-full flex-col"
       style={{
+        width: '100%',
         'overflow-y': 'auto',
         'overflow-anchor': 'none',
         height: '100%',
