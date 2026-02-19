@@ -75,7 +75,7 @@ fn create_test_notification(
     }
 }
 
-// #[tokio::test]
+#[tokio::test]
 async fn test_add_to_digest_creates_pending_entry() {
     let mut conn = get_redis_connection().await;
     cleanup_redis(&mut conn, "digest:").await;
@@ -104,7 +104,7 @@ async fn test_add_to_digest_creates_pending_entry() {
     cleanup_redis(&mut conn, "digest:").await;
 }
 
-// #[tokio::test]
+#[tokio::test]
 async fn test_add_multiple_notifications_same_user() {
     let mut conn = get_redis_connection().await;
     cleanup_redis(&mut conn, "digest:").await;
@@ -141,7 +141,7 @@ async fn test_add_multiple_notifications_same_user() {
     cleanup_redis(&mut conn, "digest:").await;
 }
 
-// #[tokio::test]
+#[tokio::test]
 async fn test_claim_ready_digest_returns_empty_when_none_pending() {
     let mut conn = get_redis_connection().await;
     cleanup_redis(&mut conn, "digest:").await;
@@ -154,7 +154,7 @@ async fn test_claim_ready_digest_returns_empty_when_none_pending() {
     cleanup_redis(&mut conn, "digest:").await;
 }
 
-// #[tokio::test]
+#[tokio::test]
 async fn test_claim_ready_digest_returns_wait_when_not_ready() {
     let mut conn = get_redis_connection().await;
     cleanup_redis(&mut conn, "digest:").await;
@@ -182,7 +182,7 @@ async fn test_claim_ready_digest_returns_wait_when_not_ready() {
     cleanup_redis(&mut conn, "digest:").await;
 }
 
-// #[tokio::test]
+#[tokio::test]
 async fn test_claim_ready_digest_returns_batch_when_ready() {
     let mut conn = get_redis_connection().await;
     cleanup_redis(&mut conn, "digest:").await;
@@ -225,7 +225,7 @@ async fn test_claim_ready_digest_returns_batch_when_ready() {
     cleanup_redis(&mut conn, "digest:").await;
 }
 
-// #[tokio::test]
+#[tokio::test]
 async fn test_new_notifications_during_processing_not_lost() {
     let mut conn = get_redis_connection().await;
     cleanup_redis(&mut conn, "digest:").await;
@@ -267,7 +267,7 @@ async fn test_new_notifications_during_processing_not_lost() {
     cleanup_redis(&mut conn, "digest:").await;
 }
 
-// #[tokio::test]
+#[tokio::test]
 async fn test_multiple_users_independent() {
     let mut conn = get_redis_connection().await;
     cleanup_redis(&mut conn, "digest:").await;
