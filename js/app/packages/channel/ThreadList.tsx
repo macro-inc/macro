@@ -151,18 +151,13 @@ export function ThreadList<T extends { id: string }>(
     isNearBottom,
   });
 
-  createEffect(
-    on(virtualHandle, (handle) => {
-      if (!handle || didInitialScroll()) return;
-
-      requestAnimationFrame(() => {
-        const target =
-          props.initialScrollTarget ?? DEFAULT_INITIAL_SCROLL_TARGET;
-        scrollToTarget(handle, target);
-        setDidInitialScroll(true);
-      });
-    })
-  );
+  function scrollOnMount(handle: VirtualizerHandle) {
+    requestAnimationFrame(() => {
+      const target = props.initialScrollTarget ?? DEFAULT_INITIAL_SCROLL_TARGET;
+      scrollToTarget(handle, target);
+      setDidInitialScroll(true);
+    });
+  }
 
   createEffect(
     on(
@@ -228,6 +223,7 @@ export function ThreadList<T extends { id: string }>(
           if (props.onNavigationReady) {
             props.onNavigationReady(createNavigation(ref));
           }
+          scrollOnMount(ref);
         }}
         scrollRef={scrollRef}
         data={props.data()}

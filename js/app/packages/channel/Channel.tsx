@@ -10,6 +10,7 @@ import {
   type ThreadListScrollTarget,
 } from './ThreadList';
 import type { ApiChannelMessage } from '@service-comms/client';
+import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 
 type ChannelProps = {
   channelId: string;
@@ -85,21 +86,23 @@ export function Channel(props: ChannelProps) {
   return (
     <Suspense>
       <Show when={messages().length > 0}>
-        <ThreadList
-          data={messages}
-          initialScrollTarget={threadListInitialScrollTarget()}
-          shift={isPrepending}
-          onScrollNearTop={fetchMoreNearTop}
-          onNavigationReady={setThreadListNavigation}
-        >
-          {(item) => {
-            return (
-              <Row>
-                <p class="macro-message-width">{item.content}</p>
-              </Row>
-            );
-          }}
-        </ThreadList>
+        <StaticMarkdownContext>
+          <ThreadList
+            data={messages}
+            initialScrollTarget={threadListInitialScrollTarget()}
+            shift={isPrepending}
+            onScrollNearTop={fetchMoreNearTop}
+            onNavigationReady={setThreadListNavigation}
+          >
+            {(item) => {
+              return (
+                <Row>
+                  <p class="macro-message-width">{item.content}</p>
+                </Row>
+              );
+            }}
+          </ThreadList>
+        </StaticMarkdownContext>
       </Show>
     </Suspense>
   );
