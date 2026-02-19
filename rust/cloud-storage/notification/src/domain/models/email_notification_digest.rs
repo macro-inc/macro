@@ -19,6 +19,7 @@ use crate::domain::{
 };
 use either::Either;
 use macro_user_id::cowlike::CowLike;
+use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::{Report, report};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, sync::Arc, time::Duration};
@@ -35,16 +36,16 @@ mod test;
 pub struct BatchSend<T>(T);
 
 impl<T> BatchSend<T> {
-    /// Unwrap the inner value.
-    pub(crate) fn into_inner(self) -> T {
-        self.0
+    /// Borrow the inner value.
+    pub(crate) fn inner(&self) -> &T {
+        &self.0
     }
 }
 
 #[cfg(test)]
 impl<T> BatchSend<T> {
-    /// Wrap an inner value (test-only).
-    pub(crate) fn new(inner: T) -> Self {
+    /// Wrap an inner value.
+    pub(crate) fn from_inner(inner: T) -> Self {
         Self(inner)
     }
 }
@@ -243,7 +244,7 @@ impl<T: Notification> AccountDoesNotExist<T> {
 /// State indicating the user has push notifications enabled.
 ///
 /// If push was delivered successfully, don't send email. Otherwise, batch send.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PushNotificationsEnabled {
     /// the inner value which has become adjacently tagged
     /// We lose the compiler typing here because we need to store this value
@@ -254,6 +255,11 @@ pub struct PushNotificationsEnabled {
 }
 
 impl PushNotificationsEnabled {
+    /// Get the owner (user) ID of this notification.
+    pub(crate) fn owner_id(&self) -> &MacroUserIdStr<'static> {
+        &self.inner.owner_id
+    }
+
     /// assert that the push notification failed to deliver and therefore
     /// we should queue a bulk email notification
     fn assert_failed(self) -> BatchSend<UserNotificationRow<serde_json::Value>> {

@@ -30,7 +30,7 @@ impl DbMessageReceiptRepository {
 }
 
 impl MessageReceiptRepo for DbMessageReceiptRepository {
-    #[tracing::intrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self))]
     async fn record_message_id(
         &self,
         message_id: MessageId,

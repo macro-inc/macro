@@ -7,7 +7,7 @@ use crate::domain::models::RateLimitResult;
 use crate::domain::models::apple::APNSPushNotification;
 use crate::domain::models::email_notification_digest::ports::{MessageId, NotificationSendChecker};
 use crate::domain::models::email_notification_digest::{
-    BatchSend, BulkDigestEgressStateMachine, PushNotificationsEnabled, ResumeMachineBRequest,
+    BulkDigestEgressStateMachine, ResumeMachineBRequest,
 };
 use crate::domain::models::mobile::MessageAttributes;
 use crate::domain::models::queue_message::{
@@ -123,10 +123,7 @@ where
             NotificationChannel::Email(ref email) => {
                 Either::Left([self.deliver_email(email).await])
             }
-            NotificationChannel::Ios(mut apns) => {
-                let entries = std::mem::take(&mut apns.bulk_digest_state_machine);
-                Either::Right(self.deliver_ios(&apns, entries).await)
-            }
+            NotificationChannel::Ios(apns) => Either::Right(self.deliver_ios(&apns).await),
         };
 
         results
@@ -148,48 +145,57 @@ where
 
     /// Deliver via iOS push (APNS).
     ///
-    /// For each endpoint paired with a state machine entry, the push delivery
-    /// is routed through [`BulkDigestEgressStateMachine::continue_machine`] which
-    /// records the SNS message ID on success or queues for batch email on failure.
-    /// Remaining endpoints (without state machine entries) are sent directly.
+    /// Iterates per-user. If a user has a digest state machine entry, each
+    /// endpoint delivery is routed through [`BulkDigestEgressStateMachine::continue_machine`]
+    /// which records the SNS message ID on success or queues for batch email on failure.
+    /// Users without a state machine entry are sent directly.
     async fn deliver_ios(
         &self,
         apns: &APNSTargets<serde_json::Value>,
-        state_machine_entries: Vec<BatchSend<PushNotificationsEnabled>>,
     ) -> Vec<Result<DeliverySuccess, Report>> {
-        let mut out = Vec::with_capacity(apns.ios_device_endpoints.len());
-        let mut sm_iter = state_machine_entries.into_iter();
+        let total: usize = apns
+            .ios_device_endpoints
+            .values()
+            .map(|u| u.endpoints.len())
+            .sum();
+        let mut out = Vec::with_capacity(total);
 
-        for endpoint in &apns.ios_device_endpoints {
-            if let Some(entry) = sm_iter.next() {
-                let checker = IosPushSend {
-                    mobile: &self.mobile,
-                    endpoint_arn: endpoint,
-                    notif: &apns.notif,
-                    attributes: &apns.attributes,
-                };
-                let req = ResumeMachineBRequest {
-                    notification_enabled: entry.into_inner(),
-                    send_notif: checker,
-                };
-                match self.state_machine.continue_machine(req).await {
-                    Ok((_msg_id, _dont_send)) => {
-                        out.push(Ok(DeliverySuccess::Ios));
-                    }
-                    Err((send_err, batch_result)) => {
-                        if let Err(ref batch_err) = batch_result {
-                            tracing::error!(error=?batch_err, "failed to queue digest batch after push failure");
+        for user_apns in apns.ios_device_endpoints.values() {
+            if let Some(ref entry) = user_apns.digest_state {
+                // User has a state machine entry — route each endpoint through continue_machine
+                for endpoint in &user_apns.endpoints {
+                    let checker = IosPushSend {
+                        mobile: &self.mobile,
+                        endpoint_arn: endpoint,
+                        notif: &apns.notif,
+                        attributes: &apns.attributes,
+                    };
+                    let req = ResumeMachineBRequest {
+                        notification_enabled: entry.inner().clone(),
+                        send_notif: checker,
+                    };
+                    match self.state_machine.continue_machine(req).await {
+                        Ok((_msg_id, _dont_send)) => {
+                            out.push(Ok(DeliverySuccess::Ios));
                         }
-                        out.push(Err(send_err));
+                        Err((send_err, batch_result)) => {
+                            if let Err(ref batch_err) = batch_result {
+                                tracing::error!(error=?batch_err, "failed to queue digest batch after push failure");
+                            }
+                            out.push(Err(send_err));
+                        }
                     }
                 }
             } else {
-                let res = self
-                    .mobile
-                    .send_ios_push_notification(endpoint, &apns.notif, &apns.attributes)
-                    .await
-                    .map(|_| DeliverySuccess::Ios);
-                out.push(res);
+                // No state machine entry — send directly
+                for endpoint in &user_apns.endpoints {
+                    let res = self
+                        .mobile
+                        .send_ios_push_notification(endpoint, &apns.notif, &apns.attributes)
+                        .await
+                        .map(|_| DeliverySuccess::Ios);
+                    out.push(res);
+                }
             }
         }
 
