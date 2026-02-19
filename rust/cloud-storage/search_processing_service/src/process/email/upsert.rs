@@ -24,8 +24,13 @@ pub async fn process_upsert_message(
             &message_id,
         )
         .await
-        .context("failed to get message info")?
-        .context("message not found")?;
+        .context("failed to get message info")?;
+
+    let message_info = if let Some(message_info) = message_info {
+        message_info
+    } else {
+        return Ok(());
+    };
 
     // don't insert spam or trash messages
     if message_info.labels.iter().any(|label| {
