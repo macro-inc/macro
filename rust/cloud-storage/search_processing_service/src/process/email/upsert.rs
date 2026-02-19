@@ -92,7 +92,7 @@ pub async fn process_upsert_thread_message(
 ) -> anyhow::Result<()> {
     let mut message_offset = 0;
     // Max is 100
-    let message_limit = 100;
+    let message_limit = 10;
 
     let now = EpochSeconds::new(Utc::now().timestamp())?;
 
