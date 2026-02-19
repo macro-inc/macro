@@ -75,7 +75,11 @@ const opensearchLogsPolicy = new aws.cloudwatch.LogResourcePolicy(
   {
     policyName: `opensearch-logs-policy-${stack}`,
     policyDocument: pulumi
-      .all([indexSlowLogGroup.arn, searchSlowLogGroup.arn, applicationLogGroup.arn])
+      .all([
+        indexSlowLogGroup.arn,
+        searchSlowLogGroup.arn,
+        applicationLogGroup.arn,
+      ])
       .apply(([indexArn, searchArn, appArn]) =>
         JSON.stringify({
           Version: '2012-10-17',
