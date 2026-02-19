@@ -415,9 +415,7 @@ export function BaseInput(props: {
               ...old,
               pages: old.pages.map((page: any) => ({
                 ...page,
-                messages: page.messages.filter(
-                  (m: any) => m.db_id !== draftId
-                ),
+                messages: page.messages.filter((m: any) => m.db_id !== draftId),
               })),
             };
           }
@@ -476,7 +474,7 @@ export function BaseInput(props: {
               },
             }
           : undefined,
-        10_000,
+        10_000
       );
       pendingMentions.forEach((mention) => {
         trackMention(blockId, 'document', mention.documentId);

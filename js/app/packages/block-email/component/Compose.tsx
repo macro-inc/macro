@@ -533,7 +533,7 @@ export function EmailCompose(props: EmailComposeProps) {
               },
             }
           : undefined,
-        10_000,
+        10_000
       );
       if (data.message.thread_db_id) {
         replaceSplit({
