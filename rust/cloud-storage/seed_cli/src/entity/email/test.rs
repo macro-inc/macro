@@ -229,6 +229,7 @@ async fn seed_inserts_link_labels_and_threads() {
     let args = EmailArgs {
         command: EmailCommand::Seed(SeedArgs {
             file_path: Some(file.path().to_str().unwrap().to_string()),
+            link_id: None,
             concurrency: 95,
         }),
     };
@@ -259,6 +260,7 @@ async fn seed_single_thread() {
     let args = EmailArgs {
         command: EmailCommand::Seed(SeedArgs {
             file_path: Some(file.path().to_str().unwrap().to_string()),
+            link_id: None,
             concurrency: 95,
         }),
     };
@@ -274,6 +276,7 @@ async fn seed_missing_file_fails() {
     let args = EmailArgs {
         command: EmailCommand::Seed(SeedArgs {
             file_path: Some("/nonexistent/path.json".to_string()),
+            link_id: None,
             concurrency: 95,
         }),
     };
@@ -292,6 +295,7 @@ async fn seed_invalid_json_fails() {
     let args = EmailArgs {
         command: EmailCommand::Seed(SeedArgs {
             file_path: Some(file.path().to_str().unwrap().to_string()),
+            link_id: None,
             concurrency: 95,
         }),
     };
@@ -333,6 +337,7 @@ async fn seed_continues_on_thread_failure() {
     let args = EmailArgs {
         command: EmailCommand::Seed(SeedArgs {
             file_path: Some(file.path().to_str().unwrap().to_string()),
+            link_id: None,
             concurrency: 1, // sequential so ordering is predictable
         }),
     };
@@ -355,6 +360,7 @@ async fn seed_link_failure_propagates() {
     let args = EmailArgs {
         command: EmailCommand::Seed(SeedArgs {
             file_path: Some(file.path().to_str().unwrap().to_string()),
+            link_id: None,
             concurrency: 95,
         }),
     };
@@ -382,6 +388,7 @@ async fn seed_label_failure_propagates() {
     let args = EmailArgs {
         command: EmailCommand::Seed(SeedArgs {
             file_path: Some(file.path().to_str().unwrap().to_string()),
+            link_id: None,
             concurrency: 95,
         }),
     };

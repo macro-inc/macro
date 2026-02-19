@@ -75,6 +75,16 @@ impl SeedDb {
         Ok(message.id)
     }
 
+    /// Fetch an email link by its ID.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn get_email_link(
+        &self,
+        link_id: uuid::Uuid,
+    ) -> anyhow::Result<Option<service::link::Link>> {
+        let result = email_db_client::links::get::fetch_link_by_id(&self.inner, link_id).await?;
+        Ok(result)
+    }
+
     /// Upsert an email link (connects a user to an email provider).
     #[tracing::instrument(skip(self), err)]
     pub async fn upsert_email_link(

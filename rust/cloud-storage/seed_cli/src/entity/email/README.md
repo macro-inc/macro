@@ -28,15 +28,26 @@ Output is written to `seed_cli/seed/emails.json`.
 | `--email-address` | required | Email address for the user |
 | `--thread-count` | 10 | Number of threads to generate |
 | `--max-messages-per-thread` | 10 | Max messages per thread (random 1..max) |
+| `--inbox-other-all-split` | `0.5,0.3,0.2` | Three comma-separated floats (must sum to 1.0) controlling label distribution for inbound messages |
 | `--output` | `emails.json` | Output filename |
+
+### Inbox/Other/All split
+
+The `--inbox-other-all-split` flag controls how inbound messages are categorized:
+
+- **inbox** (first value): message gets `INBOX` + `CATEGORY_PERSONAL` labels
+- **other** (second value): message gets `INBOX` + `CATEGORY_PROMOTIONS` labels
+- **all** (third value): message gets no `INBOX` label
+
+For example, `--inbox-other-all-split 0.6,0.2,0.2` means 60% of inbound messages land in the primary inbox, 20% in promotions, and 20% have no inbox label.
 
 ### What gets generated
 
 - **13 system labels**: INBOX, SENT, SPAM, TRASH, UNREAD, STARRED, IMPORTANT, DRAFT, and 5 CATEGORY_* labels
-- **N threads** each with a random number of messages, spread evenly from 2020 to now
+- **N threads** each with a random number of messages, spread evenly from 2020 to one year ago
 - **Messages** with random sender/recipients from 9 fake contacts (`fakecontact1@gmail.com` through `fakecontact9@gmail.com`)
 - **Body templates** — each message references a template name from `sample_bodies/` (bodies are resolved at import time, not stored in the JSON)
-- **Provider IDs** (random hex strings) on all threads and messages
+- **Provider IDs** prefixed with `seed` (e.g. `seed1a2b3c4d5e6f`) on all threads and messages
 
 ## Step 2: Seed
 
@@ -53,11 +64,22 @@ By default reads from `seed/emails.json`. Use `--file-path` to override.
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--file-path` | `seed/emails.json` | Path to the JSON file |
+| `--link-id` | none | Existing email link UUID to import into (skips link creation) |
 | `--concurrency` | 95 | Max concurrent database insertions |
+
+### Using an existing link
+
+If you already have an email link (e.g. from a previous seed or a real connected account), pass its UUID to skip link creation:
+
+```bash
+cargo run -- email seed --link-id "your-link-uuid"
+```
+
+The `user_id` and `email_address` fields in the JSON are ignored when `--link-id` is provided.
 
 ### What gets inserted
 
-1. `email_links` — connects the user to the Gmail provider
+1. `email_links` — connects the user to the Gmail provider (skipped if `--link-id` is provided)
 2. `email_labels` — all 13 system labels
 3. For each thread: `email_threads`, `email_messages`, `email_contacts`, `email_message_recipients`, `email_message_labels`
 

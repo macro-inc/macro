@@ -64,6 +64,16 @@ pub struct BulkGenerateArgs {
     /// Max messages per thread (actual count is random between 1 and this value)
     #[arg(long, default_value = "10")]
     pub max_messages_per_thread: u32,
+    /// Inbox/Other/All split as three comma-separated floats that sum to 1.0.
+    /// "inbox" = INBOX + CATEGORY_PERSONAL, "other" = INBOX without CATEGORY_PERSONAL,
+    /// "all" = no INBOX label. Example: --inbox-other-all-split 0.5,0.3,0.2
+    #[arg(
+        long,
+        value_delimiter = ',',
+        num_args = 3,
+        default_value = "0.5,0.3,0.2"
+    )]
+    pub inbox_other_all_split: Vec<f64>,
     /// Output file name for the generated JSON (written to seed_cli/seed/)
     #[arg(long, default_value = "emails.json")]
     pub output: String,
@@ -75,6 +85,9 @@ pub struct SeedArgs {
     /// Path to the JSON file containing email data to import (defaults to seed/emails.json)
     #[arg(long)]
     pub file_path: Option<String>,
+    /// Existing email link ID to import into (skips link creation)
+    #[arg(long)]
+    pub link_id: Option<Uuid>,
     /// Max concurrent database insertions
     #[arg(long, default_value = "95")]
     pub concurrency: usize,
@@ -197,16 +210,6 @@ const SUBJECTS: &[&str] = &[
     "Feedback on the proposal",
 ];
 
-/// Labels that can be randomly assigned to inbox messages (excluding structural ones).
-const RANDOM_MESSAGE_LABELS: &[&str] = &[
-    "CATEGORY_PERSONAL",
-    "CATEGORY_SOCIAL",
-    "CATEGORY_PROMOTIONS",
-    "CATEGORY_UPDATES",
-    "CATEGORY_FORUMS",
-    "IMPORTANT",
-];
-
 impl EmailArgs {
     /// Execute the email command.
     pub async fn execute(self, ctx: SeedCliContext) -> anyhow::Result<()> {
@@ -220,6 +223,21 @@ impl EmailArgs {
 #[tracing::instrument(err)]
 async fn bulk_generate(args: BulkGenerateArgs) -> anyhow::Result<()> {
     tracing::info!("generating email seed data");
+
+    anyhow::ensure!(
+        args.inbox_other_all_split.len() == 3,
+        "inbox-other-all-split must have exactly 3 values"
+    );
+    let [inbox_pct, other_pct, _all_pct] = [
+        args.inbox_other_all_split[0],
+        args.inbox_other_all_split[1],
+        args.inbox_other_all_split[2],
+    ];
+    let split_sum = inbox_pct + other_pct + _all_pct;
+    anyhow::ensure!(
+        (split_sum - 1.0).abs() < 0.01,
+        "inbox-other-all-split values must sum to 1.0 (got {split_sum})"
+    );
 
     let mut rng = rand::rng();
     let template_names = sample_bodies::TEMPLATE_NAMES;
@@ -240,18 +258,18 @@ async fn bulk_generate(args: BulkGenerateArgs) -> anyhow::Result<()> {
     };
 
     let mut threads = Vec::with_capacity(args.thread_count as usize);
-    let now = Utc::now();
+    let one_year_ago = Utc::now() - Duration::days(365);
     let earliest = DateTime::parse_from_rfc3339("2020-01-01T00:00:00Z")
         .expect("valid date")
         .with_timezone(&Utc);
-    let total_seconds = (now - earliest).num_seconds();
+    let total_seconds = (one_year_ago - earliest).num_seconds();
 
     for i in 0..args.thread_count {
         let message_count = rng.random_range(1..=args.max_messages_per_thread);
         let is_read = rng.random_bool(0.6);
         let subject = SUBJECTS[rng.random_range(0..SUBJECTS.len())].to_string();
 
-        // Spread threads evenly across [earliest, now], with some jitter
+        // Spread threads evenly across [earliest, one_year_ago], with some jitter
         let fraction = i as f64 / args.thread_count.max(1) as f64;
         let base_offset = (fraction * total_seconds as f64) as i64;
         let jitter = rng.random_range(0..total_seconds / args.thread_count.max(1) as i64);
@@ -295,22 +313,24 @@ async fn bulk_generate(args: BulkGenerateArgs) -> anyhow::Result<()> {
 
             // Build label set for this message
             let mut label_ids = Vec::new();
-            if !is_sent_by_owner {
-                label_ids.push("INBOX".to_string());
-            }
             if is_sent_by_owner {
                 label_ids.push("SENT".to_string());
+            } else {
+                // Use the inbox/other/all split to determine inbox and category labels
+                let roll: f64 = rng.random_range(0.0..1.0);
+                if roll < inbox_pct {
+                    // "inbox": INBOX + CATEGORY_PERSONAL
+                    label_ids.push("INBOX".to_string());
+                    label_ids.push("CATEGORY_PERSONAL".to_string());
+                } else if roll < inbox_pct + other_pct {
+                    // "other": INBOX + CATEGORY_PROMOTIONS
+                    label_ids.push("INBOX".to_string());
+                    label_ids.push("CATEGORY_PROMOTIONS".to_string());
+                }
+                // else "all": no INBOX label
             }
             if !is_read {
                 label_ids.push("UNREAD".to_string());
-            }
-            // Add a random category/important label
-            if rng.random_bool(0.5) {
-                let random_label =
-                    RANDOM_MESSAGE_LABELS[rng.random_range(0..RANDOM_MESSAGE_LABELS.len())];
-                if !label_ids.contains(&random_label.to_string()) {
-                    label_ids.push(random_label.to_string());
-                }
             }
 
             messages.push(SeedMessage {
@@ -329,11 +349,13 @@ async fn bulk_generate(args: BulkGenerateArgs) -> anyhow::Result<()> {
             });
         }
 
-        let has_inbound = messages.iter().any(|m| !m.is_sent);
+        let has_inbox = messages
+            .iter()
+            .any(|m| m.label_ids.contains(&"INBOX".to_string()));
 
         threads.push(SeedThread {
             provider_id: random_hex_id(&mut rng),
-            inbox_visible: has_inbound,
+            inbox_visible: has_inbox,
             is_read,
             messages,
         });
@@ -388,27 +410,39 @@ async fn seed(args: SeedArgs, ctx: SeedCliContext) -> anyhow::Result<()> {
     let seed_data: SeedEmailData =
         serde_json::from_str(&content).context("failed to parse seed data json")?;
 
-    // 1. Create the email link
-    let macro_id = macro_user_id::user_id::MacroUserIdStr::try_from_email(&seed_data.email_address)
-        .context("failed to create macro user id from email")?;
-    let email_str = macro_user_id::email::EmailStr::try_from(seed_data.email_address.clone())
-        .context("failed to parse email address")?;
-
     let now = Utc::now();
-    let link = models_email::email::service::link::Link {
-        id: Uuid::now_v7(),
-        macro_id,
-        fusionauth_user_id: seed_data.user_id.clone(),
-        email_address: email_str,
-        provider: seed_data.provider,
-        is_sync_active: true,
-        created_at: now,
-        updated_at: now,
-    };
 
-    let link = ctx.db.upsert_email_link(link).await?;
-    let link_id = link.id;
-    println!("Created email link with id {link_id}");
+    // 1. Resolve or create the email link
+    let link_id = if let Some(id) = args.link_id {
+        let link = ctx
+            .db
+            .get_email_link(id)
+            .await?
+            .with_context(|| format!("no email link found with id {id}"))?;
+        println!("Using existing email link {id} ({:?})", link.email_address);
+        id
+    } else {
+        let macro_id =
+            macro_user_id::user_id::MacroUserIdStr::try_from_email(&seed_data.email_address)
+                .context("failed to create macro user id from email")?;
+        let email_str = macro_user_id::email::EmailStr::try_from(seed_data.email_address.clone())
+            .context("failed to parse email address")?;
+
+        let link = models_email::email::service::link::Link {
+            id: Uuid::now_v7(),
+            macro_id,
+            fusionauth_user_id: seed_data.user_id.clone(),
+            email_address: email_str,
+            provider: seed_data.provider,
+            is_sync_active: true,
+            created_at: now,
+            updated_at: now,
+        };
+
+        let link = ctx.db.upsert_email_link(link).await?;
+        println!("Created email link with id {}", link.id);
+        link.id
+    };
 
     // 2. Create labels
     let labels: Vec<Label> = seed_data
@@ -601,8 +635,9 @@ fn pick_random_contacts(rng: &mut impl Rng, count: usize) -> Vec<ContactInfo> {
     selected
 }
 
-/// Generate a random 16-character hex string (8 random bytes).
+/// Generate a random 16-character ID prefixed with "seed" (4 chars + 12 random hex chars).
 fn random_hex_id(rng: &mut impl Rng) -> String {
-    let bytes: [u8; 8] = rng.random();
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
+    let bytes: [u8; 6] = rng.random();
+    let hex: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
+    format!("seed{hex}")
 }
