@@ -34,11 +34,34 @@ mod test;
 #[serde(transparent)]
 pub struct BatchSend<T>(T);
 
+impl<T> BatchSend<T> {
+    /// Unwrap the inner value.
+    pub(crate) fn into_inner(self) -> T {
+        self.0
+    }
+}
+
+#[cfg(test)]
+impl<T> BatchSend<T> {
+    /// Wrap an inner value (test-only).
+    pub(crate) fn new(inner: T) -> Self {
+        Self(inner)
+    }
+}
+
 /// Send immediately as a single notification email.
 pub struct SingleSend<T>(T);
 
 /// Do not send an email for this notification.
 pub struct DontSend(());
+
+#[cfg(test)]
+impl DontSend {
+    /// Create a new `DontSend` value (test-only).
+    pub(crate) fn new() -> Self {
+        Self(())
+    }
+}
 
 struct NotificationSet(HashSet<&'static str>);
 
@@ -496,6 +519,36 @@ where
                 Err((e, res))
             }
         }
+    }
+}
+
+/// Port for continuing the bulk-digest state machine on the egress side.
+///
+/// This abstracts [`StateMachineDriverB`] so callers only depend on the capability,
+/// not the specific implementation or its generic adapter parameters.
+pub trait BulkDigestEgressStateMachine: Send + Sync + 'static {
+    /// Given a push notification delivery result, continue the state machine.
+    ///
+    /// - If push succeeded: records the message ID for SNS failure tracking
+    /// - If push failed: queues the notification for batch email digest
+    #[allow(clippy::type_complexity)]
+    fn continue_machine<N: NotificationSendChecker>(
+        &self,
+        req: ResumeMachineBRequest<N>,
+    ) -> impl Future<Output = Result<(N::Ok, DontSend), (N::Err, Result<BatchSend<()>, Report>)>> + Send;
+}
+
+impl<B, R> BulkDigestEgressStateMachine for StateMachineDriverB<B, R>
+where
+    B: DigestBatcher,
+    R: MessageReceiptRepo,
+{
+    fn continue_machine<N: NotificationSendChecker>(
+        &self,
+        req: ResumeMachineBRequest<N>,
+    ) -> impl Future<Output = Result<(N::Ok, DontSend), (N::Err, Result<BatchSend<()>, Report>)>> + Send
+    {
+        self.continue_machine(req)
     }
 }
 

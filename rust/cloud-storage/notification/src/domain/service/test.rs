@@ -882,8 +882,8 @@ impl NotificationSender for MockMobileSender {
         _endpoint_arn: &str,
         _notification: &crate::domain::models::apple::APNSPushNotification<T>,
         _attributes: &crate::domain::models::mobile::MessageAttributes,
-    ) -> Result<(), Report> {
-        Ok(())
+    ) -> Result<String, Report> {
+        Ok("mock-message-id".to_string())
     }
 
     async fn send_android_push_notification<T: Serialize + Send + Sync>(
@@ -891,8 +891,8 @@ impl NotificationSender for MockMobileSender {
         _endpoint_arn: &str,
         _notification: &crate::domain::models::android::FCMMessage<T>,
         _attributes: &crate::domain::models::mobile::MessageAttributes,
-    ) -> Result<(), Report> {
-        Ok(())
+    ) -> Result<String, Report> {
+        Ok("mock-message-id".to_string())
     }
 }
 
@@ -946,6 +946,40 @@ impl RateLimitPort for MockRateLimiter {
     }
 }
 
+/// Mock egress state machine that forwards sends without recording message IDs or batching.
+struct MockEgressStateMachine;
+
+impl crate::domain::models::email_notification_digest::BulkDigestEgressStateMachine
+    for MockEgressStateMachine
+{
+    async fn continue_machine<
+        N: crate::domain::models::email_notification_digest::ports::NotificationSendChecker,
+    >(
+        &self,
+        req: crate::domain::models::email_notification_digest::ResumeMachineBRequest<N>,
+    ) -> Result<
+        (
+            N::Ok,
+            crate::domain::models::email_notification_digest::DontSend,
+        ),
+        (
+            N::Err,
+            Result<crate::domain::models::email_notification_digest::BatchSend<()>, Report>,
+        ),
+    > {
+        match req.send_notif.send_notification().await {
+            Ok(ok) => Ok((
+                ok,
+                crate::domain::models::email_notification_digest::DontSend::new(),
+            )),
+            Err(err) => Err((
+                err,
+                Ok(crate::domain::models::email_notification_digest::BatchSend::new(())),
+            )),
+        }
+    }
+}
+
 fn create_egress_service<R: RateLimitPort>(
     rate_limiter: R,
 ) -> NotificationEgressService<
@@ -955,6 +989,7 @@ fn create_egress_service<R: RateLimitPort>(
     MockMobileSender,
     MockEmailSender,
     R,
+    MockEgressStateMachine,
 > {
     NotificationEgressService::new(
         MockQueue::new(),
@@ -963,6 +998,7 @@ fn create_egress_service<R: RateLimitPort>(
         MockMobileSender,
         MockEmailSender,
         rate_limiter,
+        MockEgressStateMachine,
     )
 }
 
@@ -1334,7 +1370,7 @@ impl NotificationSender for TrackingMobileSender {
         endpoint_arn: &str,
         _notification: &crate::domain::models::apple::APNSPushNotification<T>,
         _attributes: &crate::domain::models::mobile::MessageAttributes,
-    ) -> Result<(), Report> {
+    ) -> Result<String, Report> {
         // Track that this endpoint was attempted
         self.attempted_endpoints
             .lock()
@@ -1346,7 +1382,7 @@ impl NotificationSender for TrackingMobileSender {
             rootcause::bail!("Simulated APNS failure for endpoint: {}", endpoint_arn);
         }
 
-        Ok(())
+        Ok(format!("msg-id-{endpoint_arn}"))
     }
 
     async fn send_android_push_notification<T: Serialize + Send + Sync>(
@@ -1354,8 +1390,8 @@ impl NotificationSender for TrackingMobileSender {
         _endpoint_arn: &str,
         _notification: &crate::domain::models::android::FCMMessage<T>,
         _attributes: &crate::domain::models::mobile::MessageAttributes,
-    ) -> Result<(), Report> {
-        Ok(())
+    ) -> Result<String, Report> {
+        Ok("mock-android-msg-id".to_string())
     }
 }
 
@@ -1381,6 +1417,7 @@ async fn test_egress_ios_attempts_all_endpoints_even_if_some_fail() {
         mobile_sender.clone(),
         MockEmailSender,
         MockRateLimiter::allowing(),
+        MockEgressStateMachine,
     );
 
     let message = QueueMessage {
@@ -1448,7 +1485,7 @@ impl NotificationSender for std::sync::Arc<TrackingMobileSender> {
         endpoint_arn: &str,
         notification: &crate::domain::models::apple::APNSPushNotification<T>,
         attributes: &crate::domain::models::mobile::MessageAttributes,
-    ) -> Result<(), Report> {
+    ) -> Result<String, Report> {
         (**self)
             .send_ios_push_notification(endpoint_arn, notification, attributes)
             .await
@@ -1459,7 +1496,7 @@ impl NotificationSender for std::sync::Arc<TrackingMobileSender> {
         endpoint_arn: &str,
         notification: &crate::domain::models::android::FCMMessage<T>,
         attributes: &crate::domain::models::mobile::MessageAttributes,
-    ) -> Result<(), Report> {
+    ) -> Result<String, Report> {
         (**self)
             .send_android_push_notification(endpoint_arn, notification, attributes)
             .await

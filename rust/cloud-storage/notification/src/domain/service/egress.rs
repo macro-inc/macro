@@ -4,8 +4,14 @@
 //! consuming from the queue and delivering via WebSocket, push, and email.
 
 use crate::domain::models::RateLimitResult;
+use crate::domain::models::apple::APNSPushNotification;
+use crate::domain::models::email_notification_digest::ports::{MessageId, NotificationSendChecker};
+use crate::domain::models::email_notification_digest::{
+    BatchSend, BulkDigestEgressStateMachine, PushNotificationsEnabled, ResumeMachineBRequest,
+};
+use crate::domain::models::mobile::MessageAttributes;
 use crate::domain::models::queue_message::{
-    ConnGatewayNotification, DeliveryFailure, DeliverySuccess, EmailNotification,
+    APNSTargets, ConnGatewayNotification, DeliveryFailure, DeliverySuccess, EmailNotification,
     NotificationChannel, QueueMessage,
 };
 use crate::domain::ports::{
@@ -16,10 +22,36 @@ use either::Either;
 use rootcause::prelude::ResultExt;
 use rootcause::{Report, report};
 
+/// Wraps a single iOS push notification send for the bulk-digest state machine.
+///
+/// The state machine calls [`NotificationSendChecker::send_notification`] to perform the actual
+/// push delivery, then records the SNS message ID or queues for batch email on failure.
+struct IosPushSend<'a, M> {
+    mobile: &'a M,
+    endpoint_arn: &'a str,
+    notif: &'a APNSPushNotification<serde_json::Value>,
+    attributes: &'a MessageAttributes,
+}
+
+impl<M: NotificationSender> NotificationSendChecker for IosPushSend<'_, M> {
+    type Ok = String;
+    type Err = Report;
+
+    async fn send_notification(self) -> Result<String, Report> {
+        self.mobile
+            .send_ios_push_notification(self.endpoint_arn, self.notif, self.attributes)
+            .await
+    }
+
+    fn extract_message_id(res: &String) -> MessageId {
+        MessageId(res.clone())
+    }
+}
+
 /// Service for delivering notifications (egress side).
 ///
 /// Handles consuming from queue and delivering via WebSocket, push, and email.
-pub struct NotificationEgressService<Q, N, W, M, E, R> {
+pub struct NotificationEgressService<Q, N, W, M, E, R, S> {
     queue: Q,
     #[allow(dead_code)]
     repository: N,
@@ -27,9 +59,10 @@ pub struct NotificationEgressService<Q, N, W, M, E, R> {
     mobile: M,
     email: E,
     rate_limiter: R,
+    state_machine: S,
 }
 
-impl<Q, N, W, M, E, R> NotificationEgressService<Q, N, W, M, E, R>
+impl<Q, N, W, M, E, R, S> NotificationEgressService<Q, N, W, M, E, R, S>
 where
     Q: NotificationQueue,
     N: NotificationRepository,
@@ -37,6 +70,7 @@ where
     M: NotificationSender,
     E: EmailSender,
     R: RateLimitPort,
+    S: BulkDigestEgressStateMachine,
 {
     /// Create a new egress service.
     pub fn new(
@@ -46,6 +80,7 @@ where
         mobile: M,
         email: E,
         rate_limiter: R,
+        state_machine: S,
     ) -> Self {
         Self {
             queue,
@@ -54,6 +89,7 @@ where
             mobile,
             email,
             rate_limiter,
+            state_machine,
         }
     }
 
@@ -80,12 +116,17 @@ where
             }
         }
 
-        let results = match &message.content {
-            NotificationChannel::ConnGateway(conn) => {
+        let results = match message.content {
+            NotificationChannel::ConnGateway(ref conn) => {
                 Either::Left([self.deliver_conn_gateway(conn).await])
             }
-            NotificationChannel::Email(email) => Either::Left([self.deliver_email(email).await]),
-            NotificationChannel::Ios(apns) => Either::Right(self.deliver_ios(apns).await),
+            NotificationChannel::Email(ref email) => {
+                Either::Left([self.deliver_email(email).await])
+            }
+            NotificationChannel::Ios(mut apns) => {
+                let entries = std::mem::take(&mut apns.bulk_digest_state_machine);
+                Either::Right(self.deliver_ios(&apns, entries).await)
+            }
         };
 
         results
@@ -106,19 +147,52 @@ where
     }
 
     /// Deliver via iOS push (APNS).
+    ///
+    /// For each endpoint paired with a state machine entry, the push delivery
+    /// is routed through [`BulkDigestEgressStateMachine::continue_machine`] which
+    /// records the SNS message ID on success or queues for batch email on failure.
+    /// Remaining endpoints (without state machine entries) are sent directly.
     async fn deliver_ios(
         &self,
-        apns: &crate::domain::models::queue_message::APNSTargets<serde_json::Value>,
+        apns: &APNSTargets<serde_json::Value>,
+        state_machine_entries: Vec<BatchSend<PushNotificationsEnabled>>,
     ) -> Vec<Result<DeliverySuccess, Report>> {
         let mut out = Vec::with_capacity(apns.ios_device_endpoints.len());
+        let mut sm_iter = state_machine_entries.into_iter();
+
         for endpoint in &apns.ios_device_endpoints {
-            let res = self
-                .mobile
-                .send_ios_push_notification(endpoint, &apns.notif, &apns.attributes)
-                .await
-                .map(|()| DeliverySuccess::Ios);
-            out.push(res)
+            if let Some(entry) = sm_iter.next() {
+                let checker = IosPushSend {
+                    mobile: &self.mobile,
+                    endpoint_arn: endpoint,
+                    notif: &apns.notif,
+                    attributes: &apns.attributes,
+                };
+                let req = ResumeMachineBRequest {
+                    notification_enabled: entry.into_inner(),
+                    send_notif: checker,
+                };
+                match self.state_machine.continue_machine(req).await {
+                    Ok((_msg_id, _dont_send)) => {
+                        out.push(Ok(DeliverySuccess::Ios));
+                    }
+                    Err((send_err, batch_result)) => {
+                        if let Err(ref batch_err) = batch_result {
+                            tracing::error!(error=?batch_err, "failed to queue digest batch after push failure");
+                        }
+                        out.push(Err(send_err));
+                    }
+                }
+            } else {
+                let res = self
+                    .mobile
+                    .send_ios_push_notification(endpoint, &apns.notif, &apns.attributes)
+                    .await
+                    .map(|_| DeliverySuccess::Ios);
+                out.push(res);
+            }
         }
+
         out
     }
 
@@ -134,7 +208,7 @@ where
     }
 }
 
-impl<Q, N, W, M, E, R> NotificationEgress for NotificationEgressService<Q, N, W, M, E, R>
+impl<Q, N, W, M, E, R, S> NotificationEgress for NotificationEgressService<Q, N, W, M, E, R, S>
 where
     Q: NotificationQueue,
     N: NotificationRepository,
@@ -142,6 +216,7 @@ where
     M: NotificationSender,
     E: EmailSender,
     R: RateLimitPort,
+    S: BulkDigestEgressStateMachine,
 {
     #[tracing::instrument(ret, skip(self))]
     async fn poll_and_deliver(&self) -> Vec<Result<DeliverySuccess, Report>> {
