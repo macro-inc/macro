@@ -14,7 +14,7 @@ import {
 import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import { useBlockId } from '@core/block';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { ReferencesModal } from '@core/component/ReferencesModal';
+import { ReferencesButton } from '@core/component/ReferencesModal';
 import { ShareButton } from '@core/component/TopBar/ShareButton';
 import { useGetPermissions } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
@@ -75,7 +75,7 @@ export function TopBar() {
           tooltip={{ label: 'Edit AI Instructions' }}
           onClick={openInstructions}
         />
-        <ReferencesModal
+        <ReferencesButton
           documentId={blockId}
           documentName={chatName()}
           buttonSize="sm"

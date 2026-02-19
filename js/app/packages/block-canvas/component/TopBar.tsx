@@ -16,9 +16,9 @@ import {
 } from '@app/component/split-layout/components/SplitToolbar';
 import { withAnalytics } from '@coparse/analytics';
 import { createBlockSignal, useBlockId } from '@core/block';
-import { DocumentPropertiesModal } from '@core/component/DocumentPropertiesModal';
+import { DocumentPropertiesButton } from '@core/component/DocumentPropertiesModal';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
-import { ReferencesModal } from '@core/component/ReferencesModal';
+import { ReferencesButton } from '@core/component/ReferencesModal';
 import { ShareButton } from '@core/component/TopBar/ShareButton';
 import { ENABLE_REFERENCES_MODAL } from '@core/constant/featureFlags';
 import { blockFileSignal, blockMetadataSignal } from '@core/signal/load';
@@ -121,17 +121,13 @@ export function TopBar() {
       </SplitToolbarLeft>
       <SplitToolbarRight>
         <Show when={ENABLE_REFERENCES_MODAL}>
-          <ReferencesModal
+          <ReferencesButton
             documentId={documentId}
             documentName={fileName()}
             buttonSize="sm"
           />
         </Show>
-        <DocumentPropertiesModal
-          documentId={documentId}
-          blockType="canvas"
-          buttonSize="sm"
-        />
+        <DocumentPropertiesButton buttonSize="sm" />
         <SplitPermissionsBadge />
         <Show when={canvasFile()} keyed>
           <ShareButton

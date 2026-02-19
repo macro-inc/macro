@@ -14,19 +14,22 @@ import { createCallback } from '@solid-primitives/rootless';
 import { toast } from 'core/component/Toast/Toast';
 import { createSignal } from 'solid-js';
 import { blockData, useGetFileBlob } from '../signal/blockData';
+import { ModalsMounter } from './ModalsMounter';
 import { TopBar } from './TopBar';
 
 export default function BlockUnknown() {
   return (
     <DocumentBlockContainer>
-      <div class="w-full h-full bg-panel select-none overscroll-none overflow-hidden flex flex-col relative">
-        <div class="relative">
-          <TopBar />
+      <ModalsMounter>
+        <div class="w-full h-full bg-panel select-none overscroll-none overflow-hidden flex flex-col relative">
+          <div class="relative">
+            <TopBar />
+          </div>
+          <div class="w-full grow-1 relative overflow-hidden">
+            <Unknown />
+          </div>
         </div>
-        <div class="w-full grow-1 relative overflow-hidden">
-          <Unknown />
-        </div>
-      </div>
+      </ModalsMounter>
     </DocumentBlockContainer>
   );
 }

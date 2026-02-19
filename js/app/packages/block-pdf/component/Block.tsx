@@ -44,6 +44,7 @@ import {
 } from '../type/coParse';
 import { preprocess } from '../websocket/preprocess';
 import { Document } from './Document';
+import { ModalsMounter } from './ModalsMounter';
 import { Tabs } from './Tabs';
 import { TopBar } from './TopBar';
 
@@ -189,32 +190,34 @@ export default function BlockPdf() {
 
   return (
     <DocumentBlockContainer>
-      <div
-        class="w-full h-full bg-panel select-none overscroll-none overflow-hidden flex flex-col"
-        onContextMenu={(e) => e.preventDefault()}
-        data-tut="App"
-      >
-        <Show when={!isNestedBlock}>
-          <TopBar />
-          <Show when={showTabBar()}>
-            <div class="flex px-2 justify-between min-h-11 items-center gap-2">
-              <div
-                class={`overflow-x-auto overflow-y-hidden grow customScrollbar w-0`}
-              >
-                <Tabs />
-              </div>
-            </div>
-          </Show>
-        </Show>
+      <ModalsMounter>
         <div
-          class="flex h-full w-full relative justify-end overflow-visible z-main-view-layout"
-          id="main-view"
+          class="w-full h-full bg-panel select-none overscroll-none overflow-hidden flex flex-col"
+          onContextMenu={(e) => e.preventDefault()}
+          data-tut="App"
         >
-          {/* {ENABLE_VIEWER_SIDE_PANEL && <ViewerNavStack />} */}
-          <Document />
-          {/* <CustomCursor /> */}
+          <Show when={!isNestedBlock}>
+            <TopBar />
+            <Show when={showTabBar()}>
+              <div class="flex px-2 justify-between min-h-11 items-center gap-2">
+                <div
+                  class={`overflow-x-auto overflow-y-hidden grow customScrollbar w-0`}
+                >
+                  <Tabs />
+                </div>
+              </div>
+            </Show>
+          </Show>
+          <div
+            class="flex h-full w-full relative justify-end overflow-visible z-main-view-layout"
+            id="main-view"
+          >
+            {/* {ENABLE_VIEWER_SIDE_PANEL && <ViewerNavStack />} */}
+            <Document />
+            {/* <CustomCursor /> */}
+          </div>
         </div>
-      </div>
+      </ModalsMounter>
     </DocumentBlockContainer>
   );
 }

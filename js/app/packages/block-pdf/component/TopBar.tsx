@@ -20,9 +20,9 @@ import { doPrint } from '@block-pdf/util/printUtil';
 import { exportPdf } from '@block-pdf/websocket/export';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
-import { DocumentPropertiesModal } from '@core/component/DocumentPropertiesModal';
+import { DocumentPropertiesButton } from '@core/component/DocumentPropertiesModal';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
-import { ReferencesModal } from '@core/component/ReferencesModal';
+import { ReferencesButton } from '@core/component/ReferencesModal';
 import { openLoginModal } from '@core/component/TopBar/LoginButton';
 import { ShareButton } from '@core/component/TopBar/ShareButton';
 import {
@@ -192,17 +192,13 @@ export function TopBar() {
       </SplitToolbarLeft>
       <SplitToolbarRight>
         <Show when={ENABLE_REFERENCES_MODAL}>
-          <ReferencesModal
+          <ReferencesButton
             documentId={documentId}
             documentName={fileName()}
             buttonSize="sm"
           />
         </Show>
-        <DocumentPropertiesModal
-          documentId={documentId}
-          blockType="pdf"
-          buttonSize="sm"
-        />
+        <DocumentPropertiesButton buttonSize="sm" />
         <div class="flex items-center">
           <SplitPermissionsBadge />
           <ShareButton

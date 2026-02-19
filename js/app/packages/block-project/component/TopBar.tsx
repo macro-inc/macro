@@ -29,7 +29,7 @@ import { buildSimpleEntityUrl } from '@core/util/url';
 import { toast } from 'core/component/Toast/Toast';
 import { createMemo, Show } from 'solid-js';
 import { ProjectCreateMenu } from './ProjectCreateMenu';
-import { ProjectPropertiesModal } from './ProjectPropertiesModal';
+import { ProjectPropertiesButton } from './ProjectPropertiesModal';
 
 // TODO (SEAMUS) : Revisit this file when we figure out what we wanna do
 //     with folder block.
@@ -101,7 +101,7 @@ export function TopBar() {
         <SplitToolbarRight>
           <div class="flex items-center">
             <Show when={!isSpecialProject}>
-              <ProjectPropertiesModal buttonSize="sm" name={name()} />
+              <ProjectPropertiesButton buttonSize="sm" />
             </Show>
             <SplitPermissionsBadge />
             <Show when={ENABLE_PROJECT_SHARING && !isSpecialProject}>

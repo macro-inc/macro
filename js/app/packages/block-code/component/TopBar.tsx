@@ -13,8 +13,8 @@ import {
 } from '@app/component/split-layout/components/SplitToolbar';
 import { withAnalytics } from '@coparse/analytics';
 import { useBlockId } from '@core/block';
-import { DocumentPropertiesModal } from '@core/component/DocumentPropertiesModal';
-import { ReferencesModal } from '@core/component/ReferencesModal';
+import { DocumentPropertiesButton } from '@core/component/DocumentPropertiesModal';
+import { ReferencesButton } from '@core/component/ReferencesModal';
 import { ShareButton } from '@core/component/TopBar/ShareButton';
 import { blockMetadataSignal, blockTextSignal } from '@core/signal/load';
 import { useGetPermissions } from '@core/signal/permissions';
@@ -73,16 +73,12 @@ export const TopBar: Component = () => {
         </div>
       </SplitToolbarLeft>
       <SplitToolbarRight>
-        <ReferencesModal
+        <ReferencesButton
           documentId={blockId}
           documentName={name()}
           buttonSize="sm"
         />
-        <DocumentPropertiesModal
-          documentId={blockId}
-          blockType="code"
-          buttonSize="sm"
-        />
+        <DocumentPropertiesButton buttonSize="sm" />
         <div class="flex items-center">
           <SplitPermissionsBadge />
           <ShareButton

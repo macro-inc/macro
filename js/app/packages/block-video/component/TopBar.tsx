@@ -12,7 +12,7 @@ import {
   SplitToolbarRight,
 } from '@app/component/split-layout/components/SplitToolbar';
 import { useBlockId } from '@core/block';
-import { ReferencesModal } from '@core/component/ReferencesModal';
+import { ReferencesButton } from '@core/component/ReferencesModal';
 import { ShareButton } from '@core/component/TopBar/ShareButton';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useGetPermissions } from '@core/signal/permissions';
@@ -72,7 +72,7 @@ export function TopBar() {
         </div>
       </SplitToolbarLeft>
       <SplitToolbarRight>
-        <ReferencesModal
+        <ReferencesButton
           documentId={blockId}
           documentName={name()}
           buttonSize="sm"
