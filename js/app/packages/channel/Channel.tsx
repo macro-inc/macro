@@ -2,7 +2,7 @@ import {
   useChannelMessagesQuery,
   type ChannelMessagesData,
 } from '@queries/channel/channel-messages';
-import { createSignal, Show, Suspense } from 'solid-js';
+import { createSignal, Show, Suspense, type ParentProps } from 'solid-js';
 import {
   DEFAULT_INITIAL_SCROLL_TARGET,
   ThreadList,
@@ -23,6 +23,10 @@ export type ChannelNavigation = {
   navigateToBottom: () => boolean;
   navigateToMessage: (messageId: string) => boolean;
 };
+
+function Row(props: ParentProps) {
+  return <div class="w-full flex justify-center">{props.children}</div>;
+}
 
 export function flattenMessages(
   data: ChannelMessagesData | undefined
@@ -84,12 +88,16 @@ export function Channel(props: ChannelProps) {
         <ThreadList
           data={messages}
           initialScrollTarget={threadListInitialScrollTarget()}
-          isPrepending={isPrepending}
+          shift={isPrepending}
           onScrollNearTop={fetchMoreNearTop}
           onNavigationReady={setThreadListNavigation}
         >
           {(item) => {
-            return <p>{item.content}</p>;
+            return (
+              <Row>
+                <p class="macro-message-width">{item.content}</p>
+              </Row>
+            );
           }}
         </ThreadList>
       </Show>
