@@ -15,9 +15,21 @@ fn access(pool: Pool<Postgres>) -> PgChannelAccessCheck {
 )]
 async fn active_member_is_allowed(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let check = access(pool);
-    assert!(check.is_channel_member(CH1, "macro|user-a@test.com").await?);
-    assert!(check.is_channel_member(CH1, "macro|user-b@test.com").await?);
-    assert!(check.is_channel_member(CH1, "macro|user-c@test.com").await?);
+    assert!(
+        check
+            .is_channel_member(CH1, "macro|user-a@test.com")
+            .await?
+    );
+    assert!(
+        check
+            .is_channel_member(CH1, "macro|user-b@test.com")
+            .await?
+    );
+    assert!(
+        check
+            .is_channel_member(CH1, "macro|user-c@test.com")
+            .await?
+    );
     Ok(())
 }
 
@@ -27,7 +39,11 @@ async fn active_member_is_allowed(pool: Pool<Postgres>) -> anyhow::Result<()> {
 )]
 async fn left_user_is_denied(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let check = access(pool);
-    assert!(!check.is_channel_member(CH1, "macro|left-user@test.com").await?);
+    assert!(
+        !check
+            .is_channel_member(CH1, "macro|left-user@test.com")
+            .await?
+    );
     Ok(())
 }
 
@@ -37,7 +53,11 @@ async fn left_user_is_denied(pool: Pool<Postgres>) -> anyhow::Result<()> {
 )]
 async fn non_participant_is_denied(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let check = access(pool);
-    assert!(!check.is_channel_member(CH1, "macro|stranger@test.com").await?);
+    assert!(
+        !check
+            .is_channel_member(CH1, "macro|stranger@test.com")
+            .await?
+    );
     Ok(())
 }
 
@@ -48,7 +68,11 @@ async fn non_participant_is_denied(pool: Pool<Postgres>) -> anyhow::Result<()> {
 async fn member_of_different_channel_is_denied(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let check = access(pool);
     // user-a is in CH1 but not in CH2
-    assert!(!check.is_channel_member(CH2, "macro|user-a@test.com").await?);
+    assert!(
+        !check
+            .is_channel_member(CH2, "macro|user-a@test.com")
+            .await?
+    );
     Ok(())
 }
 
@@ -59,6 +83,10 @@ async fn member_of_different_channel_is_denied(pool: Pool<Postgres>) -> anyhow::
 async fn nonexistent_channel_is_denied(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let check = access(pool);
     let fake_channel = Uuid::from_u128(0xdeadbeef);
-    assert!(!check.is_channel_member(fake_channel, "macro|user-a@test.com").await?);
+    assert!(
+        !check
+            .is_channel_member(fake_channel, "macro|user-a@test.com")
+            .await?
+    );
     Ok(())
 }

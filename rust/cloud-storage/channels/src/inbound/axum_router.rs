@@ -246,7 +246,10 @@ pub async fn get_channel_participants_handler<S: ChannelMessagesService, A: Chan
     State(state): State<ChannelsRouterState<S, A>>,
     member: ChannelMember,
 ) -> Result<Json<Vec<ApiChannelParticipant>>, ChannelsHandlerErr> {
-    let participants = state.service.get_channel_participants(member.channel_id).await?;
+    let participants = state
+        .service
+        .get_channel_participants(member.channel_id)
+        .await?;
 
     Ok(Json(
         participants
