@@ -1,4 +1,5 @@
 import CheckIcon from '@icon/bold/check-bold.svg';
+import Spinner from '@icon/regular/spinner.svg';
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
@@ -178,6 +179,7 @@ export const SoupViewList = (props: SoupViewListProps) => {
     setQueryFilters,
     queryFilters,
     featuredIds,
+    isSearchServiceLoading,
   } = useSoupView();
   const { getSplitCount } = useSplitLayout();
 
@@ -531,7 +533,12 @@ export const SoupViewList = (props: SoupViewListProps) => {
       >
         <StaticMarkdownContext>
           <Switch>
-            <Match when={source.isLoading() && !rows().length}>
+            <Match
+              when={
+                (source.isLoading() || isSearchServiceLoading()) &&
+                !rows().length
+              }
+            >
               <LoadingBlock />
             </Match>
             <Match when={!source.isLoading() && !rows().length}>
@@ -662,6 +669,17 @@ export const SoupViewList = (props: SoupViewListProps) => {
                             />
                           </SoupEntityContextMenu>
                         </EntityRow>
+                        <Show
+                          when={
+                            i() === rows().length - 1 &&
+                            isSearchServiceLoading()
+                          }
+                        >
+                          <div class="flex items-center gap-2 px-3 py-3 text-xs text-text-muted">
+                            <Spinner class="size-3 animate-spin" />
+                            Searching...
+                          </div>
+                        </Show>
                       </>
                     );
                   }}

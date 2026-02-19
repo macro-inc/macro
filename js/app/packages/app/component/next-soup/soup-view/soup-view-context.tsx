@@ -67,6 +67,7 @@ interface SoupViewContextValues {
   setSearchText: (value: string) => void;
   featuredIds: Accessor<string[]>;
   rows: Accessor<SoupRow[]>;
+  isSearchServiceLoading: Accessor<boolean>;
   queryFilters: Accessor<SoupItemsQueryFilters>;
   setQueryFilters: Setter<SoupItemsQueryFilters>;
   statusFilter: Accessor<string | undefined>;
@@ -342,6 +343,7 @@ export const SoupViewContextProvider: FlowComponent<
     searchText: search.searchText,
     setSearchText: search.setSearchText,
     featuredIds: search.featuredIds,
+    isSearchServiceLoading: search.isSearchServiceLoading,
     queryFilters,
     setQueryFilters,
     statusFilter,
