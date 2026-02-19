@@ -2,11 +2,11 @@ import { type Accessor, createSignal, createEffect } from 'solid-js';
 import { Queuer } from '@tanstack/pacer/queuer';
 
 /**
- * Creates a queued signal that prorcess source values in a queue with a fixed
- * delay. The queue is started when the startFn callback returns true (defaults to immediate).
+ * Creates a derived signal that drops source values until `startFn` returns true,
+ * then processes all subsequent updates through a FIFO queue with a fixed `delayMs` between each flush.
  */
 export function delayedQueue<T extends unknown[]>(
-  source: () => T,
+  source: Accessor<T>,
   delayMs: number,
   startFn: (item: T) => boolean = (_item) => true
 ): Accessor<T> {
