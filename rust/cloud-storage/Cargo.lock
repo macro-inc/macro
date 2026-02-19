@@ -2917,6 +2917,7 @@ dependencies = [
  "futures",
  "http-body-util",
  "lexical_client",
+ "macro_aws_config",
  "macro_db_migrator",
  "macro_project_utils",
  "macro_user_id",
@@ -5118,6 +5119,7 @@ name = "macro_aws_config"
 version = "0.1.0"
 dependencies = [
  "aws-config",
+ "aws-sdk-s3",
  "macro_env",
  "macro_env_var",
  "thiserror 2.0.17",
