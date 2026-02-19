@@ -562,6 +562,8 @@ export function ShareModal(props: ShareModalProps) {
                 name={props.name}
                 hideAccessLevelSelector={props.itemType === 'email'}
                 initialAccessLevel={props.itemType === 'email' ? 'view' : null}
+                blockId={props.id}
+                blockName={props.blockAlias}
               />
 
               <Show when={(recipients()?.length ?? 0) > 0}>
