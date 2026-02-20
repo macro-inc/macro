@@ -184,6 +184,7 @@ export * from './threadProviderId';
 export * from './threadSummary';
 export * from './updateLabelBatchRequest';
 export * from './updateLabelBatchResponse';
+export * from './updateThreadLabelRequest';
 export * from './upsertScheduledRequest';
 export * from './upsertScheduledResponse';
 export * from './userProvider';

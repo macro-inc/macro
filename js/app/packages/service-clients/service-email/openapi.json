@@ -1912,6 +1912,87 @@
         }
       }
     },
+    "/email/threads/{id}/labels": {
+      "patch": {
+        "tags": ["Threads"],
+        "summary": "Add or remove a label from all messages in a thread",
+        "operationId": "add_remove_thread_label",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Thread ID.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateThreadLabelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateLabelBatchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/threads/{id}/messages": {
       "get": {
         "tags": ["Threads"],
@@ -3704,6 +3785,19 @@
               "type": "string",
               "format": "uuid"
             }
+          }
+        }
+      },
+      "UpdateThreadLabelRequest": {
+        "type": "object",
+        "required": ["label_id", "value"],
+        "properties": {
+          "label_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "value": {
+            "type": "boolean"
           }
         }
       },
