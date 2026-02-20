@@ -42,6 +42,11 @@ export function getThreadId(group: NotificationStack): string {
 export function stackNotifications(
   notifications: UnifiedNotification[]
 ): NotificationStack[] {
+  // Do no stack and document_mention type notifications
+  const filteredNotifications = notifications.filter(
+    (n) => n.notification_metadata.tag !== 'document_mention'
+  );
+
   const isChannelMention = (n: UnifiedNotification) =>
     n.notification_metadata.tag === 'channel_mention';
   const isChannelMessageSend = (n: UnifiedNotification) =>
@@ -51,7 +56,7 @@ export function stackNotifications(
 
   // Collect mention messageIds for shadowing
   const mentionedMsgIds = new Set(
-    notifications
+    filteredNotifications
       .filter(isChannelMention)
       .flatMap((n) =>
         n.notification_metadata.tag === 'channel_mention'
@@ -71,14 +76,14 @@ export function stackNotifications(
   };
 
   // Partition by type
-  const mentions = notifications.filter(isChannelMention);
-  const newMsgs = notifications
+  const mentions = filteredNotifications.filter(isChannelMention);
+  const newMsgs = filteredNotifications
     .filter(isChannelMessageSend)
     .filter((n) => !isShadowed(n));
-  const replies = notifications
+  const replies = filteredNotifications
     .filter(isChannelMessageReply)
     .filter((n) => !isShadowed(n));
-  const others = notifications.filter(
+  const others = filteredNotifications.filter(
     (n) =>
       !isChannelMention(n) &&
       !isChannelMessageSend(n) &&
