@@ -1,4 +1,4 @@
-import { isItemExcludedByBody } from '@app/component/next-soup/filters/filters';
+import { filterSoupItemByRequestBody } from '@app/component/next-soup/filters/filters';
 import { throwOnErr } from '@core/util/maybeResult';
 import type { EntityData } from '@entity';
 import { soupKeys } from '@queries/soup/keys';
@@ -42,11 +42,11 @@ export const useSoupItemsQuery = (
   options?: Accessor<SoupItemsQueryOptions>
 ) => {
   const instructionsIdQuery = useInstructionsMdIdQuery();
+
   const itemFilter: SoupApiItemFilter = createCallback((item: SoupApiItem) => {
     const body = args().body;
     if (!body) return true;
-    const excluded = isItemExcludedByBody(item, body);
-    return !excluded;
+    return filterSoupItemByRequestBody(item, body);
   });
 
   return useInfiniteQuery(() => ({
