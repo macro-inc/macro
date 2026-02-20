@@ -84,4 +84,4 @@ setup:
   just setup_local_dbs
   just infra/stacks/fusionauth-instance/setup
   just rust/cloud-storage/build_dev_service_images
-  @echo "Setup complete. You can now run `just run_local`."
+  @echo "Setup complete."
