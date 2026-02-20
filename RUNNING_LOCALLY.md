@@ -21,6 +21,8 @@ Run `just setup` to initialize your entire environment.
 
 ## Running
 
+### Backend
+
 You can run the services via `just run_local`.
 
 If you've updated the docker image after making changes to a service you'll need
@@ -29,3 +31,8 @@ update the containers.
 
 By default we don't run **convert_service** or **search_processing_service**
 locally as they are not needed by the frontend when using dev assets. 
+
+### Frontend
+
+You can run the following command to get the frontend running pointed to local 
+services `cd js/app && bun i && just local`.
