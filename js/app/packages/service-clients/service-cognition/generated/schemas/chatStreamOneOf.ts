@@ -6,9 +6,9 @@
  */
 
 import type { ChatStreamOneOfAllOf } from './chatStreamOneOfAllOf';
-import type { WebSocketError } from './webSocketError';
+import type { StreamError } from './streamError';
 
 /**
  * Misc error
  */
-export type ChatStreamOneOf = WebSocketError & ChatStreamOneOfAllOf;
+export type ChatStreamOneOf = StreamError & ChatStreamOneOfAllOf;

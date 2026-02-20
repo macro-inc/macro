@@ -187,7 +187,6 @@ pub enum ChatStream {
     },
 }
 
-
 #[derive(thiserror::Error, Debug, ToSchema, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case", tag = "stream_error")]
 pub enum StreamError {

@@ -1020,27 +1020,6 @@
         }
       }
     },
-    "/stream": {
-      "get": {
-        "tags": ["ws::connection"],
-        "operationId": "ws_handler",
-        "responses": {
-          "200": {
-            "description": "Sucessfully conntect to streaming websocket"
-          },
-          "500": {
-            "description": "Failed to connect to streaming websocket",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/stream/chat/message": {
       "post": {
         "tags": ["chat_message"],
@@ -1782,7 +1761,7 @@
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/WebSocketError",
+                "$ref": "#/components/schemas/StreamError",
                 "description": "Misc error"
               },
               {
@@ -2023,16 +2002,6 @@
           },
           {
             "type": "object",
-            "required": ["type"],
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": ["pong"]
-              }
-            }
-          },
-          {
-            "type": "object",
             "description": "pdf completion",
             "required": ["completion_id", "content", "done", "type"],
             "properties": {
@@ -2259,15 +2228,6 @@
             }
           }
         ]
-      },
-      "ExtractionStatusPayload": {
-        "type": "object",
-        "required": ["attachment_id"],
-        "properties": {
-          "attachment_id": {
-            "type": "string"
-          }
-        }
       },
       "FileType": {
         "type": "string",
@@ -2757,18 +2717,6 @@
         "type": "string",
         "enum": ["user", "assistant", "system"]
       },
-      "SelectModelPayload": {
-        "type": "object",
-        "required": ["chat_id", "model"],
-        "properties": {
-          "chat_id": {
-            "type": "string"
-          },
-          "model": {
-            "type": "string"
-          }
-        }
-      },
       "SendChatMessagePayload": {
         "allOf": [
           {
@@ -2832,28 +2780,6 @@
           }
         }
       },
-      "SendCompletionPayload": {
-        "type": "object",
-        "required": ["prompt"],
-        "properties": {
-          "attachment_id": {
-            "type": ["string", "null"],
-            "description": "Optional attachment id for the completion"
-          },
-          "completion_id": {
-            "type": ["string", "null"],
-            "description": "Optional completion id to keep track of the completion\nif non is provided, one will be generated"
-          },
-          "prompt": {
-            "type": "string",
-            "description": "the prompt of the completion"
-          },
-          "selected_text": {
-            "type": ["string", "null"],
-            "description": "The selected text for the completion,"
-          }
-        }
-      },
       "SharePermissionV2": {
         "type": "object",
         "required": ["id", "isPublic", "owner"],
@@ -2914,16 +2840,6 @@
           }
         }
       },
-      "StopChatMessagePayload": {
-        "type": "object",
-        "required": ["stream_id"],
-        "properties": {
-          "stream_id": {
-            "type": "string",
-            "description": "stream id"
-          }
-        }
-      },
       "StreamError": {
         "oneOf": [
           {
@@ -2962,32 +2878,6 @@
               "stream_error": {
                 "type": "string",
                 "enum": ["internal_error"]
-              },
-              "stream_id": {
-                "type": "string"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": ["stream_id", "stream_error"],
-            "properties": {
-              "stream_error": {
-                "type": "string",
-                "enum": ["unauthorized"]
-              },
-              "stream_id": {
-                "type": "string"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": ["stream_id", "stream_error"],
-            "properties": {
-              "stream_error": {
-                "type": "string",
-                "enum": ["payment_required"]
               },
               "stream_id": {
                 "type": "string"
@@ -3038,143 +2928,6 @@
             "description": "Indicates if an error occurred"
           }
         }
-      },
-      "ToWebSocketMessage": {
-        "oneOf": [
-          {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/SendChatMessagePayload",
-                "description": "Initializes a new message in a chat for streaming"
-              },
-              {
-                "type": "object",
-                "required": ["type"],
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "enum": ["send_chat_message"]
-                  }
-                }
-              }
-            ],
-            "description": "Initializes a new message in a chat for streaming"
-          },
-          {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/SendChatMessagePayload",
-                "description": "Replace user message and restream response"
-              },
-              {
-                "type": "object",
-                "required": ["type"],
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "enum": ["edit_chat_message"]
-                  }
-                }
-              }
-            ],
-            "description": "Replace user message and restream response"
-          },
-          {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/StopChatMessagePayload",
-                "description": "Stop streaming for a given message"
-              },
-              {
-                "type": "object",
-                "required": ["type"],
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "enum": ["stop_chat_message"]
-                  }
-                }
-              }
-            ],
-            "description": "Stop streaming for a given message"
-          },
-          {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/SelectModelPayload",
-                "description": "Select model for a given chat"
-              },
-              {
-                "type": "object",
-                "required": ["type"],
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "enum": ["select_model_for_chat"]
-                  }
-                }
-              }
-            ],
-            "description": "Select model for a given chat"
-          },
-          {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ExtractionStatusPayload",
-                "description": "Get extraction status for a given attachment"
-              },
-              {
-                "type": "object",
-                "required": ["type"],
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "enum": ["extraction_status"]
-                  }
-                }
-              }
-            ],
-            "description": "Get extraction status for a given attachment"
-          },
-          {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/SendCompletionPayload",
-                "description": "pdf completion"
-              },
-              {
-                "type": "object",
-                "required": ["type"],
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "enum": ["send_completion"]
-                  }
-                }
-              }
-            ],
-            "description": "pdf completion"
-          },
-          {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/GetSimpleCompletionStreamPayload",
-                "description": "stream a simple completion"
-              },
-              {
-                "type": "object",
-                "required": ["type"],
-                "properties": {
-                  "type": {
-                    "type": "string",
-                    "enum": ["get_simple_completion_stream"]
-                  }
-                }
-              }
-            ],
-            "description": "stream a simple completion"
-          }
-        ]
       },
       "ToolSchema": {
         "type": "object",
@@ -3338,210 +3091,6 @@
             }
           }
         }
-      },
-      "WebSocketError": {
-        "oneOf": [
-          {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/StreamError"
-              },
-              {
-                "type": "object",
-                "required": ["error_type"],
-                "properties": {
-                  "error_type": {
-                    "type": "string",
-                    "enum": ["stream_error"]
-                  }
-                }
-              }
-            ]
-          },
-          {
-            "type": "object",
-            "required": ["chat_id", "message_id", "stream_id", "error_type"],
-            "properties": {
-              "chat_id": {
-                "type": "string"
-              },
-              "details": {
-                "type": ["string", "null"]
-              },
-              "error_type": {
-                "type": "string",
-                "enum": ["failed_to_send_chat_message"]
-              },
-              "message_id": {
-                "type": "string"
-              },
-              "stream_id": {
-                "type": "string"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": ["chat_id", "stream_id", "error_type"],
-            "properties": {
-              "chat_id": {
-                "type": "string"
-              },
-              "details": {
-                "type": ["string", "null"]
-              },
-              "error_type": {
-                "type": "string",
-                "enum": ["failed_to_rename_chat"]
-              },
-              "stream_id": {
-                "type": "string"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": ["error_type"],
-            "properties": {
-              "details": {
-                "type": ["string", "null"]
-              },
-              "error_type": {
-                "type": "string",
-                "enum": ["failed_to_send_error_message"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": ["chat_id", "stream_id", "error_type"],
-            "properties": {
-              "chat_id": {
-                "type": "string"
-              },
-              "details": {
-                "type": ["string", "null"]
-              },
-              "error_type": {
-                "type": "string",
-                "enum": ["failed_to_store_chat"]
-              },
-              "stream_id": {
-                "type": "string"
-              }
-            }
-          },
-          {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/GenericErrorResponse"
-              },
-              {
-                "type": "object",
-                "required": ["error_type"],
-                "properties": {
-                  "error_type": {
-                    "type": "string",
-                    "enum": ["generic"]
-                  }
-                }
-              }
-            ]
-          },
-          {
-            "type": "object",
-            "required": ["error_type"],
-            "properties": {
-              "details": {
-                "type": ["string", "null"]
-              },
-              "error_type": {
-                "type": "string",
-                "enum": ["failed_to_send_websocket_message"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": ["error_type"],
-            "properties": {
-              "details": {
-                "type": ["string", "null"]
-              },
-              "error_type": {
-                "type": "string",
-                "enum": ["failed_to_select_model"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": ["chat_id", "message_id", "stream_id", "error_type"],
-            "properties": {
-              "chat_id": {
-                "type": "string"
-              },
-              "details": {
-                "type": ["string", "null"]
-              },
-              "error_type": {
-                "type": "string",
-                "enum": ["failed_to_update_token_count"]
-              },
-              "message_id": {
-                "type": "string"
-              },
-              "stream_id": {
-                "type": "string"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": ["attachment_id", "error_type"],
-            "properties": {
-              "attachment_id": {
-                "type": "string"
-              },
-              "error_type": {
-                "type": "string",
-                "enum": ["extraction_status_failed"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": ["attachment_ids", "error_type"],
-            "properties": {
-              "attachment_ids": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "error_type": {
-                "type": "string",
-                "enum": ["attachment_permission_error"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": ["reason", "stream_id", "error_type"],
-            "properties": {
-              "error_type": {
-                "type": "string",
-                "enum": ["failed_to_edit_message"]
-              },
-              "reason": {
-                "type": "string"
-              },
-              "stream_id": {
-                "type": "string"
-              }
-            }
-          }
-        ]
       },
       "WithChatId": {
         "type": "object",

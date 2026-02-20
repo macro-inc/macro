@@ -1136,49 +1136,6 @@ export const getBatchPreview = async (
   } as getBatchPreviewResponse;
 };
 
-export type wsHandlerResponse200 = {
-  data: void;
-  status: 200;
-};
-
-export type wsHandlerResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type wsHandlerResponseSuccess = wsHandlerResponse200 & {
-  headers: Headers;
-};
-export type wsHandlerResponseError = wsHandlerResponse500 & {
-  headers: Headers;
-};
-
-export type wsHandlerResponse =
-  | wsHandlerResponseSuccess
-  | wsHandlerResponseError;
-
-export const getWsHandlerUrl = () => {
-  return `/stream`;
-};
-
-export const wsHandler = async (
-  options?: RequestInit
-): Promise<wsHandlerResponse> => {
-  const res = await fetch(getWsHandlerUrl(), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: wsHandlerResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as wsHandlerResponse;
-};
-
 /**
  * This endpoint initiates a chat message and streams the response via the stream service.
 The client should subscribe to the returned stream_id via connection_gateway to receive chunks.
