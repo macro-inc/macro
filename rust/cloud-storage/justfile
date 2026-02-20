@@ -27,7 +27,6 @@ build:
 # Build all dev service Docker images (pre-warms cache for run_local_build)
 build_dev_service_images:
   docker build -f Dockerfile.dev --target builder -t local-services .
-  docker build -f Dockerfile.convert_service.dev --target builder -t local-convert-service .
   docker build -f Dockerfile.search_processing_service.dev --target builder -t local-search-processing-service .
 
 # Build all lambda functions

@@ -82,30 +82,6 @@ services:
       start_period: 10s
 
   # ============================================================================
-  # convert_service (Port 8084)
-  # Document format conversion - requires LibreOffice
-  # ============================================================================
-  convert_service:
-    profiles:
-      - processors 
-    <<: *common-env
-    build:
-      context: ./rust/cloud-storage
-      dockerfile: Dockerfile.convert_service.dev
-      target: convert_service
-    ports:
-      - "8084:8080"
-    networks:
-      - databases
-      - services
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  # ============================================================================
   # document_cognition_service (Port 8085)
   # Document analysis and processing
   # ============================================================================
