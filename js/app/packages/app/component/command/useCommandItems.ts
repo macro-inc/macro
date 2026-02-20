@@ -20,9 +20,11 @@ import { CommandState } from './state';
 import { HotkeyTags } from '@core/hotkey/constants';
 
 function isChannelItem(item: QuickAccessItem): boolean {
+  // only dms get the "channel boost" in command menu
   return item.bucket === 'dm';
 }
 
+// tune-able freshSearch for query vs non-query sort
 function createSearchConfig(hasQuery: boolean) {
   return {
     useViewedAt: true,
@@ -82,9 +84,6 @@ function commandsToItems(commands: CommandWithInfo[]): CommandItem[] {
  * out because their conditions check the soup's selection state.
  */
 function useCommandsList(): () => CommandItem[] {
-  // Capture commands NOW, at call time, before scope switches to command-menu.
-  // This is evaluated once when the command menu mounts, capturing commands
-  // from the soup-view scope (or whatever scope was active).
   const scopeId = activeScope() ?? '';
   const capturedCommands = getActiveCommandsFromScope(scopeId, {
     sortByScopeLevel: false,
@@ -124,7 +123,6 @@ function useQuickAccessBuckets(): Record<
   const commandsList = useCommandsList();
   const entitiesList = quickAccess.useList(...exclude('person'));
 
-  // Combine entities and commands for the "all" category (like the old Konsole's "Everything")
   const allWithCommands = createMemo(() => {
     const entities = entitiesList();
     const commands = commandsList();
@@ -152,7 +150,7 @@ export function useCommandItems(
   const buckets = useQuickAccessBuckets();
 
   // When in command scope or entity action mode, always show commands regardless of category filter
-  const categoryItems = createMemo(() => {
+  const categoryItems = () => {
     if (CommandState.commandScopeCommands().length > 0) {
       return buckets.commands();
     }
@@ -160,7 +158,7 @@ export function useCommandItems(
       return buckets.commands();
     }
     return buckets[categoryFilter()]();
-  });
+  };
 
   const search = createMemo(() => {
     const q = query();
