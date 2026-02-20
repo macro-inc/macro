@@ -19,8 +19,7 @@ import type {
   SoupEntityTag,
   SoupEntityPartial,
 } from './types';
-import type { SoupBody } from '../items';
-import { isItemExcludedByBody } from '@app/component/next-soup/filters/filters';
+import type { SoupApiItemFilter, SoupBody } from '../items';
 
 /**
  * Optimistically update a single soup entity across all queries that reference it.
@@ -111,11 +110,9 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
     {
       queryKey: soupKeys.items._def,
       predicate: (query) => {
-        const body = query.meta?.body as SoupBody | undefined;
-        console.log('query body', body, query.queryKey);
-        if (!body) return true;
-        if (isItemExcludedByBody(item, body)) return false;
-        return true;
+        const filter = query.meta?.itemFilter as SoupApiItemFilter | undefined;
+        if (!filter) return true;
+        return filter(item);
       },
     },
     (prev) => {

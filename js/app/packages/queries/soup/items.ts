@@ -1,12 +1,15 @@
+import { isItemExcludedByBody } from '@app/component/next-soup/filters/filters';
 import { throwOnErr } from '@core/util/maybeResult';
 import type { EntityData } from '@entity';
 import { soupKeys } from '@queries/soup/keys';
 import { mapSoupPageToEntityList } from '@queries/soup/transform-utils';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { storageServiceClient } from '@service-storage/client';
+import type { SoupApiItem } from '@service-storage/generated/schemas';
 import type { EntityFilters } from '@service-storage/generated/schemas/entityFilters';
 import type { Params } from '@service-storage/generated/schemas/params';
 import type { PostSoupRequest } from '@service-storage/generated/schemas/postSoupRequest';
+import { createCallback } from '@solid-primitives/rootless';
 import {
   useInfiniteQuery,
   type UseInfiniteQueryResult,
@@ -27,6 +30,8 @@ export type SoupItemsQueryArgs = {
 
 export type UseSoupQueryResult = UseInfiniteQueryResult<EntityData[], Error>;
 
+export type SoupApiItemFilter = (item: SoupApiItem) => boolean;
+
 interface SoupItemsQueryOptions {
   enabled?: boolean;
   staleTime?: StaleTime;
@@ -37,6 +42,12 @@ export const useSoupItemsQuery = (
   options?: Accessor<SoupItemsQueryOptions>
 ) => {
   const instructionsIdQuery = useInstructionsMdIdQuery();
+  const itemFilter: SoupApiItemFilter = createCallback((item: SoupApiItem) => {
+    const body = args().body;
+    if (!body) return true;
+    const excluded = isItemExcludedByBody(item, body);
+    return !excluded;
+  });
 
   return useInfiniteQuery(() => ({
     queryKey: soupKeys.items(args()).queryKey,
@@ -67,7 +78,7 @@ export const useSoupItemsQuery = (
     staleTime: options?.().staleTime,
     placeholderData: (p) => p,
     meta: {
-      body: args().body,
+      itemFilter,
     },
   }));
 };
