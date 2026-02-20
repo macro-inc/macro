@@ -29,20 +29,14 @@ export type BlockChannelProps = IncomingParams & {};
 export default function BlockChannel(props: BlockChannelProps) {
   const channelId = useBlockId();
 
-  return <NewChannel channelId={channelId} />;
+  return (
+    <NewChannel
+      channelId={channelId}
+      targetMessageId={'019c248b-439c-7ae8-aa90-91d303546d3d'}
+    />
+  );
   // const channelName = useChannelName(channelId);
   // const channelQuery = useChannelQuery(() => channelId);
-
-  // const targetMessage = () => {
-  //   const messageID = props[URL_PARAMS.message];
-  //   if (!messageID) return;
-  //   const threadID = props[URL_PARAMS.thread];
-
-  //   return {
-  //     messageId: messageID,
-  //     threadId: threadID,
-  //   } satisfies TargetMessageInfo;
-  // };
 
   // return (
   //   <EntityPermissionsGate entityType="channel" entityId={channelId}>

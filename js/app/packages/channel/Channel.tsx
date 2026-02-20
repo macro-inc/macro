@@ -2,7 +2,16 @@ import {
   useChannelMessagesQuery,
   type ChannelMessagesData,
 } from '@queries/channel/channel-messages';
-import { createSignal, Show, Suspense, type ParentProps } from 'solid-js';
+import { channelKeys } from '@queries/channel/keys';
+import { queryClient } from '@queries/client';
+import {
+  createEffect,
+  createSignal,
+  on,
+  Show,
+  Suspense,
+  type ParentProps,
+} from 'solid-js';
 import { Thread } from './Thread';
 import {
   DEFAULT_INITIAL_SCROLL_TARGET,
@@ -14,10 +23,11 @@ import type { ApiChannelMessage } from '@service-comms/client';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { createThreadManager } from './thread-manager';
 import { createThreadPaginator } from './thread-paginator';
+import { createTargetMessageControlledSignal } from './target-message';
 
 type ChannelProps = {
   channelId: string;
-  targetMessageId: string;
+  targetMessageId: string | undefined;
 };
 
 function ThreadRow(props: ParentProps) {
@@ -43,17 +53,27 @@ export function flattenMessages(
 }
 
 export function Channel(props: ChannelProps) {
-  const messagesQuery = useChannelMessagesQuery(() => props.channelId);
+  const [targetMessageId, _setTargetMessageId] =
+    createTargetMessageControlledSignal(
+      () => props.channelId,
+      props.targetMessageId
+    );
+
+  const messagesQuery = useChannelMessagesQuery(
+    () => props.channelId,
+    targetMessageId
+  );
   const [, setThreadListNavigation] = createSignal<ThreadListNavigation>();
 
   const threadManager = createThreadManager();
   const threadPaginator = createThreadPaginator(messagesQuery);
 
   const threadListInitialScrollTarget = (): ThreadListScrollTarget => {
-    if (props.targetMessageId) {
+    const targetMessageId_ = targetMessageId();
+    if (targetMessageId_) {
       return {
         tag: 'id',
-        id: props.targetMessageId,
+        id: targetMessageId_,
       };
     }
     return DEFAULT_INITIAL_SCROLL_TARGET;

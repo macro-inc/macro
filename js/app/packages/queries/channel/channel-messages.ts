@@ -14,7 +14,10 @@ export type ChannelMessagesData = InfiniteData<
   string | null
 >;
 
-export function channelMessagesQueryOptions(channelId: string) {
+export function channelMessagesQueryOptions(
+  channelId: string,
+  loadAroundMessageId: string
+) {
   return {
     queryKey: channelKeys.messages(channelId).queryKey,
     queryFn: async ({ pageParam }: { pageParam: string | null }) => {
@@ -24,6 +27,8 @@ export function channelMessagesQueryOptions(channelId: string) {
             channel_id: channelId,
             limit: 100,
             cursor: pageParam,
+            load_around_message_id:
+              pageParam === null ? loadAroundMessageId : null,
           })
       );
     },
@@ -34,11 +39,17 @@ export function channelMessagesQueryOptions(channelId: string) {
   };
 }
 
-export function useChannelMessagesQuery(channelId: Accessor<string>) {
-  return useInfiniteQuery(() => channelMessagesQueryOptions(channelId()));
+export function useChannelMessagesQuery(
+  channelId: Accessor<string>,
+  loadAroundMessageId: Accessor<string | undefined>
+) {
+  return useInfiniteQuery(() =>
+    channelMessagesQueryOptions(channelId(), loadAroundMessageId() ?? null)
+  );
 }
+
 export function useChannelMessagesWithIndex(channelId: Accessor<string>) {
-  const query = useChannelMessagesQuery(channelId);
+  const query = useChannelMessagesQuery(channelId, null);
   const byId = createMemo(() => {
     const flat = flattenMessages(query.data as ChannelMessagesData | undefined);
     return new Map(flat.map((m) => [m.id, m]));
