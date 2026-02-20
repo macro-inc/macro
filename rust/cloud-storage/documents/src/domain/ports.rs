@@ -20,7 +20,7 @@ use super::models::{CreateDocumentRepoArgs, DocumentError, LocationQueryParams};
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
 pub trait DocumentRepo: Send + Sync + 'static {
     /// The error type returned by repository operations.
-    type Err: Into<anyhow::Error> + Send;
+    type Err: Into<anyhow::Error> + Send + std::fmt::Debug;
 
     /// Get full document metadata (including latest version, BOM, project info).
     fn get_document_metadata(

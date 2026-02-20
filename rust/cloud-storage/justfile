@@ -83,6 +83,8 @@ setup_test_envs:
     echo "DATABASE_URL={{ MACRODB }}" >> ./comms_service/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./documents/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./stream/.env
+    echo "DATABASE_URL={{ MACRODB }}" >> ./macro_project_utils/.env
+    echo "DATABASE_URL={{ MACRODB }}" >> ./entity_access/.env
 
 setup_macrodb:
     just macro_db_client/create_db

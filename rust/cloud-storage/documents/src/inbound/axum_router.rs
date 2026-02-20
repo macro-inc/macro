@@ -22,8 +22,7 @@ use axum::{
 };
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::{
-    DocumentAccessExtractor, InternalUser,
-    project::ProjectBodyAccessLevelExtractor,
+    DocumentAccessExtractor, InternalUser, ProjectBodyAccessLevelExtractor,
 };
 use model::document::response::{
     CreateDocumentRequest, CreateDocumentResponse, GetDocumentResponse,
@@ -120,10 +119,7 @@ where
 
     Router::new()
         .merge(document_id_routes)
-        .route(
-            "/",
-            axum::routing::post(create_document_handler::<T, Svc>),
-        )
+        .route("/", axum::routing::post(create_document_handler::<T, Svc>))
         .with_state(state)
 }
 
@@ -350,7 +346,7 @@ pub async fn create_document_handler<T: DocumentService, Svc: EntityAccessServic
     };
 
     // Log if the user-provided mime type does not match the file type
-    if let (Some(ft), Some(ref user_mime_type)) = (file_type, &req.mime_type)
+    if let (Some(ft), Some(user_mime_type)) = (file_type, &req.mime_type)
         && *user_mime_type != ft.mime_type()
     {
         tracing::warn!(

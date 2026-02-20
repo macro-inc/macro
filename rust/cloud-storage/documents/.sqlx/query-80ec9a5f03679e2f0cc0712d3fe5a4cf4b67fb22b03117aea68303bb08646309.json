@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO \"Document\" (owner, name, \"fileType\", \"projectId\", \"createdAt\", \"updatedAt\")\n                VALUES ($1, $2, $3, $4, $5, $5)\n                RETURNING id\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamp"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "80ec9a5f03679e2f0cc0712d3fe5a4cf4b67fb22b03117aea68303bb08646309"
+}

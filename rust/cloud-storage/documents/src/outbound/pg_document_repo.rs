@@ -8,8 +8,8 @@ mod tests;
 use document_sub_type::DocumentSubType;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::document::{DocumentBasic, DocumentMetadata, FileType, VersionIDWithTimeStamps};
-use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::SharePermissionV2;
+use models_permissions::share_permission::access_level::AccessLevel;
 use sqlx::PgPool;
 
 use crate::domain::models::CreateDocumentRepoArgs;
@@ -375,7 +375,10 @@ impl DocumentRepo for PgDocumentRepo {
     }
 
     #[tracing::instrument(err, skip(self, args))]
-    async fn create_document(&self, args: CreateDocumentRepoArgs) -> Result<DocumentMetadata, Self::Err> {
+    async fn create_document(
+        &self,
+        args: CreateDocumentRepoArgs,
+    ) -> Result<DocumentMetadata, Self::Err> {
         let CreateDocumentRepoArgs {
             id,
             sha,
@@ -396,12 +399,9 @@ impl DocumentRepo for PgDocumentRepo {
 
         // Fetch project name if project_id provided
         let project_name: Option<String> = if let Some(ref proj_id) = project_id {
-            sqlx::query_scalar!(
-                r#"SELECT name FROM "Project" WHERE id = $1"#,
-                proj_id,
-            )
-            .fetch_optional(&mut *transaction)
-            .await?
+            sqlx::query_scalar!(r#"SELECT name FROM "Project" WHERE id = $1"#, proj_id,)
+                .fetch_optional(&mut *transaction)
+                .await?
         } else {
             None
         };
@@ -619,11 +619,7 @@ impl DocumentRepo for PgDocumentRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn update_upload_job(
-        &self,
-        document_id: &str,
-        job_id: &str,
-    ) -> Result<(), Self::Err> {
+    async fn update_upload_job(&self, document_id: &str, job_id: &str) -> Result<(), Self::Err> {
         let result = sqlx::query!(
             r#"
             UPDATE "UploadJob" SET "documentId" = $1 WHERE "jobId" = $2
@@ -643,12 +639,9 @@ impl DocumentRepo for PgDocumentRepo {
 
     #[tracing::instrument(err, skip(self))]
     async fn delete_document_by_id(&self, document_id: &str) -> Result<(), Self::Err> {
-        sqlx::query!(
-            r#"DELETE FROM "Document" WHERE id = $1"#,
-            document_id,
-        )
-        .execute(&self.pool)
-        .await?;
+        sqlx::query!(r#"DELETE FROM "Document" WHERE id = $1"#, document_id,)
+            .execute(&self.pool)
+            .await?;
 
         Ok(())
     }

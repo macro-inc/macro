@@ -20,6 +20,7 @@ use ai::tool::tool_loop::cli::Cli;
 use ai::tool::types::RequestContext;
 use ai::types::Model;
 use documents::domain::models::CloudFrontConfig;
+use documents::domain::ports::{PresignedUploadUrlPort, TaskPropertiesPort};
 use documents::domain::service::DocumentServiceImpl;
 use documents::inbound::toolset::{DocumentToolContext, document_toolset};
 use documents::outbound::pg_document_repo::PgDocumentRepo;
@@ -27,9 +28,44 @@ use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
 use lexical_client::LexicalClient;
 use macro_user_id::user_id::MacroUserIdStr;
+use model::document::ContentType;
 use sqlx::PgPool;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
+
+/// No-op presigned upload URL service (not needed for toolset example).
+#[derive(Clone)]
+struct NoOpUploadUrl;
+
+impl PresignedUploadUrlPort for NoOpUploadUrl {
+    async fn put_document_storage_presigned_url(
+        &self,
+        _key: &str,
+        _sha: &str,
+        _content_type: ContentType,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("not implemented in example")
+    }
+
+    async fn put_docx_upload_presigned_url(
+        &self,
+        _key: &str,
+        _sha: &str,
+        _content_type: ContentType,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("not implemented in example")
+    }
+}
+
+/// No-op task properties service (not needed for toolset example).
+#[derive(Clone)]
+struct NoOpTaskProperties;
+
+impl TaskPropertiesPort for NoOpTaskProperties {
+    async fn attach_task_properties(&self, _entity_ids: Vec<String>) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
 
 /// The prompt to use in the example.
 const PROMPT: &str = "You are an assistant that helps users explore and manage their documents. Use the available tools to read document metadata.";
@@ -81,6 +117,8 @@ async fn main() {
             browser_cache_expiry_seconds: 900,
         },
         SyncServiceClient::new(sync_service_auth_key.clone(), sync_service_url),
+        NoOpUploadUrl,
+        NoOpTaskProperties,
         pool,
     );
 

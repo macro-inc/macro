@@ -24,9 +24,7 @@ use sqlx::PgPool;
 use tracing;
 
 use super::models::{CloudFrontConfig, CreateDocumentRepoArgs, DocumentError, LocationQueryParams};
-use super::ports::{
-    DocumentRepo, DocumentService, PresignedUploadUrlPort, TaskPropertiesPort,
-};
+use super::ports::{DocumentRepo, DocumentService, PresignedUploadUrlPort, TaskPropertiesPort};
 
 /// The concrete document service implementation.
 pub struct DocumentServiceImpl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort> {
@@ -465,14 +463,14 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort> Document
         let document_id = document_metadata.document_id.clone();
 
         // Update upload job if job_id provided (outside the main transaction)
-        if let Some(job_id) = &job_id {
-            if let Err(e) = self.repo.update_upload_job(&document_id, job_id).await {
-                tracing::error!(error=?e, document_id=?document_id, "failed to update upload job");
-                self.cleanup_document(&document_id).await;
-                return Err(DocumentError::Internal(anyhow!(
-                    "unable to update upload job"
-                )));
-            }
+        if let Some(job_id) = &job_id
+            && let Err(e) = self.repo.update_upload_job(&document_id, job_id).await
+        {
+            tracing::error!(error=?e, document_id=?document_id, "failed to update upload job");
+            self.cleanup_document(&document_id).await;
+            return Err(DocumentError::Internal(anyhow!(
+                "unable to update upload job"
+            )));
         }
 
         // Build the S3 key for upload
