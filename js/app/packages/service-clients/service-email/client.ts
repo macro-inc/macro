@@ -121,7 +121,9 @@ export const emailClient = {
       (result) => result
     );
   },
-  async updateThreadLabel(args: { thread_id: string } & UpdateThreadLabelRequest) {
+  async updateThreadLabel(
+    args: { thread_id: string } & UpdateThreadLabelRequest
+  ) {
     const { thread_id, label_id, value } = args;
     return mapOk(
       await emailFetch<UpdateLabelBatchResponse>(

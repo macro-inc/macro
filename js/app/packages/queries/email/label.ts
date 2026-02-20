@@ -9,7 +9,8 @@ const LABEL_STALE_TIME = 5 * 60 * 1000;
 export function useEmailLabelsQuery() {
   return useQuery(() => ({
     queryKey: emailKeys.labels.queryKey,
-    queryFn: async () => throwOnErr(async () => await emailClient.getUserLabels()),
+    queryFn: async () =>
+      throwOnErr(async () => await emailClient.getUserLabels()),
     staleTime: LABEL_STALE_TIME,
     refetchOnWindowFocus: 'always',
   }));
