@@ -108,13 +108,6 @@ where
     Q: NotificationQueue,
     S: BulkDigestStateMachine,
 {
-    /// Send a notification to the specified recipients.
-    ///
-    /// This method performs the following steps:
-    /// 1. Filter recipients (remove sender, muted users, unsubscribed users)
-    /// 2. Create notification in the database
-    /// 3. Build and publish QueueMessage to SQS
-    /// 4. Return result (delivery happens async via worker)
     fn send_notification<
         'a,
         T: Notification + Clone + 'static,
@@ -124,60 +117,7 @@ where
         request: SendNotificationRequest<'a, T, U>,
     ) -> impl Future<Output = Result<Option<NotificationResult<'a>>, Report<SendNotificationError>>> + Send
     {
-        Box::pin(async move {
-            let mut request = self
-                .filter_recipients(request)
-                .await
-                .context(SendNotificationError::Other)?;
-
-            if request.req.recipient_ids.is_empty() {
-                return Ok(None);
-            }
-
-            let notification_id = Uuid::now_v7();
-            let (queue_messages, apns_collapse_key) = self
-                .build_queue_message(notification_id, &mut request)
-                .await?;
-
-            let notified_recipients = request.req.recipient_ids.clone();
-
-            // Create notification in DB (with collapse key if APNS was built)
-            let created = self
-                .repository
-                .create_notification(
-                    request.req,
-                    notification_id,
-                    self.service_name,
-                    apns_collapse_key.as_deref(),
-                )
-                .await
-                .context(SendNotificationError::Other)?;
-
-            // If notification already exists (idempotent), return early
-            let Some(n) = created else {
-                return Ok(Some(NotificationResult {
-                    notification_id,
-                    notified_recipients: HashSet::new(),
-                }));
-            };
-
-            let results = join_all(
-                n.into_iter()
-                    .map(|user_notif| self.state_machine_driver.ingest(user_notif)),
-            )
-            .await;
-
-            self.queue
-                .publish(queue_messages.with_state_decisions(results))
-                .await
-                .context(SendNotificationError::Other)?;
-
-            // Return result (delivery happens async)
-            Ok(Some(NotificationResult {
-                notification_id,
-                notified_recipients,
-            }))
-        })
+        self.send_notification_impl(request)
     }
 }
 
@@ -195,6 +135,75 @@ where
             state_machine_driver,
             service_name: std::env!("CARGO_PKG_NAME"),
         }
+    }
+
+    /// Send a notification to the specified recipients.
+    ///
+    /// This method performs the following steps:
+    /// 1. Filter recipients (remove sender, muted users, unsubscribed users)
+    /// 2. Create notification in the database
+    /// 3. Build and publish QueueMessage to SQS
+    /// 4. Return result (delivery happens async via worker)
+    async fn send_notification_impl<
+        'a,
+        T: Notification + Clone + 'static,
+        U: Serialize + Send + Sync + 'static,
+    >(
+        &'a self,
+        request: SendNotificationRequest<'a, T, U>,
+    ) -> Result<Option<NotificationResult<'a>>, Report<SendNotificationError>> {
+        let mut request = self
+            .filter_recipients(request)
+            .await
+            .context(SendNotificationError::Other)?;
+
+        if request.req.recipient_ids.is_empty() {
+            return Ok(None);
+        }
+
+        let notification_id = Uuid::now_v7();
+        let (queue_messages, apns_collapse_key) = self
+            .build_queue_message(notification_id, &mut request)
+            .await?;
+
+        let notified_recipients = request.req.recipient_ids.clone();
+
+        // Create notification in DB (with collapse key if APNS was built)
+        let created = self
+            .repository
+            .create_notification(
+                request.req,
+                notification_id,
+                self.service_name,
+                apns_collapse_key.as_deref(),
+            )
+            .await
+            .context(SendNotificationError::Other)?;
+
+        // If notification already exists (idempotent), return early
+        let Some(n) = created else {
+            return Ok(Some(NotificationResult {
+                notification_id,
+                notified_recipients: HashSet::new(),
+            }));
+        };
+
+        let results = join_all(
+            n.into_iter()
+                .map(|user_notif| self.state_machine_driver.ingest(user_notif)),
+        )
+        .await;
+
+        self.queue
+            .publish(queue_messages.with_state_decisions(results))
+            .await
+            .context(SendNotificationError::Other)?;
+
+        // Return result (delivery happens async)
+        Ok(Some(NotificationResult {
+            notification_id,
+            notified_recipients,
+        }))
     }
 
     /// Filter recipients based on:
@@ -338,13 +347,7 @@ where
     pub fn new(repository: N, queue: Q) -> Self {
         Self { repository, queue }
     }
-}
 
-impl<N, Q> NotificationReader for NotificationReaderService<N, Q>
-where
-    N: NotificationRepository,
-    Q: NotificationQueue,
-{
     /// Update notification status for a user and optionally enqueue push notification clearing.
     ///
     /// This method performs the following steps:
@@ -354,7 +357,7 @@ where
     ///    b. Look up the user's iOS device endpoints
     ///    c. Publish silent background push messages to clear badges on devices
     #[tracing::instrument(err, skip(self))]
-    async fn update_notifications(
+    async fn update_notifications_impl(
         &self,
         req: UpdateNotificationsRequest<'_>,
     ) -> Result<(), Report> {
@@ -449,6 +452,19 @@ where
         self.queue.publish(messages.into_iter()).await?;
 
         Ok(())
+    }
+}
+
+impl<N, Q> NotificationReader for NotificationReaderService<N, Q>
+where
+    N: NotificationRepository,
+    Q: NotificationQueue,
+{
+    fn update_notifications(
+        &self,
+        req: UpdateNotificationsRequest<'_>,
+    ) -> impl Future<Output = Result<(), Report>> + Send {
+        self.update_notifications_impl(req)
     }
 
     #[tracing::instrument(err, skip(self))]
