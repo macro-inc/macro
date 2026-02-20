@@ -1,5 +1,4 @@
 import { isInBlock } from '@core/block';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { getScrollParent } from '@core/util/scrollParent';
 import {
@@ -12,9 +11,13 @@ import {
   offset,
   type Placement,
   shift,
+  size,
 } from '@floating-ui/dom';
+import { isIOS } from '@solid-primitives/platform';
 import type { Accessor, JSX } from 'solid-js';
 import { createEffect, createSignal, onCleanup, onMount } from 'solid-js';
+import { virtualKeyboardHeight } from '@core/mobile/virtualKeyboard';
+import { getSafeAreaInsetTop } from '@core/mobile/safeAreaInsets';
 
 const DEFAULT_SPACING = 8;
 
@@ -37,6 +40,7 @@ type FloatWithSelectionOptions = {
   spacing?: number;
   floatingOptions?: Partial<ComputePositionConfig>;
   moveWithSelection?: boolean;
+  onAvailableHeight?: (height: number) => void;
 };
 
 export function floatWithSelection(
@@ -79,16 +83,25 @@ export function floatWithSelection(
     if (anchor) {
       setCurrentAnchor(anchor);
       const { placement } = await computePosition(anchor, floatingEl, {
-        placement: isTouchDevice() ? 'top-start' : 'bottom-start',
+        placement: 'bottom-start',
         middleware: [
-          isTouchDevice()
-            ? null
-            : flip({
-                fallbackStrategy: 'initialPlacement',
-                fallbackPlacements: ['top-start'],
-                boundary,
-                padding: accessor()?.spacing ?? DEFAULT_SPACING,
-              }),
+          flip({
+            fallbackStrategy: 'initialPlacement',
+            fallbackPlacements: ['top-start'],
+            boundary,
+            // On iOS, inflate the bottom padding by the keyboard height so flip
+            // correctly treats that space as unavailable.
+            padding: isIOS
+              ? {
+                  top: accessor()?.spacing ?? DEFAULT_SPACING,
+                  right: accessor()?.spacing ?? DEFAULT_SPACING,
+                  bottom:
+                    (accessor()?.spacing ?? DEFAULT_SPACING) +
+                    virtualKeyboardHeight(),
+                  left: accessor()?.spacing ?? DEFAULT_SPACING,
+                }
+              : (accessor()?.spacing ?? DEFAULT_SPACING),
+          }),
           offset(accessor()?.spacing ?? DEFAULT_SPACING),
           shift({ padding: accessor()?.spacing ?? DEFAULT_SPACING, boundary }),
           hide(),
@@ -104,14 +117,49 @@ export function floatWithSelection(
     let current = currentAnchor();
     if (!current || !decidedPlacement) return;
 
+    const spacing = accessor()?.spacing ?? DEFAULT_SPACING;
+    const onAvailableHeight = accessor()?.onAvailableHeight;
     const { x, y, middlewareData } = await computePosition(
       current,
       floatingEl,
       {
         placement: decidedPlacement,
         middleware: [
-          offset(accessor()?.spacing ?? DEFAULT_SPACING),
-          shift({ padding: accessor()?.spacing ?? DEFAULT_SPACING, boundary }),
+          offset(spacing),
+          shift({ padding: spacing, boundary }),
+          ...(onAvailableHeight
+            ? [
+                size({
+                  padding: spacing,
+                  apply({
+                    availableHeight,
+                    elements,
+                    placement,
+                  }: {
+                    availableHeight: number;
+                    elements: { floating: HTMLElement };
+                    placement: Placement;
+                  }) {
+                    const safeAreaTop = placement.startsWith('top')
+                      ? getSafeAreaInsetTop()
+                      : 0;
+                    const kbHeight =
+                      isIOS && placement.startsWith('bottom')
+                        ? virtualKeyboardHeight()
+                        : 0;
+                    const h = Math.max(
+                      0,
+                      availableHeight - safeAreaTop - kbHeight
+                    );
+                    Object.assign(elements.floating.style, {
+                      maxHeight: `${h}px`,
+                      overflow: 'hidden',
+                    });
+                    onAvailableHeight(h - spacing);
+                  },
+                }),
+              ]
+            : []),
           hide(),
         ],
       }
@@ -178,6 +226,15 @@ export function floatWithSelection(
         characterData: true,
         attributes: true,
       });
+    }
+  });
+
+  // Re-position when the virtual keyboard appears/disappears on iOS, since
+  // autoUpdate doesn't observe visualViewport changes.
+  createEffect(() => {
+    if (isIOS) virtualKeyboardHeight();
+    if (currentAnchor()) {
+      updatePosition();
     }
   });
 
