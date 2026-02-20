@@ -33,20 +33,49 @@ use std::time::Duration;
 /// This ensures no notifications are lost even if new ones arrive during processing.
 pub struct RedisDigestBatcher {
     conn: MultiplexedConnection,
+    key_prefix: String,
 }
 
 impl RedisDigestBatcher {
     /// Create a new [RedisDigestBatcher] with the given Redis connection.
     pub fn new(conn: MultiplexedConnection) -> Self {
-        Self { conn }
+        Self {
+            conn,
+            key_prefix: String::new(),
+        }
     }
 
-    fn digest_key(user_id: &str) -> String {
-        format!("digest:{user_id}")
+    /// Create a new [RedisDigestBatcher] with a key prefix for namespace isolation.
+    #[cfg(test)]
+    pub(crate) fn with_key_prefix(conn: MultiplexedConnection, prefix: impl Into<String>) -> Self {
+        Self {
+            conn,
+            key_prefix: prefix.into(),
+        }
     }
 
-    fn processing_key(user_id: &str) -> String {
-        format!("digest_processing:{user_id}")
+    fn digest_key(&self, user_id: &str) -> String {
+        if self.key_prefix.is_empty() {
+            format!("digest:{user_id}")
+        } else {
+            format!("{}:digest:{user_id}", self.key_prefix)
+        }
+    }
+
+    fn processing_key(&self, user_id: &str) -> String {
+        if self.key_prefix.is_empty() {
+            format!("digest_processing:{user_id}")
+        } else {
+            format!("{}:digest_processing:{user_id}", self.key_prefix)
+        }
+    }
+
+    fn pending_users_key(&self) -> String {
+        if self.key_prefix.is_empty() {
+            "digest_pending_users".to_string()
+        } else {
+            format!("{}:digest_pending_users", self.key_prefix)
+        }
     }
 }
 
@@ -58,7 +87,8 @@ impl DigestBatcher for RedisDigestBatcher {
     ) -> Result<(), Report> {
         let mut conn = self.conn.clone();
         let user_id_str = notification.owner_id.as_ref();
-        let digest_key = Self::digest_key(user_id_str);
+        let digest_key = self.digest_key(user_id_str);
+        let pending_users_key = self.pending_users_key();
 
         let serialized = serde_json::to_string(notification)?;
 
@@ -69,7 +99,7 @@ impl DigestBatcher for RedisDigestBatcher {
         // subsequent notifications don't push back the send time
         let send_at = Utc::now().timestamp() + send_after.as_secs() as i64;
         conn.zadd_options::<_, _, _, ()>(
-            "digest_pending_users",
+            &pending_users_key,
             user_id_str,
             send_at,
             &SortedSetAddOptions::add_only(),
@@ -82,10 +112,11 @@ impl DigestBatcher for RedisDigestBatcher {
     async fn claim_ready_digest(&self) -> Result<ClaimResult, Report> {
         let mut conn = self.conn.clone();
         let now = Utc::now().timestamp();
+        let pending_users_key = self.pending_users_key();
 
         // Step 1: Atomically pop one user from the pending set
         // Only one worker will receive this user
-        let result: Vec<(String, f64)> = conn.zpopmin("digest_pending_users", 1).await?;
+        let result: Vec<(String, f64)> = conn.zpopmin(&pending_users_key, 1).await?;
 
         let Some((user_id_str, score)) = result.into_iter().next() else {
             return Ok(ClaimResult::Empty);
@@ -94,7 +125,7 @@ impl DigestBatcher for RedisDigestBatcher {
         // Check if this digest is actually ready to send
         if score > now as f64 {
             // Not ready yet, put it back
-            conn.zadd::<_, _, _, ()>("digest_pending_users", &user_id_str, score)
+            conn.zadd::<_, _, _, ()>(&pending_users_key, &user_id_str, score)
                 .await?;
 
             // Return how long to wait until this digest is ready
@@ -102,8 +133,8 @@ impl DigestBatcher for RedisDigestBatcher {
             return Ok(ClaimResult::Wait(Duration::from_secs(wait_secs as u64)));
         }
 
-        let digest_key = Self::digest_key(&user_id_str);
-        let processing_key = Self::processing_key(&user_id_str);
+        let digest_key = self.digest_key(&user_id_str);
+        let processing_key = self.processing_key(&user_id_str);
 
         // Step 2: Atomically snapshot the list via RENAME
         // After this, any new notifications for this user go to a fresh digest:{user_id}
