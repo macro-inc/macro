@@ -81,11 +81,12 @@ pub trait LastOnlineChecker: Send + Sync + 'static {
 }
 
 /// The id of a message that was send as a push notification to SNS
+#[derive(Debug)]
 pub struct MessageId(pub String);
 
 /// trait for storage a message_id associated with a user_notification PK
 /// the user notification PK is (notification uuid, userid)
-pub trait MessageReceiptRepo {
+pub trait MessageReceiptRepo: Send + Sync + 'static {
     /// create a record in the database which associates the PK message_id with the FK to user_notifications (user_id, notification_id)
     fn record_message_id(
         &self,
@@ -109,11 +110,11 @@ pub trait MessageReceiptRepo {
 }
 
 /// trait which abstracts away the sending of a notification
-pub trait NotificationSendChecker {
+pub trait NotificationSendChecker: Send {
     /// the type returned when the notification was sent successfully
-    type Ok;
+    type Ok: Send;
     /// the error type of the request
-    type Err;
+    type Err: Send;
 
     /// try to send the notification
     fn send_notification(self) -> impl Future<Output = Result<Self::Ok, Self::Err>> + Send;

@@ -8,7 +8,7 @@ use crate::domain::models::email_notification_digest::BulkDigestStateMachine;
 use crate::domain::models::mobile::{MessageAttributes, PushType};
 use crate::domain::models::queue_message::{
     APNSTargets, ClearPushIdentifier, ConnGatewayNotification, EmailNotification,
-    NotificationChannel, QueueMessage, QueueMessageNeedsStateMachine,
+    NotificationChannel, QueueMessage, QueueMessageNeedsStateMachine, UserApnsEndpoints,
 };
 use crate::domain::models::request::{
     GetNotificationsByEventItemIdsRequest, NotificationStatus, UpdateNotificationsRequest,
@@ -257,12 +257,27 @@ where
                 .await
                 .context(SendNotificationError::Other)?;
 
-            let ios_endpoints: Vec<String> = device_endpoints
-                .values()
-                .flatten()
-                .filter_map(|e| match e {
-                    DeviceEndpoint::Ios(arn) => Some(arn.clone()),
-                    DeviceEndpoint::Android(_) => None,
+            let ios_endpoints: std::collections::HashMap<_, _> = device_endpoints
+                .into_iter()
+                .filter_map(|(user_id, endpoints)| {
+                    let ios: Vec<String> = endpoints
+                        .into_iter()
+                        .filter_map(|e| match e {
+                            DeviceEndpoint::Ios(arn) => Some(arn),
+                            DeviceEndpoint::Android(_) => None,
+                        })
+                        .collect();
+                    if ios.is_empty() {
+                        None
+                    } else {
+                        Some((
+                            user_id,
+                            UserApnsEndpoints {
+                                endpoints: ios,
+                                digest_state: None,
+                            },
+                        ))
+                    }
                 })
                 .collect();
 
@@ -278,7 +293,6 @@ where
                         notif: apns_notif,
                         attributes,
                         ios_device_endpoints: ios_endpoints,
-                        bulk_digest_state_machine: Default::default(),
                     })),
                 });
             }
@@ -375,12 +389,27 @@ where
             .get_device_endpoints(&[req.user_id.copied()])
             .await?;
 
-        let ios_endpoints: Vec<String> = device_endpoints
-            .values()
-            .flatten()
-            .filter_map(|e| match e {
-                DeviceEndpoint::Ios(arn) => Some(arn.clone()),
-                DeviceEndpoint::Android(_) => None,
+        let ios_endpoints: std::collections::HashMap<_, _> = device_endpoints
+            .into_iter()
+            .filter_map(|(user_id, endpoints)| {
+                let ios: Vec<String> = endpoints
+                    .into_iter()
+                    .filter_map(|e| match e {
+                        DeviceEndpoint::Ios(arn) => Some(arn),
+                        DeviceEndpoint::Android(_) => None,
+                    })
+                    .collect();
+                if ios.is_empty() {
+                    None
+                } else {
+                    Some((
+                        user_id,
+                        UserApnsEndpoints {
+                            endpoints: ios,
+                            digest_state: None,
+                        },
+                    ))
+                }
             })
             .collect();
 
@@ -412,7 +441,6 @@ where
                                 collapse_key,
                             },
                             ios_device_endpoints: ios_endpoints.clone(),
-                            bulk_digest_state_machine: Default::default(),
                         })),
                     }
                 })

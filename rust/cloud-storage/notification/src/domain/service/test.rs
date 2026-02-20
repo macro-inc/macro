@@ -759,33 +759,42 @@ async fn test_apns_enqueues_correct_data_for_multiple_users() {
     let expected_key = NotifCollapseKey::new("test").into_hashed().into_inner();
     assert_eq!(attrs["collapse_key"], expected_key);
 
-    // Verify all device endpoints from all users are included
-    let endpoints: Vec<&str> = ios["ios_device_endpoints"]
-        .as_array()
-        .expect("iosDeviceEndpoints should be an array")
-        .iter()
-        .map(|v| v.as_str().unwrap())
+    // Verify all device endpoints from all users are included (now keyed by user)
+    let endpoints_map = ios["ios_device_endpoints"]
+        .as_object()
+        .expect("ios_device_endpoints should be an object keyed by user ID");
+
+    // Collect all endpoints across all users
+    let all_endpoints: Vec<&str> = endpoints_map
+        .values()
+        .flat_map(|user| {
+            user["endpoints"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|v| v.as_str().unwrap())
+        })
         .collect();
 
     assert_eq!(
-        endpoints.len(),
+        all_endpoints.len(),
         4,
         "Should include all 4 device endpoints across 3 users"
     );
     assert!(
-        endpoints.contains(&"arn:aws:sns:us-east-1:111:endpoint/APNS/app/alice-device"),
+        all_endpoints.contains(&"arn:aws:sns:us-east-1:111:endpoint/APNS/app/alice-device"),
         "Should include alice's device"
     );
     assert!(
-        endpoints.contains(&"arn:aws:sns:us-east-1:111:endpoint/APNS/app/bob-device"),
+        all_endpoints.contains(&"arn:aws:sns:us-east-1:111:endpoint/APNS/app/bob-device"),
         "Should include bob's first device"
     );
     assert!(
-        endpoints.contains(&"arn:aws:sns:us-east-1:111:endpoint/APNS/app/bob-device-2"),
+        all_endpoints.contains(&"arn:aws:sns:us-east-1:111:endpoint/APNS/app/bob-device-2"),
         "Should include bob's second device"
     );
     assert!(
-        endpoints.contains(&"arn:aws:sns:us-east-1:111:endpoint/APNS/app/charlie-device"),
+        all_endpoints.contains(&"arn:aws:sns:us-east-1:111:endpoint/APNS/app/charlie-device"),
         "Should include charlie's device"
     );
 }
@@ -882,8 +891,8 @@ impl NotificationSender for MockMobileSender {
         _endpoint_arn: &str,
         _notification: &crate::domain::models::apple::APNSPushNotification<T>,
         _attributes: &crate::domain::models::mobile::MessageAttributes,
-    ) -> Result<(), Report> {
-        Ok(())
+    ) -> Result<String, Report> {
+        Ok("mock-message-id".to_string())
     }
 
     async fn send_android_push_notification<T: Serialize + Send + Sync>(
@@ -891,8 +900,8 @@ impl NotificationSender for MockMobileSender {
         _endpoint_arn: &str,
         _notification: &crate::domain::models::android::FCMMessage<T>,
         _attributes: &crate::domain::models::mobile::MessageAttributes,
-    ) -> Result<(), Report> {
-        Ok(())
+    ) -> Result<String, Report> {
+        Ok("mock-message-id".to_string())
     }
 }
 
@@ -946,6 +955,51 @@ impl RateLimitPort for MockRateLimiter {
     }
 }
 
+/// Mock egress state machine that forwards sends without recording message IDs or batching.
+struct MockEgressStateMachine;
+
+impl crate::domain::models::email_notification_digest::BulkDigestEgressStateMachine
+    for MockEgressStateMachine
+{
+    async fn continue_machine<
+        N: crate::domain::models::email_notification_digest::ports::NotificationSendChecker,
+    >(
+        &self,
+        req: crate::domain::models::email_notification_digest::ResumeMachineBRequest<N>,
+    ) -> (
+        Vec<Result<N::Ok, N::Err>>,
+        either::Either<
+            crate::domain::models::email_notification_digest::DontSend,
+            Result<crate::domain::models::email_notification_digest::BatchSend<()>, Report>,
+        >,
+    ) {
+        let mut results = Vec::with_capacity(req.send_notifs.len());
+        let mut any_succeeded = false;
+
+        for send_notif in req.send_notifs {
+            match send_notif.send_notification().await {
+                Ok(ok) => {
+                    results.push(Ok(ok));
+                    any_succeeded = true;
+                }
+                Err(err) => {
+                    results.push(Err(err));
+                }
+            }
+        }
+
+        let decision = if any_succeeded {
+            either::Either::Left(crate::domain::models::email_notification_digest::DontSend::new())
+        } else {
+            either::Either::Right(Ok(
+                crate::domain::models::email_notification_digest::BatchSend::from_inner(()),
+            ))
+        };
+
+        (results, decision)
+    }
+}
+
 fn create_egress_service<R: RateLimitPort>(
     rate_limiter: R,
 ) -> NotificationEgressService<
@@ -955,6 +1009,7 @@ fn create_egress_service<R: RateLimitPort>(
     MockMobileSender,
     MockEmailSender,
     R,
+    MockEgressStateMachine,
 > {
     NotificationEgressService::new(
         MockQueue::new(),
@@ -963,6 +1018,7 @@ fn create_egress_service<R: RateLimitPort>(
         MockMobileSender,
         MockEmailSender,
         rate_limiter,
+        MockEgressStateMachine,
     )
 }
 
@@ -1137,11 +1193,21 @@ async fn test_mark_seen_publishes_ios_clear_message() {
     // Verify identifier in custom data
     assert_eq!(ios["notif"]["identifier"], "collapse_key_1");
 
-    // Verify device endpoint
-    let endpoints = ios["ios_device_endpoints"].as_array().unwrap();
-    assert_eq!(endpoints.len(), 1);
+    // Verify device endpoint (now keyed by user)
+    let endpoints_map = ios["ios_device_endpoints"].as_object().unwrap();
+    let all_endpoints: Vec<&str> = endpoints_map
+        .values()
+        .flat_map(|user| {
+            user["endpoints"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|v| v.as_str().unwrap())
+        })
+        .collect();
+    assert_eq!(all_endpoints.len(), 1);
     assert_eq!(
-        endpoints[0],
+        all_endpoints[0],
         "arn:aws:sns:us-east-1:111:endpoint/APNS/app/alice"
     );
 }
@@ -1334,7 +1400,7 @@ impl NotificationSender for TrackingMobileSender {
         endpoint_arn: &str,
         _notification: &crate::domain::models::apple::APNSPushNotification<T>,
         _attributes: &crate::domain::models::mobile::MessageAttributes,
-    ) -> Result<(), Report> {
+    ) -> Result<String, Report> {
         // Track that this endpoint was attempted
         self.attempted_endpoints
             .lock()
@@ -1346,7 +1412,7 @@ impl NotificationSender for TrackingMobileSender {
             rootcause::bail!("Simulated APNS failure for endpoint: {}", endpoint_arn);
         }
 
-        Ok(())
+        Ok(format!("msg-id-{endpoint_arn}"))
     }
 
     async fn send_android_push_notification<T: Serialize + Send + Sync>(
@@ -1354,8 +1420,8 @@ impl NotificationSender for TrackingMobileSender {
         _endpoint_arn: &str,
         _notification: &crate::domain::models::android::FCMMessage<T>,
         _attributes: &crate::domain::models::mobile::MessageAttributes,
-    ) -> Result<(), Report> {
-        Ok(())
+    ) -> Result<String, Report> {
+        Ok("mock-android-msg-id".to_string())
     }
 }
 
@@ -1363,7 +1429,7 @@ impl NotificationSender for TrackingMobileSender {
 async fn test_egress_ios_attempts_all_endpoints_even_if_some_fail() {
     use crate::domain::models::apple::{APNSPushNotification, Aps};
     use crate::domain::models::mobile::{MessageAttributes, PushType};
-    use crate::domain::models::queue_message::APNSTargets;
+    use crate::domain::models::queue_message::{APNSTargets, UserApnsEndpoints};
 
     let endpoint1 = "arn:aws:sns:us-east-1:111:endpoint/APNS/app/device1";
     let endpoint2 = "arn:aws:sns:us-east-1:111:endpoint/APNS/app/device2";
@@ -1381,8 +1447,11 @@ async fn test_egress_ios_attempts_all_endpoints_even_if_some_fail() {
         mobile_sender.clone(),
         MockEmailSender,
         MockRateLimiter::allowing(),
+        MockEgressStateMachine,
     );
 
+    let user1 = test_user_id("alice@example.com");
+    let user2 = test_user_id("bob@example.com");
     let message = QueueMessage {
         message_type: "test_notification".to_string(),
         rate_limit: None,
@@ -1395,13 +1464,22 @@ async fn test_egress_ios_attempts_all_endpoints_even_if_some_fail() {
                 push_type: PushType::Alert,
                 collapse_key: "test_collapse".to_string(),
             },
-            ios_device_endpoints: vec![
-                endpoint1.to_string(),
-                endpoint2.to_string(),
-                endpoint3.to_string(),
-                endpoint4.to_string(),
-            ],
-            bulk_digest_state_machine: vec![],
+            ios_device_endpoints: HashMap::from([
+                (
+                    user1,
+                    UserApnsEndpoints {
+                        endpoints: vec![endpoint1.to_string(), endpoint2.to_string()],
+                        digest_state: None,
+                    },
+                ),
+                (
+                    user2,
+                    UserApnsEndpoints {
+                        endpoints: vec![endpoint3.to_string(), endpoint4.to_string()],
+                        digest_state: None,
+                    },
+                ),
+            ]),
         })),
     };
 
@@ -1448,7 +1526,7 @@ impl NotificationSender for std::sync::Arc<TrackingMobileSender> {
         endpoint_arn: &str,
         notification: &crate::domain::models::apple::APNSPushNotification<T>,
         attributes: &crate::domain::models::mobile::MessageAttributes,
-    ) -> Result<(), Report> {
+    ) -> Result<String, Report> {
         (**self)
             .send_ios_push_notification(endpoint_arn, notification, attributes)
             .await
@@ -1459,7 +1537,7 @@ impl NotificationSender for std::sync::Arc<TrackingMobileSender> {
         endpoint_arn: &str,
         notification: &crate::domain::models::android::FCMMessage<T>,
         attributes: &crate::domain::models::mobile::MessageAttributes,
-    ) -> Result<(), Report> {
+    ) -> Result<String, Report> {
         (**self)
             .send_android_push_notification(endpoint_arn, notification, attributes)
             .await

@@ -24,20 +24,24 @@ use crate::domain::models::{
 /// Port for sending mobile push notifications (iOS/Android via SNS).
 pub trait NotificationSender: Send + Sync + 'static {
     /// Send an iOS push notification via APNS.
+    ///
+    /// Returns the SNS message ID on success (used for delivery failure tracking).
     fn send_ios_push_notification<T: Serialize + Send + Sync>(
         &self,
         endpoint_arn: &str,
         notification: &APNSPushNotification<T>,
         attributes: &MessageAttributes,
-    ) -> impl Future<Output = Result<(), Report>> + Send;
+    ) -> impl Future<Output = Result<String, Report>> + Send;
 
     /// Send an Android push notification via FCM.
+    ///
+    /// Returns the SNS message ID on success (used for delivery failure tracking).
     fn send_android_push_notification<T: Serialize + Send + Sync>(
         &self,
         endpoint_arn: &str,
         notification: &FCMMessage<T>,
         attributes: &MessageAttributes,
-    ) -> impl Future<Output = Result<(), Report>> + Send;
+    ) -> impl Future<Output = Result<String, Report>> + Send;
 }
 
 /// Port for rate limiting operations.

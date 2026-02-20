@@ -34,12 +34,14 @@ impl<P> MobilePushAdapter<P> {
 /// This allows the adapter to work with different SNS client implementations.
 pub trait MobilePushOps {
     /// Send a push notification to the specified endpoint ARN.
+    ///
+    /// Returns the SNS message ID on success.
     fn push_notification<T: Serialize + Send + Sync>(
         &self,
         endpoint_arn: &str,
         message: &SnsTarget<'_, T>,
         attributes: HashMap<String, MessageAttributeValue>,
-    ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
+    ) -> impl std::future::Future<Output = Result<String, Report>> + Send;
 }
 
 impl MobilePushOps for aws_sdk_sns::Client {
@@ -48,10 +50,11 @@ impl MobilePushOps for aws_sdk_sns::Client {
         endpoint_arn: &str,
         message: &SnsTarget<'_, T>,
         attributes: HashMap<String, MessageAttributeValue>,
-    ) -> Result<(), Report> {
+    ) -> Result<String, Report> {
         let payload = message.as_json()?;
 
-        self.publish()
+        let output = self
+            .publish()
             .target_arn(endpoint_arn)
             .message_structure("json")
             .message(payload)
@@ -59,7 +62,7 @@ impl MobilePushOps for aws_sdk_sns::Client {
             .send()
             .await?;
 
-        Ok(())
+        Ok(output.message_id.unwrap_or_default())
     }
 }
 
@@ -69,7 +72,7 @@ impl<P: MobilePushOps + Send + Sync + 'static> NotificationSender for MobilePush
         endpoint_arn: &str,
         notification: &APNSPushNotification<T>,
         attributes: &MessageAttributes,
-    ) -> Result<(), Report> {
+    ) -> Result<String, Report> {
         let target = SnsTarget::Ios(notification);
         let sns_attributes = build_sns_attributes(&self.apns_bundle_id, attributes);
         self.push_service
@@ -82,7 +85,7 @@ impl<P: MobilePushOps + Send + Sync + 'static> NotificationSender for MobilePush
         endpoint_arn: &str,
         notification: &FCMMessage<T>,
         attributes: &MessageAttributes,
-    ) -> Result<(), Report> {
+    ) -> Result<String, Report> {
         let target = SnsTarget::Android(notification);
         let sns_attributes = build_sns_attributes(&self.apns_bundle_id, attributes);
         self.push_service

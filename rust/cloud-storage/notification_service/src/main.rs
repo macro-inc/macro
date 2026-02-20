@@ -125,7 +125,23 @@ pub async fn main() -> anyhow::Result<()> {
 
     let redis_client =
         redis::Client::open(vars.redis_uri.as_ref()).expect("failed to create redis client");
+    let redis_multiplexed_conn = redis_client
+        .get_multiplexed_async_connection()
+        .await
+        .context("failed to get multiplexed redis connection for egress state machine")?;
     let rate_limit_adapter = RedisRateLimitAdapter::new(redis_client);
+
+    let egress_state_machine =
+        ::notification::domain::models::email_notification_digest::StateMachineDriverB {
+            message_receipt_repo:
+                ::notification::outbound::message_receipt_repository::DbMessageReceiptRepository::new(
+                    db.clone(),
+                ),
+            digest_batcher: ::notification::outbound::digest_batcher::RedisDigestBatcher::new(
+                redis_multiplexed_conn,
+            ),
+            digest_window: std::time::Duration::from_secs(30 * 60),
+        };
 
     let egress_service = NotificationEgressService::new(
         notification_queue,
@@ -134,6 +150,7 @@ pub async fn main() -> anyhow::Result<()> {
         mobile_adapter,
         email_adapter,
         rate_limit_adapter,
+        egress_state_machine,
     );
 
     let worker = NotificationWorker::new(egress_service);

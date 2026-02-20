@@ -19,6 +19,7 @@ use crate::domain::{
 };
 use either::Either;
 use macro_user_id::cowlike::CowLike;
+use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::{Report, report};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, sync::Arc, time::Duration};
@@ -34,11 +35,34 @@ mod test;
 #[serde(transparent)]
 pub struct BatchSend<T>(T);
 
+impl<T> BatchSend<T> {
+    /// Borrow the inner value.
+    pub(crate) fn inner(&self) -> &T {
+        &self.0
+    }
+}
+
+#[cfg(test)]
+impl<T> BatchSend<T> {
+    /// Wrap an inner value.
+    pub(crate) fn from_inner(inner: T) -> Self {
+        Self(inner)
+    }
+}
+
 /// Send immediately as a single notification email.
 pub struct SingleSend<T>(T);
 
 /// Do not send an email for this notification.
 pub struct DontSend(());
+
+#[cfg(test)]
+impl DontSend {
+    /// Create a new `DontSend` value (test-only).
+    pub(crate) fn new() -> Self {
+        Self(())
+    }
+}
 
 struct NotificationSet(HashSet<&'static str>);
 
@@ -220,7 +244,7 @@ impl<T: Notification> AccountDoesNotExist<T> {
 /// State indicating the user has push notifications enabled.
 ///
 /// If push was delivered successfully, don't send email. Otherwise, batch send.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PushNotificationsEnabled {
     /// the inner value which has become adjacently tagged
     /// We lose the compiler typing here because we need to store this value
@@ -231,6 +255,11 @@ pub struct PushNotificationsEnabled {
 }
 
 impl PushNotificationsEnabled {
+    /// Get the owner (user) ID of this notification.
+    pub(crate) fn owner_id(&self) -> &MacroUserIdStr<'static> {
+        &self.inner.owner_id
+    }
+
     /// assert that the push notification failed to deliver and therefore
     /// we should queue a bulk email notification
     fn assert_failed(self) -> BatchSend<UserNotificationRow<serde_json::Value>> {
@@ -445,9 +474,8 @@ pub struct StateMachineDriverB<B, R> {
 pub struct ResumeMachineBRequest<N> {
     /// the notification enabled value as received from [StateMachineDecisionA::Indeterminate]
     pub notification_enabled: PushNotificationsEnabled,
-    /// a value which abstracts away the sending of the notification
-    /// implements [NotificationSendChecker]
-    pub send_notif: N,
+    /// all endpoint send checkers for this user — implements [NotificationSendChecker]
+    pub send_notifs: Vec<N>,
 }
 
 impl<B, R> StateMachineDriverB<B, R>
@@ -456,46 +484,103 @@ where
     R: MessageReceiptRepo,
 {
     /// this picks up where we left off if we received a [StateMachineDecisionA::Indeterminate]
-    /// We call this when its time to send the notification, on the egress side of the queue
+    /// We call this when its time to send the notification, on the egress side of the queue.
+    ///
+    /// Tries all endpoints for the user. Records message IDs for successes.
+    /// Only queues a batch email digest if ALL endpoints fail.
+    ///
+    /// Returns a tuple of:
+    /// - Per-endpoint results (for delivery status tracking)
+    /// - `Left(DontSend)` if any succeeded, `Right(batch_result)` if all failed
+    #[allow(clippy::type_complexity)]
     pub async fn continue_machine<N: NotificationSendChecker>(
         &self,
         req: ResumeMachineBRequest<N>,
-    ) -> Result<(N::Ok, DontSend), (N::Err, Result<BatchSend<()>, Report>)> {
+    ) -> (
+        Vec<Result<N::Ok, N::Err>>,
+        Either<DontSend, Result<BatchSend<()>, Report>>,
+    ) {
         let ResumeMachineBRequest {
             notification_enabled,
-            send_notif,
+            send_notifs,
         } = req;
-        let res = send_notif.send_notification().await;
 
-        match res {
-            // the notification succeeded (probably) so we dont send a bulk email
-            Ok(r) => {
-                // record the message id in the repo
-                let message_id = N::extract_message_id(&r);
+        let mut results = Vec::with_capacity(send_notifs.len());
+        let mut any_succeeded = false;
 
-                // cant really do anything if this fails, so we just ignore the error
-                let _ = self
-                    .message_receipt_repo
-                    .record_message_id(
-                        message_id,
-                        notification_enabled.inner.owner_id,
-                        notification_enabled.inner.notification_id,
-                    )
-                    .await;
-
-                Ok((r, DontSend(())))
-            }
-            // the notification failed to send, queue the batch
-            Err(e) => {
-                let next = notification_enabled.assert_failed();
-                let res = self
-                    .digest_batcher
-                    .add_to_digest(&next.0, self.digest_window)
-                    .await
-                    .map(BatchSend);
-                Err((e, res))
+        for send_notif in send_notifs {
+            match send_notif.send_notification().await {
+                Ok(r) => {
+                    let message_id = N::extract_message_id(&r);
+                    // cant really do anything if this fails, so we just ignore the error
+                    let _ = self
+                        .message_receipt_repo
+                        .record_message_id(
+                            message_id,
+                            notification_enabled.inner.owner_id.copied(),
+                            notification_enabled.inner.notification_id,
+                        )
+                        .await;
+                    results.push(Ok(r));
+                    any_succeeded = true;
+                }
+                Err(e) => {
+                    results.push(Err(e));
+                }
             }
         }
+
+        if any_succeeded {
+            (results, Either::Left(DontSend(())))
+        } else {
+            let next = notification_enabled.assert_failed();
+            let batch_result = self
+                .digest_batcher
+                .add_to_digest(&next.0, self.digest_window)
+                .await
+                .map(BatchSend);
+            (results, Either::Right(batch_result))
+        }
+    }
+}
+
+/// Port for continuing the bulk-digest state machine on the egress side.
+///
+/// This abstracts [`StateMachineDriverB`] so callers only depend on the capability,
+/// not the specific implementation or its generic adapter parameters.
+pub trait BulkDigestEgressStateMachine: Send + Sync + 'static {
+    /// Try all endpoints for a user. Records message IDs for successes.
+    /// Only queues a batch email digest if ALL endpoints fail.
+    ///
+    /// Returns per-endpoint results and either `DontSend` (any succeeded)
+    /// or the batch result (all failed).
+    #[allow(clippy::type_complexity)]
+    fn continue_machine<N: NotificationSendChecker>(
+        &self,
+        req: ResumeMachineBRequest<N>,
+    ) -> impl Future<
+        Output = (
+            Vec<Result<N::Ok, N::Err>>,
+            Either<DontSend, Result<BatchSend<()>, Report>>,
+        ),
+    > + Send;
+}
+
+impl<B, R> BulkDigestEgressStateMachine for StateMachineDriverB<B, R>
+where
+    B: DigestBatcher,
+    R: MessageReceiptRepo,
+{
+    fn continue_machine<N: NotificationSendChecker>(
+        &self,
+        req: ResumeMachineBRequest<N>,
+    ) -> impl Future<
+        Output = (
+            Vec<Result<N::Ok, N::Err>>,
+            Either<DontSend, Result<BatchSend<()>, Report>>,
+        ),
+    > + Send {
+        self.continue_machine(req)
     }
 }
 

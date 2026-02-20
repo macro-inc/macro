@@ -12,11 +12,22 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use rootcause::Report;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use thiserror::Error;
 use uuid::Uuid;
 
 #[cfg(test)]
 mod test;
+
+/// Per-user iOS push delivery targets.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserApnsEndpoints {
+    /// The iOS device endpoint ARNs for this user.
+    pub endpoints: Vec<String>,
+    /// State machine data if the ingress decision was indeterminate for this user.
+    #[serde(default)]
+    pub digest_state: Option<BatchSend<PushNotificationsEnabled>>,
+}
 
 /// APNS push notification targets.
 #[derive(Debug, Serialize, Deserialize)]
@@ -25,13 +36,8 @@ pub struct APNSTargets<T> {
     pub notif: APNSPushNotification<T>,
     /// The APNS message attributes.
     pub attributes: MessageAttributes,
-    /// The iOS device endpoints to deliver to.
-    pub ios_device_endpoints: Vec<String>,
-    /// if the state machine returned that the decision is incomplete
-    /// then we pass the state of the machine into the queue such that it
-    /// can be resumed on the egress side.
-    #[serde(default)]
-    pub bulk_digest_state_machine: Vec<BatchSend<PushNotificationsEnabled>>,
+    /// Per-user iOS device endpoints and optional state machine data.
+    pub ios_device_endpoints: HashMap<MacroUserIdStr<'static>, UserApnsEndpoints>,
 }
 
 /// Email notification payload.
@@ -193,18 +199,24 @@ impl<'a, T, U> QueueMessageNeedsStateMachine<'a, T, U> {
         self,
         states: Vec<Result<StateMachineDecisionA<T>, Report>>,
     ) -> impl Iterator<Item = QueueMessage<'a, T, U>> {
-        let val: Vec<_> = states
-            .into_iter()
-            .filter_map(|v| match v {
-                Ok(StateMachineDecisionA::Indeterminate(indeterminate)) => Some(indeterminate),
-                Err(_)
-                | Ok(StateMachineDecisionA::DontSend(_))
-                | Ok(StateMachineDecisionA::BatchWasQueued(_))
-                | Ok(StateMachineDecisionA::SendImmediate(_)) => None,
-            })
-            .collect();
+        // Collect indeterminate decisions keyed by owner_id
+        let indeterminates: HashMap<MacroUserIdStr<'static>, BatchSend<PushNotificationsEnabled>> =
+            states
+                .into_iter()
+                .filter_map(|v| match v {
+                    Ok(StateMachineDecisionA::Indeterminate(indeterminate)) => Some(indeterminate),
+                    Err(_)
+                    | Ok(StateMachineDecisionA::DontSend(_))
+                    | Ok(StateMachineDecisionA::BatchWasQueued(_))
+                    | Ok(StateMachineDecisionA::SendImmediate(_)) => None,
+                })
+                .map(|batch| {
+                    let owner = batch.inner().owner_id().clone();
+                    (owner, batch)
+                })
+                .collect();
 
-        let mut val = Some(val);
+        let mut indeterminates = Some(indeterminates);
 
         let map_msg = move |msg: QueueMessage<'a, T, U>| {
             let QueueMessage {
@@ -214,7 +226,14 @@ impl<'a, T, U> QueueMessageNeedsStateMachine<'a, T, U> {
             } = msg;
 
             if let NotificationChannel::Ios(ios) = &mut content {
-                ios.bulk_digest_state_machine = val.take().unwrap_or_default();
+                if let Some(ref mut lookup) = indeterminates {
+                    for (user_id, user_endpoints) in &mut ios.ios_device_endpoints {
+                        if let Some(entry) = lookup.remove(user_id) {
+                            user_endpoints.digest_state = Some(entry);
+                        }
+                    }
+                }
+                indeterminates = None;
             }
 
             QueueMessage {
