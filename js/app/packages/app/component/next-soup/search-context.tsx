@@ -54,7 +54,12 @@ export const useSearchContext = () => {
 };
 
 export const SearchProvider: FlowComponent = (props) => {
-  const itemsQuery = useSoupItemsQuery(() => ITEM_PRELOAD_ARGS);
+  const itemsQuery = useSoupItemsQuery(
+    () => ITEM_PRELOAD_ARGS,
+    () => ({
+      staleTime: 'static',
+    })
+  );
   const itemsFetchNextPage = throttle(() => itemsQuery.fetchNextPage(), 2000);
   createDeferred(() => {
     if (itemsQuery.hasNextPage && !itemsQuery.isFetchingNextPage) {
@@ -62,7 +67,12 @@ export const SearchProvider: FlowComponent = (props) => {
     }
   });
 
-  const channelItemsQuery = useSoupItemsQuery(() => CHANNEL_PRELOAD_ARGS);
+  const channelItemsQuery = useSoupItemsQuery(
+    () => CHANNEL_PRELOAD_ARGS,
+    () => ({
+      staleTime: 'static',
+    })
+  );
   const channelItemsFetchNextPage = throttle(
     () => channelItemsQuery.fetchNextPage(),
     2000

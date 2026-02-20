@@ -10,6 +10,7 @@ import type { PostSoupRequest } from '@service-storage/generated/schemas/postSou
 import {
   useInfiniteQuery,
   type UseInfiniteQueryResult,
+  type StaleTime,
 } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 
@@ -27,7 +28,8 @@ export type SoupItemsQueryArgs = {
 export type UseSoupQueryResult = UseInfiniteQueryResult<EntityData[], Error>;
 
 interface SoupItemsQueryOptions {
-  enabled: boolean;
+  enabled?: boolean;
+  staleTime?: StaleTime;
 }
 
 export const useSoupItemsQuery = (
@@ -62,6 +64,7 @@ export const useSoupItemsQuery = (
       });
     },
     enabled: options?.().enabled,
+    staleTime: options?.().staleTime,
     placeholderData: (p) => p,
   }));
 };
