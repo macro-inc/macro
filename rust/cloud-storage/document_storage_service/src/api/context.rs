@@ -12,6 +12,7 @@ use comms::{
 };
 use comms_service::CommsHandlerState;
 use connection_gateway_client::client::ConnectionGatewayClient;
+use documents_hex::domain::ports::{PresignedUploadUrlPort, TaskPropertiesPort};
 use documents_hex::domain::service::DocumentServiceImpl;
 use documents_hex::inbound::axum_router::DocumentRouterState;
 use documents_hex::outbound::pg_document_repo::PgDocumentRepo;
@@ -22,6 +23,7 @@ use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::F
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_env_var::env_var;
 use macro_sha_count_client::Redis;
+use model::document::ContentType;
 use notification::domain::models::email_notification_digest::StateMachineDriverA;
 use notification::domain::service::NotificationIngressService;
 use notification::outbound::{
@@ -43,7 +45,9 @@ use soup::{
 use sqlx::PgPool;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
-use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
+use system_properties::{
+    PgSystemPropertiesRepository, SystemPropertiesService as _, SystemPropertiesServiceImpl,
+};
 
 #[derive(Debug, Clone)]
 pub struct InternalFlag {
@@ -84,9 +88,50 @@ type PropertiesService = PropertiesServiceImpl<
 /// Type alias for the entity access service.
 pub(crate) type EntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
 
+/// Adapter implementing [`PresignedUploadUrlPort`] for the DSS S3 client.
+pub(crate) struct S3UploadUrlAdapter(pub Arc<S3>);
+
+impl PresignedUploadUrlPort for S3UploadUrlAdapter {
+    async fn put_document_storage_presigned_url(
+        &self,
+        key: &str,
+        sha: &str,
+        content_type: ContentType,
+    ) -> anyhow::Result<String> {
+        self.0
+            .put_document_storage_presigned_url(key, sha, content_type)
+            .await
+    }
+
+    async fn put_docx_upload_presigned_url(
+        &self,
+        key: &str,
+        sha: &str,
+        content_type: ContentType,
+    ) -> anyhow::Result<String> {
+        self.0
+            .put_docx_upload_presigned_url(key, sha, content_type)
+            .await
+    }
+}
+
+/// Adapter implementing [`TaskPropertiesPort`] for the system properties service.
+pub(crate) struct TaskPropertiesAdapter(pub Arc<SystemPropertiesService>);
+
+impl TaskPropertiesPort for TaskPropertiesAdapter {
+    async fn attach_task_properties(&self, entity_ids: Vec<String>) -> anyhow::Result<()> {
+        self.0
+            .attach_task_properties(entity_ids)
+            .await
+            .map_err(Into::into)
+    }
+}
+
 /// Type alias for the documents router state.
-pub(crate) type DocumentsState =
-    DocumentRouterState<DocumentServiceImpl<PgDocumentRepo>, EntityAccessService>;
+pub(crate) type DocumentsState = DocumentRouterState<
+    DocumentServiceImpl<PgDocumentRepo, S3UploadUrlAdapter, TaskPropertiesAdapter>,
+    EntityAccessService,
+>;
 
 /// Type alias for the ChannelServiceImpl used by comms
 pub(crate) type CommsChannelService =

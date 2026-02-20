@@ -1,5 +1,7 @@
 use crate::{
-    api::context::{ApiContext, DocumentStorageServiceAuthKey},
+    api::context::{
+        ApiContext, DocumentStorageServiceAuthKey, S3UploadUrlAdapter, TaskPropertiesAdapter,
+    },
     config::{
         DocumentPermissionJwtSecretKey, DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
     },
@@ -288,6 +290,14 @@ async fn main() -> anyhow::Result<()> {
         ),
     );
 
+    let s3 = Arc::new(S3::new(
+        s3_client,
+        config.vars.document_storage_bucket.as_ref(),
+        config.vars.docx_document_upload_bucket.as_ref(),
+        config.vars.upload_staging_bucket.as_ref(),
+    ));
+    let system_properties_service = Arc::new(system_properties_service);
+
     let document_repo = PgDocumentRepo::new(db.clone());
     let cloudfront_config = CloudFrontConfig {
         distribution_url: config
@@ -312,6 +322,8 @@ async fn main() -> anyhow::Result<()> {
         document_repo,
         cloudfront_config,
         sync_service_client.clone(),
+        S3UploadUrlAdapter(s3.clone()),
+        TaskPropertiesAdapter(system_properties_service.clone()),
         db.clone(),
     );
 
@@ -327,19 +339,14 @@ async fn main() -> anyhow::Result<()> {
         ),
         db: db.clone(),
         redis_client: Arc::new(Redis::new(redis_client)),
-        s3_client: Arc::new(S3::new(
-            s3_client,
-            config.vars.document_storage_bucket.as_ref(),
-            config.vars.docx_document_upload_bucket.as_ref(),
-            config.vars.upload_staging_bucket.as_ref(),
-        )),
+        s3_client: s3,
         dynamodb_client: Arc::new(dynamodb_client),
         dynamo_db,
         sqs_client: Arc::new(sqs_client),
         notification_ingress_service,
         conn_gateway_client: Arc::new(conn_gateway_client),
         sync_service_client: Arc::new(sync_service_client),
-        system_properties_service: Arc::new(system_properties_service),
+        system_properties_service: system_properties_service.clone(),
         properties_service: Arc::new(properties_service),
         opensearch_client: Arc::new(opensearch_client),
         config: Arc::new(config),
