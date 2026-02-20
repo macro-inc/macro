@@ -1,13 +1,11 @@
 import { withAnalytics } from '@coparse/analytics';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
-import { SMART_MODE_MODEL } from '@core/component/AI/constant';
 import { useChatInputContext } from '@core/component/AI/context';
 import { useChatAttachableHistory } from '@core/component/AI/signal/attachment';
 import type { Model, ToolSet } from '@core/component/AI/types';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
-import { Hotkey, modifierMap } from '@core/component/Hotkey';
+import { Hotkey } from '@core/component/Hotkey';
 import { Tooltip } from '@core/component/Tooltip';
-import { pressedKeys } from '@core/hotkey/state';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ArrowUp from '@icon/bold/arrow-up-bold.svg';
@@ -104,11 +102,7 @@ export function ChatInput(props: ChatInputComponentProps) {
       e.preventDefault();
 
       if (canSendMessage()) {
-        if (e.metaKey) {
-          sendMessage(SMART_MODE_MODEL);
-        } else {
-          sendMessage();
-        }
+        sendMessage();
       }
       return true;
     } else {
@@ -135,41 +129,10 @@ export function ChatInput(props: ChatInputComponentProps) {
     <Switch>
       <Match when={!isTouchDevice()}>
         <div class="flex flex-row items-center gap-3 text-xs text-ink-disabled opacity-70 shrink-0">
-          <Show when={generating()}>
-            <Tooltip tooltip="ctrl+c to stop" placement="top">
-              <div
-                class="flex items-center gap-1"
-                classList={{
-                  'text-accent': pressedKeys().has('ctrl'),
-                }}
-              >
-                <span>Stop</span>
-                <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1 py-0.5">
-                  <Hotkey shortcut="ctrl+c" />
-                </div>
-              </div>
-            </Tooltip>
-          </Show>
-          <Tooltip tooltip="Enter to send with Haiku" placement="top">
+          <Tooltip tooltip="Enter to send with Opus" placement="top">
             <div class="flex items-center gap-1">
               <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1 py-0.5">
                 <Hotkey shortcut="Enter" />
-              </div>
-              <span>Haiku</span>
-            </div>
-          </Tooltip>
-          <Tooltip
-            tooltip={`${modifierMap.cmd} + Enter to send with Opus`}
-            placement="top"
-          >
-            <div
-              class="flex items-center gap-1"
-              classList={{
-                'text-accent': pressedKeys().has('cmd'),
-              }}
-            >
-              <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1 py-0.5">
-                <Hotkey shortcut={'meta+Enter'} />
               </div>
               <span>Opus</span>
             </div>
