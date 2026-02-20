@@ -35,12 +35,6 @@ run_local *ARGS:
   just create_networks
   just docker_up {{ ARGS }}
 
-# Builds the main docker images for the services and runs the docker-compose
-# after
-build_run_local *ARGS:
-  just rust/cloud-storage/build_dev_service_images
-  just run_local {{ ARGS }}
-
 # Stop all local services
 stop-local:
   docker compose down
@@ -82,3 +76,12 @@ docker_cache_clear_targets:
 # Show BuildKit cache disk usage
 docker_cache_usage:
   docker builder du --verbose
+
+setup:
+  just get_environment
+  just create_networks
+  just setup_localstack
+  just setup_local_dbs
+  just infra/stacks/fusionauth-instance/setup
+  just rust/cloud-storage/build_dev_service_images
+  @echo "Setup complete. You can now run `just run_local`."
