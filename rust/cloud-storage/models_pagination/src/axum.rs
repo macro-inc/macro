@@ -107,7 +107,6 @@ where
     encoded
         .decode(|bytes| {
             let mut deserializer = serde_json::Deserializer::from_slice(&bytes);
-            deserializer.disable_recursion_limit();
             <CursorWithValAndFilter<Id, Sort, F>>::deserialize(&mut deserializer)
         })
         .map_err(CursorExtractErr::DecodeErr)
@@ -147,10 +146,7 @@ where
     }
 }
 
-/// An enum which denotes either the client did not provide a cursor value
-/// or the cursor was provided and parsed.
-/// Provided but invalid cursors will be rejected as 400
-// TODO: in axum 0.8 there is OptionalFromRequestParts which is preferable to this
+/// A parsed bidirectional cursor used for pagination.
 #[derive(Debug)]
 pub enum BidirectionalCursor<Id, S: Sortable, F> {
     /// The client provided a cursor to fetch the next page.
@@ -159,8 +155,10 @@ pub enum BidirectionalCursor<Id, S: Sortable, F> {
     Previous(Cursor<Id, CursorVal<S>, F>),
 }
 
-/// An enum which denotes either the client did not provide a cursor value
+/// An enum which denotes either the client did not provide cursor params
 /// or exactly one cursor direction was provided and parsed.
+/// Provided but invalid cursors will be rejected as 400.
+// TODO: in axum 0.8 there is OptionalFromRequestParts which is preferable to this
 #[derive(Debug)]
 pub enum BidirectionalCursorExtractor<Id, S: Sortable, F> {
     /// The client provided a valid parsed cursor.

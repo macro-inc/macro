@@ -248,15 +248,18 @@ pub async fn get_channel_messages_handler<S: ChannelMessagesService, A: ChannelA
 
     let previous_cursor = if params.load_around_message_id.is_some() || !has_cursor {
         None
-    } else if let Some(first_cursor) = cursor_from_first_message(&page, limit) {
-        let has_previous = match direction {
-            MessagePageDirection::Older => true,
-            MessagePageDirection::Newer => has_more_newer,
-        };
-
-        has_previous.then(|| Base64Str::encode_json(first_cursor).type_erase())
     } else {
-        None
+        match cursor_from_first_message(&page, limit) {
+            Some(first_cursor) => {
+                let has_previous = match direction {
+                    MessagePageDirection::Older => true,
+                    MessagePageDirection::Newer => has_more_newer,
+                };
+
+                has_previous.then(|| Base64Str::encode_json(first_cursor).type_erase())
+            }
+            None => None,
+        }
     };
 
     let page = page.type_erase().map(ApiChannelMessage::from);
