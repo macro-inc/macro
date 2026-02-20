@@ -874,7 +874,14 @@ export const getChannelMessagesQueryParams = zod.object({
     .min(getChannelMessagesQueryLimitMin)
     .optional()
     .describe('Page size (1-100, default 50)'),
-  cursor: zod.string().optional().describe('Base64 encoded cursor value'),
+  cursor: zod
+    .string()
+    .optional()
+    .describe('Base64 encoded cursor value for older messages'),
+  previous_cursor: zod
+    .string()
+    .optional()
+    .describe('Base64 encoded cursor value for newer messages'),
   load_around_message_id: zod
     .string()
     .uuid()
@@ -1015,6 +1022,10 @@ export const getChannelMessagesResponse = zod
       .string()
       .nullish()
       .describe('Cursor for the next page, null if no more pages.'),
+    previous_cursor: zod
+      .string()
+      .nullish()
+      .describe('Cursor for the previous page, null if no newer page exists.'),
   })
   .describe('Paginated response of channel messages.');
 

@@ -49,6 +49,7 @@ export * from './apiChannelMessageDeletedAt';
 export * from './apiChannelMessageEditedAt';
 export * from './apiChannelMessagesPage';
 export * from './apiChannelMessagesPageNextCursor';
+export * from './apiChannelMessagesPagePreviousCursor';
 export * from './apiChannelParticipant';
 export * from './apiCountedReaction';
 export * from './apiMessageAttachment';

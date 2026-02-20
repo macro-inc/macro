@@ -689,7 +689,16 @@
           {
             "name": "cursor",
             "in": "query",
-            "description": "Base64 encoded cursor value",
+            "description": "Base64 encoded cursor value for older messages",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "previous_cursor",
+            "in": "query",
+            "description": "Base64 encoded cursor value for newer messages",
             "required": false,
             "schema": {
               "type": "string"
@@ -713,6 +722,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiChannelMessagesPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -4948,6 +4967,10 @@
           "next_cursor": {
             "type": ["string", "null"],
             "description": "Cursor for the next page, null if no more pages."
+          },
+          "previous_cursor": {
+            "type": ["string", "null"],
+            "description": "Cursor for the previous page, null if no newer page exists."
           }
         }
       },
