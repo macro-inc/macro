@@ -8,7 +8,6 @@
 // import { withAnalytics } from "@coparse/analytics";
 // import type { BlockName } from "@core/block";
 // import { type Completion, streamCompletion } from "@core/client/completion";
-// import { rightbarChatId } from "@core/signal/rightbar";
 // import { DropdownMenu } from "@kobalte/core/dropdown-menu";
 // import BulletPointsIcon from "@phosphor-icons/core/regular/list-bullets.svg?component-solid";
 // import PencilIcon from "@phosphor-icons/core/regular/pencil.svg?component-solid";
@@ -163,7 +162,6 @@
 // }) {
 // 	const blockOrchestrator = useGlobalBlockOrchestrator();
 // 	const [preferences, setPreferences] = useAskAiPreferences(props.blockName);
-// 	const getChatId = () => rightbarChatId();
 
 // 	const BlockAllowedPrompts = Object.keys(PromptTypeDisplay).filter(
 // 		(_key: string) => {

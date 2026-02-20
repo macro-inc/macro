@@ -1,30 +1,29 @@
+import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { mountGlobalFocusListener } from '@app/signal/focus';
 import { useIsAuthenticated } from '@core/auth';
 import { Resize } from '@core/component/Resize';
 import { usePaywallState } from '@core/constant/PaywallState';
+import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import {
   LAYOUT_CONTEXT_ID,
   setPersistedLayoutSizes,
 } from '@core/signal/layout';
+import { updateCookie } from '@core/util/cookies';
 import { type RouteSectionProps, useLocation } from '@solidjs/router';
+import { cn } from '@ui/utils/classname';
 import { attachGlobalDOMScope } from 'core/hotkey/hotkeys';
 import { createEffect, onMount, Show, Suspense } from 'solid-js';
-import { updateCookie } from '@core/util/cookies';
 import Banner from './banner/Banner';
 import { GlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
 import { CommandMenu } from './command';
-import { PropertyEditorModal } from './property-edit-modal/PropertyEditorModal';
 import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { createMenuOpen, Launcher, setCreateMenuOpen } from './Launcher';
 import { Paywall } from './paywall/Paywall';
-import { RightbarWrapper } from './rightbar/Rightbar';
+import { PropertyEditorModal } from './property-edit-modal/PropertyEditorModal';
 import { SettingsWrapper } from './settings/SettingsWrapper';
 import { ShortcutsHelper } from './settings/ShortcutsHelper';
-import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
-import { cn } from '@ui/utils/classname';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
-import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 
 const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}login`,
@@ -138,7 +137,6 @@ export function Layout(props: RouteSectionProps) {
             <Resize.Panel id={LAYOUT_CONTEXT_ID} minSize={250}>
               {props.children}
             </Resize.Panel>
-            <RightbarWrapper />
             <SettingsWrapper />
           </ItemDndProvider>
         </Resize.Zone>

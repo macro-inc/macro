@@ -10,7 +10,7 @@ import type {
   BlockInstanceHandle,
   BlockOrchestrator,
 } from '@core/orchestrator';
-import { isRightPanelOpen, isSettingsPanelOpen } from '@core/signal/layout';
+import { isSettingsPanelOpen } from '@core/signal/layout';
 import {
   type Accessor,
   createMemo,
@@ -503,7 +503,9 @@ export function createSplitLayout(
 
       const listeners = contentChangeListeners.get(split.id);
       if (listeners) {
-        listeners.forEach((listener) => listener(payload));
+        listeners.forEach((listener) => {
+          listener(payload);
+        });
       }
     }
 
@@ -631,7 +633,7 @@ export function createSplitLayout(
   };
 
   function activateSplit(id: SplitId) {
-    let current = state.activeSplitId;
+    const current = state.activeSplitId;
     setState('lastActiveSplitId', current);
     if (state.spotlightId && state.spotlightId !== id) {
       setState('spotlightId', undefined);
@@ -640,11 +642,7 @@ export function createSplitLayout(
   }
 
   function spotlightSplit(id: SplitId) {
-    if (
-      state.splits.length <= 1 &&
-      !isSettingsPanelOpen() &&
-      !isRightPanelOpen()
-    ) {
+    if (state.splits.length <= 1 && !isSettingsPanelOpen()) {
       return;
     }
     const split = state.splits.find((s) => s.id === id);
@@ -831,10 +829,10 @@ export function createSplitLayout(
   }
 
   function reconcileSplits(newSplits: SplitContent[]) {
-    let newState: SplitState[] = [];
+    const newState: SplitState[] = [];
     const currentCompositeSplits = state.splits.map(keyOfSplitState);
     const newCompositeSplits = newSplits.map(keyOfSplitContent);
-    let changed =
+    const changed =
       newCompositeSplits.join(',') !== currentCompositeSplits.join(',');
 
     if (!changed) return;

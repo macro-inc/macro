@@ -2,7 +2,6 @@ import { useOpenInstructionsMd } from '@core/component/AI/util/instructions';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
-import { useBigChat } from '@core/signal/layout';
 import { AiInstructionsIcon } from '@queries/storage/instructions-md';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createMemo } from 'solid-js';
@@ -22,8 +21,6 @@ import { CREATABLE_BLOCKS, setCreateMenuOpen } from './Launcher';
 import { useSplitLayout } from './split-layout/layout';
 
 export default function GlobalShortcuts() {
-  const [_, setBigChatOpen] = useBigChat();
-
   const canFit = () => globalSplitManager()?.canAppendSplit() ?? true;
   const { toggleSettings } = useSettingsState();
 
@@ -85,18 +82,6 @@ export default function GlobalShortcuts() {
     },
     displayPriority: 10,
     hide: CommandState.isOpen,
-    runWithInputFocused: true,
-  });
-
-  registerHotkey({
-    hotkeyToken: TOKENS.global.toggleBigChat,
-    hotkey: 'cmd+j',
-    scopeId: 'global',
-    description: 'Toggle big chat',
-    keyDownHandler: () => {
-      setBigChatOpen((v) => !v);
-      return true;
-    },
     runWithInputFocused: true,
   });
 
