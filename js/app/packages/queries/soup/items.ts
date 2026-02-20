@@ -9,7 +9,6 @@ import type { SoupApiItem } from '@service-storage/generated/schemas';
 import type { EntityFilters } from '@service-storage/generated/schemas/entityFilters';
 import type { Params } from '@service-storage/generated/schemas/params';
 import type { PostSoupRequest } from '@service-storage/generated/schemas/postSoupRequest';
-import { createCallback } from '@solid-primitives/rootless';
 import {
   useInfiniteQuery,
   type UseInfiniteQueryResult,
@@ -43,11 +42,11 @@ export const useSoupItemsQuery = (
 ) => {
   const instructionsIdQuery = useInstructionsMdIdQuery();
 
-  const itemFilter: SoupApiItemFilter = createCallback((item: SoupApiItem) => {
+  const itemFilter: SoupApiItemFilter = (item: SoupApiItem) => {
     const body = args().body;
     if (!body) return true;
     return filterSoupItemByRequestBody(item, body);
-  });
+  };
 
   return useInfiniteQuery(() => ({
     queryKey: soupKeys.items(args()).queryKey,
@@ -77,8 +76,6 @@ export const useSoupItemsQuery = (
     enabled: options?.().enabled,
     staleTime: options?.().staleTime,
     placeholderData: (p) => p,
-    meta: {
-      itemFilter,
-    },
+    meta: { itemFilter },
   }));
 };
