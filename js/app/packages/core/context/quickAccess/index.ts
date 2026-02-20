@@ -22,4 +22,5 @@ export {
   isCommandItem,
   isEntityOfType,
   isFromBucket,
+  exclude,
 } from './types';

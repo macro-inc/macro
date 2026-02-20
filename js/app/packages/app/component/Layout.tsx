@@ -12,8 +12,7 @@ import { createEffect, onMount, Show, Suspense } from 'solid-js';
 import { updateCookie } from '@core/util/cookies';
 import Banner from './banner/Banner';
 import { GlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
-import { KommandMenu } from './command/Konsole';
-import { CommandMenu } from './command-next';
+import { CommandMenu } from './command';
 import { PropertyEditorModal } from './property-edit-modal/PropertyEditorModal';
 import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
@@ -103,9 +102,6 @@ export function Layout(props: RouteSectionProps) {
       <Suspense>
         <Show when={isAuthenticated()}>
           <GlobalShortcuts />
-          <Suspense>
-            <KommandMenu />
-          </Suspense>
           <Suspense>
             <CommandMenu />
           </Suspense>

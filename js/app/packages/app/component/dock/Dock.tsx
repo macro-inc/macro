@@ -13,7 +13,6 @@ import IconAI from '@macro-icons/wide/star.svg';
 import IconGear from '@macro-icons/macro-gear.svg';
 import IconLogo from '@macro-icons/macro-logo.svg';
 import { BasicTierLimit } from './BasicTierLimit';
-import { setKonsoleOpen } from '../command/state';
 import { Hotkey } from '@core/component/Hotkey';
 import { setCreateMenuOpen } from '../Launcher';
 import { useHasPaidAccess } from '@core/auth';
@@ -21,6 +20,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { Button } from '@ui/components/Button';
 import { LabelAndHotKey } from '@core/component/Tooltip';
 import { isMobile } from '@core/mobile/isMobile';
+import { CommandState } from '../command';
 
 export function Dock() {
   const notificationSource = useGlobalNotificationSource();
@@ -88,7 +88,7 @@ export function Dock() {
                   'height': '24px',
                   'gap': '7px'
                 }}
-                onClick={() => { setKonsoleOpen(true) }}
+                onClick={CommandState.toggle}
                 class="dock-button-hover"
                 data-hotkey-token={TOKENS.global.commandMenu}
               >

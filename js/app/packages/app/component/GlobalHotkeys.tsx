@@ -17,12 +17,7 @@ import {
 } from '../../block-theme/signals/themeSignals';
 import { applyTheme } from '../../block-theme/utils/themeUtils';
 import { globalSplitManager } from '../signal/splitLayout';
-import {
-  konsoleOpen,
-  resetKonsoleMode,
-  toggleKonsoleVisibility,
-} from './command/state';
-import { isOpen as commandNextOpen, toggleCommandMenu } from './command-next';
+import { CommandState } from './command';
 import { CREATABLE_BLOCKS, setCreateMenuOpen } from './Launcher';
 import { useSplitLayout } from './split-layout/layout';
 
@@ -33,8 +28,7 @@ export default function GlobalShortcuts() {
   const { toggleSettings } = useSettingsState();
 
   const handleCommandMenu = () => {
-    resetKonsoleMode();
-    toggleKonsoleVisibility();
+    CommandState.toggle();
   };
 
   const createCommandScope = registerHotkey({
@@ -83,14 +77,14 @@ export default function GlobalShortcuts() {
     hotkey: 'cmd+k',
     scopeId: 'global',
     description: () => {
-      return konsoleOpen() ? 'Close command menu' : 'Open command menu';
+      return CommandState.isOpen() ? 'Close command menu' : 'Open command menu';
     },
     keyDownHandler: () => {
       handleCommandMenu();
       return true;
     },
     displayPriority: 10,
-    hide: konsoleOpen,
+    hide: CommandState.isOpen,
     runWithInputFocused: true,
   });
 
@@ -103,22 +97,6 @@ export default function GlobalShortcuts() {
       setBigChatOpen((v) => !v);
       return true;
     },
-    runWithInputFocused: true,
-  });
-
-  registerHotkey({
-    hotkeyToken: TOKENS.global.searchMenu,
-    hotkey: 'cmd+i',
-    scopeId: 'global',
-    description: () => {
-      return commandNextOpen() ? 'Close search menu' : 'Open search menu';
-    },
-    keyDownHandler: () => {
-      toggleCommandMenu();
-      return true;
-    },
-    displayPriority: 10,
-    hide: commandNextOpen,
     runWithInputFocused: true,
   });
 

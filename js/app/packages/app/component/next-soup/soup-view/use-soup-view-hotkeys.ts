@@ -1,15 +1,4 @@
-import {
-  konsoleOpen,
-  resetKonsoleMode,
-  setKonsoleMode,
-  toggleKonsoleVisibility,
-} from '@app/component/command/state';
-import {
-  resetCommandCategoryIndex,
-  searchCategories,
-  setCommandCategoryIndex,
-  setKonsoleContextInformation,
-} from '@app/component/command/KonsoleItem';
+import { CommandState } from '@app/component/command/state';
 import type { SplitHandle } from '@app/component/split-layout/layoutManager';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { registerHotkey } from '@core/hotkey/hotkeys';
@@ -197,43 +186,30 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
   });
 
   // cmd+k - Open command menu with selection context
+  // When there's a selection, opens in entity action mode showing only
+  // selection modification commands with a preview of the selected entities
   registerHotkey({
     scopeId,
     description: () => {
-      return konsoleOpen() ? 'Close command menu' : 'Open command menu';
+      return CommandState.isOpen() ? 'Close command menu' : 'Open command menu';
     },
     hotkey: 'cmd+k',
-    condition: () => !konsoleOpen(),
+    condition: () => !CommandState.isOpen(),
     keyDownHandler: (e) => {
       e?.preventDefault();
       const multiSelectEntities = soup.selection.selected();
 
-      const hasSelection = multiSelectEntities.length > 0;
-
-      if (hasSelection) {
-        setKonsoleMode('SELECTION_MODIFICATION');
-        const selectionIndex = searchCategories.getCategoryIndex('Selection');
-
-        if (selectionIndex === undefined) return false;
-
-        setCommandCategoryIndex(selectionIndex);
-
-        searchCategories.showCategory('Selection');
-
-        setKonsoleContextInformation({
-          multiSelectEntities: multiSelectEntities.slice(),
-        });
-
-        toggleKonsoleVisibility();
-        return true;
+      if (multiSelectEntities.length > 0) {
+        // Open in entity action mode with selection
+        CommandState.openForEntityAction(multiSelectEntities.slice());
+      } else {
+        // Normal toggle
+        CommandState.toggle();
       }
-      searchCategories.hideCategory('Selection');
-      resetCommandCategoryIndex();
-      resetKonsoleMode();
-      return false;
+      return true;
     },
     displayPriority: 10,
-    hide: konsoleOpen,
+    hide: CommandState.isOpen,
     runWithInputFocused: true,
   });
 
