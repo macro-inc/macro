@@ -1,4 +1,4 @@
-use crate::domain::models::ParticipantRole;
+use crate::domain::models::{MessagePageDirection, ParticipantRole};
 use crate::domain::ports::ChannelMessagesRepo;
 use crate::outbound::pg_channels_repo::PgChannelMessagesRepo;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -26,9 +26,15 @@ async fn top_level_excludes_thread_replies_and_fully_deleted(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let repo = repo(pool);
-    let rows = repo
-        .get_top_level_messages(CH1, &Query::Sort(CreatedAt, ()), 50)
+    let result = repo
+        .get_top_level_messages(
+            CH1,
+            &Query::Sort(CreatedAt, ()),
+            MessagePageDirection::Older,
+            50,
+        )
         .await?;
+    let rows = result.rows;
 
     let ids: Vec<Uuid> = rows.iter().map(|r| r.id).collect();
     // msg1, msg2 (deleted but has active reply), msg3 — but NOT msg4 (fully deleted)
@@ -48,9 +54,15 @@ async fn top_level_excludes_thread_replies_and_fully_deleted(
 )]
 async fn top_level_ordered_newest_first(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool);
-    let rows = repo
-        .get_top_level_messages(CH1, &Query::Sort(CreatedAt, ()), 50)
+    let result = repo
+        .get_top_level_messages(
+            CH1,
+            &Query::Sort(CreatedAt, ()),
+            MessagePageDirection::Older,
+            50,
+        )
         .await?;
+    let rows = result.rows;
 
     let ids: Vec<Uuid> = rows.iter().map(|r| r.id).collect();
     assert_eq!(ids, vec![MSG3, MSG2, MSG1]);
@@ -65,8 +77,14 @@ async fn top_level_cursor_skips_earlier_messages(pool: Pool<Postgres>) -> anyhow
     let repo = repo(pool);
     // First fetch all to get cursor values
     let all = repo
-        .get_top_level_messages(CH1, &Query::Sort(CreatedAt, ()), 50)
-        .await?;
+        .get_top_level_messages(
+            CH1,
+            &Query::Sort(CreatedAt, ()),
+            MessagePageDirection::Older,
+            50,
+        )
+        .await?
+        .rows;
     assert_eq!(all.len(), 3);
 
     // Use msg3 (newest) as cursor → should skip msg3, return msg2 + msg1
@@ -79,7 +97,10 @@ async fn top_level_cursor_skips_earlier_messages(pool: Pool<Postgres>) -> anyhow
         },
         filter: (),
     });
-    let page2 = repo.get_top_level_messages(CH1, &cursor, 50).await?;
+    let page2 = repo
+        .get_top_level_messages(CH1, &cursor, MessagePageDirection::Older, 50)
+        .await?
+        .rows;
     let ids: Vec<Uuid> = page2.iter().map(|r| r.id).collect();
     assert_eq!(ids, vec![MSG2, MSG1]);
     Ok(())
@@ -89,11 +110,93 @@ async fn top_level_cursor_skips_earlier_messages(pool: Pool<Postgres>) -> anyhow
     fixtures(path = "../../../fixtures", scripts("channels_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
+async fn top_level_newer_direction_returns_nearest_newer_page(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let all = repo
+        .get_top_level_messages(
+            CH1,
+            &Query::Sort(CreatedAt, ()),
+            MessagePageDirection::Older,
+            50,
+        )
+        .await?
+        .rows;
+
+    let oldest = all.last().expect("at least one message");
+    let cursor = Query::Cursor(Cursor {
+        id: oldest.id,
+        limit: 2,
+        val: CursorVal {
+            sort_type: CreatedAt,
+            last_val: oldest.created_at,
+        },
+        filter: (),
+    });
+    let page = repo
+        .get_top_level_messages(CH1, &cursor, MessagePageDirection::Newer, 2)
+        .await?;
+
+    let ids: Vec<Uuid> = page.rows.iter().map(|r| r.id).collect();
+    assert_eq!(ids, vec![MSG3, MSG2]);
+    assert!(!page.has_more_newer);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn top_level_newer_direction_sets_has_more_newer_with_overfetch(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let all = repo
+        .get_top_level_messages(
+            CH1,
+            &Query::Sort(CreatedAt, ()),
+            MessagePageDirection::Older,
+            50,
+        )
+        .await?
+        .rows;
+
+    let oldest = all.last().expect("at least one message");
+    let cursor = Query::Cursor(Cursor {
+        id: oldest.id,
+        limit: 1,
+        val: CursorVal {
+            sort_type: CreatedAt,
+            last_val: oldest.created_at,
+        },
+        filter: (),
+    });
+    let page = repo
+        .get_top_level_messages(CH1, &cursor, MessagePageDirection::Newer, 1)
+        .await?;
+
+    let ids: Vec<Uuid> = page.rows.iter().map(|r| r.id).collect();
+    assert_eq!(ids, vec![MSG2], "nearest newer message is returned");
+    assert!(page.has_more_newer, "there is still a newer page (MSG3)");
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
 async fn top_level_limit_is_respected(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool);
-    let rows = repo
-        .get_top_level_messages(CH1, &Query::Sort(CreatedAt, ()), 2)
+    let result = repo
+        .get_top_level_messages(
+            CH1,
+            &Query::Sort(CreatedAt, ()),
+            MessagePageDirection::Older,
+            2,
+        )
         .await?;
+    let rows = result.rows;
 
     assert_eq!(rows.len(), 2);
     // Should be the 2 newest
@@ -108,9 +211,15 @@ async fn top_level_limit_is_respected(pool: Pool<Postgres>) -> anyhow::Result<()
 )]
 async fn top_level_scoped_to_channel(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool);
-    let rows = repo
-        .get_top_level_messages(CH2, &Query::Sort(CreatedAt, ()), 50)
+    let result = repo
+        .get_top_level_messages(
+            CH2,
+            &Query::Sort(CreatedAt, ()),
+            MessagePageDirection::Older,
+            50,
+        )
         .await?;
+    let rows = result.rows;
 
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].content, "other channel msg");

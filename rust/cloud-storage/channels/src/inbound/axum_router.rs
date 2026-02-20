@@ -3,9 +3,12 @@ mod test;
 
 use crate::domain::models::{
     ChannelAttachment, ChannelMessage, ChannelParticipant, CountedReaction, MessageAttachment,
-    ParticipantRole, ThreadInfo, ThreadReply,
+    MessagePageDirection, ParticipantRole, ThreadInfo, ThreadReply,
 };
-use crate::domain::ports::{ChannelAccessCheck, ChannelMessagesErr, ChannelMessagesService};
+use crate::domain::ports::{
+    ChannelAccessCheck, ChannelMessagesErr, ChannelMessagesPage, ChannelMessagesQueryResult,
+    ChannelMessagesService,
+};
 use axum::{
     Json, Router,
     extract::{FromRequestParts, Path, Query, State},
@@ -16,7 +19,10 @@ use axum::{
 use chrono::{DateTime, Utc};
 use model_error_response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
-use models_pagination::{CreatedAt, CursorExtractor, PaginatedOpaqueCursor, TypeEraseCursor};
+use models_pagination::{
+    Base64SerdeErr, Base64Str, CreatedAt, Cursor, CursorExtractor, CursorVal,
+    PaginatedOpaqueCursor, Query as PaginationQuery, TypeEraseCursor,
+};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -121,10 +127,87 @@ pub struct Params {
     /// Page size. Clamped to [1, 100], defaults to 50.
     #[serde(default)]
     limit: Option<u16>,
+    /// Cursor for paging older messages.
+    #[serde(default)]
+    cursor: Option<String>,
+    /// Cursor for paging newer messages.
+    #[serde(default)]
+    previous_cursor: Option<String>,
     /// When set, return a centered window of messages around this message id
     /// instead of cursor-paginated results.
     #[serde(default)]
     load_around_message_id: Option<Uuid>,
+}
+
+fn decode_messages_cursor(
+    encoded_cursor: String,
+) -> Result<Cursor<Uuid, CursorVal<CreatedAt>, ()>, ChannelsHandlerErr> {
+    let encoded =
+        Base64Str::<Cursor<Uuid, CursorVal<CreatedAt>, ()>>::new_from_string(encoded_cursor);
+    if encoded.len() > 32_000 {
+        return Err(ChannelsHandlerErr::BadRequest(
+            "Query is too large, must be <32kb",
+        ));
+    }
+
+    let decoded = encoded.decode_json().map_err(|err| match err {
+        Base64SerdeErr::DecodeErr(_) => {
+            ChannelsHandlerErr::BadRequest("failed to decode cursor value")
+        }
+        Base64SerdeErr::SerdeErr(_) => {
+            ChannelsHandlerErr::BadRequest("the cursor contained unexpected data")
+        }
+    })?;
+
+    Ok(decoded)
+}
+
+fn parse_messages_query(
+    cursor: Option<String>,
+    previous_cursor: Option<String>,
+) -> Result<
+    (
+        PaginationQuery<Uuid, CreatedAt, ()>,
+        MessagePageDirection,
+        bool,
+    ),
+    ChannelsHandlerErr,
+> {
+    match (cursor, previous_cursor) {
+        (Some(_), Some(_)) => Err(ChannelsHandlerErr::BadRequest(
+            "provide only one of cursor or previous_cursor",
+        )),
+        (Some(cursor), None) => Ok((
+            PaginationQuery::Cursor(decode_messages_cursor(cursor)?),
+            MessagePageDirection::Older,
+            true,
+        )),
+        (None, Some(cursor)) => Ok((
+            PaginationQuery::Cursor(decode_messages_cursor(cursor)?),
+            MessagePageDirection::Newer,
+            true,
+        )),
+        (None, None) => Ok((
+            PaginationQuery::Sort(CreatedAt, ()),
+            MessagePageDirection::Older,
+            false,
+        )),
+    }
+}
+
+fn cursor_from_first_message(
+    page: &ChannelMessagesPage,
+    limit: u16,
+) -> Option<Cursor<Uuid, CursorVal<CreatedAt>, ()>> {
+    page.items.first().map(|first| Cursor {
+        id: first.id,
+        limit: usize::from(limit),
+        val: CursorVal {
+            sort_type: CreatedAt,
+            last_val: first.created_at,
+        },
+        filter: (),
+    })
 }
 
 /// Create the channels router.
@@ -158,11 +241,13 @@ where
     params(
         ("channel_id" = Uuid, Path, description = "Channel ID"),
         ("limit" = Option<u16>, Query, description = "Page size (1-100, default 50)"),
-        ("cursor" = Option<String>, Query, description = "Base64 encoded cursor value"),
+        ("cursor" = Option<String>, Query, description = "Base64 encoded cursor value for older messages"),
+        ("previous_cursor" = Option<String>, Query, description = "Base64 encoded cursor value for newer messages"),
         ("load_around_message_id" = Option<Uuid>, Query, description = "Return a centered window around this message ID"),
     ),
     responses(
         (status = 200, body = ApiChannelMessagesPage),
+        (status = 400, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
@@ -172,27 +257,50 @@ pub async fn get_channel_messages_handler<S: ChannelMessagesService, A: ChannelA
     State(state): State<ChannelsRouterState<S, A>>,
     member: ChannelMember,
     Query(params): Query<Params>,
-    cursor: CursorExtractor<Uuid, CreatedAt, ()>,
-) -> Result<Json<PaginatedOpaqueCursor<ApiChannelMessage>>, ChannelsHandlerErr> {
-    let limit = params.limit.unwrap_or(50);
+) -> Result<Json<ApiChannelMessagesPage>, ChannelsHandlerErr> {
+    let limit = params.limit.unwrap_or(50).clamp(1, 100);
+    let (query, direction, has_cursor) =
+        parse_messages_query(params.cursor.clone(), params.previous_cursor.clone())?;
 
-    let page = match params.load_around_message_id {
+    let (page, has_more_newer) = match params.load_around_message_id {
         Some(message_id) => {
-            state
+            let page = state
                 .service
                 .get_channel_messages_around(member.channel_id, message_id, limit)
-                .await?
+                .await?;
+            (page, false)
         }
         None => {
-            let query = cursor.into_query(CreatedAt, ());
-            state
+            let ChannelMessagesQueryResult {
+                page,
+                has_more_newer,
+            } = state
                 .service
-                .get_channel_messages(member.channel_id, query, limit)
-                .await?
+                .get_channel_messages(member.channel_id, query, direction, limit)
+                .await?;
+            (page, has_more_newer)
         }
     };
 
-    Ok(Json(page.type_erase().map(ApiChannelMessage::from)))
+    let previous_cursor = if params.load_around_message_id.is_some() || !has_cursor {
+        None
+    } else if let Some(first_cursor) = cursor_from_first_message(&page, limit) {
+        let has_previous = match direction {
+            MessagePageDirection::Older => true,
+            MessagePageDirection::Newer => has_more_newer,
+        };
+
+        has_previous.then(|| Base64Str::encode_json(first_cursor).type_erase())
+    } else {
+        None
+    };
+
+    let page = page.type_erase().map(ApiChannelMessage::from);
+    Ok(Json(ApiChannelMessagesPage {
+        items: page.items,
+        next_cursor: page.next_cursor,
+        previous_cursor,
+    }))
 }
 
 /// Handler for `GET /channels/:channel_id/attachments`.
@@ -266,6 +374,8 @@ pub struct ApiChannelMessagesPage {
     items: Vec<ApiChannelMessage>,
     /// Cursor for the next page, null if no more pages.
     next_cursor: Option<String>,
+    /// Cursor for the previous page, null if no newer page exists.
+    previous_cursor: Option<String>,
 }
 
 /// A top-level channel message with thread info.
@@ -522,6 +632,9 @@ impl From<ChannelParticipant> for ApiChannelParticipant {
 /// Errors from the channels handler.
 #[derive(Debug, thiserror::Error)]
 pub enum ChannelsHandlerErr {
+    /// Bad request.
+    #[error("{0}")]
+    BadRequest(&'static str),
     /// Internal server error.
     #[error("An internal server error occurred")]
     Internal(#[from] ChannelMessagesErr),
@@ -529,28 +642,32 @@ pub enum ChannelsHandlerErr {
 
 impl IntoResponse for ChannelsHandlerErr {
     fn into_response(self) -> axum::response::Response {
-        let ChannelsHandlerErr::Internal(ref err) = self;
-        match err {
-            ChannelMessagesErr::MessageNotFound(id) => {
-                tracing::warn!(message_id=?id, "message not found");
-                (
-                    StatusCode::NOT_FOUND,
-                    Json(ErrorResponse {
-                        message: "Message not found",
-                    }),
-                )
-                    .into_response()
+        match self {
+            ChannelsHandlerErr::BadRequest(message) => {
+                (StatusCode::BAD_REQUEST, Json(ErrorResponse { message })).into_response()
             }
-            ChannelMessagesErr::Repo(_) => {
-                tracing::error!(error=?self, "channels handler error");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        message: "An internal server error occurred",
-                    }),
-                )
-                    .into_response()
-            }
+            ChannelsHandlerErr::Internal(err) => match err {
+                ChannelMessagesErr::MessageNotFound(id) => {
+                    tracing::warn!(message_id=?id, "message not found");
+                    (
+                        StatusCode::NOT_FOUND,
+                        Json(ErrorResponse {
+                            message: "Message not found",
+                        }),
+                    )
+                        .into_response()
+                }
+                ChannelMessagesErr::Repo(repo_err) => {
+                    tracing::error!(error=?repo_err, "channels handler error");
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorResponse {
+                            message: "An internal server error occurred",
+                        }),
+                    )
+                        .into_response()
+                }
+            },
         }
     }
 }

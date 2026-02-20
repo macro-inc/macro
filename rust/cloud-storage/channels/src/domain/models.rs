@@ -11,6 +11,15 @@ pub struct GetChannelMessagesRequest {
     pub limit: u16,
 }
 
+/// Direction for cursor-based message pagination.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MessagePageDirection {
+    /// Fetch older messages than the cursor.
+    Older,
+    /// Fetch newer messages than the cursor.
+    Newer,
+}
+
 /// A top-level message with thread info, reactions, and attachments.
 #[derive(Debug)]
 pub struct ChannelMessage {
