@@ -8,7 +8,8 @@ import {
   type EntityWithValidIcon,
   getIconConfig,
 } from '@core/component/EntityIcon';
-import type { SoupItemsQueryFilters } from '@queries/soup/items';
+import type { SoupBody, SoupItemsQueryFilters } from '@queries/soup/items';
+import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { codeFileExtensions } from '@block-code/util/languageSupport';
 import type { FilterConfig } from './create-filter-state';
 import type { Component } from 'solid-js';
@@ -36,6 +37,76 @@ export const NIL_UUID = '00000000-0000-0000-0000-000000000000';
  * ```
  */
 export const EXCLUDE: string[] = [NIL_UUID];
+
+export function isItemExcludedByBody(
+  item: SoupApiItem,
+  body: SoupBody
+): boolean {
+  switch (item.tag) {
+    case 'document': {
+      const f = body.document_filters;
+      if (!f) return false;
+      if (isIdFilteredOut(f.document_ids, item.data.id)) return true;
+      // TODO: we need to account for file type associations locally first
+      // if (
+      //   f.file_types?.length &&
+      //   !f.file_types.includes(item.data.fileType ?? '')
+      // )
+      //   return true;
+      if (isIdFilteredOut(f.owners, item.data.ownerId)) return true;
+      if (
+        f.project_ids?.length &&
+        isIdFilteredOut(f.project_ids, item.data.projectId ?? '')
+      )
+        return true;
+      return false;
+    }
+    case 'chat': {
+      const f = body.chat_filters;
+      if (!f) return false;
+      if (isIdFilteredOut(f.chat_ids, item.data.id)) return true;
+      if (isIdFilteredOut(f.owners, item.data.ownerId)) return true;
+      if (
+        f.project_ids?.length &&
+        isIdFilteredOut(f.project_ids, item.data.projectId ?? '')
+      )
+        return true;
+      return false;
+    }
+    case 'channel': {
+      const f = body.channel_filters;
+      if (!f) return false;
+      if (isIdFilteredOut(f.channel_ids, item.data.channel.id)) return true;
+      if (
+        f.channel_types?.length &&
+        !f.channel_types.includes(item.data.channel.channel_type)
+      )
+        return true;
+      return false;
+    }
+    case 'project': {
+      const f = body.project_filters;
+      if (!f) return false;
+      if (isIdFilteredOut(f.project_ids, item.data.id)) return true;
+      if (isIdFilteredOut(f.owners, item.data.ownerId)) return true;
+      return false;
+    }
+    case 'emailThread': {
+      const f = body.email_filters;
+      if (!f) return false;
+      if (isIdFilteredOut(f.email_thread_ids, item.data.id)) return true;
+      if (isIdFilteredOut(f.recipients, item.data.id)) return true;
+      if (isIdFilteredOut(f.senders, item.data.senderEmail ?? '')) return true;
+      return false;
+    }
+  }
+}
+
+function isIdFilteredOut(ids: string[] | undefined, value: string): boolean {
+  if (!ids || ids.length === 0) return false;
+  if (ids.length === 1 && ids[0] === NIL_UUID) return true;
+  return !ids.includes(value);
+}
 
 /**
  * Unread filter - entity has unread content.

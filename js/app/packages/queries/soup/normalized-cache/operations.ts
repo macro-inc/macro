@@ -19,6 +19,8 @@ import type {
   SoupEntityTag,
   SoupEntityPartial,
 } from './types';
+import type { SoupBody } from '../items';
+import { isItemExcludedByBody } from '@app/component/next-soup/filters/filters';
 
 /**
  * Optimistically update a single soup entity across all queries that reference it.
@@ -106,7 +108,16 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
   const previous = snapshotSoup();
 
   queryClient.setQueriesData<InfiniteData<SoupPage, unknown>>(
-    { queryKey: soupKeys.items._def },
+    {
+      queryKey: soupKeys.items._def,
+      predicate: (query) => {
+        const body = query.meta?.body as SoupBody | undefined;
+        console.log('query body', body, query.queryKey);
+        if (!body) return true;
+        if (isItemExcludedByBody(item, body)) return false;
+        return true;
+      },
+    },
     (prev) => {
       if (!prev) return prev;
       return {
