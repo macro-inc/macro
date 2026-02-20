@@ -16,7 +16,7 @@ services:
       - db_data:/var/lib/postgresql/data
 
   fusionauth:
-    image: fusionauth/fusionauth-app:latest
+    image: fusionauth/fusionauth-app:1.62.1
     depends_on:
       db:
         condition: service_healthy
