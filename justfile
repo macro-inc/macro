@@ -13,7 +13,20 @@ fix_environment *ARGS:
   rm -rf .env-local{{ ARGS }}.dec
 
 get_environment *ARGS:
-  sops --input-type dotenv --output-type dotenv -d .env-local{{ ARGS }}.enc > .env
+  #!/usr/bin/env bash
+  set -euo pipefail
+  sops --input-type dotenv --output-type dotenv -d ".env-local{{ ARGS }}.enc" > .env
+  if [ -n "{{ ARGS }}" ] && [ -f ~/.aws/credentials ]; then
+    AWS_KEY=$(awk -F'=' '/\[default\]/{found=1} found && /aws_access_key_id/{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit}' ~/.aws/credentials)
+    AWS_SECRET=$(awk -F'=' '/\[default\]/{found=1} found && /aws_secret_access_key/{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit}' ~/.aws/credentials)
+    if [ -n "$AWS_KEY" ] && [ -n "$AWS_SECRET" ]; then
+      sed -i '' "s|^AWS_ACCESS_KEY_ID=.*|AWS_ACCESS_KEY_ID=\"$AWS_KEY\"|" .env
+      sed -i '' "s|^AWS_SECRET_ACCESS_KEY=.*|AWS_SECRET_ACCESS_KEY=\"$AWS_SECRET\"|" .env
+      echo "Replaced AWS credentials from ~/.aws/credentials [default] profile"
+    else
+      echo "Warning: Could not read AWS credentials from ~/.aws/credentials [default] profile"
+    fi
+  fi
 
 edit_environment *ARGS:
   sops --input-type dotenv --output-type dotenv .env-local{{ ARGS}}.enc
