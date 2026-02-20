@@ -1,0 +1,3 @@
+config:
+  aws:region: us-east-1
+  macro-db:db_password_secret_key: macrodb-password-dev
