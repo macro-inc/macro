@@ -19,7 +19,7 @@ import type {
   SoupEntityTag,
   SoupEntityPartial,
 } from './types';
-import type { SoupApiItemFilter, SoupBody } from '../items';
+import type { SoupApiItemFilter } from '../items';
 
 /**
  * Optimistically update a single soup entity across all queries that reference it.
