@@ -50,17 +50,23 @@ const database = new aws.rds.Instance(
     password,
     kmsKeyId: config.require('kms_key_id'),
     performanceInsightsEnabled: true,
-    performanceInsightsRetentionPeriod: config.requireNumber('performance_insights_retention_days'),
-    performanceInsightsKmsKeyId: config.require('performance_insights_kms_key_id'),
+    performanceInsightsRetentionPeriod: config.requireNumber(
+      'performance_insights_retention_days'
+    ),
+    performanceInsightsKmsKeyId: config.require(
+      'performance_insights_kms_key_id'
+    ),
     dbName: 'macrodb',
     dbSubnetGroupName: config.require('subnet_group_name'),
     vpcSecurityGroupIds: [...config.require('security_group_ids').split(',')],
     publiclyAccessible: true,
     skipFinalSnapshot: stack !== 'prod', // we only want to skip final snapshot for non-prod
-    finalSnapshotIdentifier: stack === 'prod' ? `macro-db-${stack}-final` : undefined, // only final snapshot prod
+    finalSnapshotIdentifier:
+      stack === 'prod' ? `macro-db-${stack}-final` : undefined, // only final snapshot prod
     deletionProtection: stack === 'prod',
     // parameterGroupName: pulumi.interpolate`${parameterGroup.name}`,
-    enabledCloudwatchLogsExports: stack === 'prod' ? ['postgresql', 'upgrade'] : undefined,
+    enabledCloudwatchLogsExports:
+      stack === 'prod' ? ['postgresql', 'upgrade'] : undefined,
     multiAz: stack === 'prod',
     storageEncrypted: true,
     backupRetentionPeriod: config.requireNumber('backup_retention_days'),
