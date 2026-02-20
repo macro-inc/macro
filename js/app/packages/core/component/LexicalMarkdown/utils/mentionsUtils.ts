@@ -255,7 +255,7 @@ export async function documentUploadToItem(upload: UploadSuccess) {
       updatedAt: now,
       deletedAt: null,
       documentVersionId: 0,
-      owner: '',
+      ownerId: '',
     };
   }
 
@@ -269,7 +269,7 @@ export async function documentUploadToItem(upload: UploadSuccess) {
     createdAt: now,
     updatedAt: now,
     deletedAt: null,
-    userId: '',
+    ownerId: '',
   };
 }
 

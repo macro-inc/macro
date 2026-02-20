@@ -215,7 +215,6 @@ export type QuickAccessContextValue = {
   getById: (id: string) => QuickAccessItem | undefined;
 };
 
-
 export function exclude(...buckets: Bucket[]) {
   return ALL_BUCKETS.filter((bucket) => !buckets.includes(bucket));
 }
