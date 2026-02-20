@@ -1,47 +1,32 @@
 use crate::{
     api::{
-        attachments::{
-            get_chats_for_attachment,
-            get_models_for_attachments::{
-                self, GetModelsForAttachmentsRequest, GetModelsForAttachmentsResponse,
-            },
-            verify_attachments::{self, VerifyAttachmentsRequest, VerifyAttachmentsResponse},
-        },
+        attachments::get_chats_for_attachment,
         chats::{
             chat_history, chat_history_batch_messages, copy_chat, create_user_chat, delete_chat,
-            get_chat, get_chat_permissions, get_chats, revert_delete_chat,
+            get_chat, get_chat_permissions, revert_delete_chat,
         },
         citations,
-        completions::get_completion::{self, GetCompletionRequest, GetCompletionResponse},
         completions::structured_output::{
             self, StructedOutputCompletionRequest, StructedOutputCompletionResponse,
         },
-        document_text::upsert_document_text,
         health,
         models::get_models,
         preview::get_batch_preview,
         stream::chat_message::{
             self, ChatMessageError, HttpSendChatMessageRequest, SendChatMessageResponse,
         },
-        stream::simple_completion::{self, SimpleCompletionError, SimpleCompletionResponse},
     },
     model::{
-        request::{
-            chats::{
-                CopyChatRequest, CreateChatRequest, GetChatPathParams, NewAttachment,
-                PatchChatRequest, PatchChatRequestV2,
-            },
-            document_text::{CreateTextRequestBody, CreateTextRequestParams},
+        request::chats::{
+            CopyChatRequest, CreateChatRequest, GetChatPathParams, NewAttachment, PatchChatRequest,
+            PatchChatRequestV2,
         },
         response::{
             attachments::GetChatsForAttachmentResponse,
             chats::{GetChatPermissionsResponseV2, GetChatResponse, GetModelsResponse},
             models::AIModel,
         },
-        stream::{
-            ChatStream, GetSimpleCompletionStreamPayload, SendChatMessagePayload, StreamError,
-            ToolSet,
-        },
+        stream::{ChatStream, SendChatMessagePayload, StreamError, ToolSet},
     },
 };
 
@@ -49,7 +34,7 @@ use crate::api::preview::get_batch_preview::{GetBatchPreviewRequest, GetBatchPre
 
 use ai::types::{ModelMetadata, Provider};
 
-use crate::model::chats::{ChatResponse, ChatsResponse};
+use crate::model::chats::ChatResponse;
 
 use model::{
     chat::{
@@ -84,20 +69,14 @@ use utoipa::OpenApi;
             delete_chat::delete_chat_handler,
             delete_chat::permanently_delete_chat_handler,
             get_models::get_models_handler,
-            get_chats::get_chats_handler,
-            upsert_document_text::upsert_text_handler,
             get_chats_for_attachment::get_chats_for_attachment_handler,
-            verify_attachments::verify_attachments_handler,
             citations::get_citation_handler,
             get_batch_preview::handler,
             structured_output::handler,
-            get_models_for_attachments::get_models_for_attachments_handler,
-            get_completion::get_completion_handler,
             revert_delete_chat::handler,
             chat_history::get_chat_history_handler,
             chat_history_batch_messages::get_chat_history_batch_messages_handler,
             chat_message::send_chat_message,
-            simple_completion::simple_completion,
         ),
         components(
             schemas(
@@ -141,15 +120,9 @@ use utoipa::OpenApi;
                 PatchChatRequestV2,
                 AttachmentMetadata,
                 CopyChatRequest,
-                GetModelsForAttachmentsResponse,
                 // Chat Response
                 GetChatPermissionsResponseV2,
                 GetChatResponse,
-                ChatsResponse,
-
-                // Document Text
-                CreateTextRequestBody,
-                CreateTextRequestParams,
 
                 // Share Permission
                 UpdateOperation,
@@ -162,10 +135,6 @@ use utoipa::OpenApi;
                 // Attachments
                 GetChatsForAttachmentResponse,
                 NewAttachment,
-                VerifyAttachmentsRequest,
-                VerifyAttachmentsResponse,
-                GetModelsForAttachmentsResponse,
-                GetModelsForAttachmentsRequest,
 
                 // Preview
                 GetBatchPreviewRequest,
@@ -174,16 +143,11 @@ use utoipa::OpenApi;
                 // Completions
                 StructedOutputCompletionRequest,
                 StructedOutputCompletionResponse,
-                GetCompletionRequest,
-                GetCompletionResponse,
 
                 // Stream HTTP API
                 HttpSendChatMessageRequest,
                 SendChatMessageResponse,
                 ChatMessageError,
-                SimpleCompletionResponse,
-                SimpleCompletionError,
-                GetSimpleCompletionStreamPayload,
                 StreamError,
                 ToolSet,
 

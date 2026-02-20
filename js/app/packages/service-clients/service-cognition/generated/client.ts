@@ -8,9 +8,7 @@ import type {
   ChatHistory,
   ChatHistoryBatchMessagesRequest,
   ChatMessageError,
-  ChatsResponse,
   CopyChatRequest,
-  CreateTextRequestBody,
   DocumentTextPart,
   EmptyResponse,
   GenericErrorResponse,
@@ -19,149 +17,14 @@ import type {
   GetChatPermissionsResponseV2,
   GetChatResponse,
   GetChatsForAttachmentResponse,
-  GetCompletionRequest,
-  GetCompletionResponse,
-  GetModelsForAttachmentsRequest,
-  GetModelsForAttachmentsResponse,
   GetModelsResponse,
-  GetSimpleCompletionStreamPayload,
   HttpSendChatMessageRequest,
   SendChatMessageResponse,
-  SimpleCompletionError,
-  SimpleCompletionResponse,
   StringIDResponse,
   StructedOutputCompletionRequest,
   StructedOutputCompletionResponse,
   SuccessResponse,
-  VerifyAttachmentsRequest,
-  VerifyAttachmentsResponse,
 } from './schemas';
-
-export type getModelsForAttachmentsHandlerResponse200 = {
-  data: GetModelsForAttachmentsResponse;
-  status: 200;
-};
-
-export type getModelsForAttachmentsHandlerResponse401 = {
-  data: string;
-  status: 401;
-};
-
-export type getModelsForAttachmentsHandlerResponse404 = {
-  data: string;
-  status: 404;
-};
-
-export type getModelsForAttachmentsHandlerResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type getModelsForAttachmentsHandlerResponseSuccess =
-  getModelsForAttachmentsHandlerResponse200 & {
-    headers: Headers;
-  };
-export type getModelsForAttachmentsHandlerResponseError = (
-  | getModelsForAttachmentsHandlerResponse401
-  | getModelsForAttachmentsHandlerResponse404
-  | getModelsForAttachmentsHandlerResponse500
-) & {
-  headers: Headers;
-};
-
-export type getModelsForAttachmentsHandlerResponse =
-  | getModelsForAttachmentsHandlerResponseSuccess
-  | getModelsForAttachmentsHandlerResponseError;
-
-export const getGetModelsForAttachmentsHandlerUrl = () => {
-  return `/attachments/get_models_for_attachments`;
-};
-
-export const getModelsForAttachmentsHandler = async (
-  getModelsForAttachmentsRequest: GetModelsForAttachmentsRequest,
-  options?: RequestInit
-): Promise<getModelsForAttachmentsHandlerResponse> => {
-  const res = await fetch(getGetModelsForAttachmentsHandlerUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(getModelsForAttachmentsRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getModelsForAttachmentsHandlerResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getModelsForAttachmentsHandlerResponse;
-};
-
-export type verifyAttachmentsHandlerResponse200 = {
-  data: VerifyAttachmentsResponse;
-  status: 200;
-};
-
-export type verifyAttachmentsHandlerResponse401 = {
-  data: string;
-  status: 401;
-};
-
-export type verifyAttachmentsHandlerResponse404 = {
-  data: string;
-  status: 404;
-};
-
-export type verifyAttachmentsHandlerResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type verifyAttachmentsHandlerResponseSuccess =
-  verifyAttachmentsHandlerResponse200 & {
-    headers: Headers;
-  };
-export type verifyAttachmentsHandlerResponseError = (
-  | verifyAttachmentsHandlerResponse401
-  | verifyAttachmentsHandlerResponse404
-  | verifyAttachmentsHandlerResponse500
-) & {
-  headers: Headers;
-};
-
-export type verifyAttachmentsHandlerResponse =
-  | verifyAttachmentsHandlerResponseSuccess
-  | verifyAttachmentsHandlerResponseError;
-
-export const getVerifyAttachmentsHandlerUrl = () => {
-  return `/attachments/verify`;
-};
-
-export const verifyAttachmentsHandler = async (
-  verifyAttachmentsRequest: VerifyAttachmentsRequest,
-  options?: RequestInit
-): Promise<verifyAttachmentsHandlerResponse> => {
-  const res = await fetch(getVerifyAttachmentsHandlerUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(verifyAttachmentsRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: verifyAttachmentsHandlerResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as verifyAttachmentsHandlerResponse;
-};
 
 export type getChatsForAttachmentHandlerResponse200 = {
   data: GetChatsForAttachmentResponse;
@@ -222,66 +85,6 @@ export const getChatsForAttachmentHandler = async (
     status: res.status,
     headers: res.headers,
   } as getChatsForAttachmentHandlerResponse;
-};
-
-/**
- * @summary Gets all the chats for a user
- */
-export type getChatsHandlerResponse200 = {
-  data: ChatsResponse;
-  status: 200;
-};
-
-export type getChatsHandlerResponse401 = {
-  data: string;
-  status: 401;
-};
-
-export type getChatsHandlerResponse404 = {
-  data: string;
-  status: 404;
-};
-
-export type getChatsHandlerResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type getChatsHandlerResponseSuccess = getChatsHandlerResponse200 & {
-  headers: Headers;
-};
-export type getChatsHandlerResponseError = (
-  | getChatsHandlerResponse401
-  | getChatsHandlerResponse404
-  | getChatsHandlerResponse500
-) & {
-  headers: Headers;
-};
-
-export type getChatsHandlerResponse =
-  | getChatsHandlerResponseSuccess
-  | getChatsHandlerResponseError;
-
-export const getGetChatsHandlerUrl = () => {
-  return `/chats`;
-};
-
-export const getChatsHandler = async (
-  options?: RequestInit
-): Promise<getChatsHandlerResponse> => {
-  const res = await fetch(getGetChatsHandlerUrl(), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getChatsHandlerResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getChatsHandlerResponse;
 };
 
 export type createChatHandlerResponse201 = {
@@ -827,75 +630,6 @@ export const getCitationHandler = async (
   } as getCitationHandlerResponse;
 };
 
-export type getCompletionHandlerResponse200 = {
-  data: GetCompletionResponse;
-  status: 200;
-};
-
-export type getCompletionHandlerResponse400 = {
-  data: string;
-  status: 400;
-};
-
-export type getCompletionHandlerResponse401 = {
-  data: string;
-  status: 401;
-};
-
-export type getCompletionHandlerResponse422 = {
-  data: string;
-  status: 422;
-};
-
-export type getCompletionHandlerResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type getCompletionHandlerResponseSuccess =
-  getCompletionHandlerResponse200 & {
-    headers: Headers;
-  };
-export type getCompletionHandlerResponseError = (
-  | getCompletionHandlerResponse400
-  | getCompletionHandlerResponse401
-  | getCompletionHandlerResponse422
-  | getCompletionHandlerResponse500
-) & {
-  headers: Headers;
-};
-
-export type getCompletionHandlerResponse =
-  | getCompletionHandlerResponseSuccess
-  | getCompletionHandlerResponseError;
-
-export const getGetCompletionHandlerUrl = () => {
-  return `/completions/get_completion`;
-};
-
-export const getCompletionHandler = async (
-  getCompletionRequest: GetCompletionRequest,
-  options?: RequestInit
-): Promise<getCompletionHandlerResponse> => {
-  const res = await fetch(getGetCompletionHandlerUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(getCompletionRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getCompletionHandlerResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getCompletionHandlerResponse;
-};
-
 export type handlerResponse200 = {
   data: StructedOutputCompletionResponse;
   status: 200;
@@ -948,66 +682,6 @@ export const handler = async (
 
   const data: handlerResponse['data'] = body ? JSON.parse(body) : {};
   return { data, status: res.status, headers: res.headers } as handlerResponse;
-};
-
-export type upsertTextHandlerResponse201 = {
-  data: void;
-  status: 201;
-};
-
-export type upsertTextHandlerResponse401 = {
-  data: string;
-  status: 401;
-};
-
-export type upsertTextHandlerResponse404 = {
-  data: string;
-  status: 404;
-};
-
-export type upsertTextHandlerResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type upsertTextHandlerResponseSuccess = upsertTextHandlerResponse201 & {
-  headers: Headers;
-};
-export type upsertTextHandlerResponseError = (
-  | upsertTextHandlerResponse401
-  | upsertTextHandlerResponse404
-  | upsertTextHandlerResponse500
-) & {
-  headers: Headers;
-};
-
-export type upsertTextHandlerResponse =
-  | upsertTextHandlerResponseSuccess
-  | upsertTextHandlerResponseError;
-
-export const getUpsertTextHandlerUrl = () => {
-  return `/document_text/:document_id`;
-};
-
-export const upsertTextHandler = async (
-  createTextRequestBody: CreateTextRequestBody,
-  options?: RequestInit
-): Promise<upsertTextHandlerResponse> => {
-  const res = await fetch(getUpsertTextHandlerUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(createTextRequestBody),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: upsertTextHandlerResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as upsertTextHandlerResponse;
 };
 
 /**
@@ -1199,65 +873,6 @@ export const sendChatMessage = async (
     status: res.status,
     headers: res.headers,
   } as sendChatMessageResponse;
-};
-
-/**
- * This endpoint initiates a completion and streams the response via the stream service.
-The client should subscribe to the completion_id stream via connection_gateway to receive chunks.
- * @summary Start a simple completion stream.
- */
-export type simpleCompletionResponse200 = {
-  data: SimpleCompletionResponse;
-  status: 200;
-};
-
-export type simpleCompletionResponse400 = {
-  data: SimpleCompletionError;
-  status: 400;
-};
-
-export type simpleCompletionResponse401 = {
-  data: void;
-  status: 401;
-};
-
-export type simpleCompletionResponseSuccess = simpleCompletionResponse200 & {
-  headers: Headers;
-};
-export type simpleCompletionResponseError = (
-  | simpleCompletionResponse400
-  | simpleCompletionResponse401
-) & {
-  headers: Headers;
-};
-
-export type simpleCompletionResponse =
-  | simpleCompletionResponseSuccess
-  | simpleCompletionResponseError;
-
-export const getSimpleCompletionUrl = () => {
-  return `/stream/completion/simple`;
-};
-
-export const simpleCompletion = async (
-  getSimpleCompletionStreamPayload: GetSimpleCompletionStreamPayload,
-  options?: RequestInit
-): Promise<simpleCompletionResponse> => {
-  const res = await fetch(getSimpleCompletionUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(getSimpleCompletionStreamPayload),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: simpleCompletionResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as simpleCompletionResponse;
 };
 
 /**

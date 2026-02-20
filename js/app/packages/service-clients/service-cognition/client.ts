@@ -21,25 +21,17 @@ import type { GetBatchPreviewResponse } from './generated/schemas/getBatchPrevie
 import type { GetChatPermissionsResponseV2 } from './generated/schemas/getChatPermissionsResponseV2';
 import type { GetChatResponse } from './generated/schemas/getChatResponse';
 import type { GetChatsForAttachmentResponse } from './generated/schemas/getChatsForAttachmentResponse';
-import type { GetModelsForAttachmentsRequest } from './generated/schemas/getModelsForAttachmentsRequest';
-import type { GetModelsForAttachmentsResponse } from './generated/schemas/getModelsForAttachmentsResponse';
-import type { GetModelsResponse } from './generated/schemas/getModelsResponse';
-import type { GetSimpleCompletionStreamPayload } from './generated/schemas/getSimpleCompletionStreamPayload';
 import type { HttpSendChatMessageRequest } from './generated/schemas/httpSendChatMessageRequest';
 import type { PatchChatRequestV2 } from './generated/schemas/patchChatRequestV2';
 import type { SendChatMessageResponse } from './generated/schemas/sendChatMessageResponse';
-import type { SimpleCompletionResponse } from './generated/schemas/simpleCompletionResponse';
 import type { StringIDResponse } from './generated/schemas/stringIDResponse';
 import type { StructedOutputCompletionRequest } from './generated/schemas/structedOutputCompletionRequest';
 import type { StructedOutputCompletionResponse } from './generated/schemas/structedOutputCompletionResponse';
 import type { SuccessResponse } from './generated/schemas/successResponse';
-import type { VerifyAttachmentsRequest } from './generated/schemas/verifyAttachmentsRequest';
-import type { VerifyAttachmentsResponse } from './generated/schemas/verifyAttachmentsResponse';
 
 const dcsHost: string = SERVER_HOSTS['cognition-service'];
 
 type WithChatId = { chat_id: string };
-type WithDocumentId = { document_id: string };
 type WithName = { name: string };
 type WithProjectId = { project_id: string };
 
@@ -101,14 +93,6 @@ export const cognitionApiServiceClient = {
       seconds: 5,
     }
   ),
-  async getModels() {
-    return mapOk(
-      await dcsFetch<GetModelsResponse>(`/models`, {
-        method: 'GET',
-      }),
-      (result) => result
-    );
-  },
 
   async editChatProject(args: WithChatId & WithProjectId) {
     const { chat_id, project_id } = args;
@@ -216,15 +200,6 @@ export const cognitionApiServiceClient = {
       (result) => result
     );
   },
-  async upsertText(args: WithChatId & WithDocumentId & { content: string }) {
-    const { content, document_id } = args;
-    return await dcsFetch(`/document_text/${document_id}`, {
-      method: 'POST',
-      body: JSON.stringify({
-        content: content,
-      }),
-    });
-  },
   async getChatsForAttachment(args: { attachment_id: string }) {
     const { attachment_id } = args;
     return mapOk(
@@ -235,17 +210,6 @@ export const cognitionApiServiceClient = {
         }
       ),
       (result) => result
-    );
-  },
-  async verifyAttachments(args: VerifyAttachmentsRequest) {
-    return mapOk(
-      await dcsFetch<VerifyAttachmentsResponse>(`/attachments/verify`, {
-        method: 'POST',
-        body: JSON.stringify(args),
-      }),
-      (result) => {
-        return result;
-      }
     );
   },
 
@@ -281,34 +245,11 @@ export const cognitionApiServiceClient = {
       (result) => result as { completion: any }
     );
   },
-  async getModelsForAttachments(args: GetModelsForAttachmentsRequest) {
-    return mapOk(
-      await dcsFetch<GetModelsForAttachmentsResponse>(
-        `/attachments/get_models_for_attachments`,
-        {
-          method: 'POST',
-          body: JSON.stringify(args),
-        }
-      ),
-      (result) => result
-    );
-  },
 
   /** Send a chat message via HTTP stream API. Response chunks arrive via connection_gateway. */
   async sendStreamChatMessage(args: HttpSendChatMessageRequest) {
     return mapOk(
       await dcsFetch<SendChatMessageResponse>(`/stream/chat/message`, {
-        method: 'POST',
-        body: JSON.stringify(args),
-      }),
-      (result) => result
-    );
-  },
-
-  /** Start a simple completion via HTTP stream API. Response chunks arrive via connection_gateway. */
-  async streamSimpleCompletion(args: GetSimpleCompletionStreamPayload) {
-    return mapOk(
-      await dcsFetch<SimpleCompletionResponse>(`/stream/completion/simple`, {
         method: 'POST',
         body: JSON.stringify(args),
       }),

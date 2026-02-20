@@ -11,122 +11,6 @@
     "version": "1.0.0"
   },
   "paths": {
-    "/attachments/get_models_for_attachments": {
-      "post": {
-        "tags": ["get_models_for_attachments"],
-        "operationId": "get_models_for_attachments_handler",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GetModelsForAttachmentsRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetModelsForAttachmentsResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/attachments/verify": {
-      "post": {
-        "tags": ["verify_attachments"],
-        "operationId": "verify_attachments_handler",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/VerifyAttachmentsRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VerifyAttachmentsResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/attachments/{attachment_id}/chats": {
       "get": {
         "tags": ["get_chats_for_attachment"],
@@ -187,53 +71,6 @@
       }
     },
     "/chats": {
-      "get": {
-        "tags": ["get_chats"],
-        "summary": "Gets all the chats for a user",
-        "operationId": "get_chats_handler",
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ChatsResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      },
       "post": {
         "tags": ["create_user_chat"],
         "operationId": "create_chat_handler",
@@ -746,74 +583,6 @@
         }
       }
     },
-    "/completions/get_completion": {
-      "post": {
-        "tags": ["get_completion"],
-        "operationId": "get_completion_handler",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GetCompletionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetCompletionResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/completions/structured_output": {
       "post": {
         "tags": ["structured_output"],
@@ -838,68 +607,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/document_text/:document_id": {
-      "post": {
-        "tags": ["upsert_document_text"],
-        "operationId": "upsert_text_handler",
-        "parameters": [
-          {
-            "name": "document_id",
-            "in": "path",
-            "description": "Id of the document to create text for",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateTextRequestBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": ""
           },
           "401": {
             "description": "",
@@ -1062,49 +769,6 @@
           },
           "403": {
             "description": "Forbidden"
-          }
-        }
-      }
-    },
-    "/stream/completion/simple": {
-      "post": {
-        "tags": ["simple_completion"],
-        "summary": "Start a simple completion stream.",
-        "description": "This endpoint initiates a completion and streams the response via the stream service.\nThe client should subscribe to the completion_id stream via connection_gateway to receive chunks.",
-        "operationId": "simple_completion",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GetSimpleCompletionStreamPayload"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Stream initiated successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SimpleCompletionResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SimpleCompletionError"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
           }
         }
       }
@@ -2054,18 +1718,6 @@
           }
         ]
       },
-      "ChatsResponse": {
-        "type": "object",
-        "required": ["chats"],
-        "properties": {
-          "chats": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Chat"
-            }
-          }
-        }
-      },
       "ConversationRecord": {
         "type": "object",
         "required": ["chat_id", "title", "messages"],
@@ -2120,24 +1772,6 @@
           },
           "projectId": {
             "type": ["string", "null"]
-          }
-        }
-      },
-      "CreateTextRequestBody": {
-        "type": "object",
-        "required": ["content"],
-        "properties": {
-          "content": {
-            "type": "string"
-          }
-        }
-      },
-      "CreateTextRequestParams": {
-        "type": "object",
-        "required": ["document_id"],
-        "properties": {
-          "document_id": {
-            "type": "string"
           }
         }
       },
@@ -2385,86 +2019,6 @@
           }
         }
       },
-      "GetCompletionRequest": {
-        "type": "object",
-        "required": ["prompt", "user_message"],
-        "properties": {
-          "max_tokens": {
-            "type": ["integer", "null"],
-            "format": "int32",
-            "minimum": 0
-          },
-          "model": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/Model"
-              }
-            ]
-          },
-          "prompt": {
-            "type": "string"
-          },
-          "user_message": {
-            "type": "string"
-          }
-        }
-      },
-      "GetCompletionResponse": {
-        "type": "object",
-        "required": ["completion"],
-        "properties": {
-          "completion": {
-            "type": "string"
-          }
-        }
-      },
-      "GetModelsForAttachmentsRequest": {
-        "type": "object",
-        "required": ["attachments"],
-        "properties": {
-          "active_model": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/Model"
-              }
-            ]
-          },
-          "attachments": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/NewAttachment"
-            }
-          }
-        }
-      },
-      "GetModelsForAttachmentsResponse": {
-        "type": "object",
-        "required": ["available_models"],
-        "properties": {
-          "available_models": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Model"
-            }
-          },
-          "new_model": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/Model"
-              }
-            ]
-          }
-        }
-      },
       "GetModelsResponse": {
         "type": "object",
         "required": ["models"],
@@ -2474,41 +2028,6 @@
             "items": {
               "$ref": "#/components/schemas/AIModel"
             }
-          }
-        }
-      },
-      "GetSimpleCompletionStreamPayload": {
-        "type": "object",
-        "required": ["prompt", "user_request", "completion_id"],
-        "properties": {
-          "completion_id": {
-            "type": "string",
-            "description": "client provided id, returned in responses"
-          },
-          "content_document_ids": {
-            "type": ["array", "null"],
-            "items": {
-              "type": "string"
-            },
-            "description": "Optional document ID to provide context"
-          },
-          "max_tokens": {
-            "type": ["integer", "null"],
-            "format": "int32",
-            "description": "max tokens",
-            "minimum": 0
-          },
-          "model": {
-            "type": ["string", "null"],
-            "description": "model to use for the completion"
-          },
-          "prompt": {
-            "type": "string",
-            "description": "system prompt"
-          },
-          "user_request": {
-            "type": "string",
-            "description": "user request"
           }
         }
       },
@@ -2816,30 +2335,6 @@
           }
         }
       },
-      "SimpleCompletionError": {
-        "type": "object",
-        "description": "Error response for simple completion endpoint",
-        "required": ["error"],
-        "properties": {
-          "completion_id": {
-            "type": ["string", "null"]
-          },
-          "error": {
-            "type": "string"
-          }
-        }
-      },
-      "SimpleCompletionResponse": {
-        "type": "object",
-        "description": "Response for initiating a simple completion stream",
-        "required": ["completion_id"],
-        "properties": {
-          "completion_id": {
-            "type": "string",
-            "description": "The completion ID that will receive the response chunks"
-          }
-        }
-      },
       "StreamError": {
         "oneOf": [
           {
@@ -3065,30 +2560,6 @@
           "width": {
             "type": "number",
             "format": "float"
-          }
-        }
-      },
-      "VerifyAttachmentsRequest": {
-        "type": "object",
-        "required": ["attachments"],
-        "properties": {
-          "attachments": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "VerifyAttachmentsResponse": {
-        "type": "object",
-        "required": ["attachments"],
-        "properties": {
-          "attachments": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
           }
         }
       },

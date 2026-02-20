@@ -40,23 +40,6 @@ pub struct SendChatMessagePayload {
     pub jwt: JwtPayload,
 }
 
-#[derive(Deserialize, Serialize, ToSchema, Debug, Clone)]
-pub struct GetSimpleCompletionStreamPayload {
-    /// system prompt
-    pub prompt: String,
-    /// user request
-    pub user_request: String,
-    /// model to use for the completion
-    #[schema(value_type = Option<String>)]
-    pub model: Option<Model>,
-    /// max tokens
-    pub max_tokens: Option<u32>,
-    /// Optional document ID to provide context
-    pub content_document_ids: Option<Vec<String>>,
-    /// client provided id, returned in responses
-    pub completion_id: String,
-}
-
 #[derive(Deserialize, Serialize, ToSchema, Debug, Clone, PartialEq, Copy)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum ExtractionStatusEnum {
