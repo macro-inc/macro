@@ -8,4 +8,4 @@
 /**
  * The file type of the document
  */
-export type CreateDocumentHandler200DataOneOfAllOfFileType = string | null;
+export type CreateDocument200DataOneOfAllOfFileType = string | null;

@@ -4,11 +4,11 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { CreateDocumentHandler200DataOneOf } from './createDocumentHandler200DataOneOf';
+import type { CreateDocument200DataOneOf } from './createDocument200DataOneOf';
 
-export type CreateDocumentHandler200 = {
+export type CreateDocument200 = {
   /** Data to be returned */
-  data: CreateDocumentHandler200DataOneOf;
+  data: CreateDocument200DataOneOf;
   /** Indicates if an error occurred */
   error: boolean;
 };

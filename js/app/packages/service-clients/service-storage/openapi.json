@@ -884,8 +884,9 @@
       },
       "post": {
         "tags": ["document"],
-        "summary": "Handles creating a document",
-        "operationId": "create_document_handler",
+        "summary": "Handler for `POST /documents`.",
+        "description": "Creates a new document, generates an S3 presigned upload URL, and returns\nthe document metadata with the URL for the client to upload to.",
+        "operationId": "create_document",
         "requestBody": {
           "content": {
             "application/json": {
@@ -945,7 +946,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -955,17 +956,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
           },
-          "403": {
+          "409": {
             "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -975,7 +976,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }

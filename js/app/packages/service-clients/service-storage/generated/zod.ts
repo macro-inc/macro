@@ -1182,9 +1182,11 @@ export const getUserDocumentsHandlerResponse = zod.object({
 });
 
 /**
- * @summary Handles creating a document
+ * Creates a new document, generates an S3 presigned upload URL, and returns
+the document metadata with the URL for the client to upload to.
+ * @summary Handler for `POST /documents`.
  */
-export const createDocumentHandlerBody = zod.object({
+export const createDocumentBody = zod.object({
   branchedFromId: zod
     .string()
     .nullish()
@@ -1247,7 +1249,7 @@ export const createDocumentHandlerBody = zod.object({
     ),
 });
 
-export const createDocumentHandlerResponse = zod.object({
+export const createDocumentResponse = zod.object({
   data: zod
     .object({
       documentMetadata: zod.object({
