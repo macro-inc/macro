@@ -41,7 +41,6 @@ export const EXCLUDE: string[] = [NIL_UUID];
 
 function isIdFilteredOut(ids: string[] | undefined, value: string): boolean {
   if (!ids || ids.length === 0) return false;
-  if (ids.length === 1 && ids[0] === NIL_UUID) return true;
   return !ids.includes(value);
 }
 
@@ -51,36 +50,29 @@ export function filterSoupItemByRequestBody(
   body: SoupBody
 ): boolean {
   return match(item)
-    .with({ tag: 'document' }, ({ data }) => {
-      const f = body.document_filters;
-      if (!f) return true;
-      if (isIdFilteredOut(f.document_ids, data.id)) return false;
-      return true;
-    })
-    .with({ tag: 'chat' }, ({ data }) => {
-      const f = body.chat_filters;
-      if (!f) return true;
-      if (isIdFilteredOut(f.chat_ids, data.id)) return false;
-      return true;
-    })
-    .with({ tag: 'channel' }, ({ data }) => {
-      const f = body.channel_filters;
-      if (!f) return true;
-      if (isIdFilteredOut(f.channel_ids, data.channel.id)) return false;
-      return true;
-    })
-    .with({ tag: 'project' }, ({ data }) => {
-      const f = body.project_filters;
-      if (!f) return true;
-      if (isIdFilteredOut(f.project_ids, data.id)) return false;
-      return true;
-    })
-    .with({ tag: 'emailThread' }, ({ data }) => {
-      const f = body.email_filters;
-      if (!f) return true;
-      if (isIdFilteredOut(f.email_thread_ids, data.id)) return false;
-      return true;
-    })
+    .with(
+      { tag: 'document' },
+      ({ data }) =>
+        !isIdFilteredOut(body.document_filters?.document_ids, data.id)
+    )
+    .with(
+      { tag: 'chat' },
+      ({ data }) => !isIdFilteredOut(body.chat_filters?.chat_ids, data.id)
+    )
+    .with(
+      { tag: 'channel' },
+      ({ data }) =>
+        !isIdFilteredOut(body.channel_filters?.channel_ids, data.channel.id)
+    )
+    .with(
+      { tag: 'project' },
+      ({ data }) => !isIdFilteredOut(body.project_filters?.project_ids, data.id)
+    )
+    .with(
+      { tag: 'emailThread' },
+      ({ data }) =>
+        !isIdFilteredOut(body.email_filters?.email_thread_ids, data.id)
+    )
     .exhaustive();
 }
 
