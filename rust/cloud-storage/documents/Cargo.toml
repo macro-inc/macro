@@ -8,7 +8,7 @@ version = "0.1.0"
 default = ["ports", "inbound", "outbound", "axum", "ai_tools"]
 ports = ["dep:tokio"]
 inbound = ["axum", "ports"]
-outbound = ["ports"]
+outbound = ["ports", "dep:aws-sdk-s3", "dep:base64", "dep:hex"]
 ai_tools = [
     "dep:ai",
     "dep:async-trait",
@@ -58,8 +58,11 @@ model-error-response = { path = "../model-error-response", optional = true }
 utoipa = { workspace = true, optional = true }
 
 # Outbound dependencies
+aws-sdk-s3 = { workspace = true, optional = true }
+base64 = { workspace = true, optional = true }
 cloudfront_sign = { workspace = true }
 futures = { workspace = true }
+hex = { workspace = true, optional = true }
 macro_project_utils = { path = "../macro_project_utils" }
 sqlx = { workspace = true }
 sync_service_client = { path = "../sync_service_client" }

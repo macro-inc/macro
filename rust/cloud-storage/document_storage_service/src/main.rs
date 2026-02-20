@@ -1,7 +1,5 @@
 use crate::{
-    api::context::{
-        ApiContext, DocumentStorageServiceAuthKey, S3UploadUrlAdapter, TaskPropertiesAdapter,
-    },
+    api::context::{ApiContext, DocumentStorageServiceAuthKey, TaskPropertiesAdapter},
     config::{
         DocumentPermissionJwtSecretKey, DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
     },
@@ -24,6 +22,7 @@ use documents_hex::domain::models::CloudFrontConfig;
 use documents_hex::domain::service::DocumentServiceImpl;
 use documents_hex::inbound::axum_router::DocumentRouterState;
 use documents_hex::outbound::pg_document_repo::PgDocumentRepo;
+use documents_hex::outbound::s3_upload_url::S3UploadUrlAdapter;
 use dynamodb_client::DynamodbClient;
 use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
@@ -318,11 +317,16 @@ async fn main() -> anyhow::Result<()> {
         browser_cache_expiry_seconds: config
             .document_storage_service_presigned_url_browser_cache_expiry_seconds,
     };
+    let s3_upload_adapter = S3UploadUrlAdapter::new(
+        macro_aws_config::s3_client().await,
+        config.vars.document_storage_bucket.as_ref(),
+        config.vars.docx_document_upload_bucket.as_ref(),
+    );
     let document_service = DocumentServiceImpl::new(
         document_repo,
         cloudfront_config,
         sync_service_client.clone(),
-        S3UploadUrlAdapter(s3.clone()),
+        s3_upload_adapter,
         TaskPropertiesAdapter(system_properties_service.clone()),
         db.clone(),
     );

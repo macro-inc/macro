@@ -1,4 +1,4 @@
-use super::context::{S3UploadUrlAdapter, TaskPropertiesAdapter};
+use super::context::TaskPropertiesAdapter;
 use super::{
     context::{ApiContext, EntityAccessService},
     documents::{export_document, get_document_version},
@@ -24,6 +24,7 @@ use axum::{
 };
 use documents_hex::domain::service::DocumentServiceImpl;
 use documents_hex::outbound::pg_document_repo::PgDocumentRepo;
+use documents_hex::outbound::s3_upload_url::S3UploadUrlAdapter;
 use macro_middleware::{
     auth::ensure_user_exists,
     cloud_storage::{document::ensure_document_exists, thread::ensure_thread_exists},
