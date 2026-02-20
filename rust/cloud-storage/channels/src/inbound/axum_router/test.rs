@@ -12,7 +12,7 @@ use axum::{
 };
 use http_body_util::BodyExt;
 use model_user::UserContext;
-use models_pagination::{CreatedAt, PaginateOn, Query};
+use models_pagination::{Base64Str, CreatedAt, Cursor, CursorVal, PaginateOn, Query};
 use tower::util::ServiceExt;
 
 // --- Access check implementations for tests ---
@@ -249,9 +249,24 @@ async fn messages_returns_empty_page() {
 async fn messages_returns_400_when_both_cursor_params_are_set() {
     let router = mock_router();
     let channel_id = Uuid::new_v4();
+    let raw_cursor = Base64Str::encode_json(Cursor {
+        id: Uuid::new_v4(),
+        limit: 50,
+        val: CursorVal {
+            sort_type: CreatedAt,
+            last_val: chrono::Utc::now(),
+        },
+        filter: (),
+    })
+    .type_erase();
+    let cursor = raw_cursor
+        .replace('+', "%2B")
+        .replace('/', "%2F")
+        .replace('=', "%3D");
+
     let request = Request::builder()
         .uri(format!(
-            "/{channel_id}/messages?cursor=aW52YWxpZA==&previous_cursor=aW52YWxpZA=="
+            "/{channel_id}/messages?cursor={cursor}&previous_cursor={cursor}"
         ))
         .body(axum::body::Body::empty())
         .unwrap();

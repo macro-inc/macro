@@ -20,8 +20,8 @@ use chrono::{DateTime, Utc};
 use model_error_response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
 use models_pagination::{
-    Base64SerdeErr, Base64Str, CreatedAt, Cursor, CursorExtractor, CursorVal,
-    PaginatedOpaqueCursor, Query as PaginationQuery, TypeEraseCursor,
+    Base64Str, BidirectionalCursor, BidirectionalCursorExtractor, CreatedAt, Cursor,
+    CursorExtractor, CursorVal, PaginatedOpaqueCursor, Query as PaginationQuery, TypeEraseCursor,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -127,71 +127,35 @@ pub struct Params {
     /// Page size. Clamped to [1, 100], defaults to 50.
     #[serde(default)]
     limit: Option<u16>,
-    /// Cursor for paging older messages.
-    #[serde(default)]
-    cursor: Option<String>,
-    /// Cursor for paging newer messages.
-    #[serde(default)]
-    previous_cursor: Option<String>,
     /// When set, return a centered window of messages around this message id
     /// instead of cursor-paginated results.
     #[serde(default)]
     load_around_message_id: Option<Uuid>,
 }
 
-fn decode_messages_cursor(
-    encoded_cursor: String,
-) -> Result<Cursor<Uuid, CursorVal<CreatedAt>, ()>, ChannelsHandlerErr> {
-    let encoded =
-        Base64Str::<Cursor<Uuid, CursorVal<CreatedAt>, ()>>::new_from_string(encoded_cursor);
-    if encoded.len() > 32_000 {
-        return Err(ChannelsHandlerErr::BadRequest(
-            "Query is too large, must be <32kb",
-        ));
-    }
-
-    let decoded = encoded.decode_json().map_err(|err| match err {
-        Base64SerdeErr::DecodeErr(_) => {
-            ChannelsHandlerErr::BadRequest("failed to decode cursor value")
-        }
-        Base64SerdeErr::SerdeErr(_) => {
-            ChannelsHandlerErr::BadRequest("the cursor contained unexpected data")
-        }
-    })?;
-
-    Ok(decoded)
-}
-
 fn parse_messages_query(
-    cursor: Option<String>,
-    previous_cursor: Option<String>,
-) -> Result<
-    (
-        PaginationQuery<Uuid, CreatedAt, ()>,
-        MessagePageDirection,
-        bool,
-    ),
-    ChannelsHandlerErr,
-> {
-    match (cursor, previous_cursor) {
-        (Some(_), Some(_)) => Err(ChannelsHandlerErr::BadRequest(
-            "provide only one of cursor or previous_cursor",
-        )),
-        (Some(cursor), None) => Ok((
-            PaginationQuery::Cursor(decode_messages_cursor(cursor)?),
+    cursor: BidirectionalCursorExtractor<Uuid, CreatedAt, ()>,
+) -> (
+    PaginationQuery<Uuid, CreatedAt, ()>,
+    MessagePageDirection,
+    bool,
+) {
+    match cursor {
+        BidirectionalCursorExtractor::Some(BidirectionalCursor::Next(cursor)) => (
+            PaginationQuery::Cursor(cursor),
             MessagePageDirection::Older,
             true,
-        )),
-        (None, Some(cursor)) => Ok((
-            PaginationQuery::Cursor(decode_messages_cursor(cursor)?),
+        ),
+        BidirectionalCursorExtractor::Some(BidirectionalCursor::Previous(cursor)) => (
+            PaginationQuery::Cursor(cursor),
             MessagePageDirection::Newer,
             true,
-        )),
-        (None, None) => Ok((
+        ),
+        BidirectionalCursorExtractor::None => (
             PaginationQuery::Sort(CreatedAt, ()),
             MessagePageDirection::Older,
             false,
-        )),
+        ),
     }
 }
 
@@ -257,10 +221,10 @@ pub async fn get_channel_messages_handler<S: ChannelMessagesService, A: ChannelA
     State(state): State<ChannelsRouterState<S, A>>,
     member: ChannelMember,
     Query(params): Query<Params>,
+    cursor: BidirectionalCursorExtractor<Uuid, CreatedAt, ()>,
 ) -> Result<Json<ApiChannelMessagesPage>, ChannelsHandlerErr> {
     let limit = params.limit.unwrap_or(50).clamp(1, 100);
-    let (query, direction, has_cursor) =
-        parse_messages_query(params.cursor.clone(), params.previous_cursor.clone())?;
+    let (query, direction, has_cursor) = parse_messages_query(cursor);
 
     let (page, has_more_newer) = match params.load_around_message_id {
         Some(message_id) => {
