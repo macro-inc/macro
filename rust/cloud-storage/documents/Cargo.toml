@@ -42,6 +42,7 @@ uuid = { workspace = true }
 document_sub_type = { path = "../document_sub_type" }
 entity_access = { path = "../entity_access" }
 macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
 model = { path = "../model" }
 models_permissions = { path = "../models_permissions" }
 macro_aws_config = { path = "../macro_aws_config" }
