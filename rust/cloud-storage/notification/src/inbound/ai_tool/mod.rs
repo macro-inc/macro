@@ -8,7 +8,7 @@ use crate::domain::{
         UserNotificationRow,
         request::{NotificationStatus, UpdateNotificationsRequest},
     },
-    service::NotificationIngress,
+    service::NotificationReader,
 };
 use ai::tool::{
     AsyncTool, AsyncToolSet, RequestContext, ServiceContext, ToolCallError, ToolResult,
@@ -22,12 +22,12 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 /// Service context for notification AI tools
-pub struct NotificationToolContext<T: NotificationIngress> {
+pub struct NotificationToolContext<T> {
     /// The notification service instance
     pub service: Arc<T>,
 }
 
-impl<T: NotificationIngress> Clone for NotificationToolContext<T> {
+impl<T> Clone for NotificationToolContext<T> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
@@ -35,7 +35,7 @@ impl<T: NotificationIngress> Clone for NotificationToolContext<T> {
     }
 }
 
-impl<T: NotificationIngress> NotificationToolContext<T> {
+impl<T: NotificationReader> NotificationToolContext<T> {
     /// Create a new notification tool context
     pub fn new(service: T) -> Self {
         Self {
@@ -47,7 +47,7 @@ impl<T: NotificationIngress> NotificationToolContext<T> {
 /// Create a notification toolset for AI agents
 pub fn notification_toolset<T>() -> AsyncToolSet<NotificationToolContext<T>>
 where
-    T: NotificationIngress,
+    T: NotificationReader,
 {
     AsyncToolSet::new()
         .add_tool::<ListNotifications, NotificationToolContext<T>>()
@@ -124,7 +124,7 @@ pub struct ListNotificationsResponse {
 #[async_trait]
 impl<T> AsyncTool<NotificationToolContext<T>> for ListNotifications
 where
-    T: NotificationIngress,
+    T: NotificationReader,
 {
     type Output = ListNotificationsResponse;
 
@@ -191,7 +191,7 @@ pub struct MarkNotificationsSeen {
 #[async_trait]
 impl<T> AsyncTool<NotificationToolContext<T>> for MarkNotificationsSeen
 where
-    T: NotificationIngress,
+    T: NotificationReader,
 {
     type Output = MarkNotificationsResponse;
 
@@ -245,7 +245,7 @@ pub struct MarkNotificationsDone {
 #[async_trait]
 impl<T> AsyncTool<NotificationToolContext<T>> for MarkNotificationsDone
 where
-    T: NotificationIngress,
+    T: NotificationReader,
 {
     type Output = MarkNotificationsResponse;
 
