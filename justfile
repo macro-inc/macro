@@ -85,3 +85,7 @@ setup:
   just infra/stacks/fusionauth-instance/setup
   just rust/cloud-storage/build_dev_service_images
   @echo "Setup complete."
+
+destroy:
+  just infra/stacks/fusionauth-instance/destroy
+  docker compose down -v
