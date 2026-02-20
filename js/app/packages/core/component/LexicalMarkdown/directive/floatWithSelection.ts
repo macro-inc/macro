@@ -86,14 +86,13 @@ export function floatWithSelection(
         placement: 'bottom-start',
         middleware: [
           flip({
-            fallbackStrategy: 'initialPlacement',
             fallbackPlacements: ['top-start'],
             boundary,
             // On iOS, inflate the bottom padding by the keyboard height so flip
             // correctly treats that space as unavailable.
             padding: isIOS
               ? {
-                  top: accessor()?.spacing ?? DEFAULT_SPACING,
+                  top: (accessor()?.spacing ?? DEFAULT_SPACING) + getSafeAreaInsetTop(),
                   right: accessor()?.spacing ?? DEFAULT_SPACING,
                   bottom:
                     (accessor()?.spacing ?? DEFAULT_SPACING) +
