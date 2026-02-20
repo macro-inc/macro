@@ -107,6 +107,7 @@ interface ToastMessage {
   toastType: ToastType;
   timestamp: number;
   timeoutId: ReturnType<typeof setTimeout>;
+  toastId?: number;
   subtext?: string;
   action?: {
     text: string;
@@ -121,14 +122,18 @@ function createToastKey(message: string, type: ToastType): string {
   return `${type}:${message}`;
 }
 
-function wasRecentlyShown(message: string, type: ToastType): boolean {
+function dismissIfRecent(message: string, type: ToastType): void {
   const key = createToastKey(message, type);
   const existingToast = recentToasts.get(key);
-
-  if (!existingToast) return false;
+  if (!existingToast) return;
 
   const now = Date.now();
-  return now - existingToast.timestamp < THROTTLE_DURATION;
+  if (
+    now - existingToast.timestamp < THROTTLE_DURATION &&
+    existingToast.toastId != null
+  ) {
+    toaster.dismiss(existingToast.toastId);
+  }
 }
 
 // Tell users that an action has successfully completed
@@ -138,9 +143,8 @@ function success(
   action?: { text: string; onClick: () => void },
   duration?: number
 ): number | undefined {
-  if (!wasRecentlyShown(message, ToastType.SUCCESS)) {
-    return createToast(message, ToastType.SUCCESS, subtext, action, duration);
-  }
+  dismissIfRecent(message, ToastType.SUCCESS);
+  return createToast(message, ToastType.SUCCESS, subtext, action, duration);
 }
 
 function dismiss(toastId: number) {
@@ -149,16 +153,14 @@ function dismiss(toastId: number) {
 
 // Tell users that an action has failed, because of us
 function failure(message: string, subtext?: string, duration?: number) {
-  if (!wasRecentlyShown(message, ToastType.FAILURE)) {
-    createToast(message, ToastType.FAILURE, subtext, undefined, duration);
-  }
+  dismissIfRecent(message, ToastType.FAILURE);
+  createToast(message, ToastType.FAILURE, subtext, undefined, duration);
 }
 
 // Tell users that an action has failed, because of them
 function alert(message: string, subtext?: string, duration?: number) {
-  if (!wasRecentlyShown(message, ToastType.ALERT)) {
-    createToast(message, ToastType.ALERT, subtext, undefined, duration);
-  }
+  dismissIfRecent(message, ToastType.ALERT);
+  createToast(message, ToastType.ALERT, subtext, undefined, duration);
 }
 
 function ToastContent(props: {
@@ -368,16 +370,7 @@ function createToast(
     recentToasts.delete(key);
   }, THROTTLE_DURATION);
 
-  recentToasts.set(key, {
-    message,
-    toastType,
-    timestamp: Date.now(),
-    timeoutId,
-    subtext,
-    action,
-  });
-
-  return toaster.show(
+  const toastId = toaster.show(
     (props) => (
       <ToastContent
         toastId={props.toastId}
@@ -390,6 +383,18 @@ function createToast(
     ),
     { region: 'toast-region' }
   );
+
+  recentToasts.set(key, {
+    message,
+    toastType,
+    timestamp: Date.now(),
+    timeoutId,
+    toastId,
+    subtext,
+    action,
+  });
+
+  return toastId;
 }
 
 function embed(
