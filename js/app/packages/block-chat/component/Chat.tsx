@@ -248,7 +248,7 @@ function ChatInner(props: {
               chatId={chat.chatId()}
               onSend={onSend}
               captureEditor={setChatEditor}
-              autoFocusOnMount={!navigatedFromJK()}
+              autoFocusOnMount={true}
             />
           </div>
         </div>

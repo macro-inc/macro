@@ -29,6 +29,7 @@ const { track, TrackingEvents } = withAnalytics();
 export type ChatInputProps = {
   onSend: (args: ChatSendInput) => void;
   onStop?: () => void;
+  onEscape?: (e: KeyboardEvent) => boolean;
   isPersistent?: boolean;
   showActiveTabs?: boolean;
   captureEditor?: (editor: LexicalEditor) => void;
@@ -249,6 +250,7 @@ export function ChatInput(props: ChatInputComponentProps) {
         >
           <props.markdown.MarkdownArea
             onEnter={handleEnter}
+            onEscape={props.onEscape}
             placeholder="Ask AI, @mention anything"
             history={availableAttachments}
             dontFocusOnMount={
