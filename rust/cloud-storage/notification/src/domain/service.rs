@@ -6,6 +6,7 @@
 
 mod egress;
 mod ingress;
+mod push_notification_event;
 #[cfg(test)]
 mod test;
 
@@ -16,6 +17,8 @@ pub use ingress::NotificationIngress;
 pub use ingress::NotificationIngressService;
 pub use ingress::NotificationReader;
 pub use ingress::NotificationReaderService;
+pub use push_notification_event::PushNotificationEventHandler;
+pub use push_notification_event::PushNotificationEventService;
 
 /// Error returned when sending a notification fails.
 #[derive(Debug, Error)]

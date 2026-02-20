@@ -27,7 +27,6 @@ aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
 email_validator = { path = "../email_validator" }
-futures = { workspace = true }
 http-body-util = { workspace = true }
 macro_auth = { path = "../macro_auth" }
 macro_aws_config = { path = "../macro_aws_config" }
@@ -60,7 +59,6 @@ serde_json = { workspace = true }
 ses_client = { path = "../ses_client" }
 sns_client = { path = "../sns_client" }
 sqlx = { workspace = true }
-sqs_worker = { path = "../sqs_worker" }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }
