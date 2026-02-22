@@ -53,6 +53,18 @@ struct ThreadDataRow {
     latest_reply_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
+/// Intermediate row for full thread replies query.
+#[derive(Debug, sqlx::FromRow)]
+struct ThreadReplyOnlyRow {
+    id: Uuid,
+    thread_id: Uuid,
+    sender_id: String,
+    content: String,
+    created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: chrono::DateTime<chrono::Utc>,
+    edited_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
 /// Intermediate row for reactions.
 #[derive(Debug)]
 struct ReactionRow {
@@ -274,6 +286,42 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
         }
 
         Ok(map)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_thread_replies(&self, parent_id: Uuid) -> Result<Vec<ThreadReplyRow>, Self::Err> {
+        let rows = sqlx::query_as::<_, ThreadReplyOnlyRow>(
+            r#"
+            SELECT
+                id,
+                thread_id,
+                sender_id,
+                content,
+                created_at,
+                updated_at,
+                edited_at::timestamptz AS edited_at
+            FROM comms_messages
+            WHERE thread_id = $1
+              AND deleted_at IS NULL
+            ORDER BY created_at ASC, id ASC
+            "#,
+        )
+        .bind(parent_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| ThreadReplyRow {
+                id: r.id,
+                thread_id: r.thread_id,
+                sender_id: r.sender_id,
+                content: r.content,
+                created_at: r.created_at,
+                updated_at: r.updated_at,
+                edited_at: r.edited_at,
+            })
+            .collect())
     }
 
     #[tracing::instrument(err, skip(self))]

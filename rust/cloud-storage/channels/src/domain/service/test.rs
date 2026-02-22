@@ -48,6 +48,8 @@ fn empty_repo() -> MockChannelMessagesRepo {
         .returning(|_, _| Box::pin(async { Ok(None) }));
     repo.expect_get_top_level_messages_around()
         .returning(|_, _, _, _| Box::pin(async { Ok((vec![], vec![])) }));
+    repo.expect_get_thread_replies()
+        .returning(|_| Box::pin(async { Ok(vec![]) }));
     repo
 }
 
@@ -353,4 +355,97 @@ async fn around_resolves_and_hydrates() {
     assert_eq!(page.items[0].id, after_row.id);
     assert_eq!(page.items[1].id, anchor.id);
     assert_eq!(page.items[2].id, before_row.id);
+}
+
+#[tokio::test]
+async fn thread_replies_message_not_found() {
+    let svc = ChannelMessagesServiceImpl::new(empty_repo());
+    let message_id = Uuid::new_v4();
+
+    let err = svc
+        .get_thread_replies(Uuid::nil(), message_id)
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(err, ChannelMessagesErr::MessageNotFound(id) if id == message_id),
+        "expected MessageNotFound, got {err:?}"
+    );
+}
+
+#[tokio::test]
+async fn thread_replies_resolve_and_hydrate() {
+    let parent = make_row(Uuid::new_v4(), 0);
+    let reply_1 = ThreadReplyRow {
+        id: Uuid::new_v4(),
+        thread_id: parent.id,
+        sender_id: "macro|user-a@test.com".into(),
+        content: "reply 1".into(),
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+        edited_at: None,
+    };
+    let reply_2 = ThreadReplyRow {
+        id: Uuid::new_v4(),
+        thread_id: parent.id,
+        sender_id: "macro|user-b@test.com".into(),
+        content: "reply 2".into(),
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+        edited_at: None,
+    };
+
+    let parent_clone = parent.clone();
+    let reply_1_clone = reply_1.clone();
+    let reply_2_clone = reply_2.clone();
+
+    let mut repo = MockChannelMessagesRepo::new();
+
+    repo.expect_resolve_top_level_parent()
+        .returning(move |_, _| {
+            let p = parent_clone.clone();
+            Box::pin(async move { Ok(Some(p)) })
+        });
+    repo.expect_get_thread_replies().returning(move |_| {
+        let replies = vec![reply_1_clone.clone(), reply_2_clone.clone()];
+        Box::pin(async move { Ok(replies) })
+    });
+    repo.expect_get_reactions_batch().returning(move |_| {
+        let mut map: HashMap<Uuid, Vec<CountedReaction>> = HashMap::new();
+        map.insert(
+            reply_1.id,
+            vec![CountedReaction {
+                emoji: "👍".into(),
+                users: vec!["macro|user-c@test.com".into()],
+            }],
+        );
+        Box::pin(async move { Ok(map) })
+    });
+    repo.expect_get_attachments_batch().returning(move |_| {
+        let mut map: HashMap<Uuid, Vec<MessageAttachment>> = HashMap::new();
+        map.insert(
+            reply_2.id,
+            vec![MessageAttachment {
+                id: Uuid::new_v4(),
+                entity_type: "document".into(),
+                entity_id: "doc-1".into(),
+                created_at: Utc::now(),
+            }],
+        );
+        Box::pin(async move { Ok(map) })
+    });
+
+    let svc = ChannelMessagesServiceImpl::new(repo);
+    let replies = svc
+        .get_thread_replies(Uuid::nil(), reply_1.id)
+        .await
+        .unwrap();
+
+    assert_eq!(replies.len(), 2);
+    assert_eq!(replies[0].id, reply_1.id);
+    assert_eq!(replies[0].reactions.len(), 1);
+    assert_eq!(replies[0].attachments.len(), 0);
+    assert_eq!(replies[1].id, reply_2.id);
+    assert_eq!(replies[1].reactions.len(), 0);
+    assert_eq!(replies[1].attachments.len(), 1);
 }
