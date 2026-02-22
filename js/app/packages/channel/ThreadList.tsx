@@ -16,6 +16,18 @@ export type ThreadListScrollTarget =
   | { tag: 'index'; index: number; align?: ScrollAlignment }
   | { tag: 'id'; id: string; align?: ScrollAlignment };
 
+export function defaultThreadListTargetFromMessage(
+  targetMessageId: string | undefined
+): ThreadListScrollTarget {
+  if (targetMessageId) {
+    return {
+      tag: 'id',
+      id: targetMessageId,
+    };
+  }
+  return DEFAULT_INITIAL_SCROLL_TARGET;
+}
+
 export type ThreadListNavigation = {
   scrollTo: (target: ThreadListScrollTarget) => boolean;
   scrollToIndex: (index: number, opts?: { align?: ScrollAlignment }) => boolean;

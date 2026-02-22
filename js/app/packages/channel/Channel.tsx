@@ -10,11 +10,13 @@ import {
   on,
   Show,
   Suspense,
+  type Accessor,
   type ParentProps,
 } from 'solid-js';
 import { Thread } from './Thread';
 import {
   DEFAULT_INITIAL_SCROLL_TARGET,
+  defaultThreadListTargetFromMessage,
   ThreadList,
   type ThreadListNavigation,
   type ThreadListScrollTarget,
@@ -68,16 +70,8 @@ export function Channel(props: ChannelProps) {
   const threadManager = createThreadManager();
   const threadPaginator = createThreadPaginator(messagesQuery);
 
-  const threadListInitialScrollTarget = (): ThreadListScrollTarget => {
-    const targetMessageId_ = targetMessageId();
-    if (targetMessageId_) {
-      return {
-        tag: 'id',
-        id: targetMessageId_,
-      };
-    }
-    return DEFAULT_INITIAL_SCROLL_TARGET;
-  };
+  const threadListInitialScrollTarget: Accessor<ThreadListScrollTarget> = () =>
+    defaultThreadListTargetFromMessage(targetMessageId());
 
   const messages = () =>
     messagesQuery.data

@@ -35,6 +35,8 @@ export function channelMessagesQueryOptions(
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage: ChannelMessagesPage) =>
       lastPage.next_cursor ?? null,
+    getPreviousPage: (lastPage: ChannelMessagesPage) =>
+      lastPage.previous_cursor ?? null,
     staleTime: Infinity,
   };
 }
