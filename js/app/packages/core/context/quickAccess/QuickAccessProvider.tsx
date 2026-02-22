@@ -49,6 +49,7 @@ function historyItemToEntity(item: HistoryItem): QuickAccessEntity {
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
     viewedAt: item.viewedAt,
+    ownerId: item.ownerId,
   };
 
   switch (item.type) {

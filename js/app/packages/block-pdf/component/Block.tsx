@@ -44,6 +44,7 @@ import {
 } from '../type/coParse';
 import { preprocess } from '../websocket/preprocess';
 import { Document } from './Document';
+import { ModalsProvider } from './ModalsProvider';
 import { Tabs } from './Tabs';
 import { TopBar } from './TopBar';
 
@@ -195,7 +196,9 @@ export default function BlockPdf() {
         data-tut="App"
       >
         <Show when={!isNestedBlock}>
-          <TopBar />
+          <ModalsProvider>
+            <TopBar />
+          </ModalsProvider>
           <Show when={showTabBar()}>
             <div class="flex px-2 justify-between min-h-11 items-center gap-2">
               <div

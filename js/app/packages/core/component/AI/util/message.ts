@@ -1,8 +1,10 @@
 import type {
   AssistantMessagePart,
   ChatMessageWithAttachments,
-  StreamItem,
 } from '@core/component/AI/types';
+import type { ChatMessageStream } from '@service-connection/stream';
+
+type StreamItem = ReturnType<ChatMessageStream['data']>[number];
 
 // transform the stream to chat message
 // a stream represents a single assistant response

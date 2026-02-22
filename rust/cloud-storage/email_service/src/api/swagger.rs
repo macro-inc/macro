@@ -20,6 +20,7 @@ use crate::api::email::messages::send::{SendMessageRequest, SendMessageResponse}
 use crate::api::email::settings::patch::{PatchSettingsRequest, PatchSettingsResponse};
 use crate::api::email::threads::archived::ArchiveThreadRequest;
 use crate::api::email::threads::get::GetThreadResponse;
+use crate::api::email::threads::labels::UpdateThreadLabelRequest;
 use crate::api::{email, health};
 use ::email::inbound;
 use ::email::inbound::{ApiPaginatedThreadCursor, ApiSortMethod, GetPreviewsCursorParams};
@@ -65,6 +66,7 @@ use utoipa::OpenApi;
         email::threads::get::get_thread_handler,
         email::threads::get::get_thread_messages_handler,
         email::threads::archived::archived_handler,
+        email::threads::labels::handler,
         inbound::cursor_handler,
         email::links::list::list_links_handler,
         email::labels::create::handler,
@@ -106,6 +108,7 @@ use utoipa::OpenApi;
             // Thread types
             GetThreadResponse,
             ArchiveThreadRequest,
+            UpdateThreadLabelRequest,
             APIThread,
             ThreadPreviewCursor,
             // Preview types

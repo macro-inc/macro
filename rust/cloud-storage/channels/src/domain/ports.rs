@@ -1,6 +1,6 @@
 use crate::domain::models::{
-    ChannelAttachment, ChannelParticipant, CountedReaction, MessageAttachment, ThreadData,
-    TopLevelMessageRow,
+    ChannelAttachment, ChannelParticipant, CountedReaction, MessageAttachment,
+    MessagePageDirection, ThreadData, TopLevelMessageRow,
 };
 use chrono::{DateTime, Utc};
 use models_pagination::{CreatedAt, Query};
@@ -18,8 +18,9 @@ pub trait ChannelMessagesRepo: Send + Sync + 'static {
         &self,
         channel_id: Uuid,
         query: &Query<Uuid, CreatedAt, ()>,
+        direction: MessagePageDirection,
         limit: u16,
-    ) -> impl Future<Output = Result<Vec<TopLevelMessageRow>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<TopLevelMessagesQueryResult, Self::Err>> + Send;
 
     /// Batch-fetch thread data (stats + preview replies) for parent messages in a single query.
     fn get_thread_data(
@@ -80,8 +81,9 @@ pub trait ChannelMessagesService: Send + Sync + 'static {
         &self,
         channel_id: Uuid,
         query: Query<Uuid, CreatedAt, ()>,
+        direction: MessagePageDirection,
         limit: u16,
-    ) -> impl Future<Output = Result<ChannelMessagesPage, ChannelMessagesErr>> + Send;
+    ) -> impl Future<Output = Result<ChannelMessagesQueryResult, ChannelMessagesErr>> + Send;
 
     /// Fetch a paginated page of channel-level attachments.
     fn get_channel_attachments(
@@ -119,6 +121,22 @@ pub trait ChannelAccessCheck: Send + Sync + 'static {
 /// A paginated page of channel messages.
 pub type ChannelMessagesPage =
     models_pagination::PaginatedCursor<super::models::ChannelMessage, Uuid, CreatedAt, ()>;
+
+/// Result for a cursor-paginated channel messages query.
+pub struct ChannelMessagesQueryResult {
+    /// The page of messages.
+    pub page: ChannelMessagesPage,
+    /// Whether at least one newer message exists before the first item of this page.
+    pub has_more_newer: bool,
+}
+
+/// Result from fetching top-level message rows for pagination.
+pub struct TopLevelMessagesQueryResult {
+    /// Message rows for the requested direction.
+    pub rows: Vec<TopLevelMessageRow>,
+    /// Whether at least one newer message exists before the first returned row.
+    pub has_more_newer: bool,
+}
 
 /// A paginated page of channel attachments.
 pub type ChannelAttachmentsPage =

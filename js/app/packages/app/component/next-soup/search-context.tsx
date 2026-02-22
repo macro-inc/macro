@@ -13,7 +13,6 @@ import {
   useContext,
 } from 'solid-js';
 import { throttle } from '@solid-primitives/scheduled';
-import { delayedQueue } from '@core/util/delayedQueue';
 
 export const DEFAULT_SEARCH_SORT = 'updated_at';
 
@@ -54,7 +53,12 @@ export const useSearchContext = () => {
 };
 
 export const SearchProvider: FlowComponent = (props) => {
-  const itemsQuery = useSoupItemsQuery(() => ITEM_PRELOAD_ARGS);
+  const itemsQuery = useSoupItemsQuery(
+    () => ITEM_PRELOAD_ARGS,
+    () => ({
+      staleTime: 'static',
+    })
+  );
   const itemsFetchNextPage = throttle(() => itemsQuery.fetchNextPage(), 2000);
   createDeferred(() => {
     if (itemsQuery.hasNextPage && !itemsQuery.isFetchingNextPage) {
@@ -62,7 +66,12 @@ export const SearchProvider: FlowComponent = (props) => {
     }
   });
 
-  const channelItemsQuery = useSoupItemsQuery(() => CHANNEL_PRELOAD_ARGS);
+  const channelItemsQuery = useSoupItemsQuery(
+    () => CHANNEL_PRELOAD_ARGS,
+    () => ({
+      staleTime: 'static',
+    })
+  );
   const channelItemsFetchNextPage = throttle(
     () => channelItemsQuery.fetchNextPage(),
     2000
@@ -76,20 +85,9 @@ export const SearchProvider: FlowComponent = (props) => {
     }
   });
 
-  const itemsQueryData = delayedQueue(
-    () => itemsQuery.data,
-    5000,
-    (items) => !!items && items.length > 0
-  );
-  const channelItemsQueryData = delayedQueue(
-    () => channelItemsQuery.data,
-    5000,
-    (items) => !!items && items.length > 0
-  );
-
   const entityPool = createMemo<EntityData[]>(() => [
-    ...(itemsQueryData() ?? []),
-    ...(channelItemsQueryData() ?? []),
+    ...(itemsQuery.data ?? []),
+    ...(channelItemsQuery.data ?? []),
   ]);
 
   return (

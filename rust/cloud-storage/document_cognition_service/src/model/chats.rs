@@ -1,6 +1,6 @@
 #![allow(deprecated)]
 use ai::types::Model;
-use model::chat::{Chat, ChatAttachmentWithName, ChatMessageWithAttachments};
+use model::chat::{ChatAttachmentWithName, ChatMessageWithAttachments};
 use serde::{Deserialize, Serialize};
 use unfurl_service::GetUnfurlResponse;
 use utoipa::ToSchema;
@@ -35,9 +35,4 @@ pub struct ChatResponse {
     pub web_citations: Vec<(String, Vec<GetUnfurlResponse>)>,
     /// whether the chat is persistent or not
     pub is_persistent: bool,
-}
-
-#[derive(Serialize, Deserialize, Debug, ToSchema)]
-pub struct ChatsResponse {
-    pub chats: Vec<Chat>,
 }

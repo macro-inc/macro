@@ -1,9 +1,4 @@
 import { TOKENS } from '@core/hotkey/tokens';
-import {
-  isRightPanelOpen,
-  useBigChat,
-  useToggleRightPanel,
-} from '@core/signal/layout';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { globalSplitManager } from '../../signal/splitLayout';
 import { fireMacroJump } from '../MacroJump';
@@ -103,25 +98,6 @@ export function registerSplitHotkeys(args: {
       goForward();
       return true;
     },
-    runWithInputFocused: true,
-  });
-
-  // AI side panel - legacy binding.
-  const [bigChatOpen] = useBigChat();
-  const toggleRightPanel = useToggleRightPanel();
-  registerHotkey({
-    hotkeyToken: TOKENS.split.go.toggleRightPanel,
-    hotkey: 'cmd+/',
-    scopeId: splitHotkeyScope,
-    description: () => {
-      return isRightPanelOpen() ? 'Close AI panel' : 'Open AI panel';
-    },
-    keyDownHandler: () => {
-      // Always allow closing. Only allow opening when big chat is not open.
-      toggleRightPanel(!isRightPanelOpen());
-      return true;
-    },
-    condition: () => !bigChatOpen() || isRightPanelOpen(),
     runWithInputFocused: true,
   });
 

@@ -14,6 +14,76 @@ import { Notifications } from './Notifications';
 false && clickOutside;
 const DRAWER_ID = 'notifications';
 
+export function NotificationsButton(props: {
+  entity: Entity;
+  notificationSource: NotificationSource;
+  buttonSize?: 'sm';
+}) {
+  const drawerControl = useDrawerControl(DRAWER_ID);
+  const notifications = useNotificationsForEntity(
+    props.notificationSource,
+    props.entity
+  );
+  const unreadCount = createMemo(
+    () => notifications().filter((n) => !n.viewed_at).length
+  );
+  return (
+    <div class="relative" tabIndex={-1}>
+      <DeprecatedIconButton
+        icon={Bell}
+        theme={drawerControl.isOpen() ? 'accent' : 'clear'}
+        size={props.buttonSize ?? 'base'}
+        tooltip={{ label: 'View notifications' }}
+        onClick={() => drawerControl.toggle()}
+      />
+      <Suspense fallback={null}>
+        <Show when={unreadCount() > 0}>
+          <div class="text-[6pt] bg-accent text-page font-semibold rounded-full absolute top-0 right-0 px-[4px] pointer-events-none">
+            {unreadCount()}
+          </div>
+        </Show>
+      </Suspense>
+    </div>
+  );
+}
+
+export function NotificationsDrawer(props: {
+  entity: Entity;
+  notificationSource: NotificationSource;
+}) {
+  const notifications = useNotificationsForEntity(
+    props.notificationSource,
+    props.entity
+  );
+  const unreadCount = createMemo(
+    () => notifications().filter((n) => !n.viewed_at).length
+  );
+  const title = () => (
+    <>
+      Notifications
+      <span class="text-ink-extra-muted">
+        {unreadCount() > 0 ? ` - ${unreadCount()} unread` : ''}
+      </span>
+    </>
+  );
+  return (
+    <SplitDrawer id={DRAWER_ID} side="right" size={768} title={title()}>
+      <Suspense
+        fallback={
+          <div class="flex justify-center py-8">
+            <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-ink-muted"></div>
+          </div>
+        }
+      >
+        <Notifications
+          entity={props.entity}
+          notificationSource={props.notificationSource}
+        />
+      </Suspense>
+    </SplitDrawer>
+  );
+}
+
 export type NotificationsModalProps = {
   entity: Entity;
   notificationSource: NotificationSource;

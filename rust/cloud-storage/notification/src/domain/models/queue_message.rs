@@ -2,15 +2,32 @@
 
 use crate::domain::models::{
     Notification, RateLimitConfig, RateLimitKey, SendNotificationRequest, TaggedContent,
-    apple::APNSPushNotification, mobile::MessageAttributes,
+    apple::APNSPushNotification,
+    email_notification_digest::{BatchSend, PushNotificationsEnabled, StateMachineDecisionA},
+    mobile::MessageAttributes,
 };
 use chrono::{DateTime, Utc};
 use cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
+use rootcause::Report;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use thiserror::Error;
 use uuid::Uuid;
+
+#[cfg(test)]
+mod test;
+
+/// Per-user iOS push delivery targets.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserApnsEndpoints {
+    /// The iOS device endpoint ARNs for this user.
+    pub endpoints: Vec<String>,
+    /// State machine data if the ingress decision was indeterminate for this user.
+    #[serde(default)]
+    pub digest_state: Option<BatchSend<PushNotificationsEnabled>>,
+}
 
 /// APNS push notification targets.
 #[derive(Debug, Serialize, Deserialize)]
@@ -19,8 +36,8 @@ pub struct APNSTargets<T> {
     pub notif: APNSPushNotification<T>,
     /// The APNS message attributes.
     pub attributes: MessageAttributes,
-    /// The iOS device endpoints to deliver to.
-    pub ios_device_endpoints: Vec<String>,
+    /// Per-user iOS device endpoints and optional state machine data.
+    pub ios_device_endpoints: HashMap<MacroUserIdStr<'static>, UserApnsEndpoints>,
 }
 
 /// Email notification payload.
@@ -155,15 +172,6 @@ pub enum NotificationChannel<'a, T, U> {
     ConnGateway(ConnGatewayNotification<'a, T>),
 }
 
-/// A delivery node with optional fallback on failure.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Node<'a, T, U> {
-    /// The channel of notification we are delivering on.
-    pub notif: NotificationChannel<'a, T, U>,
-    /// The optional next channel we will attempt to deliver on if this method fails.
-    pub on_failure: Option<Box<Node<'a, T, U>>>,
-}
-
 /// Message published to SQS after DB persistence.
 /// Contains everything needed for delivery.
 #[derive(Debug, Serialize, Deserialize)]
@@ -175,7 +183,68 @@ pub struct QueueMessage<'a, T, U> {
     pub rate_limit: Option<(RateLimitKey, RateLimitConfig)>,
     /// The methods on which we will attempt to deliver.
     /// This is an ALL relationship.
-    pub content: Node<'a, T, U>,
+    pub content: NotificationChannel<'a, T, U>,
+}
+
+/// a wrapper type over [QueueMessage] which can only be opened by providing the decision from the bulk digest state machine
+pub(crate) struct QueueMessageNeedsStateMachine<'a, T, U>(Vec<QueueMessage<'a, T, U>>);
+
+impl<'a, T, U> QueueMessageNeedsStateMachine<'a, T, U> {
+    pub fn new(messages: Vec<QueueMessage<'a, T, U>>) -> Self {
+        Self(messages)
+    }
+
+    /// open the inner container by applying the state machine output to the necessary fields
+    pub fn with_state_decisions(
+        self,
+        states: Vec<Result<StateMachineDecisionA<T>, Report>>,
+    ) -> impl Iterator<Item = QueueMessage<'a, T, U>> {
+        // Collect indeterminate decisions keyed by owner_id
+        let indeterminates: HashMap<MacroUserIdStr<'static>, BatchSend<PushNotificationsEnabled>> =
+            states
+                .into_iter()
+                .filter_map(|v| match v {
+                    Ok(StateMachineDecisionA::Indeterminate(indeterminate)) => Some(indeterminate),
+                    Err(_)
+                    | Ok(StateMachineDecisionA::DontSend(_))
+                    | Ok(StateMachineDecisionA::BatchWasQueued(_))
+                    | Ok(StateMachineDecisionA::SendImmediate(_)) => None,
+                })
+                .map(|batch| {
+                    let owner = batch.inner().owner_id().clone();
+                    (owner, batch)
+                })
+                .collect();
+
+        let mut indeterminates = Some(indeterminates);
+
+        let map_msg = move |msg: QueueMessage<'a, T, U>| {
+            let QueueMessage {
+                message_type,
+                rate_limit,
+                mut content,
+            } = msg;
+
+            if let NotificationChannel::Ios(ios) = &mut content {
+                if let Some(ref mut lookup) = indeterminates {
+                    for (user_id, user_endpoints) in &mut ios.ios_device_endpoints {
+                        if let Some(entry) = lookup.remove(user_id) {
+                            user_endpoints.digest_state = Some(entry);
+                        }
+                    }
+                }
+                indeterminates = None;
+            }
+
+            QueueMessage {
+                message_type,
+                rate_limit,
+                content,
+            }
+        };
+
+        self.0.into_iter().map(map_msg)
+    }
 }
 
 /// Custom data payload for a silent background push that clears a previously

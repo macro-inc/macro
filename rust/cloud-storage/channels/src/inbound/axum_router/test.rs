@@ -1,10 +1,10 @@
 use super::*;
 use crate::domain::models::{
-    ChannelAttachment, ChannelMessage, ChannelParticipant, ParticipantRole,
+    ChannelAttachment, ChannelMessage, ChannelParticipant, MessagePageDirection, ParticipantRole,
 };
 use crate::domain::ports::{
     ChannelAccessCheck, ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesPage,
-    ChannelMessagesService,
+    ChannelMessagesQueryResult, ChannelMessagesService,
 };
 use axum::{
     Extension, Router,
@@ -12,7 +12,7 @@ use axum::{
 };
 use http_body_util::BodyExt;
 use model_user::UserContext;
-use models_pagination::{CreatedAt, PaginateOn, Query};
+use models_pagination::{Base64Str, CreatedAt, Cursor, CursorVal, PaginateOn, Query};
 use tower::util::ServiceExt;
 
 // --- Access check implementations for tests ---
@@ -50,13 +50,17 @@ impl ChannelMessagesService for MockService {
         &self,
         _channel_id: Uuid,
         _query: Query<Uuid, CreatedAt, ()>,
+        _direction: MessagePageDirection,
         _limit: u16,
-    ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
-        Ok(Vec::<ChannelMessage>::new()
-            .into_iter()
-            .paginate_on(50, CreatedAt)
-            .filter_on(())
-            .into_page())
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
+        Ok(ChannelMessagesQueryResult {
+            page: Vec::<ChannelMessage>::new()
+                .into_iter()
+                .paginate_on(50, CreatedAt)
+                .filter_on(())
+                .into_page(),
+            has_more_newer: false,
+        })
     }
 
     async fn get_channel_attachments(
@@ -100,8 +104,9 @@ impl ChannelMessagesService for ErrorService {
         &self,
         _channel_id: Uuid,
         _query: Query<Uuid, CreatedAt, ()>,
+        _direction: MessagePageDirection,
         _limit: u16,
-    ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         Err(ChannelMessagesErr::Repo(anyhow::anyhow!("database error")))
     }
 
@@ -138,13 +143,17 @@ impl ChannelMessagesService for ParticipantsService {
         &self,
         _channel_id: Uuid,
         _query: Query<Uuid, CreatedAt, ()>,
+        _direction: MessagePageDirection,
         _limit: u16,
-    ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
-        Ok(Vec::<ChannelMessage>::new()
-            .into_iter()
-            .paginate_on(50, CreatedAt)
-            .filter_on(())
-            .into_page())
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
+        Ok(ChannelMessagesQueryResult {
+            page: Vec::<ChannelMessage>::new()
+                .into_iter()
+                .paginate_on(50, CreatedAt)
+                .filter_on(())
+                .into_page(),
+            has_more_newer: false,
+        })
     }
 
     async fn get_channel_attachments(
@@ -233,6 +242,61 @@ async fn messages_returns_empty_page() {
     let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(json["items"], serde_json::json!([]));
     assert!(json["next_cursor"].is_null());
+    assert!(json["previous_cursor"].is_null());
+}
+
+#[tokio::test]
+async fn messages_returns_400_when_both_cursor_params_are_set() {
+    let router = mock_router();
+    let channel_id = Uuid::new_v4();
+    let raw_cursor = Base64Str::encode_json(Cursor {
+        id: Uuid::new_v4(),
+        limit: 50,
+        val: CursorVal {
+            sort_type: CreatedAt,
+            last_val: chrono::Utc::now(),
+        },
+        filter: (),
+    })
+    .type_erase();
+    let cursor = raw_cursor
+        .replace('+', "%2B")
+        .replace('/', "%2F")
+        .replace('=', "%3D");
+
+    let request = Request::builder()
+        .uri(format!(
+            "/{channel_id}/messages?cursor={cursor}&previous_cursor={cursor}"
+        ))
+        .body(axum::body::Body::empty())
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(
+        json["message"],
+        "provide only one of cursor or previous_cursor"
+    );
+}
+
+#[tokio::test]
+async fn messages_returns_400_on_invalid_previous_cursor() {
+    let router = mock_router();
+    let channel_id = Uuid::new_v4();
+    let request = Request::builder()
+        .uri(format!("/{channel_id}/messages?previous_cursor=not-base64"))
+        .body(axum::body::Body::empty())
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(json["message"], "failed to decode cursor value");
 }
 
 #[tokio::test]
@@ -346,13 +410,17 @@ impl ChannelMessagesService for NotFoundService {
         &self,
         _channel_id: Uuid,
         _query: Query<Uuid, CreatedAt, ()>,
+        _direction: MessagePageDirection,
         _limit: u16,
-    ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
-        Ok(Vec::<ChannelMessage>::new()
-            .into_iter()
-            .paginate_on(50, CreatedAt)
-            .filter_on(())
-            .into_page())
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
+        Ok(ChannelMessagesQueryResult {
+            page: Vec::<ChannelMessage>::new()
+                .into_iter()
+                .paginate_on(50, CreatedAt)
+                .filter_on(())
+                .into_page(),
+            has_more_newer: false,
+        })
     }
 
     async fn get_channel_attachments(
@@ -403,6 +471,7 @@ async fn messages_around_returns_empty_page() {
     let bytes = res.into_body().collect().await.unwrap().to_bytes();
     let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(json["items"], serde_json::json!([]));
+    assert!(json["previous_cursor"].is_null());
 }
 
 #[tokio::test]

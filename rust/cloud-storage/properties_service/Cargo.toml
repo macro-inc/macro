@@ -29,6 +29,7 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
   "auth",
   "cloud_storage",
 ] }
+last_online_tracker = { path = "../last_online_tracker" }
 notification = { path = "../notification" }
 aws-sdk-sqs = { workspace = true }
 macro_uuid = { path = "../macro_uuid" }

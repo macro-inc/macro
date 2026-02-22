@@ -3,11 +3,12 @@ export AWS_PAGER := ""
 
 # Start LocalStack for local AWS emulation
 start_localstack:
+  docker rm -f localstack 2>/dev/null || true
   docker run -d --name localstack \
     --network databases \
     -p 4566:4566 \
     -e SERVICES=sqs,dynamodb,s3 \
-    localstack/localstack 2>/dev/null || true
+    localstack/localstack
   @echo "LocalStack started"
 
 # Create SQS queues in LocalStack

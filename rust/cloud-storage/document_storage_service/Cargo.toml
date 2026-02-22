@@ -72,6 +72,7 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
   "cloud_storage",
   "user_permissions",
 ] }
+last_online_tracker = { path = "../last_online_tracker" }
 notification = { path = "../notification" }
 macro_project_utils = { path = "../macro_project_utils" }
 macro_sha_count_client = { path = "../macro_sha_count_client" }

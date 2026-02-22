@@ -21,7 +21,7 @@ deploy-dev:
     just ci::deploy-dev connection-gateway
 
 run *FLAGS: ensure::ensure_dynamodb ensure::ensure_redis
-    cargo run --bin connection_gateway_service {{ FLAGS }}
+    cargo run --bin connection_gateway_service --features macro_middleware/local_auth {{ FLAGS }} 
 
 run_cleanup:
     cargo run --bin stale_connections

@@ -12,10 +12,9 @@ import type { HotkeyCommand } from '@core/hotkey/types';
 import type { IUser } from '@core/user/types';
 import type { DateValue } from '@core/util/date';
 
-export type QuickAccessEntity<T extends EntityData = EntityData> = Omit<
-  T,
-  'ownerId'
->;
+// Note (seamus) : Ideally history would return ownerId or we would get actual
+//     soup entities for quick access
+export type QuickAccessEntity<T extends EntityData = EntityData> = T;
 
 export type Bucket =
   | 'channel'
@@ -215,3 +214,7 @@ export type QuickAccessContextValue = {
    */
   getById: (id: string) => QuickAccessItem | undefined;
 };
+
+export function exclude(...buckets: Bucket[]) {
+  return ALL_BUCKETS.filter((bucket) => !buckets.includes(bucket));
+}

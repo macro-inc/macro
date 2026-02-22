@@ -6,6 +6,7 @@
  */
 import type { ApiChannelMessage } from './apiChannelMessage';
 import type { ApiChannelMessagesPageNextCursor } from './apiChannelMessagesPageNextCursor';
+import type { ApiChannelMessagesPagePreviousCursor } from './apiChannelMessagesPagePreviousCursor';
 
 /**
  * Paginated response of channel messages.
@@ -15,4 +16,6 @@ export interface ApiChannelMessagesPage {
   items: ApiChannelMessage[];
   /** Cursor for the next page, null if no more pages. */
   next_cursor?: ApiChannelMessagesPageNextCursor;
+  /** Cursor for the previous page, null if no newer page exists. */
+  previous_cursor?: ApiChannelMessagesPagePreviousCursor;
 }

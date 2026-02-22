@@ -3,10 +3,10 @@ mod tests;
 
 use crate::domain::{
     models::{
-        ChannelAttachment, ChannelParticipant, CountedReaction, MessageAttachment, ParticipantRole,
-        ThreadData, ThreadReplyRow, TopLevelMessageRow,
+        ChannelAttachment, ChannelParticipant, CountedReaction, MessageAttachment,
+        MessagePageDirection, ParticipantRole, ThreadData, ThreadReplyRow, TopLevelMessageRow,
     },
-    ports::ChannelMessagesRepo,
+    ports::{ChannelMessagesRepo, TopLevelMessagesQueryResult},
 };
 use chrono::{DateTime, Utc};
 use models_pagination::{CreatedAt, Query};
@@ -102,45 +102,98 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
         &self,
         channel_id: Uuid,
         query: &Query<Uuid, CreatedAt, ()>,
+        direction: MessagePageDirection,
         limit: u16,
-    ) -> Result<Vec<TopLevelMessageRow>, Self::Err> {
+    ) -> Result<TopLevelMessagesQueryResult, Self::Err> {
         let (cursor_created_at, cursor_id) = match query.vals() {
             (Some(id), Some(val)) => (Some(*val), Some(*id)),
             _ => (None, None),
         };
+        let limit_i64 = i64::from(limit);
+        let limit_usize = usize::from(limit);
 
-        let rows = sqlx::query_as!(
-            TopLevelRow,
-            r#"
-            SELECT
-                m.id,
-                m.channel_id,
-                m.sender_id,
-                m.content,
-                m.created_at,
-                m.updated_at,
-                m.edited_at::timestamptz AS "edited_at?",
-                m.deleted_at::timestamptz AS "deleted_at?"
-            FROM comms_messages m
-            WHERE m.channel_id = $1
-              AND m.thread_id IS NULL
-              AND (m.deleted_at IS NULL OR EXISTS (
-                  SELECT 1 FROM comms_messages r
-                  WHERE r.thread_id = m.id AND r.deleted_at IS NULL
-              ))
-              AND ($2::timestamptz IS NULL OR (m.created_at, m.id) < ($2, $3))
-            ORDER BY m.created_at DESC, m.id DESC
-            LIMIT $4
-            "#,
-            channel_id,
-            cursor_created_at,
-            cursor_id,
-            i64::from(limit) as i64,
-        )
-        .fetch_all(&self.pool)
-        .await?;
+        let (rows, has_more_newer) = match direction {
+            MessagePageDirection::Older => {
+                let rows = sqlx::query_as!(
+                    TopLevelRow,
+                    r#"
+                    SELECT
+                        m.id,
+                        m.channel_id,
+                        m.sender_id,
+                        m.content,
+                        m.created_at,
+                        m.updated_at,
+                        m.edited_at::timestamptz AS "edited_at?",
+                        m.deleted_at::timestamptz AS "deleted_at?"
+                    FROM comms_messages m
+                    WHERE m.channel_id = $1
+                      AND m.thread_id IS NULL
+                      AND (m.deleted_at IS NULL OR EXISTS (
+                          SELECT 1 FROM comms_messages r
+                          WHERE r.thread_id = m.id AND r.deleted_at IS NULL
+                      ))
+                      AND ($2::timestamptz IS NULL OR (m.created_at, m.id) < ($2, $3))
+                    ORDER BY m.created_at DESC, m.id DESC
+                    LIMIT $4
+                    "#,
+                    channel_id,
+                    cursor_created_at,
+                    cursor_id,
+                    limit_i64,
+                )
+                .fetch_all(&self.pool)
+                .await?;
 
-        Ok(rows
+                // For older pagination with a cursor, there is always at least one newer item
+                // (the cursor anchor itself) from the API's perspective.
+                (rows, cursor_created_at.is_some())
+            }
+            MessagePageDirection::Newer => {
+                // Query in ASC so we can overfetch one newer row and trim while preserving the
+                // "nearest newer page" semantics before reversing back to DESC.
+                let mut rows = sqlx::query_as!(
+                    TopLevelRow,
+                    r#"
+                    SELECT
+                        m.id,
+                        m.channel_id,
+                        m.sender_id,
+                        m.content,
+                        m.created_at,
+                        m.updated_at,
+                        m.edited_at::timestamptz AS "edited_at?",
+                        m.deleted_at::timestamptz AS "deleted_at?"
+                    FROM comms_messages m
+                    WHERE m.channel_id = $1
+                      AND m.thread_id IS NULL
+                      AND (m.deleted_at IS NULL OR EXISTS (
+                          SELECT 1 FROM comms_messages r
+                          WHERE r.thread_id = m.id AND r.deleted_at IS NULL
+                      ))
+                      AND ($2::timestamptz IS NOT NULL AND (m.created_at, m.id) > ($2, $3))
+                    ORDER BY m.created_at ASC, m.id ASC
+                    LIMIT $4
+                    "#,
+                    channel_id,
+                    cursor_created_at,
+                    cursor_id,
+                    limit_i64 + 1,
+                )
+                .fetch_all(&self.pool)
+                .await?;
+
+                let has_more_newer = rows.len() > limit_usize;
+                if has_more_newer {
+                    rows.truncate(limit_usize);
+                }
+
+                rows.reverse();
+                (rows, has_more_newer)
+            }
+        };
+
+        let rows = rows
             .into_iter()
             .map(|r| TopLevelMessageRow {
                 id: r.id,
@@ -152,7 +205,12 @@ impl ChannelMessagesRepo for PgChannelMessagesRepo {
                 edited_at: r.edited_at,
                 deleted_at: r.deleted_at,
             })
-            .collect())
+            .collect();
+
+        Ok(TopLevelMessagesQueryResult {
+            rows,
+            has_more_newer,
+        })
     }
 
     #[tracing::instrument(err, skip(self))]

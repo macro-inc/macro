@@ -54,6 +54,7 @@ healthcheck:
 
 # Sets up the local FusionAuth stack.
 setup:
+  cd ../../ && bun i && cd -
   just get_fusionauth_env
   just start -d --wait
   just healthcheck

@@ -1,109 +1,176 @@
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
-import { debouncedDependent } from '@core/util/debounce';
-import { createEffect, createSignal, untrack } from 'solid-js';
+import { createSignal, type Accessor, type Setter } from 'solid-js';
+import type { CategoryFilter } from './types';
+import type { CommandWithInfo } from '@core/hotkey/getCommands';
+import type { EntityData } from '@entity';
 
-const SEARCH_SERVICE_DEBOUNCE_MS = 200;
-const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 10;
+/** timestamp threshold for resetting state after menu close */
+const STATE_RESET_THRESHOLD_MS = 2_000;
 
-export const [konsoleOpen, setKonsoleOpen] = createControlledOpenSignal();
-export const toggleKonsoleVisibility = () => {
-  const isOpen = konsoleOpen();
+export interface ICommandState {
+  /** visibility */
+  isOpen: Accessor<boolean>;
+  setIsOpen: Setter<boolean>;
+  toggle: () => void;
+  open: () => void;
+  close: () => void;
 
-  setKonsoleOpen(!isOpen);
-};
+  /** query */
+  query: Accessor<string>;
+  setQuery: Setter<string>;
+  clearQuery: () => void;
 
-export const [lastCommandTime, setLastCommandTime] = createSignal(Date.now());
+  /** selected index */
+  selectedIndex: Accessor<number>;
+  setSelectedIndex: Setter<number>;
+  resetSelectedIndex: () => void;
 
-export const [rawQuery, setRawQuery] = createSignal('');
+  /** category filter */
+  categoryFilter: Accessor<CategoryFilter>;
+  setCategoryFilter: Setter<CategoryFilter>;
+  resetCategoryFilter: () => void;
 
-export const debouncedSearchServiceQuery = debouncedDependent(
-  rawQuery,
-  SEARCH_SERVICE_DEBOUNCE_MS
-);
-export const debouncedLocalQuery = debouncedDependent(
-  rawQuery,
-  LOCAL_FUZZY_SEARCH_DEBOUNCE_MS
-);
+  /** command scope (for multi-stage commands) */
+  commandScopeCommands: Accessor<CommandWithInfo[]>;
+  setCommandScopeCommands: Setter<CommandWithInfo[]>;
+  clearCommandScopeCommands: () => void;
+  isInCommandScope: Accessor<boolean>;
 
-export const resetQuery = () => setRawQuery('');
+  /** entity action mode (for selection modification commands) */
+  entityActionEntities: Accessor<EntityData[]>;
+  setEntityActionEntities: Setter<EntityData[]>;
+  clearEntityActionEntities: () => void;
+  isEntityActionMode: Accessor<boolean>;
+  openForEntityAction: (entities: EntityData[]) => void;
 
-// If we aren't in default mode,
-// there will be a prefix SIGIL on the string,
-// so we remove it.
-// THIS IS WHAT YOU SHOULD USE FOR MOST "WHAT DID THE USER TYPE IN?" THINGS,
-// the exception being actually checking for sigils.
-export function cleanQuery(query?: string) {
-  const q = query ?? rawQuery();
-  const mode = getModeConfig(currentKonsoleMode());
+  /** lifecycle */
+  maybeResetState: () => void;
+  forceReset: () => void;
+  onMenuClose: () => void;
+  onMenuOpen: () => void;
+}
 
-  if (mode.sigil && q.startsWith(mode.sigil)) {
-    return q.slice(mode.sigil.length);
+function createCommandState(): ICommandState {
+  const [isOpen, setIsOpen] = createControlledOpenSignal();
+  const [query, setQuery] = createSignal('');
+  const [selectedIndex, setSelectedIndex] = createSignal(0);
+  const [categoryFilter, setCategoryFilter] =
+    createSignal<CategoryFilter>('all');
+  const [lastClosedTime, setLastClosedTime] = createSignal(0);
+  const [commandScopeCommands, setCommandScopeCommands] = createSignal<
+    CommandWithInfo[]
+  >([]);
+  const [entityActionEntities, setEntityActionEntities] = createSignal<
+    EntityData[]
+  >([]);
+
+  function toggle() {
+    setIsOpen((prev) => !prev);
   }
 
-  return q;
-}
+  function open() {
+    setIsOpen(true);
+  }
 
-export const COMMAND_MODES = [
-  // { id: 'FULL_TEXT_SEARCH', sigil: '%', label: 'Full Text Search' },
-  // { id: "REGEX_SEARCH", sigil: "/", label: "Regex Search" },
-  // { id: "RUN_COMMAND", sigil: ">", label: "Run" },
-  // { id: "TEMP_CHAT", sigil: " ", label: "Temporary Chat" },
-  { id: 'SELECTION_MODIFICATION', sigil: '', label: 'Modify selection' },
-];
-export const DEFAULT_MODE = {
-  id: 'ENTITY_SEARCH',
-  sigil: '',
-  label: 'Global Search',
-};
+  function close() {
+    setIsOpen(false);
+  }
 
-type CommandMode = (typeof COMMAND_MODES)[number] | typeof DEFAULT_MODE;
+  function clearQuery() {
+    setQuery('');
+  }
 
-export const [currentKonsoleMode, _setKonsoleMode] = createSignal<
-  CommandMode['id']
->(DEFAULT_MODE.id);
+  function resetSelectedIndex() {
+    setSelectedIndex(0);
+  }
 
-export const setKonsoleMode = (
-  id: CommandMode['id'] | typeof DEFAULT_MODE.id
-) => {
-  _setKonsoleMode(id);
+  function resetCategoryFilter() {
+    setCategoryFilter('all');
+  }
 
-  // Add sigil when mode is changed programatically
-  const query = rawQuery();
-  const mode = getModeConfig(id);
+  function clearCommandScopeCommands() {
+    setCommandScopeCommands([]);
+  }
 
-  if (mode.id !== DEFAULT_MODE.id && query.startsWith(mode.sigil)) return;
-  setRawQuery(mode.sigil + cleanQuery());
-};
+  function isInCommandScope() {
+    return commandScopeCommands().length > 0;
+  }
 
-export const resetKonsoleMode = () => setKonsoleMode(DEFAULT_MODE.id);
+  function clearEntityActionEntities() {
+    setEntityActionEntities([]);
+  }
 
-export function getModeFromQuery(q: string): CommandMode {
-  return COMMAND_MODES.find((mode) => q.startsWith(mode.sigil)) ?? DEFAULT_MODE;
-}
+  function isEntityActionMode() {
+    return entityActionEntities().length > 0;
+  }
 
-export function getModeConfig(id: string): CommandMode {
-  const mode =
-    COMMAND_MODES.find((mode) => mode.id === id) ??
-    (id === DEFAULT_MODE.id ? DEFAULT_MODE : undefined);
-  if (!mode) console.error(`Command+K mode '${id}' does not exist.`);
-  return mode ?? DEFAULT_MODE;
-}
+  function openForEntityAction(entities: EntityData[]) {
+    setEntityActionEntities(entities);
+    setIsOpen(true);
+  }
 
-export const createModeListenerEffects = () => {
-  // Switch modes when sigil is applied by user
-  createEffect(() => {
-    const query = rawQuery();
-    const detectedMode = getModeFromQuery(query).id;
-
-    if (detectedMode !== currentKonsoleMode()) {
-      untrack(() => setKonsoleMode(detectedMode));
+  function maybeResetState() {
+    const now = Date.now();
+    if (now - lastClosedTime() >= STATE_RESET_THRESHOLD_MS) {
+      forceReset();
     }
-  });
+  }
 
-  // createEffect(() => {
-  //   console.log({
-  //     mode: currentKonsoleMode(),
-  //     query: rawQuery()
-  //   })
-  // })
-};
+  function forceReset() {
+    clearQuery();
+    resetSelectedIndex();
+    resetCategoryFilter();
+    clearCommandScopeCommands();
+    clearEntityActionEntities();
+  }
+
+  function onMenuClose() {
+    setLastClosedTime(Date.now());
+    clearCommandScopeCommands();
+    clearEntityActionEntities();
+  }
+
+  function onMenuOpen() {
+    clearQuery();
+    resetSelectedIndex();
+  }
+
+  return {
+    isOpen,
+    setIsOpen,
+    toggle,
+    open,
+    close,
+
+    query,
+    setQuery,
+    clearQuery,
+
+    selectedIndex,
+    setSelectedIndex,
+    resetSelectedIndex,
+
+    categoryFilter,
+    setCategoryFilter,
+    resetCategoryFilter,
+
+    commandScopeCommands,
+    setCommandScopeCommands,
+    clearCommandScopeCommands,
+    isInCommandScope,
+
+    entityActionEntities,
+    setEntityActionEntities,
+    clearEntityActionEntities,
+    isEntityActionMode,
+    openForEntityAction,
+
+    maybeResetState,
+    forceReset,
+    onMenuClose,
+    onMenuOpen,
+  };
+}
+
+/** Global command menu state singleton */
+export const CommandState = createCommandState();

@@ -1,23 +1,22 @@
 import { renameItem } from '@core/component/FileList/itemOperations';
+import { toast } from '@core/component/Toast/Toast';
+import type { EntityData } from '@entity';
 import {
   optimisticUpdateChannelName,
   rollbackUpdateChannelName,
   type UpdateChannelNameContext,
 } from '@queries/channel/channel';
-import { type MutationCallbacks, withCallbacks } from '@queries/utils';
-import type { ItemType } from '@service-storage/client';
-import { ChannelTypeEnum } from '@service-comms/client';
-import type { EntityData } from '@entity';
-import { useMutation } from '@tanstack/solid-query';
-import { toast } from '@core/component/Toast/Toast';
-import { setPreviewName } from '@queries/preview';
 import { setHistoryItemName } from '@queries/history/history';
-import { createCognitionWebsocketEffect } from '@service-cognition/websocket';
+import { setPreviewName } from '@queries/preview';
 import {
   getSoupEntityById,
   optimisticUpdateSoupEntity,
   type SoupTransaction,
 } from '@queries/soup/cache';
+import { type MutationCallbacks, withCallbacks } from '@queries/utils';
+import { ChannelTypeEnum } from '@service-comms/client';
+import type { ItemType } from '@service-storage/client';
+import { useMutation } from '@tanstack/solid-query';
 
 type RenamableEntity = Pick<EntityData, 'id' | 'type' | 'name'> &
   Partial<EntityData>;
@@ -326,31 +325,4 @@ export function createBulkRenameDssEntityMutation() {
     onMutate: bulkRenameOnMutate,
     onSettled: bulkRenameOnSettled,
   }));
-}
-
-const CHAT_RENAME_TIMEOUT_MS = 20000;
-
-/**
- * Waits for a chat rename to complete and updates the query cache(s).
- * If noDispose is true, the effect will not be disposed after completion/timeout.
- * Returns a dispose function to cancel the wait.
- */
-export function useWaitChatRename(chatId: string, noDispose?: boolean) {
-  if (!noDispose) {
-    setTimeout(() => {
-      dispose();
-    }, CHAT_RENAME_TIMEOUT_MS);
-  }
-
-  const dispose = createCognitionWebsocketEffect('chat_renamed', (data) => {
-    if (data.chat_id !== chatId) return;
-    performOptimisticRenameUpdates([
-      { id: chatId, newName: data.name, itemType: 'chat' },
-    ]);
-    if (!noDispose) {
-      dispose();
-    }
-  });
-
-  return dispose;
 }

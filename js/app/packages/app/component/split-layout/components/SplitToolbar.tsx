@@ -8,6 +8,7 @@ import {
   Show,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import { cn } from '@ui/utils/classname';
 import { useSplitPanelOrThrow } from '../layoutUtils';
 
 export function SplitToolbar(props: { ref: Setter<HTMLDivElement | null> }) {
@@ -43,22 +44,23 @@ export function SplitToolbar(props: { ref: Setter<HTMLDivElement | null> }) {
   // so this only affects the main unified list toolbar
   return (
     <div
-      class="relative w-full flex items-center justify-between shrink-0"
-      classList={{
-        'h-10 px-1 border-b border-edge-muted/50': hasContent(),
-        hidden: preview(),
-      }}
+      class={cn(
+        'relative w-full flex items-center justify-between shrink-0',
+        hasContent() && 'h-10 px-1 border-b border-edge-muted/50',
+        !hasContent() && 'bg-[red]',
+        preview() && 'hidden'
+      )}
       data-split-toolbar
       ref={props.ref}
     >
       <div
-        class="flex h-full items-center flex-1"
+        class="flex-1 h-full flex items-center gap-0.5 px-2"
         ref={(ref) => {
           panel.layoutRefs.toolbarLeft = ref;
         }}
       />
       <div
-        class="flex h-full items-center"
+        class="flex h-full items-center gap-0.5 px-2"
         ref={(ref) => {
           panel.layoutRefs.toolbarRight = ref;
         }}
@@ -95,7 +97,13 @@ export function SplitToolbarLeft(
 
   return (
     <Show when={panel.layoutRefs.toolbarLeft}>
-      <Portal ref={setPortalRef} mount={panel.layoutRefs.toolbarLeft}>
+      <Portal
+        ref={(div) => {
+          setPortalRef(div);
+          div.style.display = 'contents';
+        }}
+        mount={panel.layoutRefs.toolbarLeft}
+      >
         {props.children}
       </Portal>
     </Show>
@@ -122,7 +130,13 @@ export function SplitToolbarRight(props: ParentProps<{ order?: number }>) {
   });
   return (
     <Show when={panel.layoutRefs.toolbarRight}>
-      <Portal ref={setPortalRef} mount={panel.layoutRefs.toolbarRight}>
+      <Portal
+        ref={(div) => {
+          setPortalRef(div);
+          div.style.display = 'contents';
+        }}
+        mount={panel.layoutRefs.toolbarRight}
+      >
         {props.children}
       </Portal>
     </Show>

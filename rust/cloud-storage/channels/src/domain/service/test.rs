@@ -1,7 +1,10 @@
 use super::*;
 use crate::domain::{
-    models::{CountedReaction, MessageAttachment, ThreadData, ThreadReplyRow, TopLevelMessageRow},
-    ports::MockChannelMessagesRepo,
+    models::{
+        CountedReaction, MessageAttachment, MessagePageDirection, ThreadData, ThreadReplyRow,
+        TopLevelMessageRow,
+    },
+    ports::{MockChannelMessagesRepo, TopLevelMessagesQueryResult},
 };
 use chrono::Utc;
 use std::collections::HashMap;
@@ -23,7 +26,14 @@ fn make_row(id: Uuid, minutes_ago: i64) -> TopLevelMessageRow {
 fn empty_repo() -> MockChannelMessagesRepo {
     let mut repo = MockChannelMessagesRepo::new();
     repo.expect_get_top_level_messages()
-        .returning(|_, _, _| Box::pin(async { Ok(vec![]) }));
+        .returning(|_, _, _, _| {
+            Box::pin(async {
+                Ok(TopLevelMessagesQueryResult {
+                    rows: vec![],
+                    has_more_newer: false,
+                })
+            })
+        });
     repo.expect_get_thread_data()
         .returning(|_, _| Box::pin(async { Ok(HashMap::new()) }));
     repo.expect_get_reactions_batch()
@@ -44,10 +54,16 @@ fn empty_repo() -> MockChannelMessagesRepo {
 #[tokio::test]
 async fn returns_empty_page_for_no_messages() {
     let svc = ChannelMessagesServiceImpl::new(empty_repo());
-    let page = svc
-        .get_channel_messages(Uuid::nil(), Query::Sort(CreatedAt, ()), 50)
+    let result = svc
+        .get_channel_messages(
+            Uuid::nil(),
+            Query::Sort(CreatedAt, ()),
+            MessagePageDirection::Older,
+            50,
+        )
         .await
         .unwrap();
+    let page = result.page;
 
     assert!(page.items.is_empty());
     assert!(page.next_cursor.is_none());
@@ -74,9 +90,14 @@ async fn returns_messages_with_thread_info() {
 
     let row_clone = row.clone();
     repo.expect_get_top_level_messages()
-        .returning(move |_, _, _| {
+        .returning(move |_, _, _, _| {
             let r = row_clone.clone();
-            Box::pin(async move { Ok(vec![r]) })
+            Box::pin(async move {
+                Ok(TopLevelMessagesQueryResult {
+                    rows: vec![r],
+                    has_more_newer: false,
+                })
+            })
         });
 
     let reply_clone = reply_row.clone();
@@ -118,10 +139,16 @@ async fn returns_messages_with_thread_info() {
     });
 
     let svc = ChannelMessagesServiceImpl::new(repo);
-    let page = svc
-        .get_channel_messages(Uuid::nil(), Query::Sort(CreatedAt, ()), 50)
+    let result = svc
+        .get_channel_messages(
+            Uuid::nil(),
+            Query::Sort(CreatedAt, ()),
+            MessagePageDirection::Older,
+            50,
+        )
         .await
         .unwrap();
+    let page = result.page;
 
     assert_eq!(page.items.len(), 1);
     let msg = &page.items[0];
@@ -136,8 +163,15 @@ async fn returns_messages_with_thread_info() {
 async fn clamps_limit() {
     let mut repo = MockChannelMessagesRepo::new();
     repo.expect_get_top_level_messages()
-        .withf(|_, _, limit| *limit == 100)
-        .returning(|_, _, _| Box::pin(async { Ok(vec![]) }));
+        .withf(|_, _, _, limit| *limit == 100)
+        .returning(|_, _, _, _| {
+            Box::pin(async {
+                Ok(TopLevelMessagesQueryResult {
+                    rows: vec![],
+                    has_more_newer: false,
+                })
+            })
+        });
     repo.expect_get_thread_data()
         .returning(|_, _| Box::pin(async { Ok(HashMap::new()) }));
     repo.expect_get_reactions_batch()
@@ -146,10 +180,16 @@ async fn clamps_limit() {
         .returning(|_| Box::pin(async { Ok(HashMap::new()) }));
 
     let svc = ChannelMessagesServiceImpl::new(repo);
-    let page = svc
-        .get_channel_messages(Uuid::nil(), Query::Sort(CreatedAt, ()), 200)
+    let result = svc
+        .get_channel_messages(
+            Uuid::nil(),
+            Query::Sort(CreatedAt, ()),
+            MessagePageDirection::Older,
+            200,
+        )
         .await
         .unwrap();
+    let page = result.page;
 
     assert!(page.items.is_empty());
 }

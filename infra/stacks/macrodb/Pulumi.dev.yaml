@@ -1,0 +1,16 @@
+config:
+  aws:region: us-east-1
+  macrodb:db_password_secret_key: macrodb-password-dev
+  macrodb:parameter_group_family: postgres16
+  macrodb:engine_version: 16.8 
+  macrodb:instance_size: db.t4g.large
+  macrodb:storage_type: gp2
+  macrodb:allocated_storage: 50
+  macrodb:max_allocated_storage: 100
+  macrodb:ca_cert_identifier: rds-ca-rsa2048-g1
+  macrodb:kms_key_id: arn:aws:kms:us-east-1:569036502058:key/6a0ba9c2-b8ab-4a65-b0f2-6f8f39ccda72
+  macrodb:performance_insights_retention_days: 7
+  macrodb:performance_insights_kms_key_id: arn:aws:kms:us-east-1:569036502058:key/6a0ba9c2-b8ab-4a65-b0f2-6f8f39ccda72
+  macrodb:subnet_group_name: macro-db-dev-stack-macrodbinstancesubnetgroup483984b1-io15kk1yffvr
+  macrodb:security_group_ids: sg-0c947d88145e1141b
+  macrodb:backup_retention_days: 1

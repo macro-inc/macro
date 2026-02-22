@@ -6,6 +6,8 @@ get_environment:
   just ../../../infra/stacks/fusionauth-instance/insert_local_fusionauth_variables
   @echo "Copying env file"
   cp ../../../.env ./
+  @echo "Overriding FUSIONAUTH_BASE_URL"
+  sed -i '' 's|^FUSIONAUTH_BASE_URL=.*|FUSIONAUTH_BASE_URL="http://localhost:9011"|' .env
   @echo "Overriding LOCAL_AWS_URL"
   sed -i '' 's|^LOCAL_AWS_URL=.*|LOCAL_AWS_URL="http://localhost:4566"|' .env
 

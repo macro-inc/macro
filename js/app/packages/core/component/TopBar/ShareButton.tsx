@@ -19,8 +19,15 @@ import clickOutside from '@core/directive/clickOutside';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
-import { blockEditPermissionEnabledSignal } from '@core/signal/load';
-import { useIsDocumentOwner } from '@core/signal/permissions';
+import {
+  blockEditPermissionEnabledSignal,
+  blockMetadataSignal,
+} from '@core/signal/load';
+import {
+  useGetPermissions,
+  useIsDocumentOwner,
+} from '@core/signal/permissions';
+import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { idToEmail } from '@core/user';
 import {
   isErr,
@@ -50,6 +57,8 @@ import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
 import {
+  type Accessor,
+  createContext,
   createMemo,
   createResource,
   createSignal,
@@ -59,6 +68,7 @@ import {
   onMount,
   Show,
   Switch,
+  useContext,
 } from 'solid-js';
 import { match } from 'ts-pattern';
 import { beveledCorners } from '../../../block-theme/signals/themeSignals';
@@ -73,6 +83,23 @@ import { Tooltip } from '../Tooltip';
 import { openLoginModal } from './LoginButton';
 
 false && clickOutside;
+
+interface IShareDialogContext {
+  isOpen: Accessor<boolean>;
+  open: () => void;
+  close: () => void;
+}
+
+export const ShareDialogContext = createContext<IShareDialogContext>();
+
+export function useShareDialogContext() {
+  const ctx = useContext(ShareDialogContext);
+  if (!ctx)
+    throw new Error(
+      'useShareDialogContext must be used within a ShareDialogContext.Provider'
+    );
+  return ctx;
+}
 
 const permissionsBlockResource = createBlockResource(
   () => {
@@ -535,6 +562,8 @@ export function ShareModal(props: ShareModalProps) {
                 name={props.name}
                 hideAccessLevelSelector={props.itemType === 'email'}
                 initialAccessLevel={props.itemType === 'email' ? 'view' : null}
+                blockId={props.id}
+                blockName={props.blockAlias}
               />
 
               <Show when={(recipients()?.length ?? 0) > 0}>
@@ -836,6 +865,153 @@ export function ShareButton(props: ShareButtonProps) {
         id={props.id}
       />
     </>
+  );
+}
+
+export function ShareTrigger(props: { copyLink?: () => void }) {
+  const shareCtx = useShareDialogContext();
+  const isAuthenticated = useIsAuthenticated();
+  const blockType = useBlockAliasedName();
+  const blockId = useBlockId();
+  const { track } = withAnalytics();
+
+  onMount(() => {
+    const blockScopeId = blockHotkeyScopeSignal.get;
+    registerHotkey({
+      keyDownHandler: () => {
+        if (!isAuthenticated()) {
+          openLoginModal();
+        } else {
+          track(TrackingEvents.SHARE.OPEN);
+          shareCtx.open();
+        }
+        return true;
+      },
+      hotkeyToken: TOKENS.block.share,
+      runWithInputFocused: true,
+      scopeId: blockScopeId(),
+      description: 'Share',
+      hotkey: 'cmd+s',
+    });
+  });
+
+  const defaultUrl = () =>
+    buildSimpleEntityUrl({ id: blockId ?? '', type: blockType }, {});
+
+  const copyLink = createCallback(() => {
+    if (props.copyLink) return props.copyLink();
+    navigator.clipboard.writeText(defaultUrl());
+    toast.success(
+      'Link copied to clipboard.',
+      'Sending this link in a Macro message will automatically update permissions to include recipients.'
+    );
+  });
+
+  const ShareLinkAction = createMemo(() => ({
+    action: (e: MouseEvent | KeyboardEvent) => {
+      e.stopPropagation();
+      copyLink();
+    },
+    icon: IconLink,
+  }));
+
+  const shareAccessLevelText = createMemo(() => {
+    const maybeResult = permissionsBlockResource[0].latest;
+    if (!maybeResult || isErr(maybeResult)) return '';
+    const [, sharePermission] = maybeResult;
+    if (sharePermission.isPublic) return 'Public';
+    if (sharePermission.channelSharePermissions?.length) return 'Shared';
+    return 'Just me';
+  });
+
+  return (
+    <div class="border-1 border-edge-muted flex ml-1 items-stretch">
+      <Tooltip
+        tooltip={
+          <div>
+            {match(shareAccessLevelText())
+              .when(
+                (level) => level === 'Public',
+                () => 'Anyone with the link can access this item'
+              )
+              .when(
+                (level) => level === 'Shared',
+                () => 'Shared with specific people or channels'
+              )
+              .when(
+                (level) => level === 'Just me',
+                () => 'Only you can access this item'
+              )
+              .otherwise(() => 'This item has been shared with you')}
+          </div>
+        }
+      >
+        <button
+          class="text-[0.75rem] font-mono tracking-wide hover:bg-hover text-ink px-2 flex items-center gap-1 h-full"
+          onClick={() => {
+            if (!isAuthenticated()) {
+              openLoginModal();
+            } else {
+              track(TrackingEvents.SHARE.OPEN);
+              shareCtx.open();
+            }
+          }}
+        >
+          <Switch fallback={<IconShared class="size-4" />}>
+            <Match when={shareAccessLevelText() === 'Public'}>
+              <IconGlobe class="size-4" />
+            </Match>
+            <Match when={shareAccessLevelText() === 'Shared'}>
+              <IconUsers class="size-4" />
+            </Match>
+            <Match when={shareAccessLevelText() === 'Just me'}>
+              <IconEyeSlash class="size-4" />
+            </Match>
+          </Switch>
+          SHARE
+        </button>
+      </Tooltip>
+
+      <div class="w-[1px] bg-edge-muted" />
+
+      <DeprecatedIconButton
+        tooltip={{ label: 'Copy Share Link' }}
+        onClick={ShareLinkAction().action}
+        icon={ShareLinkAction().icon}
+        theme="clear"
+        size="sm"
+      />
+    </div>
+  );
+}
+
+export function ShareBlockModal(props: {
+  name?: string;
+  userPermissions?: Permissions;
+  owner?: string;
+}) {
+  const ctx = useShareDialogContext();
+  const id = useBlockId();
+  const blockAlias = useBlockAliasedName();
+  const blockName = useBlockName();
+  const itemType = blockNameToItemType(blockName);
+  const documentName = useBlockDocumentName();
+  const permissions = useGetPermissions();
+  const ownerDerived = () => blockMetadataSignal()?.owner;
+
+  if (!itemType) return null;
+
+  return (
+    <ShareModal
+      isSharePermOpen={ctx.isOpen()}
+      setIsSharePermOpen={(v) => (v ? ctx.open() : ctx.close())}
+      id={id}
+      blockAlias={blockAlias}
+      itemType={itemType}
+      name={props.name ?? documentName() ?? ''}
+      userPermissions={props.userPermissions ?? permissions()}
+      owner={props.owner ?? ownerDerived()}
+    />
   );
 }
 

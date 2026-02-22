@@ -40,6 +40,7 @@ import type {
   SendMessageResponse,
   UpdateLabelBatchRequest,
   UpdateLabelBatchResponse,
+  UpdateThreadLabelRequest,
   UpsertScheduledRequest,
   UpsertScheduledResponse,
 } from './schemas';
@@ -1975,6 +1976,79 @@ export const archiveThread = async (
     status: res.status,
     headers: res.headers,
   } as archiveThreadResponse;
+};
+
+/**
+ * @summary Add or remove a label from all messages in a thread
+ */
+export type addRemoveThreadLabelResponse200 = {
+  data: UpdateLabelBatchResponse;
+  status: 200;
+};
+
+export type addRemoveThreadLabelResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type addRemoveThreadLabelResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type addRemoveThreadLabelResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type addRemoveThreadLabelResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type addRemoveThreadLabelResponseSuccess =
+  addRemoveThreadLabelResponse200 & {
+    headers: Headers;
+  };
+export type addRemoveThreadLabelResponseError = (
+  | addRemoveThreadLabelResponse400
+  | addRemoveThreadLabelResponse401
+  | addRemoveThreadLabelResponse404
+  | addRemoveThreadLabelResponse500
+) & {
+  headers: Headers;
+};
+
+export type addRemoveThreadLabelResponse =
+  | addRemoveThreadLabelResponseSuccess
+  | addRemoveThreadLabelResponseError;
+
+export const getAddRemoveThreadLabelUrl = (id: string) => {
+  return `/email/threads/${id}/labels`;
+};
+
+export const addRemoveThreadLabel = async (
+  id: string,
+  updateThreadLabelRequest: UpdateThreadLabelRequest,
+  options?: RequestInit
+): Promise<addRemoveThreadLabelResponse> => {
+  const res = await fetch(getAddRemoveThreadLabelUrl(id), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateThreadLabelRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: addRemoveThreadLabelResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as addRemoveThreadLabelResponse;
 };
 
 export type getThreadMessagesHandlerResponse200 = {

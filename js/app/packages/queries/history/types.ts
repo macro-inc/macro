@@ -10,6 +10,8 @@ type BaseHistoryItem = Pick<Item, 'id' | 'name'> & {
   viewedAt?: DateValue;
   // TODO: item name without safe name transform
   rawName?: string;
+  // Normalized owner field: BasicDocument.owner, Chat.userId, Project.userId
+  ownerId: string;
 };
 
 export type DocumentHistoryItem = BaseHistoryItem &

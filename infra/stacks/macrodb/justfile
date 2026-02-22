@@ -1,0 +1,6 @@
+# Imports all necessary pre-existing items into the pulumi stack
+import *ARGS:
+  @echo "Initializing {{ ARGS }} stack"
+  pulumi stack init macro-inc/{{ ARGS }} || true
+  @echo "Performing imports"
+  pulumi import aws:rds/instance:Instance database macro-db-{{ ARGS }}

@@ -5,6 +5,7 @@ import { blockAcceptedFileExtensionToMimeType } from '@core/constant/allBlocks';
 import { blockFileSignal, blockMetadataSignal } from '@core/signal/load';
 import { setCopiedItem } from '@core/state/clipboard';
 import { createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { ModalsProvider } from './ModalsProvider';
 import { TopBar } from './TopBar';
 
 const { track, TrackingEvents } = withAnalytics();
@@ -63,25 +64,27 @@ export default function BlockImage() {
 
   return (
     <DocumentBlockContainer>
-      <div class="w-full h-full bg-panel select-none overscroll-none overflow-hidden flex flex-col">
-        <TopBar />
-        <Show
-          when={imageUrl()}
-          fallback={
+      <ModalsProvider>
+        <div class="w-full h-full bg-panel select-none overscroll-none overflow-hidden flex flex-col">
+          <TopBar />
+          <Show
+            when={imageUrl()}
+            fallback={
+              <div class="w-full h-full flex items-center justify-center">
+                {/* Loading state handled by DocumentBlockContainer */}
+              </div>
+            }
+          >
             <div class="w-full h-full flex items-center justify-center">
-              {/* Loading state handled by DocumentBlockContainer */}
+              <img
+                src={imageUrl()}
+                alt={blockMetadataSignal()?.documentName || 'Image'}
+                class="max-w-full max-h-full object-contain"
+              />
             </div>
-          }
-        >
-          <div class="w-full h-full flex items-center justify-center">
-            <img
-              src={imageUrl()}
-              alt={blockMetadataSignal()?.documentName || 'Image'}
-              class="max-w-full max-h-full object-contain"
-            />
-          </div>
-        </Show>
-      </div>
+          </Show>
+        </div>
+      </ModalsProvider>
     </DocumentBlockContainer>
   );
 }

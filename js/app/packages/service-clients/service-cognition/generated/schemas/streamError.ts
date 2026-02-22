@@ -6,13 +6,9 @@
  */
 import type { StreamErrorOneOf } from './streamErrorOneOf';
 import type { StreamErrorOneOfFive } from './streamErrorOneOfFive';
-import type { StreamErrorOneOfNine } from './streamErrorOneOfNine';
-import type { StreamErrorOneOfSeven } from './streamErrorOneOfSeven';
 import type { StreamErrorOneOfThree } from './streamErrorOneOfThree';
 
 export type StreamError =
   | StreamErrorOneOf
   | StreamErrorOneOfThree
-  | StreamErrorOneOfFive
-  | StreamErrorOneOfSeven
-  | StreamErrorOneOfNine;
+  | StreamErrorOneOfFive;

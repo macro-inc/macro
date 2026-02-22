@@ -1,4 +1,6 @@
 import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
+import { createSoupState } from '@app/component/next-soup/create-soup-state';
+import { SoupContextProvider } from '@app/component/next-soup/soup-context';
 import { activeElement } from '@app/signal/focus';
 import { Resize } from '@core/component/Resize';
 import { tabTitleSignal } from '@core/signal/tabTitle';
@@ -35,8 +37,6 @@ import {
 } from './layoutManager';
 import { decodePairs } from './layoutUtils';
 import { registerSplitHotkeys } from './registerSplitHotkeys';
-import { SoupContextProvider } from '@app/component/next-soup/soup-context';
-import { createSoupState } from '@app/component/next-soup/create-soup-state';
 
 type SplitLayoutContainerProps = {
   pairs: string[];
@@ -45,8 +45,7 @@ type SplitLayoutContainerProps = {
 
 function getParentSplitId(element: Element | null) {
   if (!element || !element.isConnected) return null;
-  // Checking the parent element here so that we don't get the split container itself.
-  const splitParent = element.parentElement?.closest('[data-split-container]');
+  const splitParent = element.closest('[data-split-container]');
   if (!splitParent) return null;
   const splitId = splitParent.getAttribute('data-split-id');
   if (!splitId) return null;
@@ -273,7 +272,7 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   const [, setTabTitle] = tabTitleSignal;
 
   // Store a ref to each panel by id
-  let panelRefs = new Map<SplitId, HTMLDivElement>();
+  const panelRefs = new Map<SplitId, HTMLDivElement>();
   createEffect(
     on(splitManager.events, (event) => {
       if (event.type === SplitEvent.Remove) {

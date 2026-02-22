@@ -32,7 +32,7 @@ function messageContentIsEmpty(content: ChatMessageContent) {
   }
 }
 
-function extractMessageText(content: ChatMessageContent) {
+export function extractMessageText(content: ChatMessageContent) {
   if (typeof content === 'string') {
     return content;
   } else if (Array.isArray(content)) {
@@ -40,7 +40,7 @@ function extractMessageText(content: ChatMessageContent) {
       .map((part) => {
         if (part.type === 'text') {
           return part.text;
-        } else if (part.type === 'toolCall') {
+        } else {
           // TODO - handle tool call
           return '';
         }

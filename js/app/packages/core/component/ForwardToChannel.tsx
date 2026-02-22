@@ -2,7 +2,13 @@ import { useChannelMarkdownArea } from '@block-channel/component/MarkdownArea';
 import { withAnalytics } from '@coparse/analytics';
 import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
 import { useIsAuthenticated } from '@core/auth';
-import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
+import {
+  useMaybeBlockAliasedName,
+  useMaybeBlockId,
+  useMaybeBlockName,
+  type BlockName,
+  type BlockAlias,
+} from '@core/block';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { ShareOptions } from '@core/component/TopBar/ShareButton';
@@ -48,6 +54,8 @@ interface ForwardToChannelProps {
   }) => void;
   hideAccessLevelSelector?: boolean;
   initialAccessLevel?: AccessLevel | null;
+  blockId?: string;
+  blockName?: BlockName | BlockAlias;
 }
 
 export function ForwardToChannel(props: ForwardToChannelProps) {
@@ -91,12 +99,16 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
   const [submitAccessLevel, setSubmitAccessLevel] =
     createSignal<AccessLevel | null>(props.initialAccessLevel ?? null);
 
+  const blockBaseName = useMaybeBlockName() ?? props.blockName;
+
   createEffect(() => {
     const channelPermissions_ = channelPermissions();
     if (channelPermissions_) {
       setSubmitAccessLevel(channelPermissions_?.access_level);
     } else {
-      setSubmitAccessLevel(['md'].includes(useBlockName()) ? 'edit' : 'view');
+      setSubmitAccessLevel(
+        ['md'].includes(blockBaseName as string) ? 'edit' : 'view'
+      );
     }
   });
 
@@ -130,14 +142,18 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     return true;
   });
 
-  const blockName = useBlockAliasedName();
-  const blockId = useBlockId();
+  const blockName = useMaybeBlockAliasedName() ?? props.blockName;
+  const blockId = useMaybeBlockId() ?? props.blockId;
   const asAttachment = () => {
     const itemType =
-      blockName === 'email' ? 'thread' : blockNameToItemType(blockName);
+      blockName === 'email'
+        ? 'thread'
+        : blockName != null
+          ? blockNameToItemType(blockName)
+          : undefined;
     return {
       entity_type: itemType ?? 'unknown',
-      entity_id: blockId,
+      entity_id: blockId ?? '',
     };
   };
 

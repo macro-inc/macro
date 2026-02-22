@@ -12,9 +12,13 @@ export type GetChannelMessagesParams = {
    */
   limit?: number;
   /**
-   * Base64 encoded cursor value
+   * Base64 encoded cursor value for older messages
    */
   cursor?: string;
+  /**
+   * Base64 encoded cursor value for newer messages
+   */
+  previous_cursor?: string;
   /**
    * Return a centered window around this message ID
    */

@@ -17,6 +17,8 @@ import {
 import { queryKeys } from '@macro-entity';
 import { queryClient } from '@queries/client';
 import { emailClient } from '@service-email/client';
+import { emailKeys } from '@queries/email/keys';
+import { throwOnErr } from '@core/util/maybeResult';
 import {
   removeSoupEntities,
   getSoupEntityById,
@@ -425,4 +427,123 @@ export async function archiveEmail(
       invalidateSoupEntity(id),
     ]);
   }
+}
+
+export type TrashEmailsHandle = {
+  /** Fire-and-forget promise for the API calls. Rejects on failure (rolls back optimistic update). */
+  done: Promise<void>;
+  /** Optimistically restores all entities and calls the API to remove the TRASH label. */
+  undo: () => Promise<void>;
+};
+
+/**
+ * Optimistically removes one or more email threads from soup + email caches,
+ * then fires the TRASH label API calls in the background. Takes a single
+ * snapshot before all removals so undo restores the complete pre-trash state.
+ * Returns synchronously so the caller can show the undo toast immediately.
+ */
+export function trashEmails(ids: string[]): TrashEmailsHandle {
+  queryClient.cancelQueries({ queryKey: queryKeys.all.email });
+
+  const previousEmail = queryClient.getQueriesData<{
+    pages: { items: EntityData[] }[];
+  }>({
+    queryKey: queryKeys.all.email,
+  });
+
+  const idSet = new Set(ids);
+  const soupTxn = removeSoupEntities(idSet);
+
+  // Optimistically remove from email queries
+  for (const [key, data] of previousEmail) {
+    if (!data) continue;
+    queryClient.setQueryData(key, {
+      ...data,
+      pages: data.pages.map((page) => ({
+        ...page,
+        items: page.items.filter((item) => !idSet.has(item.id)),
+      })),
+    });
+  }
+
+  const rollback = () => {
+    soupTxn.rollback();
+    for (const [key, data] of previousEmail) {
+      queryClient.setQueryData(key, data);
+    }
+  };
+
+  // Resolved lazily by the API calls; used by undo
+  let trashLabelId: string | undefined;
+
+  const done = (async () => {
+    try {
+      const labelsData = await queryClient.fetchQuery({
+        queryKey: emailKeys.labels.queryKey,
+        queryFn: async () =>
+          throwOnErr(async () => await emailClient.getUserLabels()),
+        staleTime: 5 * 60 * 1000,
+      });
+      const trashLabel = labelsData?.labels.find(
+        (l) => l.provider_label_id === 'TRASH'
+      );
+      const labelId = trashLabel?.id;
+      if (!labelId) {
+        throw new Error('TRASH label not found');
+      }
+      trashLabelId = labelId;
+
+      await Promise.all(
+        ids.map((id) =>
+          emailClient.updateThreadLabel({
+            thread_id: id,
+            label_id: labelId,
+            value: true,
+          })
+        )
+      );
+    } catch (err) {
+      rollback();
+      throw err;
+    } finally {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
+        ...ids.map((id) => invalidateSoupEntity(id)),
+      ]);
+    }
+  })();
+
+  return {
+    done,
+    undo: async () => {
+      // Wait for the trash calls to finish so we know the label ID.
+      // If the trash call itself failed, rollback already happened — nothing to undo.
+      try {
+        await done;
+      } catch {
+        return;
+      }
+
+      rollback();
+
+      try {
+        await Promise.all(
+          ids.map((id) =>
+            emailClient.updateThreadLabel({
+              thread_id: id,
+              label_id: trashLabelId!,
+              value: false,
+            })
+          )
+        );
+      } finally {
+        // Only invalidate email queries — skip soup invalidation since
+        // rollback() already restored the correct cache state.
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.all.email,
+          refetchType: 'none',
+        });
+      }
+    },
+  };
 }

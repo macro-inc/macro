@@ -136,7 +136,7 @@ export class FusionAuthService extends pulumi.ComponentResource {
               image:
                 stack === 'prod'
                   ? 'fusionauth/fusionauth-app:1.54.0'
-                  : 'fusionauth/fusionauth-app:1.62.0',
+                  : 'fusionauth/fusionauth-app:1.62.1',
               cpu: stack === 'prod' ? 2048 : 2048,
               memory: stack === 'prod' ? 4096 : 4096,
               environment: containerEnvVars,

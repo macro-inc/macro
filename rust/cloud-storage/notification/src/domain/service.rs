@@ -14,6 +14,8 @@ use thiserror::Error;
 pub use egress::NotificationEgressService;
 pub use ingress::NotificationIngress;
 pub use ingress::NotificationIngressService;
+pub use ingress::NotificationReader;
+pub use ingress::NotificationReaderService;
 
 /// Error returned when sending a notification fails.
 #[derive(Debug, Error)]

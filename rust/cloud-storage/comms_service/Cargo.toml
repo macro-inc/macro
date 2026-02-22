@@ -61,6 +61,7 @@ model_notifications = { path = "../model_notifications" }
 models_comms = { path = "../models_comms" }
 models_opensearch = { path = "../models_opensearch" }
 models_permissions = { path = "../models_permissions" }
+last_online_tracker = { path = "../last_online_tracker" }
 notification_hex = { path = "../notification", package = "notification" }
 reqwest.workspace = true
 secretsmanager_client = { path = "../secretsmanager_client" }

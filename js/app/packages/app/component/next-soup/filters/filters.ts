@@ -8,7 +8,8 @@ import {
   type EntityWithValidIcon,
   getIconConfig,
 } from '@core/component/EntityIcon';
-import type { SoupItemsQueryFilters } from '@queries/soup/items';
+import type { SoupBody, SoupItemsQueryFilters } from '@queries/soup/items';
+import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { codeFileExtensions } from '@block-code/util/languageSupport';
 import type { FilterConfig } from './create-filter-state';
 import type { Component } from 'solid-js';
@@ -20,6 +21,7 @@ import { AnimatedFolderIcon } from '@macro-icons/wide/animating/folder';
 import { AnimatedStarIcon } from '@macro-icons/wide/animating/star';
 import { AnimatedTaskIcon } from '@macro-icons/wide/animating/task';
 import { ChannelTypeEnum } from '@service-comms/client';
+import { match } from 'ts-pattern';
 
 export const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
@@ -36,6 +38,43 @@ export const NIL_UUID = '00000000-0000-0000-0000-000000000000';
  * ```
  */
 export const EXCLUDE: string[] = [NIL_UUID];
+
+function isIdFilteredOut(ids: string[] | undefined, value: string): boolean {
+  if (!ids || ids.length === 0) return false;
+  return !ids.includes(value);
+}
+
+//  TODO: this only supports for item type and id filters, other filters to be added later
+export function filterSoupItemByRequestBody(
+  item: SoupApiItem,
+  body: SoupBody
+): boolean {
+  return match(item)
+    .with(
+      { tag: 'document' },
+      ({ data }) =>
+        !isIdFilteredOut(body.document_filters?.document_ids, data.id)
+    )
+    .with(
+      { tag: 'chat' },
+      ({ data }) => !isIdFilteredOut(body.chat_filters?.chat_ids, data.id)
+    )
+    .with(
+      { tag: 'channel' },
+      ({ data }) =>
+        !isIdFilteredOut(body.channel_filters?.channel_ids, data.channel.id)
+    )
+    .with(
+      { tag: 'project' },
+      ({ data }) => !isIdFilteredOut(body.project_filters?.project_ids, data.id)
+    )
+    .with(
+      { tag: 'emailThread' },
+      ({ data }) =>
+        !isIdFilteredOut(body.email_filters?.email_thread_ids, data.id)
+    )
+    .exhaustive();
+}
 
 /**
  * Unread filter - entity has unread content.

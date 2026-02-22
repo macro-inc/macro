@@ -6,10 +6,11 @@ import { structuredOutputCompletion } from '@core/client/structuredOutput';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 import { DeprecatedIconButton } from '@core/component/DeprecatedIconButton';
 import { DeprecatedTextButton } from '@core/component/DeprecatedTextButton';
-import { AskAi } from '@core/component/GeneralizedPopup/AskAI';
+// import { AskAi } from '@core/component/GeneralizedPopup/AskAI';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { createMarkdownFile } from '@core/util/create';
+import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
 import NotesIcon from '@phosphor-icons/core/bold/file-md-bold.svg?component-solid';
@@ -35,7 +36,6 @@ import {
   PDFPopupCompletionSignal,
   PDFPopupSelectedTextSignal,
 } from './PageOverlay';
-import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 
 const { track, TrackingEvents } = withAnalytics();
 
@@ -95,10 +95,10 @@ function LoadingContent(props: { lines: number }) {
 }
 
 export function PDFPopup(props: PDFPopupProps) {
-  const isAuthenticated = useIsAuthenticated();
+  const _isAuthenticated = useIsAuthenticated();
 
   const blockId = useBlockId();
-  const [completion, setCompletion] = PDFPopupCompletionSignal;
+  const [completion, _setCompletion] = PDFPopupCompletionSignal;
   const isGenerating = () => completion()?.status !== 'completed';
 
   const [copied, setCopied] = createSignal(false);
@@ -116,7 +116,7 @@ export function PDFPopup(props: PDFPopupProps) {
     }
   });
 
-  const selectedText = createMemo(() => {
+  const _selectedText = createMemo(() => {
     const currentSelection = PDFPopupSelectedTextSignal();
     if (currentSelection && currentSelection.length > 0) {
       return currentSelection;
@@ -250,16 +250,16 @@ export function PDFPopup(props: PDFPopupProps) {
     return (
       <>
         <div class="flex flex-row items-center space-x-2 justify-between w-full">
-          <Show when={isAuthenticated() && !!selectedText() && props.aiProps}>
-            {(aiProps) => (
-              <AskAi
-                attachmentId={aiProps().attachmentId}
-                blockName="pdf"
-                setCompletion={setCompletion}
-                selectedText={selectedText()!}
-              />
-            )}
-          </Show>
+          {/*<Show when={isAuthenticated() && !!selectedText() && props.aiProps}>
+						{(aiProps) => (
+							<AskAi
+								attachmentId={aiProps().attachmentId}
+								blockName="pdf"
+								setCompletion={setCompletion}
+								selectedText={selectedText()!}
+							/>
+						)}
+					</Show>*/}
           <div class="flex flex-row space-x-2 items-center">
             <Show when={completion() && props.insertProps}>
               {(insertProps) => (

@@ -5,6 +5,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
+use std::sync::Arc;
 
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
@@ -23,20 +24,24 @@ use crate::domain::models::{
 /// Port for sending mobile push notifications (iOS/Android via SNS).
 pub trait NotificationSender: Send + Sync + 'static {
     /// Send an iOS push notification via APNS.
+    ///
+    /// Returns the SNS message ID on success (used for delivery failure tracking).
     fn send_ios_push_notification<T: Serialize + Send + Sync>(
         &self,
         endpoint_arn: &str,
         notification: &APNSPushNotification<T>,
         attributes: &MessageAttributes,
-    ) -> impl Future<Output = Result<(), Report>> + Send;
+    ) -> impl Future<Output = Result<String, Report>> + Send;
 
     /// Send an Android push notification via FCM.
+    ///
+    /// Returns the SNS message ID on success (used for delivery failure tracking).
     fn send_android_push_notification<T: Serialize + Send + Sync>(
         &self,
         endpoint_arn: &str,
         notification: &FCMMessage<T>,
         attributes: &MessageAttributes,
-    ) -> impl Future<Output = Result<(), Report>> + Send;
+    ) -> impl Future<Output = Result<String, Report>> + Send;
 }
 
 /// Port for rate limiting operations.
@@ -73,11 +78,11 @@ pub trait NotificationRepository: Send + Sync + 'static {
     /// (idempotent operation).
     fn create_notification<'a, T: Notification + Send + Sync>(
         &self,
-        request: &SendNotificationRequestBuilder<'a, T>,
+        request: SendNotificationRequestBuilder<'a, T>,
         notification_id: Uuid,
         service_sender: &str,
         apns_collapse_key: Option<&str>,
-    ) -> impl Future<Output = Result<Option<Uuid>, Report>> + Send;
+    ) -> impl Future<Output = Result<Option<Vec<UserNotificationRow<Arc<T>>>>, Report>> + Send;
 
     /// Update the sent status for users who received the notification.
     fn update_sent_status<'a>(
@@ -189,9 +194,9 @@ use crate::domain::models::queue_message::{DeliverySuccess, QueueMessage, RawQue
 /// Port for publishing notifications to delivery queue and receiving them.
 pub trait NotificationQueue: Send + Sync + 'static {
     /// Publish notifications for async delivery (after DB persistence).
-    fn publish<T: Serialize + Send + Sync, U: Serialize + Send + Sync>(
+    fn publish<'a, T: Serialize + Send + Sync, U: Serialize + Send + Sync>(
         &self,
-        messages: &[QueueMessage<'_, T, U>],
+        messages: impl Iterator<Item = QueueMessage<'a, T, U>> + Send,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
     /// Receive messages from the queue (for worker).

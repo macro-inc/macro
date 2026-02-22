@@ -80,6 +80,11 @@ export async function maybeHandlePlatformNotification(
   notificationInterface: PlatformNotificationState,
   splitLayoutManager: SplitManager
 ) {
+  // Ignore document_mention notifications - they should not show as browser notifications
+  if (notification.notification_metadata.tag === 'document_mention') {
+    return;
+  }
+
   const platformNotificationData = await toPlatformNotificationData(
     notification,
     DefaultUserNameResolver,

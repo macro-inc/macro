@@ -4,9 +4,6 @@ name = "connection_gateway"
 publish = false
 version = "0.1.0"
 
-[features]
-local_auth = []
-
 [lib]
 name = "connection_gateway_client"
 path = "src/lib.rs"

@@ -13,7 +13,6 @@ import type { ChatStreamOneOfOneseven } from './chatStreamOneOfOneseven';
 import type { ChatStreamOneOfOnetwo } from './chatStreamOneOfOnetwo';
 import type { ChatStreamOneOfOnezero } from './chatStreamOneOfOnezero';
 import type { ChatStreamOneOfSix } from './chatStreamOneOfSix';
-import type { ChatStreamOneOfThreeone } from './chatStreamOneOfThreeone';
 import type { ChatStreamOneOfTwofive } from './chatStreamOneOfTwofive';
 import type { ChatStreamOneOfTwonine } from './chatStreamOneOfTwonine';
 import type { ChatStreamOneOfTwoone } from './chatStreamOneOfTwoone';
@@ -34,5 +33,4 @@ export type ChatStream =
   | ChatStreamOneOfTwothree
   | ChatStreamOneOfTwofive
   | ChatStreamOneOfTwoseven
-  | ChatStreamOneOfTwonine
-  | ChatStreamOneOfThreeone;
+  | ChatStreamOneOfTwonine;

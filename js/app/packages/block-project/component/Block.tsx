@@ -19,6 +19,7 @@ import { refetchSoupEntity } from '@queries/soup/cache';
 import { refetchResources } from '@service-storage/util/refetchResources';
 import { toast } from 'core/component/Toast/Toast';
 import { type Component, createSignal, Show } from 'solid-js';
+import { ModalsProvider } from './ModalsProvider';
 import { TopBar } from './TopBar';
 import { SoupContextProvider } from '@app/component/next-soup/soup-context';
 import {
@@ -122,49 +123,55 @@ const Block: Component = () => {
 
   return (
     <DocumentBlockContainer>
-      <div
-        ref={attachHotkeys}
-        class="w-full h-full bg-panel flex flex-col relative"
-        use:fileFolderDrop={{
-          onDragStart: () => setIsDragging(true),
-          onDragEnd: () => setIsDragging(false),
-          onDrop: (fileEntries, folderEntries) => {
-            handleFileFolderDrop(fileEntries, folderEntries, handleFileUpload);
-          },
-          disabled: isSpecialProject,
-        }}
-      >
-        <Show when={isDragging() && !isSpecialProject}>
-          <FileDropOverlay>Upload to this folder</FileDropOverlay>
-        </Show>
-        <TopBar />
-        <Show
-          when={ENABLE_PROJECT_VIEW_PREVIEW}
-          fallback={
-            <ProjectEntityList
-              projectId={projectId}
-              soup={projectSoup}
-              scopeId={projectViewScope}
-            />
-          }
+      <ModalsProvider>
+        <div
+          ref={attachHotkeys}
+          class="w-full h-full bg-panel flex flex-col relative"
+          use:fileFolderDrop={{
+            onDragStart: () => setIsDragging(true),
+            onDragEnd: () => setIsDragging(false),
+            onDrop: (fileEntries, folderEntries) => {
+              handleFileFolderDrop(
+                fileEntries,
+                folderEntries,
+                handleFileUpload
+              );
+            },
+            disabled: isSpecialProject,
+          }}
         >
-          <div class="flex size-full">
-            <SplitPanelContext.Provider
-              value={{
-                ...splitPanelContext,
-                halfSplitState: () =>
-                  preview() ? { side: 'left', percentage: 30 } : undefined,
-              }}
-            >
+          <Show when={isDragging() && !isSpecialProject}>
+            <FileDropOverlay>Upload to this folder</FileDropOverlay>
+          </Show>
+          <TopBar />
+          <Show
+            when={ENABLE_PROJECT_VIEW_PREVIEW}
+            fallback={
               <ProjectEntityList
                 projectId={projectId}
                 soup={projectSoup}
                 scopeId={projectViewScope}
               />
-            </SplitPanelContext.Provider>
-          </div>
-        </Show>
-      </div>
+            }
+          >
+            <div class="flex size-full">
+              <SplitPanelContext.Provider
+                value={{
+                  ...splitPanelContext,
+                  halfSplitState: () =>
+                    preview() ? { side: 'left', percentage: 30 } : undefined,
+                }}
+              >
+                <ProjectEntityList
+                  projectId={projectId}
+                  soup={projectSoup}
+                  scopeId={projectViewScope}
+                />
+              </SplitPanelContext.Provider>
+            </div>
+          </Show>
+        </div>
+      </ModalsProvider>
     </DocumentBlockContainer>
   );
 };

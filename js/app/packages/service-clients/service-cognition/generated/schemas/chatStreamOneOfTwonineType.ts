@@ -10,5 +10,5 @@ export type ChatStreamOneOfTwonineType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ChatStreamOneOfTwonineType = {
-  completion_stream_chunk: 'completion_stream_chunk',
+  stream_end: 'stream_end',
 } as const;

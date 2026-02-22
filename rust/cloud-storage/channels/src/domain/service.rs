@@ -1,8 +1,11 @@
 use crate::domain::{
-    models::{ChannelMessage, ChannelParticipant, ThreadInfo, ThreadReply, TopLevelMessageRow},
+    models::{
+        ChannelMessage, ChannelParticipant, MessagePageDirection, ThreadInfo, ThreadReply,
+        TopLevelMessageRow,
+    },
     ports::{
-        ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesPage, ChannelMessagesRepo,
-        ChannelMessagesService,
+        ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesPage,
+        ChannelMessagesQueryResult, ChannelMessagesRepo, ChannelMessagesService,
     },
 };
 use models_pagination::{CreatedAt, PaginateOn, Query};
@@ -156,17 +159,18 @@ where
         &self,
         channel_id: Uuid,
         query: Query<Uuid, CreatedAt, ()>,
+        direction: MessagePageDirection,
         limit: u16,
-    ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         let limit = limit.clamp(1, 100);
 
-        let rows = self
+        let rows_result = self
             .repo
-            .get_top_level_messages(channel_id, &query, limit)
+            .get_top_level_messages(channel_id, &query, direction, limit)
             .await
             .map_err(anyhow::Error::from)?;
 
-        let messages = self.hydrate_messages(rows).await?;
+        let messages = self.hydrate_messages(rows_result.rows).await?;
 
         let page = messages
             .into_iter()
@@ -174,7 +178,10 @@ where
             .filter_on(())
             .into_page();
 
-        Ok(page)
+        Ok(ChannelMessagesQueryResult {
+            page,
+            has_more_newer: rows_result.has_more_newer,
+        })
     }
 
     #[tracing::instrument(err, skip(self))]

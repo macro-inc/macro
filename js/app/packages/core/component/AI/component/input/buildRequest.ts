@@ -1,14 +1,10 @@
 import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import { useAdditionalInstructions } from '@core/component/AI/constant/prompts';
-import type {
-  Attachment,
-  ChatMessageStream,
-  Model,
-  ToolSet,
-} from '@core/component/AI/types';
+import type { Attachment, Model, ToolSet } from '@core/component/AI/types';
 import { isPaymentError } from '@core/util/handlePaymentError';
 import { isErr } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
+import type { ChatMessageStream } from '@service-connection/stream';
 import { subscribe } from '@service-connection/stream';
 
 export type ChatSendInput = {
@@ -63,9 +59,11 @@ export function useSendChatMessage() {
       stream: {
         data: connectionStream.data,
         isDone: connectionStream.isDone,
-        model: model ?? DEFAULT_MODEL,
-        attachments: attachments ?? [],
-        streamId: stream_id,
+        id: () => ({
+          entity_id: chat_id,
+          stream_id: stream_id,
+          entity_type: 'chat',
+        }),
       },
     };
   };

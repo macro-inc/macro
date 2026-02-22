@@ -10,7 +10,6 @@ import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid'
 import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
 import NotesIcon from '@phosphor-icons/core/bold/file-md-bold.svg?component-solid';
 import LoadingIcon from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
-import type { ChatMessageContent } from '@service-cognition/generated/schemas/chatMessageContent';
 import type { ChatMessageWithAttachments } from '@service-cognition/generated/schemas/chatMessageWithAttachments';
 import type { Model } from '@service-cognition/generated/schemas/model';
 import { createCallback } from '@solid-primitives/rootless';
@@ -18,6 +17,7 @@ import { useSplitLayout } from 'app/component/split-layout/layout';
 import type { Component } from 'solid-js';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { extractMessageText } from './AssistantMessage';
 
 type AssistantActionProps = {
   message: ChatMessageWithAttachments;
@@ -37,26 +37,6 @@ export function AssistantMessageActionAndMetadata(props: AssistantActionProps) {
     if (!icon) return MODEL_PROVIDER_ICON[DEFAULT_MODEL];
     return icon;
   };
-
-  function extractMessageText(content: ChatMessageContent) {
-    if (typeof content === 'string') {
-      return content;
-    } else if (Array.isArray(content)) {
-      return content
-        .map((part) => {
-          if (part.type === 'text') {
-            return part.text;
-          } else if (part.type === 'toolCall') {
-            // TODO - handle tool call
-            return '';
-          }
-        })
-        .join('\n');
-    } else {
-      // TODO - handle tool response
-      return '';
-    }
-  }
 
   const handleCopy = async () => {
     const text = extractMessageText(props.message.content);

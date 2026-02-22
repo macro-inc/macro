@@ -57,7 +57,6 @@ export const ws = new WebsocketBuilder(resolveWsUrl)
   .build();
 
 export const state = createWebsocketStateSignal(ws);
-
 // TODO: add type mapping on the websocket event
 export function createConnectionBlockWebsocketEffect(
   callback: (data: FromWebsocketMessage) => void

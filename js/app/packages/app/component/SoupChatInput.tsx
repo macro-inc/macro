@@ -1,16 +1,17 @@
+import { useSoup } from '@app/component/next-soup/soup-context';
+import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
+import { useChatMarkdownArea } from '@core/component/AI/component/input/useChatMarkdownArea';
 import {
   ChatInputProvider,
   useChatInputContext,
 } from '@core/component/AI/context';
-import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
-import { useChatMarkdownArea } from '@core/component/AI/component/input/useChatMarkdownArea';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
+import { TOKENS } from '@core/hotkey/tokens';
 import { isErr } from '@core/util/maybeResult';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { ChatInput } from 'core/component/AI/component/input/ChatInput';
-import { useHotkeyDOMScope } from 'core/hotkey/hotkeys';
+import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import { onMount, Show } from 'solid-js';
-import { useSoup } from '@app/component/next-soup/soup-context';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
 function SoupChatInputInner() {
@@ -27,6 +28,18 @@ function SoupChatInputInner() {
 
   onMount(() => {
     attachHotkeys(containerRef);
+  });
+
+  // cmd+j - Focus the soup chat input
+  registerHotkey({
+    hotkey: 'cmd+j',
+    scopeId: splitPanelContext.splitHotkeyScope,
+    hotkeyToken: TOKENS.chat.input.focus,
+    description: 'Focus chat input',
+    keyDownHandler: () => {
+      chatMarkdownArea.focus();
+      return true;
+    },
   });
 
   const handleSend = async (request: ChatSendInput) => {
@@ -67,6 +80,10 @@ function SoupChatInputInner() {
             <ChatInput
               markdown={chatMarkdownArea}
               onSend={handleSend}
+              onEscape={() => {
+                splitPanelContext.panelRef()?.focus();
+                return true;
+              }}
               isPersistent={true}
               autoFocusOnMount={false}
             />

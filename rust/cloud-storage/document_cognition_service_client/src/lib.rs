@@ -1,7 +1,6 @@
 pub mod chat;
 pub(crate) mod constants;
 pub mod error;
-pub mod notification;
 
 use constants::INTERNAL_AUTH_HEADER_KEY;
 use error::DcsClientError;
@@ -12,6 +11,7 @@ pub struct DocumentCognitionServiceClient {
     client: reqwest::Client,
 }
 
+//bals
 impl DocumentCognitionServiceClient {
     pub fn new(internal_auth_key: String, url: String) -> Self {
         let mut headers = reqwest::header::HeaderMap::new();

@@ -219,8 +219,6 @@ function ChatInner(props: {
               <div class="flex gap-x-4">
                 <span>chunks: {stream().data().length}</span>
                 <span>isDone: {String(stream().isDone())}</span>
-                <span>model: {stream().model}</span>
-                <span>streamId: {stream().streamId ?? 'none'}</span>
               </div>
             )}
           </Show>
@@ -250,7 +248,7 @@ function ChatInner(props: {
               chatId={chat.chatId()}
               onSend={onSend}
               captureEditor={setChatEditor}
-              autoFocusOnMount={!navigatedFromJK()}
+              autoFocusOnMount={true}
             />
           </div>
         </div>

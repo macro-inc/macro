@@ -14,8 +14,6 @@ import {
 } from '@core/util/maybeResult';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { DocumentTextPart } from '@service-cognition/generated/schemas/documentTextPart';
-import { uuid } from 'short-uuid';
-import { waitExtractionStatus } from './extraction';
 import type { CreateChatRequest } from './generated/schemas/createChatRequest';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
 import type { GetBatchPreviewRequest } from './generated/schemas/getBatchPreviewRequest';
@@ -23,30 +21,17 @@ import type { GetBatchPreviewResponse } from './generated/schemas/getBatchPrevie
 import type { GetChatPermissionsResponseV2 } from './generated/schemas/getChatPermissionsResponseV2';
 import type { GetChatResponse } from './generated/schemas/getChatResponse';
 import type { GetChatsForAttachmentResponse } from './generated/schemas/getChatsForAttachmentResponse';
-import type { GetModelsForAttachmentsRequest } from './generated/schemas/getModelsForAttachmentsRequest';
-import type { GetModelsForAttachmentsResponse } from './generated/schemas/getModelsForAttachmentsResponse';
-import type { GetModelsResponse } from './generated/schemas/getModelsResponse';
+import type { HttpSendChatMessageRequest } from './generated/schemas/httpSendChatMessageRequest';
 import type { PatchChatRequestV2 } from './generated/schemas/patchChatRequestV2';
+import type { SendChatMessageResponse } from './generated/schemas/sendChatMessageResponse';
 import type { StringIDResponse } from './generated/schemas/stringIDResponse';
 import type { StructedOutputCompletionRequest } from './generated/schemas/structedOutputCompletionRequest';
 import type { StructedOutputCompletionResponse } from './generated/schemas/structedOutputCompletionResponse';
 import type { SuccessResponse } from './generated/schemas/successResponse';
-import type { GetSimpleCompletionStreamPayload } from './generated/schemas/getSimpleCompletionStreamPayload';
-import type { HttpSendChatMessageRequest } from './generated/schemas/httpSendChatMessageRequest';
-import type { SendChatMessageResponse } from './generated/schemas/sendChatMessageResponse';
-import type { SimpleCompletionResponse } from './generated/schemas/simpleCompletionResponse';
-import type { VerifyAttachmentsRequest } from './generated/schemas/verifyAttachmentsRequest';
-import type { VerifyAttachmentsResponse } from './generated/schemas/verifyAttachmentsResponse';
-import type { CognitionWebsocketService } from './service';
-import {
-  createMessageStream,
-  sendCognitionWebsocketMessage,
-} from './websocket';
 
 const dcsHost: string = SERVER_HOSTS['cognition-service'];
 
 type WithChatId = { chat_id: string };
-type WithDocumentId = { document_id: string };
 type WithName = { name: string };
 type WithProjectId = { project_id: string };
 
@@ -108,14 +93,6 @@ export const cognitionApiServiceClient = {
       seconds: 5,
     }
   ),
-  async getModels() {
-    return mapOk(
-      await dcsFetch<GetModelsResponse>(`/models`, {
-        method: 'GET',
-      }),
-      (result) => result
-    );
-  },
 
   async editChatProject(args: WithChatId & WithProjectId) {
     const { chat_id, project_id } = args;
@@ -223,15 +200,6 @@ export const cognitionApiServiceClient = {
       (result) => result
     );
   },
-  async upsertText(args: WithChatId & WithDocumentId & { content: string }) {
-    const { content, document_id } = args;
-    return await dcsFetch(`/document_text/${document_id}`, {
-      method: 'POST',
-      body: JSON.stringify({
-        content: content,
-      }),
-    });
-  },
   async getChatsForAttachment(args: { attachment_id: string }) {
     const { attachment_id } = args;
     return mapOk(
@@ -242,17 +210,6 @@ export const cognitionApiServiceClient = {
         }
       ),
       (result) => result
-    );
-  },
-  async verifyAttachments(args: VerifyAttachmentsRequest) {
-    return mapOk(
-      await dcsFetch<VerifyAttachmentsResponse>(`/attachments/verify`, {
-        method: 'POST',
-        body: JSON.stringify(args),
-      }),
-      (result) => {
-        return result;
-      }
     );
   },
 
@@ -288,18 +245,6 @@ export const cognitionApiServiceClient = {
       (result) => result as { completion: any }
     );
   },
-  async getModelsForAttachments(args: GetModelsForAttachmentsRequest) {
-    return mapOk(
-      await dcsFetch<GetModelsForAttachmentsResponse>(
-        `/attachments/get_models_for_attachments`,
-        {
-          method: 'POST',
-          body: JSON.stringify(args),
-        }
-      ),
-      (result) => result
-    );
-  },
 
   /** Send a chat message via HTTP stream API. Response chunks arrive via connection_gateway. */
   async sendStreamChatMessage(args: HttpSendChatMessageRequest) {
@@ -310,78 +255,5 @@ export const cognitionApiServiceClient = {
       }),
       (result) => result
     );
-  },
-
-  /** Start a simple completion via HTTP stream API. Response chunks arrive via connection_gateway. */
-  async streamSimpleCompletion(args: GetSimpleCompletionStreamPayload) {
-    return mapOk(
-      await dcsFetch<SimpleCompletionResponse>(`/stream/completion/simple`, {
-        method: 'POST',
-        body: JSON.stringify(args),
-      }),
-      (result) => result
-    );
-  },
-};
-
-export const cognitionWebsocketServiceClient: CognitionWebsocketService = {
-  async stopChatMessage(args) {
-    sendCognitionWebsocketMessage({
-      ...args,
-      type: 'stop_chat_message',
-    });
-  },
-  async selectModel(args) {
-    sendCognitionWebsocketMessage({
-      ...args,
-      type: 'select_model_for_chat',
-    });
-  },
-  async extractionStatus(args) {
-    sendCognitionWebsocketMessage({
-      ...args,
-      type: 'extraction_status',
-    });
-  },
-  /// PDF completion
-  async sendCompletion(args) {
-    sendCognitionWebsocketMessage({
-      ...args,
-      type: 'send_completion',
-    });
-  },
-
-  async streamSimpleCompletion(args) {
-    sendCognitionWebsocketMessage({
-      ...args,
-      type: 'get_simple_completion_stream',
-    });
-  },
-
-  async editLastMessage(args) {
-    sendCognitionWebsocketMessage({
-      ...args,
-      type: 'edit_chat_message',
-      stream_id: uuid(),
-    });
-  },
-
-  sendStreamChatMessage(args) {
-    return createMessageStream({
-      ...args,
-      type: 'send_chat_message',
-      stream_id: uuid(),
-    });
-  },
-  streamEditMessage(args) {
-    return createMessageStream({
-      ...args,
-      type: 'edit_chat_message',
-      stream_id: uuid(),
-    });
-  },
-
-  extractionStatusSync(args) {
-    return waitExtractionStatus(args.attachment_id);
   },
 };
