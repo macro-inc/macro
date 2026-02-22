@@ -308,15 +308,15 @@ pub async fn get_channel_messages_handler<S: ChannelMessagesService, A: ChannelA
 #[tracing::instrument(err, skip_all)]
 pub async fn get_thread_replies_handler<S: ChannelMessagesService, A: ChannelAccessCheck>(
     State(state): State<ChannelsRouterState<S, A>>,
-    member: ChannelMember,
+    _member: ChannelMember,
     Path(path): Path<ThreadRepliesPath>,
 ) -> Result<Json<Vec<ApiThreadReply>>, ChannelsHandlerErr> {
-    let _channel_id = path.channel_id;
+    let channel_id = path.channel_id;
     let message_id = path.message_id;
 
     let replies = state
         .service
-        .get_thread_replies(member.channel_id, message_id)
+        .get_thread_replies(channel_id, message_id)
         .await?;
 
     Ok(Json(
