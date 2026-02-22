@@ -7,6 +7,7 @@ export type MessageData = {
   sender_id: string;
   created_at: string;
   updated_at: string;
+  deleted_at?: string | null;
   edited_at?: string | null;
   attachments: ApiMessageAttachment[];
   reactions: ApiCountedReaction[];

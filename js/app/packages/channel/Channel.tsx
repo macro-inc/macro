@@ -78,6 +78,9 @@ export function Channel(props: ChannelProps) {
       ? flattenMessages(messagesQuery.data as ChannelMessagesData)
       : [];
 
+  const shift = () =>
+    threadPaginator.isShifting() || threadPaginator.isPrepending();
+
   return (
     <Suspense>
       <Show when={messages().length > 0}>
@@ -85,8 +88,9 @@ export function Channel(props: ChannelProps) {
           <ThreadList
             data={messages}
             initialScrollTarget={threadListInitialScrollTarget()}
-            shift={threadPaginator.isShifting}
+            shift={shift}
             onScrollNearTop={threadPaginator.shiftPaginate}
+            onScrollNearBottom={threadPaginator.prependPaginate}
             onNavigationReady={setThreadListNavigation}
           >
             {(item) => {

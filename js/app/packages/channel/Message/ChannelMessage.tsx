@@ -7,6 +7,7 @@ import { Timestamp } from './Timestamp';
 import { Content } from './Content';
 import { Reactions } from './Reactions';
 import { EditedIndicator } from './EditedIndicator';
+import { Attachments } from './Attachments';
 
 type ChannelMessageProps = {
   message: MessageData;
@@ -25,6 +26,7 @@ export function ChannelMessage(props: ChannelMessageProps) {
               <Timestamp class="ml-auto" />
             </div>
             <Content />
+            <Attachments />
             <Reactions />
           </div>
         </div>
