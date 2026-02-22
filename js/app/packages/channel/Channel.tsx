@@ -2,12 +2,9 @@ import {
   useChannelMessagesQuery,
   type ChannelMessagesData,
 } from '@queries/channel/channel-messages';
-import { channelKeys } from '@queries/channel/keys';
-import { queryClient } from '@queries/client';
 import {
-  createEffect,
+  createMemo,
   createSignal,
-  on,
   Show,
   Suspense,
   type Accessor,
@@ -15,7 +12,6 @@ import {
 } from 'solid-js';
 import { Thread } from './Thread';
 import {
-  DEFAULT_INITIAL_SCROLL_TARGET,
   defaultThreadListTargetFromMessage,
   ThreadList,
   type ThreadListNavigation,
@@ -26,16 +22,32 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { createThreadManager } from './thread-manager';
 import { createThreadPaginator } from './thread-paginator';
 import { createTargetMessageControlledSignal } from './target-message';
+import { useUserId } from '@core/context/user';
+import type { DateValue } from '@core/util/date';
+import { buildChannelMessageListMeta } from './message-list-meta';
+import { DateDivider, NewDivider, type ChannelMessageListMeta } from './Message';
 
 type ChannelProps = {
   channelId: string;
-  targetMessageId: string | undefined;
+  targetMessageId?: string | undefined;
+  lastViewedAt?: DateValue | null;
 };
 
-function ThreadRow(props: ParentProps) {
+type ThreadRowProps = ParentProps & {
+  message: ApiChannelMessage;
+  listMeta?: ChannelMessageListMeta;
+  onDismissNewMessages?: () => void;
+};
+
+function ThreadRow(props: ThreadRowProps) {
   return (
-    <div class="w-full flex justify-center ">
-      <div class="macro-message-width w-full">{props.children}</div>
+    <div class="w-full flex justify-center">
+      <div class="macro-message-width w-full relative">
+        <div class="pointer-events-none absolute left-5 top-0 bottom-0 border-l border-edge-muted/60" />
+        <NewDivider listMeta={props.listMeta} onDismiss={props.onDismissNewMessages} />
+        <DateDivider createdAt={props.message.created_at} listMeta={props.listMeta} />
+        {props.children}
+      </div>
     </div>
   );
 }
@@ -55,6 +67,7 @@ export function flattenMessages(
 }
 
 export function Channel(props: ChannelProps) {
+  const userId = useUserId();
   const [targetMessageId, _setTargetMessageId] =
     createTargetMessageControlledSignal(
       () => props.channelId,
@@ -66,6 +79,7 @@ export function Channel(props: ChannelProps) {
     targetMessageId
   );
   const [, setThreadListNavigation] = createSignal<ThreadListNavigation>();
+  const [newMessagesDismissed, setNewMessagesDismissed] = createSignal(false);
 
   const threadManager = createThreadManager();
   const threadPaginator = createThreadPaginator(messagesQuery);
@@ -80,6 +94,35 @@ export function Channel(props: ChannelProps) {
 
   const shift = () =>
     threadPaginator.isShifting() || threadPaginator.isPrepending();
+
+  const lastViewedAt = createMemo<DateValue | null | undefined>((prev) => {
+    if (prev !== undefined) return prev;
+    return props.lastViewedAt;
+  });
+  const openedChannelAt = createMemo<Date>((prev) => prev ?? new Date());
+
+  const isNewMessage = (message: ApiChannelMessage) => {
+    if (newMessagesDismissed()) return false;
+
+    const lastViewed = lastViewedAt();
+    if (!lastViewed) return false;
+
+    const openedAt = openedChannelAt();
+    const createdAt = new Date(message.created_at);
+
+    return (
+      createdAt > new Date(lastViewed) &&
+      createdAt < openedAt &&
+      userId() !== message.sender_id
+    );
+  };
+
+  const listMetaByMessageId = createMemo(() =>
+    buildChannelMessageListMeta(messages(), isNewMessage)
+  );
+  const dismissNewMessages = () => {
+    setNewMessagesDismissed(true);
+  };
 
   return (
     <Suspense>
@@ -96,7 +139,11 @@ export function Channel(props: ChannelProps) {
             {(item) => {
               const state = threadManager.getOrCreateThreadState(item.id);
               return (
-                <ThreadRow>
+                <ThreadRow
+                  message={item}
+                  listMeta={listMetaByMessageId()[item.id]}
+                  onDismissNewMessages={dismissNewMessages}
+                >
                   <Thread
                     data={() => item}
                     channelId={() => props.channelId}
