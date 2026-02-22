@@ -82,7 +82,7 @@ pub trait LastOnlineChecker: Send + Sync + 'static {
 }
 
 /// The id of a message that was send as a push notification to SNS
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(transparent)]
 pub struct MessageId(pub String);
 
