@@ -7,6 +7,9 @@ use crate::domain::models::push_notification_event::SnsPushNotificationEvent;
 use crate::domain::ports::PushNotificationEventQueue;
 use crate::domain::service::PushNotificationEventHandler;
 
+#[cfg(test)]
+mod test;
+
 /// Worker that processes push notification platform events from a queue.
 ///
 /// This is a thin wrapper that runs the poll loop continuously,
@@ -39,28 +42,39 @@ where
                     continue;
                 }
 
-                for message in &messages {
-                    let Some(body) = message.body.as_ref() else {
-                        tracing::warn!("received message with no body, skipping");
-                        continue;
-                    };
+                self.process_messages(&messages).await;
+            }
+        }
+    }
 
-                    let event: SnsPushNotificationEvent = match serde_json::from_str(body) {
-                        Ok(event) => event,
-                        Err(e) => {
-                            tracing::error!(error=?e, "failed to deserialize push notification event");
-                            continue;
-                        }
-                    };
+    /// Process a batch of raw messages from the queue.
+    ///
+    /// For each message: deserializes the body, calls the service, and deletes
+    /// the message from the queue on success. Errors are logged per-message.
+    async fn process_messages(
+        &self,
+        messages: &[crate::domain::models::push_notification_event::RawPushNotificationEventMessage],
+    ) {
+        for message in messages {
+            let Some(body) = message.body.as_ref() else {
+                tracing::warn!("received message with no body, skipping");
+                continue;
+            };
 
-                    if self.service.handle_event(&event).await.is_err() {
-                        continue;
-                    }
-
-                    if let Some(receipt_handle) = message.receipt_handle.as_ref() {
-                        let _ = self.queue.delete_message(receipt_handle).await;
-                    }
+            let event: SnsPushNotificationEvent = match serde_json::from_str(body) {
+                Ok(event) => event,
+                Err(e) => {
+                    tracing::error!(error=?e, "failed to deserialize push notification event");
+                    continue;
                 }
+            };
+
+            if self.service.handle_event(&event).await.is_err() {
+                continue;
+            }
+
+            if let Some(receipt_handle) = message.receipt_handle.as_ref() {
+                let _ = self.queue.delete_message(receipt_handle).await;
             }
         }
     }
