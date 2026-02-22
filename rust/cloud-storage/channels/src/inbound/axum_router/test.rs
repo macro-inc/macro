@@ -453,6 +453,79 @@ impl ChannelMessagesService for NotFoundService {
     }
 }
 
+struct AroundHasItemsService;
+
+impl ChannelMessagesService for AroundHasItemsService {
+    async fn get_channel_messages(
+        &self,
+        _channel_id: Uuid,
+        _query: Query<Uuid, CreatedAt, ()>,
+        _direction: MessagePageDirection,
+        _limit: u16,
+    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
+        Ok(ChannelMessagesQueryResult {
+            page: Vec::<ChannelMessage>::new()
+                .into_iter()
+                .paginate_on(50, CreatedAt)
+                .filter_on(())
+                .into_page(),
+            has_more_newer: false,
+        })
+    }
+
+    async fn get_channel_attachments(
+        &self,
+        _channel_id: Uuid,
+        _query: Query<Uuid, CreatedAt, ()>,
+        _limit: u16,
+    ) -> Result<ChannelAttachmentsPage, ChannelMessagesErr> {
+        Ok(Vec::<ChannelAttachment>::new()
+            .into_iter()
+            .paginate_on(50, CreatedAt)
+            .filter_on(())
+            .into_page())
+    }
+
+    async fn get_channel_participants(
+        &self,
+        _channel_id: Uuid,
+    ) -> Result<Vec<ChannelParticipant>, ChannelMessagesErr> {
+        Ok(vec![])
+    }
+
+    async fn get_channel_messages_around(
+        &self,
+        channel_id: Uuid,
+        _message_id: Uuid,
+        limit: u16,
+    ) -> Result<ChannelMessagesPage, ChannelMessagesErr> {
+        let now = chrono::Utc::now();
+        let message = ChannelMessage {
+            id: Uuid::new_v4(),
+            channel_id,
+            sender_id: "macro|user@example.com".to_string(),
+            content: "hello".to_string(),
+            created_at: now,
+            updated_at: now,
+            edited_at: None,
+            deleted_at: None,
+            thread: crate::domain::models::ThreadInfo {
+                reply_count: 0,
+                latest_reply_at: None,
+                preview: vec![],
+            },
+            reactions: vec![],
+            attachments: vec![],
+        };
+
+        Ok(vec![message]
+            .into_iter()
+            .paginate_on(usize::from(limit), CreatedAt)
+            .filter_on(())
+            .into_page())
+    }
+}
+
 #[tokio::test]
 async fn messages_around_returns_empty_page() {
     let router = mock_router();
@@ -472,6 +545,28 @@ async fn messages_around_returns_empty_page() {
     let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(json["items"], serde_json::json!([]));
     assert!(json["previous_cursor"].is_null());
+}
+
+#[tokio::test]
+async fn messages_around_returns_previous_cursor_when_items_present() {
+    let router = channels_router(ChannelsRouterState::new(AroundHasItemsService, AlwaysAllow))
+        .layer(user_extension());
+    let channel_id = Uuid::new_v4();
+    let message_id = Uuid::new_v4();
+    let request = Request::builder()
+        .uri(format!(
+            "/{channel_id}/messages?load_around_message_id={message_id}"
+        ))
+        .body(axum::body::Body::empty())
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(json["items"].as_array().unwrap().len(), 1);
+    assert!(json["previous_cursor"].is_string());
 }
 
 #[tokio::test]

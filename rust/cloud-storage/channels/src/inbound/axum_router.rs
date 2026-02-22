@@ -246,7 +246,8 @@ pub async fn get_channel_messages_handler<S: ChannelMessagesService, A: ChannelA
         }
     };
 
-    let previous_cursor = if params.load_around_message_id.is_some() || !has_cursor {
+    let can_emit_previous = has_cursor || params.load_around_message_id.is_some();
+    let previous_cursor = if !can_emit_previous {
         None
     } else {
         match cursor_from_first_message(&page, limit) {
