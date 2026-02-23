@@ -89,7 +89,8 @@ export class MentionsMenuController {
 
   combinedItems = createLazyMemo((): MentionItem[] => {
     const buckets = this.buckets();
-    if (!buckets) return [];
+    const currentBins = this.bins();
+    if (!buckets || !currentBins) return [];
 
     const currentViewAllMode = this.viewAllMode();
     const seenIds = new Set<string>(this.ignoredIds());
@@ -105,7 +106,6 @@ export class MentionsMenuController {
     }
 
     const result: MentionItem[] = [];
-    const currentBins = this.bins();
 
     buckets.forEach((config) => {
       const limit = currentBins[config.id] || 0;
