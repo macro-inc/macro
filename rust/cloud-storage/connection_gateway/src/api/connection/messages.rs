@@ -107,9 +107,7 @@ pub async fn handle_message(
             .ok();
         }
         ToWebsocketMessage::StreamEvents(message) => {
-            handle_stream_events(connection_context, sender, message)
-                .await
-                .ok();
+            handle_stream_events(connection_context, sender.clone(), message)
         }
     };
 

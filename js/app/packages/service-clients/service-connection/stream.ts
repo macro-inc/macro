@@ -3,11 +3,18 @@ import type { Accessor, Setter } from 'solid-js';
 import { createSignal } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
 import { match } from 'ts-pattern';
+import type { EntityType } from './generated/schemas';
 import { createConnectionWebsocketEffect } from './websocket';
 // entities that support streaming
 export type StreamType = {
   chat: ChatStream;
 };
+
+export function isStreamEntity(
+  entity_type: EntityType
+): entity_type is keyof StreamType {
+  return entity_type === 'chat';
+}
 
 export type StreamId = {
   entity_type: keyof StreamType;

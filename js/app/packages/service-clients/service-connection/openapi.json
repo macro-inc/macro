@@ -346,26 +346,42 @@
       "StreamEvent": {
         "oneOf": [
           {
-            "type": "object",
-            "description": "A new stream was created.",
-            "required": ["Created"],
-            "properties": {
-              "Created": {
+            "allOf": [
+              {
                 "$ref": "#/components/schemas/StreamId",
                 "description": "A new stream was created."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["created"]
+                  }
+                }
               }
-            }
+            ],
+            "description": "A new stream was created."
           },
           {
-            "type": "object",
-            "description": "A stream was closed.",
-            "required": ["Closed"],
-            "properties": {
-              "Closed": {
+            "allOf": [
+              {
                 "$ref": "#/components/schemas/StreamId",
                 "description": "A stream was closed."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["closed"]
+                  }
+                }
               }
-            }
+            ],
+            "description": "A stream was closed."
           }
         ],
         "description": "Events published through the notification channel."

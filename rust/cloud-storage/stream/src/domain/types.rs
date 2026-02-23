@@ -15,6 +15,7 @@ pub type Result<T> = std::result::Result<T, StreamServiceError>;
 /// Events published through the notification channel.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[non_exhaustive]
+#[serde(rename_all = "snake_case", tag = "type")]
 pub enum StreamEvent {
     /// A new stream was created.
     Created(StreamId),

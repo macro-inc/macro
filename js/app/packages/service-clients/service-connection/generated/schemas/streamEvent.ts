@@ -5,9 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { StreamEventOneOf } from './streamEventOneOf';
-import type { StreamEventOneOfTwo } from './streamEventOneOfTwo';
+import type { StreamEventOneOfFour } from './streamEventOneOfFour';
 
 /**
  * Events published through the notification channel.
  */
-export type StreamEvent = StreamEventOneOf | StreamEventOneOfTwo;
+export type StreamEvent = StreamEventOneOf | StreamEventOneOfFour;

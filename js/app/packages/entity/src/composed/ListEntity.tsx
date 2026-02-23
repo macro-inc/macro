@@ -1,5 +1,6 @@
 import type { DateValue } from '@core/util/date';
 import { Entity } from '../entity';
+import type { StreamEvent } from '@service-connection/generated/schemas';
 import {
   isChannelEntity,
   isEmailEntity,
@@ -9,6 +10,10 @@ import {
   isTaskEntity,
 } from '../types/entity';
 import { Match, Show, Switch, type Ref } from 'solid-js';
+import {
+  getStreamState,
+  subscribeToStreamState,
+} from '@service-connection/stream-events';
 import {
   isWithNotification,
   type WithNotification,
@@ -66,6 +71,7 @@ interface LayoutProps {
   isShared: boolean;
   hasNotifications: boolean;
   showContentHits: boolean;
+  streamState?: StreamEvent;
   onProjectClick?: (
     entity: ProjectEntity,
     e: PointerEvent | MouseEvent
@@ -104,7 +110,7 @@ function NarrowLayout(props: LayoutProps) {
           <UnreadIndicator active />
         </Show>
         <div class="size-4 shrink-0">
-          <Entity.Icon entity={props.entity} />
+          <Entity.Icon entity={props.entity} streamState={props.streamState} />
         </div>
         <Switch>
           <Match when={isEmailEntity(props.entity) && props.entity}>
@@ -241,7 +247,7 @@ function WideLayout(props: LayoutProps) {
         class="font-semibold truncate items-center gap-2 flex"
       >
         <div class="size-4 shrink-0">
-          <Entity.Icon entity={props.entity} />
+          <Entity.Icon entity={props.entity} streamState={props.streamState} />
         </div>
         <Switch>
           <Match when={isEmailEntity(props.entity) && props.entity}>
@@ -352,6 +358,9 @@ export function ListEntity(props: ListEntityProps) {
   const unread = () => unreadFilterFn(props.entity);
   const isShared = useIsShared(props.entity);
 
+  subscribeToStreamState(props.entity.id, props.entity.type);
+  const streamState = getStreamState(props.entity.id);
+
   const hasNotifications = () => {
     if (!props.showUnrollNotifications) return false;
     if (!isWithNotification(props.entity)) return false;
@@ -373,6 +382,7 @@ export function ListEntity(props: ListEntityProps) {
     isShared: isShared(),
     hasNotifications: hasNotifications(),
     showContentHits: showContentHits(),
+    streamState: streamState(),
     onProjectClick: props.onProjectClick,
   });
 

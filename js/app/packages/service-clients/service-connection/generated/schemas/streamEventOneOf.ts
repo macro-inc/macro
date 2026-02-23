@@ -4,12 +4,11 @@
  * connection_gateway
  * OpenAPI spec version: 0.1.0
  */
+
+import type { StreamEventOneOfAllOf } from './streamEventOneOfAllOf';
 import type { StreamId } from './streamId';
 
 /**
  * A new stream was created.
  */
-export type StreamEventOneOf = {
-  /** A new stream was created. */
-  Created: StreamId;
-};
+export type StreamEventOneOf = StreamId & StreamEventOneOfAllOf;

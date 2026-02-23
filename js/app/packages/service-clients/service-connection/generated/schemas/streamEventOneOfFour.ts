@@ -4,12 +4,11 @@
  * connection_gateway
  * OpenAPI spec version: 0.1.0
  */
+
+import type { StreamEventOneOfFourAllOf } from './streamEventOneOfFourAllOf';
 import type { StreamId } from './streamId';
 
 /**
  * A stream was closed.
  */
-export type StreamEventOneOfTwo = {
-  /** A stream was closed. */
-  Closed: StreamId;
-};
+export type StreamEventOneOfFour = StreamId & StreamEventOneOfFourAllOf;

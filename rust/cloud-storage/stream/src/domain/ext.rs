@@ -6,8 +6,6 @@ use futures::StreamExt;
 use std::sync::Arc;
 use std::time::Duration;
 
-const DEFAULT_CLOSE_DELAY: std::time::Duration = std::time::Duration::from_secs(60);
-
 pub trait StreamRepoExt: StreamRepo {
     /// Create a durable stream from an async stream.
     /// Consumes the async stream and closes the durable stream when it ends.
@@ -17,7 +15,6 @@ pub trait StreamRepoExt: StreamRepo {
         id: StreamId,
         stream: PayloadStream,
         timeout: Option<Duration>,
-        close_delay: Option<Duration>,
     );
 }
 
@@ -33,27 +30,20 @@ where
         id: StreamId,
         mut stream: PayloadStream,
         timeout: Option<Duration>,
-        close_delay: Option<Duration>,
     ) {
         let writer = self.clone();
         let writer_id = id.clone();
         tokio::spawn(async move {
-            let consumed =
-                tokio::time::timeout(timeout.unwrap_or(DEFAULT_STREAM_TIMEOUT), async move {
-                    while let Some(payload) = stream.next().await {
-                        if let Err(e) = writer.append(&writer_id, payload).await {
-                            tracing::error!(error=?e, "failed to append to stream");
-                            break;
-                        }
+            let _ = tokio::time::timeout(timeout.unwrap_or(DEFAULT_STREAM_TIMEOUT), async move {
+                while let Some(payload) = stream.next().await {
+                    if let Err(e) = writer.append(&writer_id, payload).await {
+                        tracing::error!(error=?e, "failed to append to stream");
+                        break;
                     }
-                })
-                .await;
-
-            if consumed.is_ok() {
-                tokio::time::sleep(close_delay.unwrap_or(DEFAULT_CLOSE_DELAY)).await;
-            } else {
-                tracing::error!("stream timed out");
-            }
+                }
+            })
+            .await
+            .inspect_err(|_| tracing::error!("stream timed out"));
 
             let _ = self
                 .close(&id)
