@@ -214,8 +214,9 @@ export function Lightbox(props: LightboxProps) {
     };
     if (hasNav) window.addEventListener('keydown', handleKeyDown);
 
+    let mouseMoveListenerTimeoutId: number | undefined;
     if (!isMobile()) {
-      setTimeout(
+      mouseMoveListenerTimeoutId = window.setTimeout(
         () => window.addEventListener('mousemove', handleMouseMove),
         500
       );
@@ -278,6 +279,7 @@ export function Lightbox(props: LightboxProps) {
 
     onCleanup(() => {
       if (hasNav) window.removeEventListener('keydown', handleKeyDown);
+      window.clearTimeout(mouseMoveListenerTimeoutId);
       window.removeEventListener('mousemove', handleMouseMove);
       if (hideToolbarTimeout) clearTimeout(hideToolbarTimeout);
     });

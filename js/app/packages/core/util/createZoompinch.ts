@@ -106,8 +106,7 @@ export function createZoompinch(
       e.handleGesturestart(ev as UIEvent);
     const handleGestureChange = (ev: Event) =>
       e.handleGesturechange(ev as UIEvent);
-    const handleGestureEnd = (ev: Event) =>
-      e.handleGestureend(ev as UIEvent);
+    const handleGestureEnd = (ev: Event) => e.handleGestureend(ev as UIEvent);
     wrapper.addEventListener('gesturestart', handleGestureStart);
     window.addEventListener('gesturechange', handleGestureChange);
     window.addEventListener('gestureend', handleGestureEnd);
@@ -119,10 +118,8 @@ export function createZoompinch(
     const onWindowTouchEnd =
       touch.onWindowEnd ?? ((ev) => e.handleTouchend(ev));
     const handleTouchStart = (ev: TouchEvent) => onTouchStart(ev, e);
-    const handleWindowTouchMove = (ev: TouchEvent) =>
-      onWindowTouchMove(ev, e);
-    const handleWindowTouchEnd = (ev: TouchEvent) =>
-      onWindowTouchEnd(ev, e);
+    const handleWindowTouchMove = (ev: TouchEvent) => onWindowTouchMove(ev, e);
+    const handleWindowTouchEnd = (ev: TouchEvent) => onWindowTouchEnd(ev, e);
     wrapper.addEventListener('touchstart', handleTouchStart, { passive: true });
     window.addEventListener('touchmove', handleWindowTouchMove, {
       passive: false,

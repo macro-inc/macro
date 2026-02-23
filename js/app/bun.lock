@@ -38,7 +38,6 @@
         "@lexical/utils": "^0.32.1",
         "@lukemorales/query-key-factory": "^1.3.4",
         "@normy/query-core": "^0.21.0",
-        "@panzoom/panzoom": "^4.6.0",
         "@phosphor-icons/core": "^2.1.1",
         "@solid-primitives/audio": "^1.4.2",
         "@solid-primitives/broadcast-channel": "^0.1.1",
@@ -878,8 +877,6 @@
     "@orval/swr": ["@orval/swr@7.13.0", "", { "dependencies": { "@orval/core": "7.13.0", "@orval/fetch": "7.13.0" } }, "sha512-SwORHlcLzbidhmxHGh8NET6ZxUZeMikfO+bI6vsayHpopCD7EkJNmbn4v3mDg1bwdzFP8M4drffKVj47KR9AAQ=="],
 
     "@orval/zod": ["@orval/zod@7.13.0", "", { "dependencies": { "@orval/core": "7.13.0", "lodash.uniq": "^4.5.0", "openapi3-ts": "4.5.0" } }, "sha512-jEEj0uRO5D5D1CHKQdth5Atl5Ap4/P21SMiOFmVpiArlXr4LQtMpbkiPVM2tsQXIhtC38c9oMt8+rOx1rYSjcw=="],
-
-    "@panzoom/panzoom": ["@panzoom/panzoom@4.6.0", "", {}, "sha512-3KxkY1lNKFn98fW5ZFR6vV0YzsXj3I4EQDyFWSXME6/cic86eSS7VjuqIjrA3PEpySo0r5fFtlX8eYCt4JPUFQ=="],
 
     "@paralleldrive/cuid2": ["@paralleldrive/cuid2@2.2.2", "", { "dependencies": { "@noble/hashes": "^1.1.5" } }, "sha512-ZOBkgDwEdoYVlSeRbYYXs0S9MejQofiVYoTbKzy/6GQa39/q5tQU2IX46+shYnUkpEl3wc+J6wRlar7r2EK2xA=="],
 
