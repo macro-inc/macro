@@ -5,11 +5,11 @@
 #[cfg(test)]
 mod tests;
 
+mod create;
+
 use document_sub_type::DocumentSubType;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use model::document::{DocumentBasic, DocumentMetadata, FileType, VersionIDWithTimeStamps};
-use models_permissions::share_permission::SharePermissionV2;
-use models_permissions::share_permission::access_level::AccessLevel;
+use model::document::{DocumentBasic, DocumentMetadata};
 use sqlx::PgPool;
 
 use crate::domain::models::CreateDocumentRepoArgs;
@@ -399,190 +399,51 @@ impl DocumentRepo for PgDocumentRepo {
 
         // Fetch project name if project_id provided
         let project_name: Option<String> = if let Some(ref proj_id) = project_id {
-            sqlx::query_scalar!(r#"SELECT name FROM "Project" WHERE id = $1"#, proj_id,)
-                .fetch_optional(&mut *transaction)
-                .await?
-        } else {
-            None
-        };
-
-        // Insert document (with or without user-provided ID)
-        let document_id = if let Some(ref id) = id {
-            let result = sqlx::query!(
-                r#"
-                INSERT INTO "Document" (id, owner, name, "fileType", "projectId", "createdAt", "updatedAt")
-                VALUES ($1, $2, $3, $4, $5, $6, $6)
-                "#,
-                id,
-                user_id.as_ref(),
-                document_name,
-                file_type.map(|ft| ft.as_str().to_string()),
-                project_id,
-                created_at.naive_utc()
-            )
-            .execute(&mut *transaction)
-            .await;
-
-            match result {
-                Ok(_) => id.clone(),
-                Err(sqlx::Error::Database(ref db_err)) if db_err.is_unique_violation() => {
-                    return Err(sqlx::Error::Protocol(format!(
-                        "document with ID already exists: {id}"
-                    )));
-                }
-                Err(e) => return Err(e),
-            }
-        } else {
             sqlx::query_scalar!(
-                r#"
-                INSERT INTO "Document" (owner, name, "fileType", "projectId", "createdAt", "updatedAt")
-                VALUES ($1, $2, $3, $4, $5, $5)
-                RETURNING id
-                "#,
-                user_id.as_ref(),
-                document_name,
-                file_type.map(|ft| ft.as_str().to_string()),
-                project_id,
-                created_at.naive_utc()
+                r#"SELECT name FROM "Project" WHERE id = $1"#,
+                &proj_id.to_string(),
             )
-            .fetch_one(&mut *transaction)
+            .fetch_optional(&mut *transaction)
             .await?
-        };
-
-        // Insert document sub-type (for tasks)
-        let sub_type: Option<DocumentSubType> = if is_task {
-            sqlx::query!(
-                r#"
-                INSERT INTO document_sub_type (document_id, sub_type)
-                VALUES ($1, $2)
-                "#,
-                document_id,
-                DocumentSubType::Task as _
-            )
-            .execute(&mut *transaction)
-            .await?;
-
-            Some(DocumentSubType::Task)
         } else {
             None
         };
+
+        let document_id = create::insert_document_row(
+            &mut transaction,
+            id.as_ref(),
+            &user_id,
+            &document_name,
+            file_type,
+            project_id.as_ref(),
+            created_at,
+        )
+        .await?;
+
+        // Insert document sub-type
+        let sub_type: Option<DocumentSubType> =
+            create::set_document_sub_type(&mut transaction, &document_id, is_task).await?;
 
         // Insert document version (DocumentBom for docx, DocumentInstance for others)
-        let document_version = match file_type {
-            Some(FileType::Docx) => {
-                let row = sqlx::query!(
-                    r#"
-                    INSERT INTO "DocumentBom" ("documentId", "createdAt", "updatedAt")
-                    VALUES ($1, $2, $2)
-                    RETURNING id, "createdAt"::timestamptz as "created_at", "updatedAt"::timestamptz as "updated_at"
-                    "#,
-                    &document_id,
-                    created_at.naive_utc(),
-                )
-                .fetch_one(&mut *transaction)
-                .await?;
-
-                VersionIDWithTimeStamps {
-                    id: row.id,
-                    created_at: row.created_at,
-                    updated_at: row.updated_at,
-                    sha: sha.clone(),
-                }
-            }
-            _ => {
-                sqlx::query_as!(
-                    VersionIDWithTimeStamps,
-                    r#"
-                    INSERT INTO "DocumentInstance" ("documentId", "sha", "createdAt", "updatedAt")
-                    VALUES ($1, $2, $3, $3)
-                    RETURNING id, sha, "createdAt"::timestamptz as "created_at", "updatedAt"::timestamptz as "updated_at"
-                    "#,
-                    &document_id,
-                    sha,
-                    created_at.naive_utc()
-                )
-                .fetch_one(&mut *transaction)
-                .await?
-            }
-        };
+        let document_version = create::set_document_version(
+            &mut transaction,
+            &document_id,
+            file_type,
+            sha,
+            created_at,
+        )
+        .await?;
 
         // Create share permission
-        let share_permission = SharePermissionV2::new_document_share_permission(file_type);
-        let share_permission_row = sqlx::query!(
-            r#"
-            INSERT INTO "SharePermission" ("isPublic", "publicAccessLevel", "createdAt", "updatedAt")
-            VALUES ($1, $2, NOW(), NOW())
-            RETURNING id
-            "#,
-            share_permission.is_public,
-            share_permission.public_access_level.map(|s| s.to_string()),
-        )
-        .fetch_one(&mut *transaction)
-        .await?;
-
-        // Link share permission to document
-        sqlx::query!(
-            r#"
-            INSERT INTO "DocumentPermission" ("documentId", "sharePermissionId")
-            VALUES ($1, $2)
-            "#,
-            document_id,
-            share_permission_row.id,
-        )
-        .execute(&mut *transaction)
-        .await?;
+        create::set_share_permission(&mut transaction, &document_id, file_type).await?;
 
         // Add to user history (if not skipped)
         if !skip_history {
-            sqlx::query!(
-                r#"
-                INSERT INTO "UserHistory" ("userId", "itemId", "itemType", "createdAt", "updatedAt")
-                VALUES ($1, $2, $3, $4, $4)
-                ON CONFLICT ("userId", "itemId", "itemType") DO UPDATE
-                SET "updatedAt" = $4
-                "#,
-                user_id.as_ref(),
-                document_id,
-                "document",
-                created_at.naive_utc()
-            )
-            .execute(&mut *transaction)
-            .await?;
-
-            sqlx::query!(
-                r#"
-                INSERT INTO "ItemLastAccessed" ("item_id", "item_type", "last_accessed")
-                VALUES ($1, $2, $3)
-                ON CONFLICT ("item_id", "item_type") DO UPDATE
-                SET "last_accessed" = $3
-                "#,
-                document_id,
-                "document",
-                created_at.naive_utc()
-            )
-            .execute(&mut *transaction)
-            .await?;
+            create::insert_history(&mut transaction, &document_id, &user_id, created_at).await?;
         }
 
         // Insert user item access (Owner level)
-        let access_id = macro_uuid::generate_uuid_v7();
-        sqlx::query!(
-            r#"
-            INSERT INTO "UserItemAccess" (
-                "id", "user_id", "item_id", "item_type", "access_level",
-                "granted_from_channel_id", "created_at", "updated_at"
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
-            "#,
-            access_id,
-            user_id.as_ref(),
-            document_id,
-            "document",
-            AccessLevel::Owner as _,
-            None::<uuid::Uuid>,
-        )
-        .execute(&mut *transaction)
-        .await?;
+        create::insert_item_access(&mut transaction, &document_id, &user_id).await?;
 
         // Link to email attachment if provided
         if let Some(attachment_id) = email_attachment_id {
@@ -591,7 +452,7 @@ impl DocumentRepo for PgDocumentRepo {
                 INSERT INTO "document_email" (document_id, email_attachment_id)
                 VALUES ($1, $2)
                 "#,
-                document_id,
+                &document_id.to_string(),
                 attachment_id,
             )
             .execute(&mut *transaction)
@@ -601,7 +462,7 @@ impl DocumentRepo for PgDocumentRepo {
         transaction.commit().await?;
 
         Ok(DocumentMetadata::new_document(
-            &document_id,
+            &document_id.to_string(),
             document_version.id,
             user_id,
             &document_name,
@@ -610,7 +471,7 @@ impl DocumentRepo for PgDocumentRepo {
             None,
             None,
             None,
-            project_id.as_deref(),
+            project_id.map(|s| s.to_string()).as_deref(),
             project_name.as_deref(),
             document_version.created_at,
             document_version.updated_at,

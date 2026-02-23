@@ -447,7 +447,7 @@ impl<R: DocumentRepo, U: PresignedUploadUrlPort, T: TaskPropertiesPort> Document
         job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         let file_type = args.file_type;
-        let project_id = args.project_id.clone();
+        let project_id = args.project_id;
         let sha = args.sha.clone();
 
         // Create document metadata in the database (full transaction)

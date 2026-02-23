@@ -29,7 +29,7 @@ pub enum DocumentError {
 /// Arguments for creating a document in the repository.
 pub struct CreateDocumentRepoArgs {
     /// Optional user-provided document ID.
-    pub id: Option<String>,
+    pub id: Option<uuid::Uuid>,
     /// SHA256 hash of the document content.
     pub sha: String,
     /// Document name without extension.
@@ -39,7 +39,7 @@ pub struct CreateDocumentRepoArgs {
     /// File type of the document.
     pub file_type: Option<FileType>,
     /// Project to associate the document with.
-    pub project_id: Option<String>,
+    pub project_id: Option<uuid::Uuid>,
     /// Email attachment to link (internal only).
     pub email_attachment_id: Option<uuid::Uuid>,
     /// Custom creation timestamp.
