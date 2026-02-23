@@ -84,6 +84,7 @@ members = [
   "non_empty",
   "notification",
   "notification_db_client",
+  "notification_sandbox",
   "notification_service",
   "notification_service_client",
   "opensearch_client",
@@ -154,6 +155,7 @@ dashmap = "6.1.0"
 dotenvy = "0.15.7"
 ego-tree = "0.6.2"
 either = "1"
+inquire = "0.7"
 futures = "0.3.31"
 hex = "0.4.3"
 http = "1"
