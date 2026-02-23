@@ -5757,6 +5757,7 @@
           },
           "id": {
             "type": ["string", "null"],
+            "format": "uuid",
             "description": "The id of the document in the database"
           },
           "isTask": {
@@ -5772,7 +5773,8 @@
             "description": "The content type of the document (currently only used for logging matches against file type)."
           },
           "projectId": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "format": "uuid"
           },
           "sha": {
             "type": "string",
@@ -5849,6 +5851,7 @@
         "properties": {
           "projectId": {
             "type": ["string", "null"],
+            "format": "uuid",
             "description": "Optional project id to associate the task with"
           },
           "propertyValues": {

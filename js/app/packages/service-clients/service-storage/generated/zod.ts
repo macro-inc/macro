@@ -1220,7 +1220,11 @@ export const createDocumentBody = zod.object({
     .string()
     .nullish()
     .describe('Optional file type of the document.'),
-  id: zod.string().nullish().describe('The id of the document in the database'),
+  id: zod
+    .string()
+    .uuid()
+    .nullish()
+    .describe('The id of the document in the database'),
   isTask: zod
     .boolean()
     .optional()
@@ -1239,7 +1243,7 @@ export const createDocumentBody = zod.object({
     .describe(
       'The content type of the document (currently only used for logging matches against file type).'
     ),
-  projectId: zod.string().nullish(),
+  projectId: zod.string().uuid().nullish(),
   sha: zod.string().describe('The sha of the document.'),
   skipHistory: zod
     .boolean()
@@ -1362,6 +1366,7 @@ export const createTaskHandlerBody = zod
   .object({
     projectId: zod
       .string()
+      .uuid()
       .nullish()
       .describe('Optional project id to associate the task with'),
     propertyValues: zod
