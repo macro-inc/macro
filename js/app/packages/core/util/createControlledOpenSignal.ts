@@ -1,15 +1,23 @@
 import { createSignal } from 'solid-js';
 import { attributesToSelector } from './attributeToSelector';
 
+/** actively open menus that may try to return focus */
 const activeFocusOwners = new Set<string>();
+
+/** the return-focus target of the first-opened menu */
 let rootFocusElement: Element | null = null;
+
 let ownerIdCounter = 0;
 let pendingFocusReturn: (() => void) | null = null;
 
+/** simple id generator */
 function generateOwnerId(prefix?: string): string {
   return `${prefix ?? 'menu'}-${++ownerIdCounter}`;
 }
 
+/**
+ * Focus and update lock metadata
+ */
 function acquireFocusLock(id: string): void {
   if (pendingFocusReturn) {
     pendingFocusReturn = null;
@@ -28,7 +36,8 @@ function releaseFocusLock(id: string, shouldReturnFocus: boolean): void {
 
   if (activeFocusOwners.size === 0 && rootFocusElement) {
     if (shouldReturnFocus) {
-      // Defer focus return to allow another menu to acquire first
+      // Defer focus return to allow another menu to acquire first. Sometimes
+      // next menu opens first, but sometime we close before next menu opens.
       const elementToFocus = rootFocusElement;
 
       pendingFocusReturn = () => {
@@ -40,7 +49,7 @@ function releaseFocusLock(id: string, shouldReturnFocus: boolean): void {
         pendingFocusReturn = null;
       };
 
-      // Use queueMicrotask so it runs after synchronous code but before setTimeout
+      // queueMicrotask so it runs after synchronous code but before next setTimeout
       queueMicrotask(() => {
         if (pendingFocusReturn) {
           pendingFocusReturn();
@@ -70,7 +79,6 @@ function focusLast(element: Element) {
         element.focus();
       } else {
         // This only works for restoring previously focused entity in UnifiedList, this a workaround previous focused Entity nodes being removed from the dom and focusing to body
-
         // attributeToSelector still doesn't guarentee node is unique for all cases
         // new rendered node might have different arribute value
         const selector = attributesToSelector(element);
