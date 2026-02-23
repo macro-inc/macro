@@ -395,6 +395,7 @@ export function Lightbox(props: LightboxProps) {
               <div class="canvas w-full h-full will-change-transform">
                 <img
                   class="w-full h-full sm:min-w-[200px] sm:max-h-[80vh] object-contain select-none"
+                  style={{ '-webkit-touch-callout': 'none' }}
                   src={props.src()}
                   alt="preview"
                 />
