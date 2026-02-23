@@ -174,16 +174,57 @@ pub enum NotificationChannel<'a, T, U> {
 
 /// Message published to SQS after DB persistence.
 /// Contains everything needed for delivery.
+///
+/// Fields are private — construct via [`QueueMessage::new`] which requires `T: Notification`.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct QueueMessage<'a, T, U> {
-    /// The notification type name (e.g., "channel_message_send").
-    pub message_type: String,
-    /// The rate limit key for this notification.
-    /// The configuration for this rate limiter.
-    pub rate_limit: Option<(RateLimitKey, RateLimitConfig)>,
-    /// The methods on which we will attempt to deliver.
-    /// This is an ALL relationship.
-    pub content: NotificationChannel<'a, T, U>,
+    message_type: String,
+    rate_limit: Option<(RateLimitKey, RateLimitConfig)>,
+    content: NotificationChannel<'a, T, U>,
+}
+
+impl<'a, T: Notification, U> QueueMessage<'a, T, U> {
+    /// Create a new queue message. Only valid notification types can be published.
+    ///
+    /// The `message_type` is derived from [`Notification::TYPE_NAME`].
+    pub fn new(
+        rate_limit: Option<(RateLimitKey, RateLimitConfig)>,
+        content: NotificationChannel<'a, T, U>,
+    ) -> Self {
+        Self {
+            message_type: T::TYPE_NAME.to_string(),
+            rate_limit,
+            content,
+        }
+    }
+}
+
+impl<'a, T, U> QueueMessage<'a, T, U> {
+    /// Consume the message and return its rate limit and content.
+    pub fn into_parts(
+        self,
+    ) -> (
+        Option<(RateLimitKey, RateLimitConfig)>,
+        NotificationChannel<'a, T, U>,
+    ) {
+        (self.rate_limit, self.content)
+    }
+}
+
+#[cfg(test)]
+impl<'a, T, U> QueueMessage<'a, T, U> {
+    /// Test-only constructor that doesn't require `T: Notification`.
+    pub(crate) fn new_test(
+        message_type: String,
+        rate_limit: Option<(RateLimitKey, RateLimitConfig)>,
+        content: NotificationChannel<'a, T, U>,
+    ) -> Self {
+        Self {
+            message_type,
+            rate_limit,
+            content,
+        }
+    }
 }
 
 /// a wrapper type over [QueueMessage] which can only be opened by providing the decision from the bulk digest state machine
@@ -249,10 +290,22 @@ impl<'a, T, U> QueueMessageNeedsStateMachine<'a, T, U> {
 
 /// Custom data payload for a silent background push that clears a previously
 /// delivered notification from the user's device.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClearPushIdentifier {
     /// The collapse key identifier used to match the notification to clear.
     pub identifier: String,
+}
+
+impl Notification for ClearPushIdentifier {
+    const TYPE_NAME: &'static str = "clear_push_notification";
+
+    fn rate_limit_config() -> Option<RateLimitConfig> {
+        None
+    }
+
+    fn rate_limit_key(&self) -> Option<RateLimitKey> {
+        None
+    }
 }
 
 /// Raw message received from SQS.

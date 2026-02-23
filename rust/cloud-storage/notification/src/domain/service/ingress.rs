@@ -242,19 +242,17 @@ where
         Report<SendNotificationError>,
     > {
         let rate_limit = notification.req.get_rate_limit()?;
-        let message_type = T::TYPE_NAME.to_string();
         let mut messages = Vec::new();
         let mut apns_collapse_key = None;
 
         // Connection gateway: 1:M (single message for all recipients)
         if notification.send_conn_gateway {
-            messages.push(QueueMessage {
-                message_type: message_type.clone(),
-                rate_limit: rate_limit.clone(),
-                content: NotificationChannel::ConnGateway(
+            messages.push(QueueMessage::new(
+                rate_limit.clone(),
+                NotificationChannel::ConnGateway(
                     ConnGatewayNotification::clone_from_request(notification_id, notification),
                 ),
-            });
+            ));
         }
 
         // APNS (iOS push): 1:M (single message for all recipients' device endpoints)
@@ -295,15 +293,14 @@ where
                     build_apns(notification.req.notification.clone(), notification_id)
             {
                 apns_collapse_key = Some(attributes.collapse_key.clone());
-                messages.push(QueueMessage {
-                    message_type: message_type.clone(),
-                    rate_limit: rate_limit.clone(),
-                    content: NotificationChannel::Ios(Box::new(APNSTargets {
+                messages.push(QueueMessage::new(
+                    rate_limit.clone(),
+                    NotificationChannel::Ios(Box::new(APNSTargets {
                         notif: apns_notif,
                         attributes,
                         ios_device_endpoints: ios_endpoints,
                     })),
-                });
+                ));
             }
         }
 
@@ -311,14 +308,13 @@ where
         if let Some(ref mut build_email) = notification.build_email {
             for recipient in &notification.req.recipient_ids {
                 let email_content = build_email(notification.req.notification.clone());
-                messages.push(QueueMessage {
-                    message_type: message_type.clone(),
-                    rate_limit: rate_limit.clone(),
-                    content: NotificationChannel::Email(EmailNotification {
+                messages.push(QueueMessage::new(
+                    rate_limit.clone(),
+                    NotificationChannel::Email(EmailNotification {
                         to: recipient.clone(),
                         content: email_content,
                     }),
-                });
+                ));
             }
         }
 
@@ -425,10 +421,9 @@ where
                 .into_iter()
                 .map(|n| {
                     let collapse_key = n.apns_collapse_key;
-                    QueueMessage {
-                        message_type: "clear_push_notification".to_string(),
-                        rate_limit: None,
-                        content: NotificationChannel::Ios(Box::new(APNSTargets {
+                    QueueMessage::new(
+                        None,
+                        NotificationChannel::Ios(Box::new(APNSTargets {
                             notif: APNSPushNotification {
                                 aps: Aps {
                                     content_available: Some(1),
@@ -445,7 +440,7 @@ where
                             },
                             ios_device_endpoints: ios_endpoints.clone(),
                         })),
-                    }
+                    )
                 })
                 .collect();
 

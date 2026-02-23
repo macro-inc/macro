@@ -11,7 +11,6 @@ use crate::domain::models::email_notification_digest::ports::{
 use crate::domain::models::email_notification_digest::{
     BulkDigestEgressStateMachine, ResumeMachineBRequest,
 };
-use crate::domain::models::queue_message::EmailContent;
 use crate::domain::models::mobile::MessageAttributes;
 use crate::domain::models::queue_message::{
     APNSTargets, ConnGatewayNotification, DeliveryFailure, DeliverySuccess, EmailNotification,
@@ -95,8 +94,10 @@ where
         &self,
         message: QueueMessage<'static, serde_json::Value, serde_json::Value>,
     ) -> Vec<Result<DeliverySuccess, Report<DeliveryFailure>>> {
+        let (rate_limit, content) = message.into_parts();
+
         // Check rate limit if configured
-        if let Some((key, config)) = message.rate_limit {
+        if let Some((key, config)) = rate_limit {
             match self.rate_limiter.check_and_increment(key, config).await {
                 Ok(RateLimitResult::Exceeded(exceeded)) => {
                     return vec![Err(report!(exceeded).context(DeliveryFailure::RateLimit))];
@@ -108,7 +109,7 @@ where
             }
         }
 
-        let results = match message.content {
+        let results = match content {
             NotificationChannel::ConnGateway(ref conn) => {
                 Either::Left([self.deliver_conn_gateway(conn).await])
             }
