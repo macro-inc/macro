@@ -12,6 +12,7 @@ import {
 } from '@floating-ui/dom';
 import type { Accessor, JSX } from 'solid-js';
 import { createEffect, onCleanup } from 'solid-js';
+import { iosSafePadding } from './iosFloatingMiddleware';
 
 export type FloatWithElementOptions = {
   element: () => Element | undefined | null;
@@ -55,15 +56,16 @@ export function floatWithElement(
       return;
     }
 
+    const spacing = accessor()?.spacing ?? 8;
     const { x, y, middlewareData } = await computePosition(
       referenceEl,
       floatingEl,
       {
         placement: 'bottom-start',
         middleware: [
-          offset(accessor()?.spacing ?? 8),
-          flip(),
-          shift({ padding: accessor()?.spacing ?? 8, boundary }),
+          offset(spacing),
+          flip({ padding: iosSafePadding(spacing) }),
+          shift({ padding: spacing, boundary }),
           hide(),
         ],
         ...(accessor()?.floatingOptions ?? {}),

@@ -1,17 +1,31 @@
 import { isIOS } from '@solid-primitives/platform';
 
-let cachedTop: number | null = null;
+type SafeAreaInsetSide = 'top' | 'right' | 'bottom' | 'left';
+
+const cache: Record<SafeAreaInsetSide, number | null> = {
+  top: null,
+  right: null,
+  bottom: null,
+  left: null,
+};
+
 window.addEventListener('resize', () => {
-  cachedTop = null;
+  cache.top = null;
+  cache.right = null;
+  cache.bottom = null;
+  cache.left = null;
 });
 
-export function getSafeAreaInsetTop(): number {
+export function getSafeAreaInset(side: SafeAreaInsetSide): number {
   if (!isIOS) return 0;
-  if (cachedTop !== null) return cachedTop;
+  if (cache[side] !== null) return cache[side];
   const el = document.createElement('div');
-  el.style.paddingTop = 'env(safe-area-inset-top, 0px)';
+  el.style.setProperty(`padding-${side}`, `env(safe-area-inset-${side}, 0px)`);
   document.body.appendChild(el);
-  cachedTop = Number.parseFloat(getComputedStyle(el).paddingTop) || 0;
+  cache[side] =
+    Number.parseFloat(
+      getComputedStyle(el).getPropertyValue(`padding-${side}`)
+    ) || 0;
   el.remove();
-  return cachedTop;
+  return cache[side];
 }

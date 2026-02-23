@@ -11,13 +11,10 @@ import {
   offset,
   type Placement,
   shift,
-  size,
 } from '@floating-ui/dom';
-import { isIOS } from '@solid-primitives/platform';
 import type { Accessor, JSX } from 'solid-js';
 import { createEffect, createSignal, onCleanup, onMount } from 'solid-js';
-import { virtualKeyboardHeight } from '@core/mobile/virtualKeyboard';
-import { getSafeAreaInsetTop } from '@core/mobile/safeAreaInsets';
+import { iosSafePadding, iosSizeMiddleware } from './iosFloatingMiddleware';
 
 const DEFAULT_SPACING = 8;
 
@@ -82,27 +79,17 @@ export function floatWithSelection(
 
     if (anchor) {
       setCurrentAnchor(anchor);
+      const spacing = accessor()?.spacing ?? DEFAULT_SPACING;
       const { placement } = await computePosition(anchor, floatingEl, {
         placement: 'bottom-start',
         middleware: [
           flip({
             fallbackPlacements: ['top-start'],
             boundary,
-            // On iOS, inflate the bottom padding by the keyboard height so flip
-            // correctly treats that space as unavailable.
-            padding: isIOS
-              ? {
-                  top: (accessor()?.spacing ?? DEFAULT_SPACING) + getSafeAreaInsetTop(),
-                  right: accessor()?.spacing ?? DEFAULT_SPACING,
-                  bottom:
-                    (accessor()?.spacing ?? DEFAULT_SPACING) +
-                    virtualKeyboardHeight(),
-                  left: accessor()?.spacing ?? DEFAULT_SPACING,
-                }
-              : (accessor()?.spacing ?? DEFAULT_SPACING),
+            padding: iosSafePadding(spacing),
           }),
-          offset(accessor()?.spacing ?? DEFAULT_SPACING),
-          shift({ padding: accessor()?.spacing ?? DEFAULT_SPACING, boundary }),
+          offset(spacing),
+          shift({ padding: spacing, boundary }),
           hide(),
         ],
       });
@@ -125,39 +112,9 @@ export function floatWithSelection(
         placement: decidedPlacement,
         middleware: [
           offset(spacing),
-          shift({ padding: spacing, boundary }),
+          shift({ padding: iosSafePadding(spacing), boundary }),
           ...(onAvailableHeight
-            ? [
-                size({
-                  padding: spacing,
-                  apply({
-                    availableHeight,
-                    elements,
-                    placement,
-                  }: {
-                    availableHeight: number;
-                    elements: { floating: HTMLElement };
-                    placement: Placement;
-                  }) {
-                    const safeAreaTop = placement.startsWith('top')
-                      ? getSafeAreaInsetTop()
-                      : 0;
-                    const kbHeight =
-                      isIOS && placement.startsWith('bottom')
-                        ? virtualKeyboardHeight()
-                        : 0;
-                    const h = Math.max(
-                      0,
-                      availableHeight - safeAreaTop - kbHeight
-                    );
-                    Object.assign(elements.floating.style, {
-                      maxHeight: `${h}px`,
-                      overflow: 'hidden',
-                    });
-                    onAvailableHeight(h - spacing);
-                  },
-                }),
-              ]
+            ? [iosSizeMiddleware(spacing, onAvailableHeight)]
             : []),
           hide(),
         ],
@@ -225,15 +182,6 @@ export function floatWithSelection(
         characterData: true,
         attributes: true,
       });
-    }
-  });
-
-  // Re-position when the virtual keyboard appears/disappears on iOS, since
-  // autoUpdate doesn't observe visualViewport changes.
-  createEffect(() => {
-    if (isIOS) virtualKeyboardHeight();
-    if (currentAnchor()) {
-      updatePosition();
     }
   });
 
