@@ -8970,6 +8970,7 @@ dependencies = [
  "tokio",
  "tokio-test",
  "tracing",
+ "utoipa",
 ]
 
 [[package]]

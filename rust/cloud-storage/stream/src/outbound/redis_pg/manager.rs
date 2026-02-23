@@ -1,4 +1,4 @@
-use crate::domain::{ItemStream, Result, StreamManager, StreamRepo};
+use crate::domain::{ItemStream, Result, StreamEvent, StreamManager, StreamRepo};
 use async_stream::stream;
 use async_trait::async_trait;
 use dashmap::DashMap;
@@ -24,6 +24,10 @@ impl RedisPostgresStreamManager {
 
 #[async_trait]
 impl StreamManager for RedisPostgresStreamManager {
+    fn repo(&self) -> Arc<dyn StreamRepo> {
+        self.repo.clone()
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn subscribe(&self, sender_id: String, entity_id: String) -> Result<ItemStream> {
         let repo = self.repo.clone();
@@ -52,7 +56,7 @@ impl StreamManager for RedisPostgresStreamManager {
                     }
                     notification = notify_rx.recv() => {
                         match notification {
-                            Ok(stream_id) if stream_id.entity_id == entity_id => {
+                            Ok(StreamEvent::Created(stream_id)) if stream_id.entity_id == entity_id => {
                                 match repo.stream_from_beginning(&stream_id).await {
                                     Ok(stream) => merged.push(stream),
                                     Err(e) => {
