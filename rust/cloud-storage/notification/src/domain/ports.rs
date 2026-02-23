@@ -222,6 +222,9 @@ pub trait NotificationEgress: Send + Sync + 'static {
     /// Messages are automatically deleted from the queue after successful delivery.
     fn poll_and_deliver(&self)
     -> impl Future<Output = Vec<Result<DeliverySuccess, Report>>> + Send;
+
+    /// Poll for ready digest batches, template them as emails, and send.
+    fn poll_email_digests(&self) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 /// Port for deleting a device registration from the database by its SNS endpoint ARN.

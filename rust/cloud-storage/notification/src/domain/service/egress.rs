@@ -5,10 +5,13 @@
 
 use crate::domain::models::RateLimitResult;
 use crate::domain::models::apple::APNSPushNotification;
-use crate::domain::models::email_notification_digest::ports::{MessageId, NotificationSendChecker};
+use crate::domain::models::email_notification_digest::ports::{
+    ClaimResult, DigestBatcher, MessageId, NotificationSendChecker,
+};
 use crate::domain::models::email_notification_digest::{
     BulkDigestEgressStateMachine, ResumeMachineBRequest,
 };
+use crate::domain::models::queue_message::EmailContent;
 use crate::domain::models::mobile::MessageAttributes;
 use crate::domain::models::queue_message::{
     APNSTargets, ConnGatewayNotification, DeliveryFailure, DeliverySuccess, EmailNotification,
@@ -51,18 +54,26 @@ impl<M: NotificationSender> NotificationSendChecker for IosPushSend<'_, M> {
 /// Service for delivering notifications (egress side).
 ///
 /// Handles consuming from queue and delivering via WebSocket, push, and email.
-pub struct NotificationEgressService<Q, N, W, M, E, R, S> {
-    queue: Q,
-    #[allow(dead_code)]
-    repository: N,
-    websocket: W,
-    mobile: M,
-    email: E,
-    rate_limiter: R,
-    state_machine: S,
+pub struct NotificationEgressService<Q, N, W, M, E, R, S, D> {
+    /// Queue for receiving notification messages.
+    pub queue: Q,
+    /// Notification repository for DB operations.
+    pub repository: N,
+    /// WebSocket sender for real-time delivery.
+    pub websocket: W,
+    /// Mobile push sender (APNS/FCM).
+    pub mobile: M,
+    /// Email sender.
+    pub email: E,
+    /// Rate limiter.
+    pub rate_limiter: R,
+    /// Bulk digest egress state machine.
+    pub state_machine: S,
+    /// Digest batcher for claiming ready email digests.
+    pub digest_batcher: D,
 }
 
-impl<Q, N, W, M, E, R, S> NotificationEgressService<Q, N, W, M, E, R, S>
+impl<Q, N, W, M, E, R, S, D> NotificationEgressService<Q, N, W, M, E, R, S, D>
 where
     Q: NotificationQueue,
     N: NotificationRepository,
@@ -71,27 +82,8 @@ where
     E: EmailSender,
     R: RateLimitPort,
     S: BulkDigestEgressStateMachine,
+    D: DigestBatcher,
 {
-    /// Create a new egress service.
-    pub fn new(
-        queue: Q,
-        repository: N,
-        websocket: W,
-        mobile: M,
-        email: E,
-        rate_limiter: R,
-        state_machine: S,
-    ) -> Self {
-        Self {
-            queue,
-            repository,
-            websocket,
-            mobile,
-            email,
-            rate_limiter,
-            state_machine,
-        }
-    }
 
     /// Deliver a notification from a queue message.
     ///
@@ -217,7 +209,7 @@ where
     }
 }
 
-impl<Q, N, W, M, E, R, S> NotificationEgress for NotificationEgressService<Q, N, W, M, E, R, S>
+impl<Q, N, W, M, E, R, S, D> NotificationEgress for NotificationEgressService<Q, N, W, M, E, R, S, D>
 where
     Q: NotificationQueue,
     N: NotificationRepository,
@@ -226,6 +218,7 @@ where
     E: EmailSender,
     R: RateLimitPort,
     S: BulkDigestEgressStateMachine,
+    D: DigestBatcher,
 {
     #[tracing::instrument(ret, skip(self))]
     async fn poll_and_deliver(&self) -> Vec<Result<DeliverySuccess, Report>> {
@@ -260,5 +253,38 @@ where
         }
 
         results
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn poll_email_digests(&self) -> Result<(), Report> {
+        let batch = match self.digest_batcher.claim_ready_digest().await? {
+            ClaimResult::Ready(batch) => batch,
+            ClaimResult::Empty | ClaimResult::Wait(_) => return Ok(()),
+        };
+
+        let count = batch.notifications.len();
+        let body = serde_json::to_string_pretty(&batch.notifications)
+            .unwrap_or_else(|e| format!("failed to serialize digest: {e}"));
+
+        let content = EmailContent {
+            subject: format!("You have {count} new notification(s)"),
+            body,
+        };
+
+        self.queue
+            .publish(std::iter::once(QueueMessage::<(), ()> {
+                message_type: "email_digest".to_string(),
+                rate_limit: None,
+                content: NotificationChannel::Email(EmailNotification {
+                    to: batch.user_id,
+                    content,
+                }),
+            }))
+            .await
+            .inspect_err(|e| {
+                tracing::error!(error=?e, "failed to queue digest email");
+            })?;
+
+        Ok(())
     }
 }
