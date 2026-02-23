@@ -144,7 +144,6 @@ export function MessageContainer(props: MessageContainerProps) {
   });
 
   const onClickAttachment = async (
-    event: MouseEvent,
     attachment: Attachment,
     fileType: FileType | undefined
   ) => {
@@ -284,8 +283,8 @@ export function MessageContainer(props: MessageContainerProps) {
                         fileName: attachment.filename ?? '',
                         mimeType: attachment.mime_type ?? undefined,
                       }}
-                      onClick={(event, fileType) =>
-                        onClickAttachment(event, attachment, fileType)
+                      onClick={(fileType) =>
+                        onClickAttachment(attachment, fileType)
                       }
                     />
                   )}
