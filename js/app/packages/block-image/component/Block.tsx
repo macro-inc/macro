@@ -64,8 +64,8 @@ export default function BlockImage() {
 
   return (
     <DocumentBlockContainer>
-      <ModalsProvider>
-        <div class="w-full h-full bg-panel select-none overscroll-none overflow-hidden flex flex-col">
+      <div class="w-full h-full bg-panel select-none overscroll-none overflow-hidden flex flex-col">
+        <ModalsProvider>
           <TopBar />
           <Show
             when={imageUrl()}
@@ -83,8 +83,8 @@ export default function BlockImage() {
               />
             </div>
           </Show>
-        </div>
-      </ModalsProvider>
+        </ModalsProvider>
+      </div>
     </DocumentBlockContainer>
   );
 }

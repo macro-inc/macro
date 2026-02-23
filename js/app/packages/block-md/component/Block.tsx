@@ -37,11 +37,11 @@ export default function BlockMarkdown() {
 
   return (
     <DocumentBlockContainer>
-      <ModalsProvider>
-        <div
-          class="w-full h-full select-none overscroll-none overflow-hidden flex flex-col relative bracket-never"
-          tabIndex={-1}
-        >
+      <div
+        class="w-full h-full select-none overscroll-none overflow-hidden flex flex-col relative bracket-never"
+        tabIndex={-1}
+      >
+        <ModalsProvider>
           <div class="relative">
             <Suspense>
               <Show
@@ -80,8 +80,8 @@ export default function BlockMarkdown() {
             </div>
             <CustomScrollbar scrollContainer={scrollRef} />
           </div>
-        </div>
-      </ModalsProvider>
+        </ModalsProvider>
+      </div>
     </DocumentBlockContainer>
   );
 }
