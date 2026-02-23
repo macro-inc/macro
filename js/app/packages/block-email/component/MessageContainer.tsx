@@ -185,7 +185,7 @@ export function MessageContainer(props: MessageContainerProps) {
     const blockName = fileType ? fileTypeToBlockName(fileType) : 'unknown';
     openWithSplit(
       { type: blockName, id: document_id },
-      { preferNewSplit: event.shiftKey }
+      { preferNewSplit: true }
     );
   };
 
