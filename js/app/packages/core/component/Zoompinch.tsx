@@ -7,7 +7,7 @@ export type ZoompinchHandle = {
 };
 
 export type ZoompinchProps = {
-  handle?: (handle: ZoompinchHandle | undefined) => void;
+  handleRef?: (handle: ZoompinchHandle | undefined) => void;
   minScale?: number;
   maxScale?: number;
   clampBounds?: boolean;
@@ -54,7 +54,7 @@ export function Zoompinch(props: ZoompinchProps) {
   const onUpdate = props.onUpdate;
   const onWheelOverride = props.onWheel;
   const touch = props.touch ?? {};
-  const ref = props.handle;
+  const ref = props.handleRef;
 
   createEffect(() => {
     const wrapper = wrapperRef();

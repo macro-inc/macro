@@ -376,7 +376,7 @@ export function Lightbox(props: LightboxProps) {
             }
           >
             <Zoompinch
-              handle={setZoompinchHandle}
+              handleRef={setZoompinchHandle}
               clampBounds
               onUpdate={(engine) => setCurrentScale(engine.scale)}
               touch={{
