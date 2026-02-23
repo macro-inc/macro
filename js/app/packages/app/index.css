@@ -495,6 +495,10 @@
 :root {
   --viewport-padding: 16px;
   --keyboard-height: 0px;
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--tauri-inset-top, 0px));
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--tauri-inset-bottom, 0px));
+  --safe-left: max(env(safe-area-inset-left, 0px), var(--tauri-inset-left, 0px));
+  --safe-right: max(env(safe-area-inset-right, 0px), var(--tauri-inset-right, 0px));
 }
 
 /** isolate the app-root stacking context from the kobalte dialog and modal stacking context */
@@ -739,6 +743,15 @@ html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
 
 @utility portal-scope {
     --documentation: "Set this element as a bounding scope for the ScopedPortal component";
+}
+
+/* Apply to the content wrapper div inside any Dialog.Portal (not the overlay).
+   Keeps UI elements within device safe areas (notch, home indicator, etc.). */
+@utility safe-insets {
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
 }
 
 :root {
