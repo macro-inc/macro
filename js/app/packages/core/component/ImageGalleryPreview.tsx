@@ -8,11 +8,11 @@ import TrashIcon from '@icon/regular/trash.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { type Component, createSignal, For, Show } from 'solid-js';
+import { copyImageToClipboard, downloadImage } from '../util/imageActions';
 import { platformFetch } from '../util/platformFetch';
 import { DeprecatedIconButton } from './DeprecatedIconButton';
 import { Lightbox } from './Lightbox';
 import { DropdownMenuContent, MenuItem, MenuSeparator } from './Menu';
-import { toast } from './Toast/Toast';
 
 type ImageData = {
   id: string;
@@ -63,55 +63,19 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
   };
 
   // Thumbnail menu actions (operate on a specific image by ID)
-  const copyToClipboardById = async (id: string) => {
+  const copyToClipboardById = (id: string) => {
     const url = getImageUrl(id);
-    try {
-      const blob = await platformFetch(url).then((r) => r.blob());
-      if (isTouchDevice() && navigator.share) {
-        await navigator.share({
-          files: [new File([blob], 'image.png', { type: blob.type })],
-          title: 'Share Image',
-        });
-        return;
-      }
-      if (ClipboardItem.supports(blob.type)) {
-        await navigator.clipboard.write([
-          new ClipboardItem({ [blob.type]: blob }),
-        ]);
-        toast.success('Copied to clipboard');
-      } else {
-        await navigator.clipboard.writeText(url);
-        toast.success('Copied image URL to clipboard');
-      }
-    } catch (err) {
-      console.error('Share/clipboard operation failed:', err);
-      try {
-        await navigator.clipboard.writeText(url);
-        toast.success('Copied image URL to clipboard');
-      } catch {
-        toast.failure('Failed to copy image');
-      }
-    }
+    return copyImageToClipboard(
+      () => platformFetch(url).then((r) => r.blob()),
+      url
+    );
   };
 
-  const downloadImageById = async (id: string) => {
-    const url = getImageUrl(id);
-    try {
-      const blob = await platformFetch(url).then((r) => r.blob());
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = `image-${id}.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
-      toast.success('Downloaded image');
-    } catch (err) {
-      console.error('Download failed:', err);
-      toast.failure('Failed to download image');
-    }
-  };
+  const downloadImageById = (id: string) =>
+    downloadImage(
+      () => platformFetch(getImageUrl(id)).then((r) => r.blob()),
+      id
+    );
 
   return (
     <Dialog

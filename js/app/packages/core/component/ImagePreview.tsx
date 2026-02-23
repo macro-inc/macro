@@ -12,11 +12,14 @@ import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-so
 import { storageServiceClient } from '@service-storage/client';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
+import {
+  copyImageToClipboard,
+  downloadImage as downloadImageAction,
+} from '../util/imageActions';
 import { platformFetch } from '../util/platformFetch';
 import { DeprecatedIconButton } from './DeprecatedIconButton';
 import { Lightbox } from './Lightbox';
 import { DropdownMenuContent, MenuItem, MenuSeparator } from './Menu';
-import { toast } from './Toast/Toast';
 
 type ImageData = {
   id: string;
@@ -92,59 +95,13 @@ export function ImagePreview(props: ImagePreviewProps) {
   });
 
   // Thumbnail menu actions
-  const copyToClipboard = async () => {
-    try {
-      const blob = props.isDss
-        ? imageBlob()
-        : await platformFetch(sfsImageUrl()).then((r) => r.blob());
-      if (!blob) throw new Error('No blob');
-      if (isTouchDevice() && navigator.share) {
-        await navigator.share({
-          files: [new File([blob], 'image.png', { type: blob.type })],
-          title: 'Share Image',
-        });
-        return;
-      }
-      if (ClipboardItem.supports(blob.type)) {
-        await navigator.clipboard.write([
-          new ClipboardItem({ [blob.type]: blob }),
-        ]);
-        toast.success('Copied to clipboard');
-      } else {
-        await navigator.clipboard.writeText(sfsImageUrl());
-        toast.success('Copied image URL to clipboard');
-      }
-    } catch (err) {
-      console.error('Share/clipboard operation failed:', err);
-      try {
-        await navigator.clipboard.writeText(sfsImageUrl());
-        toast.success('Copied image URL to clipboard');
-      } catch {
-        toast.failure('Failed to copy image');
-      }
-    }
+  const getBlob = (): Promise<Blob | undefined> => {
+    if (props.isDss) return Promise.resolve(imageBlob());
+    return platformFetch(sfsImageUrl()).then((r) => r.blob());
   };
 
-  const downloadImage = async () => {
-    try {
-      const blob = props.isDss
-        ? imageBlob()
-        : await platformFetch(sfsImageUrl()).then((r) => r.blob());
-      if (!blob) throw new Error('No blob');
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = `image-${props.image.id}.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
-      toast.success('Downloaded image');
-    } catch (err) {
-      console.error('Download failed:', err);
-      toast.failure('Failed to download image');
-    }
-  };
+  const copyToClipboard = () => copyImageToClipboard(getBlob, sfsImageUrl());
+  const downloadImage = () => downloadImageAction(getBlob, props.image.id);
 
   return (
     <Dialog modal={true}>

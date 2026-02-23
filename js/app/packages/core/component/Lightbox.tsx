@@ -11,6 +11,7 @@ import { Dialog } from '@kobalte/core/dialog';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import {
   type Accessor,
+  type Component,
   createEffect,
   createMemo,
   createSignal,
@@ -19,10 +20,18 @@ import {
   Show,
   untrack,
 } from 'solid-js';
+import {
+  copyImageToClipboard,
+  downloadImage as downloadImageAction,
+} from '../util/imageActions';
 import { platformFetch } from '../util/platformFetch';
 import { DeprecatedIconButton } from './DeprecatedIconButton';
-import { toast } from './Toast/Toast';
 import { Zoompinch, type ZoompinchHandle } from './Zoompinch';
+import { isIOS } from '@solid-primitives/platform';
+
+const SpinnerIcon: Component<JSX.SvgSVGAttributes<SVGSVGElement>> = (p) => (
+  <Spinner {...p} class="animate-spin" />
+);
 
 type LightboxProps = {
   // Current image to display
@@ -60,54 +69,47 @@ export function Lightbox(props: LightboxProps) {
     return (await platformFetch(url)).blob();
   };
 
+  // Pre-fetch the blob on iOS so it is already in memory when the user taps
+  // copy/download. This keeps navigator.share() close to synchronous with the
+  // gesture — the user-activation window expires if a network round-trip is
+  // needed. Desktop clipboard doesn't have this constraint.
+  const [cachedBlob, setCachedBlob] = createSignal<Blob | undefined>();
+  if (isIOS) {
+    createEffect(() => {
+      props.src(); // re-fetch when navigating to a new image
+      setCachedBlob(undefined);
+      untrack(() => fetchBlob())
+        .then((blob) => {
+          if (blob) setCachedBlob(blob);
+        })
+        .catch(() => {});
+    });
+  }
+  const fetchBlobCached = (): Promise<Blob | undefined> => {
+    const cached = cachedBlob();
+    return cached ? Promise.resolve(cached) : fetchBlob();
+  };
+
+  const [isCopying, setIsCopying] = createSignal(false);
+  const [isDownloading, setIsDownloading] = createSignal(false);
+
   const copyToClipboard = async () => {
+    if (isCopying()) return;
+    setIsCopying(true);
     try {
-      const blob = await fetchBlob();
-      if (!blob) throw new Error('No blob');
-      if (isTouchDevice() && navigator.share) {
-        await navigator.share({
-          files: [new File([blob], 'image.png', { type: blob.type })],
-          title: 'Share Image',
-        });
-        return;
-      }
-      if (ClipboardItem.supports(blob.type)) {
-        await navigator.clipboard.write([
-          new ClipboardItem({ [blob.type]: blob }),
-        ]);
-        toast.success('Copied to clipboard');
-      } else {
-        await navigator.clipboard.writeText(props.src() ?? '');
-        toast.success('Copied image URL to clipboard');
-      }
-    } catch (err) {
-      console.error('Share/clipboard operation failed:', err);
-      try {
-        const url = props.src();
-        if (url) await navigator.clipboard.writeText(url);
-        toast.success('Copied image URL to clipboard');
-      } catch {
-        toast.failure('Failed to copy image');
-      }
+      await copyImageToClipboard(fetchBlobCached, props.src() ?? '');
+    } finally {
+      setIsCopying(false);
     }
   };
 
   const downloadImage = async () => {
+    if (isDownloading()) return;
+    setIsDownloading(true);
     try {
-      const blob = await fetchBlob();
-      if (!blob) throw new Error('No blob');
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = `image-${props.imageId()}.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
-      toast.success('Downloaded image');
-    } catch (err) {
-      console.error('Download failed:', err);
-      toast.failure('Failed to download image');
+      await downloadImageAction(fetchBlobCached, props.imageId());
+    } finally {
+      setIsDownloading(false);
     }
   };
 
@@ -297,16 +299,17 @@ export function Lightbox(props: LightboxProps) {
         {/* Toolbar */}
         <LightboxToolbar isVisible={isToolbarVisible()}>
           <DeprecatedIconButton
-            icon={ClipboardIcon}
+            icon={isCopying() ? SpinnerIcon : ClipboardIcon}
             theme="clear"
             onClick={copyToClipboard}
-            onTouchEnd={copyToClipboard}
+            disabled={isCopying()}
             tooltip={{ label: 'Copy image' }}
           />
           <DeprecatedIconButton
-            icon={DownloadIcon}
+            icon={isDownloading() ? SpinnerIcon : DownloadIcon}
             theme="clear"
             onClick={downloadImage}
+            disabled={isDownloading()}
             tooltip={{ label: 'Download image' }}
           />
           <Dialog.CloseButton>
