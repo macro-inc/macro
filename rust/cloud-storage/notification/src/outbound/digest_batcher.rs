@@ -159,7 +159,11 @@ impl DigestBatcher for RedisDigestBatcher {
 
         let notifications = items
             .into_iter()
-            .filter_map(|s| serde_json::from_str(&s).ok())
+            .filter_map(|s| {
+                serde_json::from_str::<UserNotificationRow<serde_json::Value>>(&s)
+                    .ok()
+                    .map(|n| n.into_tagged())
+            })
             .collect();
 
         Ok(ClaimResult::Ready(DigestBatch {
