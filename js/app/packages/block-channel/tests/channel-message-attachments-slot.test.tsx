@@ -27,7 +27,9 @@ vi.mock('@core/component/VideoPreview', () => ({
 
 vi.mock('@core/component/ItemPreview', () => ({
   ItemPreview: (props: { id: string; type?: string }) => (
-    <div data-test-item-preview>{`item:${props.id}:${props.type ?? 'unknown'}`}</div>
+    <div
+      data-test-item-preview
+    >{`item:${props.id}:${props.type ?? 'unknown'}`}</div>
   ),
 }));
 
@@ -36,7 +38,10 @@ vi.mock('@service-storage/client', () => ({
 }));
 
 import type { MessageData } from '@channel/Message';
-import { Attachments, partitionMessageAttachments } from '@channel/Message/Attachments';
+import {
+  Attachments,
+  partitionMessageAttachments,
+} from '@channel/Message/Attachments';
 import { MessageProvider } from '@channel/Message/context';
 import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
 
@@ -115,14 +120,19 @@ describe('partitionMessageAttachments', () => {
       entity_type: 'channel',
     });
 
-    const buckets = partitionMessageAttachments([image, video, document, channel]);
+    const buckets = partitionMessageAttachments([
+      image,
+      video,
+      document,
+      channel,
+    ]);
 
-    expect(buckets.imageAttachments.map((attachment) => attachment.id)).toEqual([
-      'att-image',
-    ]);
-    expect(buckets.videoAttachments.map((attachment) => attachment.id)).toEqual([
-      'att-video',
-    ]);
+    expect(buckets.imageAttachments.map((attachment) => attachment.id)).toEqual(
+      ['att-image']
+    );
+    expect(buckets.videoAttachments.map((attachment) => attachment.id)).toEqual(
+      ['att-video']
+    );
     expect(
       buckets.documentAttachments.map((attachment) => attachment.id)
     ).toEqual(['att-doc', 'att-channel']);
@@ -151,9 +161,9 @@ describe('Message.Attachments', () => {
       })
     );
 
-    expect(container.querySelector('[data-test-image-preview]')?.textContent).toBe(
-      'image:image-1'
-    );
+    expect(
+      container.querySelector('[data-test-image-preview]')?.textContent
+    ).toBe('image:image-1');
     expect(container.querySelector('[data-test-image-gallery]')).toBeNull();
 
     cleanup();
@@ -187,15 +197,15 @@ describe('Message.Attachments', () => {
       })
     );
 
-    expect(container.querySelector('[data-test-image-gallery]')?.textContent).toBe(
-      'gallery:image-1,image-2'
-    );
-    expect(container.querySelector('[data-test-video-preview]')?.textContent).toBe(
-      'video:video-1'
-    );
-    expect(container.querySelector('[data-test-item-preview]')?.textContent).toBe(
-      'item:doc-1:document'
-    );
+    expect(
+      container.querySelector('[data-test-image-gallery]')?.textContent
+    ).toBe('gallery:image-1,image-2');
+    expect(
+      container.querySelector('[data-test-video-preview]')?.textContent
+    ).toBe('video:video-1');
+    expect(
+      container.querySelector('[data-test-item-preview]')?.textContent
+    ).toBe('item:doc-1:document');
 
     cleanup();
   });

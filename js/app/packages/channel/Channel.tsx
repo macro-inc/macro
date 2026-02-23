@@ -8,7 +8,6 @@ import {
   Show,
   Suspense,
   type Accessor,
-  type ParentProps,
 } from 'solid-js';
 import { Thread } from './Thread';
 import {
@@ -25,32 +24,13 @@ import { createTargetMessageControlledSignal } from './target-message';
 import { useUserId } from '@core/context/user';
 import type { DateValue } from '@core/util/date';
 import { buildChannelMessageListMeta } from './message-list-meta';
-import { DateDivider, NewDivider, type ChannelMessageListMeta } from './Message';
+import { ThreadRow } from './ThreadRow';
 
 type ChannelProps = {
   channelId: string;
   targetMessageId?: string | undefined;
   lastViewedAt?: DateValue | null;
 };
-
-type ThreadRowProps = ParentProps & {
-  message: ApiChannelMessage;
-  listMeta?: ChannelMessageListMeta;
-  onDismissNewMessages?: () => void;
-};
-
-function ThreadRow(props: ThreadRowProps) {
-  return (
-    <div class="w-full flex justify-center">
-      <div class="macro-message-width w-full relative">
-        <div class="pointer-events-none absolute left-5 top-0 bottom-0 border-l border-edge-muted/60" />
-        <NewDivider listMeta={props.listMeta} onDismiss={props.onDismissNewMessages} />
-        <DateDivider createdAt={props.message.created_at} listMeta={props.listMeta} />
-        {props.children}
-      </div>
-    </div>
-  );
-}
 
 export function flattenMessages(
   data: ChannelMessagesData | undefined
@@ -92,8 +72,7 @@ export function Channel(props: ChannelProps) {
       ? flattenMessages(messagesQuery.data as ChannelMessagesData)
       : [];
 
-  const shift = () =>
-    threadPaginator.isShifting() || threadPaginator.isPrepending();
+  const shift = () => threadPaginator.isShifting();
 
   const lastViewedAt = createMemo<DateValue | null | undefined>((prev) => {
     if (prev !== undefined) return prev;

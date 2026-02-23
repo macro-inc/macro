@@ -380,17 +380,26 @@ export const commsServiceClient = {
   async getChannelMessages(
     args: WithChannelId & {
       limit: number;
-      cursor: string | null;
+      next_cursor: string | null;
+      previous_cursor: string | null;
       load_around_message_id: string | null;
     }
   ) {
-    const { channel_id, limit, cursor, load_around_message_id } = args;
+    const {
+      channel_id,
+      limit,
+      next_cursor,
+      previous_cursor,
+      load_around_message_id,
+    } = args;
     const params = new URLSearchParams();
     params.append('limit', limit.toString());
     if (load_around_message_id) {
       params.append('load_around_message_id', load_around_message_id);
-    } else if (cursor) {
-      params.append('cursor', cursor);
+    } else if (next_cursor) {
+      params.append('cursor', next_cursor);
+    } else if (previous_cursor) {
+      params.append('previous_cursor', previous_cursor);
     }
     return mapOk(
       await commsFetch<ApiChannelMessagesPage>(

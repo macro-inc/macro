@@ -48,6 +48,8 @@ export function createThreadPaginator<T>(
       state.direction === 'shift'
         ? query.fetchNextPage
         : query.fetchPreviousPage;
+
+    console.log('checking paginator: ', hasMore(), isFetching(), state.is());
     if (!hasMore()) return;
     if (isFetching() || state.is()) {
       state.setIsPending(true);
@@ -60,6 +62,7 @@ export function createThreadPaginator<T>(
       do {
         state.setIsPending(false);
         await paginateFn();
+        console.log('PAGINATE');
       } while (hasMore() && state.pending());
     } finally {
       state.setIs(false);

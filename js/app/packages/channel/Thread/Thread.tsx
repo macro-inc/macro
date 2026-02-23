@@ -12,7 +12,7 @@ import {
   Switch,
   Match,
 } from 'solid-js';
-import { ChannelMessage } from './Message';
+import { ChannelMessage } from '../Message';
 
 export type ThreadState = {
   isExpanded: Accessor<boolean>;
@@ -28,8 +28,6 @@ const DEFAULT_REPLY_COUNT = 3;
 
 export function Thread(props: ThreadProps) {
   const [isReplying, setIsReplying] = createSignal(false);
-  const [replyContent, setReplyContent] = createSignal('');
-
   const thread = () => props.data().thread;
   const hasReplies = () => thread().reply_count > 0;
 
@@ -47,11 +45,6 @@ export function Thread(props: ThreadProps) {
     props.setIsExpanded(true);
   };
 
-  const sendReply = () => {
-    // TODO: wire up to postMessage with thread_id
-    setReplyContent('');
-    setIsReplying(false);
-  };
 
   // Match old block-channel connector geometry:
   // outer rail at message avatar center, inner reply rail at outer + thread shift.

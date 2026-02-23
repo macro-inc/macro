@@ -36,9 +36,7 @@ export function Root(props: RootProps) {
           { 'opacity-100': local.highlighted }
         )}
       />
-      <MessageProvider value={local.message}>
-        {local.children}
-      </MessageProvider>
+      <MessageProvider value={local.message}>{local.children}</MessageProvider>
     </div>
   );
 }

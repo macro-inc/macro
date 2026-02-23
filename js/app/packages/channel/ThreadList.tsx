@@ -177,7 +177,7 @@ export function ThreadList<T extends { id: string }>(
       () => {
         const handle = virtualHandle();
         if (!handle || !didInitialScroll()) return;
-        if (isNearBottom()) {
+        if (isNearBottom() && !props.shift) {
           requestAnimationFrame(() => {
             scrollToTarget(handle, { tag: 'bottom', align: 'end' });
           });
@@ -209,6 +209,7 @@ export function ThreadList<T extends { id: string }>(
 
     if (nearBottom && !nearBottomFired) {
       nearBottomFired = true;
+      console.log('scroll near bottom');
       props.onScrollNearBottom?.();
     } else if (!nearBottom) {
       nearBottomFired = false;

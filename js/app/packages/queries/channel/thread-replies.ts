@@ -19,8 +19,6 @@ export function threadRepliesQueryOptions(
           await commsServiceClient.getThreadReplies({
             channel_id: channelId,
             message_id: messageId,
-            limit: 100,
-            cursor: null,
           })
       );
     },

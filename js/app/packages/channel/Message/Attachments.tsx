@@ -59,7 +59,9 @@ export function Attachments(props: AttachmentsProps) {
     partitionMessageAttachments(message.attachments ?? [])
   );
   const imagePreviewData = createMemo(() =>
-    buckets().imageAttachments.map((attachment) => ({ id: attachment.entity_id }))
+    buckets().imageAttachments.map((attachment) => ({
+      id: attachment.entity_id,
+    }))
   );
   const imageAttachmentIds = createMemo(() =>
     buckets().imageAttachments.map((attachment) => attachment.id)
@@ -76,7 +78,10 @@ export function Attachments(props: AttachmentsProps) {
 
   return (
     <Show when={shouldRender()}>
-      <div class={cn('allow-css-brackets mb-2', props.class)} data-message-attachments>
+      <div
+        class={cn('allow-css-brackets mb-2', props.class)}
+        data-message-attachments
+      >
         <Show when={buckets().videoAttachments.length > 0}>
           <For each={buckets().videoAttachments}>
             {(attachment) => (
@@ -89,7 +94,10 @@ export function Attachments(props: AttachmentsProps) {
           <div class="flex not-first:mt-2">
             <Switch>
               <Match when={buckets().imageAttachments.length === 1}>
-                <ImagePreview image={imagePreviewData()[0]!} variant="dynamic" />
+                <ImagePreview
+                  image={imagePreviewData()[0]!}
+                  variant="dynamic"
+                />
               </Match>
               <Match when={buckets().imageAttachments.length > 1}>
                 <ImageGalleryPreview

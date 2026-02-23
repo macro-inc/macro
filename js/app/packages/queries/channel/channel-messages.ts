@@ -14,6 +14,27 @@ export type ChannelMessagesData = InfiniteData<
   string | null
 >;
 
+type SimpleCursor =
+  | {
+      next_cursor: string;
+    }
+  | {
+      previous_cursor: string;
+    };
+
+function makeCursor(type: 'next' | 'previous', value: string): SimpleCursor {
+  if (type === 'next') return { next_cursor: value };
+  return { previous_cursor: value };
+}
+
+function maybeMakeCursor<T>(
+  type: 'next' | 'previous',
+  value: string | undefined | null,
+  fallback: T
+): SimpleCursor | T {
+  return value ? makeCursor(type, value) : fallback;
+}
+
 export function channelMessagesQueryOptions(
   channelId: string,
   loadAroundMessageId: string
@@ -26,17 +47,16 @@ export function channelMessagesQueryOptions(
           await commsServiceClient.getChannelMessages({
             channel_id: channelId,
             limit: 100,
-            cursor: pageParam,
-            load_around_message_id:
-              pageParam === null ? loadAroundMessageId : null,
+            ...(pageParam ?? {}),
+            load_around_message_id: !pageParam ? loadAroundMessageId : null,
           })
       );
     },
-    initialPageParam: null as string | null,
+    initialPageParam: null,
     getNextPageParam: (lastPage: ChannelMessagesPage) =>
-      lastPage.next_cursor ?? null,
-    getPreviousPage: (lastPage: ChannelMessagesPage) =>
-      lastPage.previous_cursor ?? null,
+      maybeMakeCursor('next', lastPage.next_cursor, null),
+    getPreviousPageParam: (firstPage: ChannelMessagesPage) =>
+      maybeMakeCursor('previous', firstPage.previous_cursor, null),
     staleTime: Infinity,
   };
 }
