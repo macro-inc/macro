@@ -27,6 +27,9 @@ import { useMenuKeyboardNavigation } from './useMenuKeyboardNavigation';
 false && clickOutside;
 false && floatWithSelection;
 
+// py-2 on the menu container = 8px top + 8px bottom
+const MENU_DECORATION_HEIGHT = 16;
+
 export type EmojiMenuProps = {
   menu: MenuOperations;
   editor: LexicalEditor;
@@ -69,6 +72,14 @@ export function EmojiMenu(props: EmojiMenuProps) {
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
+  const [menuAvailableHeight, setMenuAvailableHeight] = createSignal<
+    number | undefined
+  >(undefined);
+  const contentMaxHeight = () => {
+    const h = menuAvailableHeight();
+    if (h === undefined) return undefined;
+    return Math.min(200, Math.max(0, h - MENU_DECORATION_HEIGHT));
+  };
 
   const { isKeypressActive } = useIsKeyPressActive();
   const setSelectedIndexFromMouse = (index: number) => {
@@ -208,6 +219,7 @@ export function EmojiMenu(props: EmojiMenuProps) {
             selection: untrack(mountSelection),
             reactiveOnContainer: props.editor.getRootElement(),
             useBlockBoundary: props.useBlockBoundary,
+            onAvailableHeight: setMenuAvailableHeight,
           }}
           use:clickOutside={() => {
             closeMenu();
@@ -226,7 +238,10 @@ export function EmojiMenu(props: EmojiMenuProps) {
                   data={emojiOptions()}
                   ref={setVirtualHandle}
                   style={{
-                    height: '200px',
+                    height:
+                      contentMaxHeight() !== undefined
+                        ? `${contentMaxHeight()}px`
+                        : '200px',
                     'max-height': '100%',
                     width: '100%',
                   }}

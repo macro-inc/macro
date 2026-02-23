@@ -47,7 +47,6 @@ export function iosSizeMiddleware(
       const h = Math.max(0, availableHeight - safeAreaTop - kbHeight);
       Object.assign(elements.floating.style, {
         maxHeight: `${h}px`,
-        overflow: 'hidden',
       });
       onAvailableHeight(h - spacing);
     },
