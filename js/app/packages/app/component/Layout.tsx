@@ -15,6 +15,7 @@ import { attachGlobalDOMScope } from 'core/hotkey/hotkeys';
 import { createEffect, onMount, Show, Suspense } from 'solid-js';
 import Banner from './banner/Banner';
 import { GlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
+import { GlobalShareModal } from './global-share-modal/GlobalShareModal';
 import { CommandMenu } from './command';
 import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
@@ -108,6 +109,7 @@ export function Layout(props: RouteSectionProps) {
             <PropertyEditorModal />
           </Suspense>
           <GlobalBulkEditEntityModal />
+          <GlobalShareModal />
           <ShortcutsHelper />
         </Show>
         <Show
