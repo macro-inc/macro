@@ -70,6 +70,7 @@
         "@tauri-apps/plugin-websocket": "~2",
         "@thisbeyond/solid-dnd": "^0.7.5",
         "@vitest/ui": "^4.0.17",
+        "@zoompinch/core": "^0.0.38",
         "async-lock": "^1.4.1",
         "async-mutex": "^0.5.0",
         "brace-expansion": "^4.0.1",
@@ -1447,6 +1448,8 @@
     "@wapython/unionfs": ["@wapython/unionfs@4.5.7", "", { "dependencies": { "fs-monkey": "^1.0.0" } }, "sha512-7809nAVelP9TqXCq5c1yCwymPreTXrK4n4q/zxOlQOIIz4PNmoQmIKiLnwkKk39GDnLmP1MvP9ZkBDyXCCmTfg=="],
 
     "@webgpu/types": ["@webgpu/types@0.1.63", "", {}, "sha512-s9Kuh0nE/2+nKrvmKNMB2fE5Zlr3DL2t3OFKM55v5jRcfCOxbkOHhQoshoFum5mmXIfEtRXtLCWmkeTJsVjE9w=="],
+
+    "@zoompinch/core": ["@zoompinch/core@0.0.38", "", {}, "sha512-lsFy8S1XG6NJTFmgCtpXzS1tfxheA7UeZuy6ahd6ENlxNh4Rn1BvJN5pD9wStZmN7a064D8FAT9WvmsZDFt9Mw=="],
 
     "abort-controller": ["abort-controller@3.0.0", "", { "dependencies": { "event-target-shim": "^5.0.0" } }, "sha512-h8lQ8tacZYnR3vNQTgibj+tODHI5/+l06Au2Pcriv/Gmet0eaj4TwWH41sO9wnHDiQsEj19q0drzdWdeAHtweg=="],
 
