@@ -308,7 +308,10 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
 
 const USE_ENTITY_COLORS = true;
 
-export const [createMenuOpen, setCreateMenuOpen] = createControlledOpenSignal();
+export const [createMenuOpen, setCreateMenuOpen] = createControlledOpenSignal(
+  false,
+  { id: 'launcher' }
+);
 
 type LauncherMenuItemProps = {
   creatableBlock: CreatableBlock;

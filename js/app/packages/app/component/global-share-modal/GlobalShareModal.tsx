@@ -16,7 +16,9 @@ export type GlobalShareModalProps = {
 
 const [globalModalProps, setGlobalModalProps] =
   createSignal<GlobalShareModalProps | null>(null);
-const [modalOpen, setModalOpen] = createControlledOpenSignal();
+const [modalOpen, setModalOpen] = createControlledOpenSignal(false, {
+  id: 'global-share',
+});
 
 export const isShareableEntityType = (
   type: EntityData['type']

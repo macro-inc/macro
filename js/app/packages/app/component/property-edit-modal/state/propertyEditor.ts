@@ -9,7 +9,7 @@ import { createControlledOpenSignal } from '@core/util/createControlledOpenSigna
 export type PropertyEditorMode = 'selector' | 'direct';
 
 export const [propertyEditorOpen, setPropertyEditorOpen] =
-  createControlledOpenSignal();
+  createControlledOpenSignal(false, { id: 'property-edit' });
 
 interface PropertyEditorState {
   mode: PropertyEditorMode;

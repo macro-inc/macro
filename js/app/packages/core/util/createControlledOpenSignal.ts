@@ -31,6 +31,10 @@ function acquireFocusLock(id: string): void {
   activeFocusOwners.add(id);
 }
 
+/**
+ * Release focus and handle return to last state.
+ * @param id
+ */
 function releaseFocusLock(id: string, shouldReturnFocus: boolean): void {
   activeFocusOwners.delete(id);
 
@@ -60,10 +64,6 @@ function releaseFocusLock(id: string, shouldReturnFocus: boolean): void {
     }
   }
 }
-
-// ============================================================================
-// Focus Restoration Utility
-// ============================================================================
 
 function focusLast(element: Element) {
   // has to fire two tasks after to prevent Kobalte menus stealing focus and opening menu on up/down keypress
