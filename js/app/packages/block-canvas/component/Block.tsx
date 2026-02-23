@@ -287,17 +287,17 @@ export default function BlockCanvas(props: BlockCanvasProps) {
 
   return (
     <DocumentBlockContainer>
-      <ModalsProvider>
-        <div
-          class="w-full h-full select-none flex flex-col bg-panel"
-          // TODO: we need a more robust solution for preventing parent blocks from stealing clicks
-          // This is a temporary fix for canvas in markdown but it doesn't necessarily generalize well
-          on:click={(e) => {
-            if (isNestedBlock) {
-              e.stopPropagation();
-            }
-          }}
-        >
+      <div
+        class="w-full h-full select-none flex flex-col bg-panel"
+        // TODO: we need a more robust solution for preventing parent blocks from stealing clicks
+        // This is a temporary fix for canvas in markdown but it doesn't necessarily generalize well
+        on:click={(e) => {
+          if (isNestedBlock) {
+            e.stopPropagation();
+          }
+        }}
+      >
+        <ModalsProvider>
           <Show when={!isNestedBlock}>
             <TopBar />
           </Show>
@@ -309,8 +309,8 @@ export default function BlockCanvas(props: BlockCanvasProps) {
               </Show>
             </CanvasController>
           </Show>
-        </div>
-      </ModalsProvider>
+        </ModalsProvider>
+      </div>
     </DocumentBlockContainer>
   );
 }

@@ -12,12 +12,12 @@ export default function BlockCode() {
   return (
     <DocumentBlockContainer usesCenterBar>
       <Show when={!isNestedBlock} fallback={<CodeMarkdown />}>
-        <ModalsProvider>
-          <div class="size-full bg-panel select-none overscroll-none overflow-hidden flex flex-col items-end relative">
+        <div class="size-full bg-panel select-none overscroll-none overflow-hidden flex flex-col items-end relative">
+          <ModalsProvider>
             <TopBar />
             <CodeMirror />
-          </div>
-        </ModalsProvider>
+          </ModalsProvider>
+        </div>
       </Show>
     </DocumentBlockContainer>
   );

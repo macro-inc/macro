@@ -17,16 +17,16 @@ import { TopBar } from './TopBar';
 export default function BlockUnknown() {
   return (
     <DocumentBlockContainer>
-      <ModalsProvider>
-        <div class="w-full h-full bg-panel select-none overscroll-none overflow-hidden flex flex-col relative">
+      <div class="w-full h-full bg-panel select-none overscroll-none overflow-hidden flex flex-col relative">
+        <ModalsProvider>
           <div class="relative">
             <TopBar />
           </div>
           <div class="w-full grow-1 relative overflow-hidden">
             <Unknown />
           </div>
-        </div>
-      </ModalsProvider>
+        </ModalsProvider>
+      </div>
     </DocumentBlockContainer>
   );
 }

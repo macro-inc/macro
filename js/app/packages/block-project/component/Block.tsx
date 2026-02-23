@@ -123,23 +123,19 @@ const Block: Component = () => {
 
   return (
     <DocumentBlockContainer>
-      <ModalsProvider>
-        <div
-          ref={attachHotkeys}
-          class="w-full h-full bg-panel flex flex-col relative"
-          use:fileFolderDrop={{
-            onDragStart: () => setIsDragging(true),
-            onDragEnd: () => setIsDragging(false),
-            onDrop: (fileEntries, folderEntries) => {
-              handleFileFolderDrop(
-                fileEntries,
-                folderEntries,
-                handleFileUpload
-              );
-            },
-            disabled: isSpecialProject,
-          }}
-        >
+      <div
+        ref={attachHotkeys}
+        class="w-full h-full bg-panel flex flex-col relative"
+        use:fileFolderDrop={{
+          onDragStart: () => setIsDragging(true),
+          onDragEnd: () => setIsDragging(false),
+          onDrop: (fileEntries, folderEntries) => {
+            handleFileFolderDrop(fileEntries, folderEntries, handleFileUpload);
+          },
+          disabled: isSpecialProject,
+        }}
+      >
+        <ModalsProvider>
           <Show when={isDragging() && !isSpecialProject}>
             <FileDropOverlay>Upload to this folder</FileDropOverlay>
           </Show>
@@ -170,8 +166,8 @@ const Block: Component = () => {
               </SplitPanelContext.Provider>
             </div>
           </Show>
-        </div>
-      </ModalsProvider>
+        </ModalsProvider>
+      </div>
     </DocumentBlockContainer>
   );
 };
