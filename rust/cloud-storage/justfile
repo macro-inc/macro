@@ -31,23 +31,22 @@ build_dev_service_images:
 
 # Build all lambda functions
 build_lambdas:
-    #!/usr/bin/env -S parallel --shebang --ungroup --jobs {{ num_cpus() }}
-    just docx_unzip_handler/build
-    just delete_chat_handler/build
-    just organization_retention_handler/build
-    just organization_retention_trigger/build
-    just upload_extractor_lambda_trigger/build
-    just upload_extractor_lambda_handler/build
-    just worker_trigger/build
-    just dataloss_prevention_handler/build
-    just search_upload_handler/build
-    just document_text_extractor/build
-    just email_suppression_handler/build
-    just deleted_item_poller/build
-    just email_refresh_handler/build
-    just user_link_cleanup_handler/build
-    just email_scheduled_handler/build
-    just email_sfs_delete_handler/build
+    ulimit -n 10240 && just docx_unzip_handler/build
+    ulimit -n 10240 && just delete_chat_handler/build
+    ulimit -n 10240 && just organization_retention_handler/build
+    ulimit -n 10240 && just organization_retention_trigger/build
+    ulimit -n 10240 && just upload_extractor_lambda_trigger/build
+    ulimit -n 10240 && just upload_extractor_lambda_handler/build
+    ulimit -n 10240 && just worker_trigger/build
+    ulimit -n 10240 && just dataloss_prevention_handler/build
+    ulimit -n 10240 && just search_upload_handler/build
+    ulimit -n 10240 && just document_text_extractor/build
+    ulimit -n 10240 && just email_suppression_handler/build
+    ulimit -n 10240 && just deleted_item_poller/build
+    ulimit -n 10240 && just email_refresh_handler/build
+    ulimit -n 10240 && just user_link_cleanup_handler/build
+    ulimit -n 10240 && just email_scheduled_handler/build
+    ulimit -n 10240 && just email_sfs_delete_handler/build
 
 # TESTING
 
